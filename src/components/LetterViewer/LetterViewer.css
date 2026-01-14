@@ -1,0 +1,124 @@
+.letter-viewer {
+  background: var(--bg-light);
+  border: var(--border-card);
+  border-top: solid 1px var(--highlight);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.letter-viewer-empty {
+  padding: var(--spacing-xl);
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.viewer-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg);
+  border-bottom: solid 1px var(--border);
+  gap: var(--spacing-sm);
+}
+
+.lock-button {
+  padding: 0.5rem 1rem;
+  background: var(--bg-light);
+  color: var(--text);
+  border: solid 1px var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--font-sm);
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.lock-button:hover {
+  transform: scale(1.025);
+}
+
+.lock-button.locked {
+  background: var(--text);
+  color: var(--bg-light);
+  border-color: var(--text);
+}
+
+.zoom-indicator {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-right: auto;
+}
+
+.viewer-controls .image-type-label {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  text-transform: capitalize;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.viewer-container {
+  position: relative;
+  width: 100%;
+  height: 500px;
+  overflow: hidden;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.viewer-container.dragging {
+  cursor: grabbing !important;
+}
+
+.viewer-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+  transition: transform 0.1s ease-out;
+}
+
+.viewer-info {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg);
+  border-top: solid 1px var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+}
+
+.nav-button {
+  width: 40px;
+  height: 40px;
+  background: var(--bg-light);
+  color: var(--text);
+  border: solid 1px var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 1.2rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.nav-button:hover {
+  transform: scale(1.1);
+  background: var(--bg);
+}
+
+.image-counter {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text);
+  min-width: 60px;
+  text-align: center;
+}

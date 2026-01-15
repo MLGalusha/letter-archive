@@ -56,7 +56,7 @@ export default function UploadLetterPage() {
     }
   };
 
-  const handleDragStart = (index: number, type: "letter" | "envelope") => {
+  const handleDragStart = (index: number, _type: "letter" | "envelope") => {
     setDraggedIndex(index);
   };
 

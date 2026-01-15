@@ -6,7 +6,7 @@ import "./AdminDashboard.css";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [letters, setLetters] = useState<Letter[]>(mockLetters);
+  const [letters] = useState<Letter[]>(mockLetters);
   const [filter, setFilter] = useState<"all" | "needs_review" | "published" | "hidden">("all");
   const [searchQuery, setSearchQuery] = useState("");
 

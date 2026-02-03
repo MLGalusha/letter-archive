@@ -35,6 +35,8 @@ export default function LetterReviewPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const isAuth = sessionStorage.getItem("adminAuth");
@@ -69,7 +71,7 @@ export default function LetterReviewPage() {
     }
   }, [letterId, navigate]);
 
-  // Auto-resize textarea
+  // Auto-resize transcript textarea
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
@@ -77,6 +79,24 @@ export default function LetterReviewPage() {
       textarea.style.height = textarea.scrollHeight + "px";
     }
   }, [transcript]);
+
+  // Auto-resize description textarea
+  useEffect(() => {
+    const textarea = descriptionRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = textarea.scrollHeight + "px";
+    }
+  }, [description]);
+
+  // Auto-resize notes textarea
+  useEffect(() => {
+    const textarea = notesRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = textarea.scrollHeight + "px";
+    }
+  }, [notes]);
 
   const handleSave = async () => {
     if (!letterId) return;
@@ -331,10 +351,10 @@ export default function LetterReviewPage() {
                 <div className="form-group">
                   <label htmlFor="description">Summary</label>
                   <textarea
+                    ref={descriptionRef}
                     id="description"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    rows={3}
                     placeholder="Brief description of letter content"
                   />
                 </div>
@@ -354,10 +374,10 @@ export default function LetterReviewPage() {
                 <div className="form-group">
                   <label htmlFor="notes">Admin Notes</label>
                   <textarea
+                    ref={notesRef}
                     id="notes"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    rows={2}
                     placeholder="Internal notes (not shown publicly)"
                   />
                   <span className="help-text">For internal reference only</span>

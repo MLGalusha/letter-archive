@@ -17,8 +17,8 @@
 .viewer-container {
   position: relative;
   width: 100%;
-  height: 75vh;
-  min-height: 600px;
+  min-height: 500px;
+  max-height: 80vh;
   overflow: hidden;
   background: var(--bg);
   display: flex;
@@ -31,60 +31,53 @@
 }
 
 .viewer-image {
-  width: 100%;
-  height: 100%;
+  max-width: 100%;
+  max-height: 80vh;
+  width: auto;
+  height: auto;
   object-fit: contain;
   user-select: none;
   transition: transform 0.1s ease-out;
 }
 
-/* Overlay base styles */
+/* Single compact bottom overlay */
 .viewer-overlay {
   position: absolute;
+  bottom: 0;
   left: 0;
   right: 0;
   display: flex;
   align-items: center;
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: rgba(0, 0, 0, 0.3);
-  opacity: 0.4;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: rgba(0, 0, 0, 0.4);
+  opacity: 0.3;
   transition: opacity 0.2s ease, background 0.2s ease;
   z-index: 10;
 }
 
-.viewer-overlay.top {
-  top: 0;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-}
-
-.viewer-overlay.bottom {
-  bottom: 0;
-  justify-content: center;
-  gap: var(--spacing-sm);
-}
-
-/* Hover effect - more visible on hover */
-.letter-viewer:hover .viewer-overlay {
+/* Hover on the overlay itself only */
+.viewer-overlay:hover {
   opacity: 1;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.7);
 }
 
-/* Lock button in overlay */
+/* Compact lock button */
 .viewer-overlay .lock-button {
-  padding: 0.5rem 1rem;
+  padding: 0.25rem 0.5rem;
   background: rgba(255, 255, 255, 0.9);
   color: var(--text);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: var(--font-sm);
+  font-size: 0.85rem;
   font-weight: 500;
   transition: all 0.2s ease;
 }
 
 .viewer-overlay .lock-button:hover {
-  transform: scale(1.025);
+  transform: scale(1.05);
   background: white;
 }
 
@@ -93,34 +86,33 @@
   color: white;
 }
 
-/* Zoom indicator in overlay */
+/* Zoom indicator */
 .viewer-overlay .zoom-indicator {
-  font-size: var(--font-sm);
+  font-size: 0.8rem;
   color: white;
   font-weight: 600;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
-/* Image type label in overlay */
+/* Image type label */
 .viewer-overlay .image-type-label {
-  font-size: var(--font-sm);
+  font-size: 0.8rem;
   color: white;
   text-transform: capitalize;
   font-weight: 500;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  margin-left: auto;
 }
 
-/* Navigation buttons in overlay */
+/* Compact navigation buttons */
 .viewer-overlay .nav-button {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   background: rgba(255, 255, 255, 0.9);
   color: var(--text);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 1.2rem;
+  font-size: 1rem;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -133,12 +125,12 @@
   background: white;
 }
 
-/* Image counter in overlay */
+/* Image counter */
 .viewer-overlay .image-counter {
-  font-size: var(--font-sm);
+  font-size: 0.8rem;
   font-weight: 600;
   color: white;
-  min-width: 60px;
+  min-width: 50px;
   text-align: center;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }

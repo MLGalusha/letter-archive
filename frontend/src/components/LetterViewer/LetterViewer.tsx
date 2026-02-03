@@ -164,32 +164,43 @@ export default function LetterViewer({
 
         {/* Single bottom overlay - all controls */}
         <div className="viewer-overlay">
-          <button
-            onClick={toggleLock}
-            className={`lock-button ${isLocked ? "locked" : ""}`}
-            title={isLocked ? "Unlock zoom and pan" : "Lock zoom and pan"}
-          >
-            {isLocked ? "🔒" : "🔓"}
-          </button>
-          {scale > 1 && !isLocked && (
-            <span className="zoom-indicator">{Math.round(scale * 100)}%</span>
-          )}
-          <span className="image-type-label">
-            {currentImage.type.replace(/_/g, " ")}
-          </span>
-          {displayImages.length > 1 && (
-            <>
-              <button onClick={prevImage} className="nav-button">
-                ←
-              </button>
-              <span className="image-counter">
-                {currentImageIndex + 1} / {displayImages.length}
-              </span>
-              <button onClick={nextImage} className="nav-button">
-                →
-              </button>
-            </>
-          )}
+          {/* Left: Lock button */}
+          <div className="overlay-left">
+            <button
+              onClick={toggleLock}
+              className={`lock-button ${isLocked ? "locked" : ""}`}
+              title={isLocked ? "Unlock zoom and pan" : "Lock zoom and pan"}
+            >
+              {isLocked ? "🔒" : "🔓"}
+            </button>
+            {scale > 1 && !isLocked && (
+              <span className="zoom-indicator">{Math.round(scale * 100)}%</span>
+            )}
+          </div>
+
+          {/* Center: Navigation */}
+          <div className="overlay-center">
+            {displayImages.length > 1 && (
+              <>
+                <button onClick={prevImage} className="nav-button">
+                  ←
+                </button>
+                <span className="image-counter">
+                  {currentImageIndex + 1} / {displayImages.length}
+                </span>
+                <button onClick={nextImage} className="nav-button">
+                  →
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Right: Page type */}
+          <div className="overlay-right">
+            <span className="image-type-label">
+              {currentImage.type.replace(/_/g, " ")}
+            </span>
+          </div>
         </div>
       </div>
     </div>

@@ -48,8 +48,7 @@
   right: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
+  justify-content: space-between;
   padding: 0.5rem 1rem;
   background: rgba(0, 0, 0, 0.4);
   opacity: 0.3;
@@ -61,6 +60,31 @@
 .viewer-overlay:hover {
   opacity: 1;
   background: rgba(0, 0, 0, 0.7);
+}
+
+/* Left section: lock button + zoom */
+.overlay-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+/* Center section: navigation */
+.overlay-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+/* Right section: page type */
+.overlay-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
 }
 
 /* Compact lock button */

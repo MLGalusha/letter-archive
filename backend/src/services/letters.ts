@@ -1,0 +1,216 @@
+import { eq, and, isNull } from 'drizzle-orm';
+import {
+  db,
+  letters,
+  type Letter,
+  type LetterType,
+  type DateConfidence,
+  type WorkflowState,
+  type JobStatus,
+} from '../db/index.js';
+
+export interface LetterIdentity {
+  collectionId: string;
+  dateRaw: string;
+  type: LetterType;
+  typeSequence: number;
+}
+
+export interface CreateLetterParams extends LetterIdentity {
+  letterDate: string | null;
+  dateConfidence: DateConfidence;
+}
+
+/**
+ * Finds an existing letter by its identity, or creates a new one.
+ */
+export async function findOrCreateLetter(params: CreateLetterParams): Promise<Letter> {
+  const existing = await db.query.letters.findFirst({
+    where: and(
+      eq(letters.collectionId, params.collectionId),
+      eq(letters.dateRaw, params.dateRaw),
+      eq(letters.type, params.type),
+      eq(letters.typeSequence, params.typeSequence)
+    ),
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  const [created] = await db
+    .insert(letters)
+    .values({
+      collectionId: params.collectionId,
+      dateRaw: params.dateRaw,
+      type: params.type,
+      typeSequence: params.typeSequence,
+      letterDate: params.letterDate,
+      dateConfidence: params.dateConfidence,
+    })
+    .returning();
+
+  return created;
+}
+
+/**
+ * Gets a letter by ID with its pages.
+ */
+export async function getLetterWithPages(letterId: string) {
+  return db.query.letters.findFirst({
+    where: and(eq(letters.id, letterId), isNull(letters.deletedAt)),
+    with: {
+      collection: true,
+      pages: {
+        orderBy: (pages, { asc }) => [asc(pages.pageNumber)],
+      },
+    },
+  });
+}
+
+/**
+ * Gets a letter by ID.
+ */
+export async function getLetterById(letterId: string): Promise<Letter | undefined> {
+  return db.query.letters.findFirst({
+    where: and(eq(letters.id, letterId), isNull(letters.deletedAt)),
+  });
+}
+
+/**
+ * Updates letter workflow state.
+ */
+export async function updateLetterWorkflow(
+  letterId: string,
+  workflow: WorkflowState
+): Promise<void> {
+  await db
+    .update(letters)
+    .set({
+      workflow,
+      updatedAt: new Date(),
+    })
+    .where(eq(letters.id, letterId));
+}
+
+/**
+ * Updates letter transcription status.
+ */
+export async function updateTranscriptionStatus(
+  letterId: string,
+  status: JobStatus,
+  text?: string | null,
+  error?: string | null
+): Promise<void> {
+  const updates: Partial<Letter> = {
+    transcriptionStatus: status,
+    updatedAt: new Date(),
+  };
+
+  if (text !== undefined) {
+    updates.transcriptionText = text;
+  }
+
+  if (error !== undefined) {
+    updates.transcriptionError = error;
+  }
+
+  if (status === 'SUCCESS') {
+    updates.transcribedAt = new Date();
+  }
+
+  await db.update(letters).set(updates).where(eq(letters.id, letterId));
+}
+
+/**
+ * Increments transcription attempt count.
+ */
+export async function incrementTranscriptionAttempts(letterId: string): Promise<void> {
+  const letter = await getLetterById(letterId);
+  if (!letter) return;
+
+  await db
+    .update(letters)
+    .set({
+      transcriptionAttemptCount: letter.transcriptionAttemptCount + 1,
+      updatedAt: new Date(),
+    })
+    .where(eq(letters.id, letterId));
+}
+
+/**
+ * Updates letter metadata status and fields.
+ */
+export async function updateMetadataStatus(
+  letterId: string,
+  status: JobStatus,
+  metadata?: {
+    sender?: string | null;
+    recipient?: string | null;
+    locationWritten?: string | null;
+    summary?: string | null;
+    tags?: string[] | null;
+    extractedDate?: string | null;
+    extractedDateConfidence?: DateConfidence | null;
+    metadataJson?: unknown;
+  },
+  error?: string | null
+): Promise<void> {
+  const updates: Partial<Letter> = {
+    metadataStatus: status,
+    updatedAt: new Date(),
+  };
+
+  if (metadata) {
+    if (metadata.sender !== undefined) updates.sender = metadata.sender;
+    if (metadata.recipient !== undefined) updates.recipient = metadata.recipient;
+    if (metadata.locationWritten !== undefined) updates.locationWritten = metadata.locationWritten;
+    if (metadata.summary !== undefined) updates.summary = metadata.summary;
+    if (metadata.tags !== undefined) updates.tags = metadata.tags;
+    if (metadata.extractedDate !== undefined) updates.extractedDate = metadata.extractedDate;
+    if (metadata.extractedDateConfidence !== undefined)
+      updates.extractedDateConfidence = metadata.extractedDateConfidence;
+    if (metadata.metadataJson !== undefined) updates.metadataJson = metadata.metadataJson;
+  }
+
+  if (error !== undefined) {
+    updates.metadataError = error;
+  }
+
+  await db.update(letters).set(updates).where(eq(letters.id, letterId));
+}
+
+/**
+ * Increments metadata attempt count.
+ */
+export async function incrementMetadataAttempts(letterId: string): Promise<void> {
+  const letter = await getLetterById(letterId);
+  if (!letter) return;
+
+  await db
+    .update(letters)
+    .set({
+      metadataAttemptCount: letter.metadataAttemptCount + 1,
+      updatedAt: new Date(),
+    })
+    .where(eq(letters.id, letterId));
+}
+
+/**
+ * Resets a letter for re-processing.
+ */
+export async function resetLetterForProcessing(letterId: string): Promise<void> {
+  await db
+    .update(letters)
+    .set({
+      workflow: 'UPLOADED',
+      transcriptionStatus: 'PENDING',
+      transcriptionError: null,
+      transcriptionAttemptCount: 0,
+      metadataStatus: 'PENDING',
+      metadataError: null,
+      metadataAttemptCount: 0,
+      updatedAt: new Date(),
+    })
+    .where(eq(letters.id, letterId));
+}

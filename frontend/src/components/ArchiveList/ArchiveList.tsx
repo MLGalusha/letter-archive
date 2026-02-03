@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import "./ArchiveList.css";
 import LetterCard from "../LetterCard/LetterCard";
-import { mockLetters } from "../../data/mockLetters";
+import { getLetters } from "../../api/letters";
+import type { Letter } from "../../types/Letter";
 import type { SearchFilters } from "../SearchBar/SearchBar";
 
 interface ArchiveListProps {
@@ -15,8 +16,30 @@ export default function ArchiveList({
   searchQuery = "",
   filters = {},
 }: ArchiveListProps) {
+  const [letters, setLetters] = useState<Letter[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch letters from API
+  useEffect(() => {
+    async function fetchLetters() {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await getLetters({ limit: 100 });
+        setLetters(response.letters);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load letters");
+        console.error("Failed to fetch letters:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchLetters();
+  }, []);
+
   const filteredLetters = useMemo(() => {
-    let results = mockLetters;
+    let results = letters;
 
     // Filter by search query
     if (searchQuery.trim()) {
@@ -87,6 +110,22 @@ export default function ArchiveList({
       })),
     [filteredLetters]
   );
+
+  if (loading) {
+    return (
+      <div className="archive-section">
+        <p className="loading-message">Loading letters...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="archive-section">
+        <p className="error-message">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="archive-section">

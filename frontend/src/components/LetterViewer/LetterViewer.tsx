@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import type { LetterImage } from "../../types/Letter";
+import { getImageUrl } from "../../api/client";
 import "./LetterViewer.css";
 
 interface LetterViewerProps {
@@ -129,22 +130,6 @@ export default function LetterViewer({
 
   return (
     <div className="letter-viewer">
-      <div className="viewer-controls">
-        <button
-          onClick={toggleLock}
-          className={`lock-button ${isLocked ? "locked" : ""}`}
-          title={isLocked ? "Unlock zoom and pan" : "Lock zoom and pan"}
-        >
-          {isLocked ? "🔒 Locked" : "🔓 Unlocked"}
-        </button>
-        {scale > 1 && !isLocked && (
-          <span className="zoom-indicator">{Math.round(scale * 100)}%</span>
-        )}
-        <span className="image-type-label">
-          {currentImage.type.replace(/_/g, " ")}
-        </span>
-      </div>
-
       <div
         ref={imageContainerRef}
         className={`viewer-container ${isDragging ? "dragging" : ""} ${
@@ -159,7 +144,7 @@ export default function LetterViewer({
         onTouchEnd={handleTouchEnd}
       >
         <img
-          src={currentImage.imageUrl}
+          src={getImageUrl(currentImage.imageUrl)}
           alt={`${currentImage.type} ${currentImage.pageNumber || ""}`}
           className="viewer-image"
           style={{
@@ -176,21 +161,39 @@ export default function LetterViewer({
           }}
           draggable={false}
         />
-      </div>
 
-      {displayImages.length > 1 && (
-        <div className="viewer-info">
-          <button onClick={prevImage} className="nav-button">
-            ←
+        {/* Top overlay - controls */}
+        <div className="viewer-overlay top">
+          <button
+            onClick={toggleLock}
+            className={`lock-button ${isLocked ? "locked" : ""}`}
+            title={isLocked ? "Unlock zoom and pan" : "Lock zoom and pan"}
+          >
+            {isLocked ? "🔒 Locked" : "🔓 Unlocked"}
           </button>
-          <span className="image-counter">
-            {currentImageIndex + 1} / {displayImages.length}
+          {scale > 1 && !isLocked && (
+            <span className="zoom-indicator">{Math.round(scale * 100)}%</span>
+          )}
+          <span className="image-type-label">
+            {currentImage.type.replace(/_/g, " ")}
           </span>
-          <button onClick={nextImage} className="nav-button">
-            →
-          </button>
         </div>
-      )}
+
+        {/* Bottom overlay - navigation */}
+        {displayImages.length > 1 && (
+          <div className="viewer-overlay bottom">
+            <button onClick={prevImage} className="nav-button">
+              ←
+            </button>
+            <span className="image-counter">
+              {currentImageIndex + 1} / {displayImages.length}
+            </span>
+            <button onClick={nextImage} className="nav-button">
+              →
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

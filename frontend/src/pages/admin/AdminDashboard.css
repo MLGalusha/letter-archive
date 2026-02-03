@@ -148,6 +148,16 @@
   letter-spacing: 0.05em;
 }
 
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.sortable-header:hover {
+  background-color: var(--bg-light);
+}
+
 .letters-table td {
   padding: var(--spacing-sm);
   border-bottom: solid 1px var(--border);
@@ -171,35 +181,56 @@
   font-style: italic;
 }
 
-.status-badge {
+/* Status badges container */
+.status-badges {
+  display: flex;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+/* Base badge styles */
+.badge {
   display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
   font-size: var(--font-xs);
   font-weight: 600;
-  text-transform: capitalize;
+  white-space: nowrap;
 }
 
-.status-needs_review {
-  background-color: #fff3cd;
-  color: #856404;
+/* Workflow badges */
+.badge-workflow-uploaded {
+  background-color: #e3f2fd;
+  color: #1565c0;
 }
 
-.status-published {
-  background-color: #d4edda;
-  color: #155724;
+.badge-workflow-transcribing,
+.badge-workflow-metadata_extracting {
+  background-color: #fff3e0;
+  color: #e65100;
 }
 
-.status-hidden {
-  background-color: #f8d7da;
-  color: #721c24;
+.badge-workflow-transcribed,
+.badge-workflow-metadata_drafted {
+  background-color: #e8f5e9;
+  color: #2e7d32;
 }
 
-.status-uploaded,
-.status-processing,
-.status-processed {
-  background-color: #d1ecf1;
-  color: #0c5460;
+.badge-workflow-reviewed {
+  background-color: #e8f5e9;
+  color: #1b5e20;
+  border: 1px solid #a5d6a7;
+}
+
+/* Visibility badges */
+.badge-published {
+  background-color: #c8e6c9;
+  color: #1b5e20;
+}
+
+.badge-hidden {
+  background-color: #ffcdd2;
+  color: #b71c1c;
 }
 
 .dashboard-stats {
@@ -231,4 +262,12 @@
   font-size: 2rem;
   font-weight: 600;
   color: var(--text);
+}
+
+.stat-card-highlight {
+  border-color: #a5d6a7;
+}
+
+.stat-card-highlight .stat-value {
+  color: #2e7d32;
 }

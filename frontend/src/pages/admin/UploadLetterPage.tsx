@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { uploadFiles } from "../../api/admin";
 import "./UploadLetterPage.css";
 
 interface ImagePreview {
@@ -109,19 +110,36 @@ export default function UploadLetterPage() {
     setUploading(true);
     setMessage("");
 
-    // Mock upload process
-    // In real implementation, this would upload to backend and trigger AI processing
-    setTimeout(() => {
-      setUploading(false);
-      setMessage(
-        "Letter uploaded successfully! Processing will begin shortly."
-      );
+    try {
+      // Collect all files
+      const files = [
+        ...letterImages.map((img) => img.file),
+        ...envelopeImages.map((img) => img.file),
+      ];
 
-      // Redirect back to admin panel after a brief delay
-      setTimeout(() => {
-        navigate("/admin");
-      }, 1500);
-    }, 2000);
+      // Upload to backend
+      const response = await uploadFiles(files);
+
+      if (response.failed > 0 && response.errors) {
+        const errorMessages = response.errors.map((e) => e.error).join(", ");
+        setMessage(
+          `Uploaded ${response.success} files. ${response.failed} failed: ${errorMessages}`
+        );
+      } else {
+        setMessage(
+          `Successfully uploaded ${response.success} files. Processing will begin shortly.`
+        );
+        // Redirect back to admin panel after a brief delay
+        setTimeout(() => {
+          navigate("/admin");
+        }, 1500);
+      }
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Upload failed");
+      console.error("Upload error:", err);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleCancel = () => {

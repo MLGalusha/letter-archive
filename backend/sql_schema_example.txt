@@ -1,0 +1,180 @@
+-- Best V1 Schema: Letter Archive (PostgreSQL)
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- ----------------------------
+-- Enums (tight, operational)
+-- ----------------------------
+DO $$ BEGIN
+  CREATE TYPE letter_type AS ENUM ('L','C','E');   -- Letter, Card, Extra
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE workflow_state AS ENUM (
+    'UPLOADED',            -- pages exist, nothing processed
+    'TRANSCRIBING',        -- one-shot transcription in progress
+    'TRANSCRIBED',         -- transcription_text exists
+    'METADATA_EXTRACTING', -- metadata extraction in progress
+    'METADATA_DRAFTED',    -- metadata extracted (draft stored)
+    'REVIEWED'             -- admin reviewed/edited
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE visibility_state AS ENUM (
+    'DRAFT',     -- not public
+    'PUBLISHED', -- public
+    'HIDDEN'     -- explicitly hidden (even if previously published)
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE job_status AS ENUM ('PENDING','RUNNING','SUCCESS','FAILED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE date_confidence AS ENUM ('exact','unknown','inferred');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ----------------------------
+-- Collections (001, 002, ...)
+-- ----------------------------
+CREATE TABLE IF NOT EXISTS collections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  collection_code TEXT NOT NULL UNIQUE,     -- e.g. '001'
+  title TEXT,
+  description TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- --------------------------------------------
+-- Letters (conceptual unit: 001-YYYYMMDD-L01)
+-- --------------------------------------------
+CREATE TABLE IF NOT EXISTS letters (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  collection_id UUID NOT NULL REFERENCES collections(id) ON DELETE RESTRICT,
+
+  -- Filename-derived identity
+  date_raw TEXT NOT NULL,                   -- 'YYYYMMDD' or 'XXXXXXXX'
+  letter_date DATE NULL,                    -- NULL when unknown
+  date_confidence date_confidence NOT NULL DEFAULT 'unknown',
+  type letter_type NOT NULL,                -- L/C/E
+  type_sequence INT NOT NULL CHECK (type_sequence >= 1), -- L01 -> 1
+
+  -- Pipeline + visibility
+  workflow workflow_state NOT NULL DEFAULT 'UPLOADED',
+  visibility visibility_state NOT NULL DEFAULT 'DRAFT',
+
+  -- One-shot transcription stored on the letter (canonical for V1)
+  transcription_status job_status NOT NULL DEFAULT 'PENDING',
+  transcription_text TEXT NULL,
+  transcription_error TEXT NULL,
+  transcription_attempt_count INT NOT NULL DEFAULT 0 CHECK (transcription_attempt_count >= 0),
+  transcribed_at TIMESTAMPTZ NULL,
+
+  -- Filterable metadata columns (V1 practical set)
+  sender TEXT NULL,
+  recipient TEXT NULL,
+  location_written TEXT NULL,
+
+  -- Optional: if your extractor yields a better date than filename,
+  -- keep it separate from filename truth. Admin can decide which to trust.
+  extracted_date DATE NULL,
+  extracted_date_confidence date_confidence NULL,
+
+  summary TEXT NULL,
+
+  -- Simple filterable topics/tags (GIN-indexed)
+  tags TEXT[] NULL,
+
+  -- Flexible blob: holds everything the model extracted + any admin extras
+  metadata_json JSONB NULL,
+
+  metadata_status job_status NOT NULL DEFAULT 'PENDING',
+  metadata_error TEXT NULL,
+  metadata_attempt_count INT NOT NULL DEFAULT 0 CHECK (metadata_attempt_count >= 0),
+
+  -- Admin review/publish controls
+  reviewed_at TIMESTAMPTZ NULL,
+  reviewed_by TEXT NULL,                    -- Firebase UID (string)
+  notes TEXT NULL,
+
+  -- Soft delete
+  deleted_at TIMESTAMPTZ NULL,
+  deleted_by TEXT NULL,                     -- Firebase UID
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  -- Idempotency: prevents duplicate conceptual letters
+  CONSTRAINT letters_identity_unique UNIQUE (collection_id, date_raw, type, type_sequence),
+
+  -- Guardrail: if published, it should be reviewed (enforce via CHECK)
+  -- If you don't want this strictness yet, remove this constraint.
+  CONSTRAINT published_requires_review CHECK (
+    visibility <> 'PUBLISHED' OR reviewed_at IS NOT NULL
+  )
+);
+
+-- --------------------------------------------
+-- Letter Pages (physical scans: ...-01, ...-02)
+-- --------------------------------------------
+CREATE TABLE IF NOT EXISTS letter_pages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  letter_id UUID NOT NULL REFERENCES letters(id) ON DELETE CASCADE,
+
+  page_number INT NOT NULL CHECK (page_number >= 1),
+  image_gcs_uri TEXT NOT NULL,              -- gs://bucket/path/object
+  original_filename TEXT NOT NULL,          -- e.g. 001-YYYYMMDD-L01-01.jpg
+
+  -- Optional (strongly recommended) for dedupe/integrity:
+  checksum_sha256 TEXT NULL,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  -- Idempotency: no duplicate page numbers within a letter
+  CONSTRAINT letter_pages_unique UNIQUE (letter_id, page_number)
+);
+
+-- ----------------------------
+-- Indexes (real usage)
+-- ----------------------------
+CREATE INDEX IF NOT EXISTS idx_letters_collection ON letters(collection_id);
+CREATE INDEX IF NOT EXISTS idx_letters_visibility ON letters(visibility);
+CREATE INDEX IF NOT EXISTS idx_letters_workflow ON letters(workflow);
+
+-- Useful for browsing by date range (even with NULLs)
+CREATE INDEX IF NOT EXISTS idx_letters_letter_date ON letters(letter_date);
+CREATE INDEX IF NOT EXISTS idx_letters_extracted_date ON letters(extracted_date);
+
+-- Pages retrieval in order
+CREATE INDEX IF NOT EXISTS idx_pages_letter ON letter_pages(letter_id);
+
+-- Tags filtering (e.g., tags @> ARRAY['christmas'])
+CREATE INDEX IF NOT EXISTS idx_letters_tags_gin ON letters USING GIN (tags);
+
+-- Optional: if you sometimes filter inside metadata_json (later you will)
+CREATE INDEX IF NOT EXISTS idx_letters_metadata_json_gin ON letters USING GIN (metadata_json);
+
+-- ----------------------------
+-- updated_at triggers
+-- ----------------------------
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$ BEGIN
+  CREATE TRIGGER trg_letters_updated_at
+  BEFORE UPDATE ON letters
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TRIGGER trg_pages_updated_at
+  BEFORE UPDATE ON letter_pages
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

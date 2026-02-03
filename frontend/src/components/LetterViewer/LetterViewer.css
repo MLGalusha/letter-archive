@@ -70,6 +70,7 @@
   align-items: center;
   gap: 0.5rem;
   flex: 1;
+  height: 24px;
 }
 
 /* Center section: navigation */
@@ -79,6 +80,7 @@
   justify-content: center;
   gap: 0.5rem;
   flex: 1;
+  height: 24px;
 }
 
 /* Right section: page type */
@@ -87,11 +89,15 @@
   align-items: center;
   justify-content: flex-end;
   flex: 1;
+  height: 24px;
+  line-height: 24px;
 }
 
 /* Compact lock button */
 .viewer-overlay .lock-button {
-  padding: 0.15rem 0.4rem;
+  padding: 0;
+  width: 24px;
+  height: 24px;
   background: rgba(255, 255, 255, 0.9);
   color: var(--text);
   border: none;
@@ -100,6 +106,9 @@
   font-size: 0.75rem;
   font-weight: 500;
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .viewer-overlay .lock-button:hover {
@@ -127,6 +136,9 @@
   text-transform: capitalize;
   font-weight: 500;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  height: 24px;
 }
 
 /* Compact navigation buttons */
@@ -159,4 +171,8 @@
   min-width: 40px;
   text-align: center;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
 }

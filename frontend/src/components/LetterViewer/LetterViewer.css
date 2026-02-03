@@ -49,7 +49,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.35rem 0.75rem;
+  padding: .35rem 0.75rem;
   min-height: 28px;
   background: rgba(0, 0, 0, 0.4);
   opacity: 0.3;
@@ -78,7 +78,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
   flex: 1;
   height: 24px;
 }
@@ -96,6 +96,7 @@
 /* Compact lock button */
 .viewer-overlay .lock-button {
   padding: 0;
+  margin: 0;
   width: 24px;
   height: 24px;
   background: rgba(255, 255, 255, 0.9);
@@ -109,6 +110,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  vertical-align: middle;
+  line-height: 1;
 }
 
 .viewer-overlay .lock-button:hover {
@@ -156,6 +159,10 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  margin: 0;
+  padding: 0;
+  vertical-align: middle;
+  line-height: 1;
 }
 
 .viewer-overlay .nav-button:hover {

@@ -49,11 +49,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.25rem 0.75rem;
+  padding: 0.35rem 0.75rem;
+  min-height: 28px;
   background: rgba(0, 0, 0, 0.4);
   opacity: 0.3;
   transition: opacity 0.2s ease, background 0.2s ease;
   z-index: 10;
+  box-sizing: border-box;
 }
 
 /* Hover on the overlay itself only */

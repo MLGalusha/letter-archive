@@ -49,7 +49,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 1rem;
+  padding: 0.25rem 0.75rem;
   background: rgba(0, 0, 0, 0.4);
   opacity: 0.3;
   transition: opacity 0.2s ease, background 0.2s ease;
@@ -89,13 +89,13 @@
 
 /* Compact lock button */
 .viewer-overlay .lock-button {
-  padding: 0.25rem 0.5rem;
+  padding: 0.15rem 0.4rem;
   background: rgba(255, 255, 255, 0.9);
   color: var(--text);
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   font-weight: 500;
   transition: all 0.2s ease;
 }
@@ -112,7 +112,7 @@
 
 /* Zoom indicator */
 .viewer-overlay .zoom-indicator {
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   color: white;
   font-weight: 600;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -120,7 +120,7 @@
 
 /* Image type label */
 .viewer-overlay .image-type-label {
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   color: white;
   text-transform: capitalize;
   font-weight: 500;
@@ -129,14 +129,14 @@
 
 /* Compact navigation buttons */
 .viewer-overlay .nav-button {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   background: rgba(255, 255, 255, 0.9);
   color: var(--text);
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -151,10 +151,10 @@
 
 /* Image counter */
 .viewer-overlay .image-counter {
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   font-weight: 600;
   color: white;
-  min-width: 50px;
+  min-width: 40px;
   text-align: center;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }

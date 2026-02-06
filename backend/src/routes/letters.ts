@@ -96,7 +96,11 @@ router.get('/letters/:letterId', async (req, res, next) => {
     const { letterId } = req.params;
 
     const letter = await db.query.letters.findFirst({
-      where: and(eq(letters.id, letterId), isNull(letters.deletedAt)),
+      where: and(
+        eq(letters.id, letterId),
+        isNull(letters.deletedAt),
+        eq(letters.visibility, 'PUBLISHED')
+      ),
       with: {
         collection: true,
         pages: {

@@ -1,11 +1,63 @@
 import { Router } from 'express';
-import { eq } from 'drizzle-orm';
+import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, letters } from '../../db/index.js';
 import { getLetterById, resetLetterForProcessing } from '../../services/letters.js';
-import { transformLetterToDTO, type LetterWithRelations } from '../../dto/index.js';
+import { transformLetterToDTO, transformLetterWithRelatedToDTO, type LetterWithRelations } from '../../dto/index.js';
 
 const router = Router();
+
+/**
+ * GET /admin/letters/:letterId - Get a single letter with pages (admin - any visibility)
+ * Also fetches related cards (C) and extras (E) for the same date/sequence
+ */
+router.get('/letters/:letterId', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    const letter = await db.query.letters.findFirst({
+      where: and(eq(letters.id, letterId), isNull(letters.deletedAt)),
+      with: {
+        collection: true,
+        pages: {
+          orderBy: (p, { asc }) => [asc(p.pageNumber)],
+        },
+      },
+    });
+
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // If this is a letter (L type), fetch related cards (C) and extras (E)
+    let relatedItems: LetterWithRelations[] = [];
+    if (letter.type === 'L') {
+      const related = await db.query.letters.findMany({
+        where: and(
+          eq(letters.collectionId, letter.collectionId),
+          eq(letters.dateRaw, letter.dateRaw),
+          eq(letters.typeSequence, letter.typeSequence),
+          inArray(letters.type, ['C', 'E']),
+          isNull(letters.deletedAt)
+        ),
+        with: {
+          collection: true,
+          pages: {
+            orderBy: (p, { asc }) => [asc(p.pageNumber)],
+          },
+        },
+        orderBy: (l, { asc }) => [asc(l.type)], // C before E
+      });
+      relatedItems = related as LetterWithRelations[];
+    }
+
+    // Transform to frontend-compatible format, including related items
+    res.json(transformLetterWithRelatedToDTO(letter as LetterWithRelations, relatedItems));
+  } catch (error) {
+    next(error);
+  }
+});
 
 // Validation schema for letter updates
 const updateLetterSchema = z.object({
@@ -13,6 +65,7 @@ const updateLetterSchema = z.object({
   sender: z.string().nullable().optional(),
   recipient: z.string().nullable().optional(),
   locationWritten: z.string().nullable().optional(),
+  hook: z.string().nullable().optional(),
   summary: z.string().nullable().optional(),
   extractedDate: z.string().nullable().optional(),
   extractedDateConfidence: z.enum(['exact', 'unknown', 'inferred']).nullable().optional(),
@@ -88,6 +141,9 @@ router.put('/letters/:letterId', async (req, res, next) => {
     }
     if (updates.locationWritten !== undefined) {
       dbUpdates.locationWritten = updates.locationWritten;
+    }
+    if (updates.hook !== undefined) {
+      dbUpdates.hook = updates.hook;
     }
     if (updates.summary !== undefined) {
       dbUpdates.summary = updates.summary;

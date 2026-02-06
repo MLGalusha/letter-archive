@@ -39,6 +39,7 @@ export interface LetterMetadata {
   dateRaw?: string;
   dateConfidence?: 'exact' | 'unknown' | 'inferred';
   location?: string;
+  hook?: string;
   description?: string;
   tags?: string[];
   notes?: string;

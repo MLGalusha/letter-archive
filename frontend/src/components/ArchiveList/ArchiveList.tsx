@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import "./ArchiveList.css";
 import LetterCard from "../LetterCard/LetterCard";
-import { getLetters } from "../../api/letters";
+import { getPublishedLetters } from "../../api/letters";
 import type { Letter } from "../../types/Letter";
 import type { SearchFilters } from "../SearchBar/SearchBar";
 
@@ -26,7 +26,7 @@ export default function ArchiveList({
       setLoading(true);
       setError(null);
       try {
-        const response = await getLetters({ limit: 100 });
+        const response = await getPublishedLetters({ limit: 100 });
         setLetters(response.letters);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load letters");
@@ -95,7 +95,7 @@ export default function ArchiveList({
     }
 
     return results;
-  }, [searchQuery, filters]);
+  }, [letters, searchQuery, filters]);
 
   const letterSummaries = useMemo(
     () =>
@@ -106,7 +106,7 @@ export default function ArchiveList({
         location: letter.metadata.location,
         sender: letter.metadata.sender,
         recipient: letter.metadata.recipient,
-        description: letter.metadata.description,
+        hook: letter.metadata.hook,
       })),
     [filteredLetters]
   );
@@ -144,7 +144,7 @@ export default function ArchiveList({
                 location={letter.location}
                 sender={letter.sender}
                 recipient={letter.recipient}
-                description={letter.description}
+                hook={letter.hook}
                 onClick={onLetterClick}
               />
             ))}

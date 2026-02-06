@@ -35,6 +35,7 @@ export interface FrontendLetterMetadata {
   dateRaw?: string;
   dateConfidence?: 'exact' | 'unknown' | 'inferred';
   location?: string;
+  hook?: string;
   description?: string;
   tags?: string[];
   notes?: string;
@@ -197,6 +198,7 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
       dateRaw: letter.dateRaw,
       dateConfidence: letter.extractedDateConfidence || letter.dateConfidence,
       location: letter.locationWritten || undefined,
+      hook: letter.hook || undefined,
       description: letter.summary || undefined,
       tags: letter.tags || undefined,
       notes: letter.notes || undefined,

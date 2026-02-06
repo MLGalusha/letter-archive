@@ -168,9 +168,14 @@ export default function AdminDashboard() {
 
       <div className="admin-content">
         <div className="admin-toolbar">
-          <button onClick={handleUploadClick} className="upload-button">
-            Upload New Letter
-          </button>
+          <div className="toolbar-buttons">
+            <button onClick={handleUploadClick} className="upload-button">
+              Upload New Letter
+            </button>
+            <button onClick={() => navigate('/admin/collections')} className="collections-button">
+              Manage Collections
+            </button>
+          </div>
 
           <div className="filter-search-container">
             <div className="filter-group">

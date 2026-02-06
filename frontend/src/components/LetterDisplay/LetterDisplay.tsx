@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Letter } from "../../types/Letter";
 import LetterViewer from "../LetterViewer/LetterViewer";
 import "./LetterDisplay.css";
@@ -8,117 +9,108 @@ interface LetterDisplayProps {
 }
 
 export default function LetterDisplay({ letter }: LetterDisplayProps) {
+  const navigate = useNavigate();
   const [showFullTranscript, setShowFullTranscript] = useState(false);
+
+  const handleBack = () => {
+    navigate(-1);
+  };
 
   return (
     <div className="letter-display">
-      <div className="letter-display-container">
-        {/* Header */}
-        <div className="letter-header">
-          <h1>{letter.title}</h1>
-          {letter.metadata.date && (
-            <p className="letter-date-large">{letter.metadata.date}</p>
-          )}
-        </div>
+      <header className="display-header">
+        <h1>{letter.title}</h1>
+        <button onClick={handleBack} className="back-button">
+          Back
+        </button>
+      </header>
 
-        {/* Image Section - Using LetterViewer component */}
-        <div className="letter-image-section">
-          <LetterViewer images={letter.images} showOnlyLetterPages={false} />
-        </div>
-
-        {/* Transcript Section */}
-        <div className="letter-transcript-section card">
-          <div className="transcript-header">
-            <h2>Transcript</h2>
-            {letter.transcript.verified && (
-              <span className="verified-badge">✓ Verified</span>
-            )}
+      <div className="display-body">
+        <div className="display-layout">
+          {/* Left side: Letter viewer */}
+          <div className="images-panel">
+            <LetterViewer images={letter.images} showOnlyLetterPages={false} />
           </div>
 
-          {letter.transcript.pages.length > 1 && !showFullTranscript ? (
-            <div className="transcript-pages">
-              {letter.transcript.pages.map((page) => (
-                <div key={page.pageNumber} className="transcript-page">
-                  <h4>Page {page.pageNumber}</h4>
-                  <p className="transcript-text">{page.text}</p>
-                  {page.confidence && (
-                    <span className="confidence-badge">
-                      {Math.round(page.confidence * 100)}% confidence
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="transcript-full">
-              <p className="transcript-text">{letter.transcript.fullText}</p>
-            </div>
-          )}
+          {/* Right side: Read-only content */}
+          <div className="details-panel">
+            {/* Transcript Section */}
+            <div className="transcript-section">
+              <div className="section-header">
+                <h2>Transcript</h2>
+                {letter.transcript.verified && (
+                  <span className="verified-badge">✓ Verified</span>
+                )}
+              </div>
+              <div className="section-content">
+                {letter.transcript.pages.length > 1 && !showFullTranscript ? (
+                  <div className="transcript-pages">
+                    {letter.transcript.pages.map((page) => (
+                      <div key={page.pageNumber} className="transcript-page">
+                        <h4>Page {page.pageNumber}</h4>
+                        <p className="transcript-text">{page.text}</p>
+                        {page.confidence && (
+                          <span className="confidence-badge">
+                            {Math.round(page.confidence * 100)}% confidence
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="transcript-full">
+                    <p className="transcript-text">{letter.transcript.fullText}</p>
+                  </div>
+                )}
 
-          {letter.transcript.pages.length > 1 && (
-            <button
-              className="toggle-transcript-button"
-              onClick={() => setShowFullTranscript(!showFullTranscript)}
-            >
-              {showFullTranscript ? "Show by page" : "Show full text"}
-            </button>
-          )}
-        </div>
+                {letter.transcript.pages.length > 1 && (
+                  <button
+                    className="toggle-transcript-button"
+                    onClick={() => setShowFullTranscript(!showFullTranscript)}
+                  >
+                    {showFullTranscript ? "Show by page" : "Show full text"}
+                  </button>
+                )}
+              </div>
+            </div>
 
-        {/* Metadata Section */}
-        <div className="letter-metadata-section card">
-          <h3>Details</h3>
-          <div className="metadata-grid">
-            {letter.metadata.sender && (
-              <div className="metadata-item">
-                <h4>From</h4>
-                <p>{letter.metadata.sender}</p>
+            {/* Metadata Section */}
+            <div className="metadata-section">
+              <h2>Details</h2>
+              <div className="metadata-grid">
+                {letter.metadata.sender && (
+                  <div className="metadata-item">
+                    <span className="metadata-label">From</span>
+                    <span className="metadata-value">{letter.metadata.sender}</span>
+                  </div>
+                )}
+                {letter.metadata.recipient && (
+                  <div className="metadata-item">
+                    <span className="metadata-label">To</span>
+                    <span className="metadata-value">{letter.metadata.recipient}</span>
+                  </div>
+                )}
+                {letter.metadata.date && (
+                  <div className="metadata-item">
+                    <span className="metadata-label">Date</span>
+                    <span className="metadata-value">{letter.metadata.date}</span>
+                  </div>
+                )}
+                {letter.metadata.location && (
+                  <div className="metadata-item">
+                    <span className="metadata-label">Location</span>
+                    <span className="metadata-value">{letter.metadata.location}</span>
+                  </div>
+                )}
+                {letter.metadata.description && (
+                  <div className="metadata-item metadata-full-width">
+                    <span className="metadata-label">Description</span>
+                    <span className="metadata-value">{letter.metadata.description}</span>
+                  </div>
+                )}
               </div>
-            )}
-            {letter.metadata.recipient && (
-              <div className="metadata-item">
-                <h4>To</h4>
-                <p>{letter.metadata.recipient}</p>
-              </div>
-            )}
-            {letter.metadata.date && (
-              <div className="metadata-item">
-                <h4>Date</h4>
-                <p>{letter.metadata.date}</p>
-              </div>
-            )}
-            {letter.metadata.location && (
-              <div className="metadata-item">
-                <h4>Location</h4>
-                <p>{letter.metadata.location}</p>
-              </div>
-            )}
-            {letter.metadata.description && (
-              <div className="metadata-item metadata-description">
-                <h4>Description</h4>
-                <p>{letter.metadata.description}</p>
-              </div>
-            )}
+            </div>
           </div>
-
-          {letter.metadata.verified && (
-            <div className="verification-info">
-              <hr className="divider" />
-              <h4>Verification</h4>
-              <p>
-                {letter.metadata.verifiedBy && (
-                  <>Verified by {letter.metadata.verifiedBy}</>
-                )}
-                {letter.metadata.verifiedAt && (
-                  <>
-                    {" "}
-                    on{" "}
-                    {new Date(letter.metadata.verifiedAt).toLocaleDateString()}
-                  </>
-                )}
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>

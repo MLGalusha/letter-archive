@@ -6,7 +6,7 @@ interface LetterCardProps {
   location?: string;
   sender?: string;
   recipient?: string;
-  description?: string;
+  hook?: string;
   onClick: (id: string) => void;
 }
 
@@ -16,24 +16,24 @@ export default function LetterCard({
   location,
   sender,
   recipient,
-  description,
+  hook,
   onClick,
 }: LetterCardProps) {
-  // Extract tags from description or location for display
+  // Extract tags from hook or location for display
   const getTags = () => {
     const tags: string[] = [];
 
     // You can customize this logic to derive tags from the letter content
-    if (description?.toLowerCase().includes("farm")) tags.push("Farming");
-    if (description?.toLowerCase().includes("family")) tags.push("Family");
-    if (description?.toLowerCase().includes("mine") || description?.toLowerCase().includes("work")) tags.push("Labor");
-    if (description?.toLowerCase().includes("injury") || description?.toLowerCase().includes("health")) tags.push("Health");
-    if (description?.toLowerCase().includes("cost") || description?.toLowerCase().includes("expense")) tags.push("Economy");
-    if (description?.toLowerCase().includes("household") || description?.toLowerCase().includes("domestic")) tags.push("Domestic Life");
-    if (description?.toLowerCase().includes("employment") || description?.toLowerCase().includes("job")) tags.push("Employment");
-    if (description?.toLowerCase().includes("moving") || description?.toLowerCase().includes("travel")) tags.push("Migration");
-    if (description?.toLowerCase().includes("bank") || description?.toLowerCase().includes("savings")) tags.push("Great Depression");
-    if (description?.toLowerCase().includes("ration") || description?.toLowerCase().includes("war")) tags.push("Wartime");
+    if (hook?.toLowerCase().includes("farm")) tags.push("Farming");
+    if (hook?.toLowerCase().includes("family")) tags.push("Family");
+    if (hook?.toLowerCase().includes("mine") || hook?.toLowerCase().includes("work")) tags.push("Labor");
+    if (hook?.toLowerCase().includes("injury") || hook?.toLowerCase().includes("health")) tags.push("Health");
+    if (hook?.toLowerCase().includes("cost") || hook?.toLowerCase().includes("expense")) tags.push("Economy");
+    if (hook?.toLowerCase().includes("household") || hook?.toLowerCase().includes("domestic")) tags.push("Domestic Life");
+    if (hook?.toLowerCase().includes("employment") || hook?.toLowerCase().includes("job")) tags.push("Employment");
+    if (hook?.toLowerCase().includes("moving") || hook?.toLowerCase().includes("travel")) tags.push("Migration");
+    if (hook?.toLowerCase().includes("bank") || hook?.toLowerCase().includes("savings")) tags.push("Great Depression");
+    if (hook?.toLowerCase().includes("ration") || hook?.toLowerCase().includes("war")) tags.push("Wartime");
 
     return tags.slice(0, 3); // Limit to 3 tags
   };
@@ -47,7 +47,7 @@ export default function LetterCard({
       <div className="letter-people">
         {sender && recipient ? `${sender} → ${recipient}` : sender || recipient || "Unknown"}
       </div>
-      {description && <div className="letter-summary">{description}</div>}
+      {hook && <div className="letter-summary">{hook}</div>}
       {tags.length > 0 && (
         <div className="letter-tags">
           {tags.map((tag, index) => (

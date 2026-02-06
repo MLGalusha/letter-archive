@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getLetterById } from "../../api/letters";
+import { getAdminLetterById } from "../../api/letters";
 import { updateLetter, deleteLetter, markAsReviewed } from "../../api/admin";
 import LetterViewer from "../../components/LetterViewer/LetterViewer";
 import type { Letter, VisibilityState, WorkflowState } from "../../types/Letter";
@@ -28,6 +28,7 @@ export default function LetterReviewPage() {
   const [date, setDate] = useState("");
   const [dateConfidence, setDateConfidence] = useState<"exact" | "unknown" | "inferred">("unknown");
   const [location, setLocation] = useState("");
+  const [hook, setHook] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
   const [notes, setNotes] = useState("");
@@ -35,6 +36,7 @@ export default function LetterReviewPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const hookRef = useRef<HTMLTextAreaElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
 
@@ -49,7 +51,7 @@ export default function LetterReviewPage() {
       async function fetchLetter() {
         setLoading(true);
         try {
-          const foundLetter = await getLetterById(letterId!);
+          const foundLetter = await getAdminLetterById(letterId!);
           setLetter(foundLetter);
           setTranscript(foundLetter.transcript.fullText);
           setSender(foundLetter.metadata.sender || "");
@@ -57,6 +59,7 @@ export default function LetterReviewPage() {
           setDate(foundLetter.metadata.date || "");
           setDateConfidence(foundLetter.metadata.dateConfidence || "unknown");
           setLocation(foundLetter.metadata.location || "");
+          setHook(foundLetter.metadata.hook || "");
           setDescription(foundLetter.metadata.description || "");
           setTags(foundLetter.metadata.tags?.join(", ") || "");
           setNotes(foundLetter.metadata.notes || "");
@@ -79,6 +82,15 @@ export default function LetterReviewPage() {
       textarea.style.height = textarea.scrollHeight + "px";
     }
   }, [transcript]);
+
+  // Auto-resize hook textarea
+  useEffect(() => {
+    const textarea = hookRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = textarea.scrollHeight + "px";
+    }
+  }, [hook]);
 
   // Auto-resize description textarea
   useEffect(() => {
@@ -116,6 +128,7 @@ export default function LetterReviewPage() {
         extractedDate: date || null,
         extractedDateConfidence: dateConfidence,
         locationWritten: location || null,
+        hook: hook || null,
         summary: description || null,
         tags: tagsArray.length > 0 ? tagsArray : null,
         notes: notes || null,
@@ -221,7 +234,7 @@ export default function LetterReviewPage() {
         </button>
       </header>
 
-      <div className="review-content">
+      <div className="review-body">
         <div className="review-layout">
           {/* Left side: Letter viewer */}
           <div className="images-panel">
@@ -349,13 +362,26 @@ export default function LetterReviewPage() {
                 </div>
 
                 <div className="form-group">
+                  <label htmlFor="hook">Hook</label>
+                  <textarea
+                    ref={hookRef}
+                    id="hook"
+                    value={hook}
+                    onChange={(e) => setHook(e.target.value)}
+                    placeholder="Short teaser to engage readers (shown in list view)"
+                    maxLength={150}
+                  />
+                  <span className="help-text">Max 150 characters - displayed on letter cards</span>
+                </div>
+
+                <div className="form-group">
                   <label htmlFor="description">Summary</label>
                   <textarea
                     ref={descriptionRef}
                     id="description"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Brief description of letter content"
+                    placeholder="Factual description of letter content (shown in detail view)"
                   />
                 </div>
 

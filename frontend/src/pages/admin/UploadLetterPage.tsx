@@ -22,9 +22,11 @@ interface UploadedImage {
 }
 
 interface LetterGroup {
-  letterKey: string; // e.g., "L01", "C01"
-  type: string;
-  typeSequence: number;
+  letterKey: string; // dateRaw, e.g., "18860314" or "XXXXXXXX"
+  dateRaw: string;
+  letterDate: string | null; // ISO date or null for unknown
+  letterPageCount: number; // count of type L images
+  extraCount: number; // count of non-L type images
   images: UploadedImage[];
 }
 
@@ -38,7 +40,6 @@ interface CollectionGroup {
 interface EditState {
   active: boolean;
   selectedCollection: string | null; // collection code or 'new'
-  selectedLetterKey: string | null;
   selectedImageIds: Set<string>;
   newCollectionCode: string;
 }
@@ -67,49 +68,64 @@ function groupImagesByCollection(images: UploadedImage[]): CollectionGroup[] {
   // Convert to CollectionGroup array
   const groups: CollectionGroup[] = [];
   for (const [collectionCode, imgs] of collectionMap) {
-    // Group by letter key within collection
+    // Group by dateRaw within collection (not by type+sequence)
     const letterMap = new Map<string, UploadedImage[]>();
-    const dates: string[] = [];
 
     for (const img of imgs) {
       if (img.parsed) {
-        const letterKey = `${img.parsed.type}${String(img.parsed.typeSequence).padStart(2, "0")}`;
-        const existing = letterMap.get(letterKey) || [];
+        const dateKey = img.parsed.dateRaw; // Group by date
+        const existing = letterMap.get(dateKey) || [];
         existing.push(img);
-        letterMap.set(letterKey, existing);
-
-        if (img.parsed.letterDate) {
-          dates.push(img.parsed.letterDate);
-        }
+        letterMap.set(dateKey, existing);
       }
     }
 
     // Build letters array
     const letters: LetterGroup[] = [];
-    for (const [letterKey, letterImgs] of letterMap) {
+    for (const [dateKey, letterImgs] of letterMap) {
       const firstParsed = letterImgs[0].parsed!;
+
+      // Count letter pages vs extras
+      const letterPageCount = letterImgs.filter(img => img.parsed?.type === 'L').length;
+      const extraCount = letterImgs.length - letterPageCount;
+
       letters.push({
-        letterKey,
-        type: firstParsed.type,
-        typeSequence: firstParsed.typeSequence,
-        images: letterImgs.sort((a, b) => (a.parsed?.pageNumber || 0) - (b.parsed?.pageNumber || 0)),
+        letterKey: dateKey,
+        dateRaw: dateKey,
+        letterDate: firstParsed.letterDate,
+        letterPageCount,
+        extraCount,
+        images: letterImgs.sort((a, b) => {
+          // Sort by type first (L before others), then by sequence, then by page
+          const aType = a.parsed?.type || 'Z';
+          const bType = b.parsed?.type || 'Z';
+          if (aType !== bType) {
+            if (aType === 'L') return -1;
+            if (bType === 'L') return 1;
+            return aType.localeCompare(bType);
+          }
+          const aSeq = a.parsed?.typeSequence || 0;
+          const bSeq = b.parsed?.typeSequence || 0;
+          if (aSeq !== bSeq) return aSeq - bSeq;
+          return (a.parsed?.pageNumber || 0) - (b.parsed?.pageNumber || 0);
+        }),
       });
     }
 
-    // Sort letters by type and sequence
-    letters.sort((a, b) => {
-      if (a.type !== b.type) return a.type.localeCompare(b.type);
-      return a.typeSequence - b.typeSequence;
-    });
+    // Sort letters by date
+    letters.sort((a, b) => a.dateRaw.localeCompare(b.dateRaw));
 
-    // Calculate date range
+    // Calculate date range from letters
     let dateRange = "Unknown";
-    if (dates.length > 0) {
-      const sortedDates = dates.sort();
-      if (sortedDates.length === 1) {
-        dateRange = sortedDates[0];
+    const knownDates = letters
+      .filter(l => l.letterDate !== null)
+      .map(l => l.letterDate as string)
+      .sort();
+    if (knownDates.length > 0) {
+      if (knownDates.length === 1) {
+        dateRange = knownDates[0];
       } else {
-        dateRange = `${sortedDates[0]} - ${sortedDates[sortedDates.length - 1]}`;
+        dateRange = `${knownDates[0]} - ${knownDates[knownDates.length - 1]}`;
       }
     }
 
@@ -129,6 +145,16 @@ function getNextCollectionCode(collections: CollectionGroup[]): string {
   if (collections.length === 0) return "001";
   const maxCode = Math.max(...collections.map((c) => parseInt(c.collectionCode, 10)));
   return String(maxCode + 1).padStart(3, "0");
+}
+
+function formatDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
 }
 
 function generateNewFilename(
@@ -220,7 +246,6 @@ function CollectionCard({ collection, isSelected, editMode, onSelect, onClick }:
         <span>{letterText}</span>
         <span>{collection.totalImages} images</span>
       </div>
-      <div className="collection-date">{collection.dateRange}</div>
       {isSelected && <div className="selected-badge">Selected</div>}
     </div>
   );
@@ -251,7 +276,7 @@ function CollectionModal({ collection, onClose, onViewImage }: CollectionModalPr
         <div className="modal-header">
           <h2>
             {selectedLetter
-              ? `${getTypeName(selectedLetter.type)} ${selectedLetter.typeSequence}`
+              ? (selectedLetter.letterDate ? formatDate(selectedLetter.letterDate) : 'Unknown Date')
               : `Collection ${collection.collectionCode}`}
           </h2>
           <button
@@ -266,7 +291,7 @@ function CollectionModal({ collection, onClose, onViewImage }: CollectionModalPr
           <div className="letter-images">
             {selectedLetter.images.map((img) => (
               <div key={img.id} className="letter-image-item" onClick={() => onViewImage(img)}>
-                <div className="image-type-badge">{getTypeName(selectedLetter.type)}</div>
+                <div className="image-type-badge">{getTypeName(img.parsed?.type || 'L')}</div>
                 <img src={img.url} alt={img.originalFilename} />
                 <div className="image-page">
                   Page {img.parsed?.pageNumber || 1}
@@ -282,9 +307,17 @@ function CollectionModal({ collection, onClose, onViewImage }: CollectionModalPr
                 className="letter-card"
                 onClick={() => setSelectedLetter(letter)}
               >
-                <div className="letter-card-type">{getTypeName(letter.type)}</div>
-                <div className="letter-card-sequence">#{letter.typeSequence}</div>
-                <div className="letter-card-pages">{letter.images.length} pages</div>
+                <div className="letter-card-date">
+                  {letter.letterDate ? formatDate(letter.letterDate) : 'Unknown Date'}
+                </div>
+                <div className="letter-card-counts">
+                  {letter.letterPageCount > 0 && (
+                    <span>{letter.letterPageCount} letter{letter.letterPageCount !== 1 ? 's' : ''}</span>
+                  )}
+                  {letter.extraCount > 0 && (
+                    <span>{letter.extraCount} extra{letter.extraCount !== 1 ? 's' : ''}</span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -359,7 +392,6 @@ export default function UploadLetterPage() {
   const [editState, setEditState] = useState<EditState>({
     active: false,
     selectedCollection: null,
-    selectedLetterKey: null,
     selectedImageIds: new Set(),
     newCollectionCode: "001",
   });
@@ -445,7 +477,6 @@ export default function UploadLetterPage() {
       ...prev,
       active: !prev.active,
       selectedCollection: null,
-      selectedLetterKey: null,
       selectedImageIds: new Set(),
     }));
   };
@@ -454,7 +485,6 @@ export default function UploadLetterPage() {
     setEditState((prev) => ({
       ...prev,
       selectedCollection: prev.selectedCollection === collectionCode ? null : collectionCode,
-      selectedLetterKey: null,
     }));
   };
 
@@ -462,7 +492,6 @@ export default function UploadLetterPage() {
     setEditState((prev) => ({
       ...prev,
       selectedCollection: prev.selectedCollection === "new" ? null : "new",
-      selectedLetterKey: null,
     }));
   };
 
@@ -494,31 +523,24 @@ export default function UploadLetterPage() {
 
     if (!collectionCode) return;
 
-    // Determine type and sequence
-    let type = "L";
-    let typeSequence = 1;
-
-    if (editState.selectedCollection !== "new" && editState.selectedLetterKey) {
-      // Adding to existing letter
-      type = editState.selectedLetterKey.charAt(0);
-      typeSequence = parseInt(editState.selectedLetterKey.slice(1), 10);
-    } else if (editState.selectedCollection !== "new") {
-      // Adding as new letter to existing collection
-      const collection = collections.find((c) => c.collectionCode === collectionCode);
-      if (collection && collection.letters.length > 0) {
-        const maxSeq = Math.max(...collection.letters.filter(l => l.type === 'L').map((l) => l.typeSequence));
-        typeSequence = maxSeq + 1;
-      }
-    }
+    // Determine type and sequence - always L01 for new uploads
+    const type = "L";
+    const typeSequence = 1;
 
     // Determine starting page number
+    // When adding to existing collection, find max page for XXXXXXXX date with L type
     let pageNumber = 1;
-    if (editState.selectedLetterKey) {
+    if (editState.selectedCollection !== "new") {
       const collection = collections.find((c) => c.collectionCode === collectionCode);
       if (collection) {
-        const letter = collection.letters.find((l) => l.letterKey === editState.selectedLetterKey);
-        if (letter) {
-          pageNumber = letter.images.length + 1;
+        // Find the XXXXXXXX letter if it exists
+        const unknownDateLetter = collection.letters.find((l) => l.dateRaw === 'XXXXXXXX');
+        if (unknownDateLetter) {
+          // Find max page number for L type images
+          const lImages = unknownDateLetter.images.filter(img => img.parsed?.type === 'L');
+          if (lImages.length > 0) {
+            pageNumber = Math.max(...lImages.map(img => img.parsed?.pageNumber || 0)) + 1;
+          }
         }
       }
     }
@@ -550,7 +572,6 @@ export default function UploadLetterPage() {
     setEditState((prev) => ({
       ...prev,
       selectedCollection: null,
-      selectedLetterKey: null,
       selectedImageIds: new Set(),
     }));
   };
@@ -624,6 +645,35 @@ export default function UploadLetterPage() {
       {/* Header */}
       <header className="upload-header">
         <h1>Upload Letters</h1>
+
+        {/* Edit mode controls - inline in header when active */}
+        {editState.active && (
+          <div className="header-edit-controls">
+            <span className="edit-status">
+              {editState.selectedImageIds.size} selected
+            </span>
+            {editState.selectedCollection === "new" && (
+              <div className="new-collection-input">
+                <label>Collection #:</label>
+                <input
+                  type="text"
+                  value={editState.newCollectionCode}
+                  onChange={(e) => handleNewCollectionCodeChange(e.target.value)}
+                  placeholder="001"
+                  maxLength={3}
+                />
+              </div>
+            )}
+            <button
+              className="add-btn"
+              disabled={!canAdd}
+              onClick={handleAddToCollection}
+            >
+              Add to Collection
+            </button>
+          </div>
+        )}
+
         <div className="header-actions">
           {images.length > 0 && (
             <button
@@ -638,45 +688,6 @@ export default function UploadLetterPage() {
           </button>
         </div>
       </header>
-
-      {/* Edit Mode Bar */}
-      {editState.active && (
-        <div className="edit-mode-bar">
-          <div className="edit-instructions">
-            {editState.selectedImageIds.size === 0 && !editState.selectedCollection && (
-              <span>Select images from Uncategorized and/or a collection to add them to</span>
-            )}
-            {editState.selectedImageIds.size > 0 && !editState.selectedCollection && (
-              <span>{editState.selectedImageIds.size} image(s) selected. Now select a collection.</span>
-            )}
-            {editState.selectedCollection && editState.selectedImageIds.size === 0 && (
-              <span>Collection selected. Now select images from Uncategorized.</span>
-            )}
-            {editState.selectedCollection && editState.selectedImageIds.size > 0 && (
-              <span>Ready to add {editState.selectedImageIds.size} image(s) to collection.</span>
-            )}
-          </div>
-          {editState.selectedCollection === "new" && (
-            <div className="new-collection-input">
-              <label>Collection #:</label>
-              <input
-                type="text"
-                value={editState.newCollectionCode}
-                onChange={(e) => handleNewCollectionCodeChange(e.target.value)}
-                placeholder="001"
-                maxLength={3}
-              />
-            </div>
-          )}
-          <button
-            className="add-btn"
-            disabled={!canAdd}
-            onClick={handleAddToCollection}
-          >
-            Add to Collection
-          </button>
-        </div>
-      )}
 
       <div className="upload-content">
         {/* Upload Section */}

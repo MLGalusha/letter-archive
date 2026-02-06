@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import uploadsRouter from './uploads.js';
 import lettersRouter from './letters.js';
+import collectionsRouter from './collections.js';
 
 const router = Router();
 
 router.use(uploadsRouter);
 router.use(lettersRouter);
+router.use('/collections', collectionsRouter);
 
 export default router;

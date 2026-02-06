@@ -21,7 +21,6 @@ CRITICAL GUIDELINES:
 - Extract ONLY information that is explicitly stated or clearly implied in the text
 - Use null for any field you cannot determine with reasonable confidence
 - DO NOT fabricate or infer information not present in the text
-- Include uncertainty markers like "possibly" or "likely" in the summary if appropriate
 - For dates, use ISO format (YYYY-MM-DD) if complete, or partial format if incomplete
 
 OUTPUT FORMAT:
@@ -30,13 +29,31 @@ Respond with a JSON object containing these fields:
   "sender": string | null,
   "recipient": string | null,
   "location_written": string | null,
+  "hook": string | null,
   "summary": string | null,
   "tags": string[],
   "extracted_date": string | null,
   "extracted_date_confidence": "exact" | "inferred" | null
 }
 
-For tags, include relevant topics, themes, events, people mentioned, or notable subjects from the letter. Keep tags concise (1-3 words each).`;
+FIELD GUIDELINES:
+
+hook (1-2 sentences, maximum 150 characters):
+- A brief, intriguing teaser that makes readers want to explore the letter
+- Must be 100% faithful to the letter's actual content - never exaggerate or mislead
+- Focus on the most compelling or human element of the letter
+- Write in present tense, third person
+- Examples: "A mother anxiously awaits news of her son's mining injury." or "Financial troubles force a difficult decision about the family farm."
+
+summary (2-4 sentences):
+- A straightforward factual description of the letter's content
+- Cover the main topics, people, and events discussed
+- Neutral, informational tone - not promotional
+- Include uncertainty markers like "possibly" or "likely" if appropriate
+
+tags:
+- Include relevant topics, themes, events, people mentioned, or notable subjects
+- Keep tags concise (1-3 words each)`;
 
 export function buildTranscriptionUserPrompt(context?: {
   collectionCode?: string;

@@ -93,6 +93,7 @@ export const letters = pgTable(
     locationWritten: text('location_written'),
     extractedDate: date('extracted_date'),
     extractedDateConfidence: dateConfidenceEnum('extracted_date_confidence'),
+    hook: text('hook'),
     summary: text('summary'),
     tags: text('tags').array(),
     metadataJson: jsonb('metadata_json'),

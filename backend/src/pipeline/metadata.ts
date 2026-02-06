@@ -65,6 +65,7 @@ export async function runMetadataExtraction(letterId: string): Promise<void> {
         sender: result.sender,
         recipient: result.recipient,
         locationWritten: result.locationWritten,
+        hook: result.hook,
         summary: result.summary,
         tags: result.tags,
         extractedDate: result.extractedDate,

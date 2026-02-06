@@ -65,3 +65,10 @@ export async function getAdminLetters(params: LetterQueryParams = {}): Promise<L
     sortOrder: params.sortOrder,
   });
 }
+
+/**
+ * Fetch a single letter by ID for admin view (any visibility state)
+ */
+export async function getAdminLetterById(id: string): Promise<Letter> {
+  return apiGet<Letter>(`/admin/letters/${id}`);
+}

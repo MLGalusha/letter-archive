@@ -44,6 +44,7 @@ export interface ExtractedMetadata {
   sender: string | null;
   recipient: string | null;
   locationWritten: string | null;
+  hook: string | null;
   summary: string | null;
   tags: string[];
   extractedDate: string | null;
@@ -171,6 +172,7 @@ export async function extractMetadata(
     sender: parsed.sender ?? null,
     recipient: parsed.recipient ?? null,
     locationWritten: parsed.location_written ?? null,
+    hook: parsed.hook ?? null,
     summary: parsed.summary ?? null,
     tags: Array.isArray(parsed.tags) ? parsed.tags : [],
     extractedDate: parsed.extracted_date ?? null,
@@ -186,6 +188,7 @@ function generateStubMetadata(params: ExtractMetadataParams): ExtractedMetadata 
     sender: hasStubMarker ? 'Unknown (stub)' : null,
     recipient: hasStubMarker ? 'Unknown (stub)' : null,
     locationWritten: null,
+    hook: hasStubMarker ? 'A placeholder letter awaits your review.' : null,
     summary: hasStubMarker
       ? '[STUB] This is placeholder metadata. Set OPENAI_API_KEY for real extraction.'
       : 'Unable to extract summary from transcription.',

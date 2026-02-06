@@ -48,6 +48,7 @@ export interface UpdateLetterData {
   sender?: string | null;
   recipient?: string | null;
   locationWritten?: string | null;
+  hook?: string | null;
   summary?: string | null;
   extractedDate?: string | null;
   extractedDateConfidence?: 'exact' | 'unknown' | 'inferred' | null;

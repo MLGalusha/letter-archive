@@ -148,6 +148,7 @@ export async function updateMetadataStatus(
     sender?: string | null;
     recipient?: string | null;
     locationWritten?: string | null;
+    hook?: string | null;
     summary?: string | null;
     tags?: string[] | null;
     extractedDate?: string | null;
@@ -165,6 +166,7 @@ export async function updateMetadataStatus(
     if (metadata.sender !== undefined) updates.sender = metadata.sender;
     if (metadata.recipient !== undefined) updates.recipient = metadata.recipient;
     if (metadata.locationWritten !== undefined) updates.locationWritten = metadata.locationWritten;
+    if (metadata.hook !== undefined) updates.hook = metadata.hook;
     if (metadata.summary !== undefined) updates.summary = metadata.summary;
     if (metadata.tags !== undefined) updates.tags = metadata.tags;
     if (metadata.extractedDate !== undefined) updates.extractedDate = metadata.extractedDate;

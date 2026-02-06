@@ -5,10 +5,14 @@ import HomePage from "./pages/HomePage";
 import LetterDetailPage from "./pages/LetterDetailPage";
 import AboutPage from "./pages/AboutPage";
 import ContactPage from "./pages/ContactPage";
+import CollectionsPage from "./pages/CollectionsPage";
+import CollectionDetailPage from "./pages/CollectionDetailPage";
 import AdminLoginPage from "./pages/admin/AdminLoginPage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import UploadLetterPage from "./pages/admin/UploadLetterPage";
 import LetterReviewPage from "./pages/admin/LetterReviewPage";
+import AdminCollectionsPage from "./pages/admin/CollectionsPage";
+import AdminCollectionDetailPage from "./pages/admin/CollectionDetailPage";
 import "./App.css";
 
 function App() {
@@ -21,6 +25,11 @@ function App() {
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/upload" element={<UploadLetterPage />} />
         <Route path="/admin/letters/:letterId" element={<LetterReviewPage />} />
+        <Route path="/admin/collections" element={<AdminCollectionsPage />} />
+        <Route path="/admin/collections/:collectionCode" element={<AdminCollectionDetailPage />} />
+
+        {/* Letter detail - no main header (has its own header) */}
+        <Route path="/letter/:letterId" element={<LetterDetailPage />} />
 
         {/* Public routes - with header */}
         <Route
@@ -30,9 +39,10 @@ function App() {
               <Header />
               <Routes>
                 <Route path="/" element={<HomePage />} />
-                <Route path="/letter/:letterId" element={<LetterDetailPage />} />
                 <Route path="/about" element={<AboutPage />} />
                 <Route path="/contact" element={<ContactPage />} />
+                <Route path="/collections" element={<CollectionsPage />} />
+                <Route path="/collections/:collectionCode" element={<CollectionDetailPage />} />
               </Routes>
             </main>
           }

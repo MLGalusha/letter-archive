@@ -266,6 +266,7 @@ function CollectionModal({ collection, onClose, onViewImage }: CollectionModalPr
           <div className="letter-images">
             {selectedLetter.images.map((img) => (
               <div key={img.id} className="letter-image-item" onClick={() => onViewImage(img)}>
+                <div className="image-type-badge">{getTypeName(selectedLetter.type)}</div>
                 <img src={img.url} alt={img.originalFilename} />
                 <div className="image-page">
                   Page {img.parsed?.pageNumber || 1}
@@ -274,16 +275,16 @@ function CollectionModal({ collection, onClose, onViewImage }: CollectionModalPr
             ))}
           </div>
         ) : (
-          <div className="letter-list">
+          <div className="letter-grid">
             {collection.letters.map((letter) => (
               <div
                 key={letter.letterKey}
-                className="letter-item"
+                className="letter-card"
                 onClick={() => setSelectedLetter(letter)}
               >
-                <div className="letter-type">{getTypeName(letter.type)}</div>
-                <div className="letter-sequence">#{letter.typeSequence}</div>
-                <div className="letter-pages">{letter.images.length} pages</div>
+                <div className="letter-card-type">{getTypeName(letter.type)}</div>
+                <div className="letter-card-sequence">#{letter.typeSequence}</div>
+                <div className="letter-card-pages">{letter.images.length} pages</div>
               </div>
             ))}
           </div>

@@ -6,11 +6,13 @@ import "./LetterViewer.css";
 interface LetterViewerProps {
   images: LetterImage[];
   showOnlyLetterPages?: boolean;
+  onPageChange?: (index: number, image: LetterImage) => void;
 }
 
 export default function LetterViewer({
   images,
   showOnlyLetterPages = false,
+  onPageChange,
 }: LetterViewerProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [scale, setScale] = useState(1);
@@ -22,7 +24,7 @@ export default function LetterViewer({
 
   // Filter images if needed
   const displayImages = showOnlyLetterPages
-    ? images.filter((img) => img.type === "letter_page")
+    ? images.filter((img) => img.type === "letter")
     : images;
 
   const currentImage = displayImages[currentImageIndex];
@@ -32,6 +34,13 @@ export default function LetterViewer({
     setScale(1);
     setPosition({ x: 0, y: 0 });
   }, [currentImageIndex]);
+
+  // Notify parent of page changes
+  useEffect(() => {
+    if (onPageChange && displayImages[currentImageIndex]) {
+      onPageChange(currentImageIndex, displayImages[currentImageIndex]);
+    }
+  }, [currentImageIndex, displayImages, onPageChange]);
 
   // Global wheel event listener for image zoom when unlocked
   useEffect(() => {

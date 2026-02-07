@@ -21,6 +21,8 @@ export interface CollectionWithLetters extends CollectionInfo {
 export interface AdminCollectionInfo extends CollectionInfo {
   publishedCount: number;
   draftCount: number;
+  letterPageCount: number;
+  extraContentCount: number;
 }
 
 /**

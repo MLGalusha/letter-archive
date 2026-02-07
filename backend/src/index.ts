@@ -14,7 +14,15 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+
+// Parse JSON bodies, but skip for multipart/form-data (file uploads)
+app.use((req, res, next) => {
+  const contentType = req.headers['content-type'] || '';
+  if (contentType.includes('multipart/form-data')) {
+    return next();
+  }
+  return express.json()(req, res, next);
+});
 
 // Routes
 app.use(routes);

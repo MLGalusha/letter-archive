@@ -38,7 +38,7 @@ router.get('/letters/:letterId', async (req, res, next) => {
           eq(letters.collectionId, letter.collectionId),
           eq(letters.dateRaw, letter.dateRaw),
           eq(letters.typeSequence, letter.typeSequence),
-          inArray(letters.type, ['C', 'E']),
+          inArray(letters.type, ['P', 'E', 'V', 'A', 'D', 'C', 'N', 'T']),
           isNull(letters.deletedAt)
         ),
         with: {
@@ -201,6 +201,61 @@ router.put('/letters/:letterId', async (req, res, next) => {
 
     // Apply updates
     await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
+
+    // Fetch and return updated letter
+    const updatedLetter = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+      with: {
+        collection: true,
+        pages: {
+          orderBy: (p, { asc }) => [asc(p.pageNumber)],
+        },
+      },
+    });
+
+    if (!updatedLetter) {
+      res.status(500).json({ error: 'Failed to fetch updated letter' });
+      return;
+    }
+
+    res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/letters/:letterId/confirm-transcript - Confirm transcript is correct
+ *
+ * Marks the transcript as confirmed, which triggers metadata extraction.
+ * Only works for letters in TRANSCRIBED state.
+ */
+router.post('/letters/:letterId/confirm-transcript', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    const existingLetter = await getLetterById(letterId);
+    if (!existingLetter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Only allow confirmation for TRANSCRIBED letters
+    if (existingLetter.workflow !== 'TRANSCRIBED') {
+      res.status(400).json({
+        error: 'Letter must be in TRANSCRIBED state to confirm transcript',
+        currentState: existingLetter.workflow,
+      });
+      return;
+    }
+
+    // Mark transcript as confirmed - this triggers metadata extraction by worker
+    await db.update(letters).set({
+      transcriptConfirmedAt: new Date(),
+      transcriptConfirmedBy: 'admin', // TODO: Use actual user when auth is implemented
+      metadataStatus: 'PENDING', // Ensure worker picks it up
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
 
     // Fetch and return updated letter
     const updatedLetter = await db.query.letters.findFirst({

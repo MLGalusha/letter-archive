@@ -25,10 +25,13 @@ export interface UploadError {
  * 3. Creates/finds letter
  * 4. Stores file to local storage
  * 5. Creates/finds page record
+ *
+ * @param force - If true, overwrites existing files instead of skipping
  */
 export async function processUploadedFile(
   tempPath: string,
-  originalFilename: string
+  originalFilename: string,
+  force = false
 ): Promise<UploadResult> {
   // Validate and parse filename
   if (!isValidFilename(originalFilename)) {
@@ -64,15 +67,16 @@ export async function processUploadedFile(
     originalFilename
   );
 
-  const { storagePath, checksumSha256, alreadyExists } = await storeFile(tempPath, destPath);
+  const { storagePath, checksumSha256, alreadyExists } = await storeFile(tempPath, destPath, force);
 
-  // Get or create page record
+  // Get or create page record (pass force to update checksum if replacing)
   const page = await findOrCreatePage({
     letterId: letter.id,
     pageNumber: parsed.pageNumber,
     storagePath,
     originalFilename,
     checksumSha256,
+    force,
   });
 
   return {

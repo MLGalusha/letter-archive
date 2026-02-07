@@ -45,7 +45,12 @@ hook (1-2 sentences, maximum 150 characters):
 - Write in present tense, third person
 - Examples: "A mother anxiously awaits news of her son's mining injury." or "Financial troubles force a difficult decision about the family farm."
 
-summary (2-4 sentences):
+summary:
+- Length should be PROPORTIONAL to the letter's content - match the letter's length
+- For short letters (under 200 words): 1-2 sentences maximum
+- For medium letters (200-500 words): 2-3 sentences
+- For long letters (500+ words): 3-4 sentences maximum
+- The summary should NEVER be as long as or longer than the letter itself
 - A straightforward factual description of the letter's content
 - Cover the main topics, people, and events discussed
 - Neutral, informational tone - not promotional

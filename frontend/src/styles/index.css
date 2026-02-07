@@ -19,35 +19,20 @@ body {
   margin: 0;
 }
 
-/* Button styles */
+/* Button reset - no layout properties */
 button {
-  background-color: var(--bg-light);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  color: var(--text);
-  font-weight: 600;
-  font-size: 1rem;
-  border-radius: var(--radius-md);
-  margin-top: var(--spacing-md);
-  border: var(--border-card);
-  border-top: solid 1px var(--highlight);
-  box-shadow: var(--shadow);
-  cursor: pointer;
-  transition: all 0.2s ease;
   font-family: inherit;
-}
-
-button:hover {
-  transform: scale(1.025);
-}
-
-button:active {
-  transform: scale(0.98);
+  font-size: 1rem;
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
 }
 
 button:disabled {
-  opacity: 0.5;
   cursor: not-allowed;
-  transform: none;
 }
 
 /* Input styles */

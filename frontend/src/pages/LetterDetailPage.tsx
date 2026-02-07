@@ -46,7 +46,7 @@ export default function LetterDetailPage() {
     return (
       <div style={{ padding: "2rem", textAlign: "center" }}>
         <h1>{error || "Letter not found"}</h1>
-        <button onClick={() => navigate("/")}>Back to Home</button>
+        <button className="btn-secondary" onClick={() => navigate("/")}>Back to Home</button>
       </div>
     );
   }

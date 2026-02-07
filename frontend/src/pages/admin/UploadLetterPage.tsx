@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { uploadFiles } from "../../api/admin";
+import { uploadFiles, type UploadResult, type UploadError } from "../../api/admin";
 import {
   parseFilename,
   getTypeName,
@@ -22,7 +22,7 @@ interface UploadedImage {
 }
 
 interface LetterGroup {
-  letterKey: string; // dateRaw, e.g., "18860314" or "XXXXXXXX"
+  letterKey: string; // dateRaw-sequence, e.g., "18860314-01" or "XXXXXXXX-02"
   dateRaw: string;
   letterDate: string | null; // ISO date or null for unknown
   letterPageCount: number; // count of type L images
@@ -42,6 +42,27 @@ interface EditState {
   selectedCollection: string | null; // collection code or 'new'
   selectedImageIds: Set<string>;
   newCollectionCode: string;
+}
+
+interface UploadProgress {
+  current: number;
+  total: number;
+  collectionCode: string;
+}
+
+interface UploadResultsState {
+  uploaded: UploadResult[];    // new files successfully uploaded
+  existing: UploadResult[];    // files that already exist (need confirmation)
+  replaced: UploadResult[];    // files that were force-replaced
+  skipped: UploadResult[];     // files user declined to replace
+  failed: UploadError[];       // errors
+  show: boolean;               // whether to show results panel
+}
+
+interface ConfirmDialogState {
+  show: boolean;
+  files: File[];               // files to re-upload with force
+  filenames: string[];         // display names
 }
 
 // ============================================================================
@@ -68,12 +89,16 @@ function groupImagesByCollection(images: UploadedImage[]): CollectionGroup[] {
   // Convert to CollectionGroup array
   const groups: CollectionGroup[] = [];
   for (const [collectionCode, imgs] of collectionMap) {
-    // Group by dateRaw within collection (not by type+sequence)
+    // Group by dateRaw and typeSequence within collection
+    // L01 and L02 on the same date are separate letters
+    // C01/E01 belong with L01, C02/E02 belong with L02, etc.
     const letterMap = new Map<string, UploadedImage[]>();
 
     for (const img of imgs) {
       if (img.parsed) {
-        const dateKey = img.parsed.dateRaw; // Group by date
+        // typeSequence indicates which letter this belongs to
+        // e.g., L01, C01, E01 all belong to letter 01
+        const dateKey = `${img.parsed.dateRaw}-${String(img.parsed.typeSequence).padStart(2, "0")}`;
         const existing = letterMap.get(dateKey) || [];
         existing.push(img);
         letterMap.set(dateKey, existing);
@@ -86,7 +111,9 @@ function groupImagesByCollection(images: UploadedImage[]): CollectionGroup[] {
       const firstParsed = letterImgs[0].parsed!;
 
       // Count letter pages vs extras
-      const letterPageCount = letterImgs.filter(img => img.parsed?.type === 'L').length;
+      const letterPageCount = letterImgs.filter(
+        (img) => img.parsed?.type === "L",
+      ).length;
       const extraCount = letterImgs.length - letterPageCount;
 
       letters.push({
@@ -97,11 +124,11 @@ function groupImagesByCollection(images: UploadedImage[]): CollectionGroup[] {
         extraCount,
         images: letterImgs.sort((a, b) => {
           // Sort by type first (L before others), then by sequence, then by page
-          const aType = a.parsed?.type || 'Z';
-          const bType = b.parsed?.type || 'Z';
+          const aType = a.parsed?.type || "Z";
+          const bType = b.parsed?.type || "Z";
           if (aType !== bType) {
-            if (aType === 'L') return -1;
-            if (bType === 'L') return 1;
+            if (aType === "L") return -1;
+            if (bType === "L") return 1;
             return aType.localeCompare(bType);
           }
           const aSeq = a.parsed?.typeSequence || 0;
@@ -118,8 +145,8 @@ function groupImagesByCollection(images: UploadedImage[]): CollectionGroup[] {
     // Calculate date range from letters
     let dateRange = "Unknown";
     const knownDates = letters
-      .filter(l => l.letterDate !== null)
-      .map(l => l.letterDate as string)
+      .filter((l) => l.letterDate !== null)
+      .map((l) => l.letterDate as string)
       .sort();
     if (knownDates.length > 0) {
       if (knownDates.length === 1) {
@@ -138,22 +165,26 @@ function groupImagesByCollection(images: UploadedImage[]): CollectionGroup[] {
   }
 
   // Sort by collection code
-  return groups.sort((a, b) => a.collectionCode.localeCompare(b.collectionCode));
+  return groups.sort((a, b) =>
+    a.collectionCode.localeCompare(b.collectionCode),
+  );
 }
 
 function getNextCollectionCode(collections: CollectionGroup[]): string {
   if (collections.length === 0) return "001";
-  const maxCode = Math.max(...collections.map((c) => parseInt(c.collectionCode, 10)));
+  const maxCode = Math.max(
+    ...collections.map((c) => parseInt(c.collectionCode, 10)),
+  );
   return String(maxCode + 1).padStart(3, "0");
 }
 
 function formatDate(isoDate: string): string {
-  const [year, month, day] = isoDate.split('-').map(Number);
+  const [year, month, day] = isoDate.split("-").map(Number);
   const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   });
 }
 
@@ -162,7 +193,7 @@ function generateNewFilename(
   collectionCode: string,
   type: string,
   typeSequence: number,
-  pageNumber: number
+  pageNumber: number,
 ): string {
   const ext = getFileExtension(originalFilename);
   const typeSeq = String(typeSequence).padStart(2, "0");
@@ -182,7 +213,13 @@ interface ImageThumbnailProps {
   onView: () => void;
 }
 
-function ImageThumbnail({ image, isSelected, editMode, onSelect, onView }: ImageThumbnailProps) {
+function ImageThumbnail({
+  image,
+  isSelected,
+  editMode,
+  onSelect,
+  onView,
+}: ImageThumbnailProps) {
   const lastTapRef = useRef<number>(0);
 
   const handleClick = () => {
@@ -216,6 +253,146 @@ function ImageThumbnail({ image, isSelected, editMode, onSelect, onView }: Image
   );
 }
 
+interface UncategorizedCarouselProps {
+  images: UploadedImage[];
+  editState: EditState;
+  onImageSelect: (id: string) => void;
+  onViewImage: (image: UploadedImage) => void;
+}
+
+function UncategorizedCarousel({
+  images,
+  editState,
+  onImageSelect,
+  onViewImage,
+}: UncategorizedCarouselProps) {
+  const [pageIndex, setPageIndex] = useState(0);
+  const [previousPageIndex, setPreviousPageIndex] = useState<number | null>(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [slideDirection, setSlideDirection] = useState<"left" | "right" | null>(null);
+
+  const VISIBLE_COUNT = 6;
+  const totalPages = Math.ceil(images.length / VISIBLE_COUNT);
+
+  const currentImages = useMemo(() => {
+    const start = pageIndex * VISIBLE_COUNT;
+    return images.slice(start, start + VISIBLE_COUNT);
+  }, [images, pageIndex]);
+
+  const previousImages = useMemo(() => {
+    if (previousPageIndex === null) return [];
+    const start = previousPageIndex * VISIBLE_COUNT;
+    return images.slice(start, start + VISIBLE_COUNT);
+  }, [images, previousPageIndex]);
+
+  const goToPrev = useCallback(() => {
+    if (isAnimating || totalPages <= 1) return;
+    setPreviousPageIndex(pageIndex);
+    setSlideDirection("right");
+    setIsAnimating(true);
+    setPageIndex((prev) => (prev - 1 + totalPages) % totalPages);
+  }, [isAnimating, totalPages, pageIndex]);
+
+  const goToNext = useCallback(() => {
+    if (isAnimating || totalPages <= 1) return;
+    setPreviousPageIndex(pageIndex);
+    setSlideDirection("left");
+    setIsAnimating(true);
+    setPageIndex((prev) => (prev + 1) % totalPages);
+  }, [isAnimating, totalPages, pageIndex]);
+
+  useEffect(() => {
+    if (isAnimating) {
+      const timer = setTimeout(() => setIsAnimating(false), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [isAnimating, pageIndex]);
+
+  const showNav = totalPages > 1;
+
+  return (
+    <div className="uncategorized-section">
+      <div className="uncategorized-header">
+        <h2>Uncategorized ({images.length})</h2>
+        {showNav && (
+          <span className="page-indicator">
+            {pageIndex + 1} / {totalPages}
+          </span>
+        )}
+      </div>
+      <div className="carousel-container">
+        {showNav && (
+          <button
+            className="carousel-nav carousel-nav-prev"
+            onClick={goToPrev}
+            aria-label="Previous page"
+          >
+            ‹
+          </button>
+        )}
+        <div className="uncategorized-carousel">
+          <div className={`carousel-slider ${isAnimating && slideDirection ? `animating slide-${slideDirection}` : ""}`}>
+            {/* During slide-left: previous page first, then current (slides left to show current) */}
+            {isAnimating && slideDirection === "left" && (
+              <div className="carousel-track">
+                {previousImages.map((image) => (
+                  <ImageThumbnail
+                    key={image.id}
+                    image={image}
+                    isSelected={editState.selectedImageIds.has(image.id)}
+                    editMode={editState.active}
+                    onSelect={() => onImageSelect(image.id)}
+                    onView={() => onViewImage(image)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Current page (always shown) */}
+            <div className="carousel-track">
+              {currentImages.map((image) => (
+                <ImageThumbnail
+                  key={image.id}
+                  image={image}
+                  isSelected={editState.selectedImageIds.has(image.id)}
+                  editMode={editState.active}
+                  onSelect={() => onImageSelect(image.id)}
+                  onView={() => onViewImage(image)}
+                />
+              ))}
+            </div>
+
+            {/* During slide-right: current page first, then previous (starts offset, slides to show current) */}
+            {isAnimating && slideDirection === "right" && (
+              <div className="carousel-track">
+                {previousImages.map((image) => (
+                  <ImageThumbnail
+                    key={image.id}
+                    image={image}
+                    isSelected={editState.selectedImageIds.has(image.id)}
+                    editMode={editState.active}
+                    onSelect={() => onImageSelect(image.id)}
+                    onView={() => onViewImage(image)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        {showNav && (
+          <button
+            className="carousel-nav carousel-nav-next"
+            onClick={goToNext}
+            aria-label="Next page"
+          >
+            ›
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface CollectionCardProps {
   collection: CollectionGroup;
   isSelected: boolean;
@@ -224,7 +401,13 @@ interface CollectionCardProps {
   onClick: () => void;
 }
 
-function CollectionCard({ collection, isSelected, editMode, onSelect, onClick }: CollectionCardProps) {
+function CollectionCard({
+  collection,
+  isSelected,
+  editMode,
+  onSelect,
+  onClick,
+}: CollectionCardProps) {
   const handleClick = () => {
     if (editMode) {
       onSelect();
@@ -241,7 +424,9 @@ function CollectionCard({ collection, isSelected, editMode, onSelect, onClick }:
       className={`collection-card ${isSelected ? "selected" : ""}`}
       onClick={handleClick}
     >
-      <div className="collection-code">Collection {collection.collectionCode}</div>
+      <div className="collection-code">
+        Collection {collection.collectionCode}
+      </div>
       <div className="collection-info">
         <span>{letterText}</span>
         <span>{collection.totalImages} images</span>
@@ -257,8 +442,14 @@ interface CollectionModalProps {
   onViewImage: (image: UploadedImage) => void;
 }
 
-function CollectionModal({ collection, onClose, onViewImage }: CollectionModalProps) {
-  const [selectedLetter, setSelectedLetter] = useState<LetterGroup | null>(null);
+function CollectionModal({
+  collection,
+  onClose,
+  onViewImage,
+}: CollectionModalProps) {
+  const [selectedLetter, setSelectedLetter] = useState<LetterGroup | null>(
+    null,
+  );
 
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -274,14 +465,21 @@ function CollectionModal({ collection, onClose, onViewImage }: CollectionModalPr
     <div className="modal-overlay" onClick={handleBackdropClick}>
       <div className="modal-content">
         <div className="modal-header">
-          <h2>
-            {selectedLetter
-              ? (selectedLetter.letterDate ? formatDate(selectedLetter.letterDate) : 'Unknown Date')
-              : `Collection ${collection.collectionCode}`}
-          </h2>
+          <div className="modal-title-group">
+            <h2>Collection {collection.collectionCode}</h2>
+            {selectedLetter && (
+              <span className="modal-subtitle">
+                {selectedLetter.letterDate
+                  ? formatDate(selectedLetter.letterDate)
+                  : "Unknown Date"}
+              </span>
+            )}
+          </div>
           <button
             className="modal-close"
-            onClick={() => (selectedLetter ? setSelectedLetter(null) : onClose())}
+            onClick={() =>
+              selectedLetter ? setSelectedLetter(null) : onClose()
+            }
           >
             {selectedLetter ? "← Back" : "×"}
           </button>
@@ -290,12 +488,18 @@ function CollectionModal({ collection, onClose, onViewImage }: CollectionModalPr
         {selectedLetter ? (
           <div className="letter-images">
             {selectedLetter.images.map((img) => (
-              <div key={img.id} className="letter-image-item" onClick={() => onViewImage(img)}>
-                <div className="image-type-badge">{getTypeName(img.parsed?.type || 'L')}</div>
-                <img src={img.url} alt={img.originalFilename} />
-                <div className="image-page">
-                  Page {img.parsed?.pageNumber || 1}
+              <div
+                key={img.id}
+                className="letter-image-item"
+                onClick={() => onViewImage(img)}
+              >
+                <div className="image-type-badge">
+                  {getTypeName(img.parsed?.type || "L")}
                 </div>
+                <div className="image-page-badge">
+                  {img.parsed?.pageNumber || 1}
+                </div>
+                <img src={img.url} alt={img.originalFilename} />
               </div>
             ))}
           </div>
@@ -308,14 +512,22 @@ function CollectionModal({ collection, onClose, onViewImage }: CollectionModalPr
                 onClick={() => setSelectedLetter(letter)}
               >
                 <div className="letter-card-date">
-                  {letter.letterDate ? formatDate(letter.letterDate) : 'Unknown Date'}
+                  {letter.letterDate
+                    ? formatDate(letter.letterDate)
+                    : "Unknown Date"}
                 </div>
                 <div className="letter-card-counts">
                   {letter.letterPageCount > 0 && (
-                    <span>{letter.letterPageCount} letter{letter.letterPageCount !== 1 ? 's' : ''}</span>
+                    <span>
+                      {letter.letterPageCount} letter
+                      {letter.letterPageCount !== 1 ? "s" : ""}
+                    </span>
                   )}
                   {letter.extraCount > 0 && (
-                    <span>{letter.extraCount} extra{letter.extraCount !== 1 ? 's' : ''}</span>
+                    <span>
+                      {letter.extraCount} extra
+                      {letter.extraCount !== 1 ? "s" : ""}
+                    </span>
                   )}
                 </div>
               </div>
@@ -336,42 +548,12 @@ function Lightbox({ image, onClose }: LightboxProps) {
   return (
     <div className="lightbox-overlay" onClick={onClose}>
       <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
-        <button className="lightbox-close" onClick={onClose}>×</button>
+        <button className="lightbox-close" onClick={onClose}>
+          ×
+        </button>
         <img src={image.url} alt={image.originalFilename} />
         <div className="lightbox-filename">{image.originalFilename}</div>
       </div>
-    </div>
-  );
-}
-
-interface PaginationProps {
-  currentPage: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
-}
-
-function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) {
-  if (totalPages <= 1) return null;
-
-  return (
-    <div className="pagination-controls">
-      <button
-        className="page-btn"
-        disabled={currentPage === 1}
-        onClick={() => onPageChange(currentPage - 1)}
-      >
-        Previous
-      </button>
-      <span className="page-info">
-        Page {currentPage} of {totalPages}
-      </span>
-      <button
-        className="page-btn"
-        disabled={currentPage === totalPages}
-        onClick={() => onPageChange(currentPage + 1)}
-      >
-        Next
-      </button>
     </div>
   );
 }
@@ -388,6 +570,7 @@ export default function UploadLetterPage() {
   // State
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [message, setMessage] = useState("");
   const [editState, setEditState] = useState<EditState>({
     active: false,
@@ -395,11 +578,26 @@ export default function UploadLetterPage() {
     selectedImageIds: new Set(),
     newCollectionCode: "001",
   });
-  const [uncategorizedPage, setUncategorizedPage] = useState(1);
-  const [openCollection, setOpenCollection] = useState<CollectionGroup | null>(null);
-  const [lightboxImage, setLightboxImage] = useState<UploadedImage | null>(null);
-
-  const ITEMS_PER_PAGE = 8;
+  const [openCollection, setOpenCollection] = useState<CollectionGroup | null>(
+    null,
+  );
+  const [lightboxImage, setLightboxImage] = useState<UploadedImage | null>(
+    null,
+  );
+  const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
+  const [uploadResults, setUploadResults] = useState<UploadResultsState>({
+    uploaded: [],
+    existing: [],
+    replaced: [],
+    skipped: [],
+    failed: [],
+    show: false,
+  });
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
+    show: false,
+    files: [],
+    filenames: [],
+  });
 
   // Auth check
   useEffect(() => {
@@ -421,15 +619,8 @@ export default function UploadLetterPage() {
 
   const uncategorizedImages = useMemo(
     () => images.filter((img) => !img.parsed),
-    [images]
+    [images],
   );
-
-  const uncategorizedTotalPages = Math.ceil(uncategorizedImages.length / ITEMS_PER_PAGE);
-
-  const paginatedUncategorized = useMemo(() => {
-    const start = (uncategorizedPage - 1) * ITEMS_PER_PAGE;
-    return uncategorizedImages.slice(start, start + ITEMS_PER_PAGE);
-  }, [uncategorizedImages, uncategorizedPage]);
 
   // Update next collection code when collections change
   useEffect(() => {
@@ -484,7 +675,8 @@ export default function UploadLetterPage() {
   const handleCollectionSelect = (collectionCode: string) => {
     setEditState((prev) => ({
       ...prev,
-      selectedCollection: prev.selectedCollection === collectionCode ? null : collectionCode,
+      selectedCollection:
+        prev.selectedCollection === collectionCode ? null : collectionCode,
     }));
   };
 
@@ -531,15 +723,23 @@ export default function UploadLetterPage() {
     // When adding to existing collection, find max page for XXXXXXXX date with L type
     let pageNumber = 1;
     if (editState.selectedCollection !== "new") {
-      const collection = collections.find((c) => c.collectionCode === collectionCode);
+      const collection = collections.find(
+        (c) => c.collectionCode === collectionCode,
+      );
       if (collection) {
         // Find the XXXXXXXX letter if it exists
-        const unknownDateLetter = collection.letters.find((l) => l.dateRaw === 'XXXXXXXX');
+        const unknownDateLetter = collection.letters.find(
+          (l) => l.dateRaw === "XXXXXXXX",
+        );
         if (unknownDateLetter) {
           // Find max page number for L type images
-          const lImages = unknownDateLetter.images.filter(img => img.parsed?.type === 'L');
+          const lImages = unknownDateLetter.images.filter(
+            (img) => img.parsed?.type === "L",
+          );
           if (lImages.length > 0) {
-            pageNumber = Math.max(...lImages.map(img => img.parsed?.pageNumber || 0)) + 1;
+            pageNumber =
+              Math.max(...lImages.map((img) => img.parsed?.pageNumber || 0)) +
+              1;
           }
         }
       }
@@ -555,7 +755,7 @@ export default function UploadLetterPage() {
           collectionCode,
           type,
           typeSequence,
-          pageNumber++
+          pageNumber++,
         );
 
         const newParsed = parseFilename(newFilename);
@@ -565,7 +765,7 @@ export default function UploadLetterPage() {
           originalFilename: newFilename,
           parsed: newParsed,
         };
-      })
+      }),
     );
 
     // Reset edit state
@@ -576,52 +776,147 @@ export default function UploadLetterPage() {
     }));
   };
 
-  const handleSubmit = async () => {
-    if (images.length === 0) {
-      setMessage("Please select at least one image");
+  const handleSubmit = async (force = false) => {
+    // Only upload categorized files - uncategorized stay in the carousel
+    if (collections.length === 0) {
+      setMessage("No categorized images to upload. Use Edit mode to organize images first.");
       return;
     }
 
     setUploading(true);
     setMessage("");
 
-    try {
-      // Create File objects with new names for categorized images
-      const filesToUpload = images.map((img) => {
-        if (img.originalFilename !== img.file.name) {
-          // Rename the file
-          return new File([img.file], img.originalFilename, { type: img.file.type });
-        }
-        return img.file;
+    const allUploaded: UploadResult[] = [];
+    const allExisting: UploadResult[] = [];
+    const allFailed: UploadError[] = [];
+    const filesToReupload: File[] = [];
+
+    // Upload each collection as a batch
+    for (let i = 0; i < collections.length; i++) {
+      const collection = collections[i];
+      setUploadProgress({
+        current: i + 1,
+        total: collections.length,
+        collectionCode: collection.collectionCode,
       });
 
-      const response = await uploadFiles(filesToUpload);
+      // Get files for this collection
+      const collectionFiles = collection.letters.flatMap((letter) =>
+        letter.images.map((img) => {
+          if (img.originalFilename !== img.file.name) {
+            return new File([img.file], img.originalFilename, {
+              type: img.file.type,
+            });
+          }
+          return img.file;
+        }),
+      );
 
-      if (response.failed > 0 && response.errors) {
-        const errorMessages = response.errors.map((e) => e.error).join(", ");
-        setMessage(`Uploaded ${response.success} files. ${response.failed} failed: ${errorMessages}`);
-      } else {
-        setMessage(`Successfully uploaded ${response.success} files.`);
-        setTimeout(() => navigate("/admin"), 1500);
+      try {
+        const response = await uploadFiles(collectionFiles, force);
+
+        // Categorize results
+        for (const result of response.results) {
+          if (result.alreadyExists && !force) {
+            allExisting.push(result);
+            // Find the file to potentially re-upload
+            const file = collectionFiles.find(f => f.name === result.filename);
+            if (file) filesToReupload.push(file);
+          } else {
+            allUploaded.push(result);
+          }
+        }
+
+        if (response.errors) {
+          allFailed.push(...response.errors);
+        }
+      } catch (err) {
+        // Add all files as failed if batch upload fails
+        collectionFiles.forEach(f => {
+          allFailed.push({
+            filename: f.name,
+            error: err instanceof Error ? err.message : "Upload failed",
+          });
+        });
       }
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
     }
+
+    setUploadProgress(null);
+    setUploading(false);
+
+    // If there are existing files and not forcing, show confirmation dialog
+    if (allExisting.length > 0 && !force) {
+      setConfirmDialog({
+        show: true,
+        files: filesToReupload,
+        filenames: allExisting.map(r => r.filename),
+      });
+      // Still update results to show what was uploaded
+      setUploadResults(prev => ({
+        ...prev,
+        uploaded: allUploaded,
+        existing: allExisting,
+        failed: allFailed,
+        show: true,
+      }));
+    } else {
+      // Update results (force uploads go to "replaced" category)
+      setUploadResults({
+        uploaded: force ? [] : allUploaded,
+        existing: [],
+        replaced: force ? allUploaded : [],
+        skipped: [],
+        failed: allFailed,
+        show: true,
+      });
+    }
+
+    // Remove successfully uploaded categorized images from state
+    // Keep uncategorized images
+    const uploadedFilenames = new Set(allUploaded.map(r => r.filename));
+    setImages(prev => prev.filter(img =>
+      !img.parsed || !uploadedFilenames.has(img.originalFilename)
+    ));
   };
 
-  const handleCancel = () => {
-    navigate("/admin");
+  const handleConfirmReplace = async () => {
+    setConfirmDialog({ show: false, files: [], filenames: [] });
+    // Re-upload with force=true
+    await handleSubmit(true);
+  };
+
+  const handleSkipExisting = () => {
+    // Mark existing as skipped and close dialog
+    setUploadResults(prev => ({
+      ...prev,
+      skipped: prev.existing,
+      existing: [],
+    }));
+    setConfirmDialog({ show: false, files: [], filenames: [] });
+  };
+
+  const handleClearResults = () => {
+    setUploadResults({
+      uploaded: [],
+      existing: [],
+      replaced: [],
+      skipped: [],
+      failed: [],
+      show: false,
+    });
+    setMessage("");
   };
 
   const canAdd =
     editState.selectedImageIds.size > 0 &&
     (editState.selectedCollection !== null ||
-      (editState.selectedCollection === "new" && editState.newCollectionCode.length > 0));
+      (editState.selectedCollection === "new" &&
+        editState.newCollectionCode.length > 0));
 
   return (
-    <div className={`upload-letter-page ${editState.active ? "edit-mode" : ""}`}>
+    <div
+      className={`upload-letter-page ${editState.active ? "edit-mode" : ""}`}
+    >
       {/* Hidden file inputs */}
       <input
         ref={fileInputRef}
@@ -646,66 +941,150 @@ export default function UploadLetterPage() {
       <header className="upload-header">
         <h1>Upload Letters</h1>
 
-        {/* Edit mode controls - inline in header when active */}
-        {editState.active && (
-          <div className="header-edit-controls">
-            <span className="edit-status">
-              {editState.selectedImageIds.size} selected
-            </span>
-            {editState.selectedCollection === "new" && (
-              <div className="new-collection-input">
-                <label>Collection #:</label>
-                <input
-                  type="text"
-                  value={editState.newCollectionCode}
-                  onChange={(e) => handleNewCollectionCodeChange(e.target.value)}
-                  placeholder="001"
-                  maxLength={3}
-                />
-              </div>
-            )}
-            <button
-              className="add-btn"
-              disabled={!canAdd}
-              onClick={handleAddToCollection}
-            >
-              Add to Collection
-            </button>
-          </div>
-        )}
-
         <div className="header-actions">
+          {editState.active && (
+            <span className="selected-count">{editState.selectedImageIds.size} selected</span>
+          )}
+
+          {editState.active && editState.selectedCollection === "new" && (
+            <>
+              <span className="collection-label">Collection #:</span>
+              <input
+                type="text"
+                className="collection-input"
+                value={editState.newCollectionCode}
+                onChange={(e) => handleNewCollectionCodeChange(e.target.value)}
+                placeholder="001"
+                maxLength={3}
+              />
+            </>
+          )}
+
+          {editState.active && (
+            <button className="add-btn" disabled={!canAdd} onClick={handleAddToCollection}>
+              Add
+            </button>
+          )}
+
           {images.length > 0 && (
             <button
               onClick={toggleEditMode}
               className={`edit-toggle ${editState.active ? "active" : ""}`}
             >
-              {editState.active ? "Done Editing" : "Edit"}
+              {editState.active ? "Done" : "Edit"}
             </button>
           )}
-          <button onClick={handleCancel} className="cancel-button">
-            Back to Dashboard
+
+          {images.length > 0 && (
+            <button
+              className="upload-all-btn"
+              disabled={uploading}
+              onClick={() => handleSubmit()}
+            >
+              {uploadProgress
+                ? `Uploading ${uploadProgress.collectionCode}... (${uploadProgress.current}/${uploadProgress.total})`
+                : "Upload All"}
+            </button>
+          )}
+
+          <div className="upload-dropdown">
+            <button
+              className="header-btn"
+              onClick={() => setUploadMenuOpen(!uploadMenuOpen)}
+            >
+              <svg className="btn-icon" viewBox="0 0 16 16">
+                <path
+                  d="M8 1L8 10M8 1L4 5M8 1L12 5"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                />
+                <path
+                  d="M2 11L2 14L14 14L14 11"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                />
+              </svg>
+            </button>
+            {uploadMenuOpen && (
+              <div className="upload-menu">
+                <button
+                  onClick={() => {
+                    handleSelectFiles();
+                    setUploadMenuOpen(false);
+                  }}
+                >
+                  Files
+                </button>
+                <button
+                  onClick={() => {
+                    handleSelectFolder();
+                    setUploadMenuOpen(false);
+                  }}
+                >
+                  Folder
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button onClick={() => navigate("/admin")} className="back-btn">
+            Back
           </button>
         </div>
       </header>
 
       <div className="upload-content">
-        {/* Upload Section */}
-        <div className="upload-input-section">
-          <h2>Select Images</h2>
-          <div className="upload-buttons">
-            <button onClick={handleSelectFiles} className="upload-btn">
-              Select Files
-            </button>
-            <button onClick={handleSelectFolder} className="upload-btn">
-              Select Folder
-            </button>
-          </div>
-        </div>
-
         {images.length === 0 ? (
           <div className="empty-state">
-            <p>No images uploaded yet. Select files or a folder to begin.</p>
+            <h2>Upload Letter Images</h2>
+            <p className="empty-state-subtitle">
+              Get started by adding images to organize into collections
+            </p>
+
+            <div className="guide-section">
+              <h3>Naming Format</h3>
+              <code className="filename-example">003-18860314-L01-01.jpg</code>
+              <div className="format-breakdown">
+                <span><strong>003</strong> — Collection (3 digits)</span>
+                <span><strong>18860314</strong> — Date YYYYMMDD (use X for unknown)</span>
+                <span><strong>L</strong> — Type: L=Letter, P=Photo, E=Ephemera, V=Voice, A=Article, D=Diary, C=Cover, N=Card, T=Telegram</span>
+                <span><strong>01</strong> — Sequence number</span>
+                <span><strong>01</strong> — Page number (optional)</span>
+              </div>
+            </div>
+
+            <div className="guide-section">
+              <h3>How to Use</h3>
+              <div className="guide-steps">
+                <div className="guide-step">
+                  <span className="step-number">1</span>
+                  <div>
+                    <strong>Upload images</strong>
+                    <p>Click the upload icon and select files or a folder. Images appear in the Uncategorized section below.</p>
+                  </div>
+                </div>
+                <div className="guide-step">
+                  <span className="step-number">2</span>
+                  <div>
+                    <strong>Organize with Edit mode</strong>
+                    <p>Select images, choose or create a collection, then click "Add to Collection".</p>
+                  </div>
+                </div>
+                <div className="guide-step">
+                  <span className="step-number">3</span>
+                  <div>
+                    <strong>Save to archive</strong>
+                    <p>Click "Upload All" to save your organized letters.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         ) : (
           <>
@@ -718,9 +1097,14 @@ export default function UploadLetterPage() {
                     <CollectionCard
                       key={collection.collectionCode}
                       collection={collection}
-                      isSelected={editState.selectedCollection === collection.collectionCode}
+                      isSelected={
+                        editState.selectedCollection ===
+                        collection.collectionCode
+                      }
                       editMode={editState.active}
-                      onSelect={() => handleCollectionSelect(collection.collectionCode)}
+                      onSelect={() =>
+                        handleCollectionSelect(collection.collectionCode)
+                      }
                       onClick={() => setOpenCollection(collection)}
                     />
                   ))}
@@ -729,8 +1113,10 @@ export default function UploadLetterPage() {
                       className={`collection-card new-collection ${editState.selectedCollection === "new" ? "selected" : ""}`}
                       onClick={handleNewCollectionSelect}
                     >
-                      <div className="new-collection-icon">+</div>
-                      <div className="collection-code">New Collection</div>
+                      <div className="collection-code">
+                        <span className="new-collection-icon">+</span>
+                        New Collection
+                      </div>
                       {editState.selectedCollection === "new" && (
                         <div className="selected-badge">Selected</div>
                       )}
@@ -761,48 +1147,22 @@ export default function UploadLetterPage() {
 
             {/* Uncategorized Section */}
             {uncategorizedImages.length > 0 && (
-              <div className="uncategorized-section">
-                <h2>Uncategorized ({uncategorizedImages.length})</h2>
-                <div className="uncategorized-grid">
-                  {paginatedUncategorized.map((image) => (
-                    <ImageThumbnail
-                      key={image.id}
-                      image={image}
-                      isSelected={editState.selectedImageIds.has(image.id)}
-                      editMode={editState.active}
-                      onSelect={() => handleImageSelect(image.id)}
-                      onView={() => setLightboxImage(image)}
-                    />
-                  ))}
-                </div>
-                <Pagination
-                  currentPage={uncategorizedPage}
-                  totalPages={uncategorizedTotalPages}
-                  onPageChange={setUncategorizedPage}
-                />
-              </div>
+              <UncategorizedCarousel
+                images={uncategorizedImages}
+                editState={editState}
+                onImageSelect={handleImageSelect}
+                onViewImage={setLightboxImage}
+              />
             )}
 
             {/* Message */}
             {message && (
-              <div className={`message ${message.includes("Successfully") ? "success" : "error"}`}>
+              <div
+                className={`message ${message.includes("Successfully") ? "success" : "error"}`}
+              >
                 {message}
               </div>
             )}
-
-            {/* Actions */}
-            <div className="upload-actions">
-              <button onClick={handleCancel} className="cancel-action-button">
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={uploading || images.length === 0}
-                className="submit-button"
-              >
-                {uploading ? "Uploading..." : "Upload All"}
-              </button>
-            </div>
           </>
         )}
       </div>
@@ -818,7 +1178,114 @@ export default function UploadLetterPage() {
 
       {/* Lightbox */}
       {lightboxImage && (
-        <Lightbox image={lightboxImage} onClose={() => setLightboxImage(null)} />
+        <Lightbox
+          image={lightboxImage}
+          onClose={() => setLightboxImage(null)}
+        />
+      )}
+
+      {/* Confirm Replace Dialog */}
+      {confirmDialog.show && (
+        <div className="modal-overlay" onClick={() => setConfirmDialog({ show: false, files: [], filenames: [] })}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3>Files Already Exist</h3>
+            <p>{confirmDialog.filenames.length} file(s) already exist in storage:</p>
+            <div className="existing-files-list">
+              {confirmDialog.filenames.slice(0, 5).map((name) => (
+                <code key={name}>{name}</code>
+              ))}
+              {confirmDialog.filenames.length > 5 && (
+                <span className="more-files">...and {confirmDialog.filenames.length - 5} more</span>
+              )}
+            </div>
+            <p>Do you want to replace them with the new files?</p>
+            <div className="confirm-actions">
+              <button className="confirm-btn replace" onClick={handleConfirmReplace}>
+                Replace All
+              </button>
+              <button className="confirm-btn skip" onClick={handleSkipExisting}>
+                Skip Existing
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Results Panel */}
+      {uploadResults.show && (
+        <div className="modal-overlay" onClick={handleClearResults}>
+          <div className="upload-results-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="results-header">
+              <h3>Upload Complete</h3>
+              <button className="modal-close" onClick={handleClearResults}>×</button>
+            </div>
+            <div className="results-content">
+              {uploadResults.uploaded.length > 0 && (
+                <div className="result-section success">
+                  <h4>Uploaded ({uploadResults.uploaded.length})</h4>
+                  <ul>
+                    {uploadResults.uploaded.slice(0, 10).map((r) => (
+                      <li key={r.pageId}>{r.filename}</li>
+                    ))}
+                    {uploadResults.uploaded.length > 10 && (
+                      <li className="more">...and {uploadResults.uploaded.length - 10} more</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+              {uploadResults.replaced.length > 0 && (
+                <div className="result-section replaced">
+                  <h4>Replaced ({uploadResults.replaced.length})</h4>
+                  <ul>
+                    {uploadResults.replaced.slice(0, 10).map((r) => (
+                      <li key={r.pageId}>{r.filename}</li>
+                    ))}
+                    {uploadResults.replaced.length > 10 && (
+                      <li className="more">...and {uploadResults.replaced.length - 10} more</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+              {uploadResults.skipped.length > 0 && (
+                <div className="result-section skipped">
+                  <h4>Skipped ({uploadResults.skipped.length})</h4>
+                  <ul>
+                    {uploadResults.skipped.slice(0, 10).map((r) => (
+                      <li key={r.pageId}>{r.filename}</li>
+                    ))}
+                    {uploadResults.skipped.length > 10 && (
+                      <li className="more">...and {uploadResults.skipped.length - 10} more</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+              {uploadResults.failed.length > 0 && (
+                <div className="result-section failed">
+                  <h4>Failed ({uploadResults.failed.length})</h4>
+                  <ul>
+                    {uploadResults.failed.slice(0, 10).map((r, i) => (
+                      <li key={i}>
+                        <span className="filename">{r.filename}</span>
+                        <span className="error">{r.error}</span>
+                      </li>
+                    ))}
+                    {uploadResults.failed.length > 10 && (
+                      <li className="more">...and {uploadResults.failed.length - 10} more</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="results-actions">
+              <button className="results-btn primary" onClick={handleClearResults}>
+                Upload More
+              </button>
+              <button className="results-btn secondary" onClick={() => navigate("/admin")}>
+                Go to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

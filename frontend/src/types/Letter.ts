@@ -19,17 +19,22 @@ export type WorkflowState =
 export type VisibilityState = 'DRAFT' | 'PUBLISHED' | 'HIDDEN';
 
 export type LetterImageType =
-  | 'envelope_front'
-  | 'envelope_back'
-  | 'letter_page'
+  | 'letter'
+  | 'photo'
+  | 'ephemera'
+  | 'voice'
+  | 'article'
+  | 'diary'
+  | 'cover'
   | 'card'
-  | 'extra';
+  | 'telegram';
 
 export interface LetterImage {
   id: string;
   type: LetterImageType;
   pageNumber?: number; // only for letter pages
   imageUrl: string;
+  originalFilename?: string;
 }
 
 export interface LetterMetadata {
@@ -46,6 +51,7 @@ export interface LetterMetadata {
   verified: boolean;
   verifiedBy?: string;
   verifiedAt?: string;
+  firstPageFilename?: string;
 }
 
 export interface LetterPageTranscript {
@@ -63,12 +69,14 @@ export interface LetterTranscript {
 export interface Letter {
   id: string;
   title: string;
+  collectionCode?: string;
   images: LetterImage[];
   transcript: LetterTranscript;
   metadata: LetterMetadata;
   status: LetterStatus;
   workflowState: WorkflowState;
   visibility: VisibilityState;
+  transcriptConfirmedAt?: string;
   createdAt: string;
   updatedAt?: string;
 }

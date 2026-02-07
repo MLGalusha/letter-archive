@@ -17,7 +17,7 @@ import { relations, sql } from 'drizzle-orm';
 // ENUMS
 // ============================================================================
 
-export const letterTypeEnum = pgEnum('letter_type', ['L', 'C', 'E']);
+export const letterTypeEnum = pgEnum('letter_type', ['L', 'P', 'E', 'V', 'A', 'D', 'C', 'N', 'T']);
 
 export const workflowStateEnum = pgEnum('workflow_state', [
   'UPLOADED',
@@ -100,6 +100,10 @@ export const letters = pgTable(
     metadataStatus: jobStatusEnum('metadata_status').notNull().default('PENDING'),
     metadataError: text('metadata_error'),
     metadataAttemptCount: integer('metadata_attempt_count').notNull().default(0),
+
+    // Transcript confirmation (gates metadata extraction)
+    transcriptConfirmedAt: timestamp('transcript_confirmed_at', { withTimezone: true }),
+    transcriptConfirmedBy: text('transcript_confirmed_by'),
 
     // Admin review
     reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
@@ -199,7 +203,7 @@ export type NewLetter = typeof letters.$inferInsert;
 export type LetterPage = typeof letterPages.$inferSelect;
 export type NewLetterPage = typeof letterPages.$inferInsert;
 
-export type LetterType = 'L' | 'C' | 'E';
+export type LetterType = 'L' | 'P' | 'E' | 'V' | 'A' | 'D' | 'C' | 'N' | 'T';
 export type WorkflowState = 'UPLOADED' | 'TRANSCRIBING' | 'TRANSCRIBED' | 'METADATA_EXTRACTING' | 'METADATA_DRAFTED' | 'REVIEWED';
 export type VisibilityState = 'DRAFT' | 'PUBLISHED' | 'HIDDEN';
 export type JobStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';

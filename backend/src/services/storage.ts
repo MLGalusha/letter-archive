@@ -1,7 +1,10 @@
-import { mkdir, copyFile, access, readFile } from 'node:fs/promises';
+import { mkdir, copyFile, access, readFile, stat, unlink } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { env } from '../config/env.js';
+
+// Minimum file size for images (10KB) - rejects tiny/corrupt/placeholder files
+const MIN_IMAGE_SIZE = 10 * 1024;
 
 export interface StorageResult {
   storagePath: string;
@@ -53,22 +56,39 @@ export async function fileExists(filePath: string): Promise<boolean> {
 /**
  * Stores a file from source to destination path.
  * Creates directories if needed.
- * Returns error if file already exists (no silent overwrite).
+ * If file exists and force=false, returns alreadyExists: true.
+ * If file exists and force=true, deletes existing and replaces.
  */
 export async function storeFile(
   sourcePath: string,
-  destPath: string
+  destPath: string,
+  force = false
 ): Promise<StorageResult> {
-  // Compute checksum first
+  // Check file size first - reject tiny files that are likely placeholders or corrupt
+  const fileStats = await stat(sourcePath);
+  if (fileStats.size < MIN_IMAGE_SIZE) {
+    throw new Error(
+      `File too small (${fileStats.size} bytes). Minimum size is ${MIN_IMAGE_SIZE} bytes. ` +
+      `This may indicate a corrupted or placeholder file.`
+    );
+  }
+
+  // Compute checksum
   const checksumSha256 = await computeChecksum(sourcePath);
 
   // Check if file already exists
-  if (await fileExists(destPath)) {
+  const exists = await fileExists(destPath);
+  if (exists && !force) {
     return {
       storagePath: destPath,
       checksumSha256,
       alreadyExists: true,
     };
+  }
+
+  // If force=true and file exists, delete existing file first
+  if (exists && force) {
+    await unlink(destPath);
   }
 
   // Create directory structure

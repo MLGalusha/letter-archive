@@ -89,6 +89,11 @@
   display: none; /* Chrome/Safari/Opera */
 }
 
+/* Add scroll room at bottom - margin on last child creates scrollable space */
+.details-panel > *:last-child {
+  margin-bottom: calc(var(--spacing-xl) * 2);
+}
+
 /* Sections - card styling */
 .transcript-section,
 .metadata-section {
@@ -149,19 +154,31 @@
 }
 
 .transcript-page {
+  position: relative;
   padding-bottom: var(--spacing-md);
-  border-bottom: solid 1px var(--border);
+}
+
+/* Dotted separator line between pages */
+.transcript-page:not(:last-child)::after {
+  content: "";
+  display: block;
+  width: 100%;
+  margin-top: var(--spacing-lg);
+  border-bottom: 1px dotted var(--border);
+  opacity: 0.4;
 }
 
 .transcript-page:last-child {
-  border-bottom: none;
   padding-bottom: 0;
 }
 
-.transcript-page h4 {
-  margin: 0 0 var(--spacing-xs) 0;
-  font-size: var(--font-sm);
+/* Page number - light, small, left-aligned */
+.page-number {
+  font-size: var(--font-xs);
   color: var(--text-muted);
+  font-weight: 400;
+  opacity: 0.5;
+  margin-bottom: var(--spacing-sm);
 }
 
 .confidence-badge {

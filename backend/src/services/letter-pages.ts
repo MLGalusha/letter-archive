@@ -7,10 +7,12 @@ export interface CreatePageParams {
   storagePath: string;
   originalFilename: string;
   checksumSha256?: string;
+  force?: boolean;
 }
 
 /**
  * Finds an existing page by letter ID and page number, or creates a new one.
+ * If force=true and page exists, updates the checksum and storage path.
  */
 export async function findOrCreatePage(params: CreatePageParams): Promise<LetterPage> {
   const existing = await db.query.letterPages.findFirst({
@@ -21,6 +23,19 @@ export async function findOrCreatePage(params: CreatePageParams): Promise<Letter
   });
 
   if (existing) {
+    // If force=true, update the checksum and storage path
+    if (params.force && params.checksumSha256 !== existing.checksumSha256) {
+      const [updated] = await db
+        .update(letterPages)
+        .set({
+          checksumSha256: params.checksumSha256,
+          storagePath: params.storagePath,
+          updatedAt: new Date(),
+        })
+        .where(eq(letterPages.id, existing.id))
+        .returning();
+      return updated;
+    }
     return existing;
   }
 

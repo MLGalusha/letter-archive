@@ -27,9 +27,13 @@ const upload = multer({
  * Accepts multipart/form-data with files field.
  * Each file is parsed, stored, and recorded in the database.
  * L-type letters are automatically queued for processing.
+ *
+ * Query params:
+ *   force=true - Overwrite existing files instead of skipping
  */
-router.post('/uploads', upload.array('files', 100), async (req, res, next) => {
+router.post('/uploads', upload.array('files', 500), async (req, res, next) => {
   const files = req.files as Express.Multer.File[] | undefined;
+  const force = req.query.force === 'true';
 
   if (!files || files.length === 0) {
     res.status(400).json({ error: 'No files uploaded' });
@@ -52,7 +56,7 @@ router.post('/uploads', upload.array('files', 100), async (req, res, next) => {
 
   for (const file of files) {
     try {
-      const result = await processUploadedFile(file.path, file.originalname);
+      const result = await processUploadedFile(file.path, file.originalname, force);
 
       results.push({
         filename: file.originalname,

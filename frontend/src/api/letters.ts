@@ -2,7 +2,7 @@
  * Letters API service
  */
 
-import { apiGet } from './client';
+import { apiGet, apiDelete } from './client';
 import type { Letter } from '../types/Letter';
 
 export interface LettersResponse {
@@ -71,4 +71,11 @@ export async function getAdminLetters(params: LetterQueryParams = {}): Promise<L
  */
 export async function getAdminLetterById(id: string): Promise<Letter> {
   return apiGet<Letter>(`/admin/letters/${id}`);
+}
+
+/**
+ * Delete a letter (soft delete)
+ */
+export async function deleteLetter(id: string): Promise<void> {
+  await apiDelete(`/admin/letters/${id}`);
 }

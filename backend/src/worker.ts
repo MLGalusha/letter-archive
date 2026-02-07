@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, isNotNull } from 'drizzle-orm';
 import { db, letters } from './db/index.js';
-import { processLetter } from './pipeline/processor.js';
+import { processLetter, processMetadata } from './pipeline/processor.js';
 
 const POLL_INTERVAL = 5000; // 5 seconds
 const BATCH_SIZE = 5;
@@ -23,7 +23,8 @@ async function findLettersNeedingTranscription() {
 }
 
 /**
- * Finds letters that need metadata extraction (transcribed, metadata pending, not deleted).
+ * Finds letters that need metadata extraction.
+ * Requires: transcribed, metadata pending, transcript confirmed, not deleted.
  */
 async function findLettersNeedingMetadata() {
   return db.query.letters.findMany({
@@ -31,6 +32,7 @@ async function findLettersNeedingMetadata() {
       eq(letters.type, 'L'),
       eq(letters.workflow, 'TRANSCRIBED'),
       eq(letters.metadataStatus, 'PENDING'),
+      isNotNull(letters.transcriptConfirmedAt),
       isNull(letters.deletedAt)
     ),
     limit: BATCH_SIZE,
@@ -54,15 +56,15 @@ async function processPendingJobs() {
     }
   }
 
-  // Phase 2: Metadata extraction
+  // Phase 2: Metadata extraction (only for confirmed transcripts)
   const needingMetadata = await findLettersNeedingMetadata();
 
   for (const letter of needingMetadata) {
     console.log(`[Worker] Processing metadata for letter ${letter.id}`);
     try {
-      await processLetter(letter.id);
+      await processMetadata(letter.id);
     } catch (error) {
-      console.error(`[Worker] Error processing letter ${letter.id}:`, error);
+      console.error(`[Worker] Error processing metadata for letter ${letter.id}:`, error);
     }
   }
 

@@ -15,6 +15,20 @@
       "when": 1770230626924,
       "tag": "0001_aberrant_ender_wiggin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1770480000000,
+      "tag": "0002_add_letter_types",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1770566400000,
+      "tag": "0003_add_transcript_confirmation",
+      "breakpoints": true
     }
   ]
 }

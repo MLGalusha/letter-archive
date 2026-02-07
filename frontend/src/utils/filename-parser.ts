@@ -16,9 +16,13 @@ export type DateConfidence = 'exact' | 'unknown' | 'inferred';
 // Known types with human-readable names
 export const KNOWN_TYPES: Record<string, string> = {
   'L': 'Letter',
-  'C': 'Envelope',
-  'E': 'Extra',
-  'P': 'Postcard',
+  'P': 'Photo',
+  'E': 'Ephemera',
+  'V': 'Voice',
+  'A': 'Article',
+  'D': 'Diary',
+  'C': 'Cover',
+  'N': 'Card',
   'T': 'Telegram',
 };
 
@@ -119,7 +123,7 @@ export function updateFilenameType(filename: string, newType: LetterType): strin
   const parsed = parseFilename(filename);
   if (!parsed) {
     // If can't parse, try to replace type character if pattern looks close
-    return filename.replace(/-[LCE](\d{2})-/i, `-${newType}$1-`);
+    return filename.replace(/-[LPEVADCNT](\d{2})-/i, `-${newType}$1-`);
   }
 
   const ext = getFileExtension(filename);
@@ -143,10 +147,10 @@ export function calculateSortOrder(parsed: ParsedFilename): number {
 /**
  * Map letter type to category name.
  */
-export function typeToCategory(type: LetterType): 'letters' | 'envelopes' | 'extras' {
+export function typeToCategory(type: LetterType): 'letters' | 'covers' | 'extras' {
   switch (type.toUpperCase()) {
     case 'L': return 'letters';
-    case 'C': return 'envelopes';
+    case 'C': return 'covers';
     default: return 'extras';
   }
 }
@@ -154,10 +158,10 @@ export function typeToCategory(type: LetterType): 'letters' | 'envelopes' | 'ext
 /**
  * Map category name to letter type.
  */
-export function categoryToType(category: 'letters' | 'envelopes' | 'extras'): LetterType {
+export function categoryToType(category: 'letters' | 'covers' | 'extras'): LetterType {
   switch (category) {
     case 'letters': return 'L';
-    case 'envelopes': return 'C';
+    case 'covers': return 'C';
     case 'extras': return 'E';
   }
 }

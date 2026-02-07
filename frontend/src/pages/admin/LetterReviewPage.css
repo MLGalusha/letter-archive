@@ -142,6 +142,39 @@
   display: none; /* Chrome/Safari/Opera */
 }
 
+/* Add scroll room at bottom - margin on last child creates scrollable space */
+.edit-panel > *:last-child {
+  margin-bottom: calc(var(--spacing-xl) * 2);
+}
+
+/* Filename Display (inside status-panel) */
+.filename-display {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: solid 1px var(--border);
+  margin-bottom: var(--spacing-xs);
+}
+
+.filename-label {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.filename-value {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: var(--font-sm);
+  color: var(--text);
+  background: var(--bg);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: solid 1px var(--border);
+}
+
 /* Status Panel */
 .status-panel {
   background: var(--bg-light);
@@ -151,16 +184,16 @@
   box-shadow: var(--shadow);
   padding: var(--spacing-md);
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--spacing-md);
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: var(--spacing-sm);
 }
 
 .status-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--spacing-sm);
+  flex-wrap: wrap;
 }
 
 .status-label {
@@ -255,6 +288,14 @@
   color: #b71c1c;
 }
 
+/* Slightly shrink visibility buttons in narrow range before mobile breakpoint */
+@media (max-width: 829px) and (min-width: 769px) {
+  .toggle-btn {
+    padding: 0.6rem 0.9rem;
+    font-size: var(--font-xs);
+  }
+}
+
 /* Editor Section */
 .editor-section {
   background: var(--bg-light);
@@ -262,7 +303,7 @@
   border-top: solid 1px var(--highlight);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .editor-header {
@@ -292,28 +333,38 @@
 
 .editor-container {
   padding: var(--spacing-sm);
+  min-height: 420px; /* Ensure container has minimum height for textarea */
 }
 
-.transcript-textarea {
+/* Transcript editor - contenteditable div */
+.transcript-editor {
   width: 100%;
   padding: 0.75rem 1rem;
   border: none;
   border-radius: var(--radius-md);
   font-family: inherit;
-  font-size: 1.1rem;
+  font-size: var(--transcript-font-size, 1.1rem);
   line-height: 1.8;
-  resize: none;
   background: var(--bg);
   color: var(--text);
-  transition: all 0.2s ease;
   min-height: 400px;
-  overflow: hidden;
+  overflow-y: auto; /* Vertical scroll for long transcripts */
+  overflow-x: hidden; /* No horizontal scroll - font shrinks to fit */
   box-sizing: border-box;
+  white-space: pre-wrap; /* Preserve explicit line breaks, allow wrapping within shrunken font */
+  word-wrap: normal;
+  overflow-wrap: normal;
 }
 
-.transcript-textarea:focus {
+.transcript-editor:focus {
   outline: none;
   box-shadow: 0 0 0 2px hsla(0, 0%, 50%, 0.1);
+}
+
+.transcript-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  opacity: 0.6;
 }
 
 /* Metadata Section */
@@ -338,14 +389,23 @@
   gap: var(--spacing-sm);
 }
 
-/* Form Rows for two-column layout */
+/* Form Rows for two-column layout with responsive wrap */
 .form-row {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--spacing-sm);
 }
 
 .form-row .form-group {
-  flex: 1;
+  flex: 1 1 200px; /* Grow, shrink, min-width 200px for natural wrapping */
+  min-width: 0;
+}
+
+/* Mobile: reset flex-basis from 200px (which becomes min-height in column mode) */
+@media (max-width: 768px) {
+  .form-row .form-group {
+    flex: 0 0 auto;
+  }
 }
 
 .form-group {
@@ -416,7 +476,7 @@
   border-color: #f5c6cb;
 }
 
-/* Action Bar */
+/* Action Bar - Vertical stack layout */
 .action-bar {
   background: var(--bg-light);
   border: var(--border-card);
@@ -425,26 +485,29 @@
   box-shadow: var(--shadow);
   padding: var(--spacing-md);
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
   gap: var(--spacing-sm);
-  flex-wrap: wrap;
 }
 
 .left-actions {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: var(--spacing-sm);
-  flex-wrap: wrap;
+  width: 100%;
 }
 
 .right-actions {
   display: flex;
-  gap: var(--spacing-xs);
+  flex-direction: column;
+  width: 100%;
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--border);
+  margin-top: var(--spacing-xs);
 }
 
 .action-bar button {
-  padding: 0.75rem 1.5rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -467,7 +530,15 @@
 
 .save-btn:hover:not(:disabled) {
   background: var(--bg-light);
-  transform: scale(1.025);
+}
+
+.confirm-btn {
+  background-color: #2e7d32;
+  color: white;
+}
+
+.confirm-btn:hover:not(:disabled) {
+  background-color: #1b5e20;
 }
 
 .review-btn {
@@ -477,22 +548,36 @@
 
 .review-btn:hover:not(:disabled) {
   background-color: #1565c0;
-  transform: scale(1.025);
+}
+
+.processing-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  font-size: var(--font-sm);
+  color: #e65100;
+  background-color: #fff3e0;
+  border-radius: var(--radius-md);
+  border: 1px solid #ffcc80;
 }
 
 .delete-btn {
+  background: transparent;
+  color: #dc3545;
+  border: solid 1px #dc3545 !important;
+}
+
+.delete-btn:hover:not(:disabled) {
   background-color: #dc3545;
   color: white;
 }
 
-.delete-btn:hover:not(:disabled) {
-  background-color: #c82333;
-  transform: scale(1.025);
-}
-
 .reviewed-indicator {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
+  width: 100%;
   padding: 0.5rem 1rem;
   font-size: var(--font-sm);
   color: #1b5e20;

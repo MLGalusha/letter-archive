@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Letter } from "../../types/Letter";
 import LetterViewer from "../LetterViewer/LetterViewer";
@@ -10,7 +9,6 @@ interface LetterDisplayProps {
 
 export default function LetterDisplay({ letter }: LetterDisplayProps) {
   const navigate = useNavigate();
-  const [showFullTranscript, setShowFullTranscript] = useState(false);
 
   const handleBack = () => {
     navigate(-1);
@@ -43,17 +41,12 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
                 )}
               </div>
               <div className="section-content">
-                {letter.transcript.pages.length > 1 && !showFullTranscript ? (
+                {letter.transcript.pages.length > 0 ? (
                   <div className="transcript-pages">
                     {letter.transcript.pages.map((page) => (
                       <div key={page.pageNumber} className="transcript-page">
-                        <h4>Page {page.pageNumber}</h4>
+                        <div className="page-number">Page {page.pageNumber}</div>
                         <p className="transcript-text">{page.text}</p>
-                        {page.confidence && (
-                          <span className="confidence-badge">
-                            {Math.round(page.confidence * 100)}% confidence
-                          </span>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -61,15 +54,6 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
                   <div className="transcript-full">
                     <p className="transcript-text">{letter.transcript.fullText}</p>
                   </div>
-                )}
-
-                {letter.transcript.pages.length > 1 && (
-                  <button
-                    className="toggle-transcript-button"
-                    onClick={() => setShowFullTranscript(!showFullTranscript)}
-                  >
-                    {showFullTranscript ? "Show by page" : "Show full text"}
-                  </button>
                 )}
               </div>
             </div>

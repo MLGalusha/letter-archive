@@ -30,7 +30,8 @@ export async function findOrCreateLetter(params: CreateLetterParams): Promise<Le
       eq(letters.collectionId, params.collectionId),
       eq(letters.dateRaw, params.dateRaw),
       eq(letters.type, params.type),
-      eq(letters.typeSequence, params.typeSequence)
+      eq(letters.typeSequence, params.typeSequence),
+      isNull(letters.deletedAt)
     ),
   });
 

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, and, isNull, inArray, asc, desc } from 'drizzle-orm';
+import { eq, and, isNull, inArray, asc, desc, sql } from 'drizzle-orm';
 import { db, letters, collections } from '../db/index.js';
 import { letterQuerySchema } from '../schemas/letter.js';
 import {
@@ -44,11 +44,15 @@ router.get('/letters', async (req, res, next) => {
     }
 
     // Determine sort column and order
+    // For date sorting, use dateRaw with X replaced by 0
+    // This makes unknown dates sort at the start of their range:
+    // 18XXXXXX → 18000000, so "1800s" comes before "1801"
     const sortFn = query.sortOrder === 'asc' ? asc : desc;
-    const getSortColumn = () => {
+    const getSortExpression = () => {
       switch (query.sort) {
         case 'letterDate':
-          return letters.letterDate;
+          // Replace X with 0 so unknown parts sort at the beginning of their range
+          return sql`REPLACE(${letters.dateRaw}, 'X', '0')`;
         case 'sender':
           return letters.sender;
         case 'workflow':
@@ -71,7 +75,7 @@ router.get('/letters', async (req, res, next) => {
       },
       limit: query.limit,
       offset: (query.page - 1) * query.limit,
-      orderBy: [sortFn(getSortColumn())],
+      orderBy: [sortFn(getSortExpression())],
     });
 
     // Transform to frontend-compatible format
@@ -122,7 +126,7 @@ router.get('/letters/:letterId', async (req, res, next) => {
           eq(letters.collectionId, letter.collectionId),
           eq(letters.dateRaw, letter.dateRaw),
           eq(letters.typeSequence, letter.typeSequence),
-          inArray(letters.type, ['C', 'E']),
+          inArray(letters.type, ['P', 'E', 'V', 'A', 'D', 'C', 'N', 'T']),
           isNull(letters.deletedAt)
         ),
         with: {

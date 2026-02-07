@@ -32,11 +32,13 @@ export interface UploadResponse {
 
 /**
  * Upload files to create letters/pages
+ * @param force - If true, overwrites existing files instead of skipping
  */
-export async function uploadFiles(files: File[]): Promise<UploadResponse> {
+export async function uploadFiles(files: File[], force = false): Promise<UploadResponse> {
   const formData = new FormData();
   files.forEach((file) => formData.append('files', file));
-  return apiPost<UploadResponse>('/admin/uploads', formData);
+  const url = force ? '/admin/uploads?force=true' : '/admin/uploads';
+  return apiPost<UploadResponse>(url, formData);
 }
 
 // ============================================================================
@@ -97,6 +99,13 @@ export async function deleteLetter(letterId: string): Promise<{ message: string 
  */
 export async function processLetter(letterId: string): Promise<{ message: string; letterId: string }> {
   return apiPost<{ message: string; letterId: string }>(`/admin/letters/${letterId}/process`);
+}
+
+/**
+ * Confirm transcript is correct (triggers metadata extraction)
+ */
+export async function confirmTranscript(letterId: string): Promise<Letter> {
+  return apiPost<Letter>(`/admin/letters/${letterId}/confirm-transcript`);
 }
 
 /**

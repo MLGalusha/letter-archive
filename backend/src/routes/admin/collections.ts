@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { eq, and, isNull, sql, asc } from 'drizzle-orm';
 import { z } from 'zod';
-import { db, letters, collections } from '../../db/index.js';
+import { db, letters, collections, letterPages } from '../../db/index.js';
 import { getCollectionByCode } from '../../services/collections.js';
 import { transformLettersToDTO, type LetterWithRelations } from '../../dto/index.js';
 
@@ -35,11 +35,25 @@ router.get('/', async (_req, res, next) => {
             and(eq(letters.collectionId, collection.id), isNull(letters.deletedAt))
           );
 
+        // Count letter pages and extra content pages
+        const [pageCounts] = await db
+          .select({
+            letterPageCount: sql<number>`count(*) filter (where ${letters.type} = 'L')::int`,
+            extraContentCount: sql<number>`count(*) filter (where ${letters.type} != 'L')::int`,
+          })
+          .from(letterPages)
+          .innerJoin(letters, eq(letterPages.letterId, letters.id))
+          .where(
+            and(eq(letters.collectionId, collection.id), isNull(letters.deletedAt))
+          );
+
         return {
           ...collection,
           letterCount: stats?.total || 0,
           publishedCount: stats?.published || 0,
           draftCount: stats?.draft || 0,
+          letterPageCount: pageCounts?.letterPageCount || 0,
+          extraContentCount: pageCounts?.extraContentCount || 0,
         };
       })
     );

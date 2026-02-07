@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getAdminLetterById } from "../../api/letters";
-import { updateLetter, deleteLetter, markAsReviewed } from "../../api/admin";
+import { updateLetter, deleteLetter, markAsReviewed, confirmTranscript } from "../../api/admin";
 import LetterViewer from "../../components/LetterViewer/LetterViewer";
-import type { Letter, VisibilityState, WorkflowState } from "../../types/Letter";
+import type { Letter, LetterImage, VisibilityState, WorkflowState } from "../../types/Letter";
 import "./LetterReviewPage.css";
 
 const WORKFLOW_LABELS: Record<WorkflowState, string> = {
@@ -35,7 +35,9 @@ export default function LetterReviewPage() {
 
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [transcriptFontSize, setTranscriptFontSize] = useState("1.1rem");
+  const [currentFilename, setCurrentFilename] = useState<string | undefined>(undefined);
+  const editorRef = useRef<HTMLDivElement>(null);
   const hookRef = useRef<HTMLTextAreaElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
@@ -74,39 +76,92 @@ export default function LetterReviewPage() {
     }
   }, [letterId, navigate]);
 
-  // Auto-resize transcript textarea
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = "auto";
-      textarea.style.height = textarea.scrollHeight + "px";
+  // Calculate font size based on longest line to prevent wrapping
+  const calculateFontSize = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor || !transcript) {
+      setTranscriptFontSize("1.1rem");
+      return;
+    }
+
+    const containerWidth = editor.clientWidth - 32; // Account for padding
+    const lines = transcript.split('\n');
+    const baseFontSize = 1.1; // rem
+
+    // Create canvas for measuring text
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Get computed font to match actual rendering
+    const computedStyle = window.getComputedStyle(editor);
+    const fontFamily = computedStyle.fontFamily || 'inherit';
+    ctx.font = `${baseFontSize * 16}px ${fontFamily}`; // Convert rem to px (assuming 16px base)
+
+    // Find the widest line
+    let maxWidth = 0;
+    for (const line of lines) {
+      if (line.trim()) {
+        const width = ctx.measureText(line).width;
+        if (width > maxWidth) maxWidth = width;
+      }
+    }
+
+    // Calculate scale factor (with a minimum to prevent text being too small)
+    if (maxWidth > containerWidth) {
+      const scale = Math.max(0.5, containerWidth / maxWidth); // Don't go below 50%
+      setTranscriptFontSize(`${baseFontSize * scale}rem`);
+    } else {
+      setTranscriptFontSize(`${baseFontSize}rem`);
     }
   }, [transcript]);
 
-  // Auto-resize hook textarea
+  // Recalculate font size when transcript changes or on resize
+  useEffect(() => {
+    calculateFontSize();
+
+    // Also recalculate on window resize
+    window.addEventListener('resize', calculateFontSize);
+    return () => window.removeEventListener('resize', calculateFontSize);
+  }, [calculateFontSize]);
+
+  // Set initial content in contenteditable when letter loads
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (editor && letter) {
+      // Only set content if it's different (prevents cursor jumping)
+      const currentContent = editor.innerText;
+      const newContent = letter.transcript.fullText || "";
+      if (currentContent !== newContent) {
+        editor.innerText = newContent;
+      }
+    }
+  }, [letter]);
+
+  // Auto-resize hook textarea (min 80px)
   useEffect(() => {
     const textarea = hookRef.current;
     if (textarea) {
       textarea.style.height = "auto";
-      textarea.style.height = textarea.scrollHeight + "px";
+      textarea.style.height = Math.max(textarea.scrollHeight, 80) + "px";
     }
   }, [hook]);
 
-  // Auto-resize description textarea
+  // Auto-resize description textarea (min 80px)
   useEffect(() => {
     const textarea = descriptionRef.current;
     if (textarea) {
       textarea.style.height = "auto";
-      textarea.style.height = textarea.scrollHeight + "px";
+      textarea.style.height = Math.max(textarea.scrollHeight, 80) + "px";
     }
   }, [description]);
 
-  // Auto-resize notes textarea
+  // Auto-resize notes textarea (min 80px)
   useEffect(() => {
     const textarea = notesRef.current;
     if (textarea) {
       textarea.style.height = "auto";
-      textarea.style.height = textarea.scrollHeight + "px";
+      textarea.style.height = Math.max(textarea.scrollHeight, 80) + "px";
     }
   }, [notes]);
 
@@ -167,6 +222,23 @@ export default function LetterReviewPage() {
     }
   };
 
+  const handleConfirmTranscript = async () => {
+    if (!letterId) return;
+    setSaving(true);
+    setMessage("");
+
+    try {
+      const updated = await confirmTranscript(letterId);
+      setLetter(updated);
+      setMessage("Transcript confirmed - metadata extraction will begin shortly");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Failed to confirm transcript");
+      console.error("Confirm transcript error:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleMarkReviewed = async () => {
     if (!letterId) return;
     setSaving(true);
@@ -209,6 +281,10 @@ export default function LetterReviewPage() {
     navigate("/admin");
   };
 
+  const handlePageChange = useCallback((_index: number, image: LetterImage) => {
+    setCurrentFilename(image.originalFilename);
+  }, []);
+
   if (loading || !letter) {
     return (
       <div className="letter-review-page">
@@ -238,13 +314,25 @@ export default function LetterReviewPage() {
         <div className="review-layout">
           {/* Left side: Letter viewer */}
           <div className="images-panel">
-            <LetterViewer images={letter.images} showOnlyLetterPages={false} />
+            <LetterViewer
+              images={letter.images}
+              showOnlyLetterPages={false}
+              onPageChange={handlePageChange}
+            />
           </div>
 
           {/* Right side: Editable content */}
           <div className="edit-panel">
             {/* Status Panel */}
             <div className="status-panel">
+              {/* Filename Display - shows current page's filename */}
+              {(currentFilename || letter.images[0]?.originalFilename) && (
+                <div className="filename-display">
+                  <span className="filename-label">File</span>
+                  <code className="filename-value">{currentFilename || letter.images[0]?.originalFilename}</code>
+                </div>
+              )}
+
               <div className="status-item">
                 <span className="status-label">Workflow</span>
                 <span className={`status-badge badge-workflow-${letter.workflowState.toLowerCase()}`}>
@@ -288,12 +376,17 @@ export default function LetterReviewPage() {
                 )}
               </div>
               <div className="editor-container">
-                <textarea
-                  ref={textareaRef}
-                  value={transcript}
-                  onChange={(e) => setTranscript(e.target.value)}
-                  className="transcript-textarea"
-                  placeholder="Enter letter transcription..."
+                <div
+                  ref={editorRef}
+                  className="transcript-editor"
+                  contentEditable
+                  suppressContentEditableWarning
+                  data-placeholder="Enter letter transcription..."
+                  style={{ "--transcript-font-size": transcriptFontSize } as React.CSSProperties}
+                  onInput={(e) => {
+                    const target = e.currentTarget;
+                    setTranscript(target.innerText);
+                  }}
                 />
               </div>
             </div>
@@ -425,7 +518,22 @@ export default function LetterReviewPage() {
                   {saving ? "Saving..." : "Save Changes"}
                 </button>
 
-                {letter.workflowState !== "REVIEWED" && (
+                {/* Show Confirm Transcript button for TRANSCRIBED letters that haven't been confirmed */}
+                {letter.workflowState === "TRANSCRIBED" && !letter.transcriptConfirmedAt && (
+                  <button onClick={handleConfirmTranscript} disabled={saving} className="confirm-btn">
+                    Confirm Transcript
+                  </button>
+                )}
+
+                {/* Show processing indicator while metadata is being extracted */}
+                {letter.workflowState === "TRANSCRIBED" && letter.transcriptConfirmedAt && (
+                  <span className="processing-indicator">
+                    Extracting metadata...
+                  </span>
+                )}
+
+                {/* Show Mark as Reviewed for letters past TRANSCRIBED state */}
+                {["METADATA_EXTRACTING", "METADATA_DRAFTED"].includes(letter.workflowState) && (
                   <button onClick={handleMarkReviewed} disabled={saving} className="review-btn">
                     Mark as Reviewed
                   </button>

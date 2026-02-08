@@ -93,7 +93,7 @@ export default function CollectionDetailPage() {
               location={letter.metadata.location}
               sender={letter.metadata.sender}
               recipient={letter.metadata.recipient}
-              description={letter.metadata.description}
+              hook={letter.metadata.hook}
               onClick={handleLetterClick}
             />
           ))}

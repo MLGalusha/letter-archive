@@ -38,13 +38,72 @@
   font-size: 1.25rem;
 }
 
+.header-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-md);
+}
+
+.header-stats {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+
+.header-stats .stat-divider {
+  opacity: 0.5;
+}
+
+.header-stats .uncategorized-stat {
+  color: var(--highlight);
+}
+
 .header-actions {
   display: flex;
   gap: var(--spacing-sm);
   align-items: center;
 }
 
-/* Header Buttons */
+/* Toolbar buttons with icon + text (matches AdminDashboard) */
+.toolbar-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--bg-light);
+  color: var(--text);
+  border: solid 1px var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.toolbar-button:hover:not(:disabled) {
+  background: var(--bg);
+  transform: scale(1.025);
+}
+
+.toolbar-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toolbar-button.active {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.toolbar-button.active:hover:not(:disabled) {
+  background: var(--text);
+  opacity: 0.9;
+}
+
+/* Legacy header-btn (keep for backward compat) */
 .header-btn {
   display: flex;
   align-items: center;
@@ -637,6 +696,40 @@
   box-shadow: 0 0 0 2px var(--text);
 }
 
+.delete-thumb-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.15s ease;
+  color: var(--text-muted);
+  z-index: 5;
+}
+
+.image-thumb:hover .delete-thumb-btn {
+  opacity: 1;
+}
+
+.delete-thumb-btn:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+.delete-thumb-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
 .image-thumb img {
   width: 100%;
   height: 100%;
@@ -1024,6 +1117,46 @@
   border-radius: var(--radius-md);
 }
 
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 80px;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: var(--radius-md);
+  color: white;
+  font-size: 2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+  z-index: 10;
+}
+
+.lightbox-nav:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.lightbox-nav-prev {
+  left: -70px;
+}
+
+.lightbox-nav-next {
+  right: -70px;
+}
+
+.lightbox-counter {
+  position: absolute;
+  bottom: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: var(--font-sm);
+}
+
 /* ============================================================================
    Responsive / Mobile
    ============================================================================ */
@@ -1110,8 +1243,6 @@
   border-radius: var(--radius-md);
   padding: var(--spacing-sm);
   margin-bottom: var(--spacing-md);
-  max-height: 150px;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -1139,32 +1270,34 @@
 
 .confirm-btn {
   flex: 1;
-  padding: 0.6rem 1rem;
+  padding: 0.75rem 1.25rem;
   border: none;
   border-radius: var(--radius-md);
   font-size: 0.95rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .confirm-btn.replace {
-  background: var(--highlight);
-  color: white;
+  background: var(--text);
+  color: var(--bg);
 }
 
 .confirm-btn.replace:hover {
-  filter: brightness(1.1);
+  opacity: 0.9;
+  transform: translateY(-1px);
 }
 
 .confirm-btn.skip {
-  background: var(--bg);
+  background: transparent;
   color: var(--text);
-  border: 1px solid var(--border);
+  border: 2px solid var(--border);
 }
 
 .confirm-btn.skip:hover {
-  background: var(--bg-light);
+  border-color: var(--text-muted);
+  background: var(--bg);
 }
 
 /* ============================================================================
@@ -1307,4 +1440,236 @@
 
 .results-btn.secondary:hover {
   background: var(--bg-light);
+}
+
+/* ============================================================================
+   Upload Success Banner
+   ============================================================================ */
+
+.upload-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-left: 4px solid #22c55e;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.banner-icon {
+  width: 32px;
+  height: 32px;
+  background: #22c55e;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.banner-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.banner-content strong {
+  font-size: var(--font-base);
+  color: var(--text);
+}
+
+.banner-content span {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+
+.banner-stats {
+  display: flex;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.banner-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+
+.banner-stat strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.banner-dismiss {
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.banner-dismiss:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ============================================================================
+   Delete Button on Cards
+   ============================================================================ */
+
+.collection-card {
+  position: relative;
+}
+
+.delete-card-btn {
+  position: absolute;
+  top: var(--spacing-xs);
+  right: var(--spacing-xs);
+  width: 28px;
+  height: 28px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.15s ease;
+  color: var(--text-muted);
+}
+
+.collection-card:hover .delete-card-btn {
+  opacity: 1;
+}
+
+.delete-card-btn:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+.delete-card-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Delete button in letter card */
+.letter-card {
+  position: relative;
+}
+
+.delete-letter-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.15s ease;
+  color: var(--text-muted);
+}
+
+.letter-card:hover .delete-letter-btn {
+  opacity: 1;
+}
+
+.delete-letter-btn:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+.delete-letter-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Delete confirmation dialog */
+.delete-dialog {
+  background: var(--bg-light);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  max-width: 400px;
+  width: 90%;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.delete-dialog h3 {
+  margin: 0 0 var(--spacing-sm);
+  color: var(--text);
+  font-size: 1.15rem;
+}
+
+.delete-dialog p {
+  margin: 0 0 var(--spacing-md);
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+
+.delete-dialog-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  justify-content: center;
+}
+
+.delete-dialog-btn {
+  padding: 0.6rem 1.25rem;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.delete-dialog-btn.cancel {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.delete-dialog-btn.cancel:hover {
+  background: var(--bg-light);
+}
+
+.delete-dialog-btn.confirm {
+  background: #dc2626;
+  color: white;
+}
+
+.delete-dialog-btn.confirm:hover {
+  background: #b91c1c;
 }

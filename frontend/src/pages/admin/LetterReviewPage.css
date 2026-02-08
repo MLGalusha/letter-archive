@@ -22,6 +22,102 @@
 .review-header h1 {
   margin: 0;
   font-size: 1.5rem;
+  flex: 1;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 var(--spacing-sm);
+}
+
+/* Header Action Buttons */
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.header-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: solid 1px var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.header-action:hover:not(:disabled) {
+  background: var(--bg-light);
+  transform: scale(1.05);
+}
+
+.header-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Tooltip */
+.header-action::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--text);
+  color: var(--bg);
+  font-size: var(--font-xs);
+  font-weight: 500;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 101;
+}
+
+.header-action:hover::after {
+  opacity: 1;
+}
+
+/* Action button variants */
+.header-action.save {
+  border-color: var(--border);
+}
+
+.header-action.confirm {
+  border-color: #2e7d32;
+  color: #2e7d32;
+}
+
+.header-action.confirm:hover:not(:disabled) {
+  background: #e8f5e9;
+}
+
+.header-action.review {
+  border-color: #1976d2;
+  color: #1976d2;
+}
+
+.header-action.review:hover:not(:disabled) {
+  background: #e3f2fd;
+}
+
+.header-action.delete {
+  border-color: #dc3545;
+  color: #dc3545;
+}
+
+.header-action.delete:hover:not(:disabled) {
+  background: #ffebee;
 }
 
 .back-button {
@@ -336,15 +432,15 @@
   min-height: 420px; /* Ensure container has minimum height for textarea */
 }
 
-/* Transcript editor - contenteditable div */
+/* Transcript editor - contenteditable div with monospace font for accurate spacing */
 .transcript-editor {
   width: 100%;
   padding: 0.75rem 1rem;
   border: none;
   border-radius: var(--radius-md);
-  font-family: inherit;
-  font-size: var(--transcript-font-size, 1.1rem);
-  line-height: 1.8;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: var(--transcript-font-size, 1rem);
+  line-height: 1.6;
   background: var(--bg);
   color: var(--text);
   min-height: 400px;

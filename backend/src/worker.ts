@@ -2,6 +2,9 @@ import 'dotenv/config';
 import { eq, and, isNull, isNotNull } from 'drizzle-orm';
 import { db, letters } from './db/index.js';
 import { processLetter, processMetadata } from './pipeline/processor.js';
+import { createLogger } from './utils/logger.js';
+
+const log = createLogger({ module: 'worker' });
 
 const POLL_INTERVAL = 5000; // 5 seconds
 const BATCH_SIZE = 5;
@@ -44,33 +47,72 @@ async function findLettersNeedingMetadata() {
  * Processes pending jobs.
  */
 async function processPendingJobs() {
+  const cycleStart = Date.now();
+
   // Phase 1: Transcription
   const needingTranscription = await findLettersNeedingTranscription();
 
+  if (needingTranscription.length > 0) {
+    log.debug({ count: needingTranscription.length }, 'Found letters needing transcription');
+  }
+
   for (const letter of needingTranscription) {
-    console.log(`[Worker] Processing transcription for letter ${letter.id}`);
+    const jobStart = Date.now();
+    log.info(
+      { letterId: letter.id, collectionId: letter.collectionId, dateRaw: letter.dateRaw },
+      'Starting transcription job'
+    );
     try {
       await processLetter(letter.id);
+      const duration = Date.now() - jobStart;
+      log.info({ letterId: letter.id, duration }, 'Transcription job completed');
     } catch (error) {
-      console.error(`[Worker] Error processing letter ${letter.id}:`, error);
+      const duration = Date.now() - jobStart;
+      log.error(
+        { letterId: letter.id, duration, err: error },
+        'Transcription job failed'
+      );
     }
   }
 
   // Phase 2: Metadata extraction (only for confirmed transcripts)
   const needingMetadata = await findLettersNeedingMetadata();
 
+  if (needingMetadata.length > 0) {
+    log.debug({ count: needingMetadata.length }, 'Found letters needing metadata extraction');
+  }
+
   for (const letter of needingMetadata) {
-    console.log(`[Worker] Processing metadata for letter ${letter.id}`);
+    const jobStart = Date.now();
+    log.info(
+      { letterId: letter.id, collectionId: letter.collectionId, dateRaw: letter.dateRaw },
+      'Starting metadata extraction job'
+    );
     try {
       await processMetadata(letter.id);
+      const duration = Date.now() - jobStart;
+      log.info({ letterId: letter.id, duration }, 'Metadata extraction job completed');
     } catch (error) {
-      console.error(`[Worker] Error processing metadata for letter ${letter.id}:`, error);
+      const duration = Date.now() - jobStart;
+      log.error(
+        { letterId: letter.id, duration, err: error },
+        'Metadata extraction job failed'
+      );
     }
   }
 
   const totalProcessed = needingTranscription.length + needingMetadata.length;
   if (totalProcessed > 0) {
-    console.log(`[Worker] Processed ${totalProcessed} letters this cycle`);
+    const cycleDuration = Date.now() - cycleStart;
+    log.info(
+      {
+        transcriptionCount: needingTranscription.length,
+        metadataCount: needingMetadata.length,
+        totalProcessed,
+        cycleDuration,
+      },
+      'Processing cycle completed'
+    );
   }
 }
 
@@ -85,16 +127,17 @@ function sleep(ms: number): Promise<void> {
  * Main worker loop.
  */
 async function main() {
-  console.log('[Worker] Starting background worker...');
-  console.log(`[Worker] Poll interval: ${POLL_INTERVAL}ms`);
-  console.log(`[Worker] Batch size: ${BATCH_SIZE}`);
+  log.info(
+    { pollInterval: POLL_INTERVAL, batchSize: BATCH_SIZE },
+    'Background worker starting'
+  );
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       await processPendingJobs();
     } catch (error) {
-      console.error('[Worker] Error in processing cycle:', error);
+      log.error({ err: error }, 'Error in processing cycle');
     }
 
     await sleep(POLL_INTERVAL);
@@ -103,16 +146,16 @@ async function main() {
 
 // Handle graceful shutdown
 process.on('SIGINT', () => {
-  console.log('[Worker] Received SIGINT, shutting down...');
+  log.info('Received SIGINT, shutting down');
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.log('[Worker] Received SIGTERM, shutting down...');
+  log.info('Received SIGTERM, shutting down');
   process.exit(0);
 });
 
 main().catch((error) => {
-  console.error('[Worker] Fatal error:', error);
+  log.fatal({ err: error }, 'Fatal error in worker');
   process.exit(1);
 });

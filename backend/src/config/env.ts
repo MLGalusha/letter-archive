@@ -6,7 +6,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3001),
   STORAGE_DIR: z.string().default('./storage'),
   OPENAI_API_KEY: z.string().optional(),
-  OPENAI_MODEL: z.string().default('gpt-4o'),
+  OPENAI_MODEL: z.string().default('gpt-5.2'),
 });
 
 export const env = envSchema.parse(process.env);

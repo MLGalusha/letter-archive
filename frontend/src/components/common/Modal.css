@@ -1,0 +1,162 @@
+/* ============================================================================
+   Modal Overlay
+   ============================================================================ */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: hsla(0, 0%, 0%, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--spacing-lg);
+}
+
+/* ============================================================================
+   Modal Content
+   ============================================================================ */
+
+.modal-content {
+  background: var(--bg-light);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 20px hsla(0, 0%, 0%, 0.3);
+  width: 100%;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Modal Sizes */
+.modal-sm {
+  max-width: 400px;
+}
+
+.modal-md {
+  max-width: 600px;
+}
+
+.modal-lg {
+  max-width: 800px;
+}
+
+/* ============================================================================
+   Modal Header
+   ============================================================================ */
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: solid 1px var(--border);
+}
+
+.modal-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.modal-subtitle {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ============================================================================
+   Modal Body
+   ============================================================================ */
+
+.modal-body {
+  padding: var(--spacing-md) var(--spacing-lg);
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ============================================================================
+   Modal Actions (Footer)
+   ============================================================================ */
+
+.modal-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  justify-content: flex-end;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: solid 1px var(--border);
+}
+
+/* ============================================================================
+   Confirm Dialog Specific Styles
+   ============================================================================ */
+
+.confirm-dialog {
+  text-align: center;
+  padding: var(--spacing-lg);
+}
+
+.confirm-dialog-title {
+  margin: 0 0 var(--spacing-sm);
+  font-size: 1.15rem;
+  color: var(--text);
+}
+
+.confirm-dialog-message {
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+.confirm-dialog-message p {
+  margin: 0;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  justify-content: center;
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+@media (max-width: 480px) {
+  .modal-overlay {
+    padding: var(--spacing-md);
+  }
+
+  .modal-content {
+    max-height: 90vh;
+  }
+
+  .modal-actions,
+  .confirm-dialog-actions {
+    flex-direction: column;
+  }
+}

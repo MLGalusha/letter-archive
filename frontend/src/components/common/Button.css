@@ -1,0 +1,218 @@
+/* ============================================================================
+   Button Component - Base Styles
+   ============================================================================ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  border: solid 1px transparent;
+  background: var(--bg-light);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Button Sizes
+   ============================================================================ */
+
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: var(--font-xs);
+}
+
+.btn-md {
+  padding: 0.5rem 1rem;
+  font-size: var(--font-sm);
+}
+
+.btn-lg {
+  padding: 0.75rem 1.5rem;
+  font-size: var(--font-base);
+}
+
+/* ============================================================================
+   Button Variants
+   ============================================================================ */
+
+/* Primary - filled dark */
+.btn-primary {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: scale(1.025);
+  opacity: 0.9;
+}
+
+/* Secondary - outlined */
+.btn-secondary {
+  background: var(--bg-light);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg);
+  transform: scale(1.025);
+}
+
+/* Danger - for destructive actions */
+.btn-danger {
+  background: #dc2626;
+  color: white;
+  border-color: #dc2626;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+/* Ghost - minimal styling */
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+  border-color: transparent;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-light);
+}
+
+/* ============================================================================
+   Active State (toggle buttons)
+   ============================================================================ */
+
+.btn-active.btn-secondary {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.btn-active.btn-secondary:hover:not(:disabled) {
+  background: var(--text);
+  opacity: 0.9;
+}
+
+/* ============================================================================
+   Icon Button (square, icon-only)
+   ============================================================================ */
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: solid 1px transparent;
+  padding: 0;
+  background: var(--bg-light);
+}
+
+.btn-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Icon Button Sizes */
+.btn-icon-sm {
+  width: 32px;
+  height: 32px;
+}
+
+.btn-icon-md {
+  width: 40px;
+  height: 40px;
+}
+
+.btn-icon-lg {
+  width: 48px;
+  height: 48px;
+}
+
+/* Icon Button Variants */
+.btn-icon-primary {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.btn-icon-primary:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.btn-icon-secondary {
+  background: var(--bg-light);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.btn-icon-secondary:hover:not(:disabled) {
+  background: var(--bg);
+  transform: scale(1.05);
+}
+
+.btn-icon-danger {
+  background: transparent;
+  color: #dc2626;
+  border-color: #dc2626;
+}
+
+.btn-icon-danger:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.btn-icon-ghost {
+  background: transparent;
+  color: var(--text);
+  border-color: transparent;
+}
+
+.btn-icon-ghost:hover:not(:disabled) {
+  background: var(--bg-light);
+}
+
+/* Icon Button Active State */
+.btn-icon.btn-active {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.btn-icon.btn-active:hover:not(:disabled) {
+  background: var(--text);
+  opacity: 0.9;
+  transform: scale(1.05);
+}
+
+/* ============================================================================
+   Loading Spinner
+   ============================================================================ */
+
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.75s linear infinite;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

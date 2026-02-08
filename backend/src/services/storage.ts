@@ -2,6 +2,9 @@ import { mkdir, copyFile, access, readFile, stat, unlink } from 'node:fs/promise
 import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { env } from '../config/env.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger({ module: 'storage' });
 
 // Minimum file size for images (10KB) - rejects tiny/corrupt/placeholder files
 const MIN_IMAGE_SIZE = 10 * 1024;
@@ -37,8 +40,15 @@ export function buildStoragePath(
  * Computes SHA256 checksum of a file.
  */
 export async function computeChecksum(filePath: string): Promise<string> {
+  const start = Date.now();
   const content = await readFile(filePath);
-  return createHash('sha256').update(content).digest('hex');
+  const checksum = createHash('sha256').update(content).digest('hex');
+  const duration = Date.now() - start;
+  log.debug(
+    { filePath, sizeBytes: content.length, duration, checksum: checksum.substring(0, 12) + '...' },
+    'Computed checksum'
+  );
+  return checksum;
 }
 
 /**
@@ -64,9 +74,18 @@ export async function storeFile(
   destPath: string,
   force = false
 ): Promise<StorageResult> {
+  const start = Date.now();
+  const context = { sourcePath, destPath, force };
+
+  log.debug(context, 'Starting file storage');
+
   // Check file size first - reject tiny files that are likely placeholders or corrupt
   const fileStats = await stat(sourcePath);
   if (fileStats.size < MIN_IMAGE_SIZE) {
+    log.warn(
+      { ...context, sizeBytes: fileStats.size, minSize: MIN_IMAGE_SIZE },
+      'File rejected: too small'
+    );
     throw new Error(
       `File too small (${fileStats.size} bytes). Minimum size is ${MIN_IMAGE_SIZE} bytes. ` +
       `This may indicate a corrupted or placeholder file.`
@@ -79,6 +98,7 @@ export async function storeFile(
   // Check if file already exists
   const exists = await fileExists(destPath);
   if (exists && !force) {
+    log.debug({ ...context, checksumSha256 }, 'File already exists, skipping');
     return {
       storagePath: destPath,
       checksumSha256,
@@ -88,14 +108,23 @@ export async function storeFile(
 
   // If force=true and file exists, delete existing file first
   if (exists && force) {
+    log.debug(context, 'Deleting existing file (force=true)');
     await unlink(destPath);
   }
 
   // Create directory structure
-  await mkdir(dirname(destPath), { recursive: true });
+  const dir = dirname(destPath);
+  await mkdir(dir, { recursive: true });
+  log.debug({ dir }, 'Created directory structure');
 
   // Copy file
   await copyFile(sourcePath, destPath);
+
+  const duration = Date.now() - start;
+  log.info(
+    { ...context, sizeBytes: fileStats.size, duration, checksumSha256: checksumSha256.substring(0, 12) + '...' },
+    'File stored successfully'
+  );
 
   return {
     storagePath: destPath,

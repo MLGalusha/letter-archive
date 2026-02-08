@@ -3,9 +3,14 @@ import express from 'express';
 import cors from 'cors';
 import routes from './routes/index.js';
 import { errorHandler } from './middleware/error-handler.js';
+import { requestLogger } from './middleware/request-logger.js';
 import { env, hasOpenAI } from './config/env.js';
+import { logger } from './utils/logger.js';
 
 const app = express();
+
+// Request logging (must be first to capture all requests)
+app.use(requestLogger);
 
 // Middleware
 app.use(
@@ -32,7 +37,12 @@ app.use(errorHandler);
 
 // Start server
 app.listen(env.PORT, () => {
-  console.log(`Server running on http://localhost:${env.PORT}`);
-  console.log(`OpenAI integration: ${hasOpenAI ? 'enabled' : 'stub mode (no API key)'}`);
-  console.log(`Storage directory: ${env.STORAGE_DIR}`);
+  logger.info(
+    {
+      port: env.PORT,
+      openai: hasOpenAI ? 'enabled' : 'stub mode',
+      storageDir: env.STORAGE_DIR,
+    },
+    'Server started'
+  );
 });

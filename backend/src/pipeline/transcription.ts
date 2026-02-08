@@ -1,7 +1,9 @@
 import { transcribeImage } from '../ai/openai.js';
 import { getLetterWithPages, updateTranscriptionStatus, updateLetterWorkflow, incrementTranscriptionAttempts } from '../services/letters.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
+import { createLogger } from '../utils/logger.js';
 
+const log = createLogger({ module: 'transcription-pipeline' });
 const MAX_ATTEMPTS = 3;
 
 /**
@@ -11,27 +13,45 @@ const MAX_ATTEMPTS = 3;
  * - Combines into a single transcription
  */
 export async function runTranscription(letterId: string): Promise<void> {
+  const start = Date.now();
+  const letterLog = log.child({ letterId });
+
+  letterLog.debug('Starting transcription pipeline');
+
   const letter = await getLetterWithPages(letterId);
 
   if (!letter) {
+    letterLog.error('Letter not found');
     throw new Error(`Letter not found: ${letterId}`);
   }
 
+  const context = {
+    letterId,
+    collectionCode: letter.collection.collectionCode,
+    dateRaw: letter.dateRaw,
+    type: letter.type,
+  };
+
   // Only transcribe type='L' letters
   if (letter.type !== 'L') {
-    console.log(`Skipping transcription for non-letter type: ${letter.type}`);
+    letterLog.debug({ type: letter.type }, 'Skipping transcription for non-letter type');
     return;
   }
 
   // Check attempt count
   if (letter.transcriptionAttemptCount >= MAX_ATTEMPTS) {
-    console.log(`Max attempts (${MAX_ATTEMPTS}) reached for letter ${letterId}`);
+    letterLog.warn(
+      { attemptCount: letter.transcriptionAttemptCount, maxAttempts: MAX_ATTEMPTS },
+      'Max transcription attempts reached'
+    );
     await updateTranscriptionStatus(letterId, 'FAILED', null, 'Max attempts exceeded');
     return;
   }
 
   // Increment attempt count
+  const attemptNumber = letter.transcriptionAttemptCount + 1;
   await incrementTranscriptionAttempts(letterId);
+  letterLog.info({ attemptNumber, maxAttempts: MAX_ATTEMPTS }, 'Starting transcription attempt');
 
   // Update status to running
   await updateLetterWorkflow(letterId, 'TRANSCRIBING');
@@ -41,14 +61,22 @@ export async function runTranscription(letterId: string): Promise<void> {
     const pages = letter.pages;
 
     if (pages.length === 0) {
+      letterLog.error('Letter has no pages to transcribe');
       throw new Error('Letter has no pages to transcribe');
     }
 
+    letterLog.debug({ pageCount: pages.length }, 'Processing pages');
+
     const pageTranscriptions: string[] = [];
+    let stubMode = false;
 
     // Transcribe each page
     for (const page of pages) {
-      console.log(`Transcribing page ${page.pageNumber} of letter ${letterId}`);
+      const pageStart = Date.now();
+      letterLog.debug(
+        { pageNumber: page.pageNumber, totalPages: pages.length },
+        'Transcribing page'
+      );
 
       const absolutePath = getAbsoluteStoragePath(page.storagePath);
 
@@ -63,10 +91,18 @@ export async function runTranscription(letterId: string): Promise<void> {
       });
 
       pageTranscriptions.push(result.text);
+      stubMode = result.isStub;
 
-      if (result.isStub) {
-        console.log(`  (Using stub transcription - no API key)`);
-      }
+      const pageDuration = Date.now() - pageStart;
+      letterLog.debug(
+        {
+          pageNumber: page.pageNumber,
+          textLength: result.text.length,
+          duration: pageDuration,
+          isStub: result.isStub,
+        },
+        'Page transcription completed'
+      );
     }
 
     // Combine transcriptions with page separators
@@ -83,10 +119,31 @@ export async function runTranscription(letterId: string): Promise<void> {
     await updateTranscriptionStatus(letterId, 'SUCCESS', combinedTranscription, null);
     await updateLetterWorkflow(letterId, 'TRANSCRIBED');
 
-    console.log(`Transcription complete for letter ${letterId}`);
+    const duration = Date.now() - start;
+    letterLog.info(
+      {
+        ...context,
+        duration,
+        pageCount: pages.length,
+        totalTextLength: combinedTranscription.length,
+        stubMode,
+        attemptNumber,
+      },
+      'Transcription pipeline completed successfully'
+    );
   } catch (error) {
+    const duration = Date.now() - start;
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`Transcription failed for letter ${letterId}: ${message}`);
+
+    letterLog.error(
+      {
+        ...context,
+        duration,
+        attemptNumber,
+        err: error,
+      },
+      'Transcription pipeline failed'
+    );
 
     await updateTranscriptionStatus(letterId, 'FAILED', null, message);
     // Don't update workflow to FAILED here - let it stay at TRANSCRIBING so retries can work

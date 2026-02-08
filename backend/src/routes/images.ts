@@ -5,6 +5,7 @@ import { extname } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { db, letterPages } from '../db/index.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
+import { logIfSlow, TIMING_THRESHOLDS } from '../utils/logger.js';
 
 const router = Router();
 
@@ -22,6 +23,7 @@ const MIME_TYPES: Record<string, string> = {
  * GET /images/:pageId - Serve an image by page ID
  */
 router.get('/images/:pageId', async (req, res, next) => {
+  const start = Date.now();
   try {
     const { pageId } = req.params;
 
@@ -31,6 +33,7 @@ router.get('/images/:pageId', async (req, res, next) => {
     });
 
     if (!page) {
+      req.log.debug({ pageId }, 'Image page not found');
       res.status(404).json({ error: 'Image not found' });
       return;
     }
@@ -39,10 +42,11 @@ router.get('/images/:pageId', async (req, res, next) => {
     const absolutePath = getAbsoluteStoragePath(page.storagePath);
 
     // Check file exists
+    let fileStats;
     try {
-      await stat(absolutePath);
+      fileStats = await stat(absolutePath);
     } catch {
-      console.error(`Image file not found at: ${absolutePath}`);
+      req.log.error({ pageId, path: absolutePath }, 'Image file not found on disk');
       res.status(404).json({ error: 'Image file not found on disk' });
       return;
     }
@@ -59,10 +63,16 @@ router.get('/images/:pageId', async (req, res, next) => {
     // Stream the file
     const stream = createReadStream(absolutePath);
     stream.on('error', (err) => {
-      console.error('Stream error:', err);
+      req.log.error({ pageId, path: absolutePath, err }, 'Stream error while serving image');
       if (!res.headersSent) {
         res.status(500).json({ error: 'Error reading image file' });
       }
+    });
+
+    stream.on('end', () => {
+      const duration = Date.now() - start;
+      req.log.debug({ pageId, sizeBytes: fileStats.size, duration }, 'Image served');
+      logIfSlow(req.log, 'image streaming', duration, TIMING_THRESHOLDS.IMAGE_STREAM, { pageId });
     });
 
     stream.pipe(res);

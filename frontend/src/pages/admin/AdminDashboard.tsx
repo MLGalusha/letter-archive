@@ -1,7 +1,29 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAdminLetters, deleteLetter } from "../../api/letters";
+import { getAdminCollections, type AdminCollectionInfo } from "../../api/collections";
+import {
+  getProcessingStatus,
+  startTranscription,
+  startMetadataExtraction,
+  pauseProcessing,
+  resumeProcessing,
+  abortProcessing,
+  bulkResetTranscriptions,
+  bulkClearMetadata,
+  type ProcessingStatus,
+} from "../../api/admin";
+import { useToast } from "../../contexts/ToastContext";
 import type { Letter, WorkflowState, VisibilityState } from "../../types/Letter";
+import {
+  Button,
+  ConfirmDialog,
+  WorkflowBadge,
+  VisibilityBadge,
+  DropdownHeader,
+  DropdownItem,
+} from "../../components/common";
+import { getRecentEdits, formatTimeAgo, type RecentEdit } from "../../utils/recentEdits";
 import "./AdminDashboard.css";
 
 // Extended sort field to include client-side computed columns
@@ -45,23 +67,10 @@ function savePersistedState(state: PersistedState): void {
   }
 }
 
-const WORKFLOW_LABELS: Record<WorkflowState, string> = {
-  UPLOADED: "Uploaded",
-  TRANSCRIBING: "Transcribing",
-  TRANSCRIBED: "Transcribed",
-  METADATA_EXTRACTING: "Extracting",
-  METADATA_DRAFTED: "Metadata Ready",
-  REVIEWED: "Reviewed",
-};
-
-const VISIBILITY_LABELS: Record<VisibilityState, string> = {
-  DRAFT: "Draft",
-  PUBLISHED: "Published",
-  HIDDEN: "Hidden",
-};
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [letters, setLetters] = useState<Letter[]>([]);
   const [loading, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -88,6 +97,19 @@ export default function AdminDashboard() {
   );
   const collectionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Collection suggestions state
+  const [collections, setCollections] = useState<AdminCollectionInfo[]>([]);
+  const [showCollectionSuggestions, setShowCollectionSuggestions] = useState(false);
+  const [collectionSortColumn, setCollectionSortColumn] = useState<'code' | 'total' | 'published' | 'uploaded' | 'ready'>('total');
+  const [collectionSortAsc, setCollectionSortAsc] = useState(false); // false = descending (most first)
+  const collectionInputRef = useRef<HTMLInputElement>(null);
+  const collectionSuggestionsRef = useRef<HTMLDivElement>(null);
+
+  // Recent edits state
+  const [recentEdits, setRecentEdits] = useState<RecentEdit[]>([]);
+  const [showRecentDropdown, setShowRecentDropdown] = useState(false);
+  const recentDropdownRef = useRef<HTMLDivElement>(null);
+
   // Multi-column sorting - array maintains priority order (first = highest priority)
   const [sortColumns, setSortColumns] = useState<SortColumn[]>(
     persistedState.current.sortColumns ?? []
@@ -110,6 +132,9 @@ export default function AdminDashboard() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [showClearMetadataModal, setShowClearMetadataModal] = useState(false);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
   // Drag selection state
   const [isDragging, setIsDragging] = useState(false);
@@ -117,6 +142,14 @@ export default function AdminDashboard() {
   const [dragMode, setDragMode] = useState<"select" | "deselect" | null>(null);
   const [draggedIds, setDraggedIds] = useState<Set<string>>(new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
+
+  // Process dropdown state
+  const [showProcessMenu, setShowProcessMenu] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState<ProcessingStatus | null>(null);
+  const [wasRunning, setWasRunning] = useState(false);
+  const [lastCompletedAt, setLastCompletedAt] = useState<number | null>(null);
+  const processButtonRef = useRef<HTMLDivElement>(null);
+  const editButtonRef = useRef<HTMLDivElement>(null);
 
   const fetchLetters = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
@@ -137,6 +170,27 @@ export default function AdminDashboard() {
       setIsInitialLoad(false);
     }
   }, [visibilityFilter, workflowFilter, collectionFilter]);
+
+  // Fetch collections for suggestions
+  useEffect(() => {
+    const fetchCollections = async () => {
+      try {
+        const data = await getAdminCollections();
+        setCollections(data);
+      } catch (err) {
+        console.error("Failed to fetch collections:", err);
+      }
+    };
+    fetchCollections();
+  }, []);
+
+  // Load recent edits on mount and when window gains focus
+  useEffect(() => {
+    const loadRecent = () => setRecentEdits(getRecentEdits());
+    loadRecent();
+    window.addEventListener('focus', loadRecent);
+    return () => window.removeEventListener('focus', loadRecent);
+  }, []);
 
   useEffect(() => {
     const isAuth = sessionStorage.getItem("adminAuth");
@@ -359,21 +413,71 @@ export default function AdminDashboard() {
     return new Date(dateString).toLocaleDateString();
   };
 
-  const getWorkflowBadge = (workflow: WorkflowState) => {
-    return (
-      <span className={`badge badge-workflow badge-workflow-${workflow.toLowerCase()}`}>
-        {WORKFLOW_LABELS[workflow]}
-      </span>
-    );
+  // Collection suggestions - sorted by selected column
+  const sortedCollections = useMemo(() => {
+    return [...collections].sort((a, b) => {
+      let aVal: number | string;
+      let bVal: number | string;
+
+      switch (collectionSortColumn) {
+        case 'code':
+          aVal = a.collectionCode;
+          bVal = b.collectionCode;
+          break;
+        case 'total':
+          aVal = a.publishedCount + a.draftCount;
+          bVal = b.publishedCount + b.draftCount;
+          break;
+        case 'published':
+          aVal = a.publishedCount;
+          bVal = b.publishedCount;
+          break;
+        case 'uploaded':
+          aVal = a.uploadedCount;
+          bVal = b.uploadedCount;
+          break;
+        case 'ready':
+          aVal = a.readyCount;
+          bVal = b.readyCount;
+          break;
+        default:
+          aVal = a.publishedCount + a.draftCount;
+          bVal = b.publishedCount + b.draftCount;
+      }
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return collectionSortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      return collectionSortAsc ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
+    });
+  }, [collections, collectionSortColumn, collectionSortAsc]);
+
+  // Toggle collection sort column
+  const handleCollectionSort = (column: typeof collectionSortColumn) => {
+    if (collectionSortColumn === column) {
+      setCollectionSortAsc(!collectionSortAsc);
+    } else {
+      setCollectionSortColumn(column);
+      setCollectionSortAsc(false); // Reset to descending when changing column
+    }
   };
 
-  const getVisibilityBadge = (visibility: VisibilityState) => {
-    if (visibility === "DRAFT") return null;
-    return (
-      <span className={`badge badge-visibility badge-${visibility.toLowerCase()}`}>
-        {VISIBILITY_LABELS[visibility]}
-      </span>
-    );
+  // Get selected collection info for display
+  const selectedCollection = useMemo(() => {
+    if (collectionFilter === "all") return null;
+    return collections.find((c) => c.collectionCode === collectionFilter) || null;
+  }, [collections, collectionFilter]);
+
+  const handleSelectCollection = (code: string) => {
+    setCollectionInput(code);
+    setCollectionFilter(code);
+    setShowCollectionSuggestions(false);
+  };
+
+  const handleClearCollection = () => {
+    setCollectionInput("");
+    setCollectionFilter("all");
+    setShowCollectionSuggestions(false);
   };
 
   // Edit mode functions
@@ -381,6 +485,11 @@ export default function AdminDashboard() {
     if (editMode) {
       // Exiting edit mode, clear selections
       setSelectedIds(new Set());
+    } else {
+      // Entering edit mode, close other dropdowns
+      setShowProcessMenu(false);
+      setShowCollectionSuggestions(false);
+      setShowRecentDropdown(false);
     }
     setEditMode(!editMode);
   };
@@ -395,14 +504,6 @@ export default function AdminDashboard() {
     setSelectedIds(newSelected);
   };
 
-  const toggleSelectAll = () => {
-    if (selectedIds.size === filteredLetters.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredLetters.map((l) => l.id)));
-    }
-  };
-
   const handleDeleteClick = () => {
     if (selectedIds.size > 0) {
       setShowDeleteModal(true);
@@ -411,15 +512,17 @@ export default function AdminDashboard() {
 
   const handleConfirmDelete = async () => {
     setDeleting(true);
+    const count = selectedIds.size;
     try {
       await Promise.all(Array.from(selectedIds).map((id) => deleteLetter(id)));
       setSelectedIds(new Set());
       setShowDeleteModal(false);
       setEditMode(false);
+      showToast(`Deleted ${count} letter${count === 1 ? '' : 's'}`, 'success');
       await fetchLetters();
     } catch (err) {
       console.error("Failed to delete letters:", err);
-      setError(err instanceof Error ? err.message : "Failed to delete letters");
+      showToast(err instanceof Error ? err.message : "Failed to delete letters", 'error');
     } finally {
       setDeleting(false);
     }
@@ -428,6 +531,199 @@ export default function AdminDashboard() {
   const handleCancelDelete = () => {
     setShowDeleteModal(false);
   };
+
+  // Bulk action handlers
+  const allFilteredSelected = filteredLetters.length > 0 &&
+    filteredLetters.every((l) => selectedIds.has(l.id));
+
+  const handleToggleSelectAll = () => {
+    if (allFilteredSelected) {
+      // Deselect all
+      setSelectedIds(new Set());
+    } else {
+      // Select all filtered
+      const allFilteredIds = new Set(filteredLetters.map((l) => l.id));
+      setSelectedIds(allFilteredIds);
+    }
+  };
+
+  const handleResetTranscriptionsClick = () => {
+    if (selectedIds.size > 0) {
+      setShowResetModal(true);
+    }
+  };
+
+  const handleConfirmResetTranscriptions = async () => {
+    setBulkActionLoading(true);
+    const count = selectedIds.size;
+    try {
+      await bulkResetTranscriptions(Array.from(selectedIds));
+      setSelectedIds(new Set());
+      setShowResetModal(false);
+      showToast(`Reset ${count} letter${count === 1 ? '' : 's'} to UPLOADED`, 'success');
+      await fetchLetters();
+    } catch (err) {
+      console.error("Failed to reset transcriptions:", err);
+      showToast(err instanceof Error ? err.message : "Failed to reset transcriptions", 'error');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleClearMetadataClick = () => {
+    if (selectedIds.size > 0) {
+      setShowClearMetadataModal(true);
+    }
+  };
+
+  const handleConfirmClearMetadata = async () => {
+    setBulkActionLoading(true);
+    const count = selectedIds.size;
+    try {
+      await bulkClearMetadata(Array.from(selectedIds));
+      setSelectedIds(new Set());
+      setShowClearMetadataModal(false);
+      showToast(`Cleared metadata for ${count} letter${count === 1 ? '' : 's'}`, 'success');
+      await fetchLetters();
+    } catch (err) {
+      console.error("Failed to clear metadata:", err);
+      showToast(err instanceof Error ? err.message : "Failed to clear metadata", 'error');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  // Process menu handlers
+  const handleProcessMenuToggle = () => {
+    const newState = !showProcessMenu;
+    if (newState) {
+      // Close other dropdowns when opening process menu
+      setShowCollectionSuggestions(false);
+      setShowRecentDropdown(false);
+    }
+    setShowProcessMenu(newState);
+  };
+
+  const handleStartTranscription = async () => {
+    try {
+      setShowProcessMenu(false);
+      // Pass collection filter if one is active
+      const result = await startTranscription({
+        collectionCode: collectionFilter !== "all" ? collectionFilter : undefined,
+      });
+      showToast(`Started transcription for ${result.total} letters`, 'info');
+    } catch (err) {
+      console.error("Failed to start transcription:", err);
+      showToast(err instanceof Error ? err.message : "Failed to start transcription", 'error');
+    }
+  };
+
+  const handleStartMetadataExtraction = async () => {
+    try {
+      setShowProcessMenu(false);
+      // Pass collection filter if one is active
+      const result = await startMetadataExtraction({
+        collectionCode: collectionFilter !== "all" ? collectionFilter : undefined,
+      });
+      showToast(`Started metadata extraction for ${result.total} letters`, 'info');
+    } catch (err) {
+      console.error("Failed to start metadata extraction:", err);
+      showToast(err instanceof Error ? err.message : "Failed to start metadata extraction", 'error');
+    }
+  };
+
+  const handlePauseProcessing = async () => {
+    try {
+      await pauseProcessing();
+      showToast('Processing paused', 'info');
+    } catch (err) {
+      console.error("Failed to pause processing:", err);
+      showToast(err instanceof Error ? err.message : "Failed to pause processing", 'error');
+    }
+  };
+
+  const handleResumeProcessing = async () => {
+    try {
+      await resumeProcessing();
+      showToast('Processing resumed', 'info');
+    } catch (err) {
+      console.error("Failed to resume processing:", err);
+      showToast(err instanceof Error ? err.message : "Failed to resume processing", 'error');
+    }
+  };
+
+  const handleAbortProcessing = async () => {
+    try {
+      await abortProcessing();
+      showToast('Processing aborted', 'info');
+    } catch (err) {
+      console.error("Failed to abort processing:", err);
+      showToast(err instanceof Error ? err.message : "Failed to abort processing", 'error');
+    }
+  };
+
+  // Poll for processing status
+  useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const status = await getProcessingStatus();
+        setProcessingStatus(status);
+
+        // Refresh letter list when a NEW letter completes (live updates)
+        if (status.lastCompletedAt && status.lastCompletedAt !== lastCompletedAt) {
+          setLastCompletedAt(status.lastCompletedAt);
+          fetchLetters();
+        }
+
+        // Also refresh when processing finishes entirely
+        if (!status.isRunning && wasRunning) {
+          fetchLetters();
+        }
+        setWasRunning(status.isRunning);
+      } catch (err) {
+        console.error("Failed to fetch processing status:", err);
+      }
+    };
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 1000);
+    return () => clearInterval(interval);
+  }, [wasRunning, lastCompletedAt, fetchLetters]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      // Close process menu if clicking outside
+      if (processButtonRef.current && !processButtonRef.current.contains(target)) {
+        setShowProcessMenu(false);
+      }
+
+      // Close collection suggestions if clicking outside
+      if (collectionSuggestionsRef.current && !collectionSuggestionsRef.current.contains(target) &&
+          collectionInputRef.current && !collectionInputRef.current.contains(target)) {
+        setShowCollectionSuggestions(false);
+      }
+
+      // Close recent dropdown if clicking outside
+      if (recentDropdownRef.current && !recentDropdownRef.current.contains(target)) {
+        setShowRecentDropdown(false);
+      }
+
+      // Exit edit mode if clicking outside the edit button container and the table
+      // (but not when clicking on table rows for selection)
+      if (editMode && editButtonRef.current && !editButtonRef.current.contains(target)) {
+        const tableContainer = document.querySelector('.letters-table-container');
+        if (!tableContainer?.contains(target)) {
+          setEditMode(false);
+          setSelectedIds(new Set());
+        }
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [editMode]);
 
   // Stats calculations
   const stats = {
@@ -442,7 +738,9 @@ export default function AdminDashboard() {
     return (
       <div className="admin-dashboard">
         <header className="admin-header">
-          <h1>Admin Panel</h1>
+          <div className="header-row header-row-primary">
+            <h1>Admin Panel</h1>
+          </div>
         </header>
         <div className="admin-content">
           <p>Loading letters...</p>
@@ -455,7 +753,9 @@ export default function AdminDashboard() {
     return (
       <div className="admin-dashboard">
         <header className="admin-header">
-          <h1>Admin Panel</h1>
+          <div className="header-row header-row-primary">
+            <h1>Admin Panel</h1>
+          </div>
         </header>
         <div className="admin-content">
           <p className="error-message">{error}</p>
@@ -466,51 +766,136 @@ export default function AdminDashboard() {
 
   return (
     <div className="admin-dashboard">
+      {/* Combined Header + Toolbar */}
       <header className="admin-header">
-        <h1>Admin Panel</h1>
-        <button onClick={handleLogout} className="logout-button">
-          Logout
-        </button>
-      </header>
-
-      <div className="admin-content">
-        <div className="admin-toolbar">
+        <div className="header-row header-row-primary">
+          <h1>Admin Panel</h1>
           <div className="toolbar-buttons">
-            <button onClick={handleUploadClick} className="upload-button">
-              Upload New Letter
-            </button>
-            <button
-              onClick={toggleEditMode}
-              className={`edit-mode-button ${editMode ? "active" : ""}`}
-            >
-              {editMode ? "Done" : "Edit"}
-            </button>
-            {editMode && (
-              <button
-                onClick={handleDeleteClick}
-                className="delete-button"
-                disabled={selectedIds.size === 0}
+            {/* Upload button */}
+            <Button icon="upload" onClick={handleUploadClick}>Upload</Button>
+
+            {/* Edit button with dropdown */}
+            <div className="edit-button-container" ref={editButtonRef}>
+              <Button
+                icon={editMode ? "check" : "edit"}
+                active={editMode}
+                onClick={toggleEditMode}
               >
-                Delete ({selectedIds.size})
-              </button>
+                {editMode ? "Done" : "Edit"}
+              </Button>
+
+              {editMode && (
+                <div className="dropdown-menu">
+                  <DropdownHeader>{selectedIds.size} selected</DropdownHeader>
+                  <DropdownItem
+                    title={allFilteredSelected ? "Deselect All" : "Select All"}
+                    description={allFilteredSelected
+                      ? "Clear current selection"
+                      : `Select all ${filteredLetters.length} filtered letters`}
+                    onClick={handleToggleSelectAll}
+                    variant={allFilteredSelected ? "active" : "default"}
+                  />
+                  <DropdownItem
+                    title="Reset Transcriptions"
+                    description="Clear transcripts, return to UPLOADED"
+                    onClick={handleResetTranscriptionsClick}
+                    disabled={selectedIds.size === 0}
+                  />
+                  <DropdownItem
+                    title="Clear Metadata"
+                    description="Clear metadata, keep transcripts"
+                    onClick={handleClearMetadataClick}
+                    disabled={selectedIds.size === 0}
+                  />
+                  <DropdownItem
+                    title="Delete"
+                    description="Permanently delete selected letters"
+                    onClick={handleDeleteClick}
+                    disabled={selectedIds.size === 0}
+                    variant="danger"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Process button or controls */}
+            {processingStatus?.isRunning ? (
+              <div className="processing-controls">
+                <div className="processing-progress">
+                  <span className="progress-text">
+                    {processingStatus.currentJob?.type === "transcription" ? "Transcribing" : "Extracting"}:{" "}
+                    {processingStatus.completed}/{processingStatus.total}
+                    {processingStatus.failed > 0 && (
+                      <span className="failed-count"> ({processingStatus.failed} failed)</span>
+                    )}
+                  </span>
+                  <div className="progress-bar">
+                    <div
+                      className="progress-fill"
+                      style={{
+                        width: `${processingStatus.total > 0 ? (processingStatus.completed / processingStatus.total) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+                {processingStatus.isPaused ? (
+                  <button onClick={handleResumeProcessing} className="resume-button">
+                    Resume
+                  </button>
+                ) : (
+                  <button onClick={handlePauseProcessing} className="pause-button">
+                    Pause
+                  </button>
+                )}
+                <button onClick={handleAbortProcessing} className="abort-button">
+                  Abort
+                </button>
+              </div>
+            ) : (
+              <div className="process-button-container" ref={processButtonRef}>
+                <Button
+                  icon="process"
+                  active={showProcessMenu}
+                  onClick={handleProcessMenuToggle}
+                >
+                  Process
+                </Button>
+                {showProcessMenu && (
+                  <div className="dropdown-menu">
+                    <DropdownItem
+                      title="Transcribe"
+                      description="Process UPLOADED letters"
+                      onClick={handleStartTranscription}
+                    />
+                    <DropdownItem
+                      title="Extract Metadata"
+                      description="Process TRANSCRIBED letters"
+                      onClick={handleStartMetadataExtraction}
+                    />
+                  </div>
+                )}
+              </div>
             )}
           </div>
+          <Button onClick={handleLogout}>Logout</Button>
+        </div>
 
+        {/* Filters row with stats */}
+        <div className="header-row header-row-filters">
           <div className="filter-search-container">
-            <div className="filter-group">
+            <div className="filter-group collection-filter-group">
               <label>Collection:</label>
               <input
+                ref={collectionInputRef}
                 type="text"
                 value={collectionInput}
                 onChange={(e) => {
                   const val = e.target.value;
                   setCollectionInput(val);
-                  // Debounce the filter update to prevent focus loss
                   if (collectionDebounceRef.current) {
                     clearTimeout(collectionDebounceRef.current);
                   }
                   collectionDebounceRef.current = setTimeout(() => {
-                    // Only filter after 3 characters, or clear filter if empty
                     if (val.length >= 3) {
                       setCollectionFilter(val);
                     } else if (val.length === 0) {
@@ -518,9 +903,89 @@ export default function AdminDashboard() {
                     }
                   }, 300);
                 }}
+                onFocus={() => {
+                  setShowProcessMenu(false);
+                  setShowRecentDropdown(false);
+                  setShowCollectionSuggestions(true);
+                }}
                 placeholder="000"
                 className="collection-input"
               />
+              {showCollectionSuggestions && collections.length > 0 && (
+                <div className="collection-suggestions" ref={collectionSuggestionsRef}>
+                  {/* Selected collection display (if filtering) */}
+                  {collectionFilter !== "all" && selectedCollection && (
+                    <div className="collection-selected">
+                      <span className="selected-label">Selected:</span>
+                      <span className="selected-code">{selectedCollection.collectionCode}</span>
+                      <button className="clear-btn" onClick={handleClearCollection}>
+                        Clear
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Table with column headers */}
+                  <table className="collection-table">
+                    <thead>
+                      <tr>
+                        <th
+                          className={`col-sortable ${collectionSortColumn === 'code' ? 'sorted' : ''}`}
+                          onClick={(e) => { e.stopPropagation(); handleCollectionSort('code'); }}
+                        >
+                          Code {collectionSortColumn === 'code' && (collectionSortAsc ? '↑' : '↓')}
+                        </th>
+                        <th
+                          className={`col-sortable col-num ${collectionSortColumn === 'total' ? 'sorted' : ''}`}
+                          onClick={(e) => { e.stopPropagation(); handleCollectionSort('total'); }}
+                          title="Total letters"
+                        >
+                          Total {collectionSortColumn === 'total' && (collectionSortAsc ? '↑' : '↓')}
+                        </th>
+                        <th
+                          className={`col-sortable col-num col-published ${collectionSortColumn === 'published' ? 'sorted' : ''}`}
+                          onClick={(e) => { e.stopPropagation(); handleCollectionSort('published'); }}
+                          title="Published"
+                        >
+                          Pub {collectionSortColumn === 'published' && (collectionSortAsc ? '↑' : '↓')}
+                        </th>
+                        <th
+                          className={`col-sortable col-num col-uploaded ${collectionSortColumn === 'uploaded' ? 'sorted' : ''}`}
+                          onClick={(e) => { e.stopPropagation(); handleCollectionSort('uploaded'); }}
+                          title="Needs transcription"
+                        >
+                          Upl {collectionSortColumn === 'uploaded' && (collectionSortAsc ? '↑' : '↓')}
+                        </th>
+                        <th
+                          className={`col-sortable col-num col-ready ${collectionSortColumn === 'ready' ? 'sorted' : ''}`}
+                          onClick={(e) => { e.stopPropagation(); handleCollectionSort('ready'); }}
+                          title="Ready for review"
+                        >
+                          Rdy {collectionSortColumn === 'ready' && (collectionSortAsc ? '↑' : '↓')}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedCollections.map((c) => {
+                        const isSelected = collectionFilter === c.collectionCode;
+                        const totalLetters = c.publishedCount + c.draftCount;
+                        return (
+                          <tr
+                            key={c.id}
+                            className={isSelected ? "selected" : ""}
+                            onClick={() => handleSelectCollection(c.collectionCode)}
+                          >
+                            <td className="col-code">{c.collectionCode}</td>
+                            <td className="col-num">{totalLetters}</td>
+                            <td className="col-num col-published">{c.publishedCount}</td>
+                            <td className="col-num col-uploaded">{c.uploadedCount || '-'}</td>
+                            <td className="col-num col-ready">{c.readyCount || '-'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             <div className="filter-group">
@@ -550,7 +1015,8 @@ export default function AdminDashboard() {
               </select>
             </div>
 
-            <div className="search-group">
+            <div className="filter-group search-group">
+              <label>Search:</label>
               <input
                 type="text"
                 placeholder="Search..."
@@ -559,8 +1025,68 @@ export default function AdminDashboard() {
               />
             </div>
           </div>
-        </div>
 
+          {/* Stats inline in filters row */}
+          <div className="stats-inline">
+            <span className="stat-pill" title="Total letters">{stats.total} total</span>
+            <span className="stat-pill stat-uploaded" title="Awaiting transcription">{stats.uploaded} uploaded</span>
+            <span className="stat-pill stat-transcribed" title="Ready for review">{stats.transcribed} transcribed</span>
+            <span className="stat-pill stat-reviewed" title="Reviewed">{stats.reviewed} reviewed</span>
+            <span className="stat-pill stat-published" title="Published">{stats.published} published</span>
+
+            {processingStatus?.isRunning && (
+              <span className="stat-pill stat-processing" title="Processing">
+                {processingStatus.completed}/{processingStatus.total}
+              </span>
+            )}
+
+            <div className="recent-dropdown-container" ref={recentDropdownRef}>
+              <button
+                className="recent-button"
+                onClick={() => {
+                  const newState = !showRecentDropdown;
+                  if (newState) {
+                    setShowProcessMenu(false);
+                    setShowCollectionSuggestions(false);
+                  }
+                  setShowRecentDropdown(newState);
+                }}
+              >
+                Recent {showRecentDropdown ? "▲" : "▼"}
+              </button>
+              {showRecentDropdown && (
+                <div className="recent-dropdown">
+                  <div className="recent-header">Recent Edits</div>
+                  {recentEdits.length === 0 ? (
+                    <div className="recent-empty">No recent edits</div>
+                  ) : (
+                    recentEdits.map((edit) => (
+                      <div
+                        key={edit.id}
+                        className="recent-item"
+                        onClick={() => {
+                          navigate(`/admin/letters/${edit.id}`);
+                          setShowRecentDropdown(false);
+                        }}
+                      >
+                        <span className="recent-info">
+                          {edit.sender} → {edit.recipient}
+                          {edit.collectionCode && (
+                            <span className="recent-collection">({edit.collectionCode})</span>
+                          )}
+                        </span>
+                        <span className="recent-time">{formatTimeAgo(edit.editedAt)}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="admin-content">
         <div className="letters-table-container">
           <table className="letters-table">
             <thead>
@@ -713,17 +1239,17 @@ export default function AdminDashboard() {
                       )}
                       <td>{letter.metadata.sender || "—"}</td>
                       <td>{letter.metadata.recipient || "—"}</td>
-                      <td>{letter.metadata.date || "—"}</td>
+                      <td className="date-cell">{letter.metadata.date || "—"}</td>
                       <td>{letter.collectionCode || "—"}</td>
                       <td className="count-cell">{pageCount || "—"}</td>
                       <td className="count-cell">{extrasCount || "—"}</td>
                       <td>
                         <div className="status-badges">
-                          {getWorkflowBadge(letter.workflowState)}
-                          {getVisibilityBadge(letter.visibility)}
+                          <WorkflowBadge state={letter.workflowState} />
+                          {letter.visibility !== "DRAFT" && <VisibilityBadge state={letter.visibility} />}
                         </div>
                       </td>
-                      <td>{formatDate(letter.createdAt)}</td>
+                      <td className="date-cell">{formatDate(letter.createdAt)}</td>
                     </tr>
                   );
                 })
@@ -731,59 +1257,41 @@ export default function AdminDashboard() {
             </tbody>
           </table>
         </div>
-
-        <div className="dashboard-stats">
-          <div className="stat-card">
-            <div className="stat-label">Total</div>
-            <div className="stat-value">{stats.total}</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-label">Uploaded</div>
-            <div className="stat-value">{stats.uploaded}</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-label">Ready for Review</div>
-            <div className="stat-value">{stats.transcribed}</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-label">Reviewed</div>
-            <div className="stat-value">{stats.reviewed}</div>
-          </div>
-          <div className="stat-card stat-card-highlight">
-            <div className="stat-label">Published</div>
-            <div className="stat-value">{stats.published}</div>
-          </div>
-        </div>
       </div>
 
       {/* Delete confirmation modal */}
-      {showDeleteModal && (
-        <div className="modal-overlay" onClick={handleCancelDelete}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>Delete Letters</h2>
-            <p>
-              Are you sure you want to delete {selectedIds.size} letter
-              {selectedIds.size === 1 ? "" : "s"}?
-            </p>
-            <div className="modal-buttons">
-              <button
-                onClick={handleCancelDelete}
-                className="modal-cancel-button"
-                disabled={deleting}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                className="modal-delete-button"
-                disabled={deleting}
-              >
-                {deleting ? "Deleting..." : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={showDeleteModal}
+        title="Delete Letters"
+        message={`Are you sure you want to delete ${selectedIds.size} letter${selectedIds.size === 1 ? "" : "s"}?`}
+        confirmText={deleting ? "Deleting..." : "Delete"}
+        variant="danger"
+        loading={deleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
+
+      {/* Reset transcriptions confirmation modal */}
+      <ConfirmDialog
+        isOpen={showResetModal}
+        title="Reset Transcriptions"
+        message={`This will reset ${selectedIds.size} letter${selectedIds.size === 1 ? "" : "s"} to UPLOADED state and clear their transcriptions. You will need to re-transcribe them.`}
+        confirmText={bulkActionLoading ? "Resetting..." : "Reset"}
+        loading={bulkActionLoading}
+        onConfirm={handleConfirmResetTranscriptions}
+        onCancel={() => setShowResetModal(false)}
+      />
+
+      {/* Clear metadata confirmation modal */}
+      <ConfirmDialog
+        isOpen={showClearMetadataModal}
+        title="Clear Metadata"
+        message={`This will clear metadata (sender, recipient, summary, etc.) for ${selectedIds.size} letter${selectedIds.size === 1 ? "" : "s"}. The transcriptions will be kept intact.`}
+        confirmText={bulkActionLoading ? "Clearing..." : "Clear Metadata"}
+        loading={bulkActionLoading}
+        onConfirm={handleConfirmClearMetadata}
+        onCancel={() => setShowClearMetadataModal(false)}
+      />
     </div>
   );
 }

@@ -1,23 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getAdminLetterById } from "../../api/letters";
-import { updateLetter, deleteLetter, markAsReviewed, confirmTranscript } from "../../api/admin";
+import { getAdminLetterById, deleteLetter } from "../../api/letters";
+import { updateLetter, markAsReviewed, confirmTranscript } from "../../api/admin";
 import LetterViewer from "../../components/LetterViewer/LetterViewer";
-import type { Letter, LetterImage, VisibilityState, WorkflowState } from "../../types/Letter";
+import { useToast } from "../../contexts/ToastContext";
+import { Button, Icon, WorkflowBadge, StatusBadge } from "../../components/common";
+import { trackEdit } from "../../utils/recentEdits";
+import type { Letter, LetterImage, VisibilityState } from "../../types/Letter";
 import "./LetterReviewPage.css";
-
-const WORKFLOW_LABELS: Record<WorkflowState, string> = {
-  UPLOADED: "Uploaded",
-  TRANSCRIBING: "Transcribing",
-  TRANSCRIBED: "Transcribed",
-  METADATA_EXTRACTING: "Extracting Metadata",
-  METADATA_DRAFTED: "Metadata Ready",
-  REVIEWED: "Reviewed",
-};
 
 export default function LetterReviewPage() {
   const { letterId } = useParams<{ letterId: string }>();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [letter, setLetter] = useState<Letter | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -176,8 +171,11 @@ export default function LetterReviewPage() {
         .map((t) => t.trim())
         .filter(Boolean);
 
+      // Read transcript directly from contenteditable ref to ensure we have latest content
+      const currentTranscript = editorRef.current?.innerText || transcript;
+
       const updated = await updateLetter(letterId, {
-        transcriptionText: transcript,
+        transcriptionText: currentTranscript,
         sender: sender || null,
         recipient: recipient || null,
         extractedDate: date || null,
@@ -188,10 +186,30 @@ export default function LetterReviewPage() {
         tags: tagsArray.length > 0 ? tagsArray : null,
         notes: notes || null,
       });
+
+      // Sync all states with the response to ensure UI reflects saved data
       setLetter(updated);
-      setMessage("Changes saved");
+      setTranscript(updated.transcript.fullText);
+      setSender(updated.metadata.sender || "");
+      setRecipient(updated.metadata.recipient || "");
+      setDate(updated.metadata.date || "");
+      setDateConfidence(updated.metadata.dateConfidence || "unknown");
+      setLocation(updated.metadata.location || "");
+      setHook(updated.metadata.hook || "");
+      setDescription(updated.metadata.description || "");
+      setTags(updated.metadata.tags?.join(", ") || "");
+      setNotes(updated.metadata.notes || "");
+
+      // Track this edit for the Recent Activity feature
+      trackEdit({
+        id: updated.id,
+        metadata: updated.metadata,
+        collectionCode: updated.collectionCode,
+      });
+
+      showToast("Changes saved", "success");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed to save");
+      showToast(err instanceof Error ? err.message : "Failed to save", "error");
       console.error("Save error:", err);
     } finally {
       setSaving(false);
@@ -203,19 +221,18 @@ export default function LetterReviewPage() {
     if (letter.visibility === newVisibility) return;
 
     setSaving(true);
-    setMessage("");
 
     try {
       const updated = await updateLetter(letterId, { visibility: newVisibility });
       setLetter(updated);
-      setMessage(`Visibility changed to ${newVisibility.toLowerCase()}`);
+      showToast(`Visibility changed to ${newVisibility.toLowerCase()}`, "success");
 
       // Only redirect on publish
       if (newVisibility === "PUBLISHED") {
         setTimeout(() => navigate("/admin"), 1500);
       }
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed to update visibility");
+      showToast(err instanceof Error ? err.message : "Failed to update visibility", "error");
       console.error("Visibility change error:", err);
     } finally {
       setSaving(false);
@@ -225,14 +242,13 @@ export default function LetterReviewPage() {
   const handleConfirmTranscript = async () => {
     if (!letterId) return;
     setSaving(true);
-    setMessage("");
 
     try {
       const updated = await confirmTranscript(letterId);
       setLetter(updated);
-      setMessage("Transcript confirmed - metadata extraction will begin shortly");
+      showToast("Transcript confirmed - metadata extraction will begin shortly", "success");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed to confirm transcript");
+      showToast(err instanceof Error ? err.message : "Failed to confirm transcript", "error");
       console.error("Confirm transcript error:", err);
     } finally {
       setSaving(false);
@@ -242,14 +258,13 @@ export default function LetterReviewPage() {
   const handleMarkReviewed = async () => {
     if (!letterId) return;
     setSaving(true);
-    setMessage("");
 
     try {
       const updated = await markAsReviewed(letterId);
       setLetter(updated);
-      setMessage("Letter marked as reviewed");
+      showToast("Letter marked as reviewed", "success");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed to mark as reviewed");
+      showToast(err instanceof Error ? err.message : "Failed to mark as reviewed", "error");
       console.error("Review error:", err);
     } finally {
       setSaving(false);
@@ -263,14 +278,13 @@ export default function LetterReviewPage() {
     }
 
     setSaving(true);
-    setMessage("");
 
     try {
       await deleteLetter(letterId);
-      setMessage("Letter deleted");
+      showToast("Letter deleted", "success");
       setTimeout(() => navigate("/admin"), 1500);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed to delete");
+      showToast(err instanceof Error ? err.message : "Failed to delete", "error");
       console.error("Delete error:", err);
     } finally {
       setSaving(false);
@@ -285,14 +299,38 @@ export default function LetterReviewPage() {
     setCurrentFilename(image.originalFilename);
   }, []);
 
+  // Handle Tab key to insert spaces instead of changing focus
+  const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+
+      // Insert 4 spaces at cursor position
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        const textNode = document.createTextNode('    '); // 4 spaces
+        range.insertNode(textNode);
+
+        // Move cursor after inserted spaces
+        range.setStartAfter(textNode);
+        range.setEndAfter(textNode);
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        // Update state
+        const target = e.currentTarget;
+        setTranscript(target.innerText);
+      }
+    }
+  };
+
   if (loading || !letter) {
     return (
       <div className="letter-review-page">
         <header className="review-header">
           <h1>Letter Review</h1>
-          <button onClick={handleBack} className="back-button">
-            Back to Dashboard
-          </button>
+          <Button icon="back" onClick={handleBack}>Back to Dashboard</Button>
         </header>
         <div className="review-content">
           <p>{message || (loading ? "Loading..." : "Letter not found")}</p>
@@ -304,10 +342,51 @@ export default function LetterReviewPage() {
   return (
     <div className="letter-review-page">
       <header className="review-header">
+        <Button icon="back" onClick={handleBack}>Back</Button>
         <h1>{letter.title}</h1>
-        <button onClick={handleBack} className="back-button">
-          Back
-        </button>
+        <div className="header-actions">
+          <button
+            className="header-action save"
+            onClick={handleSave}
+            disabled={saving}
+            data-tooltip="Save"
+          >
+            <Icon name="save" size={18} />
+          </button>
+
+          {/* Confirm button - only for TRANSCRIBED without confirmation */}
+          {letter.workflowState === "TRANSCRIBED" && !letter.transcriptConfirmedAt && (
+            <button
+              className="header-action confirm"
+              onClick={handleConfirmTranscript}
+              disabled={saving}
+              data-tooltip="Confirm Transcript"
+            >
+              <Icon name="confirm" size={18} />
+            </button>
+          )}
+
+          {/* Review button - for METADATA states */}
+          {["METADATA_EXTRACTING", "METADATA_DRAFTED"].includes(letter.workflowState) && (
+            <button
+              className="header-action review"
+              onClick={handleMarkReviewed}
+              disabled={saving}
+              data-tooltip="Mark Reviewed"
+            >
+              <Icon name="check" size={18} />
+            </button>
+          )}
+
+          <button
+            className="header-action delete"
+            onClick={handleDelete}
+            disabled={saving}
+            data-tooltip="Delete"
+          >
+            <Icon name="delete" size={18} />
+          </button>
+        </div>
       </header>
 
       <div className="review-body">
@@ -335,9 +414,7 @@ export default function LetterReviewPage() {
 
               <div className="status-item">
                 <span className="status-label">Workflow</span>
-                <span className={`status-badge badge-workflow-${letter.workflowState.toLowerCase()}`}>
-                  {WORKFLOW_LABELS[letter.workflowState]}
-                </span>
+                <WorkflowBadge state={letter.workflowState} />
               </div>
               <div className="status-item">
                 <span className="status-label">Visibility</span>
@@ -372,7 +449,7 @@ export default function LetterReviewPage() {
               <div className="editor-header">
                 <h2>Transcription</h2>
                 {letter.workflowState !== "UPLOADED" && (
-                  <span className="auto-badge">Auto-transcribed</span>
+                  <StatusBadge status="auto" label="Auto-transcribed" />
                 )}
               </div>
               <div className="editor-container">
@@ -387,6 +464,7 @@ export default function LetterReviewPage() {
                     const target = e.currentTarget;
                     setTranscript(target.innerText);
                   }}
+                  onKeyDown={handleEditorKeyDown}
                 />
               </div>
             </div>
@@ -511,47 +589,18 @@ export default function LetterReviewPage() {
               </div>
             )}
 
-            {/* Action Buttons */}
-            <div className="action-bar">
-              <div className="left-actions">
-                <button onClick={handleSave} disabled={saving} className="save-btn">
-                  {saving ? "Saving..." : "Save Changes"}
-                </button>
-
-                {/* Show Confirm Transcript button for TRANSCRIBED letters that haven't been confirmed */}
-                {letter.workflowState === "TRANSCRIBED" && !letter.transcriptConfirmedAt && (
-                  <button onClick={handleConfirmTranscript} disabled={saving} className="confirm-btn">
-                    Confirm Transcript
-                  </button>
-                )}
-
-                {/* Show processing indicator while metadata is being extracted */}
-                {letter.workflowState === "TRANSCRIBED" && letter.transcriptConfirmedAt && (
-                  <span className="processing-indicator">
-                    Extracting metadata...
-                  </span>
-                )}
-
-                {/* Show Mark as Reviewed for letters past TRANSCRIBED state */}
-                {["METADATA_EXTRACTING", "METADATA_DRAFTED"].includes(letter.workflowState) && (
-                  <button onClick={handleMarkReviewed} disabled={saving} className="review-btn">
-                    Mark as Reviewed
-                  </button>
-                )}
-
-                {letter.workflowState === "REVIEWED" && letter.metadata.verifiedAt && (
-                  <span className="reviewed-indicator">
-                    Reviewed on {new Date(letter.metadata.verifiedAt).toLocaleDateString()}
-                  </span>
-                )}
+            {/* Status indicators (processing, reviewed) */}
+            {letter.workflowState === "TRANSCRIBED" && letter.transcriptConfirmedAt && (
+              <div className="processing-indicator">
+                Extracting metadata...
               </div>
+            )}
 
-              <div className="right-actions">
-                <button onClick={handleDelete} disabled={saving} className="delete-btn">
-                  Delete
-                </button>
+            {letter.workflowState === "REVIEWED" && letter.metadata.verifiedAt && (
+              <div className="reviewed-indicator">
+                Reviewed on {new Date(letter.metadata.verifiedAt).toLocaleDateString()}
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

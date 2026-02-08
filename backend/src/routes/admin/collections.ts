@@ -29,6 +29,10 @@ router.get('/', async (_req, res, next) => {
             total: sql<number>`count(*)::int`,
             published: sql<number>`count(*) filter (where ${letters.visibility} = 'PUBLISHED')::int`,
             draft: sql<number>`count(*) filter (where ${letters.visibility} = 'DRAFT')::int`,
+            // Workflow state counts to help identify work needed
+            uploaded: sql<number>`count(*) filter (where ${letters.workflow} = 'UPLOADED')::int`,
+            ready: sql<number>`count(*) filter (where ${letters.workflow} in ('TRANSCRIBED', 'METADATA_DRAFTED'))::int`,
+            reviewed: sql<number>`count(*) filter (where ${letters.workflow} = 'REVIEWED')::int`,
           })
           .from(letters)
           .where(
@@ -52,6 +56,9 @@ router.get('/', async (_req, res, next) => {
           letterCount: stats?.total || 0,
           publishedCount: stats?.published || 0,
           draftCount: stats?.draft || 0,
+          uploadedCount: stats?.uploaded || 0,
+          readyCount: stats?.ready || 0,
+          reviewedCount: stats?.reviewed || 0,
           letterPageCount: pageCounts?.letterPageCount || 0,
           extraContentCount: pageCounts?.extraContentCount || 0,
         };

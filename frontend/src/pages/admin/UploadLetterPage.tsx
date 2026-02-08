@@ -7,6 +7,7 @@ import {
   getFileExtension,
   type ParsedFilename,
 } from "../../utils/filename-parser";
+import { Button, ConfirmDialog } from "../../components/common";
 import "./UploadLetterPage.css";
 
 // ============================================================================
@@ -63,6 +64,29 @@ interface ConfirmDialogState {
   show: boolean;
   files: File[];               // files to re-upload with force
   filenames: string[];         // display names
+}
+
+interface UploadBannerState {
+  show: boolean;
+  fileCount: number;
+  totalSize: string;
+  collectionCount: number;
+  replacedCount: number;
+  skippedCount: number;
+}
+
+interface DeleteDialogState {
+  show: boolean;
+  type: 'collection' | 'letter' | 'image';
+  collectionCode: string;
+  letterKey?: string;
+  imageId?: string;
+  itemName: string;
+}
+
+interface LightboxState {
+  images: UploadedImage[];
+  currentIndex: number;
 }
 
 // ============================================================================
@@ -188,6 +212,14 @@ function formatDate(isoDate: string): string {
   });
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
 function generateNewFilename(
   originalFilename: string,
   collectionCode: string,
@@ -211,6 +243,7 @@ interface ImageThumbnailProps {
   editMode: boolean;
   onSelect: () => void;
   onView: () => void;
+  onDelete?: () => void;
 }
 
 function ImageThumbnail({
@@ -219,6 +252,7 @@ function ImageThumbnail({
   editMode,
   onSelect,
   onView,
+  onDelete,
 }: ImageThumbnailProps) {
   const lastTapRef = useRef<number>(0);
 
@@ -238,6 +272,11 @@ function ImageThumbnail({
     }
   };
 
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDelete?.();
+  };
+
   const typeName = image.parsed ? getTypeName(image.parsed.type) : null;
 
   return (
@@ -245,6 +284,13 @@ function ImageThumbnail({
       className={`image-thumb ${isSelected ? "selected" : ""}`}
       onClick={handleClick}
     >
+      {!editMode && onDelete && (
+        <button className="delete-thumb-btn" onClick={handleDelete} title="Delete image">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
+          </svg>
+        </button>
+      )}
       {typeName && <div className="type-badge">{typeName}</div>}
       <img src={image.url} alt={image.originalFilename} />
       <div className="filename-badge">{image.originalFilename}</div>
@@ -257,7 +303,8 @@ interface UncategorizedCarouselProps {
   images: UploadedImage[];
   editState: EditState;
   onImageSelect: (id: string) => void;
-  onViewImage: (image: UploadedImage) => void;
+  onViewImage: (image: UploadedImage, allImages: UploadedImage[]) => void;
+  onDeleteImage: (image: UploadedImage) => void;
 }
 
 function UncategorizedCarousel({
@@ -265,6 +312,7 @@ function UncategorizedCarousel({
   editState,
   onImageSelect,
   onViewImage,
+  onDeleteImage,
 }: UncategorizedCarouselProps) {
   const [pageIndex, setPageIndex] = useState(0);
   const [previousPageIndex, setPreviousPageIndex] = useState<number | null>(null);
@@ -342,7 +390,8 @@ function UncategorizedCarousel({
                     isSelected={editState.selectedImageIds.has(image.id)}
                     editMode={editState.active}
                     onSelect={() => onImageSelect(image.id)}
-                    onView={() => onViewImage(image)}
+                    onView={() => onViewImage(image, images)}
+                    onDelete={() => onDeleteImage(image)}
                   />
                 ))}
               </div>
@@ -357,7 +406,8 @@ function UncategorizedCarousel({
                   isSelected={editState.selectedImageIds.has(image.id)}
                   editMode={editState.active}
                   onSelect={() => onImageSelect(image.id)}
-                  onView={() => onViewImage(image)}
+                  onView={() => onViewImage(image, images)}
+                  onDelete={() => onDeleteImage(image)}
                 />
               ))}
             </div>
@@ -372,7 +422,8 @@ function UncategorizedCarousel({
                     isSelected={editState.selectedImageIds.has(image.id)}
                     editMode={editState.active}
                     onSelect={() => onImageSelect(image.id)}
-                    onView={() => onViewImage(image)}
+                    onView={() => onViewImage(image, images)}
+                    onDelete={() => onDeleteImage(image)}
                   />
                 ))}
               </div>
@@ -399,6 +450,7 @@ interface CollectionCardProps {
   editMode: boolean;
   onSelect: () => void;
   onClick: () => void;
+  onDelete: () => void;
 }
 
 function CollectionCard({
@@ -407,6 +459,7 @@ function CollectionCard({
   editMode,
   onSelect,
   onClick,
+  onDelete,
 }: CollectionCardProps) {
   const handleClick = () => {
     if (editMode) {
@@ -414,6 +467,11 @@ function CollectionCard({
     } else {
       onClick();
     }
+  };
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDelete();
   };
 
   const letterCount = collection.letters.length;
@@ -424,6 +482,13 @@ function CollectionCard({
       className={`collection-card ${isSelected ? "selected" : ""}`}
       onClick={handleClick}
     >
+      {!editMode && (
+        <button className="delete-card-btn" onClick={handleDelete} title="Delete collection">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
+          </svg>
+        </button>
+      )}
       <div className="collection-code">
         Collection {collection.collectionCode}
       </div>
@@ -439,13 +504,15 @@ function CollectionCard({
 interface CollectionModalProps {
   collection: CollectionGroup;
   onClose: () => void;
-  onViewImage: (image: UploadedImage) => void;
+  onViewImage: (image: UploadedImage, allImages: UploadedImage[]) => void;
+  onDeleteLetter: (letterKey: string, letterDate: string | null) => void;
 }
 
 function CollectionModal({
   collection,
   onClose,
   onViewImage,
+  onDeleteLetter,
 }: CollectionModalProps) {
   const [selectedLetter, setSelectedLetter] = useState<LetterGroup | null>(
     null,
@@ -459,6 +526,11 @@ function CollectionModal({
         onClose();
       }
     }
+  };
+
+  const handleDeleteLetter = (e: React.MouseEvent, letter: LetterGroup) => {
+    e.stopPropagation();
+    onDeleteLetter(letter.letterKey, letter.letterDate);
   };
 
   return (
@@ -491,7 +563,7 @@ function CollectionModal({
               <div
                 key={img.id}
                 className="letter-image-item"
-                onClick={() => onViewImage(img)}
+                onClick={() => onViewImage(img, selectedLetter.images)}
               >
                 <div className="image-type-badge">
                   {getTypeName(img.parsed?.type || "L")}
@@ -511,6 +583,15 @@ function CollectionModal({
                 className="letter-card"
                 onClick={() => setSelectedLetter(letter)}
               >
+                <button
+                  className="delete-letter-btn"
+                  onClick={(e) => handleDeleteLetter(e, letter)}
+                  title="Delete letter"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
+                  </svg>
+                </button>
                 <div className="letter-card-date">
                   {letter.letterDate
                     ? formatDate(letter.letterDate)
@@ -540,19 +621,58 @@ function CollectionModal({
 }
 
 interface LightboxProps {
-  image: UploadedImage;
+  images: UploadedImage[];
+  currentIndex: number;
   onClose: () => void;
+  onNavigate: (index: number) => void;
 }
 
-function Lightbox({ image, onClose }: LightboxProps) {
+function Lightbox({ images, currentIndex, onClose, onNavigate }: LightboxProps) {
+  const image = images[currentIndex];
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex < images.length - 1;
+
+  const goPrev = useCallback(() => {
+    if (hasPrev) onNavigate(currentIndex - 1);
+  }, [hasPrev, currentIndex, onNavigate]);
+
+  const goNext = useCallback(() => {
+    if (hasNext) onNavigate(currentIndex + 1);
+  }, [hasNext, currentIndex, onNavigate]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') goPrev();
+      else if (e.key === 'ArrowRight') goNext();
+      else if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [goPrev, goNext, onClose]);
+
   return (
     <div className="lightbox-overlay" onClick={onClose}>
       <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
         <button className="lightbox-close" onClick={onClose}>
           ×
         </button>
+
+        {hasPrev && (
+          <button className="lightbox-nav lightbox-nav-prev" onClick={goPrev}>
+            ‹
+          </button>
+        )}
+
         <img src={image.url} alt={image.originalFilename} />
+
+        {hasNext && (
+          <button className="lightbox-nav lightbox-nav-next" onClick={goNext}>
+            ›
+          </button>
+        )}
+
         <div className="lightbox-filename">{image.originalFilename}</div>
+        <div className="lightbox-counter">{currentIndex + 1} / {images.length}</div>
       </div>
     </div>
   );
@@ -581,7 +701,7 @@ export default function UploadLetterPage() {
   const [openCollection, setOpenCollection] = useState<CollectionGroup | null>(
     null,
   );
-  const [lightboxImage, setLightboxImage] = useState<UploadedImage | null>(
+  const [lightboxState, setLightboxState] = useState<LightboxState | null>(
     null,
   );
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
@@ -598,6 +718,25 @@ export default function UploadLetterPage() {
     files: [],
     filenames: [],
   });
+  const [uploadBanner, setUploadBanner] = useState<UploadBannerState>({
+    show: false,
+    fileCount: 0,
+    totalSize: "0 B",
+    collectionCount: 0,
+    replacedCount: 0,
+    skippedCount: 0,
+  });
+  const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState>({
+    show: false,
+    type: 'collection',
+    collectionCode: '',
+    itemName: '',
+  });
+  const [pendingUploadStats, setPendingUploadStats] = useState<{
+    fileCount: number;
+    totalSize: number;
+    collectionCount: number;
+  } | null>(null);
 
   // Auth check
   useEffect(() => {
@@ -621,6 +760,17 @@ export default function UploadLetterPage() {
     () => images.filter((img) => !img.parsed),
     [images],
   );
+
+  const stats = useMemo(() => {
+    const totalLetters = collections.reduce((sum, c) => sum + c.letters.length, 0);
+    const totalImages = collections.reduce((sum, c) => sum + c.totalImages, 0);
+    return {
+      collections: collections.length,
+      letters: totalLetters,
+      images: totalImages,
+      uncategorized: uncategorizedImages.length,
+    };
+  }, [collections, uncategorizedImages]);
 
   // Update next collection code when collections change
   useEffect(() => {
@@ -785,11 +935,13 @@ export default function UploadLetterPage() {
 
     setUploading(true);
     setMessage("");
+    setUploadBanner(prev => ({ ...prev, show: false }));
 
     const allUploaded: UploadResult[] = [];
     const allExisting: UploadResult[] = [];
     const allFailed: UploadError[] = [];
     const filesToReupload: File[] = [];
+    let totalBytes = 0;
 
     // Upload each collection as a batch
     for (let i = 0; i < collections.length; i++) {
@@ -811,6 +963,9 @@ export default function UploadLetterPage() {
           return img.file;
         }),
       );
+
+      // Track total size
+      collectionFiles.forEach(f => totalBytes += f.size);
 
       try {
         const response = await uploadFiles(collectionFiles, force);
@@ -844,22 +999,48 @@ export default function UploadLetterPage() {
     setUploadProgress(null);
     setUploading(false);
 
-    // If there are existing files and not forcing, show confirmation dialog
+    // If there are existing files and not forcing, show confirmation dialog ONLY
     if (allExisting.length > 0 && !force) {
+      // Store pending stats for after user decision
+      setPendingUploadStats({
+        fileCount: allUploaded.length,
+        totalSize: totalBytes,
+        collectionCount: collections.length,
+      });
+
       setConfirmDialog({
         show: true,
         files: filesToReupload,
         filenames: allExisting.map(r => r.filename),
       });
-      // Still update results to show what was uploaded
+
+      // Store results but DON'T show the panel yet
       setUploadResults(prev => ({
         ...prev,
         uploaded: allUploaded,
         existing: allExisting,
         failed: allFailed,
-        show: true,
+        show: false, // Don't show until user decides
       }));
     } else {
+      // No duplicates or forcing - show success banner immediately
+      const finalUploadCount = force ? uploadResults.uploaded.length + allUploaded.length : allUploaded.length;
+      const replacedCount = force ? allUploaded.length : 0;
+
+      setUploadBanner({
+        show: true,
+        fileCount: finalUploadCount,
+        totalSize: formatFileSize(totalBytes),
+        collectionCount: collections.length,
+        replacedCount,
+        skippedCount: 0,
+      });
+
+      // Auto-dismiss banner after 5 seconds
+      setTimeout(() => {
+        setUploadBanner(prev => ({ ...prev, show: false }));
+      }, 5000);
+
       // Update results (force uploads go to "replaced" category)
       setUploadResults({
         uploaded: force ? [] : allUploaded,
@@ -867,7 +1048,7 @@ export default function UploadLetterPage() {
         replaced: force ? allUploaded : [],
         skipped: [],
         failed: allFailed,
-        show: true,
+        show: false, // Use banner instead
       });
     }
 
@@ -887,12 +1068,32 @@ export default function UploadLetterPage() {
 
   const handleSkipExisting = () => {
     // Mark existing as skipped and close dialog
+    const skippedCount = uploadResults.existing.length;
     setUploadResults(prev => ({
       ...prev,
       skipped: prev.existing,
       existing: [],
+      show: false,
     }));
     setConfirmDialog({ show: false, files: [], filenames: [] });
+
+    // Show success banner with final stats
+    if (pendingUploadStats) {
+      setUploadBanner({
+        show: true,
+        fileCount: pendingUploadStats.fileCount,
+        totalSize: formatFileSize(pendingUploadStats.totalSize),
+        collectionCount: pendingUploadStats.collectionCount,
+        replacedCount: 0,
+        skippedCount,
+      });
+      setPendingUploadStats(null);
+
+      // Auto-dismiss banner after 5 seconds
+      setTimeout(() => {
+        setUploadBanner(prev => ({ ...prev, show: false }));
+      }, 5000);
+    }
   };
 
   const handleClearResults = () => {
@@ -905,6 +1106,90 @@ export default function UploadLetterPage() {
       show: false,
     });
     setMessage("");
+  };
+
+  const handleDismissBanner = () => {
+    setUploadBanner(prev => ({ ...prev, show: false }));
+  };
+
+  const handleDeleteCollection = (collectionCode: string) => {
+    setDeleteDialog({
+      show: true,
+      type: 'collection',
+      collectionCode,
+      itemName: `Collection ${collectionCode}`,
+    });
+  };
+
+  const handleDeleteLetter = (collectionCode: string, letterKey: string, letterDate: string | null) => {
+    setDeleteDialog({
+      show: true,
+      type: 'letter',
+      collectionCode,
+      letterKey,
+      itemName: letterDate ? formatDate(letterDate) : 'Unknown Date',
+    });
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteDialog.type === 'collection') {
+      // Remove all images from this collection
+      setImages(prev => prev.filter(img =>
+        !img.parsed || img.parsed.collectionCode !== deleteDialog.collectionCode
+      ));
+    } else if (deleteDialog.type === 'letter' && deleteDialog.letterKey) {
+      // Remove images for this specific letter
+      setImages(prev => prev.filter(img => {
+        if (!img.parsed || img.parsed.collectionCode !== deleteDialog.collectionCode) {
+          return true;
+        }
+        const imgLetterKey = `${img.parsed.dateRaw}-${String(img.parsed.typeSequence).padStart(2, "0")}`;
+        return imgLetterKey !== deleteDialog.letterKey;
+      }));
+    } else if (deleteDialog.type === 'image' && deleteDialog.imageId) {
+      // Remove single uncategorized image
+      setImages(prev => prev.filter(img => img.id !== deleteDialog.imageId));
+    }
+
+    setDeleteDialog({ show: false, type: 'collection', collectionCode: '', itemName: '' });
+    // Close collection modal if we deleted the current collection or its last letter
+    if (openCollection && deleteDialog.collectionCode === openCollection.collectionCode) {
+      // Check if collection will be empty after delete
+      const remainingInCollection = images.filter(img =>
+        img.parsed?.collectionCode === deleteDialog.collectionCode
+      );
+      // If we're deleting the collection or it will be empty, close the modal
+      if (deleteDialog.type === 'collection' || remainingInCollection.length <= (openCollection.letters.find(l => l.letterKey === deleteDialog.letterKey)?.images.length || 0)) {
+        setOpenCollection(null);
+      }
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteDialog({ show: false, type: 'collection', collectionCode: '', itemName: '' });
+  };
+
+  const handleDeleteUncategorizedImage = (image: UploadedImage) => {
+    setDeleteDialog({
+      show: true,
+      type: 'image',
+      collectionCode: '',
+      imageId: image.id,
+      itemName: image.originalFilename,
+    });
+  };
+
+  const handleViewImage = (image: UploadedImage, allImages: UploadedImage[]) => {
+    const index = allImages.findIndex(img => img.id === image.id);
+    setLightboxState({ images: allImages, currentIndex: index >= 0 ? index : 0 });
+  };
+
+  const handleLightboxNavigate = (index: number) => {
+    setLightboxState(prev => prev ? { ...prev, currentIndex: index } : null);
+  };
+
+  const handleLightboxClose = () => {
+    setLightboxState(null);
   };
 
   const canAdd =
@@ -939,7 +1224,24 @@ export default function UploadLetterPage() {
 
       {/* Header */}
       <header className="upload-header">
-        <h1>Upload Letters</h1>
+        <div className="header-title-group">
+          <h1>Upload Letters</h1>
+          {images.length > 0 && (
+            <div className="header-stats">
+              <span>{stats.collections} collection{stats.collections !== 1 ? 's' : ''}</span>
+              <span className="stat-divider">·</span>
+              <span>{stats.letters} letter{stats.letters !== 1 ? 's' : ''}</span>
+              <span className="stat-divider">·</span>
+              <span>{stats.images} image{stats.images !== 1 ? 's' : ''}</span>
+              {stats.uncategorized > 0 && (
+                <>
+                  <span className="stat-divider">·</span>
+                  <span className="uncategorized-stat">{stats.uncategorized} uncategorized</span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="header-actions">
           {editState.active && (
@@ -961,56 +1263,41 @@ export default function UploadLetterPage() {
           )}
 
           {editState.active && (
-            <button className="add-btn" disabled={!canAdd} onClick={handleAddToCollection}>
+            <Button variant="primary" disabled={!canAdd} onClick={handleAddToCollection}>
               Add
-            </button>
+            </Button>
           )}
 
-          {images.length > 0 && (
-            <button
+          {uncategorizedImages.length > 0 && (
+            <Button
+              icon={editState.active ? "check" : "edit"}
               onClick={toggleEditMode}
-              className={`edit-toggle ${editState.active ? "active" : ""}`}
+              active={editState.active}
             >
-              {editState.active ? "Done" : "Edit"}
-            </button>
+              {editState.active ? "Done" : "Organize"}
+            </Button>
           )}
 
           {images.length > 0 && (
-            <button
-              className="upload-all-btn"
+            <Button
+              icon="upload"
               disabled={uploading}
               onClick={() => handleSubmit()}
             >
               {uploadProgress
-                ? `Uploading ${uploadProgress.collectionCode}... (${uploadProgress.current}/${uploadProgress.total})`
+                ? `${uploadProgress.current}/${uploadProgress.total}`
                 : "Upload All"}
-            </button>
+            </Button>
           )}
 
           <div className="upload-dropdown">
-            <button
-              className="header-btn"
+            <Button
+              icon="plus"
+              active={uploadMenuOpen}
               onClick={() => setUploadMenuOpen(!uploadMenuOpen)}
             >
-              <svg className="btn-icon" viewBox="0 0 16 16">
-                <path
-                  d="M8 1L8 10M8 1L4 5M8 1L12 5"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  fill="none"
-                />
-                <path
-                  d="M2 11L2 14L14 14L14 11"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  fill="none"
-                />
-              </svg>
-            </button>
+              Import
+            </Button>
             {uploadMenuOpen && (
               <div className="upload-menu">
                 <button
@@ -1033,13 +1320,35 @@ export default function UploadLetterPage() {
             )}
           </div>
 
-          <button onClick={() => navigate("/admin")} className="back-btn">
+          <Button icon="back" onClick={() => navigate("/admin")}>
             Back
-          </button>
+          </Button>
         </div>
       </header>
 
       <div className="upload-content">
+        {/* Upload Success Banner */}
+        {uploadBanner.show && (
+          <div className="upload-banner">
+            <div className="banner-icon">✓</div>
+            <div className="banner-content">
+              <strong>Upload Complete</strong>
+              <div className="banner-stats">
+                <span className="banner-stat"><strong>{uploadBanner.fileCount}</strong> files</span>
+                <span className="banner-stat"><strong>{uploadBanner.totalSize}</strong></span>
+                <span className="banner-stat"><strong>{uploadBanner.collectionCount}</strong> collection{uploadBanner.collectionCount !== 1 ? 's' : ''}</span>
+                {uploadBanner.replacedCount > 0 && (
+                  <span className="banner-stat"><strong>{uploadBanner.replacedCount}</strong> replaced</span>
+                )}
+                {uploadBanner.skippedCount > 0 && (
+                  <span className="banner-stat"><strong>{uploadBanner.skippedCount}</strong> skipped</span>
+                )}
+              </div>
+            </div>
+            <button className="banner-dismiss" onClick={handleDismissBanner} title="Dismiss">×</button>
+          </div>
+        )}
+
         {images.length === 0 ? (
           <div className="empty-state">
             <h2>Upload Letter Images</h2>
@@ -1091,7 +1400,7 @@ export default function UploadLetterPage() {
             {/* Collections Section */}
             {collections.length > 0 && (
               <div className="collections-section">
-                <h2>Collections ({collections.length})</h2>
+                <h2>Collections</h2>
                 <div className="collection-grid">
                   {collections.map((collection) => (
                     <CollectionCard
@@ -1106,6 +1415,7 @@ export default function UploadLetterPage() {
                         handleCollectionSelect(collection.collectionCode)
                       }
                       onClick={() => setOpenCollection(collection)}
+                      onDelete={() => handleDeleteCollection(collection.collectionCode)}
                     />
                   ))}
                   {editState.active && (
@@ -1151,7 +1461,8 @@ export default function UploadLetterPage() {
                 images={uncategorizedImages}
                 editState={editState}
                 onImageSelect={handleImageSelect}
-                onViewImage={setLightboxImage}
+                onViewImage={handleViewImage}
+                onDeleteImage={handleDeleteUncategorizedImage}
               />
             )}
 
@@ -1172,15 +1483,18 @@ export default function UploadLetterPage() {
         <CollectionModal
           collection={openCollection}
           onClose={() => setOpenCollection(null)}
-          onViewImage={setLightboxImage}
+          onViewImage={handleViewImage}
+          onDeleteLetter={(letterKey, letterDate) => handleDeleteLetter(openCollection.collectionCode, letterKey, letterDate)}
         />
       )}
 
       {/* Lightbox */}
-      {lightboxImage && (
+      {lightboxState && (
         <Lightbox
-          image={lightboxImage}
-          onClose={() => setLightboxImage(null)}
+          images={lightboxState.images}
+          currentIndex={lightboxState.currentIndex}
+          onClose={handleLightboxClose}
+          onNavigate={handleLightboxNavigate}
         />
       )}
 
@@ -1287,6 +1601,22 @@ export default function UploadLetterPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={deleteDialog.show}
+        title={`Delete ${deleteDialog.type === 'collection' ? 'Collection' : deleteDialog.type === 'letter' ? 'Letter' : 'Image'}?`}
+        message={
+          <>
+            Are you sure you want to delete <strong>{deleteDialog.itemName}</strong>?
+            {deleteDialog.type === 'collection' && ' This will remove all letters and images in this collection.'}
+          </>
+        }
+        confirmText="Delete"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
     </div>
   );
 }

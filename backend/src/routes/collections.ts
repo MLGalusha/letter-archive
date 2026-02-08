@@ -6,11 +6,13 @@ import { transformLettersToDTO, type LetterWithRelations } from '../dto/index.js
 
 const router = Router();
 
+// Note: Request logging is handled by the request-logger middleware
+
 /**
  * GET /collections
  * List all collections with letter counts (published only)
  */
-router.get('/collections', async (_req, res, next) => {
+router.get('/collections', async (req, res, next) => {
   try {
     const allCollections = await listCollections();
 
@@ -35,6 +37,7 @@ router.get('/collections', async (_req, res, next) => {
       })
     );
 
+    req.log.debug({ collectionCount: collectionsWithCounts.length }, 'Collections list fetched');
     res.json(collectionsWithCounts);
   } catch (error) {
     next(error);
@@ -69,6 +72,7 @@ router.get('/collections/:code', async (req, res, next) => {
     const collection = await getCollectionByCode(code);
 
     if (!collection) {
+      req.log.debug({ collectionCode: code }, 'Collection not found');
       res.status(404).json({ error: 'Collection not found' });
       return;
     }
@@ -88,6 +92,11 @@ router.get('/collections/:code', async (req, res, next) => {
       },
       orderBy: [asc(letters.letterDate)],
     });
+
+    req.log.debug(
+      { collectionCode: code, letterCount: collectionLetters.length },
+      'Collection fetched with letters'
+    );
 
     res.json({
       ...collection,

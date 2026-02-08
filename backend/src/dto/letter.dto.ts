@@ -354,6 +354,18 @@ export function transformLettersToDTO(letters: LetterWithRelations[]): FrontendL
 }
 
 /**
+ * Transforms multiple letters with their related items to DTOs.
+ * Each entry contains a letter and its related items (cards, extras, etc.).
+ */
+export function transformLettersWithRelatedToDTO(
+  lettersWithRelated: Array<{ letter: LetterWithRelations; relatedItems: LetterWithRelations[] }>
+): FrontendLetter[] {
+  return lettersWithRelated.map(({ letter, relatedItems }) =>
+    transformLetterWithRelatedToDTO(letter, relatedItems)
+  );
+}
+
+/**
  * Transforms a letter with related cards/extras into a single DTO.
  * The related items' pages are appended to the images array.
  * Order: letter pages first, then extras (E), then card (C) last.

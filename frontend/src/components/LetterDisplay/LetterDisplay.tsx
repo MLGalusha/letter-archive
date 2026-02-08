@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import type { Letter } from "../../types/Letter";
 import LetterViewer from "../LetterViewer/LetterViewer";
+import { Button } from "../common";
 import "./LetterDisplay.css";
 
 interface LetterDisplayProps {
@@ -18,9 +19,9 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
     <div className="letter-display">
       <header className="display-header">
         <h1>{letter.title}</h1>
-        <button onClick={handleBack} className="back-button">
+        <Button icon="back" onClick={handleBack}>
           Back
-        </button>
+        </Button>
       </header>
 
       <div className="display-body">

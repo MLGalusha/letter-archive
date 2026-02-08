@@ -3,27 +3,67 @@
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const isDev = import.meta.env.DEV;
+
+// Simple frontend logger
+const log = {
+  debug: (message: string, data?: Record<string, unknown>) => {
+    if (isDev) console.debug(`[API] ${message}`, data || '');
+  },
+  info: (message: string, data?: Record<string, unknown>) => {
+    if (isDev) console.info(`[API] ${message}`, data || '');
+  },
+  warn: (message: string, data?: Record<string, unknown>) => {
+    console.warn(`[API] ${message}`, data || '');
+  },
+  error: (message: string, data?: Record<string, unknown>) => {
+    console.error(`[API] ${message}`, data || '');
+  },
+};
 
 export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-    public data?: unknown
-  ) {
+  status: number;
+  data?: unknown;
+  requestId?: string;
+
+  constructor(status: number, message: string, data?: unknown) {
     super(message);
     this.name = 'ApiError';
+    this.status = status;
+    this.data = data;
+    this.requestId = (data as { requestId?: string })?.requestId;
   }
 }
 
-async function handleResponse<T>(response: Response): Promise<T> {
+async function handleResponse<T>(
+  response: Response,
+  method: string,
+  path: string,
+  startTime: number
+): Promise<T> {
+  const duration = Date.now() - startTime;
+
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new ApiError(
+    const error = new ApiError(
       response.status,
       (data as { error?: string }).error || response.statusText,
       data
     );
+
+    log.error('Request failed', {
+      method,
+      path,
+      status: response.status,
+      duration,
+      requestId: error.requestId,
+      error: error.message,
+    });
+
+    throw error;
   }
+
+  log.debug('Request completed', { method, path, status: response.status, duration });
   return response.json();
 }
 
@@ -44,11 +84,14 @@ export async function apiGet<T>(
     });
   }
 
+  log.debug('GET request', { path, params });
+  const startTime = Date.now();
+
   const response = await fetch(url.toString(), {
     credentials: 'include',
   });
 
-  return handleResponse<T>(response);
+  return handleResponse<T>(response, 'GET', path, startTime);
 }
 
 /**
@@ -57,6 +100,9 @@ export async function apiGet<T>(
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const isFormData = body instanceof FormData;
 
+  log.debug('POST request', { path, isFormData });
+  const startTime = Date.now();
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
     headers: isFormData ? {} : { 'Content-Type': 'application/json' },
@@ -64,13 +110,16 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
     credentials: 'include',
   });
 
-  return handleResponse<T>(response);
+  return handleResponse<T>(response, 'POST', path, startTime);
 }
 
 /**
  * PUT request
  */
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  log.debug('PUT request', { path });
+  const startTime = Date.now();
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -78,19 +127,22 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
     credentials: 'include',
   });
 
-  return handleResponse<T>(response);
+  return handleResponse<T>(response, 'PUT', path, startTime);
 }
 
 /**
  * DELETE request
  */
 export async function apiDelete<T>(path: string): Promise<T> {
+  log.debug('DELETE request', { path });
+  const startTime = Date.now();
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'DELETE',
     credentials: 'include',
   });
 
-  return handleResponse<T>(response);
+  return handleResponse<T>(response, 'DELETE', path, startTime);
 }
 
 /**

@@ -684,7 +684,15 @@ router.put('/letters/:letterId', async (req, res, next) => {
       dbUpdates.summary = updates.summary;
     }
     if (updates.extractedDate !== undefined) {
-      dbUpdates.extractedDate = updates.extractedDate;
+      // Only set extractedDate if it's a valid YYYY-MM-DD format or null
+      // Display-formatted dates like "1947" or "September 14, 1886" should be ignored
+      if (updates.extractedDate === null || updates.extractedDate === '') {
+        dbUpdates.extractedDate = null;
+      } else if (/^\d{4}-\d{2}-\d{2}$/.test(updates.extractedDate)) {
+        // Valid ISO date format
+        dbUpdates.extractedDate = updates.extractedDate;
+      }
+      // Otherwise, skip updating extractedDate (it's a display format we can't use)
     }
     if (updates.notes !== undefined) {
       dbUpdates.notes = updates.notes;

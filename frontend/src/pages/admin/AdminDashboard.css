@@ -325,18 +325,15 @@
   box-shadow: 0 0 0 3px hsla(0, 0%, 50%, 0.1);
 }
 
-/* Admin Content */
+/* Admin Content - full width for maximum table space */
 .admin-content {
   flex: 1;
   min-height: 0; /* Allow flex child to shrink */
-  max-width: 1600px;
   width: 100%;
-  margin: 0 auto;
-  padding: var(--spacing-xs) var(--spacing-lg) var(--spacing-sm);
+  padding: 0;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
 }
 
 /* Filter pills container */
@@ -492,41 +489,40 @@
   white-space: nowrap;
 }
 
-/* Pagination controls */
+/* Pagination controls - compact bottom banner */
 .pagination-controls {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
   border-top: 1px solid var(--border);
   background: var(--bg-light);
+  font-size: var(--font-xs);
 }
 
 .pagination-btn {
-  padding: 0.5rem 1rem;
-  font-size: var(--font-sm);
+  padding: 0.25rem 0.5rem;
+  font-size: var(--font-xs);
   font-weight: 500;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: color 0.15s ease;
 }
 
 .pagination-btn:hover:not(:disabled) {
-  background: var(--bg-light);
-  border-color: var(--text-muted);
+  color: var(--text);
 }
 
 .pagination-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .pagination-info {
-  font-size: var(--font-sm);
+  font-size: var(--font-xs);
   color: var(--text-muted);
 }
 
@@ -638,48 +634,31 @@
   white-space: nowrap;
 }
 
-/* Table container */
+/* Table container - full width, scrollable */
 .letters-table-container {
   flex: 1;
   min-height: 0; /* Allow flex child to shrink */
   background: var(--bg-light);
-  border: var(--border-card);
-  border-top: solid 1px var(--highlight);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-  overflow: hidden; /* Hide container overflow, tbody will scroll */
-  display: flex;
-  flex-direction: column;
-  /* Inner padding to keep scrollbar away from edges */
-  padding-bottom: 8px;
+  border-top: solid 1px var(--border);
+  overflow: auto; /* Allow both horizontal and vertical scroll */
 }
 
 .letters-table {
   width: 100%;
   border-collapse: collapse;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+  font-size: 0.75rem; /* Smaller font for compact display */
 }
 
 .letters-table thead {
   background: var(--bg);
   border-bottom: solid 2px var(--border);
-  flex-shrink: 0;
-}
-
-/* Make thead a table for proper column layout */
-.letters-table thead {
-  display: table;
-  width: 100%;
-  table-layout: fixed;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 /* Scrollable tbody */
 .letters-table tbody {
-  display: block;
-  flex: 1;
-  overflow-y: auto;
   /* Styled scrollbar */
   scrollbar-width: thin; /* Firefox */
   scrollbar-color: var(--border) transparent;
@@ -704,22 +683,16 @@
   background: var(--text-muted);
 }
 
-/* Make rows display as table for column alignment */
-.letters-table tbody tr {
-  display: table;
-  width: 100%;
-  table-layout: fixed;
-}
-
 .letters-table th {
-  padding: var(--spacing-sm);
+  padding: 0.375rem 0.5rem;
   text-align: center;
   font-weight: 600;
-  font-size: var(--font-sm);
+  font-size: 0.7rem;
   color: var(--text);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
   background: var(--bg);
+  white-space: nowrap;
 }
 
 .sortable-header {
@@ -773,16 +746,37 @@
 }
 
 .letters-table td {
-  padding: var(--spacing-sm);
+  padding: 0.375rem 0.5rem;
   border-bottom: solid 1px var(--border);
-  font-size: var(--font-sm);
+  font-size: 0.75rem;
   color: var(--text-muted);
   text-align: center;
+  white-space: nowrap;
+}
+
+/* Date column headers (Year/Month/Day) - sortable */
+.date-header {
+  width: 50px;
+  min-width: 50px;
+  text-align: center;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.date-header:hover {
+  background-color: var(--bg-light);
+}
+
+.date-header.sorted {
+  background-color: #f0f0f0;
 }
 
 /* Date cells should not wrap */
 .letters-table td.date-cell {
   white-space: nowrap;
+  text-align: center;
 }
 
 .letter-row {
@@ -1199,4 +1193,198 @@
   .filter-buttons {
     width: 100%;
   }
+}
+
+/* ============================================================================
+   TWO-TRACK WORKFLOW STATUS STYLES
+   ============================================================================ */
+
+/* Status header columns (Transcript and Metadata) */
+.status-header {
+  width: 80px;
+  min-width: 80px;
+  text-align: center;
+  font-weight: 600;
+}
+
+/* Status cell */
+.status-cell {
+  text-align: center;
+  padding: 0.25rem !important;
+}
+
+/* Status icon base */
+.status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+/* Empty - just a plain dash, no badge styling */
+.status-icon.status-empty {
+  color: var(--text-muted);
+  background: transparent !important;
+  border: none !important;
+  min-width: auto;
+  padding: 0;
+}
+
+/* Draft - grey like HIDDEN badge */
+.status-icon.status-draft {
+  min-width: 50px;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: #e9ecef;
+  color: #6c757d;
+  border: solid 1px #dee2e6;
+}
+
+/* Edited - orange/warning color */
+.status-icon.status-edited {
+  min-width: 50px;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: #fff3e0;
+  color: #e65100;
+  border: solid 1px #ffcc80;
+}
+
+/* Verified - green success */
+.status-icon.status-verified {
+  min-width: 50px;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: #d4edda;
+  color: #155724;
+  border: solid 1px #c3e6cb;
+}
+
+/* Two-track stats in filter pills */
+.filter-stats {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Draft - grey like HIDDEN badge */
+.stat-item.stat-draft {
+  background: #e9ecef;
+  color: #6c757d;
+}
+
+/* Edited - orange/warning color */
+.stat-item.stat-edited {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+/* Verified - green success */
+.stat-item.stat-verified {
+  background: #d4edda;
+  color: #155724;
+}
+
+/* ============================================================================
+   COLUMN VISIBILITY CONTROLS
+   ============================================================================ */
+
+.column-toggle-container {
+  position: relative;
+}
+
+.column-toggle-button {
+  padding: 0.375rem 0.5rem;
+  font-size: var(--font-xs);
+  font-weight: 500;
+  background: var(--bg-light);
+  color: var(--text-muted);
+  border: solid 1px var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: all 0.15s ease;
+}
+
+.column-toggle-button:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.column-toggle-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-light);
+  border: solid 1px var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px hsla(0, 0%, 0%, 0.15);
+  min-width: 160px;
+  z-index: 200;
+  padding: 0.5rem 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.column-toggle-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  cursor: pointer;
+  font-size: var(--font-xs);
+  color: var(--text);
+  transition: background-color 0.15s ease;
+}
+
+.column-toggle-item:hover {
+  background: var(--bg);
+}
+
+.column-toggle-item input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.column-toggle-item label {
+  cursor: pointer;
+  flex: 1;
+}
+
+/* Table toolbar above table */
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.table-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.table-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }

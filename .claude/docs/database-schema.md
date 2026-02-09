@@ -2,7 +2,7 @@
 
 ## Overview
 
-The application uses PostgreSQL with Drizzle ORM. The schema consists of three main tables: `collections`, `letters`, and `letter_pages`.
+The application uses PostgreSQL with Drizzle ORM. The schema consists of four main tables: `collections`, `letters`, `letter_pages`, and `letter_versions`.
 
 ## Location
 
@@ -18,6 +18,7 @@ The application uses PostgreSQL with Drizzle ORM. The schema consists of three m
 erDiagram
     collections ||--o{ letters : contains
     letters ||--o{ letter_pages : has
+    letters ||--o{ letter_versions : tracks
 
     collections {
         uuid id PK
@@ -37,6 +38,8 @@ erDiagram
         int type_sequence
         enum workflow
         enum visibility
+        enum transcript_status
+        enum metadata_content_status
         text transcription_text
         text sender
         text recipient
@@ -54,6 +57,16 @@ erDiagram
         text storage_path
         text original_filename
         text checksum_sha256
+    }
+
+    letter_versions {
+        uuid id PK
+        uuid letter_id FK
+        text field_type
+        int version_number
+        jsonb content
+        text source
+        timestamp created_at
     }
 ```
 
@@ -95,8 +108,21 @@ Main content table storing letter metadata and processing state.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| `workflow` | enum | NOT NULL, default 'UPLOADED' | Processing state |
+| `workflow` | enum | NOT NULL, default 'UPLOADED' | Legacy processing state |
 | `visibility` | enum | NOT NULL, default 'HIDDEN' | Public visibility |
+
+#### Two-Track Content Status (New)
+
+Replaces single workflow with independent tracking of transcript and metadata verification.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `transcript_status` | enum | NOT NULL, default 'EMPTY' | EMPTY → AI_DRAFT → EDITED → VERIFIED |
+| `metadata_content_status` | enum | NOT NULL, default 'EMPTY' | EMPTY → AI_DRAFT → EDITED → VERIFIED |
+| `transcript_verified_at` | timestamptz | | When transcript was verified |
+| `transcript_verified_by` | text | | Who verified transcript |
+| `metadata_verified_at` | timestamptz | | When metadata was verified |
+| `metadata_verified_by` | text | | Who verified metadata |
 
 #### Transcription Fields
 
@@ -168,6 +194,24 @@ Stores individual page images for each letter.
 
 ---
 
+### letter_versions (New)
+
+Stores version history for transcripts and metadata, enabling undo/restore functionality.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | uuid | PK, default random | Primary key |
+| `letter_id` | uuid | FK → letters.id, NOT NULL, CASCADE | Parent letter |
+| `field_type` | text | NOT NULL, CHECK IN ('transcript', 'metadata') | Which field this version is for |
+| `version_number` | int | NOT NULL, >= 1 | Sequential version number |
+| `content` | jsonb | NOT NULL | { text: "..." } for transcript, { sender, recipient, ... } for metadata |
+| `source` | text | NOT NULL, CHECK IN ('ai', 'human') | Who created this version |
+| `created_at` | timestamptz | NOT NULL, default now | Creation time |
+
+**Unique Constraint:** (letter_id, field_type, version_number)
+
+---
+
 ## Enums
 
 ### letter_type
@@ -203,6 +247,16 @@ Stores individual page images for each letter.
 'exact', 'unknown', 'inferred'
 ```
 
+### content_status (New)
+
+```sql
+'EMPTY', 'AI_DRAFT', 'EDITED', 'VERIFIED'
+```
+- EMPTY = No content yet
+- AI_DRAFT = AI generated, human hasn't touched
+- EDITED = Human has edited
+- VERIFIED = Human explicitly marked as done
+
 ---
 
 ## Indexes
@@ -224,6 +278,13 @@ Stores individual page images for each letter.
 |-------|---------|---------|
 | `letter_pages_unique` | (letter_id, page_number) | Prevent duplicate pages |
 | `idx_pages_letter` | (letter_id) | Fetch pages for letter |
+
+### letter_versions
+
+| Index | Columns | Purpose |
+|-------|---------|---------|
+| `letter_versions_unique` | (letter_id, field_type, version_number) | Prevent duplicate versions |
+| `idx_versions_letter` | (letter_id) | Fetch versions for letter |
 
 ---
 
@@ -254,6 +315,9 @@ letters.collection_id → collections.id ON DELETE RESTRICT
 
 -- Pages belong to a letter (cascade delete)
 letter_pages.letter_id → letters.id ON DELETE CASCADE
+
+-- Versions belong to a letter (cascade delete)
+letter_versions.letter_id → letters.id ON DELETE CASCADE
 ```
 
 ---
@@ -266,19 +330,28 @@ collectionsRelations = relations(collections, ({ many }) => ({
   letters: many(letters),
 }));
 
-// Letter belongs to collection, has many pages
+// Letter belongs to collection, has many pages and versions
 lettersRelations = relations(letters, ({ one, many }) => ({
   collection: one(collections, {
     fields: [letters.collectionId],
     references: [collections.id],
   }),
   pages: many(letterPages),
+  versions: many(letterVersions),
 }));
 
 // Page belongs to letter
 letterPagesRelations = relations(letterPages, ({ one }) => ({
   letter: one(letters, {
     fields: [letterPages.letterId],
+    references: [letters.id],
+  }),
+}));
+
+// Version belongs to letter
+letterVersionsRelations = relations(letterVersions, ({ one }) => ({
+  letter: one(letters, {
+    fields: [letterVersions.letterId],
     references: [letters.id],
   }),
 }));

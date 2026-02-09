@@ -45,18 +45,35 @@ Quick reference for values that must match between frontend and backend. When ad
 | `PUBLISHED` | AdminDashboard.tsx | letters.ts:20 | OK |
 | `HIDDEN` | AdminDashboard.tsx | letters.ts:20 | OK |
 
+### Content Status (Two-Track Workflow)
+
+| State | Frontend | Backend | Status |
+|-------|----------|---------|--------|
+| `EMPTY` | Letter.ts:22 | schema.ts:50 | OK |
+| `AI_DRAFT` | Letter.ts:22 | schema.ts:51 | OK |
+| `EDITED` | Letter.ts:22 | schema.ts:52 | OK |
+| `VERIFIED` | Letter.ts:22 | schema.ts:53 | OK |
+
+**Frontend location**: `frontend/src/types/Letter.ts` - `ContentStatus` type
+**Backend location**: `backend/src/db/schema.ts` - `contentStatusEnum`
+
 ---
 
 ## API Response Types
 
 ### Admin Letters Response
 
-Frontend expects (`frontend/src/api/admin.ts`):
+Frontend expects (`frontend/src/api/letters.ts`):
 ```typescript
 {
-  letters: AdminLetter[];
+  letters: Letter[];
   pagination: { page, limit, total, totalPages };
-  stats: { total, uploaded, transcribed, metadataReady, reviewed, published, hidden };
+  stats: {
+    total, uploaded, transcribed, metadataReady, reviewed, published, hidden,
+    // Two-track content status stats
+    transcriptEmpty, transcriptAiDraft, transcriptEdited, transcriptVerified,
+    metadataEmpty, metadataAiDraft, metadataEdited, metadataVerified
+  };
 }
 ```
 

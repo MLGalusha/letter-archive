@@ -27,6 +27,15 @@ export interface AdminLettersResponse {
     reviewed: number;
     published: number;
     hidden: number;
+    // Two-track content status stats
+    transcriptEmpty: number;
+    transcriptAiDraft: number;
+    transcriptEdited: number;
+    transcriptVerified: number;
+    metadataEmpty: number;
+    metadataAiDraft: number;
+    metadataEdited: number;
+    metadataVerified: number;
   };
 }
 

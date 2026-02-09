@@ -1,12 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getAdminLetterById, deleteLetter } from "../../api/letters";
-import { updateLetter, markAsReviewed, confirmTranscript } from "../../api/admin";
+import {
+  updateLetter,
+  markAsReviewed,
+  confirmTranscript,
+  verifyTranscript,
+  unverifyTranscript,
+  verifyMetadata,
+  unverifyMetadata,
+  createVersion,
+} from "../../api/admin";
 import LetterViewer from "../../components/LetterViewer/LetterViewer";
 import { useToast } from "../../contexts/ToastContext";
 import { Button, Icon, WorkflowBadge, StatusBadge } from "../../components/common";
 import { trackEdit } from "../../utils/recentEdits";
-import type { Letter, LetterImage, VisibilityState } from "../../types/Letter";
+import type { Letter, LetterImage, VisibilityState, ContentStatus } from "../../types/Letter";
 import "./LetterReviewPage.css";
 
 export default function LetterReviewPage() {
@@ -30,6 +39,8 @@ export default function LetterReviewPage() {
 
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [transcriptFontSize, setTranscriptFontSize] = useState("1.1rem");
   const [currentFilename, setCurrentFilename] = useState<string | undefined>(undefined);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -266,6 +277,131 @@ export default function LetterReviewPage() {
     }
   };
 
+  // Auto-save function (debounced)
+  const triggerAutoSave = useCallback(async (data: {
+    transcriptionText?: string;
+    sender?: string | null;
+    recipient?: string | null;
+    locationWritten?: string | null;
+    hook?: string | null;
+    summary?: string | null;
+    notes?: string | null;
+  }) => {
+    if (!letterId || !letter) return;
+
+    // Clear existing timer
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    // Set up debounced save
+    autoSaveTimerRef.current = setTimeout(async () => {
+      setAutoSaveStatus('saving');
+      try {
+        const updated = await updateLetter(letterId, data);
+        setLetter(updated);
+
+        // Create version for transcript
+        if (data.transcriptionText !== undefined) {
+          await createVersion(letterId, 'transcript', data.transcriptionText, 'human');
+        }
+
+        // Create version for metadata (if any metadata field changed)
+        if (data.sender !== undefined || data.recipient !== undefined ||
+            data.locationWritten !== undefined || data.hook !== undefined ||
+            data.summary !== undefined) {
+          await createVersion(letterId, 'metadata', {
+            sender: data.sender ?? letter.metadata.sender,
+            recipient: data.recipient ?? letter.metadata.recipient,
+            locationWritten: data.locationWritten ?? letter.metadata.location,
+            hook: data.hook ?? letter.metadata.hook,
+            summary: data.summary ?? letter.metadata.description,
+          }, 'human');
+        }
+
+        setAutoSaveStatus('saved');
+        setTimeout(() => setAutoSaveStatus('idle'), 2000);
+
+        // Track edit
+        trackEdit({
+          id: updated.id,
+          metadata: updated.metadata,
+          collectionCode: updated.collectionCode,
+        });
+      } catch (err) {
+        setAutoSaveStatus('error');
+        console.error('Auto-save error:', err);
+      }
+    }, 1500);
+  }, [letterId, letter]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Handlers for transcript verification
+  const handleVerifyTranscript = async () => {
+    if (!letterId) return;
+    setSaving(true);
+    try {
+      const updated = await verifyTranscript(letterId);
+      setLetter(updated);
+      showToast("Transcript verified", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to verify transcript", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUnverifyTranscript = async () => {
+    if (!letterId) return;
+    setSaving(true);
+    try {
+      const updated = await unverifyTranscript(letterId);
+      setLetter(updated);
+      showToast("Transcript verification removed", "info");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to unverify transcript", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Handlers for metadata verification
+  const handleVerifyMetadata = async () => {
+    if (!letterId) return;
+    setSaving(true);
+    try {
+      const updated = await verifyMetadata(letterId);
+      setLetter(updated);
+      showToast("Metadata verified", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to verify metadata", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUnverifyMetadata = async () => {
+    if (!letterId) return;
+    setSaving(true);
+    try {
+      const updated = await unverifyMetadata(letterId);
+      setLetter(updated);
+      showToast("Metadata verification removed", "info");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to unverify metadata", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!letterId) return;
     if (!window.confirm("Are you sure you want to delete this letter?")) {
@@ -288,6 +424,22 @@ export default function LetterReviewPage() {
 
   const handleBack = () => {
     navigate("/admin");
+  };
+
+  // Helper: render status indicator for two-track system
+  const renderContentStatus = (status: ContentStatus | undefined) => {
+    switch (status) {
+      case 'EMPTY':
+        return <span className="content-status status-empty">Empty</span>;
+      case 'AI_DRAFT':
+        return <span className="content-status status-ai">AI Draft</span>;
+      case 'EDITED':
+        return <span className="content-status status-edited">Edited</span>;
+      case 'VERIFIED':
+        return <span className="content-status status-verified">Verified</span>;
+      default:
+        return null;
+    }
   };
 
   const handlePageChange = useCallback((_index: number, image: LetterImage) => {
@@ -339,6 +491,12 @@ export default function LetterReviewPage() {
       <header className="review-header">
         <Button icon="back" onClick={handleBack}>Back</Button>
         <h1>{letter.title}</h1>
+        {/* Auto-save status indicator */}
+        <div className="auto-save-indicator">
+          {autoSaveStatus === 'saving' && <span className="save-status saving">Saving...</span>}
+          {autoSaveStatus === 'saved' && <span className="save-status saved">Saved</span>}
+          {autoSaveStatus === 'error' && <span className="save-status error">Save failed</span>}
+        </div>
         <div className="header-actions">
           <button
             className="header-action save"
@@ -436,9 +594,12 @@ export default function LetterReviewPage() {
             <div className="editor-section">
               <div className="editor-header">
                 <h2>Transcription</h2>
-                {letter.workflowState !== "UPLOADED" && (
-                  <StatusBadge status="auto" label="Auto-transcribed" />
-                )}
+                <div className="header-status-group">
+                  {renderContentStatus(letter.transcriptStatus)}
+                  {letter.workflowState !== "UPLOADED" && (
+                    <StatusBadge status="auto" label="Auto-transcribed" />
+                  )}
+                </div>
               </div>
               <div className="editor-container">
                 <div
@@ -450,16 +611,46 @@ export default function LetterReviewPage() {
                   style={{ "--transcript-font-size": transcriptFontSize } as React.CSSProperties}
                   onInput={(e) => {
                     const target = e.currentTarget;
-                    setTranscript(target.innerText);
+                    const newText = target.innerText;
+                    setTranscript(newText);
+                    triggerAutoSave({ transcriptionText: newText });
                   }}
                   onKeyDown={handleEditorKeyDown}
                 />
+              </div>
+              {/* Verification footer */}
+              <div className="section-footer">
+                {letter.transcriptStatus === 'VERIFIED' ? (
+                  <div className="verified-info">
+                    <Icon name="check" size={14} />
+                    <span>Verified{letter.transcriptVerifiedAt && ` on ${new Date(letter.transcriptVerifiedAt).toLocaleDateString()}`}</span>
+                    <button
+                      className="unverify-btn"
+                      onClick={handleUnverifyTranscript}
+                      disabled={saving}
+                    >
+                      Undo
+                    </button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="primary"
+                    icon="check"
+                    onClick={handleVerifyTranscript}
+                    disabled={saving || letter.transcriptStatus === 'EMPTY'}
+                  >
+                    Mark Transcript Done
+                  </Button>
+                )}
               </div>
             </div>
 
             {/* Metadata Form */}
             <div className="metadata-section">
-              <h2>Metadata</h2>
+              <div className="metadata-header">
+                <h2>Metadata</h2>
+                {renderContentStatus(letter.metadataContentStatus)}
+              </div>
               <div className="metadata-form">
                 <div className="form-row">
                   <div className="form-group">
@@ -468,7 +659,10 @@ export default function LetterReviewPage() {
                       type="text"
                       id="sender"
                       value={sender}
-                      onChange={(e) => setSender(e.target.value)}
+                      onChange={(e) => {
+                        setSender(e.target.value);
+                        triggerAutoSave({ sender: e.target.value || null });
+                      }}
                       placeholder="Who wrote the letter"
                     />
                   </div>
@@ -478,7 +672,10 @@ export default function LetterReviewPage() {
                       type="text"
                       id="recipient"
                       value={recipient}
-                      onChange={(e) => setRecipient(e.target.value)}
+                      onChange={(e) => {
+                        setRecipient(e.target.value);
+                        triggerAutoSave({ recipient: e.target.value || null });
+                      }}
                       placeholder="Who received the letter"
                     />
                   </div>
@@ -515,7 +712,10 @@ export default function LetterReviewPage() {
                     type="text"
                     id="location"
                     value={location}
-                    onChange={(e) => setLocation(e.target.value)}
+                    onChange={(e) => {
+                      setLocation(e.target.value);
+                      triggerAutoSave({ locationWritten: e.target.value || null });
+                    }}
                     placeholder="e.g., New York, NY"
                   />
                 </div>
@@ -526,7 +726,10 @@ export default function LetterReviewPage() {
                     ref={hookRef}
                     id="hook"
                     value={hook}
-                    onChange={(e) => setHook(e.target.value)}
+                    onChange={(e) => {
+                      setHook(e.target.value);
+                      triggerAutoSave({ hook: e.target.value || null });
+                    }}
                     placeholder="Short teaser to engage readers (shown in list view)"
                     maxLength={150}
                   />
@@ -539,7 +742,10 @@ export default function LetterReviewPage() {
                     ref={descriptionRef}
                     id="description"
                     value={description}
-                    onChange={(e) => setDescription(e.target.value)}
+                    onChange={(e) => {
+                      setDescription(e.target.value);
+                      triggerAutoSave({ summary: e.target.value || null });
+                    }}
                     placeholder="Factual description of letter content (shown in detail view)"
                   />
                 </div>
@@ -562,11 +768,39 @@ export default function LetterReviewPage() {
                     ref={notesRef}
                     id="notes"
                     value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
+                    onChange={(e) => {
+                      setNotes(e.target.value);
+                      triggerAutoSave({ notes: e.target.value || null });
+                    }}
                     placeholder="Internal notes (not shown publicly)"
                   />
                   <span className="help-text">For internal reference only</span>
                 </div>
+              </div>
+              {/* Metadata Verification footer */}
+              <div className="section-footer">
+                {letter.metadataContentStatus === 'VERIFIED' ? (
+                  <div className="verified-info">
+                    <Icon name="check" size={14} />
+                    <span>Verified{letter.metadataVerifiedAt && ` on ${new Date(letter.metadataVerifiedAt).toLocaleDateString()}`}</span>
+                    <button
+                      className="unverify-btn"
+                      onClick={handleUnverifyMetadata}
+                      disabled={saving}
+                    >
+                      Undo
+                    </button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="primary"
+                    icon="check"
+                    onClick={handleVerifyMetadata}
+                    disabled={saving || letter.metadataContentStatus === 'EMPTY'}
+                  >
+                    Mark Metadata Done
+                  </Button>
+                )}
               </div>
             </div>
 

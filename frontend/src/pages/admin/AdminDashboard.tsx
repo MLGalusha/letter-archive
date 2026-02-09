@@ -14,11 +14,10 @@ import {
   type ProcessingStatus,
 } from "../../api/admin";
 import { useToast } from "../../contexts/ToastContext";
-import type { Letter, WorkflowState, VisibilityState } from "../../types/Letter";
+import type { Letter, WorkflowState, VisibilityState, ContentStatus } from "../../types/Letter";
 import {
   Button,
   ConfirmDialog,
-  WorkflowBadge,
   VisibilityBadge,
   DropdownHeader,
   DropdownItem,
@@ -26,13 +25,99 @@ import {
 import { getRecentEdits, formatTimeAgo, type RecentEdit } from "../../utils/recentEdits";
 import "./AdminDashboard.css";
 
+// Server-side sort fields (must match backend Zod schema)
+type ServerSortField = 'createdAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection';
+// Client-side computed sort fields (sorted locally after fetch)
+type ClientSortField = 'year' | 'month' | 'day' | 'letters' | 'extras';
 // Extended sort field to include client-side computed columns
-type ExtendedSortField = 'sender' | 'recipient' | 'letterDate' | 'collection' | 'letters' | 'extras' | 'createdAt';
+type ExtendedSortField = ServerSortField | ClientSortField;
 type SortDirection = 'asc' | 'desc';
+
+// Helper to check if a field is server-sortable
+const isServerSortField = (field: ExtendedSortField): field is ServerSortField => {
+  return ['createdAt', 'letterDate', 'sender', 'recipient', 'workflow', 'visibility', 'collection'].includes(field);
+};
 
 interface SortColumn {
   field: ExtendedSortField;
   direction: SortDirection;
+}
+
+// Column definitions for visibility toggle
+type ColumnId = 'sender' | 'recipient' | 'year' | 'month' | 'day' | 'collection' | 'letters' | 'extras' | 'transcript' | 'metadata' | 'visibility' | 'created';
+
+interface ColumnDef {
+  id: ColumnId;
+  label: string;
+  defaultVisible: boolean;
+}
+
+const ALL_COLUMNS: ColumnDef[] = [
+  { id: 'sender', label: 'Sender', defaultVisible: true },
+  { id: 'recipient', label: 'Recipient', defaultVisible: true },
+  { id: 'year', label: 'Year', defaultVisible: true },
+  { id: 'month', label: 'Month', defaultVisible: true },
+  { id: 'day', label: 'Day', defaultVisible: true },
+  { id: 'collection', label: 'Collection', defaultVisible: true },
+  { id: 'letters', label: 'Letters', defaultVisible: true },
+  { id: 'extras', label: 'Extras', defaultVisible: true },
+  { id: 'transcript', label: 'Transcript', defaultVisible: true },
+  { id: 'metadata', label: 'Metadata', defaultVisible: true },
+  { id: 'visibility', label: 'Visibility', defaultVisible: true },
+  { id: 'created', label: 'Created', defaultVisible: true },
+];
+
+const DEFAULT_VISIBLE_COLUMNS = new Set<ColumnId>(
+  ALL_COLUMNS.filter(c => c.defaultVisible).map(c => c.id)
+);
+
+const COLUMN_STORAGE_KEY = 'adminDashboardColumns';
+
+// Status icon component for two-track workflow
+function StatusIcon({ status, type }: { status: ContentStatus; type: 'T' | 'M' }) {
+  const title = type === 'T' ? 'Transcript' : 'Metadata';
+  switch (status) {
+    case 'EMPTY':
+      return <span className="status-icon status-empty" title={`${title}: Empty`}>—</span>;
+    case 'AI_DRAFT':
+      return <span className="status-icon status-draft" title={`${title}: Draft`}>Draft</span>;
+    case 'EDITED':
+      return <span className="status-icon status-edited" title={`${title}: Edited`}>Edited</span>;
+    case 'VERIFIED':
+      return <span className="status-icon status-verified" title={`${title}: Verified`}>✓</span>;
+    default:
+      return <span className="status-icon">—</span>;
+  }
+}
+
+// Parse dateRaw into year/month/day components
+function parseDateRaw(dateRaw: string | undefined): { year: string; month: string; day: string } {
+  if (!dateRaw || dateRaw.length !== 8) {
+    return { year: '—', month: '—', day: '—' };
+  }
+
+  const yearStr = dateRaw.slice(0, 4);
+  const monthStr = dateRaw.slice(4, 6);
+  const dayStr = dateRaw.slice(6, 8);
+
+  // Year: show if any digits known, replace X with ?
+  const year = yearStr.includes('X')
+    ? (yearStr === 'XXXX' ? '—' : yearStr.replace(/X/g, '?'))
+    : yearStr;
+
+  // Month: convert to short name if fully known
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = monthStr.includes('X')
+    ? '—'
+    : monthNames[parseInt(monthStr, 10) - 1] || '—';
+
+  // Day: show number if fully known
+  const day = dayStr.includes('X')
+    ? '—'
+    : String(parseInt(dayStr, 10)); // Remove leading zero
+
+  return { year, month, day };
 }
 
 // localStorage key for persisting filters and sorting
@@ -78,7 +163,12 @@ export default function AdminDashboard() {
 
   // Server response data (pagination and stats)
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
-  const [stats, setStats] = useState({ total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0 });
+  const [stats, setStats] = useState({
+    total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0,
+    // Two-track content status stats
+    transcriptEmpty: 0, transcriptAiDraft: 0, transcriptEdited: 0, transcriptVerified: 0,
+    metadataEmpty: 0, metadataAiDraft: 0, metadataEdited: 0, metadataVerified: 0,
+  });
 
   // Load persisted state on mount
   const persistedState = useRef(loadPersistedState());
@@ -136,6 +226,56 @@ export default function AdminDashboard() {
     persistedState.current.sortColumns ?? []
   );
 
+  // Column visibility state (persisted separately)
+  const [visibleColumns, setVisibleColumns] = useState<Set<ColumnId>>(() => {
+    try {
+      const saved = localStorage.getItem(COLUMN_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as ColumnId[];
+        return new Set(parsed);
+      }
+    } catch (e) {
+      console.warn('Failed to load column visibility:', e);
+    }
+    return DEFAULT_VISIBLE_COLUMNS;
+  });
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
+  const columnMenuRef = useRef<HTMLDivElement>(null);
+
+  // Save column visibility changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(Array.from(visibleColumns)));
+    } catch (e) {
+      console.warn('Failed to save column visibility:', e);
+    }
+  }, [visibleColumns]);
+
+  // Close column menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (columnMenuRef.current && !columnMenuRef.current.contains(event.target as Node)) {
+        setShowColumnMenu(false);
+      }
+    }
+    if (showColumnMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showColumnMenu]);
+
+  const toggleColumnVisibility = (columnId: ColumnId) => {
+    setVisibleColumns(prev => {
+      const next = new Set(prev);
+      if (next.has(columnId)) {
+        next.delete(columnId);
+      } else {
+        next.add(columnId);
+      }
+      return next;
+    });
+  };
+
   // Persist state changes to localStorage
   useEffect(() => {
     savePersistedState({
@@ -176,6 +316,9 @@ export default function AdminDashboard() {
     if (showLoading) setLoading(true);
     setError(null);
     try {
+      // Find the first server-sortable column (skip client-side computed columns)
+      const serverSort = sortColumns.find(col => isServerSortField(col.field));
+
       // Server-side filtering and pagination
       const response = await getAdminLetters({
         page,
@@ -184,12 +327,28 @@ export default function AdminDashboard() {
         visibility: visibilityFilter ?? undefined,
         workflow: workflowFilters.size > 0 ? Array.from(workflowFilters) : undefined,
         search: searchQuery || undefined,
-        sort: sortColumns.length > 0 ? (sortColumns[0].field as 'createdAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection') : 'createdAt',
-        sortOrder: sortColumns.length > 0 ? sortColumns[0].direction : 'desc',
+        sort: serverSort ? (serverSort.field as ServerSortField) : 'createdAt',
+        sortOrder: serverSort ? serverSort.direction : 'desc',
       });
       setLetters(response.letters);
       setPagination(response.pagination);
-      setStats(response.stats);
+      setStats({
+        total: response.stats.total ?? 0,
+        uploaded: response.stats.uploaded ?? 0,
+        transcribed: response.stats.transcribed ?? 0,
+        metadataReady: response.stats.metadataReady ?? 0,
+        reviewed: response.stats.reviewed ?? 0,
+        published: response.stats.published ?? 0,
+        hidden: response.stats.hidden ?? 0,
+        transcriptEmpty: response.stats.transcriptEmpty ?? 0,
+        transcriptAiDraft: response.stats.transcriptAiDraft ?? 0,
+        transcriptEdited: response.stats.transcriptEdited ?? 0,
+        transcriptVerified: response.stats.transcriptVerified ?? 0,
+        metadataEmpty: response.stats.metadataEmpty ?? 0,
+        metadataAiDraft: response.stats.metadataAiDraft ?? 0,
+        metadataEdited: response.stats.metadataEdited ?? 0,
+        metadataVerified: response.stats.metadataVerified ?? 0,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load letters");
       console.error("Failed to fetch letters:", err);
@@ -385,9 +544,55 @@ export default function AdminDashboard() {
     };
   };
 
-  // Server-side filtering is now used - letters are already filtered/sorted
-  // filteredLetters is just letters from server response
-  const filteredLetters = letters;
+  // Apply client-side sorting for computed columns (year, month, day, letters, extras)
+  const filteredLetters = useMemo(() => {
+    // Find client-side sort columns (ones that can't be sorted server-side)
+    const clientSortColumns = sortColumns.filter(col => !isServerSortField(col.field));
+
+    if (clientSortColumns.length === 0) {
+      return letters; // No client-side sorting needed
+    }
+
+    return [...letters].sort((a, b) => {
+      for (const { field, direction } of clientSortColumns) {
+        let comparison = 0;
+
+        switch (field) {
+          case 'year':
+            // Sort by raw year string (handles "18??" etc)
+            comparison = (a.metadata.dateRaw?.slice(0, 4) || '').localeCompare(b.metadata.dateRaw?.slice(0, 4) || '');
+            break;
+          case 'month':
+            // Sort by month number (01-12), treating XX as 00
+            const aMonth = a.metadata.dateRaw?.slice(4, 6) || '00';
+            const bMonth = b.metadata.dateRaw?.slice(4, 6) || '00';
+            comparison = aMonth.replace(/X/g, '0').localeCompare(bMonth.replace(/X/g, '0'));
+            break;
+          case 'day':
+            // Sort by day number (01-31), treating XX as 00
+            const aDay = a.metadata.dateRaw?.slice(6, 8) || '00';
+            const bDay = b.metadata.dateRaw?.slice(6, 8) || '00';
+            comparison = aDay.replace(/X/g, '0').localeCompare(bDay.replace(/X/g, '0'));
+            break;
+          case 'letters':
+            const aLetters = a.images.filter(img => img.type === 'letter').length;
+            const bLetters = b.images.filter(img => img.type === 'letter').length;
+            comparison = aLetters - bLetters;
+            break;
+          case 'extras':
+            const aExtras = a.images.filter(img => img.type !== 'letter').length;
+            const bExtras = b.images.filter(img => img.type !== 'letter').length;
+            comparison = aExtras - bExtras;
+            break;
+        }
+
+        if (comparison !== 0) {
+          return direction === 'asc' ? comparison : -comparison;
+        }
+      }
+      return 0;
+    });
+  }, [letters, sortColumns]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
@@ -1068,7 +1273,42 @@ export default function AdminDashboard() {
 
             <span className="filter-separator">|</span>
 
-            {/* Workflow filters */}
+            {/* Two-track content status stats */}
+            <div className="filter-section">
+              <span className="filter-section-label">Transcript</span>
+              <div className="filter-stats">
+                <span className="stat-item stat-draft" title="Transcript: Draft">
+                  {stats.transcriptAiDraft} Draft
+                </span>
+                <span className="stat-item stat-edited" title="Transcript: Edited">
+                  {stats.transcriptEdited} Edited
+                </span>
+                <span className="stat-item stat-verified" title="Transcript: Verified">
+                  {stats.transcriptVerified} Done
+                </span>
+              </div>
+            </div>
+
+            <span className="filter-separator">|</span>
+
+            <div className="filter-section">
+              <span className="filter-section-label">Metadata</span>
+              <div className="filter-stats">
+                <span className="stat-item stat-draft" title="Metadata: Draft">
+                  {stats.metadataAiDraft} Draft
+                </span>
+                <span className="stat-item stat-edited" title="Metadata: Edited">
+                  {stats.metadataEdited} Edited
+                </span>
+                <span className="stat-item stat-verified" title="Metadata: Verified">
+                  {stats.metadataVerified} Done
+                </span>
+              </div>
+            </div>
+
+            <span className="filter-separator">|</span>
+
+            {/* Legacy Workflow filters (for backward compat) */}
             <div className="filter-section">
               <span className="filter-section-label">Workflow</span>
               <div className="filter-buttons">
@@ -1077,28 +1317,28 @@ export default function AdminDashboard() {
                   onClick={() => toggleWorkflowFilter("UPLOADED")}
                   title="Awaiting transcription"
                 >
-                  {stats.uploaded} Uploaded
+                  {stats.uploaded}
                 </button>
                 <button
                   className={`filter-pill filter-transcribed ${workflowFilters.has("TRANSCRIBED") ? "active" : ""}`}
                   onClick={() => toggleWorkflowFilter("TRANSCRIBED")}
                   title="Transcribed"
                 >
-                  {stats.transcribed} Transcribed
+                  {stats.transcribed}
                 </button>
                 <button
                   className={`filter-pill filter-metadata-ready ${workflowFilters.has("METADATA_DRAFTED") ? "active" : ""}`}
                   onClick={() => toggleWorkflowFilter("METADATA_DRAFTED")}
                   title="Metadata ready for review"
                 >
-                  {stats.metadataReady} Metadata
+                  {stats.metadataReady}
                 </button>
                 <button
                   className={`filter-pill filter-reviewed ${workflowFilters.has("REVIEWED") ? "active" : ""}`}
                   onClick={() => toggleWorkflowFilter("REVIEWED")}
                   title="Reviewed"
                 >
-                  {stats.reviewed} Reviewed
+                  {stats.reviewed}
                 </button>
               </div>
             </div>
@@ -1113,6 +1353,38 @@ export default function AdminDashboard() {
       </header>
 
       <div className="admin-content">
+        {/* Table toolbar with column toggle */}
+        <div className="table-toolbar">
+          <div className="table-toolbar-left">
+            <span className="pagination-info">
+              Showing {filteredLetters.length} of {pagination.total} letters
+            </span>
+          </div>
+          <div className="table-toolbar-right">
+            <div className="column-toggle-container" ref={columnMenuRef}>
+              <button
+                className="column-toggle-button"
+                onClick={() => setShowColumnMenu(!showColumnMenu)}
+              >
+                Columns ▾
+              </button>
+              {showColumnMenu && (
+                <div className="column-toggle-dropdown">
+                  {ALL_COLUMNS.map(col => (
+                    <label key={col.id} className="column-toggle-item">
+                      <input
+                        type="checkbox"
+                        checked={visibleColumns.has(col.id)}
+                        onChange={() => toggleColumnVisibility(col.id)}
+                      />
+                      {col.label}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
         <div className="letters-table-container">
           <table className="letters-table">
             <thead>
@@ -1120,126 +1392,174 @@ export default function AdminDashboard() {
                 {editMode && (
                   <th className="checkbox-header"></th>
                 )}
-                <th
-                  className={`sortable-header ${getSortInfo("sender") ? "sorted" : ""}`}
-                  onClick={() => handleSort("sender")}
-                >
-                  <span className="header-content">
-                    Sender
-                    {getSortInfo("sender") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">{getSortInfo("sender")?.direction === "asc" ? "↑" : "↓"}</span>
-                        {getSortInfo("sender")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("sender")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
-                <th
-                  className={`sortable-header ${getSortInfo("recipient") ? "sorted" : ""}`}
-                  onClick={() => handleSort("recipient")}
-                >
-                  <span className="header-content">
-                    Recipient
-                    {getSortInfo("recipient") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">{getSortInfo("recipient")?.direction === "asc" ? "↑" : "↓"}</span>
-                        {getSortInfo("recipient")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("recipient")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
-                <th
-                  className={`sortable-header ${getSortInfo("letterDate") ? "sorted" : ""}`}
-                  onClick={() => handleSort("letterDate")}
-                >
-                  <span className="header-content">
-                    Date
-                    {getSortInfo("letterDate") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">{getSortInfo("letterDate")?.direction === "asc" ? "↑" : "↓"}</span>
-                        {getSortInfo("letterDate")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("letterDate")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
-                <th
-                  className={`sortable-header ${getSortInfo("collection") ? "sorted" : ""}`}
-                  onClick={() => handleSort("collection")}
-                >
-                  <span className="header-content">
-                    Collection
-                    {getSortInfo("collection") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">{getSortInfo("collection")?.direction === "asc" ? "↑" : "↓"}</span>
-                        {getSortInfo("collection")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("collection")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
-                <th
-                  className={`sortable-header ${getSortInfo("letters") ? "sorted" : ""}`}
-                  onClick={() => handleSort("letters")}
-                >
-                  <span className="header-content">
-                    Letters
-                    {getSortInfo("letters") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">{getSortInfo("letters")?.direction === "asc" ? "↑" : "↓"}</span>
-                        {getSortInfo("letters")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("letters")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
-                <th
-                  className={`sortable-header ${getSortInfo("extras") ? "sorted" : ""}`}
-                  onClick={() => handleSort("extras")}
-                >
-                  <span className="header-content">
-                    Extras
-                    {getSortInfo("extras") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">{getSortInfo("extras")?.direction === "asc" ? "↑" : "↓"}</span>
-                        {getSortInfo("extras")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("extras")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
-                <th>Workflow</th>
-                <th>Visibility</th>
-                <th
-                  className={`sortable-header ${getSortInfo("createdAt") ? "sorted" : ""}`}
-                  onClick={() => handleSort("createdAt")}
-                >
-                  <span className="header-content">
-                    Created
-                    {getSortInfo("createdAt") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">{getSortInfo("createdAt")?.direction === "asc" ? "↑" : "↓"}</span>
-                        {getSortInfo("createdAt")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("createdAt")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
+                {visibleColumns.has('sender') && (
+                  <th
+                    className={`sortable-header ${getSortInfo("sender") ? "sorted" : ""}`}
+                    onClick={() => handleSort("sender")}
+                  >
+                    <span className="header-content">
+                      Sender
+                      {getSortInfo("sender") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("sender")?.direction === "asc" ? "↑" : "↓"}</span>
+                          {getSortInfo("sender")!.total > 1 && (
+                            <span className="sort-priority">{getSortInfo("sender")?.priority}</span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('recipient') && (
+                  <th
+                    className={`sortable-header ${getSortInfo("recipient") ? "sorted" : ""}`}
+                    onClick={() => handleSort("recipient")}
+                  >
+                    <span className="header-content">
+                      Recipient
+                      {getSortInfo("recipient") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("recipient")?.direction === "asc" ? "↑" : "↓"}</span>
+                          {getSortInfo("recipient")!.total > 1 && (
+                            <span className="sort-priority">{getSortInfo("recipient")?.priority}</span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('year') && (
+                  <th
+                    className={`date-header sortable-header ${getSortInfo("year") ? "sorted" : ""}`}
+                    onClick={() => handleSort("year")}
+                  >
+                    <span className="header-content">
+                      Year
+                      {getSortInfo("year") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("year")?.direction === "asc" ? "↑" : "↓"}</span>
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('month') && (
+                  <th
+                    className={`date-header sortable-header ${getSortInfo("month") ? "sorted" : ""}`}
+                    onClick={() => handleSort("month")}
+                  >
+                    <span className="header-content">
+                      Month
+                      {getSortInfo("month") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("month")?.direction === "asc" ? "↑" : "↓"}</span>
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('day') && (
+                  <th
+                    className={`date-header sortable-header ${getSortInfo("day") ? "sorted" : ""}`}
+                    onClick={() => handleSort("day")}
+                  >
+                    <span className="header-content">
+                      Day
+                      {getSortInfo("day") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("day")?.direction === "asc" ? "↑" : "↓"}</span>
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('collection') && (
+                  <th
+                    className={`sortable-header ${getSortInfo("collection") ? "sorted" : ""}`}
+                    onClick={() => handleSort("collection")}
+                  >
+                    <span className="header-content">
+                      Collection
+                      {getSortInfo("collection") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("collection")?.direction === "asc" ? "↑" : "↓"}</span>
+                          {getSortInfo("collection")!.total > 1 && (
+                            <span className="sort-priority">{getSortInfo("collection")?.priority}</span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('letters') && (
+                  <th
+                    className={`sortable-header ${getSortInfo("letters") ? "sorted" : ""}`}
+                    onClick={() => handleSort("letters")}
+                  >
+                    <span className="header-content">
+                      Letters
+                      {getSortInfo("letters") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("letters")?.direction === "asc" ? "↑" : "↓"}</span>
+                          {getSortInfo("letters")!.total > 1 && (
+                            <span className="sort-priority">{getSortInfo("letters")?.priority}</span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('extras') && (
+                  <th
+                    className={`sortable-header ${getSortInfo("extras") ? "sorted" : ""}`}
+                    onClick={() => handleSort("extras")}
+                  >
+                    <span className="header-content">
+                      Extras
+                      {getSortInfo("extras") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("extras")?.direction === "asc" ? "↑" : "↓"}</span>
+                          {getSortInfo("extras")!.total > 1 && (
+                            <span className="sort-priority">{getSortInfo("extras")?.priority}</span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('transcript') && (
+                  <th className="status-header">Transcript</th>
+                )}
+                {visibleColumns.has('metadata') && (
+                  <th className="status-header">Metadata</th>
+                )}
+                {visibleColumns.has('visibility') && (
+                  <th>Visibility</th>
+                )}
+                {visibleColumns.has('created') && (
+                  <th
+                    className={`sortable-header ${getSortInfo("createdAt") ? "sorted" : ""}`}
+                    onClick={() => handleSort("createdAt")}
+                  >
+                    <span className="header-content">
+                      Created
+                      {getSortInfo("createdAt") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("createdAt")?.direction === "asc" ? "↑" : "↓"}</span>
+                          {getSortInfo("createdAt")!.total > 1 && (
+                            <span className="sort-priority">{getSortInfo("createdAt")?.priority}</span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
               {filteredLetters.length === 0 ? (
                 <tr>
-                  <td colSpan={editMode ? 10 : 9} className="empty-state">
+                  <td colSpan={visibleColumns.size + (editMode ? 1 : 0)} className="empty-state">
                     No letters found
                   </td>
                 </tr>
@@ -1247,6 +1567,7 @@ export default function AdminDashboard() {
                 filteredLetters.map((letter, index) => {
                   const pageCount = letter.images.filter((img) => img.type === "letter").length;
                   const extrasCount = letter.images.filter((img) => img.type !== "letter").length;
+                  const { year, month, day } = parseDateRaw(letter.metadata.dateRaw);
                   return (
                     <tr
                       key={letter.id}
@@ -1264,19 +1585,30 @@ export default function AdminDashboard() {
                           />
                         </td>
                       )}
-                      <td>{letter.metadata.sender || "—"}</td>
-                      <td>{letter.metadata.recipient || "—"}</td>
-                      <td className="date-cell">{letter.metadata.date || "—"}</td>
-                      <td>{letter.collectionCode || "—"}</td>
-                      <td className="count-cell">{pageCount || "—"}</td>
-                      <td className="count-cell">{extrasCount || "—"}</td>
-                      <td>
-                        <WorkflowBadge state={letter.workflowState} />
-                      </td>
-                      <td>
-                        <VisibilityBadge state={letter.visibility} />
-                      </td>
-                      <td className="date-cell">{formatDate(letter.createdAt)}</td>
+                      {visibleColumns.has('sender') && <td>{letter.metadata.sender || "—"}</td>}
+                      {visibleColumns.has('recipient') && <td>{letter.metadata.recipient || "—"}</td>}
+                      {visibleColumns.has('year') && <td className="date-cell">{year}</td>}
+                      {visibleColumns.has('month') && <td className="date-cell">{month}</td>}
+                      {visibleColumns.has('day') && <td className="date-cell">{day}</td>}
+                      {visibleColumns.has('collection') && <td>{letter.collectionCode || "—"}</td>}
+                      {visibleColumns.has('letters') && <td className="count-cell">{pageCount || "—"}</td>}
+                      {visibleColumns.has('extras') && <td className="count-cell">{extrasCount || "—"}</td>}
+                      {visibleColumns.has('transcript') && (
+                        <td className="status-cell">
+                          <StatusIcon status={letter.transcriptStatus} type="T" />
+                        </td>
+                      )}
+                      {visibleColumns.has('metadata') && (
+                        <td className="status-cell">
+                          <StatusIcon status={letter.metadataContentStatus} type="M" />
+                        </td>
+                      )}
+                      {visibleColumns.has('visibility') && (
+                        <td>
+                          <VisibilityBadge state={letter.visibility} />
+                        </td>
+                      )}
+                      {visibleColumns.has('created') && <td className="date-cell">{formatDate(letter.createdAt)}</td>}
                     </tr>
                   );
                 })

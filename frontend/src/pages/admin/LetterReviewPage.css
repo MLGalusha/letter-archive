@@ -779,3 +779,143 @@
   background-color: #c82333;
   transform: scale(1.025);
 }
+
+/* ============================================================================
+   TWO-TRACK WORKFLOW SYSTEM STYLES
+   ============================================================================ */
+
+/* Auto-save indicator in header */
+.auto-save-indicator {
+  display: flex;
+  align-items: center;
+  margin-right: auto;
+  margin-left: var(--spacing-sm);
+}
+
+.save-status {
+  font-size: var(--font-xs);
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.save-status.saving {
+  color: var(--text-muted);
+  background: var(--bg);
+}
+
+.save-status.saved {
+  color: #2e7d32;
+  background: #e8f5e9;
+}
+
+.save-status.error {
+  color: #c62828;
+  background: #ffebee;
+}
+
+/* Content status badges */
+.content-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.status-empty {
+  background: var(--bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.status-ai {
+  background: #e3f2fd;
+  color: #1565c0;
+  border: 1px solid #90caf9;
+}
+
+.status-edited {
+  background: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffcc80;
+}
+
+.status-verified {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+/* Header status group (for editor headers) */
+.header-status-group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+/* Metadata header */
+.metadata-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.metadata-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+/* Section footer (for verification buttons) */
+.section-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg);
+  border-top: solid 1px var(--border);
+}
+
+/* Verified info row */
+.verified-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: #2e7d32;
+  font-size: var(--font-sm);
+  font-weight: 500;
+}
+
+.verified-info svg {
+  flex-shrink: 0;
+}
+
+.unverify-btn {
+  margin-left: var(--spacing-sm);
+  padding: 0.25rem 0.5rem;
+  background: transparent;
+  color: var(--text-muted);
+  border: solid 1px var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.unverify-btn:hover:not(:disabled) {
+  background: var(--bg-light);
+  color: var(--text);
+}
+
+.unverify-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

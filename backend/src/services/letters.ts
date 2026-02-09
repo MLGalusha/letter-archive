@@ -118,6 +118,8 @@ export async function updateTranscriptionStatus(
 
   if (status === 'SUCCESS') {
     updates.transcribedAt = new Date();
+    // Set two-track content status to AI_DRAFT when AI completes
+    updates.transcriptStatus = 'AI_DRAFT';
   }
 
   await db.update(letters).set(updates).where(eq(letters.id, letterId));
@@ -180,6 +182,11 @@ export async function updateMetadataStatus(
     updates.metadataError = error;
   }
 
+  // Set two-track content status to AI_DRAFT when AI completes
+  if (status === 'SUCCESS') {
+    updates.metadataContentStatus = 'AI_DRAFT';
+  }
+
   await db.update(letters).set(updates).where(eq(letters.id, letterId));
 }
 
@@ -213,6 +220,13 @@ export async function resetLetterForProcessing(letterId: string): Promise<void> 
       metadataStatus: 'PENDING',
       metadataError: null,
       metadataAttemptCount: 0,
+      // Reset two-track content status to EMPTY
+      transcriptStatus: 'EMPTY',
+      metadataContentStatus: 'EMPTY',
+      transcriptVerifiedAt: null,
+      transcriptVerifiedBy: null,
+      metadataVerifiedAt: null,
+      metadataVerifiedBy: null,
       updatedAt: new Date(),
     })
     .where(eq(letters.id, letterId));

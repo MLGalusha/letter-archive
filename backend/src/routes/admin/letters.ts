@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, and, isNull, isNotNull, inArray, sql } from 'drizzle-orm';
+import { eq, and, isNull, isNotNull, inArray, sql, or, ilike, asc, desc, count } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, letters, collections } from '../../db/index.js';
 import { getLetterById, resetLetterForProcessing } from '../../services/letters.js';
@@ -9,6 +9,225 @@ import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger({ module: 'admin-letters' });
 const router = Router();
+
+// ============================================================================
+// ADMIN LETTERS LIST WITH SERVER-SIDE FILTERING + PAGINATION
+// ============================================================================
+
+const adminLettersQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(50),
+  visibility: z.enum(['PUBLISHED', 'HIDDEN']).optional(),
+  workflow: z.preprocess(
+    // Preprocess: split comma-separated string into array BEFORE validation
+    (val) => {
+      if (typeof val === 'string' && val.includes(',')) {
+        return val.split(',');
+      }
+      return val;
+    },
+    // Then validate as either single enum or array of enums
+    z.union([
+      z.enum(['UPLOADED', 'TRANSCRIBING', 'TRANSCRIBED', 'METADATA_EXTRACTING', 'METADATA_DRAFTED', 'REVIEWED']),
+      z.array(z.enum(['UPLOADED', 'TRANSCRIBING', 'TRANSCRIBED', 'METADATA_EXTRACTING', 'METADATA_DRAFTED', 'REVIEWED'])),
+    ]).optional()
+  ),
+  collection: z.string().optional(),
+  search: z.string().optional(),
+  sort: z.enum(['createdAt', 'letterDate', 'sender', 'recipient', 'workflow', 'visibility', 'collection']).default('createdAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+});
+
+/**
+ * GET /admin/letters - List letters with server-side filtering, pagination, and stats
+ *
+ * Query params:
+ * - page: Page number (default 1)
+ * - limit: Items per page (default 50, max 100)
+ * - visibility: 'PUBLISHED' | 'HIDDEN'
+ * - workflow: Single value or comma-separated list of workflow states
+ * - collection: Collection code (or 'all')
+ * - search: Search term for sender/recipient/title
+ * - sort: Sort field
+ * - sortOrder: 'asc' | 'desc'
+ *
+ * Response includes:
+ * - letters: Paginated letter list
+ * - pagination: { page, limit, total, totalPages }
+ * - stats: Counts for the collection (not affected by filters except collection)
+ */
+router.get('/letters', async (req, res, next) => {
+  const start = Date.now();
+  try {
+    const query = adminLettersQuerySchema.parse(req.query);
+
+    req.log.debug(
+      { collection: query.collection, visibility: query.visibility, workflow: query.workflow, search: query.search, page: query.page },
+      'Admin letters list query'
+    );
+
+    // Build base conditions
+    const conditions: ReturnType<typeof eq>[] = [
+      isNull(letters.deletedAt),
+      eq(letters.type, 'L'), // Only L-type letters in admin view
+    ];
+
+    // Collection filter
+    let collectionId: string | undefined;
+    if (query.collection && query.collection !== 'all') {
+      const collection = await db.query.collections.findFirst({
+        where: eq(collections.collectionCode, query.collection),
+      });
+      if (collection) {
+        collectionId = collection.id;
+        conditions.push(eq(letters.collectionId, collection.id));
+      } else {
+        // Collection not found, return empty
+        res.json({
+          letters: [],
+          pagination: { page: query.page, limit: query.limit, total: 0, totalPages: 0 },
+          stats: { total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0 },
+        });
+        return;
+      }
+    }
+
+    // Visibility filter
+    if (query.visibility) {
+      conditions.push(eq(letters.visibility, query.visibility));
+    }
+
+    // Workflow filter (supports array)
+    const workflowValues = query.workflow
+      ? Array.isArray(query.workflow) ? query.workflow : [query.workflow]
+      : null;
+    if (workflowValues && workflowValues.length > 0) {
+      conditions.push(inArray(letters.workflow, workflowValues));
+    }
+
+    // Search filter (ILIKE on sender, recipient, summary, hook)
+    if (query.search && query.search.trim()) {
+      const searchTerm = `%${query.search.trim()}%`;
+      conditions.push(
+        or(
+          ilike(letters.sender, searchTerm),
+          ilike(letters.recipient, searchTerm),
+          ilike(letters.summary, searchTerm),
+          ilike(letters.hook, searchTerm)
+        )!
+      );
+    }
+
+    // Calculate stats for the collection (unfiltered by visibility/workflow/search)
+    // This lets filter pills show accurate counts
+    const statsConditions: ReturnType<typeof eq>[] = [
+      isNull(letters.deletedAt),
+      eq(letters.type, 'L'),
+    ];
+    if (collectionId) {
+      statsConditions.push(eq(letters.collectionId, collectionId));
+    }
+
+    const statsResult = await db.select({
+      total: count(),
+      uploaded: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'UPLOADED')`,
+      transcribing: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'TRANSCRIBING')`,
+      transcribed: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'TRANSCRIBED')`,
+      metadataExtracting: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'METADATA_EXTRACTING')`,
+      metadataReady: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'METADATA_DRAFTED')`,
+      reviewed: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'REVIEWED')`,
+      published: sql<number>`COUNT(*) FILTER (WHERE ${letters.visibility} = 'PUBLISHED')`,
+      hidden: sql<number>`COUNT(*) FILTER (WHERE ${letters.visibility} = 'HIDDEN')`,
+    })
+      .from(letters)
+      .where(and(...statsConditions));
+
+    const stats = statsResult[0] || {
+      total: 0, uploaded: 0, transcribing: 0, transcribed: 0,
+      metadataExtracting: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0
+    };
+
+    // Get total count for filtered results (for pagination)
+    const countResult = await db.select({ count: count() })
+      .from(letters)
+      .where(and(...conditions));
+    const totalFiltered = countResult[0]?.count || 0;
+    const totalPages = Math.ceil(totalFiltered / query.limit);
+
+    // Determine sort order direction
+    const sortDirection = query.sortOrder === 'asc' ? asc : desc;
+
+    // Build orderBy based on sort field
+    const getOrderBy = (): Parameters<typeof db.query.letters.findMany>[0]['orderBy'] => {
+      switch (query.sort) {
+        case 'letterDate':
+          return sortDirection(sql`REPLACE(${letters.dateRaw}, 'X', '0')`);
+        case 'sender':
+          return sortDirection(letters.sender);
+        case 'recipient':
+          return sortDirection(letters.recipient);
+        case 'workflow':
+          return sortDirection(letters.workflow);
+        case 'visibility':
+          return sortDirection(letters.visibility);
+        case 'collection':
+          // Sort by collectionId - letters in same collection have same ID, so this groups them
+          // Not perfect alphabetically but functional for grouping
+          return sortDirection(letters.collectionId);
+        case 'createdAt':
+        default:
+          return sortDirection(letters.createdAt);
+      }
+    };
+
+    // Fetch paginated results
+    const offset = (query.page - 1) * query.limit;
+    const results = await db.query.letters.findMany({
+      where: and(...conditions),
+      with: {
+        collection: true,
+        pages: {
+          orderBy: (p, { asc: pageAsc }) => [pageAsc(p.pageNumber)],
+        },
+      },
+      orderBy: getOrderBy(),
+      limit: query.limit,
+      offset,
+    });
+
+    // Transform to DTOs
+    const transformedLetters = (results as LetterWithRelations[]).map(letter =>
+      transformLetterToDTO(letter)
+    );
+
+    const duration = Date.now() - start;
+    req.log.info(
+      { resultCount: transformedLetters.length, total: totalFiltered, page: query.page, duration },
+      'Admin letters list completed'
+    );
+
+    res.json({
+      letters: transformedLetters,
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        total: totalFiltered,
+        totalPages,
+      },
+      stats: {
+        total: Number(stats.total),
+        uploaded: Number(stats.uploaded) + Number(stats.transcribing),
+        transcribed: Number(stats.transcribed) + Number(stats.metadataExtracting),
+        metadataReady: Number(stats.metadataReady),
+        reviewed: Number(stats.reviewed),
+        published: Number(stats.published),
+        hidden: Number(stats.hidden),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ============================================================================
 // ON-DEMAND PROCESSING STATE AND FUNCTIONS
@@ -603,7 +822,7 @@ const updateLetterSchema = z.object({
   extractedDate: z.string().nullable().optional(),
   extractedDateConfidence: z.enum(['exact', 'unknown', 'inferred']).nullable().optional(),
   tags: z.array(z.string()).nullable().optional(),
-  visibility: z.enum(['DRAFT', 'PUBLISHED', 'HIDDEN']).optional(),
+  visibility: z.enum(['PUBLISHED', 'HIDDEN']).optional(),
   notes: z.string().nullable().optional(),
 });
 

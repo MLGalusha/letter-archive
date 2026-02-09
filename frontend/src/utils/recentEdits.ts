@@ -4,14 +4,36 @@
 
 export interface RecentEdit {
   id: string;
-  sender: string;
-  recipient: string;
-  collectionCode: string;
+  displayName: string; // Format: CCC-YYYYMMDD-NN (collection-date-sequence)
   editedAt: number; // timestamp
 }
 
 const STORAGE_KEY = 'recentEdits';
 const MAX_RECENT_EDITS = 10;
+
+// Pattern to parse filename: CCC-YYYYMMDD-TNN[-PP].ext
+const FILENAME_PATTERN = /^(\d{3})-([\dX]{8})-([A-Z])(\d{2})(?:-(\d{2}))?\.\w+$/i;
+
+/**
+ * Extract display name from first page filename.
+ * Format: CCC-YYYYMMDD-NN (drops type letter, keeps sequence)
+ * Example: "003-18860314-L01-01.jpg" → "003-18860314-01"
+ */
+function extractDisplayName(filename: string | undefined, collectionCode?: string): string {
+  if (!filename) {
+    return collectionCode ? `${collectionCode}-unknown` : 'unknown';
+  }
+
+  const match = filename.match(FILENAME_PATTERN);
+  if (match) {
+    const [, collection, dateRaw, , sequence] = match;
+    return `${collection}-${dateRaw}-${sequence}`;
+  }
+
+  // Fallback: use filename without extension
+  const nameWithoutExt = filename.replace(/\.\w+$/, '');
+  return nameWithoutExt;
+}
 
 /**
  * Get all recent edits from localStorage
@@ -33,16 +55,14 @@ export function getRecentEdits(): RecentEdit[] {
  */
 export function trackEdit(letter: {
   id: string;
-  metadata: { sender?: string | null; recipient?: string | null };
+  metadata: { firstPageFilename?: string };
   collectionCode?: string;
 }): void {
   try {
     const recent = getRecentEdits();
     const newEdit: RecentEdit = {
       id: letter.id,
-      sender: letter.metadata.sender || 'Unknown',
-      recipient: letter.metadata.recipient || 'Unknown',
-      collectionCode: letter.collectionCode || '',
+      displayName: extractDisplayName(letter.metadata.firstPageFilename, letter.collectionCode),
       editedAt: Date.now(),
     };
 

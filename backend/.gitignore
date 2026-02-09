@@ -10,6 +10,7 @@ dist/
 
 # Storage (uploaded files)
 storage/
+Voices That Remain/
 
 # Temp uploads
 uploads/
@@ -27,3 +28,4 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+logs/

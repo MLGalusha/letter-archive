@@ -29,7 +29,6 @@ export const workflowStateEnum = pgEnum('workflow_state', [
 ]);
 
 export const visibilityStateEnum = pgEnum('visibility_state', [
-  'DRAFT',
   'PUBLISHED',
   'HIDDEN',
 ]);
@@ -78,7 +77,7 @@ export const letters = pgTable(
 
     // Pipeline + visibility
     workflow: workflowStateEnum('workflow').notNull().default('UPLOADED'),
-    visibility: visibilityStateEnum('visibility').notNull().default('DRAFT'),
+    visibility: visibilityStateEnum('visibility').notNull().default('HIDDEN'),
 
     // Transcription fields
     transcriptionStatus: jobStatusEnum('transcription_status').notNull().default('PENDING'),
@@ -205,6 +204,6 @@ export type NewLetterPage = typeof letterPages.$inferInsert;
 
 export type LetterType = 'L' | 'P' | 'E' | 'V' | 'A' | 'D' | 'C' | 'N' | 'T';
 export type WorkflowState = 'UPLOADED' | 'TRANSCRIBING' | 'TRANSCRIBED' | 'METADATA_EXTRACTING' | 'METADATA_DRAFTED' | 'REVIEWED';
-export type VisibilityState = 'DRAFT' | 'PUBLISHED' | 'HIDDEN';
+export type VisibilityState = 'PUBLISHED' | 'HIDDEN';
 export type JobStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
 export type DateConfidence = 'exact' | 'unknown' | 'inferred';

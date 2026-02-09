@@ -27,11 +27,13 @@ router.get('/', async (_req, res, next) => {
         const [stats] = await db
           .select({
             total: sql<number>`count(*)::int`,
+            // Visibility counts
             published: sql<number>`count(*) filter (where ${letters.visibility} = 'PUBLISHED')::int`,
-            draft: sql<number>`count(*) filter (where ${letters.visibility} = 'DRAFT')::int`,
-            // Workflow state counts to help identify work needed
+            hidden: sql<number>`count(*) filter (where ${letters.visibility} = 'HIDDEN')::int`,
+            // Workflow state counts
             uploaded: sql<number>`count(*) filter (where ${letters.workflow} = 'UPLOADED')::int`,
-            ready: sql<number>`count(*) filter (where ${letters.workflow} in ('TRANSCRIBED', 'METADATA_DRAFTED'))::int`,
+            transcribed: sql<number>`count(*) filter (where ${letters.workflow} = 'TRANSCRIBED')::int`,
+            metadataReady: sql<number>`count(*) filter (where ${letters.workflow} = 'METADATA_DRAFTED')::int`,
             reviewed: sql<number>`count(*) filter (where ${letters.workflow} = 'REVIEWED')::int`,
           })
           .from(letters)
@@ -55,9 +57,10 @@ router.get('/', async (_req, res, next) => {
           ...collection,
           letterCount: stats?.total || 0,
           publishedCount: stats?.published || 0,
-          draftCount: stats?.draft || 0,
+          hiddenCount: stats?.hidden || 0,
           uploadedCount: stats?.uploaded || 0,
-          readyCount: stats?.ready || 0,
+          transcribedCount: stats?.transcribed || 0,
+          metadataReadyCount: stats?.metadataReady || 0,
           reviewedCount: stats?.reviewed || 0,
           letterPageCount: pageCounts?.letterPageCount || 0,
           extraContentCount: pageCounts?.extraContentCount || 0,

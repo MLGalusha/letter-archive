@@ -55,7 +55,7 @@ export interface UpdateLetterData {
   extractedDate?: string | null;
   extractedDateConfidence?: 'exact' | 'unknown' | 'inferred' | null;
   tags?: string[] | null;
-  visibility?: 'DRAFT' | 'PUBLISHED' | 'HIDDEN';
+  visibility?: 'PUBLISHED' | 'HIDDEN';
   notes?: string | null;
 }
 
@@ -78,13 +78,6 @@ export async function publishLetter(letterId: string): Promise<Letter> {
  */
 export async function hideLetter(letterId: string): Promise<Letter> {
   return apiPut<Letter>(`/admin/letters/${letterId}`, { visibility: 'HIDDEN' });
-}
-
-/**
- * Save as draft (set visibility to DRAFT)
- */
-export async function saveDraft(letterId: string, data: UpdateLetterData): Promise<Letter> {
-  return apiPut<Letter>(`/admin/letters/${letterId}`, { ...data, visibility: 'DRAFT' });
 }
 
 // Note: deleteLetter is exported from letters.ts to avoid duplicate exports

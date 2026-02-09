@@ -225,12 +225,7 @@ export default function LetterReviewPage() {
     try {
       const updated = await updateLetter(letterId, { visibility: newVisibility });
       setLetter(updated);
-      showToast(`Visibility changed to ${newVisibility.toLowerCase()}`, "success");
-
-      // Only redirect on publish
-      if (newVisibility === "PUBLISHED") {
-        setTimeout(() => navigate("/admin"), 1500);
-      }
+      showToast(newVisibility === "PUBLISHED" ? "Letter published" : "Letter hidden", "success");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to update visibility", "error");
       console.error("Visibility change error:", err);
@@ -366,8 +361,8 @@ export default function LetterReviewPage() {
             </button>
           )}
 
-          {/* Review button - for METADATA states */}
-          {["METADATA_EXTRACTING", "METADATA_DRAFTED"].includes(letter.workflowState) && (
+          {/* Review button - available for any state except already reviewed */}
+          {letter.workflowState !== "REVIEWED" && (
             <button
               className="header-action review"
               onClick={handleMarkReviewed}
@@ -420,25 +415,18 @@ export default function LetterReviewPage() {
                 <span className="status-label">Visibility</span>
                 <div className="visibility-toggle">
                   <button
-                    className={`toggle-btn ${letter.visibility === "DRAFT" ? "active" : ""}`}
-                    onClick={() => handleVisibilityChange("DRAFT")}
+                    className={`toggle-btn ${letter.visibility === "HIDDEN" ? "active hidden" : ""}`}
+                    onClick={() => handleVisibilityChange("HIDDEN")}
                     disabled={saving}
                   >
-                    Draft
+                    {letter.visibility === "HIDDEN" ? "Hidden" : "Hide"}
                   </button>
                   <button
                     className={`toggle-btn ${letter.visibility === "PUBLISHED" ? "active published" : ""}`}
                     onClick={() => handleVisibilityChange("PUBLISHED")}
                     disabled={saving}
                   >
-                    Published
-                  </button>
-                  <button
-                    className={`toggle-btn ${letter.visibility === "HIDDEN" ? "active hidden" : ""}`}
-                    onClick={() => handleVisibilityChange("HIDDEN")}
-                    disabled={saving}
-                  >
-                    Hidden
+                    {letter.visibility === "PUBLISHED" ? "Published" : "Publish"}
                   </button>
                 </div>
               </div>

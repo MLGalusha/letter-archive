@@ -51,6 +51,7 @@ Centralized SVG icons with consistent styling.
 | `select-all` | Checkbox checked |
 | `folder` | Folder |
 | `file` | Document |
+| `logout` | Logout arrow |
 
 ### Usage
 
@@ -231,11 +232,11 @@ import { WorkflowBadge } from '../../components/common';
 
 | State | Label | Color |
 |-------|-------|-------|
-| `UPLOADED` | Uploaded | Blue (info) |
-| `TRANSCRIBING` | Transcribing | Orange (warning) |
-| `TRANSCRIBED` | Transcribed | Green (success) |
-| `METADATA_EXTRACTING` | Extracting | Orange (warning) |
-| `METADATA_DRAFTED` | Metadata Ready | Green (success) |
+| `UPLOADED` | Uploaded | Yellow (warning) |
+| `TRANSCRIBING` | Transcribing | Cyan (info) |
+| `TRANSCRIBED` | Transcribed | Cyan (info) |
+| `METADATA_EXTRACTING` | Extracting | Cyan (info) |
+| `METADATA_DRAFTED` | Metadata Ready | Purple |
 | `REVIEWED` | Reviewed | Green (success) |
 
 ### Visibility Badge
@@ -245,14 +246,13 @@ Shows letter visibility state.
 ```tsx
 import { VisibilityBadge } from '../../components/common';
 
-{letter.visibility !== 'DRAFT' && <VisibilityBadge state={letter.visibility} />}
+<VisibilityBadge state={letter.visibility} />
 ```
 
 | State | Label | Color |
 |-------|-------|-------|
-| `DRAFT` | Draft | Gray (muted) |
 | `PUBLISHED` | Published | Green (success) |
-| `HIDDEN` | Hidden | Orange (warning) |
+| `HIDDEN` | Hidden | Gray (muted) |
 
 ### Type Badge
 

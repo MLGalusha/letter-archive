@@ -7,7 +7,7 @@ import './Badge.css';
 
 export interface BadgeProps {
   children: string;
-  variant?: 'default' | 'success' | 'warning' | 'danger' | 'info' | 'muted';
+  variant?: 'default' | 'success' | 'warning' | 'danger' | 'info' | 'muted' | 'purple';
   className?: string;
 }
 
@@ -24,11 +24,11 @@ export function Badge({ children, variant = 'default', className = '' }: BadgePr
    ============================================================================ */
 
 const WORKFLOW_CONFIG: Record<WorkflowState, { label: string; variant: BadgeProps['variant'] }> = {
-  UPLOADED: { label: 'Uploaded', variant: 'info' },
-  TRANSCRIBING: { label: 'Transcribing', variant: 'warning' },
-  TRANSCRIBED: { label: 'Transcribed', variant: 'success' },
-  METADATA_EXTRACTING: { label: 'Extracting', variant: 'warning' },
-  METADATA_DRAFTED: { label: 'Metadata Ready', variant: 'success' },
+  UPLOADED: { label: 'Uploaded', variant: 'warning' },
+  TRANSCRIBING: { label: 'Transcribing', variant: 'info' },
+  TRANSCRIBED: { label: 'Transcribed', variant: 'info' },
+  METADATA_EXTRACTING: { label: 'Extracting', variant: 'info' },
+  METADATA_DRAFTED: { label: 'Metadata Ready', variant: 'purple' },
   REVIEWED: { label: 'Reviewed', variant: 'success' },
 };
 
@@ -50,19 +50,22 @@ export function WorkflowBadge({ state, className = '' }: WorkflowBadgeProps) {
    Visibility Badge
    ============================================================================ */
 
-const VISIBILITY_CONFIG: Record<VisibilityState, { label: string; variant: BadgeProps['variant'] }> = {
-  DRAFT: { label: 'Draft', variant: 'muted' },
+// Map visibility states - includes legacy DRAFT fallback to HIDDEN
+const VISIBILITY_CONFIG: Record<string, { label: string; variant: BadgeProps['variant'] }> = {
   PUBLISHED: { label: 'Published', variant: 'success' },
-  HIDDEN: { label: 'Hidden', variant: 'warning' },
+  HIDDEN: { label: 'Hidden', variant: 'muted' },
+  DRAFT: { label: 'Hidden', variant: 'muted' }, // Legacy fallback
 };
 
 export interface VisibilityBadgeProps {
-  state: VisibilityState;
+  state: VisibilityState | string; // Allow string for legacy DRAFT values
   className?: string;
 }
 
 export function VisibilityBadge({ state, className = '' }: VisibilityBadgeProps) {
-  const config = VISIBILITY_CONFIG[state] || { label: state, variant: 'default' };
+  // Normalize legacy DRAFT to HIDDEN
+  const normalizedState = state === 'DRAFT' ? 'HIDDEN' : state;
+  const config = VISIBILITY_CONFIG[normalizedState] || { label: 'Hidden', variant: 'muted' };
   return (
     <Badge variant={config.variant} className={`badge-visibility ${className}`}>
       {config.label}

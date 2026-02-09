@@ -96,7 +96,7 @@ Main content table storing letter metadata and processing state.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `workflow` | enum | NOT NULL, default 'UPLOADED' | Processing state |
-| `visibility` | enum | NOT NULL, default 'DRAFT' | Public visibility |
+| `visibility` | enum | NOT NULL, default 'HIDDEN' | Public visibility |
 
 #### Transcription Fields
 
@@ -188,7 +188,7 @@ Stores individual page images for each letter.
 ### visibility_state
 
 ```sql
-'DRAFT', 'PUBLISHED', 'HIDDEN'
+'PUBLISHED', 'HIDDEN'
 ```
 
 ### job_status

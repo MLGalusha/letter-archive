@@ -16,7 +16,7 @@ export type WorkflowState =
   | 'METADATA_DRAFTED'
   | 'REVIEWED';
 
-export type VisibilityState = 'DRAFT' | 'PUBLISHED' | 'HIDDEN';
+export type VisibilityState = 'PUBLISHED' | 'HIDDEN';
 
 export type LetterImageType =
   | 'letter'

@@ -3,7 +3,7 @@
  */
 
 import { apiGet, apiDelete } from './client';
-import type { Letter } from '../types/Letter';
+import type { Letter, WorkflowState, VisibilityState } from '../types/Letter';
 
 export interface LettersResponse {
   letters: Letter[];
@@ -11,15 +11,45 @@ export interface LettersResponse {
   limit: number;
 }
 
-export type SortField = 'createdAt' | 'letterDate' | 'sender' | 'title' | 'workflow' | 'visibility';
+export interface AdminLettersResponse {
+  letters: Letter[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  stats: {
+    total: number;
+    uploaded: number;
+    transcribed: number;
+    metadataReady: number;
+    reviewed: number;
+    published: number;
+    hidden: number;
+  };
+}
+
+export type SortField = 'createdAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection';
 export type SortOrder = 'asc' | 'desc';
 
 export interface LetterQueryParams {
   page?: number;
   limit?: number;
-  visibility?: 'DRAFT' | 'PUBLISHED' | 'HIDDEN';
+  visibility?: 'PUBLISHED' | 'HIDDEN';
   workflow?: string;
   collection?: string;
+  sort?: SortField;
+  sortOrder?: SortOrder;
+}
+
+export interface AdminLetterQueryParams {
+  page?: number;
+  limit?: number;
+  visibility?: VisibilityState;
+  workflow?: WorkflowState | WorkflowState[];
+  collection?: string;
+  search?: string;
   sort?: SortField;
   sortOrder?: SortOrder;
 }
@@ -52,15 +82,33 @@ export async function getPublishedLetters(params: Omit<LetterQueryParams, 'visib
 }
 
 /**
- * Fetch all letters for admin view (all visibility states)
+ * Fetch all letters for admin view with server-side filtering, pagination, and stats
+ *
+ * Uses the /admin/letters endpoint which supports:
+ * - visibility: Single visibility filter
+ * - workflow: Single or array of workflow states
+ * - collection: Collection code filter
+ * - search: Search term (matches sender, recipient, summary, hook)
+ * - sort/sortOrder: Server-side sorting
+ *
+ * Returns:
+ * - letters: Paginated letter list
+ * - pagination: { page, limit, total, totalPages }
+ * - stats: Counts for the collection (unaffected by filters)
  */
-export async function getAdminLetters(params: LetterQueryParams = {}): Promise<LettersResponse> {
-  return apiGet<LettersResponse>('/letters', {
+export async function getAdminLetters(params: AdminLetterQueryParams = {}): Promise<AdminLettersResponse> {
+  // Convert workflow array to comma-separated string for query params
+  const workflow = params.workflow
+    ? Array.isArray(params.workflow) ? params.workflow.join(',') : params.workflow
+    : undefined;
+
+  return apiGet<AdminLettersResponse>('/admin/letters', {
     page: params.page || 1,
-    limit: params.limit || 100,
-    visibility: params.visibility, // undefined = all
-    workflow: params.workflow,
+    limit: params.limit || 50,
+    visibility: params.visibility,
+    workflow,
     collection: params.collection,
+    search: params.search,
     sort: params.sort,
     sortOrder: params.sortOrder,
   });

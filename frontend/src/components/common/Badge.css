@@ -54,6 +54,12 @@
   border: solid 1px #dee2e6;
 }
 
+.badge-purple {
+  background: #e2d4f0;
+  color: #5e35b1;
+  border: solid 1px #d1c4e9;
+}
+
 /* ============================================================================
    Workflow Badge (specific styling)
    ============================================================================ */

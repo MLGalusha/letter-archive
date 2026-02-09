@@ -39,8 +39,8 @@ interface SortColumn {
 const STORAGE_KEY = 'adminDashboardState';
 
 interface PersistedState {
-  visibilityFilter: "all" | VisibilityState;
-  workflowFilter: "all" | WorkflowState;
+  visibilityFilters: VisibilityState[];
+  workflowFilters: WorkflowState[];
   collectionFilter: string;
   collectionInput: string;
   searchQuery: string;
@@ -76,15 +76,19 @@ export default function AdminDashboard() {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Server response data (pagination and stats)
+  const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
+  const [stats, setStats] = useState({ total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0 });
+
   // Load persisted state on mount
   const persistedState = useRef(loadPersistedState());
 
-  // Filters (initialized from localStorage)
-  const [visibilityFilter, setVisibilityFilter] = useState<"all" | VisibilityState>(
-    persistedState.current.visibilityFilter ?? "all"
+  // Filters (initialized from localStorage) - multi-select using Sets
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityState | null>(
+    persistedState.current.visibilityFilters?.[0] ?? null
   );
-  const [workflowFilter, setWorkflowFilter] = useState<"all" | WorkflowState>(
-    persistedState.current.workflowFilter ?? "all"
+  const [workflowFilters, setWorkflowFilters] = useState<Set<WorkflowState>>(
+    new Set(persistedState.current.workflowFilters ?? [])
   );
   const [collectionFilter, setCollectionFilter] = useState<string>(
     persistedState.current.collectionFilter ?? "all"
@@ -92,10 +96,27 @@ export default function AdminDashboard() {
   const [collectionInput, setCollectionInput] = useState<string>(
     persistedState.current.collectionInput ?? ""
   );
-  const [searchQuery, setSearchQuery] = useState(
-    persistedState.current.searchQuery ?? ""
-  );
+
+  // Debounced search - separate input state from query state
+  const [searchInput, setSearchInput] = useState(persistedState.current.searchQuery ?? "");
+  const [searchQuery, setSearchQuery] = useState(persistedState.current.searchQuery ?? "");
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const collectionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounce search input
+  useEffect(() => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+    searchDebounceRef.current = setTimeout(() => {
+      setSearchQuery(searchInput);
+    }, 300);
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, [searchInput]);
 
   // Collection suggestions state
   const [collections, setCollections] = useState<AdminCollectionInfo[]>([]);
@@ -118,14 +139,14 @@ export default function AdminDashboard() {
   // Persist state changes to localStorage
   useEffect(() => {
     savePersistedState({
-      visibilityFilter,
-      workflowFilter,
+      visibilityFilters: visibilityFilter ? [visibilityFilter] : [],
+      workflowFilters: Array.from(workflowFilters),
       collectionFilter,
       collectionInput,
       searchQuery,
       sortColumns,
     });
-  }, [visibilityFilter, workflowFilter, collectionFilter, collectionInput, searchQuery, sortColumns]);
+  }, [visibilityFilter, workflowFilters, collectionFilter, collectionInput, searchQuery, sortColumns]);
 
   // Edit mode
   const [editMode, setEditMode] = useState(false);
@@ -151,17 +172,24 @@ export default function AdminDashboard() {
   const processButtonRef = useRef<HTMLDivElement>(null);
   const editButtonRef = useRef<HTMLDivElement>(null);
 
-  const fetchLetters = useCallback(async (showLoading = false) => {
+  const fetchLetters = useCallback(async (showLoading = false, page = pagination.page) => {
     if (showLoading) setLoading(true);
     setError(null);
     try {
+      // Server-side filtering and pagination
       const response = await getAdminLetters({
-        limit: 100,
-        visibility: visibilityFilter === "all" ? undefined : visibilityFilter,
-        workflow: workflowFilter === "all" ? undefined : workflowFilter,
+        page,
+        limit: 50,
         collection: collectionFilter === "all" ? undefined : collectionFilter,
+        visibility: visibilityFilter ?? undefined,
+        workflow: workflowFilters.size > 0 ? Array.from(workflowFilters) : undefined,
+        search: searchQuery || undefined,
+        sort: sortColumns.length > 0 ? (sortColumns[0].field as 'createdAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection') : 'createdAt',
+        sortOrder: sortColumns.length > 0 ? sortColumns[0].direction : 'desc',
       });
       setLetters(response.letters);
+      setPagination(response.pagination);
+      setStats(response.stats);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load letters");
       console.error("Failed to fetch letters:", err);
@@ -169,7 +197,12 @@ export default function AdminDashboard() {
       setLoading(false);
       setIsInitialLoad(false);
     }
-  }, [visibilityFilter, workflowFilter, collectionFilter]);
+  }, [collectionFilter, visibilityFilter, workflowFilters, searchQuery, sortColumns, pagination.page]);
+
+  // Re-fetch when filters change (reset to page 1)
+  useEffect(() => {
+    fetchLetters(true, 1);
+  }, [collectionFilter, visibilityFilter, workflowFilters, searchQuery, sortColumns]);
 
   // Fetch collections for suggestions
   useEffect(() => {
@@ -352,62 +385,9 @@ export default function AdminDashboard() {
     };
   };
 
-  // Helper to get sortable value for a letter by field
-  const getSortValue = (letter: Letter, field: ExtendedSortField): string | number => {
-    switch (field) {
-      case 'sender':
-        return (letter.metadata.sender || '').toLowerCase();
-      case 'recipient':
-        return (letter.metadata.recipient || '').toLowerCase();
-      case 'letterDate':
-        return letter.metadata.dateRaw || letter.metadata.date || '';
-      case 'collection':
-        return (letter.collectionCode || '').toLowerCase();
-      case 'letters':
-        return letter.images.filter((img) => img.type === 'letter').length;
-      case 'extras':
-        return letter.images.filter((img) => img.type !== 'letter').length;
-      case 'createdAt':
-        return letter.createdAt;
-      default:
-        return '';
-    }
-  };
-
-  // Apply multi-column sorting
-  const sortedLetters = useMemo(() => {
-    if (sortColumns.length === 0) return letters;
-
-    return [...letters].sort((a, b) => {
-      for (const { field, direction } of sortColumns) {
-        const aVal = getSortValue(a, field);
-        const bVal = getSortValue(b, field);
-
-        let comparison = 0;
-        if (typeof aVal === 'number' && typeof bVal === 'number') {
-          comparison = aVal - bVal;
-        } else {
-          comparison = String(aVal).localeCompare(String(bVal));
-        }
-
-        if (comparison !== 0) {
-          return direction === 'asc' ? comparison : -comparison;
-        }
-      }
-      return 0;
-    });
-  }, [letters, sortColumns]);
-
-  // Client-side search filtering (applied after sorting)
-  const filteredLetters = sortedLetters.filter((letter) => {
-    if (searchQuery === "") return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      letter.metadata.sender?.toLowerCase().includes(query) ||
-      letter.metadata.recipient?.toLowerCase().includes(query) ||
-      letter.title.toLowerCase().includes(query)
-    );
-  });
+  // Server-side filtering is now used - letters are already filtered/sorted
+  // filteredLetters is just letters from server response
+  const filteredLetters = letters;
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
@@ -425,8 +405,8 @@ export default function AdminDashboard() {
           bVal = b.collectionCode;
           break;
         case 'total':
-          aVal = a.publishedCount + a.draftCount;
-          bVal = b.publishedCount + b.draftCount;
+          aVal = a.publishedCount + a.hiddenCount;
+          bVal = b.publishedCount + b.hiddenCount;
           break;
         case 'published':
           aVal = a.publishedCount;
@@ -437,12 +417,12 @@ export default function AdminDashboard() {
           bVal = b.uploadedCount;
           break;
         case 'ready':
-          aVal = a.readyCount;
-          bVal = b.readyCount;
+          aVal = a.metadataReadyCount;
+          bVal = b.metadataReadyCount;
           break;
         default:
-          aVal = a.publishedCount + a.draftCount;
-          bVal = b.publishedCount + b.draftCount;
+          aVal = a.publishedCount + a.hiddenCount;
+          bVal = b.publishedCount + b.hiddenCount;
       }
 
       if (typeof aVal === 'string' && typeof bVal === 'string') {
@@ -725,13 +705,24 @@ export default function AdminDashboard() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [editMode]);
 
-  // Stats calculations
-  const stats = {
-    total: letters.length,
-    uploaded: letters.filter((l) => l.workflowState === "UPLOADED").length,
-    transcribed: letters.filter((l) => l.workflowState === "TRANSCRIBED" || l.workflowState === "METADATA_DRAFTED").length,
-    reviewed: letters.filter((l) => l.workflowState === "REVIEWED").length,
-    published: letters.filter((l) => l.visibility === "PUBLISHED").length,
+  // Stats now come from server response (see setStats in fetchLetters)
+
+  // Toggle filter functions
+  // Visibility is mutually exclusive (radio behavior) - click to select, click again to clear
+  const toggleVisibilityFilter = (state: VisibilityState) => {
+    setVisibilityFilter(prev => prev === state ? null : state);
+  };
+
+  const toggleWorkflowFilter = (state: WorkflowState) => {
+    setWorkflowFilters((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(state)) {
+        newSet.delete(state);
+      } else {
+        newSet.add(state);
+      }
+      return newSet;
+    });
   };
 
   if (loading && isInitialLoad) {
@@ -877,7 +868,7 @@ export default function AdminDashboard() {
               </div>
             )}
           </div>
-          <Button onClick={handleLogout}>Logout</Button>
+          <Button icon="logout" onClick={handleLogout}>Logout</Button>
         </div>
 
         {/* Filters row with stats */}
@@ -967,7 +958,7 @@ export default function AdminDashboard() {
                     <tbody>
                       {sortedCollections.map((c) => {
                         const isSelected = collectionFilter === c.collectionCode;
-                        const totalLetters = c.publishedCount + c.draftCount;
+                        const totalLetters = c.publishedCount + c.hiddenCount;
                         return (
                           <tr
                             key={c.id}
@@ -978,7 +969,7 @@ export default function AdminDashboard() {
                             <td className="col-num">{totalLetters}</td>
                             <td className="col-num col-published">{c.publishedCount}</td>
                             <td className="col-num col-uploaded">{c.uploadedCount || '-'}</td>
-                            <td className="col-num col-ready">{c.readyCount || '-'}</td>
+                            <td className="col-num col-ready">{c.metadataReadyCount || '-'}</td>
                           </tr>
                         );
                       })}
@@ -988,31 +979,48 @@ export default function AdminDashboard() {
               )}
             </div>
 
-            <div className="filter-group">
-              <label>Visibility:</label>
-              <select
-                value={visibilityFilter}
-                onChange={(e) => setVisibilityFilter(e.target.value as typeof visibilityFilter)}
-              >
-                <option value="all">All</option>
-                <option value="DRAFT">Draft</option>
-                <option value="PUBLISHED">Published</option>
-                <option value="HIDDEN">Hidden</option>
-              </select>
-            </div>
-
-            <div className="filter-group">
-              <label>Workflow:</label>
-              <select
-                value={workflowFilter}
-                onChange={(e) => setWorkflowFilter(e.target.value as typeof workflowFilter)}
-              >
-                <option value="all">All</option>
-                <option value="UPLOADED">Uploaded</option>
-                <option value="TRANSCRIBED">Transcribed</option>
-                <option value="METADATA_DRAFTED">Metadata Ready</option>
-                <option value="REVIEWED">Reviewed</option>
-              </select>
+            {/* History dropdown - between Collection and Search */}
+            <div className="filter-group history-filter-group">
+              <label>History:</label>
+              <div className="history-dropdown-container" ref={recentDropdownRef}>
+                <button
+                  className="history-button"
+                  onClick={() => {
+                    const newState = !showRecentDropdown;
+                    if (newState) {
+                      setShowProcessMenu(false);
+                      setShowCollectionSuggestions(false);
+                    }
+                    setShowRecentDropdown(newState);
+                  }}
+                >
+                  {recentEdits.length > 0 ? `${recentEdits.length} edits` : "None"} {showRecentDropdown ? "▲" : "▼"}
+                </button>
+                {showRecentDropdown && (
+                  <div className="history-dropdown">
+                    <div className="history-header">Edit History</div>
+                    {recentEdits.length === 0 ? (
+                      <div className="history-empty">No recent edits</div>
+                    ) : (
+                      recentEdits.map((edit) => (
+                        <div
+                          key={edit.id}
+                          className="history-item"
+                          onClick={() => {
+                            navigate(`/admin/letters/${edit.id}`);
+                            setShowRecentDropdown(false);
+                          }}
+                        >
+                          <span className="history-info">
+                            {edit.displayName}
+                          </span>
+                          <span className="history-time">{formatTimeAgo(edit.editedAt)}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="filter-group search-group">
@@ -1020,68 +1028,86 @@ export default function AdminDashboard() {
               <input
                 type="text"
                 placeholder="Search..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
               />
             </div>
           </div>
 
-          {/* Stats inline in filters row */}
-          <div className="stats-inline">
-            <span className="stat-pill" title="Total letters">{stats.total} total</span>
-            <span className="stat-pill stat-uploaded" title="Awaiting transcription">{stats.uploaded} uploaded</span>
-            <span className="stat-pill stat-transcribed" title="Ready for review">{stats.transcribed} transcribed</span>
-            <span className="stat-pill stat-reviewed" title="Reviewed">{stats.reviewed} reviewed</span>
-            <span className="stat-pill stat-published" title="Published">{stats.published} published</span>
+          {/* Filter pills - clickable stat buttons */}
+          <div className="filter-pills">
+            {/* Total count and pagination info */}
+            <span className="filter-total-header">
+              {pagination.total > 0 ? (
+                <>Showing {((pagination.page - 1) * pagination.limit) + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}</>
+              ) : (
+                <>No letters</>
+              )}
+            </span>
+
+            {/* Visibility filters */}
+            <div className="filter-section">
+              <span className="filter-section-label">Visibility</span>
+              <div className="filter-buttons">
+                <button
+                  className={`filter-pill filter-published ${visibilityFilter === "PUBLISHED" ? "active" : ""}`}
+                  onClick={() => toggleVisibilityFilter("PUBLISHED")}
+                  title="Published letters - click to filter, click again to show all"
+                >
+                  {stats.published} Published
+                </button>
+                <button
+                  className={`filter-pill filter-hidden ${visibilityFilter === "HIDDEN" ? "active" : ""}`}
+                  onClick={() => toggleVisibilityFilter("HIDDEN")}
+                  title="Hidden letters - click to filter, click again to show all"
+                >
+                  {stats.hidden} Hidden
+                </button>
+              </div>
+            </div>
+
+            <span className="filter-separator">|</span>
+
+            {/* Workflow filters */}
+            <div className="filter-section">
+              <span className="filter-section-label">Workflow</span>
+              <div className="filter-buttons">
+                <button
+                  className={`filter-pill filter-uploaded ${workflowFilters.has("UPLOADED") ? "active" : ""}`}
+                  onClick={() => toggleWorkflowFilter("UPLOADED")}
+                  title="Awaiting transcription"
+                >
+                  {stats.uploaded} Uploaded
+                </button>
+                <button
+                  className={`filter-pill filter-transcribed ${workflowFilters.has("TRANSCRIBED") ? "active" : ""}`}
+                  onClick={() => toggleWorkflowFilter("TRANSCRIBED")}
+                  title="Transcribed"
+                >
+                  {stats.transcribed} Transcribed
+                </button>
+                <button
+                  className={`filter-pill filter-metadata-ready ${workflowFilters.has("METADATA_DRAFTED") ? "active" : ""}`}
+                  onClick={() => toggleWorkflowFilter("METADATA_DRAFTED")}
+                  title="Metadata ready for review"
+                >
+                  {stats.metadataReady} Metadata
+                </button>
+                <button
+                  className={`filter-pill filter-reviewed ${workflowFilters.has("REVIEWED") ? "active" : ""}`}
+                  onClick={() => toggleWorkflowFilter("REVIEWED")}
+                  title="Reviewed"
+                >
+                  {stats.reviewed} Reviewed
+                </button>
+              </div>
+            </div>
 
             {processingStatus?.isRunning && (
               <span className="stat-pill stat-processing" title="Processing">
                 {processingStatus.completed}/{processingStatus.total}
               </span>
             )}
-
-            <div className="recent-dropdown-container" ref={recentDropdownRef}>
-              <button
-                className="recent-button"
-                onClick={() => {
-                  const newState = !showRecentDropdown;
-                  if (newState) {
-                    setShowProcessMenu(false);
-                    setShowCollectionSuggestions(false);
-                  }
-                  setShowRecentDropdown(newState);
-                }}
-              >
-                Recent {showRecentDropdown ? "▲" : "▼"}
-              </button>
-              {showRecentDropdown && (
-                <div className="recent-dropdown">
-                  <div className="recent-header">Recent Edits</div>
-                  {recentEdits.length === 0 ? (
-                    <div className="recent-empty">No recent edits</div>
-                  ) : (
-                    recentEdits.map((edit) => (
-                      <div
-                        key={edit.id}
-                        className="recent-item"
-                        onClick={() => {
-                          navigate(`/admin/letters/${edit.id}`);
-                          setShowRecentDropdown(false);
-                        }}
-                      >
-                        <span className="recent-info">
-                          {edit.sender} → {edit.recipient}
-                          {edit.collectionCode && (
-                            <span className="recent-collection">({edit.collectionCode})</span>
-                          )}
-                        </span>
-                        <span className="recent-time">{formatTimeAgo(edit.editedAt)}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </header>
@@ -1190,7 +1216,8 @@ export default function AdminDashboard() {
                     )}
                   </span>
                 </th>
-                <th>Status</th>
+                <th>Workflow</th>
+                <th>Visibility</th>
                 <th
                   className={`sortable-header ${getSortInfo("createdAt") ? "sorted" : ""}`}
                   onClick={() => handleSort("createdAt")}
@@ -1212,7 +1239,7 @@ export default function AdminDashboard() {
             <tbody>
               {filteredLetters.length === 0 ? (
                 <tr>
-                  <td colSpan={editMode ? 9 : 8} className="empty-state">
+                  <td colSpan={editMode ? 10 : 9} className="empty-state">
                     No letters found
                   </td>
                 </tr>
@@ -1244,10 +1271,10 @@ export default function AdminDashboard() {
                       <td className="count-cell">{pageCount || "—"}</td>
                       <td className="count-cell">{extrasCount || "—"}</td>
                       <td>
-                        <div className="status-badges">
-                          <WorkflowBadge state={letter.workflowState} />
-                          {letter.visibility !== "DRAFT" && <VisibilityBadge state={letter.visibility} />}
-                        </div>
+                        <WorkflowBadge state={letter.workflowState} />
+                      </td>
+                      <td>
+                        <VisibilityBadge state={letter.visibility} />
                       </td>
                       <td className="date-cell">{formatDate(letter.createdAt)}</td>
                     </tr>
@@ -1257,6 +1284,29 @@ export default function AdminDashboard() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination controls */}
+        {pagination.totalPages > 1 && (
+          <div className="pagination-controls">
+            <button
+              className="pagination-btn"
+              onClick={() => fetchLetters(true, pagination.page - 1)}
+              disabled={pagination.page <= 1 || loading}
+            >
+              ← Previous
+            </button>
+            <span className="pagination-info">
+              Page {pagination.page} of {pagination.totalPages}
+            </span>
+            <button
+              className="pagination-btn"
+              onClick={() => fetchLetters(true, pagination.page + 1)}
+              disabled={pagination.page >= pagination.totalPages || loading}
+            >
+              Next →
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Delete confirmation modal */}

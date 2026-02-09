@@ -88,7 +88,7 @@ export function mapWorkflowVisibilityToStatus(
   if (visibility === 'PUBLISHED') return 'published';
   if (visibility === 'HIDDEN') return 'hidden';
 
-  // Workflow states for DRAFT visibility
+  // Workflow states for HIDDEN visibility (unpublished letters)
   switch (workflow) {
     case 'UPLOADED':
       return 'uploaded';

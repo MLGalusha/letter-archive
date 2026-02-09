@@ -44,7 +44,7 @@ export function Button({
       ) : (
         <>
           {icon && iconPosition === 'left' && <Icon name={icon} size={iconSize} />}
-          {children}
+          {children && <span className="btn-text">{children}</span>}
           {icon && iconPosition === 'right' && <Icon name={icon} size={iconSize} />}
         </>
       )}

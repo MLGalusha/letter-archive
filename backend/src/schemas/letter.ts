@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const letterQuerySchema = z.object({
   collection: z.string().optional(),
-  visibility: z.enum(['DRAFT', 'PUBLISHED', 'HIDDEN']).optional(),
+  visibility: z.enum(['PUBLISHED', 'HIDDEN']).optional(),
   workflow: z
     .enum([
       'UPLOADED',

@@ -401,6 +401,72 @@ Clear metadata but keep transcription.
 
 ---
 
+### Letter List (Admin)
+
+#### GET /admin/letters
+
+List all letters with server-side filtering, pagination, and stats.
+
+**Query Parameters**:
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `page` | number | 1 | Page number |
+| `limit` | number | 50 | Items per page (max 100) |
+| `collection` | string | - | Filter by collection code |
+| `visibility` | `PUBLISHED` \| `HIDDEN` | - | Filter by visibility |
+| `workflow` | string | - | Filter by workflow state(s), comma-separated |
+| `search` | string | - | Search in sender, recipient, summary, hook |
+| `sort` | string | `createdAt` | Sort field: `letterDate`, `sender`, `recipient`, `workflow`, `visibility`, `collection`, `createdAt` |
+| `sortOrder` | string | `desc` | Sort direction: `asc` or `desc` |
+
+**Response**:
+
+```json
+{
+  "letters": [
+    {
+      "id": "uuid",
+      "collectionCode": "003",
+      "type": "L",
+      "dateRaw": "18860314",
+      "letterDate": "1886-03-14",
+      "metadata": {
+        "sender": "John Smith",
+        "recipient": "Jane Doe",
+        "hook": "A poignant letter..."
+      },
+      "visibility": "HIDDEN",
+      "workflowState": "METADATA_DRAFTED",
+      "images": [...],
+      "createdAt": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "total": 847,
+    "totalPages": 17
+  },
+  "stats": {
+    "total": 2341,
+    "uploaded": 423,
+    "transcribed": 892,
+    "metadataReady": 156,
+    "reviewed": 870,
+    "published": 1200,
+    "hidden": 1141
+  }
+}
+```
+
+**Notes**:
+- Stats reflect the entire collection (or all letters if no collection filter), unaffected by other filters
+- Search uses case-insensitive ILIKE matching
+- Workflow filter accepts multiple states: `?workflow=UPLOADED,TRANSCRIBED`
+
+---
+
 ### Single Letter Operations
 
 #### GET /admin/letters/:letterId

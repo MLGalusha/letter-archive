@@ -22,6 +22,7 @@ import {
   DropdownHeader,
   DropdownItem,
 } from "../../components/common";
+import { FilterSidebar, type FilterState } from "../../components/FilterSidebar";
 import { getRecentEdits, formatTimeAgo, type RecentEdit } from "../../utils/recentEdits";
 import "./AdminDashboard.css";
 
@@ -124,10 +125,13 @@ const STORAGE_KEY = 'adminDashboardState';
 interface PersistedState {
   visibilityFilters: VisibilityState[];
   workflowFilters: WorkflowState[];
+  transcriptStatusFilters: ContentStatus[];
+  metadataStatusFilters: ContentStatus[];
   collectionFilter: string;
   collectionInput: string;
   searchQuery: string;
   sortColumns: SortColumn[];
+  filterSidebarOpen: boolean;
 }
 
 function loadPersistedState(): Partial<PersistedState> {
@@ -171,25 +175,32 @@ export default function AdminDashboard() {
   // Load persisted state on mount
   const persistedState = useRef(loadPersistedState());
 
+  // Filter sidebar state
+  const [showFilterSidebar, setShowFilterSidebar] = useState(
+    persistedState.current.filterSidebarOpen ?? false
+  );
+
   // Filters (initialized from localStorage) - multi-select using Sets
-  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityState | null>(
-    persistedState.current.visibilityFilters?.[0] ?? null
+  const [visibilityFilters, setVisibilityFilters] = useState<VisibilityState[]>(
+    persistedState.current.visibilityFilters ?? []
   );
   const [workflowFilters, setWorkflowFilters] = useState<Set<WorkflowState>>(
     new Set(persistedState.current.workflowFilters ?? [])
   );
+  const [transcriptStatusFilters, setTranscriptStatusFilters] = useState<ContentStatus[]>(
+    persistedState.current.transcriptStatusFilters ?? []
+  );
+  const [metadataStatusFilters, setMetadataStatusFilters] = useState<ContentStatus[]>(
+    persistedState.current.metadataStatusFilters ?? []
+  );
   const [collectionFilter, setCollectionFilter] = useState<string>(
     persistedState.current.collectionFilter ?? "all"
-  );
-  const [collectionInput, setCollectionInput] = useState<string>(
-    persistedState.current.collectionInput ?? ""
   );
 
   // Debounced search - separate input state from query state
   const [searchInput, setSearchInput] = useState(persistedState.current.searchQuery ?? "");
   const [searchQuery, setSearchQuery] = useState(persistedState.current.searchQuery ?? "");
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const collectionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounce search input
   useEffect(() => {
@@ -206,13 +217,8 @@ export default function AdminDashboard() {
     };
   }, [searchInput]);
 
-  // Collection suggestions state
+  // Collections state (for filter sidebar)
   const [collections, setCollections] = useState<AdminCollectionInfo[]>([]);
-  const [showCollectionSuggestions, setShowCollectionSuggestions] = useState(false);
-  const [collectionSortColumn, setCollectionSortColumn] = useState<'code' | 'total' | 'published' | 'uploaded' | 'ready'>('total');
-  const [collectionSortAsc, setCollectionSortAsc] = useState(false); // false = descending (most first)
-  const collectionInputRef = useRef<HTMLInputElement>(null);
-  const collectionSuggestionsRef = useRef<HTMLDivElement>(null);
 
   // Recent edits state
   const [recentEdits, setRecentEdits] = useState<RecentEdit[]>([]);
@@ -277,14 +283,17 @@ export default function AdminDashboard() {
   // Persist state changes to localStorage
   useEffect(() => {
     savePersistedState({
-      visibilityFilters: visibilityFilter ? [visibilityFilter] : [],
+      visibilityFilters: visibilityFilters,
       workflowFilters: Array.from(workflowFilters),
+      transcriptStatusFilters,
+      metadataStatusFilters,
       collectionFilter,
-      collectionInput,
+      collectionInput: '', // No longer used
       searchQuery,
       sortColumns,
+      filterSidebarOpen: showFilterSidebar,
     });
-  }, [visibilityFilter, workflowFilters, collectionFilter, collectionInput, searchQuery, sortColumns]);
+  }, [visibilityFilters, workflowFilters, transcriptStatusFilters, metadataStatusFilters, collectionFilter, searchQuery, sortColumns, showFilterSidebar]);
 
   // Edit mode
   const [editMode, setEditMode] = useState(false);
@@ -317,12 +326,15 @@ export default function AdminDashboard() {
       // Find the first server-sortable column (skip client-side computed columns)
       const serverSort = sortColumns.find(col => isServerSortField(col.field));
 
+      // Visibility: if exactly one selected, use it; otherwise no filter (shows all)
+      const visibilityParam = visibilityFilters.length === 1 ? visibilityFilters[0] : undefined;
+
       // Server-side filtering and pagination
       const response = await getAdminLetters({
         page,
         limit: 50,
         collection: collectionFilter === "all" ? undefined : collectionFilter,
-        visibility: visibilityFilter ?? undefined,
+        visibility: visibilityParam,
         workflow: workflowFilters.size > 0 ? Array.from(workflowFilters) : undefined,
         search: searchQuery || undefined,
         sort: serverSort ? (serverSort.field as ServerSortField) : 'createdAt',
@@ -353,12 +365,12 @@ export default function AdminDashboard() {
       setLoading(false);
       setIsInitialLoad(false);
     }
-  }, [collectionFilter, visibilityFilter, workflowFilters, searchQuery, sortColumns, pagination.page]);
+  }, [collectionFilter, visibilityFilters, workflowFilters, searchQuery, sortColumns, pagination.page]);
 
   // Re-fetch when filters change (reset to page 1)
   useEffect(() => {
     fetchLetters(true, 1);
-  }, [collectionFilter, visibilityFilter, workflowFilters, searchQuery, sortColumns]);
+  }, [collectionFilter, visibilityFilters, workflowFilters, searchQuery, sortColumns]);
 
   // Fetch collections for suggestions
   useEffect(() => {
@@ -595,73 +607,6 @@ export default function AdminDashboard() {
     return new Date(dateString).toLocaleDateString();
   };
 
-  // Collection suggestions - sorted by selected column
-  const sortedCollections = useMemo(() => {
-    return [...collections].sort((a, b) => {
-      let aVal: number | string;
-      let bVal: number | string;
-
-      switch (collectionSortColumn) {
-        case 'code':
-          aVal = a.collectionCode;
-          bVal = b.collectionCode;
-          break;
-        case 'total':
-          aVal = a.publishedCount + a.hiddenCount;
-          bVal = b.publishedCount + b.hiddenCount;
-          break;
-        case 'published':
-          aVal = a.publishedCount;
-          bVal = b.publishedCount;
-          break;
-        case 'uploaded':
-          aVal = a.uploadedCount;
-          bVal = b.uploadedCount;
-          break;
-        case 'ready':
-          aVal = a.metadataReadyCount;
-          bVal = b.metadataReadyCount;
-          break;
-        default:
-          aVal = a.publishedCount + a.hiddenCount;
-          bVal = b.publishedCount + b.hiddenCount;
-      }
-
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return collectionSortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-      }
-      return collectionSortAsc ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
-    });
-  }, [collections, collectionSortColumn, collectionSortAsc]);
-
-  // Toggle collection sort column
-  const handleCollectionSort = (column: typeof collectionSortColumn) => {
-    if (collectionSortColumn === column) {
-      setCollectionSortAsc(!collectionSortAsc);
-    } else {
-      setCollectionSortColumn(column);
-      setCollectionSortAsc(false); // Reset to descending when changing column
-    }
-  };
-
-  // Get selected collection info for display
-  const selectedCollection = useMemo(() => {
-    if (collectionFilter === "all") return null;
-    return collections.find((c) => c.collectionCode === collectionFilter) || null;
-  }, [collections, collectionFilter]);
-
-  const handleSelectCollection = (code: string) => {
-    setCollectionInput(code);
-    setCollectionFilter(code);
-    setShowCollectionSuggestions(false);
-  };
-
-  const handleClearCollection = () => {
-    setCollectionInput("");
-    setCollectionFilter("all");
-    setShowCollectionSuggestions(false);
-  };
-
   // Edit mode functions
   const toggleEditMode = () => {
     if (editMode) {
@@ -670,8 +615,8 @@ export default function AdminDashboard() {
     } else {
       // Entering edit mode, close other dropdowns
       setShowProcessMenu(false);
-      setShowCollectionSuggestions(false);
       setShowRecentDropdown(false);
+      setShowFilterSidebar(false);
     }
     setEditMode(!editMode);
   };
@@ -780,8 +725,8 @@ export default function AdminDashboard() {
     const newState = !showProcessMenu;
     if (newState) {
       // Close other dropdowns when opening process menu
-      setShowCollectionSuggestions(false);
       setShowRecentDropdown(false);
+      setShowFilterSidebar(false);
     }
     setShowProcessMenu(newState);
   };
@@ -844,6 +789,35 @@ export default function AdminDashboard() {
     }
   };
 
+  // Handle filter sidebar apply
+  const handleFiltersApply = (filters: FilterState) => {
+    setCollectionFilter(filters.collection);
+    setVisibilityFilters(filters.visibility);
+    setWorkflowFilters(new Set(filters.workflow));
+    setTranscriptStatusFilters(filters.transcriptStatus);
+    setMetadataStatusFilters(filters.metadataStatus);
+  };
+
+  // Get current filters as FilterState for sidebar
+  const currentFilters: FilterState = {
+    collection: collectionFilter,
+    visibility: visibilityFilters,
+    transcriptStatus: transcriptStatusFilters,
+    metadataStatus: metadataStatusFilters,
+    workflow: Array.from(workflowFilters),
+  };
+
+  // Count active filters for badge
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (collectionFilter !== 'all') count++;
+    if (visibilityFilters.length > 0) count += visibilityFilters.length;
+    if (workflowFilters.size > 0) count += workflowFilters.size;
+    if (transcriptStatusFilters.length > 0) count += transcriptStatusFilters.length;
+    if (metadataStatusFilters.length > 0) count += metadataStatusFilters.length;
+    return count;
+  }, [collectionFilter, visibilityFilters, workflowFilters, transcriptStatusFilters, metadataStatusFilters]);
+
   // Poll for processing status
   useEffect(() => {
     const fetchStatus = async () => {
@@ -882,12 +856,6 @@ export default function AdminDashboard() {
         setShowProcessMenu(false);
       }
 
-      // Close collection suggestions if clicking outside
-      if (collectionSuggestionsRef.current && !collectionSuggestionsRef.current.contains(target) &&
-          collectionInputRef.current && !collectionInputRef.current.contains(target)) {
-        setShowCollectionSuggestions(false);
-      }
-
       // Close recent dropdown if clicking outside
       if (recentDropdownRef.current && !recentDropdownRef.current.contains(target)) {
         setShowRecentDropdown(false);
@@ -906,26 +874,6 @@ export default function AdminDashboard() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [editMode]);
-
-  // Stats now come from server response (see setStats in fetchLetters)
-
-  // Toggle filter functions
-  // Visibility is mutually exclusive (radio behavior) - click to select, click again to clear
-  const toggleVisibilityFilter = (state: VisibilityState) => {
-    setVisibilityFilter(prev => prev === state ? null : state);
-  };
-
-  const toggleWorkflowFilter = (state: WorkflowState) => {
-    setWorkflowFilters((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(state)) {
-        newSet.delete(state);
-      } else {
-        newSet.add(state);
-      }
-      return newSet;
-    });
-  };
 
   if (loading && isInitialLoad) {
     return (
@@ -1073,117 +1021,22 @@ export default function AdminDashboard() {
           <Button icon="logout" onClick={handleLogout}>Logout</Button>
         </div>
 
-        {/* Filters row with stats */}
+        {/* Filters row - simplified with sidebar button */}
         <div className="header-row header-row-filters">
-          <div className="filter-search-container">
-            <div className="filter-group collection-filter-group">
-              <label>Collection:</label>
-              <input
-                ref={collectionInputRef}
-                type="text"
-                value={collectionInput}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setCollectionInput(val);
-                  if (collectionDebounceRef.current) {
-                    clearTimeout(collectionDebounceRef.current);
-                  }
-                  collectionDebounceRef.current = setTimeout(() => {
-                    if (val.length >= 3) {
-                      setCollectionFilter(val);
-                    } else if (val.length === 0) {
-                      setCollectionFilter("all");
-                    }
-                  }, 300);
-                }}
-                onFocus={() => {
-                  setShowProcessMenu(false);
-                  setShowRecentDropdown(false);
-                  setShowCollectionSuggestions(true);
-                }}
-                placeholder="000"
-                className="collection-input"
-              />
-              {showCollectionSuggestions && collections.length > 0 && (
-                <div className="collection-suggestions" ref={collectionSuggestionsRef}>
-                  {/* Selected collection display (if filtering) */}
-                  {collectionFilter !== "all" && selectedCollection && (
-                    <div className="collection-selected">
-                      <span className="selected-label">Selected:</span>
-                      <span className="selected-code">{selectedCollection.collectionCode}</span>
-                      <button className="clear-btn" onClick={handleClearCollection}>
-                        Clear
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Table with column headers */}
-                  <table className="collection-table">
-                    <thead>
-                      <tr>
-                        <th
-                          className={`col-sortable ${collectionSortColumn === 'code' ? 'sorted' : ''}`}
-                          onClick={(e) => { e.stopPropagation(); handleCollectionSort('code'); }}
-                        >
-                          Code {collectionSortColumn === 'code' && (collectionSortAsc ? '↑' : '↓')}
-                        </th>
-                        <th
-                          className={`col-sortable col-num ${collectionSortColumn === 'total' ? 'sorted' : ''}`}
-                          onClick={(e) => { e.stopPropagation(); handleCollectionSort('total'); }}
-                          title="Total letters"
-                        >
-                          Total {collectionSortColumn === 'total' && (collectionSortAsc ? '↑' : '↓')}
-                        </th>
-                        <th
-                          className={`col-sortable col-num col-published ${collectionSortColumn === 'published' ? 'sorted' : ''}`}
-                          onClick={(e) => { e.stopPropagation(); handleCollectionSort('published'); }}
-                          title="Published"
-                        >
-                          Pub {collectionSortColumn === 'published' && (collectionSortAsc ? '↑' : '↓')}
-                        </th>
-                        <th
-                          className={`col-sortable col-num col-uploaded ${collectionSortColumn === 'uploaded' ? 'sorted' : ''}`}
-                          onClick={(e) => { e.stopPropagation(); handleCollectionSort('uploaded'); }}
-                          title="Needs transcription"
-                        >
-                          Upl {collectionSortColumn === 'uploaded' && (collectionSortAsc ? '↑' : '↓')}
-                        </th>
-                        <th
-                          className={`col-sortable col-num col-ready ${collectionSortColumn === 'ready' ? 'sorted' : ''}`}
-                          onClick={(e) => { e.stopPropagation(); handleCollectionSort('ready'); }}
-                          title="Ready for review"
-                        >
-                          Rdy {collectionSortColumn === 'ready' && (collectionSortAsc ? '↑' : '↓')}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedCollections.map((c) => {
-                        const isSelected = collectionFilter === c.collectionCode;
-                        const totalLetters = c.publishedCount + c.hiddenCount;
-                        return (
-                          <tr
-                            key={c.id}
-                            className={isSelected ? "selected" : ""}
-                            onClick={() => handleSelectCollection(c.collectionCode)}
-                          >
-                            <td className="col-code">{c.collectionCode}</td>
-                            <td className="col-num">{totalLetters}</td>
-                            <td className="col-num col-published">{c.publishedCount}</td>
-                            <td className="col-num col-uploaded">{c.uploadedCount || '-'}</td>
-                            <td className="col-num col-ready">{c.metadataReadyCount || '-'}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+          <div className="filter-controls">
+            {/* Filters button */}
+            <button
+              className={`filter-button ${activeFilterCount > 0 ? 'has-filters' : ''}`}
+              onClick={() => setShowFilterSidebar(true)}
+            >
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="filter-badge">{activeFilterCount}</span>
               )}
-            </div>
+            </button>
 
-            {/* History dropdown - between Collection and Search */}
+            {/* History dropdown */}
             <div className="filter-group history-filter-group">
-              <label>History:</label>
               <div className="history-dropdown-container" ref={recentDropdownRef}>
                 <button
                   className="history-button"
@@ -1191,12 +1044,11 @@ export default function AdminDashboard() {
                     const newState = !showRecentDropdown;
                     if (newState) {
                       setShowProcessMenu(false);
-                      setShowCollectionSuggestions(false);
                     }
                     setShowRecentDropdown(newState);
                   }}
                 >
-                  {recentEdits.length > 0 ? `${recentEdits.length} edits` : "None"} {showRecentDropdown ? "▲" : "▼"}
+                  History {recentEdits.length > 0 && `(${recentEdits.length})`} {showRecentDropdown ? "▲" : "▼"}
                 </button>
                 {showRecentDropdown && (
                   <div className="history-dropdown">
@@ -1225,8 +1077,8 @@ export default function AdminDashboard() {
               </div>
             </div>
 
+            {/* Search input */}
             <div className="filter-group search-group">
-              <label>Search:</label>
               <input
                 type="text"
                 placeholder="Search..."
@@ -1236,111 +1088,33 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Filter pills - clickable stat buttons */}
-          <div className="filter-pills">
-            {/* Total count and pagination info */}
-            <span className="filter-total-header">
+          {/* Stats summary */}
+          <div className="stats-summary">
+            <span className="stat-total">
               {pagination.total > 0 ? (
                 <>Showing {((pagination.page - 1) * pagination.limit) + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}</>
               ) : (
                 <>No letters</>
               )}
             </span>
-
-            {/* Visibility filters */}
-            <div className="filter-section">
-              <span className="filter-section-label">Visibility</span>
-              <div className="filter-buttons">
-                <button
-                  className={`filter-pill filter-published ${visibilityFilter === "PUBLISHED" ? "active" : ""}`}
-                  onClick={() => toggleVisibilityFilter("PUBLISHED")}
-                  title="Published letters - click to filter, click again to show all"
-                >
-                  {stats.published} Published
-                </button>
-                <button
-                  className={`filter-pill filter-hidden ${visibilityFilter === "HIDDEN" ? "active" : ""}`}
-                  onClick={() => toggleVisibilityFilter("HIDDEN")}
-                  title="Hidden letters - click to filter, click again to show all"
-                >
-                  {stats.hidden} Hidden
-                </button>
-              </div>
-            </div>
-
-            <span className="filter-separator">|</span>
-
-            {/* Two-track content status stats */}
-            <div className="filter-section">
-              <span className="filter-section-label">Transcript</span>
-              <div className="filter-stats">
-                <span className="stat-item stat-draft" title="Transcript: Draft">
-                  {stats.transcriptAiDraft} Draft
-                </span>
-                <span className="stat-item stat-edited" title="Transcript: Edited">
-                  {stats.transcriptEdited} Edited
-                </span>
-                <span className="stat-item stat-verified" title="Transcript: Verified">
-                  {stats.transcriptVerified} Done
-                </span>
-              </div>
-            </div>
-
-            <span className="filter-separator">|</span>
-
-            <div className="filter-section">
-              <span className="filter-section-label">Metadata</span>
-              <div className="filter-stats">
-                <span className="stat-item stat-draft" title="Metadata: Draft">
-                  {stats.metadataAiDraft} Draft
-                </span>
-                <span className="stat-item stat-edited" title="Metadata: Edited">
-                  {stats.metadataEdited} Edited
-                </span>
-                <span className="stat-item stat-verified" title="Metadata: Verified">
-                  {stats.metadataVerified} Done
-                </span>
-              </div>
-            </div>
-
-            <span className="filter-separator">|</span>
-
-            {/* Legacy Workflow filters (for backward compat) */}
-            <div className="filter-section">
-              <span className="filter-section-label">Workflow</span>
-              <div className="filter-buttons">
-                <button
-                  className={`filter-pill filter-uploaded ${workflowFilters.has("UPLOADED") ? "active" : ""}`}
-                  onClick={() => toggleWorkflowFilter("UPLOADED")}
-                  title="Awaiting transcription"
-                >
-                  {stats.uploaded}
-                </button>
-                <button
-                  className={`filter-pill filter-transcribed ${workflowFilters.has("TRANSCRIBED") ? "active" : ""}`}
-                  onClick={() => toggleWorkflowFilter("TRANSCRIBED")}
-                  title="Transcribed"
-                >
-                  {stats.transcribed}
-                </button>
-                <button
-                  className={`filter-pill filter-metadata-ready ${workflowFilters.has("METADATA_DRAFTED") ? "active" : ""}`}
-                  onClick={() => toggleWorkflowFilter("METADATA_DRAFTED")}
-                  title="Metadata ready for review"
-                >
-                  {stats.metadataReady}
-                </button>
-              </div>
-            </div>
-
             {processingStatus?.isRunning && (
-              <span className="stat-pill stat-processing" title="Processing">
-                {processingStatus.completed}/{processingStatus.total}
+              <span className="stat-processing">
+                Processing: {processingStatus.completed}/{processingStatus.total}
               </span>
             )}
           </div>
         </div>
       </header>
+
+      {/* Filter Sidebar */}
+      <FilterSidebar
+        isOpen={showFilterSidebar}
+        onClose={() => setShowFilterSidebar(false)}
+        appliedFilters={currentFilters}
+        stats={stats}
+        collections={collections}
+        onApply={handleFiltersApply}
+      />
 
       <div className="admin-content">
         {/* Table toolbar with column toggle */}
@@ -1375,178 +1149,216 @@ export default function AdminDashboard() {
             </div>
           </div>
         </div>
-        <div className="letters-table-container">
-          <table className="letters-table">
-            <thead>
-              <tr>
-                {editMode && (
-                  <th className="checkbox-header"></th>
-                )}
-                {visibleColumns.has('sender') && (
-                  <th
-                    className={`sortable-header ${getSortInfo("sender") ? "sorted" : ""}`}
-                    onClick={() => handleSort("sender")}
-                  >
-                    <span className="header-content">
-                      Sender
-                      {getSortInfo("sender") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("sender")?.direction === "asc" ? "↑" : "↓"}</span>
-                          {getSortInfo("sender")!.total > 1 && (
-                            <span className="sort-priority">{getSortInfo("sender")?.priority}</span>
-                          )}
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('recipient') && (
-                  <th
-                    className={`sortable-header ${getSortInfo("recipient") ? "sorted" : ""}`}
-                    onClick={() => handleSort("recipient")}
-                  >
-                    <span className="header-content">
-                      Recipient
-                      {getSortInfo("recipient") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("recipient")?.direction === "asc" ? "↑" : "↓"}</span>
-                          {getSortInfo("recipient")!.total > 1 && (
-                            <span className="sort-priority">{getSortInfo("recipient")?.priority}</span>
-                          )}
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('year') && (
-                  <th
-                    className={`date-header sortable-header ${getSortInfo("year") ? "sorted" : ""}`}
-                    onClick={() => handleSort("year")}
-                  >
-                    <span className="header-content">
-                      Year
-                      {getSortInfo("year") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("year")?.direction === "asc" ? "↑" : "↓"}</span>
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('month') && (
-                  <th
-                    className={`date-header sortable-header ${getSortInfo("month") ? "sorted" : ""}`}
-                    onClick={() => handleSort("month")}
-                  >
-                    <span className="header-content">
-                      Month
-                      {getSortInfo("month") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("month")?.direction === "asc" ? "↑" : "↓"}</span>
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('day') && (
-                  <th
-                    className={`date-header sortable-header ${getSortInfo("day") ? "sorted" : ""}`}
-                    onClick={() => handleSort("day")}
-                  >
-                    <span className="header-content">
-                      Day
-                      {getSortInfo("day") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("day")?.direction === "asc" ? "↑" : "↓"}</span>
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('collection') && (
-                  <th
-                    className={`sortable-header ${getSortInfo("collection") ? "sorted" : ""}`}
-                    onClick={() => handleSort("collection")}
-                  >
-                    <span className="header-content">
-                      Collection
-                      {getSortInfo("collection") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("collection")?.direction === "asc" ? "↑" : "↓"}</span>
-                          {getSortInfo("collection")!.total > 1 && (
-                            <span className="sort-priority">{getSortInfo("collection")?.priority}</span>
-                          )}
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('letters') && (
-                  <th
-                    className={`sortable-header ${getSortInfo("letters") ? "sorted" : ""}`}
-                    onClick={() => handleSort("letters")}
-                  >
-                    <span className="header-content">
-                      Letters
-                      {getSortInfo("letters") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("letters")?.direction === "asc" ? "↑" : "↓"}</span>
-                          {getSortInfo("letters")!.total > 1 && (
-                            <span className="sort-priority">{getSortInfo("letters")?.priority}</span>
-                          )}
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('extras') && (
-                  <th
-                    className={`sortable-header ${getSortInfo("extras") ? "sorted" : ""}`}
-                    onClick={() => handleSort("extras")}
-                  >
-                    <span className="header-content">
-                      Extras
-                      {getSortInfo("extras") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("extras")?.direction === "asc" ? "↑" : "↓"}</span>
-                          {getSortInfo("extras")!.total > 1 && (
-                            <span className="sort-priority">{getSortInfo("extras")?.priority}</span>
-                          )}
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('transcript') && (
-                  <th className="status-header">Transcript</th>
-                )}
-                {visibleColumns.has('metadata') && (
-                  <th className="status-header">Metadata</th>
-                )}
-                {visibleColumns.has('visibility') && (
-                  <th>Visibility</th>
-                )}
-                {visibleColumns.has('created') && (
-                  <th
-                    className={`sortable-header ${getSortInfo("createdAt") ? "sorted" : ""}`}
-                    onClick={() => handleSort("createdAt")}
-                  >
-                    <span className="header-content">
-                      Created
-                      {getSortInfo("createdAt") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("createdAt")?.direction === "asc" ? "↑" : "↓"}</span>
-                          {getSortInfo("createdAt")!.total > 1 && (
-                            <span className="sort-priority">{getSortInfo("createdAt")?.priority}</span>
-                          )}
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
+        <div className="letters-table-wrapper">
+          {/* Fixed header table */}
+          <div className="letters-table-header">
+            <table className="letters-table">
+              <colgroup>
+                {editMode && <col style={{ width: '32px' }} />}
+                {visibleColumns.has('sender') && <col style={{ width: '12%' }} />}
+                {visibleColumns.has('recipient') && <col style={{ width: '12%' }} />}
+                {visibleColumns.has('year') && <col style={{ width: '50px' }} />}
+                {visibleColumns.has('month') && <col style={{ width: '50px' }} />}
+                {visibleColumns.has('day') && <col style={{ width: '40px' }} />}
+                {visibleColumns.has('collection') && <col style={{ width: '80px' }} />}
+                {visibleColumns.has('letters') && <col style={{ width: '55px' }} />}
+                {visibleColumns.has('extras') && <col style={{ width: '50px' }} />}
+                {visibleColumns.has('transcript') && <col style={{ width: '70px' }} />}
+                {visibleColumns.has('metadata') && <col style={{ width: '70px' }} />}
+                {visibleColumns.has('visibility') && <col style={{ width: '70px' }} />}
+                {visibleColumns.has('created') && <col style={{ width: '80px' }} />}
+              </colgroup>
+              <thead>
+                <tr>
+                  {editMode && (
+                    <th className="checkbox-header"></th>
+                  )}
+                  {visibleColumns.has('sender') && (
+                    <th
+                      className={`sortable-header ${getSortInfo("sender") ? "sorted" : ""}`}
+                      onClick={() => handleSort("sender")}
+                    >
+                      <span className="header-content">
+                        Sender
+                        {getSortInfo("sender") && (
+                          <span className="sort-indicator">
+                            <span className="sort-arrow">{getSortInfo("sender")?.direction === "asc" ? "↑" : "↓"}</span>
+                            {getSortInfo("sender")!.total > 1 && (
+                              <span className="sort-priority">{getSortInfo("sender")?.priority}</span>
+                            )}
+                          </span>
+                        )}
+                      </span>
+                    </th>
+                  )}
+                  {visibleColumns.has('recipient') && (
+                    <th
+                      className={`sortable-header ${getSortInfo("recipient") ? "sorted" : ""}`}
+                      onClick={() => handleSort("recipient")}
+                    >
+                      <span className="header-content">
+                        Recipient
+                        {getSortInfo("recipient") && (
+                          <span className="sort-indicator">
+                            <span className="sort-arrow">{getSortInfo("recipient")?.direction === "asc" ? "↑" : "↓"}</span>
+                            {getSortInfo("recipient")!.total > 1 && (
+                              <span className="sort-priority">{getSortInfo("recipient")?.priority}</span>
+                            )}
+                          </span>
+                        )}
+                      </span>
+                    </th>
+                  )}
+                  {visibleColumns.has('year') && (
+                    <th
+                      className={`date-header sortable-header ${getSortInfo("year") ? "sorted" : ""}`}
+                      onClick={() => handleSort("year")}
+                    >
+                      <span className="header-content">
+                        Year
+                        {getSortInfo("year") && (
+                          <span className="sort-indicator">
+                            <span className="sort-arrow">{getSortInfo("year")?.direction === "asc" ? "↑" : "↓"}</span>
+                          </span>
+                        )}
+                      </span>
+                    </th>
+                  )}
+                  {visibleColumns.has('month') && (
+                    <th
+                      className={`date-header sortable-header ${getSortInfo("month") ? "sorted" : ""}`}
+                      onClick={() => handleSort("month")}
+                    >
+                      <span className="header-content">
+                        Month
+                        {getSortInfo("month") && (
+                          <span className="sort-indicator">
+                            <span className="sort-arrow">{getSortInfo("month")?.direction === "asc" ? "↑" : "↓"}</span>
+                          </span>
+                        )}
+                      </span>
+                    </th>
+                  )}
+                  {visibleColumns.has('day') && (
+                    <th
+                      className={`date-header sortable-header ${getSortInfo("day") ? "sorted" : ""}`}
+                      onClick={() => handleSort("day")}
+                    >
+                      <span className="header-content">
+                        Day
+                        {getSortInfo("day") && (
+                          <span className="sort-indicator">
+                            <span className="sort-arrow">{getSortInfo("day")?.direction === "asc" ? "↑" : "↓"}</span>
+                          </span>
+                        )}
+                      </span>
+                    </th>
+                  )}
+                  {visibleColumns.has('collection') && (
+                    <th
+                      className={`sortable-header ${getSortInfo("collection") ? "sorted" : ""}`}
+                      onClick={() => handleSort("collection")}
+                    >
+                      <span className="header-content">
+                        Collection
+                        {getSortInfo("collection") && (
+                          <span className="sort-indicator">
+                            <span className="sort-arrow">{getSortInfo("collection")?.direction === "asc" ? "↑" : "↓"}</span>
+                            {getSortInfo("collection")!.total > 1 && (
+                              <span className="sort-priority">{getSortInfo("collection")?.priority}</span>
+                            )}
+                          </span>
+                        )}
+                      </span>
+                    </th>
+                  )}
+                  {visibleColumns.has('letters') && (
+                    <th
+                      className={`sortable-header ${getSortInfo("letters") ? "sorted" : ""}`}
+                      onClick={() => handleSort("letters")}
+                    >
+                      <span className="header-content">
+                        Letters
+                        {getSortInfo("letters") && (
+                          <span className="sort-indicator">
+                            <span className="sort-arrow">{getSortInfo("letters")?.direction === "asc" ? "↑" : "↓"}</span>
+                            {getSortInfo("letters")!.total > 1 && (
+                              <span className="sort-priority">{getSortInfo("letters")?.priority}</span>
+                            )}
+                          </span>
+                        )}
+                      </span>
+                    </th>
+                  )}
+                  {visibleColumns.has('extras') && (
+                    <th
+                      className={`sortable-header ${getSortInfo("extras") ? "sorted" : ""}`}
+                      onClick={() => handleSort("extras")}
+                    >
+                      <span className="header-content">
+                        Extras
+                        {getSortInfo("extras") && (
+                          <span className="sort-indicator">
+                            <span className="sort-arrow">{getSortInfo("extras")?.direction === "asc" ? "↑" : "↓"}</span>
+                            {getSortInfo("extras")!.total > 1 && (
+                              <span className="sort-priority">{getSortInfo("extras")?.priority}</span>
+                            )}
+                          </span>
+                        )}
+                      </span>
+                    </th>
+                  )}
+                  {visibleColumns.has('transcript') && (
+                    <th className="status-header">Transcript</th>
+                  )}
+                  {visibleColumns.has('metadata') && (
+                    <th className="status-header">Metadata</th>
+                  )}
+                  {visibleColumns.has('visibility') && (
+                    <th>Visibility</th>
+                  )}
+                  {visibleColumns.has('created') && (
+                    <th
+                      className={`sortable-header ${getSortInfo("createdAt") ? "sorted" : ""}`}
+                      onClick={() => handleSort("createdAt")}
+                    >
+                      <span className="header-content">
+                        Created
+                        {getSortInfo("createdAt") && (
+                          <span className="sort-indicator">
+                            <span className="sort-arrow">{getSortInfo("createdAt")?.direction === "asc" ? "↑" : "↓"}</span>
+                            {getSortInfo("createdAt")!.total > 1 && (
+                              <span className="sort-priority">{getSortInfo("createdAt")?.priority}</span>
+                            )}
+                          </span>
+                        )}
+                      </span>
+                    </th>
+                  )}
+                </tr>
+              </thead>
+            </table>
+          </div>
+
+          {/* Scrollable body table */}
+          <div className="letters-table-container">
+            <table className="letters-table">
+              <colgroup>
+                {editMode && <col style={{ width: '32px' }} />}
+                {visibleColumns.has('sender') && <col style={{ width: '12%' }} />}
+                {visibleColumns.has('recipient') && <col style={{ width: '12%' }} />}
+                {visibleColumns.has('year') && <col style={{ width: '50px' }} />}
+                {visibleColumns.has('month') && <col style={{ width: '50px' }} />}
+                {visibleColumns.has('day') && <col style={{ width: '40px' }} />}
+                {visibleColumns.has('collection') && <col style={{ width: '80px' }} />}
+                {visibleColumns.has('letters') && <col style={{ width: '55px' }} />}
+                {visibleColumns.has('extras') && <col style={{ width: '50px' }} />}
+                {visibleColumns.has('transcript') && <col style={{ width: '70px' }} />}
+                {visibleColumns.has('metadata') && <col style={{ width: '70px' }} />}
+                {visibleColumns.has('visibility') && <col style={{ width: '70px' }} />}
+                {visibleColumns.has('created') && <col style={{ width: '80px' }} />}
+              </colgroup>
+              <tbody>
               {filteredLetters.length === 0 ? (
                 <tr>
                   <td colSpan={visibleColumns.size + (editMode ? 1 : 0)} className="empty-state">
@@ -1604,7 +1416,8 @@ export default function AdminDashboard() {
                 })
               )}
             </tbody>
-          </table>
+            </table>
+          </div>
         </div>
 
         {/* Pagination controls */}

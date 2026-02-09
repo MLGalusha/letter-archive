@@ -1,0 +1,384 @@
+/* ============================================================================
+   Filter Sidebar Styles
+   ============================================================================ */
+
+/* Overlay backdrop */
+.filter-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Sidebar container */
+.filter-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 300px;
+  height: 100vh;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  z-index: 101;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform 0.25s ease;
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+}
+
+.filter-sidebar.open {
+  transform: translateX(0);
+}
+
+/* ============================================================================
+   Header
+   ============================================================================ */
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-light);
+}
+
+.sidebar-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.clear-all-btn {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clear-all-btn:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.close-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.close-btn:hover {
+  color: var(--text);
+  background: var(--bg-light);
+}
+
+/* ============================================================================
+   Scrollable Content
+   ============================================================================ */
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbar styling */
+.sidebar-content::-webkit-scrollbar,
+.collection-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-content::-webkit-scrollbar-track,
+.collection-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb,
+.collection-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb:hover,
+.collection-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Firefox scrollbar */
+.sidebar-content,
+.collection-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* ============================================================================
+   Filter Sections
+   ============================================================================ */
+
+.filter-section {
+  border-bottom: 1px solid var(--border);
+}
+
+.section-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.section-header:hover {
+  background: var(--bg-light);
+}
+
+.section-arrow {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  width: 12px;
+}
+
+.section-title {
+  flex: 1;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.section-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--text-muted);
+  border-radius: 9px;
+}
+
+.section-content {
+  padding: 0 var(--spacing-lg) var(--spacing-md);
+}
+
+/* ============================================================================
+   Filter Options (Checkboxes)
+   ============================================================================ */
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.filter-option:hover {
+  opacity: 0.8;
+}
+
+/* Custom checkbox styling */
+.filter-option input[type="checkbox"] {
+  /* Hide default checkbox */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  /* Custom styling */
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.filter-option input[type="checkbox"]:hover {
+  border-color: var(--text-muted);
+}
+
+.filter-option input[type="checkbox"]:checked {
+  background: var(--bg-light);
+  border-color: var(--text-muted);
+}
+
+/* Checkmark */
+.filter-option input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  border: solid var(--text);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.filter-label {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.filter-count {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================================
+   Collection Filter
+   ============================================================================ */
+
+.collection-filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.collection-search {
+  width: 100%;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.collection-search:focus {
+  outline: none;
+  border-color: var(--highlight);
+}
+
+.collection-search::placeholder {
+  color: var(--text-muted);
+}
+
+.collection-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.collection-option {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.collection-option:hover {
+  background: var(--bg-light);
+}
+
+.collection-option.selected {
+  background: color-mix(in srgb, var(--highlight) 15%, transparent);
+}
+
+/* Custom radio button styling */
+.collection-option input[type="radio"] {
+  /* Hide default radio */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+  /* Custom styling */
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.collection-option input[type="radio"]:hover {
+  border-color: var(--text-muted);
+}
+
+.collection-option input[type="radio"]:checked {
+  border-color: var(--text-muted);
+}
+
+/* Radio dot */
+.collection-option input[type="radio"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 6px;
+  height: 6px;
+  background: var(--text);
+  border-radius: 50%;
+}
+
+.collection-code {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--text);
+  font-family: monospace;
+}
+
+.collection-count {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================================
+   Footer
+   ============================================================================ */
+
+.sidebar-footer {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid var(--border);
+  background: var(--bg-light);
+}
+
+.sidebar-footer button {
+  flex: 1;
+}

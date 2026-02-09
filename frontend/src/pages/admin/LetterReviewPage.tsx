@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import { getAdminLetterById, deleteLetter } from "../../api/letters";
 import {
   updateLetter,
-  markAsReviewed,
   confirmTranscript,
   verifyTranscript,
   unverifyTranscript,
@@ -261,22 +260,6 @@ export default function LetterReviewPage() {
     }
   };
 
-  const handleMarkReviewed = async () => {
-    if (!letterId) return;
-    setSaving(true);
-
-    try {
-      const updated = await markAsReviewed(letterId);
-      setLetter(updated);
-      showToast("Letter marked as reviewed", "success");
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to mark as reviewed", "error");
-      console.error("Review error:", err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   // Auto-save function (debounced)
   const triggerAutoSave = useCallback(async (data: {
     transcriptionText?: string;
@@ -516,18 +499,6 @@ export default function LetterReviewPage() {
               data-tooltip="Confirm Transcript"
             >
               <Icon name="confirm" size={18} />
-            </button>
-          )}
-
-          {/* Review button - available for any state except already reviewed */}
-          {letter.workflowState !== "REVIEWED" && (
-            <button
-              className="header-action review"
-              onClick={handleMarkReviewed}
-              disabled={saving}
-              data-tooltip="Mark Reviewed"
-            >
-              <Icon name="check" size={18} />
             </button>
           )}
 
@@ -811,16 +782,16 @@ export default function LetterReviewPage() {
               </div>
             )}
 
-            {/* Status indicators (processing, reviewed) */}
+            {/* Status indicators (processing, complete) */}
             {letter.workflowState === "TRANSCRIBED" && letter.transcriptConfirmedAt && (
               <div className="processing-indicator">
                 Extracting metadata...
               </div>
             )}
 
-            {letter.workflowState === "REVIEWED" && letter.metadata.verifiedAt && (
+            {letter.transcriptStatus === "VERIFIED" && letter.metadataContentStatus === "VERIFIED" && (
               <div className="reviewed-indicator">
-                Reviewed on {new Date(letter.metadata.verifiedAt).toLocaleDateString()}
+                Complete — both transcript and metadata verified
               </div>
             )}
           </div>

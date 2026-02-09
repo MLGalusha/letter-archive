@@ -297,7 +297,7 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
           }))
         : [],
       fullText: letter.transcriptionText || '',
-      verified: letter.workflow === 'REVIEWED',
+      verified: letter.transcriptStatus === 'VERIFIED',
     },
     metadata: {
       sender: letter.sender || undefined,
@@ -310,9 +310,9 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
       description: letter.summary || undefined,
       tags: letter.tags || undefined,
       notes: letter.notes || undefined,
-      verified: letter.reviewedAt !== null,
-      verifiedBy: letter.reviewedBy || undefined,
-      verifiedAt: letter.reviewedAt?.toISOString(),
+      verified: letter.metadataContentStatus === 'VERIFIED',
+      verifiedBy: letter.metadataVerifiedBy || undefined,
+      verifiedAt: letter.metadataVerifiedAt?.toISOString(),
       firstPageFilename: letter.pages[0]?.originalFilename,
     },
     status: mapWorkflowVisibilityToStatus(letter.workflow, letter.visibility),

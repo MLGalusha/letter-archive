@@ -24,7 +24,6 @@ export interface AdminLettersResponse {
     uploaded: number;
     transcribed: number;
     metadataReady: number;
-    reviewed: number;
     published: number;
     hidden: number;
     // Two-track content status stats

@@ -86,7 +86,7 @@ router.get('/letters', async (req, res, next) => {
         res.json({
           letters: [],
           pagination: { page: query.page, limit: query.limit, total: 0, totalPages: 0 },
-          stats: { total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0 },
+          stats: { total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, published: 0, hidden: 0 },
         });
         return;
       }
@@ -136,16 +136,15 @@ router.get('/letters', async (req, res, next) => {
       transcribed: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'TRANSCRIBED')`,
       metadataExtracting: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'METADATA_EXTRACTING')`,
       metadataReady: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'METADATA_DRAFTED')`,
-      reviewed: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'REVIEWED')`,
       // Visibility stats
       published: sql<number>`COUNT(*) FILTER (WHERE ${letters.visibility} = 'PUBLISHED')`,
       hidden: sql<number>`COUNT(*) FILTER (WHERE ${letters.visibility} = 'HIDDEN')`,
-      // New two-track transcript stats
+      // Two-track transcript stats
       transcriptEmpty: sql<number>`COUNT(*) FILTER (WHERE ${letters.transcriptStatus} = 'EMPTY')`,
       transcriptAiDraft: sql<number>`COUNT(*) FILTER (WHERE ${letters.transcriptStatus} = 'AI_DRAFT')`,
       transcriptEdited: sql<number>`COUNT(*) FILTER (WHERE ${letters.transcriptStatus} = 'EDITED')`,
       transcriptVerified: sql<number>`COUNT(*) FILTER (WHERE ${letters.transcriptStatus} = 'VERIFIED')`,
-      // New two-track metadata stats
+      // Two-track metadata stats
       metadataEmpty: sql<number>`COUNT(*) FILTER (WHERE ${letters.metadataContentStatus} = 'EMPTY')`,
       metadataAiDraft: sql<number>`COUNT(*) FILTER (WHERE ${letters.metadataContentStatus} = 'AI_DRAFT')`,
       metadataEdited: sql<number>`COUNT(*) FILTER (WHERE ${letters.metadataContentStatus} = 'EDITED')`,
@@ -156,7 +155,7 @@ router.get('/letters', async (req, res, next) => {
 
     const stats = statsResult[0] || {
       total: 0, uploaded: 0, transcribing: 0, transcribed: 0,
-      metadataExtracting: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0,
+      metadataExtracting: 0, metadataReady: 0, published: 0, hidden: 0,
       transcriptEmpty: 0, transcriptAiDraft: 0, transcriptEdited: 0, transcriptVerified: 0,
       metadataEmpty: 0, metadataAiDraft: 0, metadataEdited: 0, metadataVerified: 0,
     };
@@ -235,18 +234,17 @@ router.get('/letters', async (req, res, next) => {
         uploaded: Number(stats.uploaded) + Number(stats.transcribing),
         transcribed: Number(stats.transcribed) + Number(stats.metadataExtracting),
         metadataReady: Number(stats.metadataReady),
-        reviewed: Number(stats.reviewed),
         // Visibility stats
         published: Number(stats.published),
         hidden: Number(stats.hidden),
-        // New two-track transcript stats
+        // Two-track transcript stats
         transcript: {
           empty: Number(stats.transcriptEmpty),
           aiDraft: Number(stats.transcriptAiDraft),
           edited: Number(stats.transcriptEdited),
           verified: Number(stats.transcriptVerified),
         },
-        // New two-track metadata stats
+        // Two-track metadata stats
         metadata: {
           empty: Number(stats.metadataEmpty),
           aiDraft: Number(stats.metadataAiDraft),
@@ -720,8 +718,13 @@ router.post('/letters/bulk/reset-transcriptions', async (req, res, next) => {
       extractedDate: null,
       extractedDateConfidence: null,
       tags: null,
-      reviewedAt: null,
-      reviewedBy: null,
+      // Reset two-track content status
+      transcriptStatus: 'EMPTY',
+      transcriptVerifiedAt: null,
+      transcriptVerifiedBy: null,
+      metadataContentStatus: 'EMPTY',
+      metadataVerifiedAt: null,
+      metadataVerifiedBy: null,
       updatedAt: new Date(),
     }).where(
       and(
@@ -768,8 +771,10 @@ router.post('/letters/bulk/clear-metadata', async (req, res, next) => {
       tags: null,
       metadataStatus: 'PENDING',
       metadataError: null,
-      reviewedAt: null,
-      reviewedBy: null,
+      // Reset metadata two-track status (keep transcript status intact)
+      metadataContentStatus: 'EMPTY',
+      metadataVerifiedAt: null,
+      metadataVerifiedBy: null,
       // Set workflow to TRANSCRIBED if it was past that
       workflow: 'TRANSCRIBED',
       updatedAt: new Date(),
@@ -1108,52 +1113,6 @@ router.post('/letters/:letterId/confirm-transcript', async (req, res, next) => {
   }
 });
 
-/**
- * POST /admin/letters/:letterId/review - Mark letter as reviewed
- *
- * Sets workflow to REVIEWED and records review timestamp.
- * This is an admin sign-off indicating they don't need to revisit this letter.
- */
-router.post('/letters/:letterId/review', async (req, res, next) => {
-  try {
-    const { letterId } = req.params;
-
-    const existingLetter = await getLetterById(letterId);
-    if (!existingLetter) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
-
-    // Set workflow to REVIEWED and record review timestamp
-    await db.update(letters).set({
-      workflow: 'REVIEWED',
-      reviewedAt: new Date(),
-      reviewedBy: 'admin', // TODO: Use actual user when auth is implemented
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
-
-    // Fetch and return updated letter
-    const updatedLetter = await db.query.letters.findFirst({
-      where: eq(letters.id, letterId),
-      with: {
-        collection: true,
-        pages: {
-          orderBy: (p, { asc }) => [asc(p.pageNumber)],
-        },
-      },
-    });
-
-    if (!updatedLetter) {
-      res.status(500).json({ error: 'Failed to fetch updated letter' });
-      return;
-    }
-
-    res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
-  } catch (error) {
-    next(error);
-  }
-});
-
 // ============================================================================
 // VERSION HISTORY ENDPOINTS
 // ============================================================================
@@ -1259,7 +1218,7 @@ router.post('/letters/:letterId/versions', async (req, res, next) => {
     req.log.debug({ letterId, fieldType, versionNumber: nextVersionNumber }, 'Version created');
 
     // Cleanup old versions (keep last 48 hours)
-    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     await db.delete(letterVersions).where(
       and(
         eq(letterVersions.letterId, letterId),

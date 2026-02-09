@@ -96,15 +96,8 @@ export async function confirmTranscript(letterId: string): Promise<Letter> {
   return apiPost<Letter>(`/admin/letters/${letterId}/confirm-transcript`);
 }
 
-/**
- * Mark a letter as reviewed (admin sign-off)
- */
-export async function markAsReviewed(letterId: string): Promise<Letter> {
-  return apiPost<Letter>(`/admin/letters/${letterId}/review`);
-}
-
 // ============================================================================
-// TWO-TRACK VERIFICATION (New workflow system)
+// TWO-TRACK VERIFICATION
 // ============================================================================
 
 /**

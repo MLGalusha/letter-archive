@@ -147,8 +147,8 @@ export const letters = pgTable(
     index('idx_letters_workflow').on(table.workflow),
     index('idx_letters_letter_date').on(table.letterDate),
     index('idx_letters_extracted_date').on(table.extractedDate),
-    // Check constraint: published requires review
-    check('published_requires_review', sql`visibility <> 'PUBLISHED' OR reviewed_at IS NOT NULL`),
+    // Check constraint: published requires both transcript and metadata to be verified
+    check('published_requires_verified', sql`visibility <> 'PUBLISHED' OR (transcript_status = 'VERIFIED' AND metadata_content_status = 'VERIFIED')`),
     // Check constraint: type_sequence >= 1
     check('type_sequence_positive', sql`type_sequence >= 1`),
     // Check constraint: attempt counts >= 0

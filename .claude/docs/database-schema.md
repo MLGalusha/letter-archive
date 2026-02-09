@@ -222,12 +222,14 @@ Stores version history for transcripts and metadata, enabling undo/restore funct
 - L = Letter, P = Photo, E = Ephemera, V = Voice, A = Article
 - D = Diary, C = Cover, N = Card, T = Telegram
 
-### workflow_state
+### workflow_state (Legacy)
 
 ```sql
 'UPLOADED', 'TRANSCRIBING', 'TRANSCRIBED',
 'METADATA_EXTRACTING', 'METADATA_DRAFTED', 'REVIEWED'
 ```
+
+**Note**: The `REVIEWED` state is deprecated. Letter completion is now determined by the two-track content status system (`transcript_status` and `metadata_content_status` both being `VERIFIED`).
 
 ### visibility_state
 

@@ -100,10 +100,8 @@ function parseDateRaw(dateRaw: string | undefined): { year: string; month: strin
   const monthStr = dateRaw.slice(4, 6);
   const dayStr = dateRaw.slice(6, 8);
 
-  // Year: show if any digits known, replace X with ?
-  const year = yearStr.includes('X')
-    ? (yearStr === 'XXXX' ? '—' : yearStr.replace(/X/g, '?'))
-    : yearStr;
+  // Year: show as-is (keep X for unknown digits)
+  const year = yearStr === 'XXXX' ? '—' : yearStr;
 
   // Month: convert to short name if fully known
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -164,7 +162,7 @@ export default function AdminDashboard() {
   // Server response data (pagination and stats)
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
   const [stats, setStats] = useState({
-    total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0,
+    total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, published: 0, hidden: 0,
     // Two-track content status stats
     transcriptEmpty: 0, transcriptAiDraft: 0, transcriptEdited: 0, transcriptVerified: 0,
     metadataEmpty: 0, metadataAiDraft: 0, metadataEdited: 0, metadataVerified: 0,
@@ -337,7 +335,6 @@ export default function AdminDashboard() {
         uploaded: response.stats.uploaded ?? 0,
         transcribed: response.stats.transcribed ?? 0,
         metadataReady: response.stats.metadataReady ?? 0,
-        reviewed: response.stats.reviewed ?? 0,
         published: response.stats.published ?? 0,
         hidden: response.stats.hidden ?? 0,
         transcriptEmpty: response.stats.transcriptEmpty ?? 0,
@@ -1332,13 +1329,6 @@ export default function AdminDashboard() {
                   title="Metadata ready for review"
                 >
                   {stats.metadataReady}
-                </button>
-                <button
-                  className={`filter-pill filter-reviewed ${workflowFilters.has("REVIEWED") ? "active" : ""}`}
-                  onClick={() => toggleWorkflowFilter("REVIEWED")}
-                  title="Reviewed"
-                >
-                  {stats.reviewed}
                 </button>
               </div>
             </div>

@@ -24,7 +24,7 @@ Quick reference for values that must match between frontend and backend. When ad
 
 **Backend location**: `backend/src/routes/admin/letters.ts` - Zod schema line 37, `getSortExpression()` lines 159-175
 
-### Workflow States
+### Workflow States (Legacy)
 
 | State | Frontend | Backend | Status |
 |-------|----------|---------|--------|
@@ -33,7 +33,9 @@ Quick reference for values that must match between frontend and backend. When ad
 | `TRANSCRIBED` | AdminDashboard.tsx | letters.ts:31-32 | OK |
 | `METADATA_EXTRACTING` | AdminDashboard.tsx | letters.ts:31-32 | OK |
 | `METADATA_DRAFTED` | AdminDashboard.tsx | letters.ts:31-32 | OK |
-| `REVIEWED` | AdminDashboard.tsx | letters.ts:31-32 | OK |
+| `REVIEWED` | AdminDashboard.tsx | letters.ts:31-32 | DEPRECATED |
+
+**Note**: The `REVIEWED` state is deprecated. Letter completion is now determined by the two-track content status system: a letter is complete when both `transcriptStatus` and `metadataContentStatus` are `VERIFIED`.
 
 **Frontend location**: `frontend/src/pages/admin/AdminDashboard.tsx` - `WorkflowState` type
 **Backend location**: `backend/src/routes/admin/letters.ts` - Zod enum, `backend/src/db/schema.ts` - DB enum
@@ -69,7 +71,7 @@ Frontend expects (`frontend/src/api/letters.ts`):
   letters: Letter[];
   pagination: { page, limit, total, totalPages };
   stats: {
-    total, uploaded, transcribed, metadataReady, reviewed, published, hidden,
+    total, uploaded, transcribed, metadataReady, published, hidden,
     // Two-track content status stats
     transcriptEmpty, transcriptAiDraft, transcriptEdited, transcriptVerified,
     metadataEmpty, metadataAiDraft, metadataEdited, metadataVerified

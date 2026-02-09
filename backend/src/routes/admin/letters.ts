@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { eq, and, isNull, isNotNull, inArray, sql, or, ilike, asc, desc, count } from 'drizzle-orm';
 import { z } from 'zod';
-import { db, letters, collections } from '../../db/index.js';
+import { db, letters, collections, letterVersions } from '../../db/index.js';
 import { getLetterById, resetLetterForProcessing } from '../../services/letters.js';
 import { transformLetterToDTO, transformLetterWithRelatedToDTO, type LetterWithRelations } from '../../dto/index.js';
 import { processLetter, processMetadata } from '../../pipeline/processor.js';
@@ -130,21 +130,35 @@ router.get('/letters', async (req, res, next) => {
 
     const statsResult = await db.select({
       total: count(),
+      // Legacy workflow stats (for backward compat)
       uploaded: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'UPLOADED')`,
       transcribing: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'TRANSCRIBING')`,
       transcribed: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'TRANSCRIBED')`,
       metadataExtracting: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'METADATA_EXTRACTING')`,
       metadataReady: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'METADATA_DRAFTED')`,
       reviewed: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'REVIEWED')`,
+      // Visibility stats
       published: sql<number>`COUNT(*) FILTER (WHERE ${letters.visibility} = 'PUBLISHED')`,
       hidden: sql<number>`COUNT(*) FILTER (WHERE ${letters.visibility} = 'HIDDEN')`,
+      // New two-track transcript stats
+      transcriptEmpty: sql<number>`COUNT(*) FILTER (WHERE ${letters.transcriptStatus} = 'EMPTY')`,
+      transcriptAiDraft: sql<number>`COUNT(*) FILTER (WHERE ${letters.transcriptStatus} = 'AI_DRAFT')`,
+      transcriptEdited: sql<number>`COUNT(*) FILTER (WHERE ${letters.transcriptStatus} = 'EDITED')`,
+      transcriptVerified: sql<number>`COUNT(*) FILTER (WHERE ${letters.transcriptStatus} = 'VERIFIED')`,
+      // New two-track metadata stats
+      metadataEmpty: sql<number>`COUNT(*) FILTER (WHERE ${letters.metadataContentStatus} = 'EMPTY')`,
+      metadataAiDraft: sql<number>`COUNT(*) FILTER (WHERE ${letters.metadataContentStatus} = 'AI_DRAFT')`,
+      metadataEdited: sql<number>`COUNT(*) FILTER (WHERE ${letters.metadataContentStatus} = 'EDITED')`,
+      metadataVerified: sql<number>`COUNT(*) FILTER (WHERE ${letters.metadataContentStatus} = 'VERIFIED')`,
     })
       .from(letters)
       .where(and(...statsConditions));
 
     const stats = statsResult[0] || {
       total: 0, uploaded: 0, transcribing: 0, transcribed: 0,
-      metadataExtracting: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0
+      metadataExtracting: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0,
+      transcriptEmpty: 0, transcriptAiDraft: 0, transcriptEdited: 0, transcriptVerified: 0,
+      metadataEmpty: 0, metadataAiDraft: 0, metadataEdited: 0, metadataVerified: 0,
     };
 
     // Get total count for filtered results (for pagination)
@@ -158,7 +172,7 @@ router.get('/letters', async (req, res, next) => {
     const sortDirection = query.sortOrder === 'asc' ? asc : desc;
 
     // Build orderBy based on sort field
-    const getOrderBy = (): Parameters<typeof db.query.letters.findMany>[0]['orderBy'] => {
+    const getOrderBy = () => {
       switch (query.sort) {
         case 'letterDate':
           return sortDirection(sql`REPLACE(${letters.dateRaw}, 'X', '0')`);
@@ -215,13 +229,30 @@ router.get('/letters', async (req, res, next) => {
         totalPages,
       },
       stats: {
+        // Total
         total: Number(stats.total),
+        // Legacy workflow stats (for backward compat)
         uploaded: Number(stats.uploaded) + Number(stats.transcribing),
         transcribed: Number(stats.transcribed) + Number(stats.metadataExtracting),
         metadataReady: Number(stats.metadataReady),
         reviewed: Number(stats.reviewed),
+        // Visibility stats
         published: Number(stats.published),
         hidden: Number(stats.hidden),
+        // New two-track transcript stats
+        transcript: {
+          empty: Number(stats.transcriptEmpty),
+          aiDraft: Number(stats.transcriptAiDraft),
+          edited: Number(stats.transcriptEdited),
+          verified: Number(stats.transcriptVerified),
+        },
+        // New two-track metadata stats
+        metadata: {
+          empty: Number(stats.metadataEmpty),
+          aiDraft: Number(stats.metadataAiDraft),
+          edited: Number(stats.metadataEdited),
+          verified: Number(stats.metadataVerified),
+        },
       },
     });
   } catch (error) {
@@ -931,7 +962,41 @@ router.put('/letters/:letterId', async (req, res, next) => {
       }
     }
 
-    // Workflow auto-transition based on content changes
+    // =========================================================================
+    // TWO-TRACK STATUS TRANSITIONS (new system)
+    // =========================================================================
+
+    // Transcript edit: AI_DRAFT → EDITED (but not VERIFIED → EDITED, that requires explicit action)
+    if (updates.transcriptionText !== undefined) {
+      const currentTranscriptStatus = existingLetter.transcriptStatus;
+      if (currentTranscriptStatus === 'AI_DRAFT') {
+        dbUpdates.transcriptStatus = 'EDITED';
+        req.log.debug({ letterId }, 'Transcript status: AI_DRAFT → EDITED');
+      }
+      // Note: VERIFIED stays VERIFIED - editing verified content keeps it verified
+    }
+
+    // Metadata edit: AI_DRAFT → EDITED
+    const hasMetadataUpdate = [
+      updates.sender,
+      updates.recipient,
+      updates.locationWritten,
+      updates.summary,
+      updates.hook,
+      updates.extractedDate,
+    ].some((field) => field !== undefined);
+
+    if (hasMetadataUpdate) {
+      const currentMetadataStatus = existingLetter.metadataContentStatus;
+      if (currentMetadataStatus === 'AI_DRAFT') {
+        dbUpdates.metadataContentStatus = 'EDITED';
+        req.log.debug({ letterId }, 'Metadata status: AI_DRAFT → EDITED');
+      }
+    }
+
+    // =========================================================================
+    // LEGACY WORKFLOW TRANSITIONS (kept for backward compatibility)
+    // =========================================================================
     const currentWorkflow = existingLetter.workflow;
 
     // If admin adds transcription to an UPLOADED letter → TRANSCRIBED
@@ -946,14 +1011,6 @@ router.put('/letters/:letterId', async (req, res, next) => {
     }
 
     // If admin adds any metadata to a TRANSCRIBED letter → METADATA_DRAFTED
-    const hasMetadataUpdate = [
-      updates.sender,
-      updates.recipient,
-      updates.locationWritten,
-      updates.summary,
-      updates.extractedDate,
-    ].some((field) => field !== undefined && field !== null && field !== '');
-
     if (hasMetadataUpdate) {
       const workflowToCheck = (dbUpdates.workflow as string) || currentWorkflow;
       if (workflowToCheck === 'TRANSCRIBED') {
@@ -1090,6 +1147,405 @@ router.post('/letters/:letterId/review', async (req, res, next) => {
       res.status(500).json({ error: 'Failed to fetch updated letter' });
       return;
     }
+
+    res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
+// VERSION HISTORY ENDPOINTS
+// ============================================================================
+
+const versionBodySchema = z.object({
+  fieldType: z.enum(['transcript', 'metadata']),
+  content: z.union([z.string(), z.record(z.unknown())]),
+  source: z.enum(['ai', 'human']),
+});
+
+/**
+ * GET /admin/letters/:letterId/versions - Get version history for a letter
+ *
+ * Query params:
+ * - fieldType: 'transcript' | 'metadata' (required)
+ */
+router.get('/letters/:letterId/versions', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+    const fieldType = req.query.fieldType as string;
+
+    if (!fieldType || !['transcript', 'metadata'].includes(fieldType)) {
+      res.status(400).json({ error: 'fieldType query param required (transcript or metadata)' });
+      return;
+    }
+
+    // Verify letter exists
+    const letter = await getLetterById(letterId);
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Fetch versions for this letter and field type
+    const versions = await db.query.letterVersions.findMany({
+      where: and(
+        eq(letterVersions.letterId, letterId),
+        eq(letterVersions.fieldType, fieldType)
+      ),
+      orderBy: (v, { desc }) => [desc(v.versionNumber)],
+    });
+
+    res.json({
+      versions: versions.map(v => ({
+        versionNumber: v.versionNumber,
+        content: v.content,
+        source: v.source,
+        createdAt: v.createdAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/letters/:letterId/versions - Create a new version snapshot
+ *
+ * Called on auto-save to preserve version history.
+ */
+router.post('/letters/:letterId/versions', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    // Verify letter exists
+    const letter = await getLetterById(letterId);
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Validate body
+    const parseResult = versionBodySchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
+      return;
+    }
+    const { fieldType, content, source } = parseResult.data;
+
+    // Get the next version number
+    const existingVersions = await db.query.letterVersions.findMany({
+      where: and(
+        eq(letterVersions.letterId, letterId),
+        eq(letterVersions.fieldType, fieldType)
+      ),
+      orderBy: (v, { desc }) => [desc(v.versionNumber)],
+      limit: 1,
+    });
+
+    const nextVersionNumber = existingVersions.length > 0
+      ? existingVersions[0].versionNumber + 1
+      : 1;
+
+    // Create the version
+    const [newVersion] = await db.insert(letterVersions).values({
+      letterId,
+      fieldType,
+      versionNumber: nextVersionNumber,
+      content: typeof content === 'string' ? { text: content } : content,
+      source,
+    }).returning();
+
+    req.log.debug({ letterId, fieldType, versionNumber: nextVersionNumber }, 'Version created');
+
+    // Cleanup old versions (keep last 48 hours)
+    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    await db.delete(letterVersions).where(
+      and(
+        eq(letterVersions.letterId, letterId),
+        eq(letterVersions.fieldType, fieldType),
+        sql`${letterVersions.createdAt} < ${cutoff}`,
+        // Always keep at least version 1 (AI original)
+        sql`${letterVersions.versionNumber} > 1`
+      )
+    );
+
+    res.json({
+      versionNumber: newVersion.versionNumber,
+      createdAt: newVersion.createdAt.toISOString(),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/letters/:letterId/versions/:versionNumber/restore - Restore a previous version
+ *
+ * Copies the content from the specified version back to the letter.
+ */
+router.post('/letters/:letterId/versions/:versionNumber/restore', async (req, res, next) => {
+  try {
+    const { letterId, versionNumber } = req.params;
+    const fieldType = req.query.fieldType as string;
+
+    if (!fieldType || !['transcript', 'metadata'].includes(fieldType)) {
+      res.status(400).json({ error: 'fieldType query param required (transcript or metadata)' });
+      return;
+    }
+
+    // Verify letter exists
+    const letter = await getLetterById(letterId);
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Find the version to restore
+    const version = await db.query.letterVersions.findFirst({
+      where: and(
+        eq(letterVersions.letterId, letterId),
+        eq(letterVersions.fieldType, fieldType),
+        eq(letterVersions.versionNumber, parseInt(versionNumber, 10))
+      ),
+    });
+
+    if (!version) {
+      res.status(404).json({ error: 'Version not found' });
+      return;
+    }
+
+    // Restore the content
+    const content = version.content as Record<string, unknown>;
+
+    if (fieldType === 'transcript') {
+      await db.update(letters).set({
+        transcriptionText: (content.text as string) || '',
+        transcriptStatus: 'EDITED',
+        updatedAt: new Date(),
+      }).where(eq(letters.id, letterId));
+    } else {
+      // Restore metadata fields
+      await db.update(letters).set({
+        sender: (content.sender as string) || null,
+        recipient: (content.recipient as string) || null,
+        locationWritten: (content.locationWritten as string) || null,
+        hook: (content.hook as string) || null,
+        summary: (content.summary as string) || null,
+        metadataContentStatus: 'EDITED',
+        updatedAt: new Date(),
+      }).where(eq(letters.id, letterId));
+    }
+
+    req.log.info({ letterId, fieldType, restoredVersion: versionNumber }, 'Version restored');
+
+    // Fetch and return updated letter
+    const updatedLetter = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+      with: {
+        collection: true,
+        pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
+      },
+    });
+
+    res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
+// TWO-TRACK VERIFICATION ENDPOINTS (New workflow system)
+// ============================================================================
+
+/**
+ * POST /admin/letters/:letterId/verify-transcript - Mark transcript as verified
+ *
+ * This is an explicit user action to say "I've reviewed this transcript and it's correct."
+ * Does NOT auto-transition - user must explicitly verify.
+ */
+router.post('/letters/:letterId/verify-transcript', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    const existingLetter = await getLetterById(letterId);
+    if (!existingLetter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Can only verify if there's content (not EMPTY)
+    if (existingLetter.transcriptStatus === 'EMPTY') {
+      res.status(400).json({
+        error: 'Cannot verify empty transcript',
+        currentStatus: existingLetter.transcriptStatus,
+      });
+      return;
+    }
+
+    // Update transcript status to VERIFIED
+    await db.update(letters).set({
+      transcriptStatus: 'VERIFIED',
+      transcriptVerifiedAt: new Date(),
+      transcriptVerifiedBy: 'admin', // TODO: Use actual user when auth is implemented
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+
+    req.log.info({ letterId, previousStatus: existingLetter.transcriptStatus }, 'Transcript verified');
+
+    // Fetch and return updated letter
+    const updatedLetter = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+      with: {
+        collection: true,
+        pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
+      },
+    });
+
+    res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/letters/:letterId/unverify-transcript - Reset transcript verification
+ *
+ * Moves transcript from VERIFIED back to EDITED (allowing re-verification).
+ */
+router.post('/letters/:letterId/unverify-transcript', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    const existingLetter = await getLetterById(letterId);
+    if (!existingLetter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    if (existingLetter.transcriptStatus !== 'VERIFIED') {
+      res.status(400).json({
+        error: 'Transcript is not verified',
+        currentStatus: existingLetter.transcriptStatus,
+      });
+      return;
+    }
+
+    // Reset to EDITED status
+    await db.update(letters).set({
+      transcriptStatus: 'EDITED',
+      transcriptVerifiedAt: null,
+      transcriptVerifiedBy: null,
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+
+    req.log.info({ letterId }, 'Transcript verification removed');
+
+    const updatedLetter = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+      with: {
+        collection: true,
+        pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
+      },
+    });
+
+    res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/letters/:letterId/verify-metadata - Mark metadata as verified
+ *
+ * This is an explicit user action to say "I've reviewed this metadata and it's correct."
+ */
+router.post('/letters/:letterId/verify-metadata', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    const existingLetter = await getLetterById(letterId);
+    if (!existingLetter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Can only verify if there's content (not EMPTY)
+    if (existingLetter.metadataContentStatus === 'EMPTY') {
+      res.status(400).json({
+        error: 'Cannot verify empty metadata',
+        currentStatus: existingLetter.metadataContentStatus,
+      });
+      return;
+    }
+
+    // Update metadata status to VERIFIED
+    await db.update(letters).set({
+      metadataContentStatus: 'VERIFIED',
+      metadataVerifiedAt: new Date(),
+      metadataVerifiedBy: 'admin', // TODO: Use actual user when auth is implemented
+      // Also mark as reviewed for legacy compatibility
+      reviewedAt: new Date(),
+      reviewedBy: 'admin',
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+
+    req.log.info({ letterId, previousStatus: existingLetter.metadataContentStatus }, 'Metadata verified');
+
+    const updatedLetter = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+      with: {
+        collection: true,
+        pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
+      },
+    });
+
+    res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/letters/:letterId/unverify-metadata - Reset metadata verification
+ *
+ * Moves metadata from VERIFIED back to EDITED (allowing re-verification).
+ */
+router.post('/letters/:letterId/unverify-metadata', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    const existingLetter = await getLetterById(letterId);
+    if (!existingLetter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    if (existingLetter.metadataContentStatus !== 'VERIFIED') {
+      res.status(400).json({
+        error: 'Metadata is not verified',
+        currentStatus: existingLetter.metadataContentStatus,
+      });
+      return;
+    }
+
+    // Reset to EDITED status
+    await db.update(letters).set({
+      metadataContentStatus: 'EDITED',
+      metadataVerifiedAt: null,
+      metadataVerifiedBy: null,
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+
+    req.log.info({ letterId }, 'Metadata verification removed');
+
+    const updatedLetter = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+      with: {
+        collection: true,
+        pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
+      },
+    });
 
     res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
   } catch (error) {

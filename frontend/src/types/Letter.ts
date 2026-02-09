@@ -18,6 +18,9 @@ export type WorkflowState =
 
 export type VisibilityState = 'PUBLISHED' | 'HIDDEN';
 
+// Two-track content status system
+export type ContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+
 export type LetterImageType =
   | 'letter'
   | 'photo'
@@ -76,6 +79,14 @@ export interface Letter {
   status: LetterStatus;
   workflowState: WorkflowState;
   visibility: VisibilityState;
+  // Two-track content status system
+  transcriptStatus: ContentStatus;
+  metadataContentStatus: ContentStatus;
+  transcriptVerifiedAt?: string;
+  transcriptVerifiedBy?: string;
+  metadataVerifiedAt?: string;
+  metadataVerifiedBy?: string;
+  // Legacy field
   transcriptConfirmedAt?: string;
   createdAt: string;
   updatedAt?: string;

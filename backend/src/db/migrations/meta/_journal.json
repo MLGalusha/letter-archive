@@ -29,6 +29,13 @@
       "when": 1770566400000,
       "tag": "0003_add_transcript_confirmation",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1770617357527,
+      "tag": "0004_wandering_oracle",
+      "breakpoints": true
     }
   ]
 }

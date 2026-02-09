@@ -46,6 +46,14 @@ export const dateConfidenceEnum = pgEnum('date_confidence', [
   'inferred',
 ]);
 
+// Content status for transcript and metadata (two-track workflow system)
+export const contentStatusEnum = pgEnum('content_status', [
+  'EMPTY',      // No content yet
+  'AI_DRAFT',   // AI generated, human hasn't touched
+  'EDITED',     // Human has edited
+  'VERIFIED',   // Human explicitly marked as done
+]);
+
 // ============================================================================
 // TABLES
 // ============================================================================
@@ -75,9 +83,17 @@ export const letters = pgTable(
     type: letterTypeEnum('type').notNull(),
     typeSequence: integer('type_sequence').notNull(),
 
-    // Pipeline + visibility
+    // Pipeline + visibility (legacy workflow kept for backward compat)
     workflow: workflowStateEnum('workflow').notNull().default('UPLOADED'),
     visibility: visibilityStateEnum('visibility').notNull().default('HIDDEN'),
+
+    // Two-track content status system (replaces workflow)
+    transcriptStatus: contentStatusEnum('transcript_status').notNull().default('EMPTY'),
+    metadataContentStatus: contentStatusEnum('metadata_content_status').notNull().default('EMPTY'),
+    transcriptVerifiedAt: timestamp('transcript_verified_at', { withTimezone: true }),
+    transcriptVerifiedBy: text('transcript_verified_by'),
+    metadataVerifiedAt: timestamp('metadata_verified_at', { withTimezone: true }),
+    metadataVerifiedBy: text('metadata_verified_by'),
 
     // Transcription fields
     transcriptionStatus: jobStatusEnum('transcription_status').notNull().default('PENDING'),
@@ -166,6 +182,32 @@ export const letterPages = pgTable(
   ]
 );
 
+// Letter versions table (for version history)
+export const letterVersions = pgTable(
+  'letter_versions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    letterId: uuid('letter_id')
+      .notNull()
+      .references(() => letters.id, { onDelete: 'cascade' }),
+    fieldType: text('field_type').notNull(), // 'transcript' or 'metadata'
+    versionNumber: integer('version_number').notNull(),
+    content: jsonb('content').notNull(), // { text: "..." } for transcript, { sender, recipient, ... } for metadata
+    source: text('source').notNull(), // 'ai' or 'human'
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Each letter + field_type has unique version numbers
+    uniqueIndex('letter_versions_unique').on(table.letterId, table.fieldType, table.versionNumber),
+    // Query index
+    index('idx_versions_letter').on(table.letterId),
+    // Check constraints
+    check('field_type_valid', sql`field_type IN ('transcript', 'metadata')`),
+    check('source_valid', sql`source IN ('ai', 'human')`),
+    check('version_number_positive', sql`version_number >= 1`),
+  ]
+);
+
 // ============================================================================
 // RELATIONS
 // ============================================================================
@@ -180,11 +222,19 @@ export const lettersRelations = relations(letters, ({ one, many }) => ({
     references: [collections.id],
   }),
   pages: many(letterPages),
+  versions: many(letterVersions),
 }));
 
 export const letterPagesRelations = relations(letterPages, ({ one }) => ({
   letter: one(letters, {
     fields: [letterPages.letterId],
+    references: [letters.id],
+  }),
+}));
+
+export const letterVersionsRelations = relations(letterVersions, ({ one }) => ({
+  letter: one(letters, {
+    fields: [letterVersions.letterId],
     references: [letters.id],
   }),
 }));
@@ -202,8 +252,12 @@ export type NewLetter = typeof letters.$inferInsert;
 export type LetterPage = typeof letterPages.$inferSelect;
 export type NewLetterPage = typeof letterPages.$inferInsert;
 
+export type LetterVersion = typeof letterVersions.$inferSelect;
+export type NewLetterVersion = typeof letterVersions.$inferInsert;
+
 export type LetterType = 'L' | 'P' | 'E' | 'V' | 'A' | 'D' | 'C' | 'N' | 'T';
 export type WorkflowState = 'UPLOADED' | 'TRANSCRIBING' | 'TRANSCRIBED' | 'METADATA_EXTRACTING' | 'METADATA_DRAFTED' | 'REVIEWED';
 export type VisibilityState = 'PUBLISHED' | 'HIDDEN';
 export type JobStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
 export type DateConfidence = 'exact' | 'unknown' | 'inferred';
+export type ContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';

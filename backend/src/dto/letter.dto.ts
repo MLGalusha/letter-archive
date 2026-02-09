@@ -5,6 +5,7 @@ import type {
   WorkflowState,
   VisibilityState,
   LetterType,
+  ContentStatus,
 } from '../db/index.js';
 
 // ============================================================================
@@ -68,6 +69,14 @@ export interface FrontendLetter {
   status: FrontendLetterStatus;
   workflowState: WorkflowState;
   visibility: VisibilityState;
+  // Two-track content status system
+  transcriptStatus: ContentStatus;
+  metadataContentStatus: ContentStatus;
+  transcriptVerifiedAt?: string;
+  transcriptVerifiedBy?: string;
+  metadataVerifiedAt?: string;
+  metadataVerifiedBy?: string;
+  // Legacy field kept for backward compat
   transcriptConfirmedAt?: string;
   createdAt: string;
   updatedAt?: string;
@@ -309,6 +318,14 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
     status: mapWorkflowVisibilityToStatus(letter.workflow, letter.visibility),
     workflowState: letter.workflow,
     visibility: letter.visibility,
+    // Two-track content status
+    transcriptStatus: letter.transcriptStatus,
+    metadataContentStatus: letter.metadataContentStatus,
+    transcriptVerifiedAt: letter.transcriptVerifiedAt?.toISOString(),
+    transcriptVerifiedBy: letter.transcriptVerifiedBy || undefined,
+    metadataVerifiedAt: letter.metadataVerifiedAt?.toISOString(),
+    metadataVerifiedBy: letter.metadataVerifiedBy || undefined,
+    // Legacy field
     transcriptConfirmedAt: letter.transcriptConfirmedAt?.toISOString(),
     createdAt: letter.createdAt.toISOString(),
     updatedAt: letter.updatedAt?.toISOString(),

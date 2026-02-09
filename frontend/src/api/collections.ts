@@ -27,6 +27,10 @@ export interface AdminCollectionInfo extends CollectionInfo {
   reviewedCount: number;
   letterPageCount: number;
   extraContentCount: number;
+  // Verification and date range stats
+  verifiedCount: number;      // Letters with both transcript AND metadata verified
+  minDate: string | null;     // Earliest dateRaw (YYYYMMDD format)
+  maxDate: string | null;     // Latest dateRaw (YYYYMMDD format)
 }
 
 /**

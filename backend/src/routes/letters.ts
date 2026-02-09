@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, and, isNull, inArray, asc, desc, sql } from 'drizzle-orm';
+import { eq, and, isNull, inArray, ilike, asc, desc, sql } from 'drizzle-orm';
 import { db, letters, collections } from '../db/index.js';
 import { letterQuerySchema } from '../schemas/letter.js';
 import {
@@ -33,13 +33,13 @@ router.get('/letters', async (req, res, next) => {
     // Build conditions WITHOUT workflow filter (applied after grouping)
     const conditions = [isNull(letters.deletedAt)];
 
-    // Filter by collection code
+    // Filter by collection code - supports partial matching (e.g., "7" matches "007")
     if (query.collection) {
-      const collection = await db.query.collections.findFirst({
-        where: eq(collections.collectionCode, query.collection),
+      const matchingCollections = await db.query.collections.findMany({
+        where: ilike(collections.collectionCode, `%${query.collection}`),
       });
-      if (collection) {
-        conditions.push(eq(letters.collectionId, collection.id));
+      if (matchingCollections.length > 0) {
+        conditions.push(inArray(letters.collectionId, matchingCollections.map(c => c.id)));
       } else {
         // Collection not found, return empty results
         res.json({ letters: [], page: query.page, limit: query.limit, total: 0 });

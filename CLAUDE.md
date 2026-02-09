@@ -2,6 +2,15 @@
 
 Historical letter preservation and exploration platform. Full-stack app with React frontend, Express backend, PostgreSQL database, and OpenAI-powered transcription.
 
+## Before You Start
+
+**Read these first:**
+
+| Document | Why |
+|----------|-----|
+| [about-this-project.md](.claude/docs/about-this-project.md) | Understand what we're building and why—the vision of a "wise guide" AI that helps visitors explore letter stories |
+| [collaboration-style.md](.claude/docs/collaboration-style.md) | **How we work together.** Ask questions proactively. Plan before implementing. Challenge ideas. We build this together. |
+
 ## Quick Reference
 
 Before exploring the codebase manually, **check if a doc already covers it**:
@@ -90,6 +99,8 @@ When you modify code that is documented, update the relevant doc:
 | Modify processing/transcription logic | `processing-pipeline.md` |
 | Change database schema | `database-schema.md` |
 | Add sort fields, workflow states, or other shared enums | `frontend-backend-sync.md` |
+| Change collaboration guidelines or working style | `collaboration-style.md` |
+| Update project goals or vision | `about-this-project.md` |
 
 ## Adding New Documentation
 

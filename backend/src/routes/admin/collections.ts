@@ -35,6 +35,11 @@ router.get('/', async (_req, res, next) => {
             transcribed: sql<number>`count(*) filter (where ${letters.workflow} = 'TRANSCRIBED')::int`,
             metadataReady: sql<number>`count(*) filter (where ${letters.workflow} = 'METADATA_DRAFTED')::int`,
             reviewed: sql<number>`count(*) filter (where ${letters.workflow} = 'REVIEWED')::int`,
+            // Fully verified count (both transcript AND metadata verified)
+            verified: sql<number>`count(*) filter (where ${letters.transcriptStatus} = 'VERIFIED' AND ${letters.metadataContentStatus} = 'VERIFIED')::int`,
+            // Date range
+            minDate: sql<string | null>`min(${letters.dateRaw})`,
+            maxDate: sql<string | null>`max(${letters.dateRaw})`,
           })
           .from(letters)
           .where(
@@ -62,6 +67,9 @@ router.get('/', async (_req, res, next) => {
           transcribedCount: stats?.transcribed || 0,
           metadataReadyCount: stats?.metadataReady || 0,
           reviewedCount: stats?.reviewed || 0,
+          verifiedCount: stats?.verified || 0,
+          minDate: stats?.minDate || null,
+          maxDate: stats?.maxDate || null,
           letterPageCount: pageCounts?.letterPageCount || 0,
           extraContentCount: pageCounts?.extraContentCount || 0,
         };

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAdminLetters, deleteLetter } from "../../api/letters";
-import { getAdminCollections, type AdminCollectionInfo } from "../../api/collections";
 import {
   getProcessingStatus,
   startTranscription,
@@ -11,19 +10,44 @@ import {
   abortProcessing,
   bulkResetTranscriptions,
   bulkClearMetadata,
+  bulkTranscribe,
+  bulkExtractMetadata,
   type ProcessingStatus,
 } from "../../api/admin";
 import { useToast } from "../../contexts/ToastContext";
-import type { Letter, WorkflowState, VisibilityState, ContentStatus } from "../../types/Letter";
+import type { Letter, ContentStatus } from "../../types/Letter";
 import {
   Button,
   ConfirmDialog,
   VisibilityBadge,
-  DropdownHeader,
   DropdownItem,
+  DropdownDivider,
 } from "../../components/common";
-import { FilterSidebar, type FilterState } from "../../components/FilterSidebar";
 import { getRecentEdits, formatTimeAgo, type RecentEdit } from "../../utils/recentEdits";
+
+// Visibility filter type (inline instead of from FilterSidebar)
+type VisibilityFilter = 'ALL' | 'PUBLISHED' | 'HIDDEN';
+
+// Date filter mode
+type DateMode = 'specific' | 'range';
+
+// Year/month/day options for date dropdowns
+const YEAR_OPTIONS = Array.from({ length: 151 }, (_, i) => 1800 + i);
+const MONTH_OPTIONS = [
+  { value: 1, label: 'Jan' },
+  { value: 2, label: 'Feb' },
+  { value: 3, label: 'Mar' },
+  { value: 4, label: 'Apr' },
+  { value: 5, label: 'May' },
+  { value: 6, label: 'Jun' },
+  { value: 7, label: 'Jul' },
+  { value: 8, label: 'Aug' },
+  { value: 9, label: 'Sep' },
+  { value: 10, label: 'Oct' },
+  { value: 11, label: 'Nov' },
+  { value: 12, label: 'Dec' },
+];
+const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
 import "./AdminDashboard.css";
 
 // Server-side sort fields (must match backend Zod schema)
@@ -123,15 +147,17 @@ function parseDateRaw(dateRaw: string | undefined): { year: string; month: strin
 const STORAGE_KEY = 'adminDashboardState';
 
 interface PersistedState {
-  visibilityFilters: VisibilityState[];
-  workflowFilters: WorkflowState[];
-  transcriptStatusFilters: ContentStatus[];
-  metadataStatusFilters: ContentStatus[];
+  visibilityFilter: VisibilityFilter;
   collectionFilter: string;
-  collectionInput: string;
   searchQuery: string;
   sortColumns: SortColumn[];
-  filterSidebarOpen: boolean;
+  // Date filters
+  dateMode: DateMode;
+  year: number | null;
+  month: number | null;
+  day: number | null;
+  dateFrom: string | null;
+  dateTo: string | null;
 }
 
 function loadPersistedState(): Partial<PersistedState> {
@@ -166,7 +192,7 @@ export default function AdminDashboard() {
   // Server response data (pagination and stats)
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
   const [stats, setStats] = useState({
-    total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, published: 0, hidden: 0,
+    total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0,
     // Two-track content status stats
     transcriptEmpty: 0, transcriptAiDraft: 0, transcriptEdited: 0, transcriptVerified: 0,
     metadataEmpty: 0, metadataAiDraft: 0, metadataEdited: 0, metadataVerified: 0,
@@ -175,26 +201,47 @@ export default function AdminDashboard() {
   // Load persisted state on mount
   const persistedState = useRef(loadPersistedState());
 
-  // Filter sidebar state
-  const [showFilterSidebar, setShowFilterSidebar] = useState(
-    persistedState.current.filterSidebarOpen ?? false
+  // Date dropdown state
+  const [showDateDropdown, setShowDateDropdown] = useState(false);
+  const [dateMode, setDateMode] = useState<DateMode>(
+    persistedState.current.dateMode ?? 'specific'
+  );
+  const dateDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Content status toggle (Transcript vs Metadata view)
+  type ContentFilterView = 'transcript' | 'metadata';
+  const [contentFilterView, setContentFilterView] = useState<ContentFilterView>('transcript');
+
+  // Collection input for number-based filtering
+  const [collectionInput, setCollectionInput] = useState(
+    persistedState.current.collectionFilter === 'all' ? '' : persistedState.current.collectionFilter ?? ''
   );
 
-  // Filters (initialized from localStorage) - multi-select using Sets
-  const [visibilityFilters, setVisibilityFilters] = useState<VisibilityState[]>(
-    persistedState.current.visibilityFilters ?? []
+  // Filters (initialized from localStorage)
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>(
+    persistedState.current.visibilityFilter ?? 'ALL'
   );
-  const [workflowFilters, setWorkflowFilters] = useState<Set<WorkflowState>>(
-    new Set(persistedState.current.workflowFilters ?? [])
-  );
-  const [transcriptStatusFilters, setTranscriptStatusFilters] = useState<ContentStatus[]>(
-    persistedState.current.transcriptStatusFilters ?? []
-  );
-  const [metadataStatusFilters, setMetadataStatusFilters] = useState<ContentStatus[]>(
-    persistedState.current.metadataStatusFilters ?? []
-  );
+  // Content status filters - not persisted since they're not yet implemented server-side
+  const [transcriptStatusFilters, setTranscriptStatusFilters] = useState<ContentStatus[]>([]);
+  const [metadataStatusFilters, setMetadataStatusFilters] = useState<ContentStatus[]>([]);
   const [collectionFilter, setCollectionFilter] = useState<string>(
     persistedState.current.collectionFilter ?? "all"
+  );
+  // Date filters
+  const [yearFilter, setYearFilter] = useState<number | null>(
+    persistedState.current.year ?? null
+  );
+  const [monthFilter, setMonthFilter] = useState<number | null>(
+    persistedState.current.month ?? null
+  );
+  const [dayFilter, setDayFilter] = useState<number | null>(
+    persistedState.current.day ?? null
+  );
+  const [dateFromFilter, setDateFromFilter] = useState<string | null>(
+    persistedState.current.dateFrom ?? null
+  );
+  const [dateToFilter, setDateToFilter] = useState<string | null>(
+    persistedState.current.dateTo ?? null
   );
 
   // Debounced search - separate input state from query state
@@ -216,9 +263,6 @@ export default function AdminDashboard() {
       }
     };
   }, [searchInput]);
-
-  // Collections state (for filter sidebar)
-  const [collections, setCollections] = useState<AdminCollectionInfo[]>([]);
 
   // Recent edits state
   const [recentEdits, setRecentEdits] = useState<RecentEdit[]>([]);
@@ -281,19 +325,22 @@ export default function AdminDashboard() {
   };
 
   // Persist state changes to localStorage
+  // Note: transcriptStatusFilters and metadataStatusFilters are not persisted
+  // since server-side filtering for them is not yet implemented
   useEffect(() => {
     savePersistedState({
-      visibilityFilters: visibilityFilters,
-      workflowFilters: Array.from(workflowFilters),
-      transcriptStatusFilters,
-      metadataStatusFilters,
+      visibilityFilter,
       collectionFilter,
-      collectionInput: '', // No longer used
       searchQuery,
       sortColumns,
-      filterSidebarOpen: showFilterSidebar,
+      dateMode,
+      year: yearFilter,
+      month: monthFilter,
+      day: dayFilter,
+      dateFrom: dateFromFilter,
+      dateTo: dateToFilter,
     });
-  }, [visibilityFilters, workflowFilters, transcriptStatusFilters, metadataStatusFilters, collectionFilter, searchQuery, sortColumns, showFilterSidebar]);
+  }, [visibilityFilter, collectionFilter, searchQuery, sortColumns, dateMode, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter]);
 
   // Edit mode
   const [editMode, setEditMode] = useState(false);
@@ -317,7 +364,6 @@ export default function AdminDashboard() {
   const [wasRunning, setWasRunning] = useState(false);
   const [lastCompletedAt, setLastCompletedAt] = useState<number | null>(null);
   const processButtonRef = useRef<HTMLDivElement>(null);
-  const editButtonRef = useRef<HTMLDivElement>(null);
 
   const fetchLetters = useCallback(async (showLoading = false, page = pagination.page) => {
     if (showLoading) setLoading(true);
@@ -326,8 +372,8 @@ export default function AdminDashboard() {
       // Find the first server-sortable column (skip client-side computed columns)
       const serverSort = sortColumns.find(col => isServerSortField(col.field));
 
-      // Visibility: if exactly one selected, use it; otherwise no filter (shows all)
-      const visibilityParam = visibilityFilters.length === 1 ? visibilityFilters[0] : undefined;
+      // Visibility: convert filter type to API param (ALL means no filter)
+      const visibilityParam = visibilityFilter !== 'ALL' ? visibilityFilter : undefined;
 
       // Server-side filtering and pagination
       const response = await getAdminLetters({
@@ -335,10 +381,18 @@ export default function AdminDashboard() {
         limit: 50,
         collection: collectionFilter === "all" ? undefined : collectionFilter,
         visibility: visibilityParam,
-        workflow: workflowFilters.size > 0 ? Array.from(workflowFilters) : undefined,
         search: searchQuery || undefined,
         sort: serverSort ? (serverSort.field as ServerSortField) : 'createdAt',
         sortOrder: serverSort ? serverSort.direction : 'desc',
+        // Date filters
+        year: yearFilter ?? undefined,
+        month: monthFilter ?? undefined,
+        day: dayFilter ?? undefined,
+        dateFrom: dateFromFilter ?? undefined,
+        dateTo: dateToFilter ?? undefined,
+        // Content status filters (join arrays to comma-separated strings)
+        transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(',') : undefined,
+        metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(',') : undefined,
       });
       setLetters(response.letters);
       setPagination(response.pagination);
@@ -347,16 +401,18 @@ export default function AdminDashboard() {
         uploaded: response.stats.uploaded ?? 0,
         transcribed: response.stats.transcribed ?? 0,
         metadataReady: response.stats.metadataReady ?? 0,
+        reviewed: response.stats.reviewed ?? 0,
         published: response.stats.published ?? 0,
         hidden: response.stats.hidden ?? 0,
-        transcriptEmpty: response.stats.transcriptEmpty ?? 0,
-        transcriptAiDraft: response.stats.transcriptAiDraft ?? 0,
-        transcriptEdited: response.stats.transcriptEdited ?? 0,
-        transcriptVerified: response.stats.transcriptVerified ?? 0,
-        metadataEmpty: response.stats.metadataEmpty ?? 0,
-        metadataAiDraft: response.stats.metadataAiDraft ?? 0,
-        metadataEdited: response.stats.metadataEdited ?? 0,
-        metadataVerified: response.stats.metadataVerified ?? 0,
+        // Two-track content status stats (nested in API response)
+        transcriptEmpty: response.stats.transcript?.empty ?? 0,
+        transcriptAiDraft: response.stats.transcript?.aiDraft ?? 0,
+        transcriptEdited: response.stats.transcript?.edited ?? 0,
+        transcriptVerified: response.stats.transcript?.verified ?? 0,
+        metadataEmpty: response.stats.metadata?.empty ?? 0,
+        metadataAiDraft: response.stats.metadata?.aiDraft ?? 0,
+        metadataEdited: response.stats.metadata?.edited ?? 0,
+        metadataVerified: response.stats.metadata?.verified ?? 0,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load letters");
@@ -365,25 +421,12 @@ export default function AdminDashboard() {
       setLoading(false);
       setIsInitialLoad(false);
     }
-  }, [collectionFilter, visibilityFilters, workflowFilters, searchQuery, sortColumns, pagination.page]);
+  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, pagination.page, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
   // Re-fetch when filters change (reset to page 1)
   useEffect(() => {
     fetchLetters(true, 1);
-  }, [collectionFilter, visibilityFilters, workflowFilters, searchQuery, sortColumns]);
-
-  // Fetch collections for suggestions
-  useEffect(() => {
-    const fetchCollections = async () => {
-      try {
-        const data = await getAdminCollections();
-        setCollections(data);
-      } catch (err) {
-        console.error("Failed to fetch collections:", err);
-      }
-    };
-    fetchCollections();
-  }, []);
+  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
   // Load recent edits on mount and when window gains focus
   useEffect(() => {
@@ -432,8 +475,9 @@ export default function AdminDashboard() {
     if (!editMode) return;
     // Only start drag on left mouse button
     if (e.button !== 0) return;
-    // Don't start drag if clicking on checkbox
-    if ((e.target as HTMLElement).tagName === "INPUT") return;
+    // Don't start drag if clicking on buttons or inputs
+    const tagName = (e.target as HTMLElement).tagName;
+    if (tagName === "INPUT" || tagName === "BUTTON") return;
 
     const letterId = filteredLetters[index].id;
     // Determine if we're selecting or deselecting based on the first item
@@ -616,7 +660,7 @@ export default function AdminDashboard() {
       // Entering edit mode, close other dropdowns
       setShowProcessMenu(false);
       setShowRecentDropdown(false);
-      setShowFilterSidebar(false);
+      setShowDateDropdown(false);
     }
     setEditMode(!editMode);
   };
@@ -726,19 +770,37 @@ export default function AdminDashboard() {
     if (newState) {
       // Close other dropdowns when opening process menu
       setShowRecentDropdown(false);
-      setShowFilterSidebar(false);
+      setShowDateDropdown(false);
     }
     setShowProcessMenu(newState);
   };
 
+  // Build filter options for processing endpoints (matches current filter state)
+  const buildProcessingFilters = () => ({
+    collectionCode: collectionFilter !== "all" ? collectionFilter : undefined,
+    visibility: visibilityFilter !== 'ALL' ? visibilityFilter : undefined,
+    search: searchQuery || undefined,
+    year: yearFilter ?? undefined,
+    month: monthFilter ?? undefined,
+    day: dayFilter ?? undefined,
+    dateFrom: dateFromFilter ?? undefined,
+    dateTo: dateToFilter ?? undefined,
+  });
+
   const handleStartTranscription = async () => {
     try {
       setShowProcessMenu(false);
-      // Pass collection filter if one is active
-      const result = await startTranscription({
-        collectionCode: collectionFilter !== "all" ? collectionFilter : undefined,
-      });
-      showToast(`Started transcription for ${result.total} letters`, 'info');
+      if (selectedIds.size > 0) {
+        // Process only selected items using bulk endpoint
+        const result = await bulkTranscribe(Array.from(selectedIds));
+        showToast(`Queued ${result.queued} letters for transcription${result.skipped > 0 ? ` (${result.skipped} skipped)` : ''}`, 'info');
+        setSelectedIds(new Set());
+        await fetchLetters();
+      } else {
+        // Process all letters matching current filters
+        const result = await startTranscription(buildProcessingFilters());
+        showToast(`Started transcription for ${result.total} letters`, 'info');
+      }
     } catch (err) {
       console.error("Failed to start transcription:", err);
       showToast(err instanceof Error ? err.message : "Failed to start transcription", 'error');
@@ -748,11 +810,17 @@ export default function AdminDashboard() {
   const handleStartMetadataExtraction = async () => {
     try {
       setShowProcessMenu(false);
-      // Pass collection filter if one is active
-      const result = await startMetadataExtraction({
-        collectionCode: collectionFilter !== "all" ? collectionFilter : undefined,
-      });
-      showToast(`Started metadata extraction for ${result.total} letters`, 'info');
+      if (selectedIds.size > 0) {
+        // Process only selected items using bulk endpoint
+        const result = await bulkExtractMetadata(Array.from(selectedIds));
+        showToast(`Queued ${result.queued} letters for metadata extraction${result.skipped > 0 ? ` (${result.skipped} skipped)` : ''}`, 'info');
+        setSelectedIds(new Set());
+        await fetchLetters();
+      } else {
+        // Process all letters matching current filters
+        const result = await startMetadataExtraction(buildProcessingFilters());
+        showToast(`Started metadata extraction for ${result.total} letters`, 'info');
+      }
     } catch (err) {
       console.error("Failed to start metadata extraction:", err);
       showToast(err instanceof Error ? err.message : "Failed to start metadata extraction", 'error');
@@ -789,34 +857,114 @@ export default function AdminDashboard() {
     }
   };
 
-  // Handle filter sidebar apply
-  const handleFiltersApply = (filters: FilterState) => {
-    setCollectionFilter(filters.collection);
-    setVisibilityFilters(filters.visibility);
-    setWorkflowFilters(new Set(filters.workflow));
-    setTranscriptStatusFilters(filters.transcriptStatus);
-    setMetadataStatusFilters(filters.metadataStatus);
+  // Toggle functions for inline filter pills
+  const toggleVisibilityFilter = (value: 'PUBLISHED' | 'HIDDEN') => {
+    setVisibilityFilter(current => current === value ? 'ALL' : value);
   };
 
-  // Get current filters as FilterState for sidebar
-  const currentFilters: FilterState = {
-    collection: collectionFilter,
-    visibility: visibilityFilters,
-    transcriptStatus: transcriptStatusFilters,
-    metadataStatus: metadataStatusFilters,
-    workflow: Array.from(workflowFilters),
+  const toggleTranscriptFilter = (value: ContentStatus) => {
+    setTranscriptStatusFilters(prev =>
+      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
+    );
+  };
+
+  const toggleMetadataFilter = (value: ContentStatus) => {
+    setMetadataStatusFilters(prev =>
+      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
+    );
+  };
+
+  // Handle collection input change - filter immediately on any input
+  const handleCollectionInputChange = (value: string) => {
+    const cleaned = value.replace(/\D/g, '').slice(0, 3);
+    setCollectionInput(cleaned);
+    if (cleaned === '') {
+      setCollectionFilter('all');
+    } else {
+      // Use the value as-is for partial matching (e.g., "7" matches "007", "017", etc.)
+      setCollectionFilter(cleaned);
+    }
+  };
+
+  // Clear all filters
+  const handleClearAllFilters = () => {
+    setVisibilityFilter('ALL');
+    setTranscriptStatusFilters([]);
+    setMetadataStatusFilters([]);
+    setCollectionFilter('all');
+    setCollectionInput('');
+    setYearFilter(null);
+    setMonthFilter(null);
+    setDayFilter(null);
+    setDateFromFilter(null);
+    setDateToFilter(null);
+    setDateMode('specific');
+  };
+
+  // Date filter helpers
+  const hasDateFilter = yearFilter !== null || monthFilter !== null || dayFilter !== null ||
+                        dateFromFilter !== null || dateToFilter !== null;
+
+  const clearDateFilters = () => {
+    setYearFilter(null);
+    setMonthFilter(null);
+    setDayFilter(null);
+    setDateFromFilter(null);
+    setDateToFilter(null);
+  };
+
+  // Parse MM/DD/YYYY display to YYYYMMDD
+  const displayToDateRaw = (display: string): string | null => {
+    if (!display) return null;
+    const parts = display.split('/');
+    if (parts.length !== 3) return null;
+    const [month, day, year] = parts;
+    if (year.length !== 4) return null;
+    return `${year}${month.padStart(2, '0')}${day.padStart(2, '0')}`;
+  };
+
+  // Parse YYYYMMDD to MM/DD/YYYY display format
+  const dateRawToDisplay = (dateRaw: string | null): string => {
+    if (!dateRaw || dateRaw.length < 8) return '';
+    const year = dateRaw.slice(0, 4);
+    const month = dateRaw.slice(4, 6);
+    const day = dateRaw.slice(6, 8);
+    return `${month}/${day}/${year}`;
+  };
+
+  // Get date filter display text for button
+  const getDateButtonText = () => {
+    if (dateMode === 'specific') {
+      const parts = [];
+      if (yearFilter) parts.push(yearFilter);
+      if (monthFilter) parts.push(MONTH_OPTIONS[monthFilter - 1]?.label);
+      if (dayFilter) parts.push(dayFilter);
+      return parts.length > 0 ? parts.join(' ') : 'Date';
+    } else {
+      if (dateFromFilter || dateToFilter) {
+        const from = dateFromFilter ? dateRawToDisplay(dateFromFilter) : '...';
+        const to = dateToFilter ? dateRawToDisplay(dateToFilter) : '...';
+        return `${from} - ${to}`;
+      }
+      return 'Date';
+    }
   };
 
   // Count active filters for badge
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (collectionFilter !== 'all') count++;
-    if (visibilityFilters.length > 0) count += visibilityFilters.length;
-    if (workflowFilters.size > 0) count += workflowFilters.size;
+    if (visibilityFilter !== 'ALL') count++;
     if (transcriptStatusFilters.length > 0) count += transcriptStatusFilters.length;
     if (metadataStatusFilters.length > 0) count += metadataStatusFilters.length;
+    // Date filters count
+    if (yearFilter !== null) count++;
+    if (monthFilter !== null) count++;
+    if (dayFilter !== null) count++;
+    if (dateFromFilter !== null) count++;
+    if (dateToFilter !== null) count++;
     return count;
-  }, [collectionFilter, visibilityFilters, workflowFilters, transcriptStatusFilters, metadataStatusFilters]);
+  }, [collectionFilter, visibilityFilter, transcriptStatusFilters, metadataStatusFilters, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter]);
 
   // Poll for processing status
   useEffect(() => {
@@ -861,19 +1009,14 @@ export default function AdminDashboard() {
         setShowRecentDropdown(false);
       }
 
-      // Exit edit mode if clicking outside the edit button container and the table
-      // (but not when clicking on table rows for selection)
-      if (editMode && editButtonRef.current && !editButtonRef.current.contains(target)) {
-        const tableContainer = document.querySelector('.letters-table-container');
-        if (!tableContainer?.contains(target)) {
-          setEditMode(false);
-          setSelectedIds(new Set());
-        }
+      // Close date dropdown if clicking outside
+      if (dateDropdownRef.current && !dateDropdownRef.current.contains(target)) {
+        setShowDateDropdown(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [editMode]);
+  }, []);
 
   if (loading && isInitialLoad) {
     return (
@@ -914,50 +1057,6 @@ export default function AdminDashboard() {
           <div className="toolbar-buttons">
             {/* Upload button */}
             <Button icon="upload" onClick={handleUploadClick}>Upload</Button>
-
-            {/* Edit button with dropdown */}
-            <div className="edit-button-container" ref={editButtonRef}>
-              <Button
-                icon={editMode ? "check" : "edit"}
-                active={editMode}
-                onClick={toggleEditMode}
-              >
-                {editMode ? "Done" : "Edit"}
-              </Button>
-
-              {editMode && (
-                <div className="dropdown-menu">
-                  <DropdownHeader>{selectedIds.size} selected</DropdownHeader>
-                  <DropdownItem
-                    title={allFilteredSelected ? "Deselect All" : "Select All"}
-                    description={allFilteredSelected
-                      ? "Clear current selection"
-                      : `Select all ${filteredLetters.length} filtered letters`}
-                    onClick={handleToggleSelectAll}
-                    variant={allFilteredSelected ? "active" : "default"}
-                  />
-                  <DropdownItem
-                    title="Reset Transcriptions"
-                    description="Clear transcripts, return to UPLOADED"
-                    onClick={handleResetTranscriptionsClick}
-                    disabled={selectedIds.size === 0}
-                  />
-                  <DropdownItem
-                    title="Clear Metadata"
-                    description="Clear metadata, keep transcripts"
-                    onClick={handleClearMetadataClick}
-                    disabled={selectedIds.size === 0}
-                  />
-                  <DropdownItem
-                    title="Delete"
-                    description="Permanently delete selected letters"
-                    onClick={handleDeleteClick}
-                    disabled={selectedIds.size === 0}
-                    variant="danger"
-                  />
-                </div>
-              )}
-            </div>
 
             {/* Process button or controls */}
             {processingStatus?.isRunning ? (
@@ -1005,13 +1104,33 @@ export default function AdminDashboard() {
                   <div className="dropdown-menu">
                     <DropdownItem
                       title="Transcribe"
-                      description="Process UPLOADED letters"
+                      description={selectedIds.size > 0 ? `Process ${selectedIds.size} selected` : "Process UPLOADED letters"}
                       onClick={handleStartTranscription}
                     />
                     <DropdownItem
                       title="Extract Metadata"
-                      description="Process TRANSCRIBED letters"
+                      description={selectedIds.size > 0 ? `Process ${selectedIds.size} selected` : "Process TRANSCRIBED letters"}
                       onClick={handleStartMetadataExtraction}
+                    />
+                    <DropdownDivider />
+                    <DropdownItem
+                      title="Reset Transcriptions"
+                      description="Clear transcripts, return to UPLOADED"
+                      onClick={handleResetTranscriptionsClick}
+                      disabled={selectedIds.size === 0}
+                    />
+                    <DropdownItem
+                      title="Clear Metadata"
+                      description="Clear metadata, keep transcripts"
+                      onClick={handleClearMetadataClick}
+                      disabled={selectedIds.size === 0}
+                    />
+                    <DropdownItem
+                      title="Delete"
+                      description="Permanently delete selected letters"
+                      onClick={handleDeleteClick}
+                      disabled={selectedIds.size === 0}
+                      variant="danger"
                     />
                   </div>
                 )}
@@ -1021,113 +1140,120 @@ export default function AdminDashboard() {
           <Button icon="logout" onClick={handleLogout}>Logout</Button>
         </div>
 
-        {/* Filters row - simplified with sidebar button */}
+        {/* Filter pills - single row with all filters */}
         <div className="header-row header-row-filters">
-          <div className="filter-controls">
-            {/* Filters button */}
-            <button
-              className={`filter-button ${activeFilterCount > 0 ? 'has-filters' : ''}`}
-              onClick={() => setShowFilterSidebar(true)}
-            >
-              Filters
-              {activeFilterCount > 0 && (
-                <span className="filter-badge">{activeFilterCount}</span>
-              )}
-            </button>
-
-            {/* History dropdown */}
-            <div className="filter-group history-filter-group">
-              <div className="history-dropdown-container" ref={recentDropdownRef}>
+          <div className="filter-pills">
+            {/* Visibility filters */}
+            <div className="filter-group-inline">
+              <span className="filter-section-label">Visibility</span>
+              <div className="filter-buttons">
                 <button
-                  className="history-button"
-                  onClick={() => {
-                    const newState = !showRecentDropdown;
-                    if (newState) {
-                      setShowProcessMenu(false);
-                    }
-                    setShowRecentDropdown(newState);
-                  }}
+                  className={`filter-pill filter-published ${visibilityFilter === 'PUBLISHED' ? 'active' : ''}`}
+                  onClick={() => toggleVisibilityFilter('PUBLISHED')}
+                  title="Published letters"
                 >
-                  History {recentEdits.length > 0 && `(${recentEdits.length})`} {showRecentDropdown ? "▲" : "▼"}
+                  {stats.published} Pub
                 </button>
-                {showRecentDropdown && (
-                  <div className="history-dropdown">
-                    <div className="history-header">Edit History</div>
-                    {recentEdits.length === 0 ? (
-                      <div className="history-empty">No recent edits</div>
-                    ) : (
-                      recentEdits.map((edit) => (
-                        <div
-                          key={edit.id}
-                          className="history-item"
-                          onClick={() => {
-                            navigate(`/admin/letters/${edit.id}`);
-                            setShowRecentDropdown(false);
-                          }}
-                        >
-                          <span className="history-info">
-                            {edit.displayName}
-                          </span>
-                          <span className="history-time">{formatTimeAgo(edit.editedAt)}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                <button
+                  className={`filter-pill filter-hidden ${visibilityFilter === 'HIDDEN' ? 'active' : ''}`}
+                  onClick={() => toggleVisibilityFilter('HIDDEN')}
+                  title="Hidden letters"
+                >
+                  {stats.hidden} Hidden
+                </button>
+              </div>
+            </div>
+
+            {/* Transcript/Metadata toggle filter */}
+            <div className="filter-group-inline">
+              <div className="content-filter-toggle">
+                <button
+                  className={`content-toggle-btn ${contentFilterView === 'transcript' ? 'active' : ''}`}
+                  onClick={() => setContentFilterView('transcript')}
+                >
+                  Transcript
+                  {contentFilterView !== 'transcript' && transcriptStatusFilters.length > 0 && (
+                    <span className="toggle-badge">{transcriptStatusFilters.length}</span>
+                  )}
+                </button>
+                <button
+                  className={`content-toggle-btn ${contentFilterView === 'metadata' ? 'active' : ''}`}
+                  onClick={() => setContentFilterView('metadata')}
+                >
+                  Metadata
+                  {contentFilterView !== 'metadata' && metadataStatusFilters.length > 0 && (
+                    <span className="toggle-badge">{metadataStatusFilters.length}</span>
+                  )}
+                </button>
+              </div>
+              <div className="filter-buttons">
+                {contentFilterView === 'transcript' ? (
+                  <>
+                    <button
+                      className={`filter-pill filter-content-draft ${transcriptStatusFilters.includes('AI_DRAFT') ? 'active' : ''}`}
+                      onClick={() => toggleTranscriptFilter('AI_DRAFT')}
+                      title="AI Draft transcripts"
+                    >
+                      {stats.transcriptAiDraft} Draft
+                    </button>
+                    <button
+                      className={`filter-pill filter-content-edited ${transcriptStatusFilters.includes('EDITED') ? 'active' : ''}`}
+                      onClick={() => toggleTranscriptFilter('EDITED')}
+                      title="Edited transcripts"
+                    >
+                      {stats.transcriptEdited} Edit
+                    </button>
+                    <button
+                      className={`filter-pill filter-content-verified ${transcriptStatusFilters.includes('VERIFIED') ? 'active' : ''}`}
+                      onClick={() => toggleTranscriptFilter('VERIFIED')}
+                      title="Verified transcripts"
+                    >
+                      {stats.transcriptVerified} Done
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      className={`filter-pill filter-content-draft ${metadataStatusFilters.includes('AI_DRAFT') ? 'active' : ''}`}
+                      onClick={() => toggleMetadataFilter('AI_DRAFT')}
+                      title="AI Draft metadata"
+                    >
+                      {stats.metadataAiDraft} Draft
+                    </button>
+                    <button
+                      className={`filter-pill filter-content-edited ${metadataStatusFilters.includes('EDITED') ? 'active' : ''}`}
+                      onClick={() => toggleMetadataFilter('EDITED')}
+                      title="Edited metadata"
+                    >
+                      {stats.metadataEdited} Edit
+                    </button>
+                    <button
+                      className={`filter-pill filter-content-verified ${metadataStatusFilters.includes('VERIFIED') ? 'active' : ''}`}
+                      onClick={() => toggleMetadataFilter('VERIFIED')}
+                      title="Verified metadata"
+                    >
+                      {stats.metadataVerified} Done
+                    </button>
+                  </>
                 )}
               </div>
             </div>
 
-            {/* Search input */}
-            <div className="filter-group search-group">
-              <input
-                type="text"
-                placeholder="Search..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-              />
-            </div>
-          </div>
+            {/* Collection input */}
+            <input
+              type="text"
+              className="collection-input"
+              placeholder="000"
+              title="Filter by collection number"
+              value={collectionInput}
+              onChange={(e) => handleCollectionInputChange(e.target.value)}
+              maxLength={3}
+            />
 
-          {/* Stats summary */}
-          <div className="stats-summary">
-            <span className="stat-total">
-              {pagination.total > 0 ? (
-                <>Showing {((pagination.page - 1) * pagination.limit) + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}</>
-              ) : (
-                <>No letters</>
-              )}
-            </span>
-            {processingStatus?.isRunning && (
-              <span className="stat-processing">
-                Processing: {processingStatus.completed}/{processingStatus.total}
-              </span>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* Filter Sidebar */}
-      <FilterSidebar
-        isOpen={showFilterSidebar}
-        onClose={() => setShowFilterSidebar(false)}
-        appliedFilters={currentFilters}
-        stats={stats}
-        collections={collections}
-        onApply={handleFiltersApply}
-      />
-
-      <div className="admin-content">
-        {/* Table toolbar with column toggle */}
-        <div className="table-toolbar">
-          <div className="table-toolbar-left">
-            <span className="pagination-info">
-              Showing {filteredLetters.length} of {pagination.total} letters
-            </span>
-          </div>
-          <div className="table-toolbar-right">
-            <div className="column-toggle-container" ref={columnMenuRef}>
+            {/* Columns toggle */}
+            <div className="dropdown-container" ref={columnMenuRef}>
               <button
-                className="column-toggle-button"
+                className="dropdown-trigger"
                 onClick={() => setShowColumnMenu(!showColumnMenu)}
               >
                 Columns ▾
@@ -1147,221 +1273,389 @@ export default function AdminDashboard() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
-        <div className="letters-table-wrapper">
-          {/* Fixed header table */}
-          <div className="letters-table-header">
-            <table className="letters-table">
-              <colgroup>
-                {editMode && <col style={{ width: '32px' }} />}
-                {visibleColumns.has('sender') && <col style={{ width: '12%' }} />}
-                {visibleColumns.has('recipient') && <col style={{ width: '12%' }} />}
-                {visibleColumns.has('year') && <col style={{ width: '50px' }} />}
-                {visibleColumns.has('month') && <col style={{ width: '50px' }} />}
-                {visibleColumns.has('day') && <col style={{ width: '40px' }} />}
-                {visibleColumns.has('collection') && <col style={{ width: '80px' }} />}
-                {visibleColumns.has('letters') && <col style={{ width: '55px' }} />}
-                {visibleColumns.has('extras') && <col style={{ width: '50px' }} />}
-                {visibleColumns.has('transcript') && <col style={{ width: '70px' }} />}
-                {visibleColumns.has('metadata') && <col style={{ width: '70px' }} />}
-                {visibleColumns.has('visibility') && <col style={{ width: '70px' }} />}
-                {visibleColumns.has('created') && <col style={{ width: '80px' }} />}
-              </colgroup>
-              <thead>
-                <tr>
-                  {editMode && (
-                    <th className="checkbox-header"></th>
+
+            {/* History dropdown */}
+            <div className="dropdown-container" ref={recentDropdownRef}>
+              <button
+                className="dropdown-trigger"
+                onClick={() => {
+                  const newState = !showRecentDropdown;
+                  if (newState) {
+                    setShowProcessMenu(false);
+                    setShowDateDropdown(false);
+                  }
+                  setShowRecentDropdown(newState);
+                }}
+              >
+                History {recentEdits.length > 0 && `(${recentEdits.length})`} ▾
+              </button>
+              {showRecentDropdown && (
+                <div className="history-dropdown">
+                  <div className="history-header">Edit History</div>
+                  {recentEdits.length === 0 ? (
+                    <div className="history-empty">No recent edits</div>
+                  ) : (
+                    recentEdits.map((edit) => (
+                      <div
+                        key={edit.id}
+                        className="history-item"
+                        onClick={() => {
+                          navigate(`/admin/letters/${edit.id}`);
+                          setShowRecentDropdown(false);
+                        }}
+                      >
+                        <span className="history-info">{edit.displayName}</span>
+                        <span className="history-time">{formatTimeAgo(edit.editedAt)}</span>
+                      </div>
+                    ))
                   )}
-                  {visibleColumns.has('sender') && (
-                    <th
-                      className={`sortable-header ${getSortInfo("sender") ? "sorted" : ""}`}
-                      onClick={() => handleSort("sender")}
+                </div>
+              )}
+            </div>
+
+            {/* Date dropdown */}
+            <div className="dropdown-container" ref={dateDropdownRef}>
+              <button
+                className={`dropdown-trigger ${hasDateFilter ? 'active' : ''}`}
+                onClick={() => {
+                  setShowDateDropdown(!showDateDropdown);
+                  setShowRecentDropdown(false);
+                  setShowProcessMenu(false);
+                }}
+              >
+                {getDateButtonText()} ▾
+              </button>
+              {showDateDropdown && (
+                <div className="date-dropdown-panel">
+                  <div className="date-mode-toggle">
+                    <button
+                      className={`mode-btn ${dateMode === 'specific' ? 'active' : ''}`}
+                      onClick={() => setDateMode('specific')}
                     >
-                      <span className="header-content">
-                        Sender
-                        {getSortInfo("sender") && (
-                          <span className="sort-indicator">
-                            <span className="sort-arrow">{getSortInfo("sender")?.direction === "asc" ? "↑" : "↓"}</span>
-                            {getSortInfo("sender")!.total > 1 && (
-                              <span className="sort-priority">{getSortInfo("sender")?.priority}</span>
-                            )}
-                          </span>
-                        )}
-                      </span>
-                    </th>
-                  )}
-                  {visibleColumns.has('recipient') && (
-                    <th
-                      className={`sortable-header ${getSortInfo("recipient") ? "sorted" : ""}`}
-                      onClick={() => handleSort("recipient")}
+                      Specific
+                    </button>
+                    <button
+                      className={`mode-btn ${dateMode === 'range' ? 'active' : ''}`}
+                      onClick={() => setDateMode('range')}
                     >
-                      <span className="header-content">
-                        Recipient
-                        {getSortInfo("recipient") && (
-                          <span className="sort-indicator">
-                            <span className="sort-arrow">{getSortInfo("recipient")?.direction === "asc" ? "↑" : "↓"}</span>
-                            {getSortInfo("recipient")!.total > 1 && (
-                              <span className="sort-priority">{getSortInfo("recipient")?.priority}</span>
-                            )}
-                          </span>
-                        )}
-                      </span>
-                    </th>
+                      Range
+                    </button>
+                  </div>
+                  {dateMode === 'specific' ? (
+                    <div className="date-dropdowns">
+                      <select
+                        value={yearFilter ?? ''}
+                        onChange={(e) => setYearFilter(e.target.value ? Number(e.target.value) : null)}
+                      >
+                        <option value="">Year</option>
+                        {YEAR_OPTIONS.map((y) => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={monthFilter ?? ''}
+                        onChange={(e) => setMonthFilter(e.target.value ? Number(e.target.value) : null)}
+                      >
+                        <option value="">Month</option>
+                        {MONTH_OPTIONS.map((m) => (
+                          <option key={m.value} value={m.value}>{m.label}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={dayFilter ?? ''}
+                        onChange={(e) => setDayFilter(e.target.value ? Number(e.target.value) : null)}
+                      >
+                        <option value="">Day</option>
+                        {DAY_OPTIONS.map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="date-range-inputs">
+                      <div className="date-range-field">
+                        <label>From</label>
+                        <input
+                          type="text"
+                          placeholder="mm/dd/yyyy"
+                          value={dateFromFilter ? dateRawToDisplay(dateFromFilter) : ''}
+                          onChange={(e) => {
+                            const raw = displayToDateRaw(e.target.value);
+                            setDateFromFilter(raw);
+                          }}
+                          maxLength={10}
+                        />
+                      </div>
+                      <div className="date-range-field">
+                        <label>To</label>
+                        <input
+                          type="text"
+                          placeholder="mm/dd/yyyy"
+                          value={dateToFilter ? dateRawToDisplay(dateToFilter) : ''}
+                          onChange={(e) => {
+                            const raw = displayToDateRaw(e.target.value);
+                            setDateToFilter(raw);
+                          }}
+                          maxLength={10}
+                        />
+                      </div>
+                    </div>
                   )}
-                  {visibleColumns.has('year') && (
-                    <th
-                      className={`date-header sortable-header ${getSortInfo("year") ? "sorted" : ""}`}
-                      onClick={() => handleSort("year")}
-                    >
-                      <span className="header-content">
-                        Year
-                        {getSortInfo("year") && (
-                          <span className="sort-indicator">
-                            <span className="sort-arrow">{getSortInfo("year")?.direction === "asc" ? "↑" : "↓"}</span>
-                          </span>
-                        )}
-                      </span>
-                    </th>
+                  {hasDateFilter && (
+                    <button className="date-clear-btn" onClick={clearDateFilters}>
+                      Clear Date
+                    </button>
                   )}
-                  {visibleColumns.has('month') && (
-                    <th
-                      className={`date-header sortable-header ${getSortInfo("month") ? "sorted" : ""}`}
-                      onClick={() => handleSort("month")}
-                    >
-                      <span className="header-content">
-                        Month
-                        {getSortInfo("month") && (
-                          <span className="sort-indicator">
-                            <span className="sort-arrow">{getSortInfo("month")?.direction === "asc" ? "↑" : "↓"}</span>
-                          </span>
-                        )}
-                      </span>
-                    </th>
-                  )}
-                  {visibleColumns.has('day') && (
-                    <th
-                      className={`date-header sortable-header ${getSortInfo("day") ? "sorted" : ""}`}
-                      onClick={() => handleSort("day")}
-                    >
-                      <span className="header-content">
-                        Day
-                        {getSortInfo("day") && (
-                          <span className="sort-indicator">
-                            <span className="sort-arrow">{getSortInfo("day")?.direction === "asc" ? "↑" : "↓"}</span>
-                          </span>
-                        )}
-                      </span>
-                    </th>
-                  )}
-                  {visibleColumns.has('collection') && (
-                    <th
-                      className={`sortable-header ${getSortInfo("collection") ? "sorted" : ""}`}
-                      onClick={() => handleSort("collection")}
-                    >
-                      <span className="header-content">
-                        Collection
-                        {getSortInfo("collection") && (
-                          <span className="sort-indicator">
-                            <span className="sort-arrow">{getSortInfo("collection")?.direction === "asc" ? "↑" : "↓"}</span>
-                            {getSortInfo("collection")!.total > 1 && (
-                              <span className="sort-priority">{getSortInfo("collection")?.priority}</span>
-                            )}
-                          </span>
-                        )}
-                      </span>
-                    </th>
-                  )}
-                  {visibleColumns.has('letters') && (
-                    <th
-                      className={`sortable-header ${getSortInfo("letters") ? "sorted" : ""}`}
-                      onClick={() => handleSort("letters")}
-                    >
-                      <span className="header-content">
-                        Letters
-                        {getSortInfo("letters") && (
-                          <span className="sort-indicator">
-                            <span className="sort-arrow">{getSortInfo("letters")?.direction === "asc" ? "↑" : "↓"}</span>
-                            {getSortInfo("letters")!.total > 1 && (
-                              <span className="sort-priority">{getSortInfo("letters")?.priority}</span>
-                            )}
-                          </span>
-                        )}
-                      </span>
-                    </th>
-                  )}
-                  {visibleColumns.has('extras') && (
-                    <th
-                      className={`sortable-header ${getSortInfo("extras") ? "sorted" : ""}`}
-                      onClick={() => handleSort("extras")}
-                    >
-                      <span className="header-content">
-                        Extras
-                        {getSortInfo("extras") && (
-                          <span className="sort-indicator">
-                            <span className="sort-arrow">{getSortInfo("extras")?.direction === "asc" ? "↑" : "↓"}</span>
-                            {getSortInfo("extras")!.total > 1 && (
-                              <span className="sort-priority">{getSortInfo("extras")?.priority}</span>
-                            )}
-                          </span>
-                        )}
-                      </span>
-                    </th>
-                  )}
-                  {visibleColumns.has('transcript') && (
-                    <th className="status-header">Transcript</th>
-                  )}
-                  {visibleColumns.has('metadata') && (
-                    <th className="status-header">Metadata</th>
-                  )}
-                  {visibleColumns.has('visibility') && (
-                    <th>Visibility</th>
-                  )}
-                  {visibleColumns.has('created') && (
-                    <th
-                      className={`sortable-header ${getSortInfo("createdAt") ? "sorted" : ""}`}
-                      onClick={() => handleSort("createdAt")}
-                    >
-                      <span className="header-content">
-                        Created
-                        {getSortInfo("createdAt") && (
-                          <span className="sort-indicator">
-                            <span className="sort-arrow">{getSortInfo("createdAt")?.direction === "asc" ? "↑" : "↓"}</span>
-                            {getSortInfo("createdAt")!.total > 1 && (
-                              <span className="sort-priority">{getSortInfo("createdAt")?.priority}</span>
-                            )}
-                          </span>
-                        )}
-                      </span>
-                    </th>
-                  )}
-                </tr>
-              </thead>
-            </table>
+                </div>
+              )}
+            </div>
+
+            {/* Search input */}
+            <div className="filter-group search-group">
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+              />
+            </div>
+
+            {/* Clear All button */}
+            {activeFilterCount > 0 && (
+              <button className="clear-all-btn" onClick={handleClearAllFilters}>
+                Clear All
+              </button>
+            )}
+
+            {/* Processing indicator */}
+            {processingStatus?.isRunning && (
+              <span className="stat-processing">
+                Processing: {processingStatus.completed}/{processingStatus.total}
+              </span>
+            )}
           </div>
 
-          {/* Scrollable body table */}
-          <div className="letters-table-container">
-            <table className="letters-table">
-              <colgroup>
-                {editMode && <col style={{ width: '32px' }} />}
-                {visibleColumns.has('sender') && <col style={{ width: '12%' }} />}
-                {visibleColumns.has('recipient') && <col style={{ width: '12%' }} />}
-                {visibleColumns.has('year') && <col style={{ width: '50px' }} />}
-                {visibleColumns.has('month') && <col style={{ width: '50px' }} />}
-                {visibleColumns.has('day') && <col style={{ width: '40px' }} />}
-                {visibleColumns.has('collection') && <col style={{ width: '80px' }} />}
-                {visibleColumns.has('letters') && <col style={{ width: '55px' }} />}
-                {visibleColumns.has('extras') && <col style={{ width: '50px' }} />}
-                {visibleColumns.has('transcript') && <col style={{ width: '70px' }} />}
-                {visibleColumns.has('metadata') && <col style={{ width: '70px' }} />}
-                {visibleColumns.has('visibility') && <col style={{ width: '70px' }} />}
-                {visibleColumns.has('created') && <col style={{ width: '80px' }} />}
-              </colgroup>
-              <tbody>
+          {/* Letter count - far right of filter row */}
+          <span className="letter-count">
+            {((pagination.page - 1) * pagination.limit) + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
+          </span>
+        </div>
+      </header>
+
+      <div className="admin-content">
+        {/* Single table with sticky header - scrolls together horizontally */}
+        <div className="letters-table-container">
+          <table className="letters-table">
+            <colgroup>
+              <col style={{ width: '70px' }} /> {/* Index column - always visible */}
+              {visibleColumns.has('sender') && <col style={{ width: '12%' }} />}
+              {visibleColumns.has('recipient') && <col style={{ width: '12%' }} />}
+              {visibleColumns.has('year') && <col style={{ width: '50px' }} />}
+              {visibleColumns.has('month') && <col style={{ width: '50px' }} />}
+              {visibleColumns.has('day') && <col style={{ width: '40px' }} />}
+              {visibleColumns.has('collection') && <col style={{ width: '80px' }} />}
+              {visibleColumns.has('letters') && <col style={{ width: '55px' }} />}
+              {visibleColumns.has('extras') && <col style={{ width: '50px' }} />}
+              {visibleColumns.has('transcript') && <col style={{ width: '70px' }} />}
+              {visibleColumns.has('metadata') && <col style={{ width: '70px' }} />}
+              {visibleColumns.has('visibility') && <col style={{ width: '70px' }} />}
+              {visibleColumns.has('created') && <col style={{ width: '80px' }} />}
+            </colgroup>
+            <thead>
+              <tr>
+                {/* Index column header - sticky, contains edit controls */}
+                <th className="index-header">
+                  {editMode ? (
+                    <div className="index-header-edit">
+                      <input
+                        type="checkbox"
+                        checked={allFilteredSelected}
+                        onChange={handleToggleSelectAll}
+                        title={allFilteredSelected ? "Deselect all" : "Select all"}
+                      />
+                      <span className="selection-count">{selectedIds.size}</span>
+                      <button
+                        className="exit-edit-btn"
+                        onClick={toggleEditMode}
+                        title="Exit edit mode"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <button className="enter-edit-btn" onClick={toggleEditMode}>
+                      Edit
+                    </button>
+                  )}
+                </th>
+                {visibleColumns.has('sender') && (
+                  <th
+                    className={`sortable-header ${getSortInfo("sender") ? "sorted" : ""}`}
+                    onClick={() => handleSort("sender")}
+                  >
+                    <span className="header-content">
+                      Sender
+                      {getSortInfo("sender") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("sender")?.direction === "asc" ? "↑" : "↓"}</span>
+                          {getSortInfo("sender")!.total > 1 && (
+                            <span className="sort-priority">{getSortInfo("sender")?.priority}</span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('recipient') && (
+                  <th
+                    className={`sortable-header ${getSortInfo("recipient") ? "sorted" : ""}`}
+                    onClick={() => handleSort("recipient")}
+                  >
+                    <span className="header-content">
+                      Recipient
+                      {getSortInfo("recipient") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("recipient")?.direction === "asc" ? "↑" : "↓"}</span>
+                          {getSortInfo("recipient")!.total > 1 && (
+                            <span className="sort-priority">{getSortInfo("recipient")?.priority}</span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('year') && (
+                  <th
+                    className={`date-header sortable-header ${getSortInfo("year") ? "sorted" : ""}`}
+                    onClick={() => handleSort("year")}
+                  >
+                    <span className="header-content">
+                      Year
+                      {getSortInfo("year") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("year")?.direction === "asc" ? "↑" : "↓"}</span>
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('month') && (
+                  <th
+                    className={`date-header sortable-header ${getSortInfo("month") ? "sorted" : ""}`}
+                    onClick={() => handleSort("month")}
+                  >
+                    <span className="header-content">
+                      Month
+                      {getSortInfo("month") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("month")?.direction === "asc" ? "↑" : "↓"}</span>
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('day') && (
+                  <th
+                    className={`date-header sortable-header ${getSortInfo("day") ? "sorted" : ""}`}
+                    onClick={() => handleSort("day")}
+                  >
+                    <span className="header-content">
+                      Day
+                      {getSortInfo("day") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("day")?.direction === "asc" ? "↑" : "↓"}</span>
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('collection') && (
+                  <th
+                    className={`sortable-header ${getSortInfo("collection") ? "sorted" : ""}`}
+                    onClick={() => handleSort("collection")}
+                  >
+                    <span className="header-content">
+                      Collection
+                      {getSortInfo("collection") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("collection")?.direction === "asc" ? "↑" : "↓"}</span>
+                          {getSortInfo("collection")!.total > 1 && (
+                            <span className="sort-priority">{getSortInfo("collection")?.priority}</span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('letters') && (
+                  <th
+                    className={`sortable-header ${getSortInfo("letters") ? "sorted" : ""}`}
+                    onClick={() => handleSort("letters")}
+                  >
+                    <span className="header-content">
+                      Letters
+                      {getSortInfo("letters") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("letters")?.direction === "asc" ? "↑" : "↓"}</span>
+                          {getSortInfo("letters")!.total > 1 && (
+                            <span className="sort-priority">{getSortInfo("letters")?.priority}</span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('extras') && (
+                  <th
+                    className={`sortable-header ${getSortInfo("extras") ? "sorted" : ""}`}
+                    onClick={() => handleSort("extras")}
+                  >
+                    <span className="header-content">
+                      Extras
+                      {getSortInfo("extras") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("extras")?.direction === "asc" ? "↑" : "↓"}</span>
+                          {getSortInfo("extras")!.total > 1 && (
+                            <span className="sort-priority">{getSortInfo("extras")?.priority}</span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+                {visibleColumns.has('transcript') && (
+                  <th className="status-header">Transcript</th>
+                )}
+                {visibleColumns.has('metadata') && (
+                  <th className="status-header">Metadata</th>
+                )}
+                {visibleColumns.has('visibility') && (
+                  <th>Visibility</th>
+                )}
+                {visibleColumns.has('created') && (
+                  <th
+                    className={`sortable-header ${getSortInfo("createdAt") ? "sorted" : ""}`}
+                    onClick={() => handleSort("createdAt")}
+                  >
+                    <span className="header-content">
+                      Created
+                      {getSortInfo("createdAt") && (
+                        <span className="sort-indicator">
+                          <span className="sort-arrow">{getSortInfo("createdAt")?.direction === "asc" ? "↑" : "↓"}</span>
+                          {getSortInfo("createdAt")!.total > 1 && (
+                            <span className="sort-priority">{getSortInfo("createdAt")?.priority}</span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
               {filteredLetters.length === 0 ? (
                 <tr>
-                  <td colSpan={visibleColumns.size + (editMode ? 1 : 0)} className="empty-state">
+                  <td colSpan={visibleColumns.size + 1} className="empty-state">
                     No letters found
                   </td>
                 </tr>
@@ -1378,15 +1672,8 @@ export default function AdminDashboard() {
                       onMouseEnter={() => handleRowMouseEnter(index)}
                       className={`letter-row ${selectedIds.has(letter.id) ? "selected" : ""} ${editMode ? "edit-mode" : ""}`}
                     >
-                      {editMode && (
-                        <td className="checkbox-cell" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(letter.id)}
-                            onChange={() => toggleSelection(letter.id)}
-                          />
-                        </td>
-                      )}
+                      {/* Index cell - always visible, shows row number */}
+                      <td className="index-cell">{index + 1}</td>
                       {visibleColumns.has('sender') && <td>{letter.metadata.sender || "—"}</td>}
                       {visibleColumns.has('recipient') && <td>{letter.metadata.recipient || "—"}</td>}
                       {visibleColumns.has('year') && <td className="date-cell">{year}</td>}
@@ -1416,8 +1703,7 @@ export default function AdminDashboard() {
                 })
               )}
             </tbody>
-            </table>
-          </div>
+          </table>
         </div>
 
         {/* Pagination controls */}

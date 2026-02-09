@@ -2,7 +2,14 @@
 
 This folder contains documentation for Claude agents to quickly understand the Letter Archive codebase.
 
-## Available Documentation
+## Start Here
+
+| Document | Description |
+|----------|-------------|
+| [about-this-project.md](about-this-project.md) | Project vision, goals, and the "wise guide" AI concept |
+| [collaboration-style.md](collaboration-style.md) | How we work together—proactive questioning, planning before implementing |
+
+## Technical Documentation
 
 | Document | Description |
 |----------|-------------|

@@ -14,6 +14,9 @@ const router = Router();
 // ADMIN LETTERS LIST WITH SERVER-SIDE FILTERING + PAGINATION
 // ============================================================================
 
+// Content status enum values for validation
+const contentStatusValues = ['EMPTY', 'AI_DRAFT', 'EDITED', 'VERIFIED'] as const;
+
 const adminLettersQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(50),
@@ -36,6 +39,32 @@ const adminLettersQuerySchema = z.object({
   search: z.string().optional(),
   sort: z.enum(['createdAt', 'letterDate', 'sender', 'recipient', 'workflow', 'visibility', 'collection']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  // Date filters - individual components
+  year: z.coerce.number().min(1800).max(2100).optional(),
+  month: z.coerce.number().min(1).max(12).optional(),
+  day: z.coerce.number().min(1).max(31).optional(),
+  // Date range filters (YYYYMMDD format)
+  dateFrom: z.string().regex(/^\d{8}$/).optional(),
+  dateTo: z.string().regex(/^\d{8}$/).optional(),
+  // Content status filters (comma-separated)
+  transcriptStatus: z.preprocess(
+    (val) => {
+      if (typeof val === 'string' && val.includes(',')) {
+        return val.split(',');
+      }
+      return val ? [val] : undefined;
+    },
+    z.array(z.enum(contentStatusValues)).optional()
+  ),
+  metadataStatus: z.preprocess(
+    (val) => {
+      if (typeof val === 'string' && val.includes(',')) {
+        return val.split(',');
+      }
+      return val ? [val] : undefined;
+    },
+    z.array(z.enum(contentStatusValues)).optional()
+  ),
 });
 
 /**
@@ -72,17 +101,18 @@ router.get('/letters', async (req, res, next) => {
       eq(letters.type, 'L'), // Only L-type letters in admin view
     ];
 
-    // Collection filter
-    let collectionId: string | undefined;
+    // Collection filter - supports partial matching (e.g., "7" matches "007", "017", "107")
+    let collectionIds: string[] = [];
     if (query.collection && query.collection !== 'all') {
-      const collection = await db.query.collections.findFirst({
-        where: eq(collections.collectionCode, query.collection),
+      // Find all collections whose code ends with the input (for partial matching)
+      const matchingCollections = await db.query.collections.findMany({
+        where: ilike(collections.collectionCode, `%${query.collection}`),
       });
-      if (collection) {
-        collectionId = collection.id;
-        conditions.push(eq(letters.collectionId, collection.id));
+      if (matchingCollections.length > 0) {
+        collectionIds = matchingCollections.map(c => c.id);
+        conditions.push(inArray(letters.collectionId, collectionIds));
       } else {
-        // Collection not found, return empty
+        // No collections found, return empty
         res.json({
           letters: [],
           pagination: { page: query.page, limit: query.limit, total: 0, totalPages: 0 },
@@ -118,14 +148,49 @@ router.get('/letters', async (req, res, next) => {
       );
     }
 
+    // Date filters - individual components (year, month, day)
+    // dateRaw format: "18860314" or "1886XXXX" (8 characters)
+    if (query.year) {
+      // Match year at the start of dateRaw
+      conditions.push(sql`SUBSTRING(${letters.dateRaw}, 1, 4) = ${query.year.toString()}`);
+    }
+    if (query.month) {
+      // Match month (positions 5-6 in YYYYMMDD format)
+      const monthStr = query.month.toString().padStart(2, '0');
+      conditions.push(sql`SUBSTRING(${letters.dateRaw}, 5, 2) = ${monthStr}`);
+    }
+    if (query.day) {
+      // Match day (positions 7-8 in YYYYMMDD format)
+      const dayStr = query.day.toString().padStart(2, '0');
+      conditions.push(sql`SUBSTRING(${letters.dateRaw}, 7, 2) = ${dayStr}`);
+    }
+
+    // Date range filters (only apply if individual year/month/day not set to avoid conflicts)
+    if (query.dateFrom && !query.year && !query.month && !query.day) {
+      // Filter dateRaw >= dateFrom (treating X as 0 for comparison)
+      conditions.push(sql`REPLACE(${letters.dateRaw}, 'X', '0') >= ${query.dateFrom}`);
+    }
+    if (query.dateTo && !query.year && !query.month && !query.day) {
+      // Filter dateRaw <= dateTo (treating X as 9 for end range)
+      conditions.push(sql`REPLACE(${letters.dateRaw}, 'X', '9') <= ${query.dateTo}`);
+    }
+
+    // Content status filters
+    if (query.transcriptStatus && query.transcriptStatus.length > 0) {
+      conditions.push(inArray(letters.transcriptStatus, query.transcriptStatus));
+    }
+    if (query.metadataStatus && query.metadataStatus.length > 0) {
+      conditions.push(inArray(letters.metadataContentStatus, query.metadataStatus));
+    }
+
     // Calculate stats for the collection (unfiltered by visibility/workflow/search)
     // This lets filter pills show accurate counts
     const statsConditions: ReturnType<typeof eq>[] = [
       isNull(letters.deletedAt),
       eq(letters.type, 'L'),
     ];
-    if (collectionId) {
-      statsConditions.push(eq(letters.collectionId, collectionId));
+    if (collectionIds.length > 0) {
+      statsConditions.push(inArray(letters.collectionId, collectionIds));
     }
 
     const statsResult = await db.select({
@@ -136,6 +201,7 @@ router.get('/letters', async (req, res, next) => {
       transcribed: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'TRANSCRIBED')`,
       metadataExtracting: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'METADATA_EXTRACTING')`,
       metadataReady: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'METADATA_DRAFTED')`,
+      reviewed: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'REVIEWED')`,
       // Visibility stats
       published: sql<number>`COUNT(*) FILTER (WHERE ${letters.visibility} = 'PUBLISHED')`,
       hidden: sql<number>`COUNT(*) FILTER (WHERE ${letters.visibility} = 'HIDDEN')`,
@@ -155,7 +221,7 @@ router.get('/letters', async (req, res, next) => {
 
     const stats = statsResult[0] || {
       total: 0, uploaded: 0, transcribing: 0, transcribed: 0,
-      metadataExtracting: 0, metadataReady: 0, published: 0, hidden: 0,
+      metadataExtracting: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0,
       transcriptEmpty: 0, transcriptAiDraft: 0, transcriptEdited: 0, transcriptVerified: 0,
       metadataEmpty: 0, metadataAiDraft: 0, metadataEdited: 0, metadataVerified: 0,
     };
@@ -363,9 +429,86 @@ router.get('/processing/status', (_req, res) => {
   res.json(processingState);
 });
 
+// Schema for processing filter options (matches frontend StartProcessingOptions)
+const processingFilterSchema = z.object({
+  collectionCode: z.string().optional(),
+  visibility: z.enum(['PUBLISHED', 'HIDDEN']).optional(),
+  search: z.string().optional(),
+  year: z.coerce.number().min(1800).max(2100).optional(),
+  month: z.coerce.number().min(1).max(12).optional(),
+  day: z.coerce.number().min(1).max(31).optional(),
+  dateFrom: z.string().regex(/^\d{8}$/).optional(),
+  dateTo: z.string().regex(/^\d{8}$/).optional(),
+});
+
+/**
+ * Build filter conditions from processing options
+ * Returns { conditions, collectionNotFound } - check collectionNotFound before using conditions
+ */
+async function buildProcessingConditions(
+  options: z.infer<typeof processingFilterSchema>,
+  baseConditions: ReturnType<typeof eq>[]
+): Promise<{ conditions: ReturnType<typeof eq>[]; collectionNotFound: boolean }> {
+  const conditions = [...baseConditions];
+
+  // Collection filter (partial matching like GET endpoint)
+  if (options.collectionCode) {
+    const matchingCollections = await db.query.collections.findMany({
+      where: ilike(collections.collectionCode, `%${options.collectionCode}`),
+    });
+    if (matchingCollections.length > 0) {
+      const collectionIds = matchingCollections.map(c => c.id);
+      conditions.push(inArray(letters.collectionId, collectionIds));
+    } else {
+      return { conditions: [], collectionNotFound: true };
+    }
+  }
+
+  // Visibility filter
+  if (options.visibility) {
+    conditions.push(eq(letters.visibility, options.visibility));
+  }
+
+  // Search filter (ILIKE on sender, recipient, summary, hook)
+  if (options.search && options.search.trim()) {
+    const searchTerm = `%${options.search.trim()}%`;
+    conditions.push(
+      or(
+        ilike(letters.sender, searchTerm),
+        ilike(letters.recipient, searchTerm),
+        ilike(letters.summary, searchTerm),
+        ilike(letters.hook, searchTerm)
+      )!
+    );
+  }
+
+  // Date filters - individual components
+  if (options.year) {
+    conditions.push(sql`SUBSTRING(${letters.dateRaw}, 1, 4) = ${options.year.toString()}`);
+  }
+  if (options.month) {
+    const monthStr = options.month.toString().padStart(2, '0');
+    conditions.push(sql`SUBSTRING(${letters.dateRaw}, 5, 2) = ${monthStr}`);
+  }
+  if (options.day) {
+    const dayStr = options.day.toString().padStart(2, '0');
+    conditions.push(sql`SUBSTRING(${letters.dateRaw}, 7, 2) = ${dayStr}`);
+  }
+
+  // Date range filters (only if individual components not set)
+  if (options.dateFrom && !options.year && !options.month && !options.day) {
+    conditions.push(sql`REPLACE(${letters.dateRaw}, 'X', '0') >= ${options.dateFrom}`);
+  }
+  if (options.dateTo && !options.year && !options.month && !options.day) {
+    conditions.push(sql`REPLACE(${letters.dateRaw}, 'X', '9') <= ${options.dateTo}`);
+  }
+
+  return { conditions, collectionNotFound: false };
+}
+
 /**
  * POST /admin/processing/start-transcription - Start transcription processing
- * Accepts optional { collectionCode } in body to filter by collection
+ * Accepts filter options to process only matching letters
  */
 router.post('/processing/start-transcription', async (req, res, next) => {
   try {
@@ -374,27 +517,20 @@ router.post('/processing/start-transcription', async (req, res, next) => {
       return;
     }
 
-    const { collectionCode } = req.body || {};
+    const options = processingFilterSchema.parse(req.body || {});
 
-    // Build where conditions
-    const conditions: ReturnType<typeof eq>[] = [
+    // Base conditions for transcription: type L, workflow UPLOADED, not deleted
+    const baseConditions: ReturnType<typeof eq>[] = [
       eq(letters.type, 'L'),
       eq(letters.workflow, 'UPLOADED'),
       isNull(letters.deletedAt)
     ];
 
-    // If collectionCode provided, filter by collection
-    if (collectionCode) {
-      const collection = await db.query.collections.findFirst({
-        where: eq(collections.collectionCode, collectionCode)
-      });
-      if (collection) {
-        conditions.push(eq(letters.collectionId, collection.id));
-      } else {
-        // Collection not found - return empty
-        res.json({ message: 'Collection not found', total: 0 });
-        return;
-      }
+    const { conditions, collectionNotFound } = await buildProcessingConditions(options, baseConditions);
+
+    if (collectionNotFound) {
+      res.json({ message: 'Collection not found', total: 0 });
+      return;
     }
 
     // Find eligible letters
@@ -434,7 +570,7 @@ router.post('/processing/start-transcription', async (req, res, next) => {
 
 /**
  * POST /admin/processing/start-metadata - Start metadata extraction
- * Accepts optional { collectionCode } in body to filter by collection
+ * Accepts filter options to process only matching letters
  */
 router.post('/processing/start-metadata', async (req, res, next) => {
   try {
@@ -443,28 +579,21 @@ router.post('/processing/start-metadata', async (req, res, next) => {
       return;
     }
 
-    const { collectionCode } = req.body || {};
+    const options = processingFilterSchema.parse(req.body || {});
 
-    // Build where conditions
-    const conditions: ReturnType<typeof eq>[] = [
+    // Base conditions for metadata: type L, workflow TRANSCRIBED, transcript confirmed, not deleted
+    const baseConditions: ReturnType<typeof eq>[] = [
       eq(letters.type, 'L'),
       eq(letters.workflow, 'TRANSCRIBED'),
       isNotNull(letters.transcriptConfirmedAt),
       isNull(letters.deletedAt)
     ];
 
-    // If collectionCode provided, filter by collection
-    if (collectionCode) {
-      const collection = await db.query.collections.findFirst({
-        where: eq(collections.collectionCode, collectionCode)
-      });
-      if (collection) {
-        conditions.push(eq(letters.collectionId, collection.id));
-      } else {
-        // Collection not found - return empty
-        res.json({ message: 'Collection not found', total: 0 });
-        return;
-      }
+    const { conditions, collectionNotFound } = await buildProcessingConditions(options, baseConditions);
+
+    if (collectionNotFound) {
+      res.json({ message: 'Collection not found', total: 0 });
+      return;
     }
 
     // Find eligible letters

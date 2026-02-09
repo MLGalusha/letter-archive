@@ -241,6 +241,13 @@ export interface ProcessingStatus {
 
 export interface StartProcessingOptions {
   collectionCode?: string;
+  visibility?: 'PUBLISHED' | 'HIDDEN';
+  search?: string;
+  year?: number;
+  month?: number;
+  day?: number;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 /**

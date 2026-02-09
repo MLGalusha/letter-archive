@@ -40,6 +40,8 @@
   padding: var(--spacing-xs) var(--spacing-lg);
   flex-wrap: wrap;
   gap: var(--spacing-xs) var(--spacing-md);
+  justify-content: space-between;
+  align-items: center;
 }
 
 .toolbar-buttons {
@@ -87,8 +89,9 @@
 }
 
 .filter-button.has-filters {
-  border-color: var(--highlight);
-  color: var(--highlight);
+  border-color: var(--text);
+  color: var(--text);
+  background: var(--bg);
 }
 
 .filter-badge {
@@ -125,6 +128,14 @@
   color: var(--highlight);
   border-radius: var(--radius-sm);
   font-weight: 500;
+}
+
+.letter-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 
 .filter-search-container {
@@ -378,14 +389,18 @@
 }
 
 .search-group input {
-  padding: 0.5rem 0.75rem;
-  border: solid 1px var(--border);
-  border-radius: var(--radius-md);
-  font-size: var(--font-sm);
-  background: var(--bg-light);
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  background: transparent;
   color: var(--text);
-  width: 150px;
-  transition: all 0.2s ease;
+  width: 140px;
+  transition: all 0.15s ease;
+}
+
+.search-group input::placeholder {
+  color: var(--text-muted);
 }
 
 .search-group input:focus,
@@ -414,6 +429,90 @@
   flex-wrap: wrap;
 }
 
+/* Primary row - utilities */
+.filter-row-primary {
+  width: 100%;
+}
+
+/* Secondary row - main filters */
+.filter-row-secondary {
+  width: 100%;
+}
+
+/* ============================================================================
+   FILTER GROUPS - Simple containers for filter groups (no borders)
+   ============================================================================ */
+
+.filter-group-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Collection input - styled like dropdown buttons */
+.collection-input {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 30px;
+  width: 48px;
+  padding: 0 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1;
+  text-align: center;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.collection-input::placeholder {
+  color: var(--text-muted);
+}
+
+.collection-input:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.collection-input:focus {
+  outline: none;
+  color: var(--text);
+  border-color: var(--text);
+  background: var(--bg-light);
+}
+
+/* Fast tooltip for collection input */
+.collection-input[title] {
+  position: relative;
+}
+
+.collection-input[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  white-space: nowrap;
+  z-index: 100;
+  animation: tooltip-appear 0ms ease-out forwards;
+}
+
+@keyframes tooltip-appear {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .filter-section {
   display: flex;
   flex-direction: column;
@@ -429,6 +528,11 @@
   letter-spacing: 0.03em;
 }
 
+/* Center labels in filter groups */
+.filter-group-inline .filter-section-label {
+  align-self: center;
+}
+
 .filter-buttons {
   display: flex;
   align-items: center;
@@ -439,6 +543,46 @@
   color: var(--border);
   font-size: var(--font-sm);
   margin: 0 var(--spacing-xs);
+}
+
+/* ============================================================================
+   UNIFIED DROPDOWN TRIGGER - Outlined/bordered style for all dropdowns
+   ============================================================================ */
+
+.dropdown-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.dropdown-trigger:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.dropdown-trigger.active {
+  color: var(--text);
+  border-color: var(--text);
+  background: var(--bg-light);
 }
 
 /* Clickable filter pill */
@@ -546,6 +690,324 @@
 .filter-pill.filter-hidden.active {
   box-shadow: 0 0 0 3px rgba(108, 117, 125, 0.5), 0 2px 8px rgba(108, 117, 125, 0.2);
   background: #d6d8db;
+}
+
+/* Transcript status filter colors */
+.filter-pill.filter-transcript-draft {
+  background: #fff8e1;
+  color: #f57c00;
+  border-color: #ffe082;
+}
+
+.filter-pill.filter-transcript-edited {
+  background: #e3f2fd;
+  color: #1976d2;
+  border-color: #90caf9;
+}
+
+.filter-pill.filter-transcript-verified {
+  background: #e8f5e9;
+  color: #388e3c;
+  border-color: #a5d6a7;
+}
+
+.filter-pill.filter-transcript-draft.active {
+  box-shadow: 0 0 0 3px rgba(245, 124, 0, 0.5), 0 2px 8px rgba(245, 124, 0, 0.2);
+  background: #ffecb3;
+}
+
+.filter-pill.filter-transcript-edited.active {
+  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.5), 0 2px 8px rgba(25, 118, 210, 0.2);
+  background: #bbdefb;
+}
+
+.filter-pill.filter-transcript-verified.active {
+  box-shadow: 0 0 0 3px rgba(56, 142, 60, 0.5), 0 2px 8px rgba(56, 142, 60, 0.2);
+  background: #c8e6c9;
+}
+
+/* Metadata status filter colors */
+.filter-pill.filter-metadata-draft {
+  background: #fce4ec;
+  color: #c2185b;
+  border-color: #f48fb1;
+}
+
+.filter-pill.filter-metadata-edited {
+  background: #f3e5f5;
+  color: #7b1fa2;
+  border-color: #ce93d8;
+}
+
+.filter-pill.filter-metadata-verified {
+  background: #e0f2f1;
+  color: #00796b;
+  border-color: #80cbc4;
+}
+
+.filter-pill.filter-metadata-draft.active {
+  box-shadow: 0 0 0 3px rgba(194, 24, 91, 0.5), 0 2px 8px rgba(194, 24, 91, 0.2);
+  background: #f8bbd9;
+}
+
+.filter-pill.filter-metadata-edited.active {
+  box-shadow: 0 0 0 3px rgba(123, 31, 162, 0.5), 0 2px 8px rgba(123, 31, 162, 0.2);
+  background: #e1bee7;
+}
+
+.filter-pill.filter-metadata-verified.active {
+  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.5), 0 2px 8px rgba(0, 121, 107, 0.2);
+  background: #b2dfdb;
+}
+
+/* ============================================================================
+   CONTENT FILTER TOGGLE (Transcript/Metadata toggle)
+   ============================================================================ */
+
+.content-filter-toggle {
+  display: flex;
+  background: var(--bg);
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.content-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.3rem 0.6rem;
+  font-size: var(--font-xs);
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.content-toggle-btn:hover {
+  color: var(--text);
+}
+
+.content-toggle-btn.active {
+  background: var(--bg-light);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.toggle-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--bg-light);
+  background: var(--text-muted);
+  border-radius: 8px;
+}
+
+/* Unified content filter pill colors (used for both transcript and metadata) */
+.filter-pill.filter-content-draft {
+  background: #fff8e1;
+  color: #f57c00;
+  border-color: #ffe082;
+}
+
+.filter-pill.filter-content-edited {
+  background: #e3f2fd;
+  color: #1976d2;
+  border-color: #90caf9;
+}
+
+.filter-pill.filter-content-verified {
+  background: #e8f5e9;
+  color: #388e3c;
+  border-color: #a5d6a7;
+}
+
+.filter-pill.filter-content-draft.active {
+  box-shadow: 0 0 0 3px rgba(245, 124, 0, 0.5), 0 2px 8px rgba(245, 124, 0, 0.2);
+  background: #ffecb3;
+}
+
+.filter-pill.filter-content-edited.active {
+  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.5), 0 2px 8px rgba(25, 118, 210, 0.2);
+  background: #bbdefb;
+}
+
+.filter-pill.filter-content-verified.active {
+  box-shadow: 0 0 0 3px rgba(56, 142, 60, 0.5), 0 2px 8px rgba(56, 142, 60, 0.2);
+  background: #c8e6c9;
+}
+
+/* Inline filter sections */
+.filter-section-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--spacing-xs);
+  position: relative;
+}
+
+/* Date filter button */
+.date-filter-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 0.4rem 0.6rem;
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--text);
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.date-filter-button:hover {
+  border-color: var(--text-muted);
+}
+
+.date-filter-button.active {
+  border-color: var(--text);
+  background: var(--bg);
+  font-weight: 600;
+}
+
+/* Date dropdown panel */
+.date-dropdown-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: var(--spacing-sm);
+  z-index: 200;
+  min-width: 240px;
+}
+
+.date-mode-toggle {
+  display: flex;
+  gap: 4px;
+  margin-bottom: var(--spacing-sm);
+  background: var(--bg);
+  padding: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.date-mode-toggle .mode-btn {
+  flex: 1;
+  padding: 0.3rem 0.5rem;
+  font-size: var(--font-xs);
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.date-mode-toggle .mode-btn:hover {
+  color: var(--text);
+}
+
+.date-mode-toggle .mode-btn.active {
+  background: var(--bg-light);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.date-dropdowns {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.date-dropdowns select {
+  flex: 1;
+  padding: 0.4rem;
+  font-size: var(--font-sm);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.date-range-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.date-range-field {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.date-range-field label {
+  font-size: var(--font-xs);
+  font-weight: 500;
+  color: var(--text-muted);
+  min-width: 35px;
+}
+
+.date-range-field input {
+  flex: 1;
+  padding: 0.4rem;
+  font-size: var(--font-sm);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.date-clear-btn {
+  width: 100%;
+  margin-top: var(--spacing-xs);
+  padding: 0.3rem;
+  font-size: var(--font-xs);
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.date-clear-btn:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+/* Clear All button */
+.clear-all-btn {
+  padding: 0.4rem 0.75rem;
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: #dc2626;
+  background: transparent;
+  border: 1px solid #dc2626;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.clear-all-btn:hover {
+  background: #fef2f2;
 }
 
 /* Total count header */
@@ -706,46 +1168,16 @@
   white-space: nowrap;
 }
 
-/* Table wrapper - contains fixed header + scrollable body */
-.letters-table-wrapper {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border-top: solid 1px var(--border);
-  background: var(--bg-light);
-}
-
-/* Fixed header - not scrollable */
-.letters-table-header {
-  flex-shrink: 0;
-  background: var(--bg);
-  border-bottom: solid 2px var(--border);
-  /* Reserve space for scrollbar to align with body */
-  scrollbar-gutter: stable;
-  overflow-y: scroll;
-  /* Hide the actual scrollbar but keep the gutter space */
-  scrollbar-color: transparent transparent;
-}
-
-.letters-table-header::-webkit-scrollbar {
-  width: 8px;
-}
-
-.letters-table-header::-webkit-scrollbar-thumb {
-  background: transparent;
-}
-
-.letters-table-header::-webkit-scrollbar-track {
-  background: var(--bg);
-}
-
-/* Scrollable body container */
+/* Single scrollable table container with sticky header */
 .letters-table-container {
   flex: 1;
   min-height: 0;
-  background: var(--bg-light);
+  background: var(--bg);  /* Grey background fills scrollbar gutter area */
+  border-top: solid 1px var(--border);
+  /* Enable both horizontal and vertical scroll */
   overflow: auto;
+  /* Add left padding to balance the scrollbar width on the right */
+  padding-left: 8px;
   /* Firefox scrollbar */
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
@@ -776,9 +1208,16 @@
 
 .letters-table {
   width: 100%;
+  min-width: 900px; /* Minimum width to trigger horizontal scroll instead of shrinking */
   border-collapse: collapse;
   font-size: 0.75rem; /* Smaller font for compact display */
   table-layout: fixed;
+}
+
+.letters-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .letters-table th {
@@ -792,6 +1231,7 @@
   background: var(--bg);
   white-space: nowrap;
 }
+
 
 .sortable-header {
   cursor: pointer;
@@ -841,6 +1281,10 @@
   align-items: center;
   justify-content: center;
   line-height: 1;
+}
+
+.letters-table tbody {
+  background: var(--bg-light);  /* Light background for data rows */
 }
 
 .letters-table td {
@@ -1294,6 +1738,150 @@
 }
 
 /* ============================================================================
+   INDEX COLUMN - Sticky first column with edit controls
+   ============================================================================ */
+
+/* Index column header - contains edit controls */
+.index-header {
+  position: sticky;
+  left: 0;
+  z-index: 11; /* Above regular sticky header z-index of 10 */
+  background: var(--bg);
+  width: 70px;
+  min-width: 70px;
+  text-align: center;
+  padding: 0.25rem !important;
+}
+
+/* Index cell - row number */
+.index-cell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: inherit;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ensure index cells inherit proper background on hover/selected */
+.letter-row .index-cell {
+  background: var(--bg-light);
+}
+
+.letter-row:hover .index-cell {
+  background: var(--bg);
+}
+
+.letter-row.selected .index-cell {
+  background: #e3f2fd;
+}
+
+.letter-row.selected:hover .index-cell {
+  background: #bbdefb;
+}
+
+/* Edit mode header content */
+.index-header-edit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.index-header-edit input[type="checkbox"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.index-header-edit input[type="checkbox"]:hover {
+  border-color: var(--text-muted);
+}
+
+.index-header-edit input[type="checkbox"]:checked {
+  background: var(--bg-light);
+  border-color: var(--text);
+}
+
+.index-header-edit input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--text);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.selection-count {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 16px;
+}
+
+.exit-edit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.exit-edit-btn:hover {
+  color: var(--text);
+  background: var(--bg-light);
+  border-color: var(--border);
+}
+
+/* Enter edit mode button */
+.enter-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.enter-edit-btn:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+  background: var(--bg-light);
+}
+
+/* ============================================================================
    TWO-TRACK WORKFLOW STATUS STYLES
    ============================================================================ */
 
@@ -1400,8 +1988,11 @@
    COLUMN VISIBILITY CONTROLS
    ============================================================================ */
 
+/* Column toggle (in filter pills row) */
 .column-toggle-container {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .column-toggle-button {
@@ -1427,7 +2018,7 @@
 .column-toggle-dropdown {
   position: absolute;
   top: 100%;
-  right: 0;
+  left: 0;
   margin-top: 4px;
   background: var(--bg-light);
   border: solid 1px var(--border);
@@ -1538,4 +2129,40 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+/* Toolbar stats display */
+.toolbar-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.toolbar-stats .stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  background: transparent;
+}
+
+.toolbar-stats .stat-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.toolbar-stats .stat-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+.toolbar-stats .stat-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
 }

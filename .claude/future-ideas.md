@@ -99,3 +99,85 @@ When a future idea comes up in conversation:
 When ready to implement:
 1. Move the idea to a plan file
 2. Keep a note here that it was implemented
+
+---
+
+## 8. Stories & Collection Narrative System
+
+**What:** A narrative layer built on top of collections that weaves letters into explorable story experiences. This goes beyond the current "collection = organizational bucket" model to make collections tell stories.
+
+**The Vision:**
+
+The archive has two modes of exploration:
+1. **Archive Mode** (current) - Factual, searchable, filterable. Browse individual letters.
+2. **Stories Mode** (future) - Narrative, guided, explorable. Experience letters as interconnected stories.
+
+**Key Concepts:**
+
+- **Collections** = Archival groupings (what exists now: code, title, description)
+- **Stories** = Narrative experiences built from letters in collections
+- Relationship between collections and stories is flexible (1:1, 1:many, or many:1 depending on content)
+
+**Types of Relations to Capture:**
+
+1. **Chronological narrative** - Letters form a timeline/story arc (courtship → marriage → family life)
+2. **People connections** - Same sender/recipient across letters, family trees, social networks
+3. **Topic/theme threads** - Letters about same events, places, or themes (war, illness, business)
+4. **Response chains** - Letter A is a reply to Letter B, conversation threads
+
+**AI Integration Ideas:**
+
+1. **Relation-aware metadata extraction** - During metadata extraction, capture fields like:
+   - `mentions_person` - People mentioned in the letter
+   - `references_letter` - If it's replying to or mentions another letter
+   - `location_sequence` - Track location changes over time
+   - `themes` - Recurring topics
+
+2. **Collection-level AI analysis** - Send all letters in a collection to AI to:
+   - Identify story arcs and themes
+   - Detect relationships between letters
+   - Suggest narrative orderings
+   - Generate collection summaries
+
+3. **Story generation** - AI creates narrative descriptions that tie letters together, which humans then edit/verify
+
+**Admin UI Direction:**
+
+- Main admin page stays letter-focused (current AdminDashboard)
+- Add a toggle/tab to switch to "Collection View"
+- Collection View shows:
+  - List of collections with stats (letter count, completion %, etc.)
+  - Click into a collection to see its letters + collection metadata
+  - Edit collection title/description
+  - Eventually: manage relations, story arcs, narrative content
+
+**Public UI Direction:**
+
+- Keep current archive browsing (search, filter, individual letters)
+- Add a separate "Stories" or "Explore" section
+- Users can browse by story/collection rather than individual letters
+- Stories guide users through letters in a meaningful order with narrative context
+
+**Why Deferred:**
+
+1. Archive is in early stage (<100 letters processed)
+2. No verified transcripts yet
+3. No extracted metadata yet
+4. Stories require content depth to be meaningful
+5. Better to nail the processing pipeline and basic public UI first
+
+**Prerequisites Before Building:**
+
+1. Multiple collections with verified, metadata-rich letters
+2. Solid public reading experience
+3. Working search/filter
+4. Consider adding relation-aware metadata fields to extraction pipeline (plant seeds now)
+
+**Simpler First Steps (when ready):**
+
+1. Basic collection CRUD in admin (edit title/description)
+2. Collection stats dashboard (letter count, completion %)
+3. Add relation fields to metadata extraction
+4. Then build toward full Stories experience
+
+**Discussed:** 2026-02-09

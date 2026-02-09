@@ -3,7 +3,7 @@
  */
 
 import { apiGet, apiDelete } from './client';
-import type { Letter, WorkflowState, VisibilityState } from '../types/Letter';
+import type { Letter, VisibilityState } from '../types/Letter';
 
 export interface LettersResponse {
   letters: Letter[];
@@ -24,17 +24,22 @@ export interface AdminLettersResponse {
     uploaded: number;
     transcribed: number;
     metadataReady: number;
+    reviewed: number;
     published: number;
     hidden: number;
-    // Two-track content status stats
-    transcriptEmpty: number;
-    transcriptAiDraft: number;
-    transcriptEdited: number;
-    transcriptVerified: number;
-    metadataEmpty: number;
-    metadataAiDraft: number;
-    metadataEdited: number;
-    metadataVerified: number;
+    // Two-track content status stats (nested objects)
+    transcript: {
+      empty: number;
+      aiDraft: number;
+      edited: number;
+      verified: number;
+    };
+    metadata: {
+      empty: number;
+      aiDraft: number;
+      edited: number;
+      verified: number;
+    };
   };
 }
 
@@ -55,11 +60,19 @@ export interface AdminLetterQueryParams {
   page?: number;
   limit?: number;
   visibility?: VisibilityState;
-  workflow?: WorkflowState | WorkflowState[];
   collection?: string;
   search?: string;
   sort?: SortField;
   sortOrder?: SortOrder;
+  // Date filters
+  year?: number;
+  month?: number;
+  day?: number;
+  dateFrom?: string;  // YYYYMMDD format
+  dateTo?: string;    // YYYYMMDD format
+  // Content status filters (comma-separated if multiple)
+  transcriptStatus?: string;
+  metadataStatus?: string;
 }
 
 /**
@@ -94,7 +107,6 @@ export async function getPublishedLetters(params: Omit<LetterQueryParams, 'visib
  *
  * Uses the /admin/letters endpoint which supports:
  * - visibility: Single visibility filter
- * - workflow: Single or array of workflow states
  * - collection: Collection code filter
  * - search: Search term (matches sender, recipient, summary, hook)
  * - sort/sortOrder: Server-side sorting
@@ -105,20 +117,23 @@ export async function getPublishedLetters(params: Omit<LetterQueryParams, 'visib
  * - stats: Counts for the collection (unaffected by filters)
  */
 export async function getAdminLetters(params: AdminLetterQueryParams = {}): Promise<AdminLettersResponse> {
-  // Convert workflow array to comma-separated string for query params
-  const workflow = params.workflow
-    ? Array.isArray(params.workflow) ? params.workflow.join(',') : params.workflow
-    : undefined;
-
   return apiGet<AdminLettersResponse>('/admin/letters', {
     page: params.page || 1,
     limit: params.limit || 50,
     visibility: params.visibility,
-    workflow,
     collection: params.collection,
     search: params.search,
     sort: params.sort,
     sortOrder: params.sortOrder,
+    // Date filters
+    year: params.year,
+    month: params.month,
+    day: params.day,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    // Content status filters
+    transcriptStatus: params.transcriptStatus,
+    metadataStatus: params.metadataStatus,
   });
 }
 

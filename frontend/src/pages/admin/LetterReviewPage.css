@@ -144,6 +144,15 @@
   background: #e8f5e9;
 }
 
+.header-action.revert {
+  border-color: #e65100;
+  color: #e65100;
+}
+
+.header-action.revert:hover:not(:disabled) {
+  background: #fff3e0;
+}
+
 .header-action.delete {
   border-color: #dc3545;
   color: #dc3545;
@@ -180,15 +189,12 @@
   overflow: hidden;
 }
 
-/* Grid layout - Full height */
+/* Layout container - ResizableSplitPane handles the grid */
 .review-layout {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
-  gap: var(--spacing-lg);
   height: 100%;
   max-width: 1800px;
   margin: 0 auto;
-  padding: 0 var(--spacing-lg);
+  padding: 0 var(--spacing-sm) 0 var(--spacing-lg); /* Less padding on right */
 }
 
 /* Tablet view */
@@ -199,7 +205,7 @@
   }
 }
 
-/* Mobile view - stack vertically, allow full scroll */
+/* Mobile view - ResizableSplitPane handles the vertical layout */
 @media (max-width: 768px) {
   .review-header {
     padding: var(--spacing-sm);
@@ -215,22 +221,15 @@
   }
 
   .review-layout {
-    display: flex;
-    flex-direction: column;
-    height: auto;
     padding: var(--spacing-sm);
-    gap: var(--spacing-md);
   }
 
-  .images-panel {
-    height: auto !important;
-    padding: 0 !important;
+  .letter-review-page .images-panel {
+    padding: 0;
   }
 
-  .edit-panel {
-    height: auto !important;
-    overflow: visible !important;
-    padding: 0 !important;
+  .letter-review-page .edit-panel {
+    padding: 0;
   }
 
   .form-row {
@@ -238,14 +237,20 @@
   }
 }
 
-/* Left panel - Fixed, no scroll */
-.images-panel {
-  height: 100%;
-  overflow: hidden;
+/* Left panel - ResizableSplitPane applies this class */
+.letter-review-page .images-panel {
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  padding: var(--spacing-xl) 0;
+  /* No padding here - the child LetterViewer will have margin instead */
+  min-height: 0; /* Important for flexbox */
+  box-sizing: border-box;
+}
+
+.letter-review-page .images-panel > * {
+  flex: 1;
+  min-height: 0;
+  /* Spacing: top, right (gap from divider), bottom, left */
+  margin: var(--spacing-lg) var(--spacing-sm) var(--spacing-sm) 0;
 }
 
 .images-panel h2 {
@@ -254,25 +259,32 @@
   font-weight: 600;
 }
 
-/* Right panel - Scrollable, hidden scrollbar */
-.edit-panel {
-  height: 100%;
+/* Right panel container - ResizableSplitPane applies this class */
+.letter-review-page .edit-panel {
   overflow-y: auto;
+  overflow-x: hidden; /* Prevent horizontal overflow */
   padding: var(--spacing-xl) 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
   /* Hide scrollbar but keep scrolling */
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE/Edge */
+  min-width: 0; /* Allow shrinking in grid/flex */
 }
 
 .edit-panel::-webkit-scrollbar {
   display: none; /* Chrome/Safari/Opera */
 }
 
-/* Add scroll room at bottom - margin on last child creates scrollable space */
-.edit-panel > *:last-child {
+/* Inner content wrapper for the edit panel */
+.edit-panel-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  min-width: 0; /* Allow shrinking */
+  width: 100%;
+}
+
+/* Add scroll room at bottom */
+.edit-panel-content > *:last-child {
   margin-bottom: calc(var(--spacing-xl) * 2);
 }
 
@@ -425,7 +437,7 @@
   }
 }
 
-/* Editor Section */
+/* Editor Section - card container */
 .editor-section {
   background: var(--bg-light);
   border: var(--border-card);
@@ -433,6 +445,7 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   overflow: visible;
+  min-width: 0; /* Allow shrinking in flex container */
 }
 
 .editor-header {
@@ -440,8 +453,6 @@
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--bg);
-  border-bottom: solid 1px var(--border);
 }
 
 .editor-header h2 {
@@ -462,14 +473,15 @@
 
 .editor-container {
   padding: var(--spacing-sm);
-  min-height: 420px; /* Ensure container has minimum height for textarea */
+  min-height: 420px;
+  min-width: 0; /* Allow shrinking */
 }
 
 /* Transcript editor - contenteditable div with monospace font for accurate spacing */
 .transcript-editor {
   width: 100%;
-  padding: 0.75rem 1rem;
-  border: none;
+  padding: var(--spacing-md);
+  border: solid 1px var(--border); /* Subtle border for visual separation */
   border-radius: var(--radius-md);
   font-family: 'Courier New', Courier, monospace;
   font-size: var(--transcript-font-size, 1rem);
@@ -480,8 +492,9 @@
   overflow-y: auto; /* Vertical scroll for long transcripts */
   overflow-x: hidden; /* No horizontal scroll - font shrinks to fit */
   box-sizing: border-box;
-  white-space: pre-wrap; /* Preserve explicit line breaks, allow wrapping within shrunken font */
+  white-space: pre; /* Preserve line breaks exactly, NEVER wrap lines */
   word-wrap: normal;
+  transition: font-size 0.15s ease-out; /* Smooth font size transition during resize */
   overflow-wrap: normal;
   text-align: left; /* Override inherited center alignment from #root */
 }
@@ -495,6 +508,11 @@
   content: attr(data-placeholder);
   color: var(--text-muted);
   opacity: 0.6;
+}
+
+/* Verified state - green border on editor */
+.transcript-editor.verified {
+  border-color: #4caf50;
 }
 
 /* Metadata Section */
@@ -895,6 +913,38 @@
   gap: var(--spacing-xs);
 }
 
+/* Header right side container (status badges + verification) */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+/* Verify button (checkmark icon button) */
+.verify-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: solid 1px #4caf50;
+  border-radius: var(--radius-md);
+  color: #4caf50;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.verify-btn:hover:not(:disabled) {
+  background: #e8f5e9;
+}
+
+.verify-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Metadata header */
 .metadata-header {
   display: flex;
@@ -969,12 +1019,12 @@
   50% { opacity: 0.5; }
 }
 
-/* Section footer (for verification buttons) */
+/* Section footer (for metadata verification button only) */
 .section-footer {
   display: flex;
   justify-content: flex-end;
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--bg);
+  padding: var(--spacing-sm) 0;
+  margin-top: var(--spacing-sm);
   border-top: solid 1px var(--border);
 }
 
@@ -1239,3 +1289,40 @@
   gap: var(--spacing-sm);
   margin-top: var(--spacing-sm);
 }
+
+/* ============================================================================
+   VERIFIED TRANSCRIPT EDITING FLOW STYLES
+   ============================================================================ */
+
+/* Double-click to edit tooltip */
+.edit-tooltip {
+  position: fixed;
+  background: var(--text);
+  color: var(--bg);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  box-shadow: var(--shadow-lg);
+  z-index: 1000;
+  pointer-events: none;
+  animation: fadeInTooltip 0.15s ease;
+  max-width: 260px;
+}
+
+@keyframes fadeInTooltip {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Verified transcript - cursor indicates click behavior */
+.transcript-editor.verified {
+  cursor: pointer;
+  user-select: none;
+}
+

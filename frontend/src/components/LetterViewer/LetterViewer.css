@@ -69,7 +69,7 @@
 .overlay-left {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   flex: 1;
   height: 24px;
 }
@@ -94,8 +94,8 @@
   line-height: 24px;
 }
 
-/* Compact lock button */
-.viewer-overlay .lock-button {
+/* Base icon button style for viewer controls */
+.viewer-overlay .viewer-icon-btn {
   padding: 0;
   margin: 0;
   width: 24px;
@@ -105,32 +105,109 @@
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.75rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  vertical-align: middle;
-  line-height: 1;
 }
 
-.viewer-overlay .lock-button:hover {
+.viewer-overlay .viewer-icon-btn:hover:not(:disabled) {
   transform: scale(1.05);
   background: white;
 }
 
+.viewer-overlay .viewer-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Lock button specific styles */
 .viewer-overlay .lock-button.locked {
-  background: rgba(50, 50, 50, 0.9);
+  background: rgba(60, 60, 60, 0.95);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.viewer-overlay .lock-button.locked:hover {
+  background: rgba(80, 80, 80, 0.95);
   color: white;
 }
 
-/* Zoom indicator */
-.viewer-overlay .zoom-indicator {
-  font-size: 0.7rem;
-  color: white;
+/* ============================================================================
+   ZOOM SLIDER
+   ============================================================================ */
+
+/* Slider container */
+.zoom-slider-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 24px;
+}
+
+/* Slider track */
+.zoom-slider-track {
+  position: relative;
+  width: 150px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+/* Filled portion of track */
+.zoom-slider-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+/* Smooth transition for click-to-zoom */
+.zoom-slider-fill.animating {
+  transition: width 150ms ease-out;
+}
+
+/* Draggable handle */
+.zoom-slider-handle {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: grab;
+  pointer-events: none;
+}
+
+/* Smooth transition for click-to-zoom */
+.zoom-slider-handle.animating {
+  transition: left 150ms ease-out;
+}
+
+.zoom-slider-track:active .zoom-slider-handle {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+/* Percentage label */
+.zoom-percentage {
+  font-size: 0.65rem;
   font-weight: 600;
+  color: white;
+  min-width: 36px;
+  text-align: center;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Image transition for smooth zoom on click */
+.viewer-image.animating {
+  transition: transform 150ms ease-out;
 }
 
 /* Image type label */
@@ -154,20 +231,16 @@
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   margin: 0;
   padding: 0;
-  vertical-align: middle;
-  line-height: 1;
 }
 
 .viewer-overlay .nav-button:hover {
-  transform: scale(1.1);
+  transform: scale(1.08);
   background: white;
 }
 

@@ -28,7 +28,7 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
         <div className="display-layout">
           {/* Left side: Letter viewer */}
           <div className="images-panel">
-            <LetterViewer images={letter.images} showOnlyLetterPages={false} />
+            <LetterViewer images={letter.images} letterId={letter.id} showOnlyLetterPages={false} />
           </div>
 
           {/* Right side: Read-only content */}

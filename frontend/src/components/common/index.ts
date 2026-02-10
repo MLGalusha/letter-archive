@@ -36,3 +36,6 @@ export {
   type DropdownHeaderProps,
   type DropdownItemProps,
 } from './Dropdown';
+
+// Layout
+export { ResizableSplitPane, type ResizableSplitPaneProps } from './ResizableSplitPane';

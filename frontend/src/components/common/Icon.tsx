@@ -7,6 +7,7 @@ export type IconName =
   | 'delete'
   | 'back'
   | 'plus'
+  | 'minus'
   | 'save'
   | 'process'
   | 'arrow-left'
@@ -23,7 +24,11 @@ export type IconName =
   | 'logout'
   | 'refresh'
   | 'chevron-down'
-  | 'chevron-right';
+  | 'chevron-right'
+  | 'lock'
+  | 'unlock'
+  | 'zoom-in'
+  | 'zoom-out';
 
 interface IconProps {
   name: IconName;
@@ -149,6 +154,34 @@ const iconPaths: Record<IconName, React.ReactNode> = {
   ),
   'chevron-down': <polyline points="6,9 12,15 18,9" />,
   'chevron-right': <polyline points="9,6 15,12 9,18" />,
+  minus: <line x1="5" y1="12" x2="19" y2="12" />,
+  lock: (
+    <>
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0110 0v4" />
+    </>
+  ),
+  unlock: (
+    <>
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 019.9-1" />
+    </>
+  ),
+  'zoom-in': (
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      <line x1="11" y1="8" x2="11" y2="14" />
+      <line x1="8" y1="11" x2="14" y2="11" />
+    </>
+  ),
+  'zoom-out': (
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      <line x1="8" y1="11" x2="14" y2="11" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 18, className = '' }: IconProps) {

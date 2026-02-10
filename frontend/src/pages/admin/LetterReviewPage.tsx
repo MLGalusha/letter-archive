@@ -14,7 +14,7 @@ import {
 } from "../../api/admin";
 import LetterViewer from "../../components/LetterViewer/LetterViewer";
 import { useToast } from "../../contexts/ToastContext";
-import { Button, Icon, WorkflowBadge, StatusBadge } from "../../components/common";
+import { Button, Icon, WorkflowBadge, ResizableSplitPane } from "../../components/common";
 import { trackEdit } from "../../utils/recentEdits";
 import type {
   Letter,
@@ -109,6 +109,19 @@ export default function LetterReviewPage() {
   const [transcriptFontSize, setTranscriptFontSize] = useState("1.1rem");
   const [currentFilename, setCurrentFilename] = useState<string | undefined>(undefined);
   const editorRef = useRef<HTMLDivElement>(null);
+
+  // Verified transcript editing flow state
+  const [isTranscriptEditing, setIsTranscriptEditing] = useState(false);
+  const [originalTranscriptText, setOriginalTranscriptText] = useState<string | null>(null);
+  const [originalTranscriptVerified, setOriginalTranscriptVerified] = useState(false);
+  const [hasTranscriptChanges, setHasTranscriptChanges] = useState(false);
+  const [showEditTooltip, setShowEditTooltip] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Line highlighting state
+  const [currentLineIndex, setCurrentLineIndex] = useState<number | null>(null);
+
   const hookRef = useRef<HTMLTextAreaElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
@@ -162,7 +175,11 @@ export default function LetterReviewPage() {
       return;
     }
 
-    const containerWidth = editor.clientWidth - 32; // Account for padding
+    // Get computed styles for padding and font
+    const computedStyle = window.getComputedStyle(editor);
+    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+    const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+    const containerWidth = editor.clientWidth - paddingLeft - paddingRight;
     const lines = transcript.split('\n');
     const baseFontSize = 1.1; // rem
 
@@ -171,8 +188,7 @@ export default function LetterReviewPage() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Get computed font to match actual rendering
-    const computedStyle = window.getComputedStyle(editor);
+    // Use computed font to match actual rendering
     const fontFamily = computedStyle.fontFamily || 'inherit';
     ctx.font = `${baseFontSize * 16}px ${fontFamily}`; // Convert rem to px (assuming 16px base)
 
@@ -187,18 +203,32 @@ export default function LetterReviewPage() {
 
     // Calculate scale factor (with a minimum to prevent text being too small)
     if (maxWidth > containerWidth) {
-      const scale = Math.max(0.5, containerWidth / maxWidth); // Don't go below 50%
+      const scale = Math.max(0.4, containerWidth / maxWidth); // Don't go below 40%
       setTranscriptFontSize(`${baseFontSize * scale}rem`);
     } else {
       setTranscriptFontSize(`${baseFontSize}rem`);
     }
   }, [transcript]);
 
-  // Recalculate font size when transcript changes or on resize
+  // Recalculate font size when transcript changes or on container resize
   useEffect(() => {
     calculateFontSize();
 
-    // Also recalculate on window resize
+    // Use ResizeObserver to detect container size changes (from split pane drag)
+    const editor = editorRef.current;
+    // Also observe the parent container which actually resizes with the split pane
+    const editorContainer = editor?.parentElement;
+
+    if (editor || editorContainer) {
+      const resizeObserver = new ResizeObserver(() => {
+        calculateFontSize();
+      });
+      if (editor) resizeObserver.observe(editor);
+      if (editorContainer) resizeObserver.observe(editorContainer);
+      return () => resizeObserver.disconnect();
+    }
+
+    // Fallback: window resize
     window.addEventListener('resize', calculateFontSize);
     return () => window.removeEventListener('resize', calculateFontSize);
   }, [calculateFontSize]);
@@ -621,6 +651,142 @@ export default function LetterReviewPage() {
     }
   };
 
+  // Verified transcript editing flow handlers
+  const handleTranscriptClick = useCallback((e: React.MouseEvent) => {
+    if (!letter?.transcriptStatus || letter.transcriptStatus !== 'VERIFIED' || isTranscriptEditing) return;
+
+    // Show tooltip near click position
+    setTooltipPosition({ x: e.clientX, y: e.clientY });
+    setShowEditTooltip(true);
+
+    // Clear existing timeout
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+    }
+
+    // Auto-dismiss after 3 seconds
+    tooltipTimeoutRef.current = setTimeout(() => {
+      setShowEditTooltip(false);
+    }, 3000);
+  }, [letter?.transcriptStatus, isTranscriptEditing]);
+
+  const handleTranscriptDoubleClick = useCallback(async () => {
+    if (!letter?.transcriptStatus || letter.transcriptStatus !== 'VERIFIED' || !letterId) return;
+
+    // Dismiss tooltip
+    setShowEditTooltip(false);
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+    }
+
+    // Store original state for potential revert
+    setOriginalTranscriptText(transcript);
+    setOriginalTranscriptVerified(true);
+
+    // Unverify via API
+    setSaving(true);
+    try {
+      const updated = await unverifyTranscript(letterId);
+      setLetter(updated);
+      setIsTranscriptEditing(true);
+      setHasTranscriptChanges(false);
+      showToast("Verification removed", "info");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to unverify transcript", "error");
+    } finally {
+      setSaving(false);
+    }
+  }, [letter?.transcriptStatus, letterId, transcript, showToast]);
+
+  const handleTranscriptRevert = useCallback(async () => {
+    if (!letterId || originalTranscriptText === null) return;
+
+    // Show confirmation dialog
+    if (!window.confirm("Discard all changes since editing started?")) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Restore original text
+      const updated = await updateLetter(letterId, { transcriptionText: originalTranscriptText });
+      setLetter(updated);
+      setTranscript(originalTranscriptText);
+
+      // Update contenteditable
+      if (editorRef.current) {
+        editorRef.current.innerText = originalTranscriptText;
+      }
+
+      // If was originally verified, re-verify
+      if (originalTranscriptVerified) {
+        const verifiedLetter = await verifyTranscript(letterId);
+        setLetter(verifiedLetter);
+        showToast("Changes reverted and verification restored", "success");
+      } else {
+        showToast("Changes reverted", "success");
+      }
+
+      // Reset editing state
+      setIsTranscriptEditing(false);
+      setOriginalTranscriptText(null);
+      setOriginalTranscriptVerified(false);
+      setHasTranscriptChanges(false);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to revert changes", "error");
+    } finally {
+      setSaving(false);
+    }
+  }, [letterId, originalTranscriptText, originalTranscriptVerified, showToast]);
+
+  // Cleanup tooltip timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (tooltipTimeoutRef.current) {
+        clearTimeout(tooltipTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Line highlighting - update on cursor move
+  useEffect(() => {
+    const isEditing = letter && letter.transcriptStatus !== 'VERIFIED' || isTranscriptEditing;
+
+    const handleSelectionChange = () => {
+      const editor = editorRef.current;
+      if (!editor || !isEditing) {
+        setCurrentLineIndex(null);
+        return;
+      }
+
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) {
+        setCurrentLineIndex(null);
+        return;
+      }
+
+      // Check if selection is within the editor
+      const range = selection.getRangeAt(0);
+      if (!editor.contains(range.commonAncestorContainer)) {
+        setCurrentLineIndex(null);
+        return;
+      }
+
+      // Find the cursor position
+      const preRange = document.createRange();
+      preRange.setStart(editor, 0);
+      preRange.setEnd(range.startContainer, range.startOffset);
+      const textBeforeCursor = preRange.toString();
+
+      // Count newlines to determine line index
+      const lineIndex = (textBeforeCursor.match(/\n/g) || []).length;
+      setCurrentLineIndex(lineIndex);
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, [letter?.transcriptStatus, isTranscriptEditing]);
+
   if (loading || !letter) {
     return (
       <div className="letter-review-page">
@@ -678,6 +844,18 @@ export default function LetterReviewPage() {
             </button>
           )}
 
+          {/* Revert button - when editing a verified transcript with changes */}
+          {isTranscriptEditing && hasTranscriptChanges && (
+            <button
+              className="header-action revert"
+              onClick={handleTranscriptRevert}
+              disabled={saving}
+              data-tooltip="Revert Changes"
+            >
+              <Icon name="reset" size={18} />
+            </button>
+          )}
+
           <button
             className="header-action delete"
             onClick={handleDelete}
@@ -690,18 +868,22 @@ export default function LetterReviewPage() {
       </header>
 
       <div className="review-body">
-        <div className="review-layout">
+        <ResizableSplitPane
+          letterId={letterId}
+          className="review-layout"
+          firstPanelClassName="images-panel"
+          secondPanelClassName="edit-panel"
+        >
           {/* Left side: Letter viewer */}
-          <div className="images-panel">
-            <LetterViewer
-              images={letter.images}
-              showOnlyLetterPages={false}
-              onPageChange={handlePageChange}
-            />
-          </div>
+          <LetterViewer
+            images={letter.images}
+            letterId={letterId}
+            showOnlyLetterPages={false}
+            onPageChange={handlePageChange}
+          />
 
           {/* Right side: Editable content */}
-          <div className="edit-panel">
+          <div className="edit-panel-content">
             {/* Status Panel */}
             <div className="status-panel">
               {/* Filename Display - shows current page's filename */}
@@ -741,18 +923,46 @@ export default function LetterReviewPage() {
             <div className="editor-section">
               <div className="editor-header">
                 <h2>Transcription</h2>
-                <div className="header-status-group">
-                  {renderContentStatus(letter.transcriptStatus)}
-                  {letter.workflowState !== "UPLOADED" && (
-                    <StatusBadge status="auto" label="Auto-transcribed" />
+                <div className="header-right">
+                  {/* Status badge - only show "Edited" when NOT verified */}
+                  {letter.transcriptStatus === 'EDITED' && !isTranscriptEditing && (
+                    renderContentStatus(letter.transcriptStatus)
+                  )}
+
+                  {/* Verification UI */}
+                  {letter.transcriptStatus === 'VERIFIED' && !isTranscriptEditing ? (
+                    <div className="verified-info">
+                      <Icon name="check" size={14} />
+                      <span>Verified{letter.transcriptVerifiedAt && ` on ${new Date(letter.transcriptVerifiedAt).toLocaleDateString()}`}</span>
+                      <button
+                        className="unverify-btn"
+                        onClick={handleUnverifyTranscript}
+                        disabled={saving}
+                      >
+                        Undo
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="verify-btn"
+                      onClick={handleVerifyTranscript}
+                      disabled={saving || letter.transcriptStatus === 'EMPTY'}
+                      title="Mark transcript verified"
+                    >
+                      <Icon name="check" size={18} />
+                    </button>
                   )}
                 </div>
               </div>
-              <div className="editor-container">
+              <div
+                className="editor-container"
+                onClick={handleTranscriptClick}
+                onDoubleClick={handleTranscriptDoubleClick}
+              >
                 <div
                   ref={editorRef}
-                  className="transcript-editor"
-                  contentEditable
+                  className={`transcript-editor ${letter.transcriptStatus === 'VERIFIED' && !isTranscriptEditing ? 'verified' : ''}`}
+                  contentEditable={letter.transcriptStatus !== 'VERIFIED' || isTranscriptEditing}
                   suppressContentEditableWarning
                   data-placeholder="Enter letter transcription..."
                   style={{ "--transcript-font-size": transcriptFontSize } as React.CSSProperties}
@@ -760,36 +970,25 @@ export default function LetterReviewPage() {
                     const target = e.currentTarget;
                     const newText = target.innerText;
                     setTranscript(newText);
+                    setHasTranscriptChanges(originalTranscriptText !== null && newText !== originalTranscriptText);
                     triggerAutoSave({ transcriptionText: newText });
                   }}
                   onKeyDown={handleEditorKeyDown}
                 />
               </div>
-              {/* Verification footer */}
-              <div className="section-footer">
-                {letter.transcriptStatus === 'VERIFIED' ? (
-                  <div className="verified-info">
-                    <Icon name="check" size={14} />
-                    <span>Verified{letter.transcriptVerifiedAt && ` on ${new Date(letter.transcriptVerifiedAt).toLocaleDateString()}`}</span>
-                    <button
-                      className="unverify-btn"
-                      onClick={handleUnverifyTranscript}
-                      disabled={saving}
-                    >
-                      Undo
-                    </button>
-                  </div>
-                ) : (
-                  <Button
-                    variant="primary"
-                    icon="check"
-                    onClick={handleVerifyTranscript}
-                    disabled={saving || letter.transcriptStatus === 'EMPTY'}
-                  >
-                    Mark Transcript Done
-                  </Button>
-                )}
-              </div>
+
+              {/* Double-click to edit tooltip */}
+              {showEditTooltip && (
+                <div
+                  className="edit-tooltip"
+                  style={{
+                    left: Math.min(tooltipPosition.x, window.innerWidth - 280),
+                    top: tooltipPosition.y + 10
+                  }}
+                >
+                  Verified. Double-click to edit and unverify.
+                </div>
+              )}
             </div>
 
             {/* Metadata Form */}
@@ -1103,7 +1302,7 @@ export default function LetterReviewPage() {
               </div>
             )}
           </div>
-        </div>
+        </ResizableSplitPane>
       </div>
 
     </div>

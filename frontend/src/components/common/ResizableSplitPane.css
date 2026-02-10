@@ -1,0 +1,146 @@
+/* ============================================================================
+   RESIZABLE SPLIT PANE
+   ============================================================================ */
+
+/* Desktop - horizontal (side-by-side) layout */
+.split-pane-horizontal {
+  display: grid;
+  grid-template-columns: var(--first-size) var(--second-size);
+  gap: var(--split-gap, var(--spacing-lg));
+  height: 100%;
+  position: relative;
+}
+
+/* Mobile - vertical (stacked) layout */
+.split-pane-vertical {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 53px);
+  position: relative;
+}
+
+/* ============================================================================
+   PANELS
+   ============================================================================ */
+
+.split-pane-first {
+  height: 100%;
+  overflow: hidden;
+  min-width: 0; /* Allow shrinking in grid */
+}
+
+.split-pane-second {
+  height: 100%;
+  overflow: hidden;
+  min-width: 0; /* Allow shrinking in grid */
+}
+
+/* Mobile panel overrides */
+.split-pane-vertical .split-pane-first {
+  position: sticky;
+  top: 53px;
+  flex: 0 0 var(--first-height, 50%);
+  overflow: hidden;
+  z-index: 5;
+}
+
+.split-pane-vertical .split-pane-second {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ============================================================================
+   DIVIDER
+   ============================================================================ */
+
+/* Desktop - vertical divider (between horizontal panels) */
+.split-pane-horizontal .split-pane-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* Center in the gap */
+  left: var(--first-size);
+  width: var(--split-gap);
+  cursor: grab;
+  z-index: 10;
+  touch-action: none; /* Prevent scroll interference */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.split-pane-horizontal .split-pane-divider:active,
+.split-pane-horizontal .split-pane-divider.dragging {
+  cursor: grabbing;
+}
+
+/* Simple vertical line */
+.split-pane-horizontal .split-pane-divider::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--border);
+  transform: translateX(-50%);
+  transition: background 0.15s ease, width 0.15s ease;
+}
+
+/* Hover/active states - desktop */
+.split-pane-horizontal .split-pane-divider:hover::after,
+.split-pane-horizontal .split-pane-divider.dragging::after {
+  background: var(--text-muted);
+  width: 2px;
+}
+
+/* Mobile - horizontal divider (between vertical panels) */
+.split-pane-vertical .split-pane-divider {
+  position: relative;
+  width: 100%;
+  height: 24px;
+  cursor: row-resize;
+  z-index: 10;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Always visible handle - mobile */
+.split-pane-vertical .split-pane-divider::after {
+  content: "";
+  width: 40px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+/* Hover/active states - mobile */
+.split-pane-vertical .split-pane-divider:hover::after,
+.split-pane-vertical .split-pane-divider.dragging::after {
+  background: var(--text-muted);
+  transform: scaleX(1.2);
+}
+
+/* ============================================================================
+   DRAGGING STATE
+   ============================================================================ */
+
+.split-pane.dragging {
+  cursor: grabbing;
+}
+
+.split-pane-vertical.dragging {
+  cursor: row-resize;
+}
+
+/* Prevent interactions with content during drag */
+.split-pane.dragging .split-pane-first,
+.split-pane.dragging .split-pane-second {
+  pointer-events: none;
+}

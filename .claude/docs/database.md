@@ -28,6 +28,30 @@ id, letter_id, page_number, storage_path, original_filename, checksum_sha256
 id, letter_id, field_type ('transcript'|'metadata'), version_number, content (jsonb), source ('ai'|'human')
 ```
 
+### canonical_persons
+```
+id, canonical_name, aliases[], notes, created_at, updated_at
+```
+Unique individuals across all letters. Has trigram index for fuzzy matching.
+
+### canonical_places
+```
+id, canonical_name, aliases[], place_type, notes, created_at, updated_at
+```
+Unique locations. `place_type`: city, state, country, address, region, other.
+
+### letter_persons
+```
+id, letter_id, person_id, role, confidence (0-100), context, created_at
+```
+Links letters to people. `role`: sender, recipient, mentioned.
+
+### letter_places
+```
+id, letter_id, place_id, role, confidence (0-100), context, created_at
+```
+Links letters to places. `role`: written_from, mentioned, destination.
+
 ## Enums
 
 **letter_type:** L, P, E, V, A, D, C, N, T
@@ -40,6 +64,16 @@ id, letter_id, field_type ('transcript'|'metadata'), version_number, content (js
 
 **job_status:** PENDING, RUNNING, SUCCESS, FAILED
 
+**person_role:** sender, recipient, mentioned
+
+**place_role:** written_from, mentioned, destination
+
+**place_type:** city, state, country, address, region, other
+
+**emotional_tone:** joyful, hopeful, neutral, anxious, sad, angry, desperate
+
+**relationship_type:** spouse, fiancé/fiancée, romantic-partner, parent, child, sibling, grandparent, grandchild, aunt/uncle, nephew/niece, cousin, in-law, friend, acquaintance, business-associate, employer, employee, unknown
+
 ## Key Constraints
 
 - Unique identity: `(collection_id, date_raw, type, type_sequence)`
@@ -50,16 +84,29 @@ id, letter_id, field_type ('transcript'|'metadata'), version_number, content (js
 ## Common Queries
 
 ```typescript
-// Letter with pages
+// Letter with pages and entities
 db.query.letters.findFirst({
   where: eq(letters.id, letterId),
-  with: { collection: true, pages: { orderBy: asc(p.pageNumber) } },
+  with: {
+    collection: true,
+    pages: { orderBy: asc(p.pageNumber) },
+    persons: { with: { person: true } },
+    places: { with: { place: true } },
+  },
 });
 
 // Published only
 db.query.letters.findMany({
   where: and(eq(letters.visibility, 'PUBLISHED'), isNull(letters.deletedAt)),
 });
+
+// Find persons by fuzzy name match
+db.execute(sql`
+  SELECT id, canonical_name, similarity(canonical_name, ${name}) as score
+  FROM canonical_persons
+  WHERE similarity(canonical_name, ${name}) > 0.5
+  ORDER BY score DESC
+`);
 ```
 
 ## Commands

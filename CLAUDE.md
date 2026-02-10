@@ -2,6 +2,17 @@
 
 Historical letter digitization platform with AI-powered transcription. React frontend, Express backend, PostgreSQL, OpenAI.
 
+## Active Plan
+
+**Plan file:** `.claude/plans/active.md`
+
+**Instructions:**
+1. If the plan file has content, read it and execute the plan
+2. After completing the plan, clear the file (leave it empty) so it's ready for the next plan
+3. If the user asks to create a plan, write it to this file
+
+**Documentation rule:** After implementing new features, update or create relevant docs in `.claude/docs/`. Keep docs current with the codebase.
+
 ## Essential Context
 
 **Read first:**
@@ -15,6 +26,9 @@ Historical letter digitization platform with AI-powered transcription. React fro
 | UI components | [components.md](.claude/docs/components.md) |
 | API endpoints | [api/](.claude/docs/api/) (split by domain) |
 | Database schema | [database.md](.claude/docs/database.md) |
+| AI integration | [ai.md](.claude/docs/ai.md) |
+| Entity management | [entities.md](.claude/docs/entities.md) |
+| Admin workflows | [workflows.md](.claude/docs/workflows.md) |
 | Processing pipeline | [processing.md](.claude/docs/processing.md) |
 | Filename parsing | [filenames.md](.claude/docs/filenames.md) |
 | Frontend/backend sync | [sync.md](.claude/docs/sync.md) |

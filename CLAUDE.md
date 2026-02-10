@@ -2,16 +2,6 @@
 
 Historical letter digitization platform with AI-powered transcription. React frontend, Express backend, PostgreSQL, OpenAI.
 
-## Plan System
-
-**BEFORE doing any non-trivial work, read [.claude/plans/index.md](.claude/plans/index.md).**
-
-This file contains:
-- Active plans and their states
-- Mandatory instructions for creating and implementing plans
-
-**You MUST follow the plan system. No exceptions.**
-
 **Documentation rule:** After implementing new features, update or create relevant docs in `.claude/docs/`.
 
 ## Essential Context

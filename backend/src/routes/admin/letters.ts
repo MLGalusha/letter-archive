@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { eq, and, isNull, isNotNull, inArray, sql, or, ilike, asc, desc, count } from 'drizzle-orm';
 import { z } from 'zod';
-import { db, letters, collections, letterVersions, letterPersons, letterPlaces, canonicalPersons, canonicalPlaces } from '../../db/index.js';
+import { db, letters, letterPages, collections, letterVersions, letterPersons, letterPlaces, canonicalPersons, canonicalPlaces } from '../../db/index.js';
 import { getLetterById, resetLetterForProcessing } from '../../services/letters.js';
 import { transformLetterToDTO, transformLetterWithRelatedToDTO, type LetterWithRelations } from '../../dto/index.js';
 import { processLetter, processMetadata } from '../../pipeline/processor.js';
@@ -348,10 +348,51 @@ router.get('/letters', async (req, res, next) => {
       offset,
     });
 
-    // Transform to DTOs
-    const transformedLetters = (results as LetterWithRelations[]).map(letter =>
-      transformLetterToDTO(letter)
-    );
+    // Count related items (extras) for each letter in the result set
+    // Related items share collectionId, dateRaw, typeSequence but have type != 'L'
+    const extrasCountMap = new Map<string, number>();
+    if (results.length > 0) {
+      // Build conditions for related items query
+      // We need to count pages from letters that match our results' keys
+      const relatedConditions = results.map(letter =>
+        and(
+          eq(letters.collectionId, letter.collectionId),
+          eq(letters.dateRaw, letter.dateRaw),
+          eq(letters.typeSequence, letter.typeSequence),
+          sql`${letters.type} != 'L'`,
+          isNull(letters.deletedAt)
+        )
+      );
+
+      // Query to count pages from related items grouped by their parent letter's key
+      const relatedCounts = await db
+        .select({
+          collectionId: letters.collectionId,
+          dateRaw: letters.dateRaw,
+          typeSequence: letters.typeSequence,
+          pageCount: count(),
+        })
+        .from(letters)
+        .innerJoin(letterPages, eq(letterPages.letterId, letters.id))
+        .where(or(...relatedConditions))
+        .groupBy(letters.collectionId, letters.dateRaw, letters.typeSequence);
+
+      // Build lookup map: key = "collectionId:dateRaw:typeSequence" -> count
+      for (const row of relatedCounts) {
+        const key = `${row.collectionId}:${row.dateRaw}:${row.typeSequence}`;
+        extrasCountMap.set(key, row.pageCount);
+      }
+    }
+
+    // Transform to DTOs with extras count
+    const transformedLetters = (results as LetterWithRelations[]).map(letter => {
+      const dto = transformLetterToDTO(letter);
+      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
+      return {
+        ...dto,
+        extrasCount: extrasCountMap.get(key) || 0,
+      };
+    });
 
     const duration = Date.now() - start;
     req.log.info(

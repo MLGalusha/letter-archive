@@ -1392,11 +1392,21 @@
   font-weight: bold;
 }
 
-.empty-state {
-  text-align: center;
-  padding: var(--spacing-xl);
+/* Empty state - shown as centered message in table container */
+.letters-table-container.empty {
+  display: flex;
+  flex-direction: column;
+}
+
+.letters-table-container.empty::after {
+  content: 'No letters found';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
   color: var(--text-muted);
   font-style: italic;
+  font-size: 0.9rem;
 }
 
 /* Status badges container */
@@ -1678,31 +1688,6 @@
     margin-bottom: var(--spacing-xs);
   }
 
-  /* Horizontal scroll for table with sticky first column */
-  .letters-table-container {
-    position: relative;
-  }
-
-  .letters-table th:first-child,
-  .letters-table td:first-child {
-    position: sticky;
-    left: 0;
-    z-index: 1;
-    background: inherit;
-  }
-
-  .letter-row td:first-child {
-    background: var(--bg-light);
-  }
-
-  .letter-row:hover td:first-child {
-    background: var(--bg);
-  }
-
-  .letter-row.selected td:first-child {
-    background: #e3f2fd;
-  }
-
   .processing-controls {
     flex-wrap: wrap;
     gap: var(--spacing-xs);
@@ -1743,155 +1728,6 @@
   }
 }
 
-/* ============================================================================
-   INDEX COLUMN - Sticky first column with edit controls
-   ============================================================================ */
-
-/* Index column header - contains edit controls */
-.index-header {
-  position: sticky;
-  left: 0;
-  z-index: 11; /* Above regular sticky header z-index of 10 */
-  background: var(--bg);
-  width: 70px;
-  min-width: 70px;
-  text-align: center;
-  padding: 0.25rem !important;
-}
-
-/* Index cell - row number */
-.index-cell {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  background: inherit;
-  text-align: center;
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Ensure index cells inherit proper background on hover/selected */
-.letter-row .index-cell {
-  background: var(--bg-light);
-}
-
-.letter-row:hover .index-cell {
-  background: var(--bg);
-}
-
-.letter-row.selected .index-cell {
-  background: #e3f2fd;
-}
-
-.letter-row.selected:hover .index-cell {
-  background: #bbdefb;
-}
-
-/* Edit mode header content */
-.index-header-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.index-header-edit {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 0 4px;
-}
-
-.index-header-edit input[type="checkbox"] {
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  cursor: pointer;
-  background: var(--bg-light);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  position: relative;
-  transition: all 0.15s ease;
-}
-
-.index-header-edit input[type="checkbox"]:hover {
-  border-color: var(--text-muted);
-}
-
-.index-header-edit input[type="checkbox"]:checked {
-  background: var(--bg-light);
-  border-color: var(--text);
-}
-
-.index-header-edit input[type="checkbox"]:checked::after {
-  content: '';
-  position: absolute;
-  left: 3px;
-  top: 0px;
-  width: 4px;
-  height: 8px;
-  border: solid var(--text);
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
-.selection-count {
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--text);
-  min-width: 16px;
-}
-
-.exit-edit-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1;
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.exit-edit-btn:hover {
-  color: var(--text);
-  background: var(--bg-light);
-  border-color: var(--border);
-}
-
-/* Enter edit mode button */
-.enter-edit-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-
-.enter-edit-btn:hover {
-  color: var(--text);
-  border-color: var(--text-muted);
-  background: var(--bg-light);
-}
 
 /* ============================================================================
    TWO-TRACK WORKFLOW STATUS STYLES

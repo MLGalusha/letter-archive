@@ -155,4 +155,6 @@ export interface Letter {
   // Linked entities (populated when fetching letter detail)
   linkedPersons?: LinkedPerson[];
   linkedPlaces?: LinkedPlace[];
+  // Count of related items (envelopes, photos, etc.) - only in list responses
+  extrasCount?: number;
 }

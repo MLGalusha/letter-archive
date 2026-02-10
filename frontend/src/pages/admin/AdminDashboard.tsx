@@ -638,8 +638,9 @@ export default function AdminDashboard() {
             comparison = aLetters - bLetters;
             break;
           case 'extras':
-            const aExtras = a.images.filter(img => img.type !== 'letter').length;
-            const bExtras = b.images.filter(img => img.type !== 'letter').length;
+            // Use extrasCount from API (includes related items like photos, covers)
+            const aExtras = a.extrasCount ?? a.images.filter(img => img.type !== 'letter').length;
+            const bExtras = b.extrasCount ?? b.images.filter(img => img.type !== 'letter').length;
             comparison = aExtras - bExtras;
             break;
         }
@@ -966,10 +967,13 @@ export default function AdminDashboard() {
   };
 
   // Handle collection input change - filter immediately on any input
+  // "0" and "00" are treated as no filter (same as empty)
+  // Any non-zero value like "9", "09", "009", "090", "900" will filter
   const handleCollectionInputChange = (value: string) => {
     const cleaned = value.replace(/\D/g, '').slice(0, 3);
     setCollectionInput(cleaned);
-    if (cleaned === '') {
+    // Treat empty, "0", and "00" as no filter
+    if (cleaned === '' || cleaned === '0' || cleaned === '00') {
       setCollectionFilter('all');
     } else {
       // Use the value as-is for partial matching (e.g., "7" matches "007", "017", etc.)
@@ -1146,6 +1150,15 @@ export default function AdminDashboard() {
         <div className="header-row header-row-primary">
           <h1>Admin Panel</h1>
           <div className="toolbar-buttons">
+            {/* Edit mode toggle */}
+            <Button
+              icon={editMode ? "close" : "edit"}
+              active={editMode}
+              onClick={toggleEditMode}
+            >
+              {editMode ? "Exit Edit" : "Edit"}
+            </Button>
+
             {/* Upload button */}
             <Button icon="upload" onClick={handleUploadClick}>Upload</Button>
 
@@ -1535,10 +1548,9 @@ export default function AdminDashboard() {
 
       <div className={`admin-content ${editMode ? 'has-edit-toolbar' : ''}`}>
         {/* Single table with sticky header - scrolls together horizontally */}
-        <div className="letters-table-container">
+        <div className={`letters-table-container ${filteredLetters.length === 0 ? 'empty' : ''}`}>
           <table className="letters-table">
             <colgroup>
-              <col style={{ width: '70px' }} /> {/* Index column - always visible */}
               {visibleColumns.has('sender') && <col style={{ width: '12%' }} />}
               {visibleColumns.has('recipient') && <col style={{ width: '12%' }} />}
               {visibleColumns.has('date') && <col style={{ width: '100px' }} />}
@@ -1553,16 +1565,6 @@ export default function AdminDashboard() {
             </colgroup>
             <thead>
               <tr>
-                {/* Index column header - sticky */}
-                <th className="index-header">
-                  {editMode ? (
-                    <span className="index-header-label">#</span>
-                  ) : (
-                    <button className="enter-edit-btn" onClick={toggleEditMode}>
-                      Edit
-                    </button>
-                  )}
-                </th>
                 {visibleColumns.has('sender') && (
                   <th
                     className={`sortable-header ${getSortInfo("sender") ? "sorted" : ""}`}
@@ -1704,16 +1706,11 @@ export default function AdminDashboard() {
               </tr>
             </thead>
             <tbody>
-              {filteredLetters.length === 0 ? (
-                <tr>
-                  <td colSpan={visibleColumns.size + 1} className="empty-state">
-                    No letters found
-                  </td>
-                </tr>
-              ) : (
-                filteredLetters.map((letter, index) => {
+              {filteredLetters.map((letter, index) => {
                   const pageCount = letter.images.filter((img) => img.type === "letter").length;
-                  const extrasCount = letter.images.filter((img) => img.type !== "letter").length;
+                  // Use extrasCount from API (includes related items like photos, covers)
+                  // Fallback to computing from images for backward compatibility
+                  const extrasCount = letter.extrasCount ?? letter.images.filter((img) => img.type !== "letter").length;
                   const formattedDate = formatDateRaw(letter.metadata.dateRaw);
                   return (
                     <tr
@@ -1723,8 +1720,6 @@ export default function AdminDashboard() {
                       onMouseEnter={() => handleRowMouseEnter(index)}
                       className={`letter-row ${selectedIds.has(letter.id) ? "selected" : ""} ${editMode ? "edit-mode" : ""}`}
                     >
-                      {/* Index cell - always visible, shows row number */}
-                      <td className="index-cell">{index + 1}</td>
                       {visibleColumns.has('sender') && (
                         <td
                           className={`
@@ -1784,8 +1779,7 @@ export default function AdminDashboard() {
                       {visibleColumns.has('created') && <td className="date-cell">{formatDate(letter.createdAt)}</td>}
                     </tr>
                   );
-                })
-              )}
+                })}
             </tbody>
           </table>
         </div>

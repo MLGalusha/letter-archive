@@ -225,8 +225,6 @@ export const letters = pgTable(
     // V2 indexes
     index('idx_letters_emotional_tone').on(table.emotionalTone),
     index('idx_letters_primary_topics').using('gin', table.primaryTopics),
-    // Check constraint: published requires both transcript and metadata to be verified
-    check('published_requires_verified', sql`visibility::text <> 'PUBLISHED' OR (transcript_status::text = 'VERIFIED' AND metadata_content_status::text = 'VERIFIED')`),
     // Check constraint: type_sequence >= 1
     check('type_sequence_positive', sql`type_sequence >= 1`),
     // Check constraint: attempt counts >= 0

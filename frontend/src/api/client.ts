@@ -131,6 +131,23 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
 }
 
 /**
+ * PATCH request
+ */
+export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  log.debug('PATCH request', { path });
+  const startTime = Date.now();
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    credentials: 'include',
+  });
+
+  return handleResponse<T>(response, 'PATCH', path, startTime);
+}
+
+/**
  * DELETE request
  */
 export async function apiDelete<T>(path: string): Promise<T> {

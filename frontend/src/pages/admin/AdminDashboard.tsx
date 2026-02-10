@@ -12,6 +12,7 @@ import {
   bulkClearMetadata,
   bulkTranscribe,
   bulkExtractMetadata,
+  bulkUpdateFields,
   type ProcessingStatus,
 } from "../../api/admin";
 import { useToast } from "../../contexts/ToastContext";
@@ -53,7 +54,7 @@ import "./AdminDashboard.css";
 // Server-side sort fields (must match backend Zod schema)
 type ServerSortField = 'createdAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection';
 // Client-side computed sort fields (sorted locally after fetch)
-type ClientSortField = 'year' | 'month' | 'day' | 'letters' | 'extras';
+type ClientSortField = 'letters' | 'extras';
 // Extended sort field to include client-side computed columns
 type ExtendedSortField = ServerSortField | ClientSortField;
 type SortDirection = 'asc' | 'desc';
@@ -69,7 +70,7 @@ interface SortColumn {
 }
 
 // Column definitions for visibility toggle
-type ColumnId = 'sender' | 'recipient' | 'year' | 'month' | 'day' | 'collection' | 'letters' | 'extras' | 'transcript' | 'metadata' | 'visibility' | 'created';
+type ColumnId = 'sender' | 'recipient' | 'date' | 'collection' | 'letters' | 'extras' | 'transcript' | 'metadata' | 'visibility' | 'created' | 'sync';
 
 interface ColumnDef {
   id: ColumnId;
@@ -80,17 +81,39 @@ interface ColumnDef {
 const ALL_COLUMNS: ColumnDef[] = [
   { id: 'sender', label: 'Sender', defaultVisible: true },
   { id: 'recipient', label: 'Recipient', defaultVisible: true },
-  { id: 'year', label: 'Year', defaultVisible: true },
-  { id: 'month', label: 'Month', defaultVisible: true },
-  { id: 'day', label: 'Day', defaultVisible: true },
+  { id: 'date', label: 'Date', defaultVisible: true },
   { id: 'collection', label: 'Collection', defaultVisible: true },
   { id: 'letters', label: 'Letters', defaultVisible: true },
   { id: 'extras', label: 'Extras', defaultVisible: true },
   { id: 'transcript', label: 'Transcript', defaultVisible: true },
   { id: 'metadata', label: 'Metadata', defaultVisible: true },
+  { id: 'sync', label: 'Sync', defaultVisible: true },
   { id: 'visibility', label: 'Visibility', defaultVisible: true },
   { id: 'created', label: 'Created', defaultVisible: true },
 ];
+
+/**
+ * Checks if a letter's derived fields (summary/hook) may be out of sync with identities.
+ * Returns true if sender/recipient are set but don't appear in the summary or hook.
+ */
+function checkNeedsSync(letter: Letter): boolean {
+  const { sender, recipient, description, hook } = letter.metadata;
+
+  // No sender/recipient set - nothing to check
+  if (!sender && !recipient) return false;
+
+  // No summary/hook to check against
+  if (!description && !hook) return false;
+
+  const combinedText = ((description || '') + ' ' + (hook || '')).toLowerCase();
+
+  // Check if identities appear in derived fields
+  const senderMissing = sender && !combinedText.includes(sender.toLowerCase());
+  const recipientMissing = recipient && !combinedText.includes(recipient.toLowerCase());
+
+  // If either identity is missing from derived fields, may need sync
+  return Boolean(senderMissing || recipientMissing);
+}
 
 const DEFAULT_VISIBLE_COLUMNS = new Set<ColumnId>(
   ALL_COLUMNS.filter(c => c.defaultVisible).map(c => c.id)
@@ -115,32 +138,23 @@ function StatusIcon({ status, type }: { status: ContentStatus; type: 'T' | 'M' }
   }
 }
 
-// Parse dateRaw into year/month/day components
-function parseDateRaw(dateRaw: string | undefined): { year: string; month: string; day: string } {
+// Parse dateRaw into formatted MM/DD/YYYY string
+function formatDateRaw(dateRaw: string | undefined): string {
   if (!dateRaw || dateRaw.length !== 8) {
-    return { year: '—', month: '—', day: '—' };
+    return '—';
   }
 
   const yearStr = dateRaw.slice(0, 4);
   const monthStr = dateRaw.slice(4, 6);
   const dayStr = dateRaw.slice(6, 8);
 
-  // Year: show as-is (keep X for unknown digits)
-  const year = yearStr === 'XXXX' ? '—' : yearStr;
+  // Handle unknown components with ?
+  const year = yearStr.includes('X') ? yearStr.replace(/X/g, '?') : yearStr;
+  const month = monthStr.includes('X') ? '??' : monthStr;
+  const day = dayStr.includes('X') ? '??' : dayStr;
 
-  // Month: convert to short name if fully known
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const month = monthStr.includes('X')
-    ? '—'
-    : monthNames[parseInt(monthStr, 10) - 1] || '—';
-
-  // Day: show number if fully known
-  const day = dayStr.includes('X')
-    ? '—'
-    : String(parseInt(dayStr, 10)); // Remove leading zero
-
-  return { year, month, day };
+  // Format as MM/DD/YYYY
+  return `${month}/${day}/${year}`;
 }
 
 // localStorage key for persisting filters and sorting
@@ -357,6 +371,13 @@ export default function AdminDashboard() {
   const [dragMode, setDragMode] = useState<"select" | "deselect" | null>(null);
   const [draggedIds, setDraggedIds] = useState<Set<string>>(new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
+
+  // Copy-paste edit mode state
+  const [copyModeActive, setCopyModeActive] = useState(false);
+  const [copiedValue, setCopiedValue] = useState<string | null>(null);
+  const [sourceCell, setSourceCell] = useState<{ letterId: string; column: 'sender' | 'recipient' } | null>(null);
+  const [pendingChanges, setPendingChanges] = useState<Map<string, { sender?: string; recipient?: string }>>(new Map());
+  const [isSaving, setIsSaving] = useState(false);
 
   // Process dropdown state
   const [showProcessMenu, setShowProcessMenu] = useState(false);
@@ -597,7 +618,7 @@ export default function AdminDashboard() {
     };
   };
 
-  // Apply client-side sorting for computed columns (year, month, day, letters, extras)
+  // Apply client-side sorting for computed columns (letters, extras)
   const filteredLetters = useMemo(() => {
     // Find client-side sort columns (ones that can't be sorted server-side)
     const clientSortColumns = sortColumns.filter(col => !isServerSortField(col.field));
@@ -611,22 +632,6 @@ export default function AdminDashboard() {
         let comparison = 0;
 
         switch (field) {
-          case 'year':
-            // Sort by raw year string (handles "18??" etc)
-            comparison = (a.metadata.dateRaw?.slice(0, 4) || '').localeCompare(b.metadata.dateRaw?.slice(0, 4) || '');
-            break;
-          case 'month':
-            // Sort by month number (01-12), treating XX as 00
-            const aMonth = a.metadata.dateRaw?.slice(4, 6) || '00';
-            const bMonth = b.metadata.dateRaw?.slice(4, 6) || '00';
-            comparison = aMonth.replace(/X/g, '0').localeCompare(bMonth.replace(/X/g, '0'));
-            break;
-          case 'day':
-            // Sort by day number (01-31), treating XX as 00
-            const aDay = a.metadata.dateRaw?.slice(6, 8) || '00';
-            const bDay = b.metadata.dateRaw?.slice(6, 8) || '00';
-            comparison = aDay.replace(/X/g, '0').localeCompare(bDay.replace(/X/g, '0'));
-            break;
           case 'letters':
             const aLetters = a.images.filter(img => img.type === 'letter').length;
             const bLetters = b.images.filter(img => img.type === 'letter').length;
@@ -654,15 +659,15 @@ export default function AdminDashboard() {
   // Edit mode functions
   const toggleEditMode = () => {
     if (editMode) {
-      // Exiting edit mode, clear selections
-      setSelectedIds(new Set());
+      // Exiting edit mode, clear all state
+      exitEditMode();
     } else {
       // Entering edit mode, close other dropdowns
       setShowProcessMenu(false);
       setShowRecentDropdown(false);
       setShowDateDropdown(false);
+      setEditMode(true);
     }
-    setEditMode(!editMode);
   };
 
   const toggleSelection = (id: string) => {
@@ -673,6 +678,106 @@ export default function AdminDashboard() {
       newSelected.add(id);
     }
     setSelectedIds(newSelected);
+  };
+
+  // Copy-paste mode handlers
+  const toggleCopyMode = () => {
+    if (copyModeActive) {
+      // Deactivate copy mode
+      setCopyModeActive(false);
+      setCopiedValue(null);
+      setSourceCell(null);
+    } else {
+      // Activate copy mode
+      setCopyModeActive(true);
+      setCopiedValue(null);
+      setSourceCell(null);
+    }
+  };
+
+  const handleCellClick = (letterId: string, column: 'sender' | 'recipient', value: string | null, e: React.MouseEvent) => {
+    if (!editMode || !copyModeActive) return;
+
+    e.stopPropagation(); // Prevent row selection
+
+    // Check if clicking on a cell that already has a pending change
+    const existingChange = pendingChanges.get(letterId);
+    const hasPendingChangeForColumn = existingChange && existingChange[column] !== undefined;
+
+    if (sourceCell === null) {
+      // No source yet - this click sets the source
+      setSourceCell({ letterId, column });
+      setCopiedValue(value || '');
+    } else if (sourceCell.letterId === letterId && sourceCell.column === column) {
+      // Clicking the source cell again - deselect it
+      setSourceCell(null);
+      setCopiedValue(null);
+    } else if (hasPendingChangeForColumn) {
+      // Clicking a cell that already has a pending change - remove the change
+      setPendingChanges(prev => {
+        const next = new Map(prev);
+        const existing = next.get(letterId);
+        if (existing) {
+          const { [column]: removed, ...rest } = existing;
+          if (Object.keys(rest).length === 0) {
+            next.delete(letterId);
+          } else {
+            next.set(letterId, rest as { sender?: string; recipient?: string });
+          }
+        }
+        return next;
+      });
+    } else {
+      // Paste the copied value to this cell
+      setPendingChanges(prev => {
+        const next = new Map(prev);
+        const existing = next.get(letterId) || {};
+        next.set(letterId, { ...existing, [column]: copiedValue || '' });
+        return next;
+      });
+    }
+  };
+
+  const handleSaveChanges = async () => {
+    if (pendingChanges.size === 0) return;
+
+    setIsSaving(true);
+    try {
+      // Group updates and send to API
+      const updates = Array.from(pendingChanges.entries()).map(([letterId, changes]) => ({
+        letterId,
+        ...changes,
+      }));
+
+      await bulkUpdateFields(updates);
+
+      showToast(`Updated ${pendingChanges.size} letter${pendingChanges.size === 1 ? '' : 's'}`, 'success');
+
+      // Exit edit mode after successful save
+      setEditMode(false);
+      setSelectedIds(new Set());
+      setPendingChanges(new Map());
+      setCopyModeActive(false);
+      setCopiedValue(null);
+      setSourceCell(null);
+
+      // Refresh the list
+      await fetchLetters();
+    } catch (err) {
+      console.error('Failed to save changes:', err);
+      showToast(err instanceof Error ? err.message : 'Failed to save changes', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const exitEditMode = () => {
+    setEditMode(false);
+    setSelectedIds(new Set());
+    setPendingChanges(new Map());
+    setCopyModeActive(false);
+    setCopiedValue(null);
+    setSourceCell(null);
   };
 
   const handleDeleteClick = () => {
@@ -704,20 +809,6 @@ export default function AdminDashboard() {
   };
 
   // Bulk action handlers
-  const allFilteredSelected = filteredLetters.length > 0 &&
-    filteredLetters.every((l) => selectedIds.has(l.id));
-
-  const handleToggleSelectAll = () => {
-    if (allFilteredSelected) {
-      // Deselect all
-      setSelectedIds(new Set());
-    } else {
-      // Select all filtered
-      const allFilteredIds = new Set(filteredLetters.map((l) => l.id));
-      setSelectedIds(allFilteredIds);
-    }
-  };
-
   const handleResetTranscriptionsClick = () => {
     if (selectedIds.size > 0) {
       setShowResetModal(true);
@@ -1442,7 +1533,7 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      <div className="admin-content">
+      <div className={`admin-content ${editMode ? 'has-edit-toolbar' : ''}`}>
         {/* Single table with sticky header - scrolls together horizontally */}
         <div className="letters-table-container">
           <table className="letters-table">
@@ -1450,38 +1541,22 @@ export default function AdminDashboard() {
               <col style={{ width: '70px' }} /> {/* Index column - always visible */}
               {visibleColumns.has('sender') && <col style={{ width: '12%' }} />}
               {visibleColumns.has('recipient') && <col style={{ width: '12%' }} />}
-              {visibleColumns.has('year') && <col style={{ width: '50px' }} />}
-              {visibleColumns.has('month') && <col style={{ width: '50px' }} />}
-              {visibleColumns.has('day') && <col style={{ width: '40px' }} />}
+              {visibleColumns.has('date') && <col style={{ width: '100px' }} />}
               {visibleColumns.has('collection') && <col style={{ width: '80px' }} />}
               {visibleColumns.has('letters') && <col style={{ width: '55px' }} />}
               {visibleColumns.has('extras') && <col style={{ width: '50px' }} />}
               {visibleColumns.has('transcript') && <col style={{ width: '70px' }} />}
               {visibleColumns.has('metadata') && <col style={{ width: '70px' }} />}
+              {visibleColumns.has('sync') && <col style={{ width: '50px' }} />}
               {visibleColumns.has('visibility') && <col style={{ width: '70px' }} />}
               {visibleColumns.has('created') && <col style={{ width: '80px' }} />}
             </colgroup>
             <thead>
               <tr>
-                {/* Index column header - sticky, contains edit controls */}
+                {/* Index column header - sticky */}
                 <th className="index-header">
                   {editMode ? (
-                    <div className="index-header-edit">
-                      <input
-                        type="checkbox"
-                        checked={allFilteredSelected}
-                        onChange={handleToggleSelectAll}
-                        title={allFilteredSelected ? "Deselect all" : "Select all"}
-                      />
-                      <span className="selection-count">{selectedIds.size}</span>
-                      <button
-                        className="exit-edit-btn"
-                        onClick={toggleEditMode}
-                        title="Exit edit mode"
-                      >
-                        ×
-                      </button>
-                    </div>
+                    <span className="index-header-label">#</span>
                   ) : (
                     <button className="enter-edit-btn" onClick={toggleEditMode}>
                       Edit
@@ -1524,46 +1599,19 @@ export default function AdminDashboard() {
                     </span>
                   </th>
                 )}
-                {visibleColumns.has('year') && (
+                {visibleColumns.has('date') && (
                   <th
-                    className={`date-header sortable-header ${getSortInfo("year") ? "sorted" : ""}`}
-                    onClick={() => handleSort("year")}
+                    className={`date-header sortable-header ${getSortInfo("letterDate") ? "sorted" : ""}`}
+                    onClick={() => handleSort("letterDate")}
                   >
                     <span className="header-content">
-                      Year
-                      {getSortInfo("year") && (
+                      Date
+                      {getSortInfo("letterDate") && (
                         <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("year")?.direction === "asc" ? "↑" : "↓"}</span>
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('month') && (
-                  <th
-                    className={`date-header sortable-header ${getSortInfo("month") ? "sorted" : ""}`}
-                    onClick={() => handleSort("month")}
-                  >
-                    <span className="header-content">
-                      Month
-                      {getSortInfo("month") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("month")?.direction === "asc" ? "↑" : "↓"}</span>
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('day') && (
-                  <th
-                    className={`date-header sortable-header ${getSortInfo("day") ? "sorted" : ""}`}
-                    onClick={() => handleSort("day")}
-                  >
-                    <span className="header-content">
-                      Day
-                      {getSortInfo("day") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("day")?.direction === "asc" ? "↑" : "↓"}</span>
+                          <span className="sort-arrow">{getSortInfo("letterDate")?.direction === "asc" ? "↑" : "↓"}</span>
+                          {getSortInfo("letterDate")!.total > 1 && (
+                            <span className="sort-priority">{getSortInfo("letterDate")?.priority}</span>
+                          )}
                         </span>
                       )}
                     </span>
@@ -1629,6 +1677,9 @@ export default function AdminDashboard() {
                 {visibleColumns.has('metadata') && (
                   <th className="status-header">Metadata</th>
                 )}
+                {visibleColumns.has('sync') && (
+                  <th className="status-header" title="Identity/content sync status">Sync</th>
+                )}
                 {visibleColumns.has('visibility') && (
                   <th>Visibility</th>
                 )}
@@ -1663,7 +1714,7 @@ export default function AdminDashboard() {
                 filteredLetters.map((letter, index) => {
                   const pageCount = letter.images.filter((img) => img.type === "letter").length;
                   const extrasCount = letter.images.filter((img) => img.type !== "letter").length;
-                  const { year, month, day } = parseDateRaw(letter.metadata.dateRaw);
+                  const formattedDate = formatDateRaw(letter.metadata.dateRaw);
                   return (
                     <tr
                       key={letter.id}
@@ -1674,11 +1725,35 @@ export default function AdminDashboard() {
                     >
                       {/* Index cell - always visible, shows row number */}
                       <td className="index-cell">{index + 1}</td>
-                      {visibleColumns.has('sender') && <td>{letter.metadata.sender || "—"}</td>}
-                      {visibleColumns.has('recipient') && <td>{letter.metadata.recipient || "—"}</td>}
-                      {visibleColumns.has('year') && <td className="date-cell">{year}</td>}
-                      {visibleColumns.has('month') && <td className="date-cell">{month}</td>}
-                      {visibleColumns.has('day') && <td className="date-cell">{day}</td>}
+                      {visibleColumns.has('sender') && (
+                        <td
+                          className={`
+                            ${copyModeActive ? 'copyable-cell' : ''}
+                            ${sourceCell?.letterId === letter.id && sourceCell?.column === 'sender' ? 'source-cell' : ''}
+                            ${pendingChanges.has(letter.id) && pendingChanges.get(letter.id)?.sender !== undefined ? 'changed-cell' : ''}
+                          `}
+                          onClick={(e) => copyModeActive ? handleCellClick(letter.id, 'sender', letter.metadata.sender ?? null, e) : undefined}
+                        >
+                          {pendingChanges.get(letter.id)?.sender !== undefined
+                            ? pendingChanges.get(letter.id)?.sender || "—"
+                            : letter.metadata.sender || "—"}
+                        </td>
+                      )}
+                      {visibleColumns.has('recipient') && (
+                        <td
+                          className={`
+                            ${copyModeActive ? 'copyable-cell' : ''}
+                            ${sourceCell?.letterId === letter.id && sourceCell?.column === 'recipient' ? 'source-cell' : ''}
+                            ${pendingChanges.has(letter.id) && pendingChanges.get(letter.id)?.recipient !== undefined ? 'changed-cell' : ''}
+                          `}
+                          onClick={(e) => copyModeActive ? handleCellClick(letter.id, 'recipient', letter.metadata.recipient ?? null, e) : undefined}
+                        >
+                          {pendingChanges.get(letter.id)?.recipient !== undefined
+                            ? pendingChanges.get(letter.id)?.recipient || "—"
+                            : letter.metadata.recipient || "—"}
+                        </td>
+                      )}
+                      {visibleColumns.has('date') && <td className="date-cell">{formattedDate}</td>}
                       {visibleColumns.has('collection') && <td>{letter.collectionCode || "—"}</td>}
                       {visibleColumns.has('letters') && <td className="count-cell">{pageCount || "—"}</td>}
                       {visibleColumns.has('extras') && <td className="count-cell">{extrasCount || "—"}</td>}
@@ -1690,6 +1765,15 @@ export default function AdminDashboard() {
                       {visibleColumns.has('metadata') && (
                         <td className="status-cell">
                           <StatusIcon status={letter.metadataContentStatus} type="M" />
+                        </td>
+                      )}
+                      {visibleColumns.has('sync') && (
+                        <td className="status-cell sync-cell">
+                          {checkNeedsSync(letter) ? (
+                            <span className="sync-indicator needs-sync" title="Names may not match summary/hook">⚠</span>
+                          ) : (
+                            <span className="sync-indicator synced" title="Synced">✓</span>
+                          )}
                         </td>
                       )}
                       {visibleColumns.has('visibility') && (
@@ -1763,6 +1847,61 @@ export default function AdminDashboard() {
         onConfirm={handleConfirmClearMetadata}
         onCancel={() => setShowClearMetadataModal(false)}
       />
+
+      {/* Floating edit toolbar - always visible in edit mode */}
+      {editMode && (
+        <div className="edit-toolbar visible">
+          <div className="edit-toolbar-content">
+            {/* Left section: selection count and copy mode toggle */}
+            <div className="edit-toolbar-left">
+              <span className="toolbar-selection-count">
+                {selectedIds.size} selected
+              </span>
+              <div className="toolbar-divider" />
+              <button
+                className={`toolbar-copy-btn ${copyModeActive ? 'active' : ''}`}
+                onClick={toggleCopyMode}
+                disabled={isSaving}
+              >
+                {copyModeActive ? '✓ Copy Mode' : 'Copy Mode'}
+              </button>
+            </div>
+
+            {/* Center section: copy hints and change count */}
+            <div className="edit-toolbar-center">
+              {copyModeActive && !sourceCell && (
+                <span className="toolbar-hint">Click a Sender or Recipient cell to copy</span>
+              )}
+              {copyModeActive && sourceCell && (
+                <span className="toolbar-hint">
+                  Copying: <strong>"{copiedValue || '(empty)'}"</strong> — click cells to paste, click again to undo
+                </span>
+              )}
+              {pendingChanges.size > 0 && (
+                <span className="toolbar-changes">{pendingChanges.size} change{pendingChanges.size === 1 ? '' : 's'}</span>
+              )}
+            </div>
+
+            {/* Right section: cancel and save buttons */}
+            <div className="edit-toolbar-actions">
+              <button
+                className="toolbar-btn toolbar-btn-cancel"
+                onClick={exitEditMode}
+                disabled={isSaving}
+              >
+                Cancel
+              </button>
+              <button
+                className="toolbar-btn toolbar-btn-save"
+                onClick={handleSaveChanges}
+                disabled={pendingChanges.size === 0 || isSaving}
+              >
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

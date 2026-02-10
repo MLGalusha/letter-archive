@@ -36,6 +36,20 @@
       "when": 1770617357527,
       "tag": "0004_wandering_oracle",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1770653806305,
+      "tag": "0005_fuzzy_shocker",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1770693041320,
+      "tag": "0006_oval_karen_page",
+      "breakpoints": true
     }
   ]
 }

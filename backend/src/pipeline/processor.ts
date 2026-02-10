@@ -1,5 +1,6 @@
 import { runTranscription } from './transcription.js';
 import { runMetadataExtraction } from './metadata.js';
+import { runMetadataExtractionV2 } from './metadataV2.js';
 import { getLetterById } from '../services/letters.js';
 
 /**
@@ -54,9 +55,11 @@ export async function processMetadata(letterId: string): Promise<void> {
     letter.transcriptConfirmedAt !== null
   ) {
     console.log(`Processing metadata for letter ${letterId}`);
-    await runMetadataExtraction(letterId);
+    // Use V2 extraction (Responses API with structured outputs)
+    await runMetadataExtractionV2(letterId);
   }
 }
 
 export { runTranscription } from './transcription.js';
 export { runMetadataExtraction } from './metadata.js';
+export { runMetadataExtractionV2 } from './metadataV2.js';

@@ -11,6 +11,9 @@ import AdminLoginPage from "./pages/admin/AdminLoginPage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import UploadLetterPage from "./pages/admin/UploadLetterPage";
 import LetterReviewPage from "./pages/admin/LetterReviewPage";
+import EntityReviewPage from "./pages/admin/EntityReviewPage";
+import PeoplePage from "./pages/admin/PeoplePage";
+import PlacesPage from "./pages/admin/PlacesPage";
 import "./App.css";
 
 function App() {
@@ -23,6 +26,9 @@ function App() {
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/upload" element={<UploadLetterPage />} />
         <Route path="/admin/letters/:letterId" element={<LetterReviewPage />} />
+        <Route path="/admin/entities/review" element={<EntityReviewPage />} />
+        <Route path="/admin/entities/people" element={<PeoplePage />} />
+        <Route path="/admin/entities/places" element={<PlacesPage />} />
 
         {/* Letter detail - no main header (has its own header) */}
         <Route path="/letter/:letterId" element={<LetterDetailPage />} />

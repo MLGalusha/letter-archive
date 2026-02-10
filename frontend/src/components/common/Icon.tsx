@@ -20,7 +20,10 @@ export type IconName =
   | 'select-all'
   | 'folder'
   | 'file'
-  | 'logout';
+  | 'logout'
+  | 'refresh'
+  | 'chevron-down'
+  | 'chevron-right';
 
 interface IconProps {
   name: IconName;
@@ -138,6 +141,14 @@ const iconPaths: Record<IconName, React.ReactNode> = {
       <line x1="21" y1="12" x2="9" y2="12" />
     </>
   ),
+  refresh: (
+    <>
+      <polyline points="23,4 23,10 17,10" />
+      <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" />
+    </>
+  ),
+  'chevron-down': <polyline points="6,9 12,15 18,9" />,
+  'chevron-right': <polyline points="9,6 15,12 9,18" />,
 };
 
 export function Icon({ name, size = 18, className = '' }: IconProps) {

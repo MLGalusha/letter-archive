@@ -145,6 +145,7 @@
   color: var(--text);
   white-space: pre-wrap;
   margin: 0;
+  text-align: left; /* Override inherited center alignment from #root */
 }
 
 .transcript-pages {

@@ -9,13 +9,64 @@ import {
   verifyMetadata,
   unverifyMetadata,
   createVersion,
+  resyncMetadata,
+  checkResyncNeeded,
 } from "../../api/admin";
 import LetterViewer from "../../components/LetterViewer/LetterViewer";
 import { useToast } from "../../contexts/ToastContext";
 import { Button, Icon, WorkflowBadge, StatusBadge } from "../../components/common";
 import { trackEdit } from "../../utils/recentEdits";
-import type { Letter, LetterImage, VisibilityState, ContentStatus } from "../../types/Letter";
+import type {
+  Letter,
+  LetterImage,
+  VisibilityState,
+  ContentStatus,
+  EmotionalTone,
+  RelationshipType,
+} from "../../types/Letter";
 import "./LetterReviewPage.css";
+
+// V2 Metadata constants
+const EMOTIONAL_TONES: { value: EmotionalTone; label: string }[] = [
+  { value: 'joyful', label: 'Joyful' },
+  { value: 'hopeful', label: 'Hopeful' },
+  { value: 'neutral', label: 'Neutral' },
+  { value: 'anxious', label: 'Anxious' },
+  { value: 'sad', label: 'Sad' },
+  { value: 'angry', label: 'Angry' },
+  { value: 'desperate', label: 'Desperate' },
+];
+
+const RELATIONSHIP_TYPES: { value: RelationshipType; label: string }[] = [
+  { value: 'spouse', label: 'Spouse' },
+  { value: 'fiancé/fiancée', label: 'Fiancé/Fiancée' },
+  { value: 'romantic-partner', label: 'Romantic Partner' },
+  { value: 'parent', label: 'Parent' },
+  { value: 'child', label: 'Child' },
+  { value: 'sibling', label: 'Sibling' },
+  { value: 'grandparent', label: 'Grandparent' },
+  { value: 'grandchild', label: 'Grandchild' },
+  { value: 'aunt/uncle', label: 'Aunt/Uncle' },
+  { value: 'nephew/niece', label: 'Nephew/Niece' },
+  { value: 'cousin', label: 'Cousin' },
+  { value: 'in-law', label: 'In-Law' },
+  { value: 'friend', label: 'Friend' },
+  { value: 'acquaintance', label: 'Acquaintance' },
+  { value: 'business-associate', label: 'Business Associate' },
+  { value: 'employer', label: 'Employer' },
+  { value: 'employee', label: 'Employee' },
+  { value: 'unknown', label: 'Unknown' },
+];
+
+const PRIMARY_TOPICS = [
+  'family/marriage', 'family/children', 'family/death-grief', 'family/separation', 'family/reunion',
+  'health/illness', 'health/recovery', 'health/pregnancy-birth',
+  'work/employment', 'work/job-loss', 'finances/hardship', 'finances/prosperity',
+  'travel/journey', 'travel/immigration', 'home/moving', 'home/property',
+  'correspondence/news-sharing', 'correspondence/advice', 'correspondence/gratitude', 'correspondence/apology',
+  'war/service', 'war/homefront', 'religion/faith', 'community/local-events',
+  'daily-life/weather', 'daily-life/farming', 'daily-life/household', 'daily-life/social',
+];
 
 export default function LetterReviewPage() {
   const { letterId } = useParams<{ letterId: string }>();
@@ -35,6 +86,21 @@ export default function LetterReviewPage() {
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
   const [notes, setNotes] = useState("");
+
+  // V2 Metadata state
+  const [emotionalTone, setEmotionalTone] = useState<EmotionalTone | "">("");
+  const [relationship, setRelationship] = useState<RelationshipType | "">("");
+  const [primaryTopics, setPrimaryTopics] = useState<string[]>([]);
+  const [showV2Section, setShowV2Section] = useState(true);
+
+  // Track original identity values for re-sync detection
+  const [originalSender, setOriginalSender] = useState("");
+  const [originalRecipient, setOriginalRecipient] = useState("");
+
+
+  // AI sync state - single button that checks and auto-applies
+  const [syncState, setSyncState] = useState<'idle' | 'checking' | 'updating' | 'done'>('idle');
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -70,6 +136,13 @@ export default function LetterReviewPage() {
           setDescription(foundLetter.metadata.description || "");
           setTags(foundLetter.metadata.tags?.join(", ") || "");
           setNotes(foundLetter.metadata.notes || "");
+          // V2 metadata
+          setEmotionalTone(foundLetter.metadata.emotionalTone || "");
+          setRelationship(foundLetter.metadata.senderRecipientRelationship || "");
+          setPrimaryTopics(foundLetter.metadata.primaryTopics || []);
+          // Store original values for AI sync detection
+          setOriginalSender(foundLetter.metadata.sender || "");
+          setOriginalRecipient(foundLetter.metadata.recipient || "");
         } catch (err) {
           setMessage(err instanceof Error ? err.message : "Letter not found");
           console.error("Failed to fetch letter:", err);
@@ -170,32 +243,37 @@ export default function LetterReviewPage() {
     }
   }, [notes]);
 
+
   const handleSave = async () => {
     if (!letterId) return;
+
+    const tagsArray = tags
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    // Read transcript directly from contenteditable ref to ensure we have latest content
+    const currentTranscript = editorRef.current?.innerText || transcript;
+
+    const saveData = {
+      transcriptionText: currentTranscript,
+      sender: sender || null,
+      recipient: recipient || null,
+      extractedDate: date || null,
+      extractedDateConfidence: dateConfidence,
+      locationWritten: location || null,
+      hook: hook || null,
+      summary: description || null,
+      tags: tagsArray.length > 0 ? tagsArray : null,
+      notes: notes || null,
+    };
+
+    // Proceed with save
     setSaving(true);
     setMessage("");
 
     try {
-      const tagsArray = tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean);
-
-      // Read transcript directly from contenteditable ref to ensure we have latest content
-      const currentTranscript = editorRef.current?.innerText || transcript;
-
-      const updated = await updateLetter(letterId, {
-        transcriptionText: currentTranscript,
-        sender: sender || null,
-        recipient: recipient || null,
-        extractedDate: date || null,
-        extractedDateConfidence: dateConfidence,
-        locationWritten: location || null,
-        hook: hook || null,
-        summary: description || null,
-        tags: tagsArray.length > 0 ? tagsArray : null,
-        notes: notes || null,
-      });
+      const updated = await updateLetter(letterId, saveData);
 
       // Sync all states with the response to ensure UI reflects saved data
       setLetter(updated);
@@ -209,6 +287,9 @@ export default function LetterReviewPage() {
       setDescription(updated.metadata.description || "");
       setTags(updated.metadata.tags?.join(", ") || "");
       setNotes(updated.metadata.notes || "");
+      // Update original values after successful save
+      setOriginalSender(updated.metadata.sender || "");
+      setOriginalRecipient(updated.metadata.recipient || "");
 
       // Track this edit for the Recent Activity feature
       trackEdit({
@@ -223,6 +304,91 @@ export default function LetterReviewPage() {
       console.error("Save error:", err);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Single AI Sync button: checks if updates needed and auto-applies them
+  const handleAISync = async () => {
+    if (!letterId || !letter) return;
+
+    // Step 1: Check if sync is needed
+    setSyncState('checking');
+    setSyncMessage('Checking metadata...');
+
+    try {
+      const checkResult = await checkResyncNeeded(letterId, {
+        oldSender: originalSender || null,
+        newSender: sender || null,
+        oldRecipient: originalRecipient || null,
+        newRecipient: recipient || null,
+      });
+
+      if (!checkResult.needsResync) {
+        // No changes needed
+        setSyncState('done');
+        setSyncMessage('Already up to date');
+        showToast("Metadata is already in sync", "success");
+        setTimeout(() => {
+          setSyncState('idle');
+          setSyncMessage(null);
+        }, 2000);
+        return;
+      }
+
+      // Step 2: Apply the changes automatically
+      setSyncState('updating');
+      const issueCount = checkResult.decision.issues?.length || 0;
+      setSyncMessage(`Updating ${issueCount} issue${issueCount !== 1 ? 's' : ''}...`);
+
+      const resyncResult = await resyncMetadata(letterId, {
+        oldSender: originalSender || null,
+        newSender: sender || null,
+        oldRecipient: originalRecipient || null,
+        newRecipient: recipient || null,
+      });
+
+      // Update local state with the synced letter
+      setLetter(resyncResult.letter);
+      setDescription(resyncResult.letter.metadata.description || "");
+      setHook(resyncResult.letter.metadata.hook || "");
+
+      // Update original values for future change detection
+      setOriginalSender(sender);
+      setOriginalRecipient(recipient);
+
+      // Build success message
+      const updatedFields: string[] = [];
+      if (resyncResult.resync.updatedFields.summary) updatedFields.push("summary");
+      if (resyncResult.resync.updatedFields.hook) updatedFields.push("hook");
+      if (resyncResult.resync.updatedFields.senderPerson) updatedFields.push("sender link");
+      if (resyncResult.resync.updatedFields.recipientPerson) updatedFields.push("recipient link");
+      if (resyncResult.resync.updatedFields.relationshipType) updatedFields.push("relationship");
+
+      setSyncState('done');
+      if (updatedFields.length > 0) {
+        setSyncMessage(`Updated: ${updatedFields.join(", ")}`);
+        showToast(`AI updated ${updatedFields.join(", ")}`, "success");
+      } else {
+        setSyncMessage('No changes needed');
+      }
+
+      // Track this edit
+      trackEdit({
+        id: resyncResult.letter.id,
+        metadata: resyncResult.letter.metadata,
+        collectionCode: resyncResult.letter.collectionCode,
+      });
+
+      // Clear done state after a moment
+      setTimeout(() => {
+        setSyncState('idle');
+        setSyncMessage(null);
+      }, 3000);
+    } catch (err) {
+      setSyncState('idle');
+      setSyncMessage(null);
+      showToast(err instanceof Error ? err.message : "AI sync failed", "error");
+      console.error("AI Sync error:", err);
     }
   };
 
@@ -483,11 +649,21 @@ export default function LetterReviewPage() {
         <div className="header-actions">
           <button
             className="header-action save"
-            onClick={handleSave}
+            onClick={() => handleSave()}
             disabled={saving}
             data-tooltip="Save"
           >
             <Icon name="save" size={18} />
+          </button>
+
+          {/* AI Sync button - checks and auto-applies updates */}
+          <button
+            className={`header-action ai-sync ${syncState !== 'idle' ? syncState : ''}`}
+            onClick={handleAISync}
+            disabled={saving || syncState !== 'idle' || !letter.transcript.fullText}
+            data-tooltip="AI Sync"
+          >
+            <Icon name={syncState === 'done' ? 'check' : 'process'} size={18} />
           </button>
 
           {/* Confirm button - only for TRANSCRIBED without confirmation */}
@@ -621,6 +797,15 @@ export default function LetterReviewPage() {
               <div className="metadata-header">
                 <h2>Metadata</h2>
                 {renderContentStatus(letter.metadataContentStatus)}
+                {/* AI sync status indicator */}
+                {syncMessage && (
+                  <span className={`sync-status-indicator ${syncState}`}>
+                    {syncState === 'checking' && <Icon name="process" size={14} className="spinning" />}
+                    {syncState === 'updating' && <Icon name="process" size={14} className="spinning" />}
+                    {syncState === 'done' && <Icon name="check" size={14} />}
+                    <span>{syncMessage}</span>
+                  </span>
+                )}
               </div>
               <div className="metadata-form">
                 <div className="form-row">
@@ -747,6 +932,129 @@ export default function LetterReviewPage() {
                   />
                   <span className="help-text">For internal reference only</span>
                 </div>
+
+                {/* V2 Metadata Section */}
+                <div className="v2-metadata-section">
+                  <button
+                    type="button"
+                    className="v2-section-toggle"
+                    onClick={() => setShowV2Section(!showV2Section)}
+                  >
+                    <Icon name={showV2Section ? "chevron-down" : "chevron-right"} size={16} />
+                    <span>AI-Extracted Metadata</span>
+                    {letter.metadata.emotionalTone && (
+                      <span className="v2-preview-badge">{letter.metadata.emotionalTone}</span>
+                    )}
+                  </button>
+
+                  {showV2Section && (
+                    <div className="v2-fields">
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label htmlFor="emotionalTone">Emotional Tone</label>
+                          <select
+                            id="emotionalTone"
+                            value={emotionalTone}
+                            onChange={(e) => setEmotionalTone(e.target.value as EmotionalTone | "")}
+                          >
+                            <option value="">— Select —</option>
+                            {EMOTIONAL_TONES.map((t) => (
+                              <option key={t.value} value={t.value}>
+                                {t.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label htmlFor="relationship">Sender/Recipient Relationship</label>
+                          <select
+                            id="relationship"
+                            value={relationship}
+                            onChange={(e) => setRelationship(e.target.value as RelationshipType | "")}
+                          >
+                            <option value="">— Select —</option>
+                            {RELATIONSHIP_TYPES.map((r) => (
+                              <option key={r.value} value={r.value}>
+                                {r.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Primary Topics</label>
+                        <div className="topics-grid">
+                          {PRIMARY_TOPICS.map((topic) => (
+                            <label key={topic} className="topic-checkbox">
+                              <input
+                                type="checkbox"
+                                checked={primaryTopics.includes(topic)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setPrimaryTopics([...primaryTopics, topic]);
+                                  } else {
+                                    setPrimaryTopics(primaryTopics.filter((t) => t !== topic));
+                                  }
+                                }}
+                              />
+                              <span>{topic.replace('/', ' / ')}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Notable Quotes (read-only display) */}
+                      {letter.metadata.notableQuotes && letter.metadata.notableQuotes.length > 0 && (
+                        <div className="form-group">
+                          <label>Notable Quotes</label>
+                          <div className="notable-quotes">
+                            {letter.metadata.notableQuotes.map((quote, idx) => (
+                              <blockquote key={idx} className="notable-quote">
+                                <p>"{quote.text}"</p>
+                                {quote.context && <cite>— {quote.context}</cite>}
+                              </blockquote>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Linked Entities Section */}
+                      {(letter.linkedPersons?.length || letter.linkedPlaces?.length) ? (
+                        <div className="linked-entities">
+                          {letter.linkedPersons && letter.linkedPersons.length > 0 && (
+                            <div className="entity-group">
+                              <label>Linked People</label>
+                              <div className="entity-list">
+                                {letter.linkedPersons.map((lp) => (
+                                  <div key={lp.id} className="entity-item">
+                                    <span className="entity-name">{lp.canonicalName}</span>
+                                    <span className={`entity-role role-${lp.role}`}>{lp.role}</span>
+                                    <span className="entity-confidence">{lp.confidence}%</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {letter.linkedPlaces && letter.linkedPlaces.length > 0 && (
+                            <div className="entity-group">
+                              <label>Linked Places</label>
+                              <div className="entity-list">
+                                {letter.linkedPlaces.map((lpl) => (
+                                  <div key={lpl.id} className="entity-item">
+                                    <span className="entity-name">{lpl.canonicalName}</span>
+                                    <span className={`entity-role role-${lpl.role}`}>{lpl.role}</span>
+                                    <span className="entity-confidence">{lpl.confidence}%</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
               </div>
               {/* Metadata Verification footer */}
               <div className="section-footer">
@@ -797,6 +1105,7 @@ export default function LetterReviewPage() {
           </div>
         </div>
       </div>
+
     </div>
   );
 }

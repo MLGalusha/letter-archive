@@ -2,7 +2,7 @@
  * Admin API service
  */
 
-import { apiGet, apiPost, apiPut } from './client';
+import { apiGet, apiPost, apiPut, apiPatch } from './client';
 import type { Letter } from '../types/Letter';
 
 // ============================================================================
@@ -223,6 +223,19 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkUpdate
   return apiPost<BulkUpdateResponse>('/admin/letters/bulk/clear-metadata', { letterIds });
 }
 
+export interface BulkFieldUpdate {
+  letterId: string;
+  sender?: string;
+  recipient?: string;
+}
+
+/**
+ * Bulk update sender/recipient fields for multiple letters
+ */
+export async function bulkUpdateFields(updates: BulkFieldUpdate[]): Promise<BulkUpdateResponse> {
+  return apiPatch<BulkUpdateResponse>('/admin/letters/bulk/update-fields', { updates });
+}
+
 // ============================================================================
 // ON-DEMAND PROCESSING
 // ============================================================================
@@ -292,4 +305,72 @@ export async function resumeProcessing(): Promise<{ message: string }> {
  */
 export async function abortProcessing(): Promise<{ message: string }> {
   return apiPost<{ message: string }>('/admin/processing/abort');
+}
+
+// ============================================================================
+// METADATA RE-SYNC
+// ============================================================================
+
+export interface ResyncRequest {
+  oldSender: string | null;
+  newSender: string | null;
+  oldRecipient: string | null;
+  newRecipient: string | null;
+}
+
+export interface ResyncDecision {
+  shouldUpdateSummary: boolean;
+  shouldUpdateHook: boolean;
+  shouldCreateSenderPerson: boolean;
+  shouldCreateRecipientPerson: boolean;
+  shouldUpdateRelationship: boolean;
+  issues: string[];
+  reason: string;
+}
+
+export interface ResyncResponse {
+  letter: Letter;
+  resync: {
+    wasUpdated: boolean;
+    updatedFields: {
+      summary: boolean;
+      hook: boolean;
+      senderPerson: boolean;
+      recipientPerson: boolean;
+      relationshipType: boolean;
+    };
+    decision: ResyncDecision;
+  };
+}
+
+/**
+ * Re-sync derived fields (summary/hook) after identity changes
+ *
+ * Uses a two-model approach:
+ * 1. GPT-4o-mini decides what needs updating
+ * 2. GPT-5.2 regenerates affected fields
+ */
+export async function resyncMetadata(
+  letterId: string,
+  change: ResyncRequest
+): Promise<ResyncResponse> {
+  return apiPost<ResyncResponse>(`/admin/letters/${letterId}/resync`, change);
+}
+
+export interface ResyncCheckResponse {
+  needsResync: boolean;
+  decision: ResyncDecision;
+}
+
+/**
+ * Check if derived fields need updating (decision only, no changes)
+ *
+ * Uses GPT-4o-mini to make a quick decision. Call this in the background
+ * when identity/date fields change to pre-check if resync is needed.
+ */
+export async function checkResyncNeeded(
+  letterId: string,
+  change: ResyncRequest
+): Promise<ResyncCheckResponse> {
+  return apiPost<ResyncCheckResponse>(`/admin/letters/${letterId}/resync-check`, change);
 }

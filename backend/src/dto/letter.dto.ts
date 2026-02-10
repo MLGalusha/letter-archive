@@ -6,6 +6,15 @@ import type {
   VisibilityState,
   LetterType,
   ContentStatus,
+  LetterPerson,
+  LetterPlace,
+  CanonicalPerson,
+  CanonicalPlace,
+  PersonRole,
+  PlaceRole,
+  PlaceType,
+  EmotionalTone,
+  RelationshipType,
 } from '../db/index.js';
 
 // ============================================================================
@@ -30,6 +39,35 @@ export interface FrontendLetterImage {
   originalFilename?: string;
 }
 
+// V2 Metadata types
+export interface FrontendNotableQuote {
+  text: string;
+  context?: string;
+  position?: 'opening' | 'middle' | 'closing';
+}
+
+export interface FrontendLinkedPerson {
+  id: string;
+  personId: string;
+  canonicalName: string;
+  role: PersonRole;
+  nameAsWritten?: string;
+  relationshipToSender?: string;
+  context?: string;
+  confidence: number;
+}
+
+export interface FrontendLinkedPlace {
+  id: string;
+  placeId: string;
+  canonicalName: string;
+  role: PlaceRole;
+  placeType?: PlaceType;
+  nameAsWritten?: string;
+  context?: string;
+  confidence: number;
+}
+
 export interface FrontendLetterMetadata {
   sender?: string;
   recipient?: string;
@@ -45,6 +83,11 @@ export interface FrontendLetterMetadata {
   verifiedBy?: string;
   verifiedAt?: string;
   firstPageFilename?: string;
+  // V2 metadata fields
+  emotionalTone?: EmotionalTone;
+  senderRecipientRelationship?: RelationshipType;
+  primaryTopics?: string[];
+  notableQuotes?: FrontendNotableQuote[];
 }
 
 export interface FrontendLetterPageTranscript {
@@ -80,6 +123,9 @@ export interface FrontendLetter {
   transcriptConfirmedAt?: string;
   createdAt: string;
   updatedAt?: string;
+  // Linked entities (populated when fetching letter detail)
+  linkedPersons?: FrontendLinkedPerson[];
+  linkedPlaces?: FrontendLinkedPlace[];
 }
 
 // ============================================================================
@@ -262,12 +308,48 @@ export function formatLetterDate(letter: Letter): string | undefined {
 }
 
 // ============================================================================
+// V2 METADATA HELPERS
+// ============================================================================
+
+/**
+ * Extracts notable quotes from metadataV2Json
+ */
+function extractNotableQuotes(letter: Letter): FrontendNotableQuote[] | undefined {
+  const metadata = letter.metadataV2Json as {
+    notable_quotes?: Array<{ text: string; context?: string; position?: string }>;
+  } | null;
+
+  if (!metadata?.notable_quotes?.length) {
+    return undefined;
+  }
+
+  return metadata.notable_quotes.map((q) => ({
+    text: q.text,
+    context: q.context,
+    position: q.position as 'opening' | 'middle' | 'closing' | undefined,
+  }));
+}
+
+// ============================================================================
 // MAIN TRANSFORMER
 // ============================================================================
+
+// Letter person with joined canonical person data
+export interface LetterPersonWithPerson extends LetterPerson {
+  person: CanonicalPerson;
+}
+
+// Letter place with joined canonical place data
+export interface LetterPlaceWithPlace extends LetterPlace {
+  place: CanonicalPlace;
+}
 
 export interface LetterWithRelations extends Letter {
   collection: Collection;
   pages: LetterPage[];
+  // Optional entity relations (populated when fetching detail view)
+  persons?: LetterPersonWithPerson[];
+  places?: LetterPlaceWithPlace[];
 }
 
 /**
@@ -314,6 +396,11 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
       verifiedBy: letter.metadataVerifiedBy || undefined,
       verifiedAt: letter.metadataVerifiedAt?.toISOString(),
       firstPageFilename: letter.pages[0]?.originalFilename,
+      // V2 metadata fields
+      emotionalTone: letter.emotionalTone || undefined,
+      senderRecipientRelationship: letter.senderRecipientRelationship || undefined,
+      primaryTopics: letter.primaryTopics || undefined,
+      notableQuotes: extractNotableQuotes(letter),
     },
     status: mapWorkflowVisibilityToStatus(letter.workflow, letter.visibility),
     workflowState: letter.workflow,
@@ -329,6 +416,27 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
     transcriptConfirmedAt: letter.transcriptConfirmedAt?.toISOString(),
     createdAt: letter.createdAt.toISOString(),
     updatedAt: letter.updatedAt?.toISOString(),
+    // Linked entities (only populated for detail view)
+    linkedPersons: letter.persons?.map((lp) => ({
+      id: lp.id,
+      personId: lp.personId,
+      canonicalName: lp.person.canonicalName,
+      role: lp.role,
+      nameAsWritten: lp.nameAsWritten || undefined,
+      relationshipToSender: lp.relationshipToSender || undefined,
+      context: lp.context || undefined,
+      confidence: lp.confidence,
+    })),
+    linkedPlaces: letter.places?.map((lpl) => ({
+      id: lpl.id,
+      placeId: lpl.placeId,
+      canonicalName: lpl.place.canonicalName,
+      role: lpl.role,
+      placeType: lpl.place.placeType || undefined,
+      nameAsWritten: lpl.nameAsWritten || undefined,
+      context: lpl.context || undefined,
+      confidence: lpl.confidence,
+    })),
   };
 }
 

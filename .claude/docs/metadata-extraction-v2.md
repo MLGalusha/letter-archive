@@ -471,9 +471,91 @@ Given the September 1947 letter, new extraction would produce:
 
 ---
 
-## Research: OpenAI Best Practices (2025-2026)
+## Research: OpenAI Best Practices (Updated Feb 2026)
 
-Based on research from OpenAI's documentation and cookbook, here are the best practices we should follow:
+Based on latest research from OpenAI's documentation, cookbook, and GPT-5.2 guides.
+
+### GPT-5.2 Specifications
+
+| Spec | Value |
+|------|-------|
+| Model ID | `gpt-5.2` |
+| Context Window | 400,000 tokens |
+| Max Output | 128,000 tokens |
+| Input Cost | $1.75 / 1M tokens |
+| Output Cost | $14.00 / 1M tokens |
+| Structured Outputs | ✅ Full support |
+| Function Calling | ✅ Full support |
+
+### Responses API vs Chat Completions
+
+The [Responses API](https://platform.openai.com/docs/guides/responses-vs-chat-completions) is now recommended for new projects:
+
+| Feature | Chat Completions | Responses API |
+|---------|-----------------|---------------|
+| Cache utilization | Baseline | 40-80% better |
+| State management | Manual | Built-in with `store: true` |
+| Tool orchestration | Manual | Native |
+| Benchmark (SWE-bench) | Baseline | +3% improvement |
+
+**Implementation:**
+```typescript
+// ✅ Use Responses API (recommended)
+const response = await client.responses.create({
+  model: 'gpt-5.2',
+  input: messages,
+  text: {
+    format: {
+      type: 'json_schema',
+      name: 'letter_metadata_v2',
+      strict: true,
+      schema: jsonSchema
+    }
+  },
+  temperature: 0  // Deterministic for extraction
+});
+
+// Handle refusals
+if (response.output.refusal) {
+  log.warn({ refusal: response.output.refusal }, 'Model refused');
+  return null;
+}
+```
+
+### Key Best Practices for Extraction
+
+From [GPT-5.2 Prompting Guide](https://cookbook.openai.com/examples/gpt-5/gpt-5-2_prompting_guide):
+
+1. **Temperature 0** for deterministic extraction
+2. **Use XML-style section tags** for prompt structure (`<guidelines>`, `<example>`)
+3. **Explicit length constraints** (e.g., "3-6 sentences")
+4. **Re-scan before return** - verify extraction against source
+5. **Set null for missing data** - never guess
+6. **Preserve domain terms exactly** - don't paraphrase names, places
+
+From [NER Cookbook](https://cookbook.openai.com/examples/named_entity_recognition_to_enrich_text):
+
+1. **One-shot examples** produce more precise results than zero-shot
+2. **Whitelist entity categories** for better control
+3. **Use `additionalProperties: false`** to prevent hallucinated fields
+
+### Structured Outputs Requirements
+
+From [Structured Outputs Intro](https://cookbook.openai.com/examples/structured_outputs_intro):
+
+```typescript
+// ✅ Correct - nullable field, always present
+emotional_tone: z.enum([...]).nullable()
+
+// ❌ Avoid - field might be missing
+emotional_tone: z.enum([...]).optional()
+```
+
+All fields must be **required** in the schema. Use `nullable()` for optional values.
+
+---
+
+## Legacy Research (2025)
 
 ### Temporal Agents Pattern
 
@@ -1330,3 +1412,539 @@ Given the dual-mode vision, here's the updated priority:
 1. **Voice input:** Should users be able to speak to the Archivist? (Lower priority, can add later)
 
 2. **Archivist's actual name:** Need to decide on the perfect name that fits the personality
+
+---
+
+## Part 9: Finalized Implementation Plan (Revised Feb 2026)
+
+Based on detailed requirements gathering and OpenAI best practices research.
+
+### Key Decisions Made
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Entity matching | Hybrid threshold | High-confidence auto-link, low-confidence to review queue |
+| Unknown sender/recipient | Contextual | Most letters have clear sender/recipient; edge cases use context |
+| Connections | People + Places only | Events deferred to Phase 5 (low ROI for 100 letters) |
+| Topic taxonomy | Fixed list | Consistent, searchable facets |
+| Emotional tone | Single per letter | Simple, queryable |
+| Quotes | AI extracts 1-3 | For featured cards, sharing, Archivist citations |
+| Places | Names only | No hierarchy, no coordinates - geocode later |
+| Public entry point | Featured letters | Curated hooks with editorial picks |
+| Curation level | Light | Admin features letters, rest searchable |
+| Mobile priority | Equal | Both desktop and mobile polished |
+| User memory | localStorage first | DB accounts deferred to Phase 5 |
+| Model | GPT-5.2 | Accuracy first ($1.75/1M in, $14/1M out) |
+| API | Responses API | 40-80% better cache, built-in state management |
+| Error handling | Auto-retry once | Then flag for manual review |
+| Temperature | 0 | Deterministic extraction per OpenAI best practices |
+
+### What We're Cutting (Simplification)
+
+| Feature | Status | Rationale |
+|---------|--------|-----------|
+| `formality_level` | CUT | Low value, rarely searchable |
+| `letter_purpose` | CUT | Overlaps with topics |
+| `secondary_topics` | CUT | Keep 1-3 primary topics only |
+| `time_period_context` | CUT | Inferrable from date |
+| `historical_events` table | DEFER to Phase 5 | Complex, low ROI for 100 letters |
+| Person birth/death years | CUT | Rarely knowable from letters |
+| Place hierarchy | CUT | Over-engineering |
+| Materialized views | DEFER | Premature optimization |
+| Vector embeddings | DEFER to after Phase 4 | Manual search validates metadata first |
+| NL query translation | DEFER to Phase 5 | Archivist handles this |
+| User accounts table | DEFER to Phase 5 | localStorage sufficient initially |
+
+### Updated Extraction Schema (Simplified)
+
+Based on OpenAI best practices, the extraction schema is simplified for reliability:
+
+```typescript
+// Complete V2 extraction output
+{
+  // Core identifiers
+  "sender": { "name": string | null, "confidence": number },
+  "recipient": { "name": string | null, "confidence": number },
+  "location_written": { "name": string | null, "confidence": number },
+
+  // Date extraction
+  "extracted_date": string | null,  // ISO format YYYY-MM-DD
+  "extracted_date_confidence": "exact" | "inferred" | null,
+
+  // Content teasers
+  "hook": string | null,     // 1-2 sentences, max 150 chars
+  "summary": string | null,  // Proportional to letter length
+
+  // Emotional context (SINGLE value, not array)
+  "emotional_tone": "joyful" | "hopeful" | "neutral" | "anxious" | "sad" | "angry" | "desperate" | null,
+
+  // Relationship (controlled vocabulary)
+  "sender_recipient_relationship":
+    | "spouse" | "fiancé/fiancée" | "romantic-partner"
+    | "parent" | "child" | "sibling"
+    | "grandparent" | "grandchild"
+    | "aunt/uncle" | "nephew/niece" | "cousin"
+    | "in-law" | "friend" | "acquaintance"
+    | "business-associate" | "employer" | "employee"
+    | "unknown" | null,
+
+  // Topics (from fixed vocabulary, 1-3 items)
+  "primary_topics": string[],
+
+  // Notable quotes (1-3, for featured cards)
+  "notable_quotes": [
+    {
+      "text": string,
+      "context": string,
+      "position": "opening" | "middle" | "closing"
+    }
+  ],
+
+  // Unified entities array (simpler than separate arrays)
+  "entities": [
+    {
+      "type": "person" | "place",
+      "name": string,
+      "role": string,  // person: "sender"|"recipient"|"mentioned", place: "written_from"|"mentioned"|"destination"
+      "context": string,
+      "relationship_to_sender": string | null,  // only for people
+      "confidence": number
+    }
+  ]
+}
+```
+
+**What was removed from original design:**
+- `formality_level` - rarely useful for search
+- `letter_purpose` - overlaps with topics
+- `secondary_topics` - just use 1-3 primary topics
+- `time_period_context` - inferrable from date
+- `events_referenced` - deferred to Phase 5
+
+### Database Additions
+
+**Phase 1: New columns on `letters` table**
+```sql
+-- Emotional and relationship context
+ALTER TABLE letters ADD COLUMN emotional_tone TEXT;  -- enum in app
+ALTER TABLE letters ADD COLUMN sender_recipient_relationship TEXT;
+ALTER TABLE letters ADD COLUMN primary_topics TEXT[];  -- from fixed vocabulary
+
+-- Check constraint for emotional_tone
+ALTER TABLE letters ADD CONSTRAINT check_emotional_tone
+  CHECK (emotional_tone IS NULL OR emotional_tone IN (
+    'joyful', 'hopeful', 'neutral', 'anxious', 'sad', 'angry', 'desperate'
+  ));
+```
+
+**Phase 2: Entity tables (simplified)**
+```sql
+-- People registry (no birth/death years - rarely knowable)
+CREATE TABLE people (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  canonical_name TEXT NOT NULL,
+  aliases TEXT[] DEFAULT '{}',
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Places registry (no hierarchy, no coordinates)
+CREATE TABLE places (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  canonical_name TEXT NOT NULL,
+  aliases TEXT[] DEFAULT '{}',
+  place_type TEXT,  -- 'city', 'region', 'country', 'street', 'landmark'
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Letter-people junction
+CREATE TABLE letter_people (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  letter_id UUID REFERENCES letters(id) ON DELETE CASCADE,
+  person_id UUID REFERENCES people(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,  -- 'sender', 'recipient', 'mentioned'
+  relationship_to_sender TEXT,
+  context TEXT,
+  confidence REAL DEFAULT 1.0,
+  confirmed_by TEXT,
+  confirmed_at TIMESTAMPTZ,
+  UNIQUE(letter_id, person_id, role)
+);
+
+-- Letter-places junction
+CREATE TABLE letter_places (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  letter_id UUID REFERENCES letters(id) ON DELETE CASCADE,
+  place_id UUID REFERENCES places(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,  -- 'written_from', 'mentioned', 'destination'
+  context TEXT,
+  confidence REAL DEFAULT 1.0,
+  confirmed_by TEXT,
+  confirmed_at TIMESTAMPTZ,
+  UNIQUE(letter_id, place_id, role)
+);
+
+-- Entity review queue
+CREATE TABLE entity_review_queue (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_type TEXT NOT NULL,  -- 'person', 'place'
+  extracted_text TEXT NOT NULL,
+  letter_id UUID REFERENCES letters(id),
+  suggested_entity_id UUID,
+  context TEXT,
+  confidence REAL,
+  status TEXT DEFAULT 'pending',  -- 'pending', 'confirmed', 'rejected', 'new_entity'
+  reviewed_by TEXT,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for common queries
+CREATE INDEX idx_letter_people_person ON letter_people(person_id);
+CREATE INDEX idx_letter_places_place ON letter_places(place_id);
+CREATE INDEX idx_entity_queue_status ON entity_review_queue(status) WHERE status = 'pending';
+```
+
+**Phase 3: Featured letters & quotes**
+```sql
+-- Featured letters tracking
+ALTER TABLE letters ADD COLUMN is_featured BOOLEAN DEFAULT FALSE;
+ALTER TABLE letters ADD COLUMN featured_at TIMESTAMPTZ;
+ALTER TABLE letters ADD COLUMN featured_by TEXT;
+ALTER TABLE letters ADD COLUMN feature_order INTEGER;
+
+-- Notable quotes
+CREATE TABLE letter_quotes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  letter_id UUID REFERENCES letters(id) ON DELETE CASCADE,
+  quote_text TEXT NOT NULL,
+  context TEXT,
+  position TEXT,  -- 'opening', 'middle', 'closing'
+  is_featured BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_quotes_letter ON letter_quotes(letter_id);
+CREATE INDEX idx_letters_featured ON letters(feature_order) WHERE is_featured = true;
+```
+
+**Phase 5 (Deferred): User sessions**
+```sql
+-- Only create when building The Archivist
+CREATE TABLE user_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_token TEXT UNIQUE NOT NULL,
+  conversation_history JSONB DEFAULT '[]',
+  last_letters_viewed UUID[] DEFAULT '{}',
+  preferences JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  last_active_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### Admin UI: Entity Review Page
+
+New page at `/admin/review` with three tabs:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  ENTITY REVIEW                                      [Dashboard] │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  [People (12)] [Places (5)] [Events (3)]                        │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Pending Matches:                                               │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ "John" in letter Sept 21, 1947                          │   │
+│  │ Context: "I talked with John about the farm..."         │   │
+│  │                                                          │   │
+│  │ Suggested match: John Smith (8 other letters)    [85%]  │   │
+│  │                                                          │   │
+│  │ [✓ Confirm] [✗ Reject] [+ New Person] [Skip]            │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ "Mary" in letter Sept 4, 1947                           │   │
+│  │ Context: "Tell Mary I'll write to her tomorrow..."      │   │
+│  │                                                          │   │
+│  │ Suggested match: Mary (recipient) (12 letters)   [92%]  │   │
+│  │                                                          │   │
+│  │ [✓ Confirm] [✗ Reject] [+ New Person] [Skip]            │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│  People Registry: [View All People →]                           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Admin UI: Featured Letters Management
+
+Add to existing admin dashboard or new page:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  FEATURED LETTERS                                               │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Current Featured (drag to reorder):                            │
+│  ┌──┬─────────────────────────────────────────────────────┐    │
+│  │1 │ "A desperate plea..." - Sept 21, 1947  [Unfeature]  │    │
+│  ├──┼─────────────────────────────────────────────────────┤    │
+│  │2 │ "Waiting for news..." - Aug 10, 1947   [Unfeature]  │    │
+│  ├──┼─────────────────────────────────────────────────────┤    │
+│  │3 │ "Kansas kitchen..." - Sept 15, 1947    [Unfeature]  │    │
+│  └──┴─────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│  AI Suggestions (not yet featured):                             │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ "Hearts across the ocean" - Aug 5, 1947                 │   │
+│  │ Score: 94% | Tone: hopeful | Topics: family/marriage    │   │
+│  │ Quote: "I count the days until I see your face..."      │   │
+│  │ [Feature] [View Letter]                                  │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Public UI: Landing Page
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│                    THE LETTER ARCHIVE                           │
+│           Voices from the past, preserved for the future        │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  FEATURED LETTERS                                               │
+│                                                                 │
+│  ┌───────────────────┐ ┌───────────────────┐ ┌───────────────┐ │
+│  │ A Desperate Plea  │ │ Waiting for News  │ │ Kansas Kitchen│ │
+│  │ Sept 21, 1947     │ │ Aug 10, 1947      │ │ Sept 15, 1947 │ │
+│  │                   │ │                   │ │               │ │
+│  │ "I count the days │ │ "The telegram     │ │ "Cars here    │ │
+│  │  until..."        │ │  finally came..." │ │  are not..."  │ │
+│  │                   │ │                   │ │               │ │
+│  │ [Read →]          │ │ [Read →]          │ │ [Read →]      │ │
+│  └───────────────────┘ └───────────────────┘ └───────────────┘ │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  [🔍 Browse the Archive]    [💬 Ask the Archivist]              │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  EXPLORE BY THEME                                               │
+│  [Love & Marriage] [War Letters] [Daily Life] [Family]          │
+│                                                                 │
+│  EXPLORE BY DECADE                                              │
+│  [1940s] [1860s] [1900s]                                        │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Revised Phase Breakdown (Final)
+
+#### Phase 1a: Schema & Extraction Pipeline
+**Goal:** V2 extraction working with GPT-5.2 and Responses API
+
+**Tasks:**
+1. Create Zod schema (`backend/src/ai/schemas/metadataV2.ts`)
+2. Add new columns to `letters` table (migration)
+3. Update extraction prompt with:
+   - One-shot example (per NER best practices)
+   - XML-style section tags
+   - Fixed topic vocabulary inline
+   - Relationship vocabulary inline
+4. Create extraction service using Responses API
+5. Handle refusals gracefully
+6. Build auto-retry logic (retry once, then flag)
+7. Test on 3-5 letters manually
+
+**Technical Details:**
+- Model: `gpt-5.2`
+- API: Responses API (not Chat Completions)
+- Temperature: 0
+- `strict: true` for JSON schema
+- `additionalProperties: false` in schema
+
+**Deliverable:** Can extract V2 metadata via API call
+
+#### Phase 1b: Process All Transcribed Letters
+**Goal:** All 23 transcribed letters have V2 metadata
+
+**Tasks:**
+1. Run V2 extraction on all transcribed letters
+2. Review results for quality
+3. Tune prompt if needed
+4. Re-extract if necessary
+5. Verify quotes are useful for featuring
+
+**Deliverable:** All letters have rich metadata
+
+---
+
+#### Phase 2a: Entity Tables & Matching
+**Goal:** Entity registry with fuzzy matching
+
+**Tasks:**
+1. Create entity tables (people, places - no events yet)
+2. Create junction tables with confidence scores
+3. Create entity_review_queue table
+4. Build fuzzy matching with Fuse.js (`backend/src/services/entityMatcher.ts`)
+5. Integrate entity extraction into pipeline
+6. Populate entities from V2 extraction results
+
+**Deliverable:** Entities extracted and queued for review
+
+#### Phase 2b: Admin Entity Review UI
+**Goal:** Admin can confirm/reject entity matches
+
+**Tasks:**
+1. Create `/admin/entities` page with tabs (People, Places)
+2. Build review queue interface
+3. Confirm/reject/create-new workflow
+4. People registry with letter counts
+5. Places registry with letter counts
+
+**Deliverable:** Admin can curate entity graph
+
+---
+
+#### Phase 3a: Featured Letters System
+**Goal:** Admin can feature letters
+
+**Tasks:**
+1. Add featured columns to letters table (migration)
+2. Create letter_quotes table (migration)
+3. Populate quotes from V2 extraction
+4. Simple "interestingness" heuristic (has quotes + tone != neutral)
+5. Admin featured management UI (drag to reorder)
+6. Featured letters API endpoint
+
+**Deliverable:** Admin can curate featured letters
+
+#### Phase 3b: Public Landing Page
+**Goal:** Public entry point exists
+
+**Tasks:**
+1. Create public landing page (`frontend/src/pages/public/Landing.tsx`)
+2. Featured letters cards with quotes
+3. Browse by topic links
+4. Browse by decade links
+5. Responsive for mobile
+6. Link to letter detail page
+
+**Deliverable:** Public can see featured letters and browse
+
+---
+
+#### Phase 4: Search & Browse
+**Goal:** Full faceted search experience
+
+**Tasks:**
+1. Public search page with filters (topic, tone, date, person)
+2. Person detail pages (shows all letters mentioning them)
+3. Place detail pages (shows all letters mentioning location)
+4. Letter connections panel (people, places in this letter)
+5. "Explore by topic" browse pages
+
+**Deliverable:** Rich manual search without AI
+
+---
+
+#### Phase 5: The Archivist (Future)
+**Goal:** Conversational AI guide
+
+**Tasks:**
+1. User sessions (localStorage first)
+2. Archivist system prompt with personality
+3. Archivist API with tools (search_letters, get_letter, etc.)
+4. Conversational UI
+5. Session persistence (DB for logged-in users)
+6. Vector embeddings for RAG (if needed)
+7. Historical events table (if needed)
+8. User accounts table (if needed)
+
+**Deliverable:** The wise guide experience
+
+### Files to Create/Modify
+
+| Phase | File | Purpose |
+|-------|------|---------|
+| **1a** | `backend/src/ai/schemas/metadataV2.ts` | NEW: Zod schema definition |
+| **1a** | `backend/src/ai/prompts.ts` | Update extraction prompt |
+| **1a** | `backend/src/ai/openai.ts` | Switch to Responses API |
+| **1a** | `backend/src/pipeline/metadata.ts` | Update for V2 format |
+| **1a** | `backend/src/db/schema.ts` | Add new columns |
+| **1a** | `drizzle/migrations/XXXX_add_v2_metadata.sql` | NEW: Migration |
+| **2a** | `backend/src/db/schema.ts` | Add entity tables |
+| **2a** | `drizzle/migrations/XXXX_add_entity_tables.sql` | NEW: Migration |
+| **2a** | `backend/src/services/entityMatcher.ts` | NEW: Fuse.js matching |
+| **2a** | `backend/src/routes/admin/entities.ts` | NEW: Entity API routes |
+| **2b** | `frontend/src/pages/admin/Entities.tsx` | NEW: Review UI |
+| **2b** | `frontend/src/api/entities.ts` | NEW: Entity API client |
+| **3a** | `backend/src/db/schema.ts` | Add featured columns, quotes table |
+| **3a** | `drizzle/migrations/XXXX_add_featured.sql` | NEW: Migration |
+| **3a** | `backend/src/routes/admin/featured.ts` | NEW: Featured API |
+| **3a** | `frontend/src/pages/admin/Featured.tsx` | NEW: Featured management |
+| **3b** | `frontend/src/pages/public/Landing.tsx` | NEW: Public home |
+| **3b** | `frontend/src/pages/public/Landing.css` | NEW: Landing styles |
+| **4** | `frontend/src/pages/public/Search.tsx` | NEW: Search page |
+| **4** | `frontend/src/pages/public/PersonDetail.tsx` | NEW: Person page |
+| **4** | `frontend/src/pages/public/PlaceDetail.tsx` | NEW: Place page |
+| **4** | `backend/src/routes/public/search.ts` | NEW: Public search API |
+| **5** | `backend/src/routes/archivist.ts` | NEW: Archivist API |
+| **5** | `frontend/src/pages/public/Archivist.tsx` | NEW: Chat UI |
+
+### Success Criteria
+
+**Phase 1 Complete When:**
+- [ ] V2 extraction pipeline uses GPT-5.2 with Responses API
+- [ ] All 23 transcribed letters have V2 metadata
+- [ ] Extraction includes: tone, topics, relationship, quotes, entities
+- [ ] Failed extractions retry once, then flag for review
+- [ ] Refusals are handled gracefully
+
+**Phase 2 Complete When:**
+- [ ] People and places tables exist with junction tables
+- [ ] Entities extracted from V2 metadata and stored
+- [ ] Fuzzy matching suggests existing entities for review
+- [ ] Admin can confirm/reject/create entities at `/admin/entities`
+- [ ] People and places registries show letter counts
+
+**Phase 3 Complete When:**
+- [ ] Featured letters system works (is_featured, feature_order)
+- [ ] Quotes table populated from V2 extraction
+- [ ] Featured letters appear on public landing page
+- [ ] Admin can drag-to-reorder featured list
+- [ ] Landing page is mobile-responsive
+
+**Phase 4 Complete When:**
+- [ ] Public search page with filters (topic, tone, date, person, place)
+- [ ] Person detail pages show all related letters
+- [ ] Place detail pages show all related letters
+- [ ] Letter detail shows connections panel
+- [ ] Mobile experience is polished
+
+**Phase 5 Complete When:**
+- [ ] Archivist responds conversationally with personality
+- [ ] Has tools to query the archive
+- [ ] Remembers context within session (localStorage)
+- [ ] Graceful fallback to manual search on AI failure
+
+---
+
+## Sources
+
+- [OpenAI Structured Outputs Documentation](https://platform.openai.com/docs/guides/structured-outputs)
+- [Introduction to Structured Outputs | OpenAI Cookbook](https://cookbook.openai.com/examples/structured_outputs_intro)
+- [Named Entity Recognition | OpenAI Cookbook](https://cookbook.openai.com/examples/named_entity_recognition_to_enrich_text)
+- [GPT-5.2 Prompting Guide | OpenAI Cookbook](https://cookbook.openai.com/examples/gpt-5/gpt-5-2_prompting_guide)
+- [Responses API vs Chat Completions](https://platform.openai.com/docs/guides/responses-vs-chat-completions)
+- [Temporal Agents with Knowledge Graphs | OpenAI Cookbook](https://cookbook.openai.com/examples/partners/temporal_agents_with_knowledge_graphs/temporal_agents)
+- [Entity Extraction for Long Documents | OpenAI Cookbook](https://cookbook.openai.com/examples/entity_extraction_for_long_documents)

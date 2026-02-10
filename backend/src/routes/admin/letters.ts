@@ -1,21 +1,95 @@
 import { Router } from 'express';
 import { eq, and, isNull, isNotNull, inArray, sql, or, ilike, asc, desc, count } from 'drizzle-orm';
 import { z } from 'zod';
-import { db, letters, collections, letterVersions } from '../../db/index.js';
+import { db, letters, collections, letterVersions, letterPersons, letterPlaces, canonicalPersons, canonicalPlaces } from '../../db/index.js';
 import { getLetterById, resetLetterForProcessing } from '../../services/letters.js';
 import { transformLetterToDTO, transformLetterWithRelatedToDTO, type LetterWithRelations } from '../../dto/index.js';
 import { processLetter, processMetadata } from '../../pipeline/processor.js';
+import { resyncMetadata, auditMetadata, type MetadataAuditContext, type LinkedPersonInfo } from '../../ai/resync.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger({ module: 'admin-letters' });
 const router = Router();
 
 // ============================================================================
-// ADMIN LETTERS LIST WITH SERVER-SIDE FILTERING + PAGINATION
+// ENUM VALIDATION HELPERS
 // ============================================================================
 
 // Content status enum values for validation
 const contentStatusValues = ['EMPTY', 'AI_DRAFT', 'EDITED', 'VERIFIED'] as const;
+
+// Valid relationship types for the database enum
+const VALID_RELATIONSHIP_TYPES = [
+  'spouse', 'fiancé/fiancée', 'romantic-partner', 'parent', 'child', 'sibling',
+  'grandparent', 'grandchild', 'aunt/uncle', 'nephew/niece', 'cousin', 'in-law',
+  'friend', 'acquaintance', 'business-associate', 'employer', 'employee', 'unknown'
+] as const;
+
+type RelationshipType = typeof VALID_RELATIONSHIP_TYPES[number];
+
+/**
+ * Normalize and validate AI-generated relationship type to match database enum.
+ * Returns null if the value cannot be mapped to a valid enum.
+ */
+function normalizeRelationshipType(value: string | null | undefined): RelationshipType | null {
+  if (!value) return null;
+
+  const normalized = value.toLowerCase().trim();
+
+  // Direct match
+  if (VALID_RELATIONSHIP_TYPES.includes(normalized as RelationshipType)) {
+    return normalized as RelationshipType;
+  }
+
+  // Common AI variations that need mapping
+  const mappings: Record<string, RelationshipType> = {
+    'romantic partners': 'romantic-partner',
+    'romantic partner': 'romantic-partner',
+    'partners': 'romantic-partner',
+    'partner': 'romantic-partner',
+    'fiance': 'fiancé/fiancée',
+    'fiancee': 'fiancé/fiancée',
+    'fianc': 'fiancé/fiancée',
+    'engaged': 'fiancé/fiancée',
+    'married': 'spouse',
+    'husband': 'spouse',
+    'wife': 'spouse',
+    'mom': 'parent',
+    'dad': 'parent',
+    'mother': 'parent',
+    'father': 'parent',
+    'son': 'child',
+    'daughter': 'child',
+    'brother': 'sibling',
+    'sister': 'sibling',
+    'grandmother': 'grandparent',
+    'grandfather': 'grandparent',
+    'grandson': 'grandchild',
+    'granddaughter': 'grandchild',
+    'aunt': 'aunt/uncle',
+    'uncle': 'aunt/uncle',
+    'niece': 'nephew/niece',
+    'nephew': 'nephew/niece',
+    'business associate': 'business-associate',
+    'colleague': 'business-associate',
+    'coworker': 'business-associate',
+    'co-worker': 'business-associate',
+    'boss': 'employer',
+    'manager': 'employer',
+  };
+
+  if (mappings[normalized]) {
+    return mappings[normalized];
+  }
+
+  // If we can't map it, return unknown rather than failing
+  log.warn({ original: value, normalized }, 'Unknown relationship type from AI, defaulting to unknown');
+  return 'unknown';
+}
+
+// ============================================================================
+// ADMIN LETTERS LIST WITH SERVER-SIDE FILTERING + PAGINATION
+// ============================================================================
 
 const adminLettersQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -874,6 +948,69 @@ router.post('/letters/bulk/reset-transcriptions', async (req, res, next) => {
 });
 
 /**
+ * PATCH /admin/letters/bulk/update-fields - Bulk update sender/recipient fields
+ *
+ * Used by the copy-paste edit mode in the admin dashboard.
+ * Accepts an array of updates with letterId and sender/recipient values.
+ */
+const bulkUpdateFieldsSchema = z.object({
+  updates: z.array(z.object({
+    letterId: z.string().uuid(),
+    sender: z.string().optional(),
+    recipient: z.string().optional(),
+  })).min(1),
+});
+
+router.patch('/letters/bulk/update-fields', async (req, res, next) => {
+  try {
+    const parseResult = bulkUpdateFieldsSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      req.log.warn({ errors: parseResult.error.errors }, 'Invalid bulk update fields request');
+      res.status(400).json({ error: 'Invalid request', details: parseResult.error.errors });
+      return;
+    }
+    const { updates } = parseResult.data;
+
+    req.log.info({ updateCount: updates.length }, 'Bulk update fields request received');
+
+    // Process each update
+    let successCount = 0;
+    for (const update of updates) {
+      const dbUpdates: Record<string, unknown> = {
+        updatedAt: new Date(),
+      };
+
+      if (update.sender !== undefined) {
+        dbUpdates.sender = update.sender || null;
+      }
+      if (update.recipient !== undefined) {
+        dbUpdates.recipient = update.recipient || null;
+      }
+
+      // Only update if there are actual field changes
+      if (Object.keys(dbUpdates).length > 1) {
+        await db.update(letters).set(dbUpdates).where(
+          and(
+            eq(letters.id, update.letterId),
+            isNull(letters.deletedAt)
+          )
+        );
+        successCount++;
+      }
+    }
+
+    req.log.info({ updated: successCount }, 'Bulk update fields completed');
+
+    res.json({
+      message: 'Fields updated',
+      updated: successCount,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * POST /admin/letters/bulk/clear-metadata - Clear metadata for selected letters
  *
  * Clears metadata fields but keeps the transcription intact.
@@ -930,6 +1067,7 @@ router.post('/letters/bulk/clear-metadata', async (req, res, next) => {
 /**
  * GET /admin/letters/:letterId - Get a single letter with pages (admin - any visibility)
  * Also fetches related cards (C) and extras (E) for the same date/sequence
+ * Includes linked persons and places for V2 metadata display
  */
 router.get('/letters/:letterId', async (req, res, next) => {
   try {
@@ -941,6 +1079,16 @@ router.get('/letters/:letterId', async (req, res, next) => {
         collection: true,
         pages: {
           orderBy: (p, { asc }) => [asc(p.pageNumber)],
+        },
+        persons: {
+          with: {
+            person: true,
+          },
+        },
+        places: {
+          with: {
+            place: true,
+          },
         },
       },
     });
@@ -1636,6 +1784,347 @@ router.post('/letters/:letterId/unverify-metadata', async (req, res, next) => {
     });
 
     res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
+// METADATA RE-SYNC ENDPOINTS
+// ============================================================================
+
+const resyncSchema = z.object({
+  oldSender: z.string().nullable(),
+  newSender: z.string().nullable(),
+  oldRecipient: z.string().nullable(),
+  newRecipient: z.string().nullable(),
+});
+
+/**
+ * POST /admin/letters/:letterId/resync-check - Full metadata audit (decision only)
+ *
+ * Uses GPT-4o-mini to audit all metadata for consistency issues.
+ * Does NOT actually update anything - just returns the decision.
+ *
+ * Checks:
+ * - Summary uses actual names (not "the sender/recipient")
+ * - Hook uses actual names
+ * - Sender is linked as a person
+ * - Recipient is linked as a person
+ * - Relationship type is set
+ */
+router.post('/letters/:letterId/resync-check', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    // Verify letter exists and fetch with linked persons
+    const letter = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+      with: {
+        collection: true,
+        pages: { orderBy: (p, { asc: asc2 }) => [asc2(p.pageNumber)] },
+        persons: {
+          with: {
+            person: true,
+          },
+        },
+      },
+    });
+
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Validate request body (optional change info)
+    const parseResult = resyncSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
+      return;
+    }
+    const { oldSender, newSender, oldRecipient, newRecipient } = parseResult.data;
+
+    req.log.debug(
+      {
+        letterId,
+        sender: newSender || letter.sender,
+        recipient: newRecipient || letter.recipient,
+      },
+      'Metadata audit requested'
+    );
+
+    // Build linked persons info
+    const linkedPersons: LinkedPersonInfo[] = (letter.persons || []).map(lp => ({
+      canonicalName: lp.person?.canonicalName || '',
+      role: lp.role as 'sender' | 'recipient' | 'mentioned',
+    }));
+
+    // Build full audit context
+    const auditContext: MetadataAuditContext = {
+      sender: newSender || letter.sender || null,
+      recipient: newRecipient || letter.recipient || null,
+      date: letter.extractedDate || null,
+      summary: letter.summary || null,
+      hook: letter.hook || null,
+      relationshipType: letter.senderRecipientRelationship || null,
+      linkedPersons,
+    };
+
+    // Build change info if there was a change
+    const change = (oldSender !== newSender || oldRecipient !== newRecipient)
+      ? { oldSender, newSender, oldRecipient, newRecipient }
+      : undefined;
+
+    // Call the audit function (fast model)
+    const decision = await auditMetadata(auditContext, change);
+
+    const needsResync =
+      decision.shouldUpdateSummary ||
+      decision.shouldUpdateHook ||
+      decision.shouldCreateSenderPerson ||
+      decision.shouldCreateRecipientPerson ||
+      decision.shouldUpdateRelationship;
+
+    req.log.debug(
+      {
+        letterId,
+        needsResync,
+        issueCount: decision.issues.length,
+        reason: decision.reason,
+      },
+      'Metadata audit completed'
+    );
+
+    res.json({
+      needsResync,
+      decision,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/letters/:letterId/resync - Full metadata sync
+ *
+ * Uses a two-model approach:
+ * 1. GPT-4o-mini audits all metadata for issues
+ * 2. GPT-5.2 regenerates/fixes the affected fields
+ *
+ * Can fix:
+ * - Summary using generic terms instead of names
+ * - Hook using generic terms instead of names
+ * - Missing linked persons for sender/recipient
+ * - Missing relationship type
+ */
+router.post('/letters/:letterId/resync', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    // Verify letter exists and fetch with linked persons
+    const letter = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+      with: {
+        collection: true,
+        pages: { orderBy: (p, { asc: asc2 }) => [asc2(p.pageNumber)] },
+        persons: {
+          with: {
+            person: true,
+          },
+        },
+      },
+    });
+
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Validate request body (optional change info)
+    const parseResult = resyncSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
+      return;
+    }
+    const { oldSender, newSender, oldRecipient, newRecipient } = parseResult.data;
+
+    req.log.info(
+      {
+        letterId,
+        sender: newSender || letter.sender,
+        recipient: newRecipient || letter.recipient,
+      },
+      'Metadata sync requested'
+    );
+
+    // Build linked persons info
+    const linkedPersons: LinkedPersonInfo[] = (letter.persons || []).map(lp => ({
+      canonicalName: lp.person?.canonicalName || '',
+      role: lp.role as 'sender' | 'recipient' | 'mentioned',
+    }));
+
+    // Build full audit context
+    const auditContext: MetadataAuditContext = {
+      sender: newSender || letter.sender || null,
+      recipient: newRecipient || letter.recipient || null,
+      date: letter.extractedDate || null,
+      summary: letter.summary || null,
+      hook: letter.hook || null,
+      relationshipType: letter.senderRecipientRelationship || null,
+      linkedPersons,
+    };
+
+    // Build change info if there was a change
+    const change = (oldSender !== newSender || oldRecipient !== newRecipient)
+      ? { oldSender, newSender, oldRecipient, newRecipient }
+      : undefined;
+
+    // Get transcript
+    const transcript = letter.transcriptionText || '';
+
+    // Perform full resync using AI
+    const result = await resyncMetadata({
+      transcript,
+      context: auditContext,
+      change,
+    });
+
+    // If something was updated, save it
+    if (result.wasUpdated) {
+      const dbUpdates: Record<string, unknown> = {
+        updatedAt: new Date(),
+      };
+
+      if (result.summary) {
+        dbUpdates.summary = result.summary;
+      }
+      if (result.hook) {
+        dbUpdates.hook = result.hook;
+      }
+      if (result.relationshipType) {
+        // Normalize AI-generated relationship type to match database enum
+        const normalizedRelationship = normalizeRelationshipType(result.relationshipType);
+        if (normalizedRelationship) {
+          dbUpdates.senderRecipientRelationship = normalizedRelationship;
+        }
+      }
+
+      await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
+
+      // Create linked persons if needed
+      if (result.senderPerson) {
+        // Find or create canonical person
+        let senderPerson = await db.query.canonicalPersons.findFirst({
+          where: ilike(canonicalPersons.canonicalName, result.senderPerson.name),
+        });
+
+        if (!senderPerson) {
+          const [newPerson] = await db.insert(canonicalPersons).values({
+            canonicalName: result.senderPerson.name,
+          }).returning();
+          senderPerson = newPerson;
+        }
+
+        // Check if already linked
+        const existingLink = await db.query.letterPersons.findFirst({
+          where: and(
+            eq(letterPersons.letterId, letterId),
+            eq(letterPersons.personId, senderPerson.id),
+            eq(letterPersons.role, 'sender')
+          ),
+        });
+
+        if (!existingLink) {
+          await db.insert(letterPersons).values({
+            letterId,
+            personId: senderPerson.id,
+            role: 'sender',
+            confidence: 100,
+          });
+        }
+      }
+
+      if (result.recipientPerson) {
+        // Find or create canonical person
+        let recipientPerson = await db.query.canonicalPersons.findFirst({
+          where: ilike(canonicalPersons.canonicalName, result.recipientPerson.name),
+        });
+
+        if (!recipientPerson) {
+          const [newPerson] = await db.insert(canonicalPersons).values({
+            canonicalName: result.recipientPerson.name,
+          }).returning();
+          recipientPerson = newPerson;
+        }
+
+        // Check if already linked
+        const existingLink = await db.query.letterPersons.findFirst({
+          where: and(
+            eq(letterPersons.letterId, letterId),
+            eq(letterPersons.personId, recipientPerson.id),
+            eq(letterPersons.role, 'recipient')
+          ),
+        });
+
+        if (!existingLink) {
+          await db.insert(letterPersons).values({
+            letterId,
+            personId: recipientPerson.id,
+            role: 'recipient',
+            confidence: 100,
+          });
+        }
+      }
+
+      req.log.info(
+        {
+          letterId,
+          updatedSummary: Boolean(result.summary),
+          updatedHook: Boolean(result.hook),
+          createdSenderPerson: Boolean(result.senderPerson),
+          createdRecipientPerson: Boolean(result.recipientPerson),
+          updatedRelationship: Boolean(result.relationshipType),
+          decision: result.decision.reason,
+        },
+        'Metadata sync completed'
+      );
+    } else {
+      req.log.info({ letterId, reason: result.decision.reason }, 'Metadata sync: no updates needed');
+    }
+
+    // Fetch and return updated letter with linked persons AND places
+    const updatedLetter = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+      with: {
+        collection: true,
+        pages: { orderBy: (p, { asc: asc2 }) => [asc2(p.pageNumber)] },
+        persons: {
+          with: {
+            person: true,
+          },
+        },
+        places: {
+          with: {
+            place: true,
+          },
+        },
+      },
+    });
+
+    res.json({
+      letter: transformLetterToDTO(updatedLetter as LetterWithRelations),
+      resync: {
+        wasUpdated: result.wasUpdated,
+        updatedFields: {
+          summary: Boolean(result.summary),
+          hook: Boolean(result.hook),
+          senderPerson: Boolean(result.senderPerson),
+          recipientPerson: Boolean(result.recipientPerson),
+          relationshipType: Boolean(result.relationshipType),
+        },
+        decision: result.decision,
+      },
+    });
   } catch (error) {
     next(error);
   }

@@ -46,12 +46,80 @@ export const dateConfidenceEnum = pgEnum('date_confidence', [
   'inferred',
 ]);
 
+// Emotional tone for V2 metadata
+export const emotionalToneEnum = pgEnum('emotional_tone', [
+  'joyful',
+  'hopeful',
+  'neutral',
+  'anxious',
+  'sad',
+  'angry',
+  'desperate',
+]);
+
+// Sender-recipient relationship for V2 metadata
+export const relationshipEnum = pgEnum('relationship_type', [
+  'spouse',
+  'fiancé/fiancée',
+  'romantic-partner',
+  'parent',
+  'child',
+  'sibling',
+  'grandparent',
+  'grandchild',
+  'aunt/uncle',
+  'nephew/niece',
+  'cousin',
+  'in-law',
+  'friend',
+  'acquaintance',
+  'business-associate',
+  'employer',
+  'employee',
+  'unknown',
+]);
+
 // Content status for transcript and metadata (two-track workflow system)
 export const contentStatusEnum = pgEnum('content_status', [
   'EMPTY',      // No content yet
   'AI_DRAFT',   // AI generated, human hasn't touched
   'EDITED',     // Human has edited
   'VERIFIED',   // Human explicitly marked as done
+]);
+
+// ============================================================================
+// ENTITY ENUMS
+// ============================================================================
+
+export const personRoleEnum = pgEnum('person_role', ['sender', 'recipient', 'mentioned']);
+
+export const placeRoleEnum = pgEnum('place_role', ['written_from', 'mentioned', 'destination']);
+
+export const placeTypeEnum = pgEnum('place_type', ['city', 'region', 'country', 'street', 'landmark', 'other']);
+
+export const entityReviewStatusEnum = pgEnum('entity_review_status', [
+  'pending',
+  'confirmed',
+  'rejected',
+  'new_entity',
+]);
+
+// Person-to-person relationship types (for relationship graph)
+export const personRelationshipTypeEnum = pgEnum('person_relationship_type', [
+  'spouse',
+  'fiancé/fiancée',
+  'romantic-partner',
+  'parent-child',       // Bidirectional: covers parent↔child
+  'sibling',
+  'grandparent-grandchild',
+  'aunt-uncle-niece-nephew',
+  'cousin',
+  'in-law',
+  'friend',
+  'acquaintance',
+  'business-associate',
+  'employer-employee',
+  'unknown',
 ]);
 
 // ============================================================================
@@ -116,6 +184,13 @@ export const letters = pgTable(
     metadataError: text('metadata_error'),
     metadataAttemptCount: integer('metadata_attempt_count').notNull().default(0),
 
+    // V2 Metadata fields
+    emotionalTone: emotionalToneEnum('emotional_tone'),
+    senderRecipientRelationship: relationshipEnum('sender_recipient_relationship'),
+    primaryTopics: text('primary_topics').array(),
+    // V2 extraction stores full structured output for entity processing
+    metadataV2Json: jsonb('metadata_v2_json'),
+
     // Transcript confirmation (gates metadata extraction)
     transcriptConfirmedAt: timestamp('transcript_confirmed_at', { withTimezone: true }),
     transcriptConfirmedBy: text('transcript_confirmed_by'),
@@ -147,8 +222,11 @@ export const letters = pgTable(
     index('idx_letters_workflow').on(table.workflow),
     index('idx_letters_letter_date').on(table.letterDate),
     index('idx_letters_extracted_date').on(table.extractedDate),
+    // V2 indexes
+    index('idx_letters_emotional_tone').on(table.emotionalTone),
+    index('idx_letters_primary_topics').using('gin', table.primaryTopics),
     // Check constraint: published requires both transcript and metadata to be verified
-    check('published_requires_verified', sql`visibility <> 'PUBLISHED' OR (transcript_status = 'VERIFIED' AND metadata_content_status = 'VERIFIED')`),
+    check('published_requires_verified', sql`visibility::text <> 'PUBLISHED' OR (transcript_status::text = 'VERIFIED' AND metadata_content_status::text = 'VERIFIED')`),
     // Check constraint: type_sequence >= 1
     check('type_sequence_positive', sql`type_sequence >= 1`),
     // Check constraint: attempt counts >= 0
@@ -209,6 +287,185 @@ export const letterVersions = pgTable(
 );
 
 // ============================================================================
+// ENTITY TABLES
+// ============================================================================
+
+/**
+ * Canonical people registry - stores unique individuals across all letters
+ */
+export const canonicalPersons = pgTable(
+  'canonical_persons',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    canonicalName: text('canonical_name').notNull(),
+    aliases: text('aliases').array().default([]),
+    notes: text('notes'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // GIN index for trigram similarity searches on canonical_name
+    index('idx_persons_name_trgm').using('gin', sql`${table.canonicalName} gin_trgm_ops`),
+    // GIN index for array containment on aliases
+    index('idx_persons_aliases').using('gin', table.aliases),
+  ]
+);
+
+/**
+ * Canonical places registry - stores unique locations across all letters
+ */
+export const canonicalPlaces = pgTable(
+  'canonical_places',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    canonicalName: text('canonical_name').notNull(),
+    aliases: text('aliases').array().default([]),
+    placeType: placeTypeEnum('place_type'),
+    notes: text('notes'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // GIN index for trigram similarity searches
+    index('idx_places_name_trgm').using('gin', sql`${table.canonicalName} gin_trgm_ops`),
+    // GIN index for aliases
+    index('idx_places_aliases').using('gin', table.aliases),
+  ]
+);
+
+/**
+ * Junction table linking letters to people mentioned
+ */
+export const letterPersons = pgTable(
+  'letter_persons',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    letterId: uuid('letter_id')
+      .notNull()
+      .references(() => letters.id, { onDelete: 'cascade' }),
+    personId: uuid('person_id')
+      .notNull()
+      .references(() => canonicalPersons.id, { onDelete: 'cascade' }),
+    role: personRoleEnum('role').notNull(),
+    nameAsWritten: text('name_as_written'),
+    relationshipToSender: text('relationship_to_sender'),
+    context: text('context'),
+    confidence: integer('confidence').notNull().default(100),
+    confirmedBy: text('confirmed_by'),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Unique constraint: same person can only have one role per letter
+    uniqueIndex('letter_persons_unique').on(table.letterId, table.personId, table.role),
+    // Query indexes
+    index('idx_letter_persons_letter').on(table.letterId),
+    index('idx_letter_persons_person').on(table.personId),
+    // Check constraint for confidence range
+    check('confidence_range', sql`confidence >= 0 AND confidence <= 100`),
+  ]
+);
+
+/**
+ * Junction table linking letters to places mentioned
+ */
+export const letterPlaces = pgTable(
+  'letter_places',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    letterId: uuid('letter_id')
+      .notNull()
+      .references(() => letters.id, { onDelete: 'cascade' }),
+    placeId: uuid('place_id')
+      .notNull()
+      .references(() => canonicalPlaces.id, { onDelete: 'cascade' }),
+    role: placeRoleEnum('role').notNull(),
+    nameAsWritten: text('name_as_written'),
+    context: text('context'),
+    confidence: integer('confidence').notNull().default(100),
+    confirmedBy: text('confirmed_by'),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Unique constraint: same place can only have one role per letter
+    uniqueIndex('letter_places_unique').on(table.letterId, table.placeId, table.role),
+    // Query indexes
+    index('idx_letter_places_letter').on(table.letterId),
+    index('idx_letter_places_place').on(table.placeId),
+    // Check constraint for confidence range
+    check('confidence_range_place', sql`confidence >= 0 AND confidence <= 100`),
+  ]
+);
+
+/**
+ * Person-to-person relationships (bidirectional graph)
+ * Tracks how canonical persons are related to each other across the collection
+ */
+export const personRelationships = pgTable(
+  'person_relationships',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // Always store with personAId < personBId alphabetically to prevent duplicates
+    personAId: uuid('person_a_id')
+      .notNull()
+      .references(() => canonicalPersons.id, { onDelete: 'cascade' }),
+    personBId: uuid('person_b_id')
+      .notNull()
+      .references(() => canonicalPersons.id, { onDelete: 'cascade' }),
+    relationshipType: personRelationshipTypeEnum('relationship_type').notNull(),
+    notes: text('notes'),
+    // Track which letter this relationship was discovered in (optional)
+    discoveredInLetterId: uuid('discovered_in_letter_id')
+      .references(() => letters.id, { onDelete: 'set null' }),
+    // AI-suggested vs manually confirmed
+    confidence: integer('confidence').notNull().default(100),
+    confirmedBy: text('confirmed_by'),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Unique constraint: only one relationship between any two people
+    uniqueIndex('person_relationships_unique').on(table.personAId, table.personBId),
+    // Query indexes
+    index('idx_person_rel_a').on(table.personAId),
+    index('idx_person_rel_b').on(table.personBId),
+    // Confidence check
+    check('confidence_range_rel', sql`confidence >= 0 AND confidence <= 100`),
+    // Ensure personAId != personBId
+    check('no_self_relationship', sql`person_a_id <> person_b_id`),
+  ]
+);
+
+/**
+ * Review queue for pending entity matches needing admin confirmation
+ */
+export const entityReviewQueue = pgTable(
+  'entity_review_queue',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    entityType: text('entity_type').notNull(), // 'person' | 'place'
+    extractedText: text('extracted_text').notNull(),
+    letterId: uuid('letter_id')
+      .notNull()
+      .references(() => letters.id, { onDelete: 'cascade' }),
+    suggestedEntityId: uuid('suggested_entity_id'),
+    context: text('context'),
+    confidence: integer('confidence').notNull().default(0),
+    status: entityReviewStatusEnum('status').notNull().default('pending'),
+    reviewedBy: text('reviewed_by'),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_review_queue_status').on(table.status),
+    index('idx_review_queue_letter').on(table.letterId),
+    index('idx_review_queue_entity_type').on(table.entityType),
+  ]
+);
+
+// ============================================================================
 // RELATIONS
 // ============================================================================
 
@@ -223,6 +480,8 @@ export const lettersRelations = relations(letters, ({ one, many }) => ({
   }),
   pages: many(letterPages),
   versions: many(letterVersions),
+  persons: many(letterPersons),
+  places: many(letterPlaces),
 }));
 
 export const letterPagesRelations = relations(letterPages, ({ one }) => ({
@@ -236,6 +495,57 @@ export const letterVersionsRelations = relations(letterVersions, ({ one }) => ({
   letter: one(letters, {
     fields: [letterVersions.letterId],
     references: [letters.id],
+  }),
+}));
+
+export const canonicalPersonsRelations = relations(canonicalPersons, ({ many }) => ({
+  letterPersons: many(letterPersons),
+  // Relationships where this person is personA
+  relationshipsAsA: many(personRelationships, { relationName: 'personA' }),
+  // Relationships where this person is personB
+  relationshipsAsB: many(personRelationships, { relationName: 'personB' }),
+}));
+
+export const personRelationshipsRelations = relations(personRelationships, ({ one }) => ({
+  personA: one(canonicalPersons, {
+    fields: [personRelationships.personAId],
+    references: [canonicalPersons.id],
+    relationName: 'personA',
+  }),
+  personB: one(canonicalPersons, {
+    fields: [personRelationships.personBId],
+    references: [canonicalPersons.id],
+    relationName: 'personB',
+  }),
+  discoveredInLetter: one(letters, {
+    fields: [personRelationships.discoveredInLetterId],
+    references: [letters.id],
+  }),
+}));
+
+export const canonicalPlacesRelations = relations(canonicalPlaces, ({ many }) => ({
+  letterPlaces: many(letterPlaces),
+}));
+
+export const letterPersonsRelations = relations(letterPersons, ({ one }) => ({
+  letter: one(letters, {
+    fields: [letterPersons.letterId],
+    references: [letters.id],
+  }),
+  person: one(canonicalPersons, {
+    fields: [letterPersons.personId],
+    references: [canonicalPersons.id],
+  }),
+}));
+
+export const letterPlacesRelations = relations(letterPlaces, ({ one }) => ({
+  letter: one(letters, {
+    fields: [letterPlaces.letterId],
+    references: [letters.id],
+  }),
+  place: one(canonicalPlaces, {
+    fields: [letterPlaces.placeId],
+    references: [canonicalPlaces.id],
   }),
 }));
 
@@ -261,3 +571,33 @@ export type VisibilityState = 'PUBLISHED' | 'HIDDEN';
 export type JobStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
 export type DateConfidence = 'exact' | 'unknown' | 'inferred';
 export type ContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+
+// V2 Metadata types
+export type EmotionalTone = 'joyful' | 'hopeful' | 'neutral' | 'anxious' | 'sad' | 'angry' | 'desperate';
+export type RelationshipType = 'spouse' | 'fiancé/fiancée' | 'romantic-partner' | 'parent' | 'child' | 'sibling' | 'grandparent' | 'grandchild' | 'aunt/uncle' | 'nephew/niece' | 'cousin' | 'in-law' | 'friend' | 'acquaintance' | 'business-associate' | 'employer' | 'employee' | 'unknown';
+
+// Entity types
+export type CanonicalPerson = typeof canonicalPersons.$inferSelect;
+export type NewCanonicalPerson = typeof canonicalPersons.$inferInsert;
+
+export type CanonicalPlace = typeof canonicalPlaces.$inferSelect;
+export type NewCanonicalPlace = typeof canonicalPlaces.$inferInsert;
+
+export type LetterPerson = typeof letterPersons.$inferSelect;
+export type NewLetterPerson = typeof letterPersons.$inferInsert;
+
+export type LetterPlace = typeof letterPlaces.$inferSelect;
+export type NewLetterPlace = typeof letterPlaces.$inferInsert;
+
+export type EntityReviewItem = typeof entityReviewQueue.$inferSelect;
+export type NewEntityReviewItem = typeof entityReviewQueue.$inferInsert;
+
+export type PersonRole = 'sender' | 'recipient' | 'mentioned';
+export type PlaceRole = 'written_from' | 'mentioned' | 'destination';
+export type PlaceType = 'city' | 'region' | 'country' | 'street' | 'landmark' | 'other';
+export type EntityReviewStatus = 'pending' | 'confirmed' | 'rejected' | 'new_entity';
+
+// Person relationship types
+export type PersonRelationship = typeof personRelationships.$inferSelect;
+export type NewPersonRelationship = typeof personRelationships.$inferInsert;
+export type PersonRelationshipType = 'spouse' | 'fiancé/fiancée' | 'romantic-partner' | 'parent-child' | 'sibling' | 'grandparent-grandchild' | 'aunt-uncle-niece-nephew' | 'cousin' | 'in-law' | 'friend' | 'acquaintance' | 'business-associate' | 'employer-employee' | 'unknown';

@@ -7,7 +7,10 @@ import {
   type DateConfidence,
   type WorkflowState,
   type JobStatus,
+  type EmotionalTone,
+  type RelationshipType,
 } from '../db/index.js';
+import type { MetadataV2 } from '../ai/schemas/metadataV2.js';
 
 export interface LetterIdentity {
   collectionId: string;
@@ -230,4 +233,55 @@ export async function resetLetterForProcessing(letterId: string): Promise<void> 
       updatedAt: new Date(),
     })
     .where(eq(letters.id, letterId));
+}
+
+/**
+ * Updates letter with V2 metadata extraction results.
+ * Stores both the flattened fields and the full JSON for entity processing.
+ */
+export async function updateMetadataV2(
+  letterId: string,
+  status: JobStatus,
+  metadata?: MetadataV2,
+  error?: string | null
+): Promise<void> {
+  const updates: Partial<Letter> = {
+    metadataStatus: status,
+    updatedAt: new Date(),
+  };
+
+  if (metadata) {
+    // V1 compatible fields (for existing queries/UI)
+    updates.sender = metadata.sender.name;
+    updates.recipient = metadata.recipient.name;
+    updates.locationWritten = metadata.location_written.name;
+    updates.hook = metadata.hook;
+    updates.summary = metadata.summary;
+    updates.extractedDate = metadata.extracted_date;
+    updates.extractedDateConfidence = metadata.extracted_date_confidence;
+    // Generate tags from topics for V1 compatibility
+    updates.tags = metadata.primary_topics;
+
+    // V2 specific fields
+    updates.emotionalTone = metadata.emotional_tone as EmotionalTone | null;
+    updates.senderRecipientRelationship = metadata.sender_recipient_relationship as RelationshipType | null;
+    updates.primaryTopics = metadata.primary_topics;
+
+    // Store full V2 JSON for entity processing and future features
+    updates.metadataV2Json = metadata;
+
+    // Also store in legacy metadataJson for backwards compatibility
+    updates.metadataJson = metadata;
+  }
+
+  if (error !== undefined) {
+    updates.metadataError = error;
+  }
+
+  // Set two-track content status to AI_DRAFT when AI completes
+  if (status === 'SUCCESS') {
+    updates.metadataContentStatus = 'AI_DRAFT';
+  }
+
+  await db.update(letters).set(updates).where(eq(letters.id, letterId));
 }

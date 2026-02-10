@@ -1,7 +1,8 @@
+import { useCallback, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Letter } from "../../types/Letter";
+import type { Letter, LetterImage } from "../../types/Letter";
 import LetterViewer from "../LetterViewer/LetterViewer";
-import { Button } from "../common";
+import { Button, ResizableSplitPane } from "../common";
 import "./LetterDisplay.css";
 
 interface LetterDisplayProps {
@@ -10,10 +11,50 @@ interface LetterDisplayProps {
 
 export default function LetterDisplay({ letter }: LetterDisplayProps) {
   const navigate = useNavigate();
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const [isTranscriptVisible, setIsTranscriptVisible] = useState(true);
+
+  // Count letter pages for single-page header hiding
+  const letterPageCount = letter.images.filter(img => img.type === 'letter').length;
 
   const handleBack = () => {
     navigate(-1);
   };
+
+  // Track transcript visibility with Intersection Observer
+  useEffect(() => {
+    if (!transcriptRef.current) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // Consider visible if >10% is showing
+        setIsTranscriptVisible(entry.intersectionRatio > 0.1);
+      },
+      { threshold: [0, 0.1, 0.5, 1] }
+    );
+
+    observer.observe(transcriptRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  // Handle page change from LetterViewer - smooth scroll to corresponding transcript
+  const handlePageChange = useCallback((_index: number, image: LetterImage) => {
+    // Only scroll for letter pages, not envelopes/cards
+    if (image.type !== 'letter') return;
+
+    // Only scroll if transcript is visible (user hasn't scrolled to metadata)
+    if (!isTranscriptVisible) return;
+
+    // Don't scroll if only one letter page
+    if (letterPageCount <= 1) return;
+
+    // SMOOTH scroll to corresponding page section
+    const pageHeader = document.querySelector(`[data-page="${image.pageNumber}"]`);
+    pageHeader?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+  }, [isTranscriptVisible, letterPageCount]);
 
   return (
     <div className="letter-display">
@@ -25,14 +66,22 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
       </header>
 
       <div className="display-body">
-        <div className="display-layout">
+        <ResizableSplitPane
+          letterId={letter.id}
+          className="display-layout"
+          firstPanelClassName="images-panel"
+          secondPanelClassName="details-panel"
+        >
           {/* Left side: Letter viewer */}
-          <div className="images-panel">
-            <LetterViewer images={letter.images} letterId={letter.id} showOnlyLetterPages={false} />
-          </div>
+          <LetterViewer
+            images={letter.images}
+            letterId={letter.id}
+            showOnlyLetterPages={false}
+            onPageChange={handlePageChange}
+          />
 
           {/* Right side: Read-only content */}
-          <div className="details-panel">
+          <div className="details-panel-content">
             {/* Transcript Section */}
             <div className="transcript-section">
               <div className="section-header">
@@ -41,12 +90,15 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
                   <span className="verified-badge">✓ Verified</span>
                 )}
               </div>
-              <div className="section-content">
+              <div className="section-content" ref={transcriptRef}>
                 {letter.transcript.pages.length > 0 ? (
                   <div className="transcript-pages">
                     {letter.transcript.pages.map((page) => (
-                      <div key={page.pageNumber} className="transcript-page">
-                        <div className="page-number">Page {page.pageNumber}</div>
+                      <div key={page.pageNumber} className="transcript-page" data-page={page.pageNumber}>
+                        {/* Hide "Page X" header if only one letter page */}
+                        {letterPageCount > 1 && (
+                          <div className="page-number">Page {page.pageNumber}</div>
+                        )}
                         <p className="transcript-text">{page.text}</p>
                       </div>
                     ))}
@@ -96,7 +148,7 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
               </div>
             </div>
           </div>
-        </div>
+        </ResizableSplitPane>
       </div>
     </div>
   );

@@ -25,6 +25,7 @@ interface ImageViewState {
 interface StoredState {
   letterId: string;
   images: Record<string, ImageViewState>;
+  splitRatio?: number; // Used by ResizableSplitPane
 }
 
 interface LetterViewerProps {

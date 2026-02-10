@@ -51,35 +51,33 @@
   overflow: hidden;
 }
 
-/* Grid layout - Full height */
+/* Layout container - ResizableSplitPane handles the grid */
 .display-layout {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
-  gap: var(--spacing-lg);
   height: 100%;
   max-width: 1800px;
   margin: 0 auto;
   padding: 0 var(--spacing-lg);
 }
 
-/* Left panel - Fixed, no scroll */
+/* Left panel - ResizableSplitPane applies this class */
 .images-panel {
-  height: 100%;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  padding: var(--spacing-xl) 0;
+  /* No padding here - the child LetterViewer will have margin instead */
+  min-height: 0; /* Important for flexbox */
 }
 
-/* Right panel - Scrollable, hidden scrollbar */
+.images-panel > * {
+  flex: 1;
+  min-height: 0;
+  /* Spacing: top, right (gap from divider), bottom, left */
+  margin: var(--spacing-md) var(--spacing-sm) var(--spacing-md) 0;
+}
+
+/* Right panel container - ResizableSplitPane applies this class */
 .details-panel {
-  height: 100%;
   overflow-y: auto;
   padding: var(--spacing-xl) 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
   /* Hide scrollbar but keep scrolling */
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE/Edge */
@@ -89,8 +87,15 @@
   display: none; /* Chrome/Safari/Opera */
 }
 
-/* Add scroll room at bottom - margin on last child creates scrollable space */
-.details-panel > *:last-child {
+/* Inner content wrapper for the details panel */
+.details-panel-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+/* Add scroll room at bottom */
+.details-panel-content > *:last-child {
   margin-bottom: calc(var(--spacing-xl) * 2);
 }
 
@@ -140,12 +145,13 @@
 /* Transcript text - monospace for accurate spacing */
 .transcript-text {
   font-family: 'Courier New', Courier, monospace;
-  font-size: 1rem;
+  font-size: var(--transcript-font-size, 1rem);
   line-height: 1.6;
   color: var(--text);
-  white-space: pre-wrap;
+  white-space: pre; /* NEVER wrap lines - font shrinks to fit */
   margin: 0;
   text-align: left; /* Override inherited center alignment from #root */
+  transition: font-size 0.15s ease-out; /* Smooth font size transition during resize */
 }
 
 .transcript-pages {
@@ -260,7 +266,7 @@
   }
 }
 
-/* Mobile view - stack vertically, allow full scroll */
+/* Mobile view - ResizableSplitPane handles the vertical layout */
 @media (max-width: 768px) {
   .display-header {
     padding: var(--spacing-sm);
@@ -276,21 +282,14 @@
   }
 
   .display-layout {
-    display: flex;
-    flex-direction: column;
-    height: auto;
     padding: var(--spacing-sm);
-    gap: var(--spacing-md);
   }
 
   .images-panel {
-    height: auto;
     padding: 0;
   }
 
   .details-panel {
-    height: auto;
-    overflow: visible;
     padding: 0;
   }
 }

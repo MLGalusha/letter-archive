@@ -104,6 +104,14 @@ export async function regenerateMetadata(letterId: string): Promise<Letter> {
   return apiPost<Letter>(`/admin/letters/${letterId}/regenerate-metadata`);
 }
 
+/**
+ * Regenerate entity extraction for a letter
+ * Runs only the entity extraction (Prompt 2) without re-running basic metadata
+ */
+export async function regenerateEntities(letterId: string): Promise<Letter> {
+  return apiPost<Letter>(`/admin/letters/${letterId}/regenerate-entities`);
+}
+
 // ============================================================================
 // TWO-TRACK VERIFICATION
 // ============================================================================
@@ -196,6 +204,9 @@ export async function restoreVersion(
 export interface BulkProcessResponse {
   queued: number;
   skipped: number;
+  skipReasons?: Array<{ letterId: string; reason: string }>;
+  processing?: boolean;
+  unconfirmedCount?: number;
 }
 
 /**
@@ -208,8 +219,8 @@ export async function bulkTranscribe(letterIds: string[]): Promise<BulkProcessRe
 /**
  * Queue multiple letters for metadata extraction
  */
-export async function bulkExtractMetadata(letterIds: string[]): Promise<BulkProcessResponse> {
-  return apiPost<BulkProcessResponse>('/admin/letters/bulk/extract-metadata', { letterIds });
+export async function bulkExtractMetadata(letterIds: string[], skipConfirmationCheck = false): Promise<BulkProcessResponse> {
+  return apiPost<BulkProcessResponse>('/admin/letters/bulk/extract-metadata', { letterIds, skipConfirmationCheck });
 }
 
 export interface BulkUpdateResponse {
@@ -313,6 +324,88 @@ export async function resumeProcessing(): Promise<{ message: string }> {
  */
 export async function abortProcessing(): Promise<{ message: string }> {
   return apiPost<{ message: string }>('/admin/processing/abort');
+}
+
+// ============================================================================
+// PROCESSING QUEUE
+// ============================================================================
+
+export type QueueJobType = 'transcription' | 'metadata' | 'entity_extraction';
+
+export interface QueueActiveJob {
+  letterId: string;
+  letterTitle: string;
+  collectionCode: string;
+  sender: string | null;
+  recipient: string | null;
+  type: QueueJobType;
+  startedAt: string;
+}
+
+export interface QueuedItem {
+  letterId: string;
+  letterTitle: string;
+  collectionCode: string;
+  sender: string | null;
+  recipient: string | null;
+  queuedAt: string;
+}
+
+export interface QueueRecentJob {
+  letterId: string;
+  letterTitle: string;
+  collectionCode: string;
+  type: QueueJobType;
+  status: 'SUCCESS' | 'FAILED';
+  error?: string;
+  completedAt: string;
+}
+
+export interface QueueStatus {
+  active: QueueActiveJob[];
+  queued: {
+    transcription: QueuedItem[];
+    metadata: QueuedItem[];
+    entityExtraction: QueuedItem[];
+  };
+  recent: QueueRecentJob[];
+  counts: {
+    activeCount: number;
+    queuedTranscription: number;
+    queuedMetadata: number;
+    queuedEntityExtraction: number;
+    recentSuccessCount: number;
+    recentFailedCount: number;
+  };
+  onDemandProcessing: ProcessingStatus;
+}
+
+/**
+ * Get full queue status with active, queued, and recent jobs
+ */
+export async function getProcessingQueue(): Promise<QueueStatus> {
+  return apiGet<QueueStatus>('/admin/processing/queue');
+}
+
+/**
+ * Remove a letter from the processing queue (only PENDING items)
+ */
+export async function removeFromQueue(letterId: string, type: QueueJobType): Promise<{ message: string }> {
+  return apiPost<{ message: string }>('/admin/processing/queue/remove', { letterId, type });
+}
+
+/**
+ * Clear all queued items of a given type
+ */
+export async function clearQueue(type: QueueJobType): Promise<{ message: string; cleared: number }> {
+  return apiPost<{ message: string; cleared: number }>('/admin/processing/queue/clear', { type });
+}
+
+/**
+ * Retry a failed job (resets status to PENDING)
+ */
+export async function retryFailed(letterId: string, type: QueueJobType): Promise<{ message: string }> {
+  return apiPost<{ message: string }>('/admin/processing/queue/retry', { letterId, type });
 }
 
 // ============================================================================

@@ -5,11 +5,13 @@ import {
   TRANSCRIPTION_SYSTEM_PROMPT,
   METADATA_SYSTEM_PROMPT,
   METADATA_V2_SYSTEM_PROMPT,
+  ENTITY_EXTRACTION_SYSTEM_PROMPT,
   EXTRA_CONTENT_CHECK_SYSTEM_PROMPT,
   EXTRA_CONTENT_TRANSCRIPTION_SYSTEM_PROMPT,
   buildTranscriptionUserPrompt,
   buildMetadataUserPrompt,
   buildMetadataV2UserPrompt,
+  buildEntityExtractionUserPrompt,
   buildExtraContentCheckPrompt,
   buildExtraContentTranscriptionPrompt,
 } from './prompts.js';
@@ -18,6 +20,11 @@ import {
   METADATA_V2_JSON_SCHEMA,
   type MetadataV2,
 } from './schemas/metadataV2.js';
+import {
+  EntityExtractionSchema,
+  ENTITY_EXTRACTION_JSON_SCHEMA,
+  type EntityExtraction,
+} from './schemas/entityExtraction.js';
 import type { DateConfidence } from '../db/schema.js';
 import { createLogger, logIfSlow, TIMING_THRESHOLDS } from '../utils/logger.js';
 
@@ -456,7 +463,6 @@ export async function extractMetadataV2(
         relationship: metadata.sender_recipient_relationship,
         topicsCount: metadata.primary_topics.length,
         quotesCount: metadata.notable_quotes.length,
-        entitiesCount: metadata.entities.length,
       },
       'V2 metadata extraction completed'
     );
@@ -507,8 +513,194 @@ function generateStubMetadataV2(params: ExtractMetadataV2Params): ExtractMetadat
       sender_recipient_relationship: 'unknown',
       primary_topics: [],
       notable_quotes: [],
-      entities: [],
       ai_notes: null,
+    },
+    isStub: true,
+  };
+}
+
+// ============================================================================
+// ENTITY EXTRACTION (Prompt 2 - People, Places, Relationships)
+// ============================================================================
+
+export interface ExtractEntitiesParams {
+  transcriptionText: string;
+  basicMetadata?: {
+    sender?: string | null;
+    recipient?: string | null;
+    senderRecipientRelationship?: string | null;
+    summary?: string | null;
+  };
+  context?: {
+    collectionCode?: string;
+    dateRaw?: string;
+    dateFromFilename?: string | null;
+    extraContentTranscript?: string | null;
+  };
+}
+
+export interface ExtractEntitiesResult {
+  entities: EntityExtraction;
+  isStub: boolean;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+}
+
+/**
+ * Entity Extraction using OpenAI Responses API with Structured Outputs.
+ *
+ * Runs as Prompt 2 after basic metadata extraction (Prompt 1).
+ * Extracts rich profiles of people and places, discovers relationships,
+ * and maps person-to-place connections.
+ */
+export async function extractEntities(
+  params: ExtractEntitiesParams
+): Promise<ExtractEntitiesResult> {
+  const context = {
+    collectionCode: params.context?.collectionCode,
+    dateRaw: params.context?.dateRaw,
+    transcriptLength: params.transcriptionText.length,
+  };
+
+  if (!hasOpenAI || !openai) {
+    log.debug(context, 'Using stub entity extraction (no API key)');
+    return generateStubEntityExtraction();
+  }
+
+  log.debug(context, 'Starting entity extraction');
+  const start = Date.now();
+
+  try {
+    const response = await openai.responses.create({
+      model: env.OPENAI_MODEL,
+      input: [
+        { role: 'system', content: ENTITY_EXTRACTION_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: buildEntityExtractionUserPrompt(
+            params.transcriptionText,
+            params.basicMetadata,
+            params.context
+          ),
+        },
+      ],
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'entity_extraction',
+          strict: true,
+          schema: ENTITY_EXTRACTION_JSON_SCHEMA,
+        },
+      },
+    });
+
+    const duration = Date.now() - start;
+
+    // Handle refusals
+    if (response.status === 'incomplete' && response.incomplete_details?.reason === 'content_filter') {
+      log.warn(
+        { ...context, duration, reason: response.incomplete_details.reason },
+        'Entity extraction refused by content filter'
+      );
+      throw new Error('Content refused by OpenAI safety filter');
+    }
+
+    // Get the output text
+    const outputItem = response.output.find((item) => item.type === 'message');
+    if (!outputItem || outputItem.type !== 'message') {
+      log.error({ ...context, duration, output: response.output }, 'No message in entity extraction response');
+      throw new Error('No message output from entity extraction');
+    }
+
+    const textContent = outputItem.content.find((c) => c.type === 'output_text');
+    if (!textContent || textContent.type !== 'output_text') {
+      log.error({ ...context, duration }, 'No text content in entity extraction response');
+      throw new Error('No text content in entity extraction response');
+    }
+
+    // Parse and validate with Zod
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(textContent.text);
+    } catch (parseError) {
+      log.error(
+        { ...context, duration, text: textContent.text.substring(0, 500), err: parseError },
+        'Failed to parse entity extraction JSON response'
+      );
+      throw new Error('Invalid JSON in entity extraction response');
+    }
+
+    const validationResult = EntityExtractionSchema.safeParse(parsed);
+    if (!validationResult.success) {
+      log.error(
+        {
+          ...context,
+          duration,
+          errors: validationResult.error.errors,
+          parsed: JSON.stringify(parsed).substring(0, 500),
+        },
+        'Entity extraction failed Zod validation'
+      );
+      throw new Error('Entity extraction failed schema validation');
+    }
+
+    const entities = validationResult.data;
+    const usage = response.usage;
+
+    log.info(
+      {
+        ...context,
+        duration,
+        model: env.OPENAI_MODEL,
+        promptTokens: usage?.input_tokens,
+        completionTokens: usage?.output_tokens,
+        totalTokens: (usage?.input_tokens ?? 0) + (usage?.output_tokens ?? 0),
+        peopleCount: entities.people.length,
+        placesCount: entities.places.length,
+        relationshipsCount: entities.relationships.length,
+        connectionsCount: entities.person_place_connections.length,
+      },
+      'Entity extraction completed'
+    );
+
+    logIfSlow(log, 'OpenAI entity extraction', duration, TIMING_THRESHOLDS.OPENAI_API, context);
+
+    return {
+      entities,
+      isStub: false,
+      usage: usage
+        ? {
+            promptTokens: usage.input_tokens,
+            completionTokens: usage.output_tokens,
+            totalTokens: usage.input_tokens + usage.output_tokens,
+          }
+        : undefined,
+    };
+  } catch (error) {
+    const duration = Date.now() - start;
+    log.error(
+      {
+        ...context,
+        duration,
+        err: error,
+        model: env.OPENAI_MODEL,
+      },
+      'Entity extraction failed'
+    );
+    throw error;
+  }
+}
+
+function generateStubEntityExtraction(): ExtractEntitiesResult {
+  return {
+    entities: {
+      people: [],
+      places: [],
+      relationships: [],
+      person_place_connections: [],
     },
     isStub: true,
   };

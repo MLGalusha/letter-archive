@@ -5,6 +5,7 @@ import {
   updateLetter,
   confirmTranscript,
   regenerateMetadata,
+  regenerateEntities,
   verifyTranscript,
   unverifyTranscript,
   verifyMetadata,
@@ -2304,6 +2305,42 @@ export default function LetterReviewPage() {
 
                     {/* Linked Entities Section */}
                     <div className="linked-entities">
+                      <div className="entity-extraction-status" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                        <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                          Entity extraction:{" "}
+                          <span style={{
+                            color: letter.entityExtractionStatus === "SUCCESS" ? "var(--green, #22c55e)"
+                              : letter.entityExtractionStatus === "FAILED" ? "var(--red, #ef4444)"
+                              : letter.entityExtractionStatus === "RUNNING" ? "var(--blue, #3b82f6)"
+                              : "var(--text-muted)",
+                            fontWeight: 600,
+                          }}>
+                            {letter.entityExtractionStatus || "PENDING"}
+                          </span>
+                          {letter.entityExtractionError && (
+                            <span title={letter.entityExtractionError} style={{ color: "var(--red, #ef4444)", marginLeft: "4px" }}> (error)</span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          className="add-entity-btn"
+                          onClick={async () => {
+                            try {
+                              showToast("Re-extracting entities...", "info");
+                              const updated = await regenerateEntities(letterId!);
+                              setLetter(updated);
+                              showToast("Entities re-extracted successfully", "success");
+                            } catch (err) {
+                              showToast("Failed to re-extract entities", "error");
+                            }
+                          }}
+                          title="Re-run entity extraction (Prompt 2)"
+                          disabled={letter.entityExtractionStatus === "RUNNING"}
+                          style={{ fontSize: "11px" }}
+                        >
+                          Re-extract
+                        </button>
+                      </div>
                       <div className="entity-group">
                         <div className="entity-group-header">
                           <label>Linked People</label>

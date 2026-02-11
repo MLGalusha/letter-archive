@@ -5,7 +5,10 @@
  * Following best practices:
  * - All fields required with nullable() for optional values
  * - Controlled vocabularies for enums
- * - Confidence scores for entity extraction
+ * - Confidence scores for extracted values
+ *
+ * Note: Entity extraction (people/places) is handled by a separate prompt.
+ * See entityExtraction.ts for that schema.
  */
 
 import { z } from 'zod';
@@ -150,19 +153,6 @@ export const NotableQuoteSchema = z.object({
 });
 export type NotableQuote = z.infer<typeof NotableQuoteSchema>;
 
-/**
- * Extracted entity (person or place)
- */
-export const ExtractedEntitySchema = z.object({
-  type: EntityTypeEnum,
-  name: z.string(),
-  role: z.string(), // PersonRole or PlaceRole depending on type
-  context: z.string(),
-  relationship_to_sender: z.string().nullable(), // Only for people
-  confidence: z.number().min(0).max(1),
-});
-export type ExtractedEntity = z.infer<typeof ExtractedEntitySchema>;
-
 // ============================================================================
 // MAIN SCHEMA
 // ============================================================================
@@ -198,9 +188,6 @@ export const MetadataV2Schema = z.object({
 
   // Notable quotes (1-3)
   notable_quotes: z.array(NotableQuoteSchema),
-
-  // Entities (people and places)
-  entities: z.array(ExtractedEntitySchema),
 
   // AI observations and hunches for admin review
   ai_notes: z.string().nullable(),
@@ -291,22 +278,6 @@ export const METADATA_V2_JSON_SCHEMA = {
         additionalProperties: false,
       },
     },
-    entities: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          type: { type: 'string', enum: ['person', 'place'] },
-          name: { type: 'string' },
-          role: { type: 'string' },
-          context: { type: 'string' },
-          relationship_to_sender: { type: ['string', 'null'] },
-          confidence: { type: 'number', minimum: 0, maximum: 1 },
-        },
-        required: ['type', 'name', 'role', 'context', 'relationship_to_sender', 'confidence'],
-        additionalProperties: false,
-      },
-    },
     ai_notes: { type: ['string', 'null'] },
   },
   required: [
@@ -321,7 +292,6 @@ export const METADATA_V2_JSON_SCHEMA = {
     'sender_recipient_relationship',
     'primary_topics',
     'notable_quotes',
-    'entities',
     'ai_notes',
   ],
   additionalProperties: false,

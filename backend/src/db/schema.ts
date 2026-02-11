@@ -188,8 +188,13 @@ export const letters = pgTable(
     emotionalTone: emotionalToneEnum('emotional_tone'),
     senderRecipientRelationship: relationshipEnum('sender_recipient_relationship'),
     primaryTopics: text('primary_topics').array(),
-    // V2 extraction stores full structured output for entity processing
+    // V2 extraction stores full structured output
     metadataV2Json: jsonb('metadata_v2_json'),
+
+    // Entity extraction (Prompt 2 - separate from basic metadata)
+    entityExtractionJson: jsonb('entity_extraction_json'),
+    entityExtractionStatus: jobStatusEnum('entity_extraction_status').notNull().default('PENDING'),
+    entityExtractionError: text('entity_extraction_error'),
 
     // Transcript confirmation (gates metadata extraction)
     transcriptConfirmedAt: timestamp('transcript_confirmed_at', { withTimezone: true }),

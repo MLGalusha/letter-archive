@@ -11,6 +11,7 @@ import {
   type RelationshipType,
 } from '../db/index.js';
 import type { MetadataV2 } from '../ai/schemas/metadataV2.js';
+import type { EntityExtraction } from '../ai/schemas/entityExtraction.js';
 
 export interface LetterIdentity {
   collectionId: string;
@@ -284,6 +285,32 @@ export async function updateMetadataV2(
   // Set two-track content status to AI_DRAFT when AI completes
   if (status === 'SUCCESS') {
     updates.metadataContentStatus = 'AI_DRAFT';
+  }
+
+  await db.update(letters).set(updates).where(eq(letters.id, letterId));
+}
+
+/**
+ * Updates entity extraction results (Prompt 2) for a letter.
+ * Tracked separately from basic metadata to allow independent retry.
+ */
+export async function updateEntityExtraction(
+  letterId: string,
+  status: JobStatus,
+  entityData?: EntityExtraction,
+  error?: string | null
+): Promise<void> {
+  const updates: Partial<Letter> = {
+    entityExtractionStatus: status,
+    updatedAt: new Date(),
+  };
+
+  if (entityData) {
+    updates.entityExtractionJson = entityData;
+  }
+
+  if (error !== undefined) {
+    updates.entityExtractionError = error;
   }
 
   await db.update(letters).set(updates).where(eq(letters.id, letterId));

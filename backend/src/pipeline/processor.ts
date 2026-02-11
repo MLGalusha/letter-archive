@@ -48,11 +48,12 @@ export async function processMetadata(letterId: string): Promise<void> {
     return;
   }
 
-  // Only process if transcript is confirmed and metadata is pending
+  // Only process if workflow is TRANSCRIBED and metadata is pending
+  // Note: transcriptConfirmedAt check is handled by the calling endpoint,
+  // which may allow bypassing confirmation with user approval
   if (
     letter.workflow === 'TRANSCRIBED' &&
-    letter.metadataStatus === 'PENDING' &&
-    letter.transcriptConfirmedAt !== null
+    letter.metadataStatus === 'PENDING'
   ) {
     console.log(`Processing metadata for letter ${letterId}`);
     // Use V2 extraction (Responses API with structured outputs)

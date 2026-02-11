@@ -8,6 +8,7 @@ import {
   type ParsedFilename,
 } from "../../utils/filename-parser";
 import { Button, ConfirmDialog } from "../../components/common";
+import AdminLayout from "../../components/AdminLayout/AdminLayout";
 import "./UploadLetterPage.css";
 
 // ============================================================================
@@ -1198,7 +1199,40 @@ export default function UploadLetterPage() {
       (editState.selectedCollection === "new" &&
         editState.newCollectionCode.length > 0));
 
+  const importDropdown = (
+    <div className="upload-dropdown">
+      <Button
+        icon="plus"
+        active={uploadMenuOpen}
+        onClick={() => setUploadMenuOpen(!uploadMenuOpen)}
+      >
+        Import
+      </Button>
+      {uploadMenuOpen && (
+        <div className="upload-menu">
+          <button
+            onClick={() => {
+              handleSelectFiles();
+              setUploadMenuOpen(false);
+            }}
+          >
+            Files
+          </button>
+          <button
+            onClick={() => {
+              handleSelectFolder();
+              setUploadMenuOpen(false);
+            }}
+          >
+            Folder
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
+    <AdminLayout title="Upload Letters" headerActions={importDropdown}>
     <div
       className={`upload-letter-page ${editState.active ? "edit-mode" : ""}`}
     >
@@ -1222,63 +1256,58 @@ export default function UploadLetterPage() {
         className="hidden-input"
       />
 
-      {/* Header */}
-      <header className="upload-header">
-        <div className="header-title-group">
-          <h1>Upload Letters</h1>
-          {images.length > 0 && (
-            <div className="header-stats">
-              <span>{stats.collections} collection{stats.collections !== 1 ? 's' : ''}</span>
-              <span className="stat-divider">·</span>
-              <span>{stats.letters} letter{stats.letters !== 1 ? 's' : ''}</span>
-              <span className="stat-divider">·</span>
-              <span>{stats.images} image{stats.images !== 1 ? 's' : ''}</span>
-              {stats.uncategorized > 0 && (
-                <>
-                  <span className="stat-divider">·</span>
-                  <span className="uncategorized-stat">{stats.uncategorized} uncategorized</span>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+      {/* Content toolbar */}
+      {images.length > 0 && (
+        <div className="upload-toolbar">
+          <div className="header-stats">
+            <span>{stats.collections} collection{stats.collections !== 1 ? 's' : ''}</span>
+            <span className="stat-divider">·</span>
+            <span>{stats.letters} letter{stats.letters !== 1 ? 's' : ''}</span>
+            <span className="stat-divider">·</span>
+            <span>{stats.images} image{stats.images !== 1 ? 's' : ''}</span>
+            {stats.uncategorized > 0 && (
+              <>
+                <span className="stat-divider">·</span>
+                <span className="uncategorized-stat">{stats.uncategorized} uncategorized</span>
+              </>
+            )}
+          </div>
 
-        <div className="header-actions">
-          {editState.active && (
-            <span className="selected-count">{editState.selectedImageIds.size} selected</span>
-          )}
+          <div className="header-actions">
+            {editState.active && (
+              <span className="selected-count">{editState.selectedImageIds.size} selected</span>
+            )}
 
-          {editState.active && editState.selectedCollection === "new" && (
-            <>
-              <span className="collection-label">Collection #:</span>
-              <input
-                type="text"
-                className="collection-input"
-                value={editState.newCollectionCode}
-                onChange={(e) => handleNewCollectionCodeChange(e.target.value)}
-                placeholder="001"
-                maxLength={3}
-              />
-            </>
-          )}
+            {editState.active && editState.selectedCollection === "new" && (
+              <>
+                <span className="collection-label">Collection #:</span>
+                <input
+                  type="text"
+                  className="collection-input"
+                  value={editState.newCollectionCode}
+                  onChange={(e) => handleNewCollectionCodeChange(e.target.value)}
+                  placeholder="001"
+                  maxLength={3}
+                />
+              </>
+            )}
 
-          {editState.active && (
-            <Button variant="primary" disabled={!canAdd} onClick={handleAddToCollection}>
-              Add
-            </Button>
-          )}
+            {editState.active && (
+              <Button variant="primary" disabled={!canAdd} onClick={handleAddToCollection}>
+                Add
+              </Button>
+            )}
 
-          {uncategorizedImages.length > 0 && (
-            <Button
-              icon={editState.active ? "check" : "edit"}
-              onClick={toggleEditMode}
-              active={editState.active}
-            >
-              {editState.active ? "Done" : "Organize"}
-            </Button>
-          )}
+            {uncategorizedImages.length > 0 && (
+              <Button
+                icon={editState.active ? "check" : "edit"}
+                onClick={toggleEditMode}
+                active={editState.active}
+              >
+                {editState.active ? "Done" : "Organize"}
+              </Button>
+            )}
 
-          {images.length > 0 && (
             <Button
               icon="upload"
               disabled={uploading}
@@ -1288,43 +1317,9 @@ export default function UploadLetterPage() {
                 ? `${uploadProgress.current}/${uploadProgress.total}`
                 : "Upload All"}
             </Button>
-          )}
-
-          <div className="upload-dropdown">
-            <Button
-              icon="plus"
-              active={uploadMenuOpen}
-              onClick={() => setUploadMenuOpen(!uploadMenuOpen)}
-            >
-              Import
-            </Button>
-            {uploadMenuOpen && (
-              <div className="upload-menu">
-                <button
-                  onClick={() => {
-                    handleSelectFiles();
-                    setUploadMenuOpen(false);
-                  }}
-                >
-                  Files
-                </button>
-                <button
-                  onClick={() => {
-                    handleSelectFolder();
-                    setUploadMenuOpen(false);
-                  }}
-                >
-                  Folder
-                </button>
-              </div>
-            )}
           </div>
-
-          <Button icon="back" onClick={() => navigate("/admin")}>
-            Back
-          </Button>
         </div>
-      </header>
+      )}
 
       <div className="upload-content">
         {/* Upload Success Banner */}
@@ -1349,133 +1344,123 @@ export default function UploadLetterPage() {
           </div>
         )}
 
-        {images.length === 0 ? (
-          <div className="empty-state">
-            <h2>Upload Letter Images</h2>
-            <p className="empty-state-subtitle">
-              Get started by adding images to organize into collections
-            </p>
-
-            <div className="guide-section">
-              <h3>Naming Format</h3>
-              <code className="filename-example">003-18860314-L01-01.jpg</code>
-              <div className="format-breakdown">
-                <span><strong>003</strong> — Collection (3 digits)</span>
-                <span><strong>18860314</strong> — Date YYYYMMDD (use X for unknown)</span>
-                <span><strong>L</strong> — Type: L=Letter, P=Photo, E=Ephemera, V=Voice, A=Article, D=Diary, C=Cover, N=Card, T=Telegram</span>
-                <span><strong>01</strong> — Sequence number</span>
-                <span><strong>01</strong> — Page number (optional)</span>
-              </div>
+        {/* Collections Section */}
+        {collections.length > 0 && (
+          <div className="collections-section">
+            <h2>Collections</h2>
+            <div className="collection-grid">
+              {collections.map((collection) => (
+                <CollectionCard
+                  key={collection.collectionCode}
+                  collection={collection}
+                  isSelected={
+                    editState.selectedCollection ===
+                    collection.collectionCode
+                  }
+                  editMode={editState.active}
+                  onSelect={() =>
+                    handleCollectionSelect(collection.collectionCode)
+                  }
+                  onClick={() => setOpenCollection(collection)}
+                  onDelete={() => handleDeleteCollection(collection.collectionCode)}
+                />
+              ))}
+              {editState.active && (
+                <div
+                  className={`collection-card new-collection ${editState.selectedCollection === "new" ? "selected" : ""}`}
+                  onClick={handleNewCollectionSelect}
+                >
+                  <div className="collection-code">
+                    <span className="new-collection-icon">+</span>
+                    New Collection
+                  </div>
+                  {editState.selectedCollection === "new" && (
+                    <div className="selected-badge">Selected</div>
+                  )}
+                </div>
+              )}
             </div>
+          </div>
+        )}
 
-            <div className="guide-section">
-              <h3>How to Use</h3>
-              <div className="guide-steps">
-                <div className="guide-step">
-                  <span className="step-number">1</span>
-                  <div>
-                    <strong>Upload images</strong>
-                    <p>Click the upload icon and select files or a folder. Images appear in the Uncategorized section below.</p>
-                  </div>
-                </div>
-                <div className="guide-step">
-                  <span className="step-number">2</span>
-                  <div>
-                    <strong>Organize with Edit mode</strong>
-                    <p>Select images, choose or create a collection, then click "Add to Collection".</p>
-                  </div>
-                </div>
-                <div className="guide-step">
-                  <span className="step-number">3</span>
-                  <div>
-                    <strong>Save to archive</strong>
-                    <p>Click "Upload All" to save your organized letters.</p>
-                  </div>
-                </div>
+        {/* New Collection Card (when no collections exist but in edit mode) */}
+        {collections.length === 0 && editState.active && (
+          <div className="collections-section">
+            <h2>Collections</h2>
+            <div className="collection-grid">
+              <div
+                className={`collection-card new-collection ${editState.selectedCollection === "new" ? "selected" : ""}`}
+                onClick={handleNewCollectionSelect}
+              >
+                <div className="new-collection-icon">+</div>
+                <div className="collection-code">New Collection</div>
+                {editState.selectedCollection === "new" && (
+                  <div className="selected-badge">Selected</div>
+                )}
               </div>
             </div>
           </div>
-        ) : (
-          <>
-            {/* Collections Section */}
-            {collections.length > 0 && (
-              <div className="collections-section">
-                <h2>Collections</h2>
-                <div className="collection-grid">
-                  {collections.map((collection) => (
-                    <CollectionCard
-                      key={collection.collectionCode}
-                      collection={collection}
-                      isSelected={
-                        editState.selectedCollection ===
-                        collection.collectionCode
-                      }
-                      editMode={editState.active}
-                      onSelect={() =>
-                        handleCollectionSelect(collection.collectionCode)
-                      }
-                      onClick={() => setOpenCollection(collection)}
-                      onDelete={() => handleDeleteCollection(collection.collectionCode)}
-                    />
-                  ))}
-                  {editState.active && (
-                    <div
-                      className={`collection-card new-collection ${editState.selectedCollection === "new" ? "selected" : ""}`}
-                      onClick={handleNewCollectionSelect}
-                    >
-                      <div className="collection-code">
-                        <span className="new-collection-icon">+</span>
-                        New Collection
-                      </div>
-                      {editState.selectedCollection === "new" && (
-                        <div className="selected-badge">Selected</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* New Collection Card (when no collections exist but in edit mode) */}
-            {collections.length === 0 && editState.active && (
-              <div className="collections-section">
-                <h2>Collections</h2>
-                <div className="collection-grid">
-                  <div
-                    className={`collection-card new-collection ${editState.selectedCollection === "new" ? "selected" : ""}`}
-                    onClick={handleNewCollectionSelect}
-                  >
-                    <div className="new-collection-icon">+</div>
-                    <div className="collection-code">New Collection</div>
-                    {editState.selectedCollection === "new" && (
-                      <div className="selected-badge">Selected</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Uncategorized Section */}
-            {uncategorizedImages.length > 0 && (
-              <UncategorizedCarousel
-                images={uncategorizedImages}
-                editState={editState}
-                onImageSelect={handleImageSelect}
-                onViewImage={handleViewImage}
-                onDeleteImage={handleDeleteUncategorizedImage}
-              />
-            )}
-
-            {/* Message */}
-            {message && (
-              <div
-                className={`message ${message.includes("Successfully") ? "success" : "error"}`}
-              >
-                {message}
-              </div>
-            )}
-          </>
         )}
+
+        {/* Uncategorized Section */}
+        {uncategorizedImages.length > 0 && (
+          <UncategorizedCarousel
+            images={uncategorizedImages}
+            editState={editState}
+            onImageSelect={handleImageSelect}
+            onViewImage={handleViewImage}
+            onDeleteImage={handleDeleteUncategorizedImage}
+          />
+        )}
+
+        {/* Message */}
+        {message && (
+          <div
+            className={`message ${message.includes("Successfully") ? "success" : "error"}`}
+          >
+            {message}
+          </div>
+        )}
+
+        {/* Guide sections */}
+        <div className="guide-section">
+          <h3>Naming Format</h3>
+          <code className="filename-example">003-18860314-L01-01.jpg</code>
+          <div className="format-breakdown">
+            <span><strong>003</strong> — Collection (3 digits)</span>
+            <span><strong>18860314</strong> — Date YYYYMMDD (use X for unknown)</span>
+            <span><strong>L</strong> — Type: L=Letter, P=Photo, E=Ephemera, V=Voice, A=Article, D=Diary, C=Cover, N=Card, T=Telegram</span>
+            <span><strong>01</strong> — Sequence number</span>
+            <span><strong>01</strong> — Page number (optional)</span>
+          </div>
+        </div>
+
+        <div className="guide-section">
+          <h3>How to Use</h3>
+          <div className="guide-steps">
+            <div className="guide-step">
+              <span className="step-number">1</span>
+              <div>
+                <strong>Upload images</strong>
+                <p>Click the upload icon and select files or a folder. Images appear in the Uncategorized section below.</p>
+              </div>
+            </div>
+            <div className="guide-step">
+              <span className="step-number">2</span>
+              <div>
+                <strong>Organize with Edit mode</strong>
+                <p>Select images, choose or create a collection, then click "Add to Collection".</p>
+              </div>
+            </div>
+            <div className="guide-step">
+              <span className="step-number">3</span>
+              <div>
+                <strong>Save to archive</strong>
+                <p>Click "Upload All" to save your organized letters.</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Collection Modal */}
@@ -1618,5 +1603,6 @@ export default function UploadLetterPage() {
         onCancel={handleCancelDelete}
       />
     </div>
+    </AdminLayout>
   );
 }

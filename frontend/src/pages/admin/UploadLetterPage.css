@@ -3,7 +3,6 @@
    ============================================================================ */
 
 .upload-letter-page {
-  min-height: 100vh;
   background: var(--bg);
 }
 
@@ -17,31 +16,16 @@
 }
 
 /* ============================================================================
-   Header
+   Content Toolbar
    ============================================================================ */
 
-.upload-header {
-  background: var(--bg-light);
-  border-bottom: solid 1px var(--border);
-  padding: 0.5rem var(--spacing-lg);
+.upload-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 1px 3px hsla(0, 0%, 0%, 0.1);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.upload-header h1 {
-  margin: 0;
-  font-size: 1.25rem;
-}
-
-.header-title-group {
-  display: flex;
-  align-items: baseline;
-  gap: var(--spacing-md);
+  padding: 0.5rem var(--spacing-lg);
+  border-bottom: solid 1px var(--border);
+  background: var(--bg-light);
 }
 
 .header-stats {
@@ -344,72 +328,15 @@
   background: var(--bg-light);
 }
 
-/* ============================================================================
-   Empty State
-   ============================================================================ */
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: var(--spacing-xl) var(--spacing-md);
-  text-align: center;
-  min-height: 400px;
-}
-
-.empty-state h2 {
-  margin: 0 0 var(--spacing-xs) 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.empty-state-subtitle {
-  color: var(--text-muted);
-  margin: 0 0 var(--spacing-lg) 0;
-  font-size: var(--font-base);
-}
-
-.empty-state-steps {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-  text-align: left;
-  max-width: 400px;
-}
-
-.step {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-sm);
-  color: var(--text);
-}
-
-.step-number {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--text);
-  color: var(--bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--font-sm);
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
 /* Guide Sections */
 .guide-section {
-  width: 100%;
-  max-width: 500px;
   background: var(--bg-light);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--spacing-md);
-  margin-bottom: var(--spacing-md);
   text-align: left;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
 .guide-section h3 {

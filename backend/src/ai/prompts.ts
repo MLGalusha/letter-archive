@@ -261,6 +261,10 @@ export function buildMetadataUserPrompt(
 // ============================================================================
 
 import { PRIMARY_TOPICS } from './schemas/metadataV2.js';
+import {
+  PERSON_RELATIONSHIP_TYPES,
+  PERSON_PLACE_CONNECTION_TYPES,
+} from './schemas/entityExtraction.js';
 
 // ============================================================================
 // CONTROLLED VOCABULARIES WITH DEFINITIONS
@@ -470,12 +474,6 @@ notable_quotes (1-3):
 - Select memorable, representative quotes from the letter
 - Each quote: exact text, brief context explaining significance, position in letter
 
-entities:
-- Extract ALL people and places mentioned in BOTH the letter AND any extra content (envelopes, telegrams, etc.)
-- For people: type="person", role=sender/recipient/mentioned, include relationship_to_sender if known
-- For places: type="place", role=written_from/mentioned/destination
-- IMPORTANT: Also extract entities from the extra content section if present (e.g., addresses on envelopes, names in telegrams)
-
 ai_notes:
 - Observations, hunches, and connections that may help the admin review this letter
 - Note potential name connections (e.g., "Jimmie may be same person as James C. Kawler Jr. mentioned in telegram")
@@ -518,12 +516,6 @@ Extracted metadata:
   "notable_quotes": [
     { "text": "Please, please give me one more month.", "context": "Desperate plea for more time", "position": "middle" },
     { "text": "George doesn't know you like I do.", "context": "Comparing himself to rival suitor", "position": "middle" }
-  ],
-  "entities": [
-    { "type": "person", "name": "Molly", "role": "recipient", "context": "The woman he loves", "relationship_to_sender": "romantic-partner", "confidence": 0.95 },
-    { "type": "person", "name": "George", "role": "mentioned", "context": "Molly's other suitor", "relationship_to_sender": null, "confidence": 0.9 },
-    { "type": "person", "name": "Barbara", "role": "mentioned", "context": "Molly's daughter in school", "relationship_to_sender": null, "confidence": 0.85 },
-    { "type": "place", "name": "Stockport Road", "role": "mentioned", "context": "Where they walked together", "relationship_to_sender": null, "confidence": 0.95 }
   ],
   "ai_notes": "• Barbara appears to be Molly's daughter - suggests Molly may be a widow or divorced\n• Stockport Road is in Manchester, UK - sender mentions 'flying over' suggesting transatlantic correspondence\n• The unsigned closing 'Your devoted admirer' makes sender identification difficult"
 }
@@ -575,6 +567,310 @@ export function buildMetadataV2UserPrompt(
   }
 
   prompt += '\n\nExtract metadata following the schema. Return JSON only.';
+
+  return prompt;
+}
+
+// ============================================================================
+// ENTITY EXTRACTION (Prompt 2 - People, Places, Relationships)
+// ============================================================================
+
+/**
+ * Build relationship type documentation for entity extraction prompt.
+ * Uses bidirectional types (parent-child, employer-employee) from personRelationshipTypeEnum.
+ */
+const RELATIONSHIP_TYPE_DOCS: Record<string, { definition: string; indicators: string[] }> = {
+  'spouse': {
+    definition: 'Married couple',
+    indicators: ['my wife', 'my husband', 'Mrs.', 'married'],
+  },
+  'fiancé/fiancée': {
+    definition: 'Engaged to be married',
+    indicators: ['betrothed', 'future wife', 'engaged'],
+  },
+  'romantic-partner': {
+    definition: 'Romantic relationship, not married or engaged',
+    indicators: ['sweetheart', 'darling', 'my love', 'courting'],
+  },
+  'parent-child': {
+    definition: 'Parent and child relationship (either direction)',
+    indicators: ['my son', 'my daughter', 'my father', 'my mother', 'papa', 'mama'],
+  },
+  'sibling': {
+    definition: 'Brothers or sisters',
+    indicators: ['my brother', 'my sister', 'sis'],
+  },
+  'grandparent-grandchild': {
+    definition: 'Grandparent and grandchild (either direction)',
+    indicators: ['grandma', 'grandpa', 'grandmother', 'grandfather', 'grandchild'],
+  },
+  'aunt-uncle-niece-nephew': {
+    definition: 'Aunt/uncle and niece/nephew (either direction)',
+    indicators: ['my aunt', 'my uncle', 'my niece', 'my nephew'],
+  },
+  'cousin': {
+    definition: 'Cousin relationship',
+    indicators: ['my cousin', 'coz'],
+  },
+  'in-law': {
+    definition: 'Related by marriage',
+    indicators: ['mother-in-law', 'father-in-law', 'sister-in-law', 'brother-in-law'],
+  },
+  'friend': {
+    definition: 'Close personal friend',
+    indicators: ['my friend', 'old friend', 'dear friend'],
+  },
+  'acquaintance': {
+    definition: 'Known person, not close',
+    indicators: ['Mr.', 'Mrs.', 'formal address'],
+  },
+  'business-associate': {
+    definition: 'Professional or business relationship',
+    indicators: ['colleague', 'partner', 'business'],
+  },
+  'employer-employee': {
+    definition: 'Employment relationship (either direction)',
+    indicators: ['my employer', 'my boss', 'works for'],
+  },
+  'unknown': {
+    definition: 'Relationship cannot be determined',
+    indicators: [],
+  },
+};
+
+function buildEntityRelationshipTypeDocs(): string {
+  const lines: string[] = [];
+  for (const [key, info] of Object.entries(RELATIONSHIP_TYPE_DOCS)) {
+    const indicators = info.indicators.length > 0
+      ? ` (look for: ${info.indicators.join(', ')})`
+      : '';
+    lines.push(`  - "${key}": ${info.definition}${indicators}`);
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Entity Extraction System Prompt (Prompt 2)
+ *
+ * Extracts rich profiles of people and places, discovers relationships
+ * between entities, and maps person-to-place connections.
+ */
+export const ENTITY_EXTRACTION_SYSTEM_PROMPT = `You are an expert archivist performing deep entity extraction from historical letter transcriptions. Your goal is to build rich, detailed profiles of every person and place mentioned.
+
+<guidelines>
+- Extract ALL people and places from BOTH the letter AND any extra content (envelopes, telegrams, ephemera)
+- Be thorough: capture every name, nickname, alias, and place reference
+- For each entity, gather ALL available information from the letter text
+- Confidence scores: 0.9+ = explicit in text, 0.7-0.9 = strongly implied, 0.5-0.7 = inferred
+- NEVER fabricate information not present in the text
+- Preserve exact names and spellings as written in the letter
+</guidelines>
+
+<people_instructions>
+For EACH person mentioned (sender, recipient, or anyone discussed):
+
+name: The primary name used in the letter (exact spelling)
+aliases: Any other names, nicknames, or forms of address used for this person in the letter (e.g., if "James" is also called "Jimmie" or "J.C.")
+role: "sender", "recipient", or "mentioned"
+relationship_to_sender: Their relationship to the letter writer (e.g., "romantic-partner", "daughter", "friend") or null if unknown
+details: An array of life details discovered in the letter. Each detail has:
+  - detail: The specific information (e.g., "Works as a coal miner", "Currently ill with fever")
+  - category: One of: "occupation", "age", "health", "location", "education", "personality", "life_event", "family", "financial", "military", "religion", "appearance", "hobby"
+emotional_significance: What this person means emotionally in the context of this letter (e.g., "The sender's great love whom he fears losing", "A child whose wellbeing brings comfort")
+quotes: Every quote or passage in the letter that references or discusses this person. Include:
+  - text: The exact quote from the letter
+  - context: Brief explanation of what this quote reveals about the person
+confidence: How confident you are this person exists based on the text
+</people_instructions>
+
+<places_instructions>
+For EACH place mentioned:
+
+name: The place name as written
+type: "city", "region", "country", "street", "landmark", or "other"
+role: "written_from" (where the letter was written), "mentioned", or "destination" (where recipient lives or letter is sent to)
+why_mentioned: Why this place comes up in the letter (e.g., "Where the sender and recipient walked together", "Location of the recipient's school")
+descriptive_details: Any descriptions of the place from the letter (scenery, conditions, what it's like) or null if none
+associated_people: Names of people connected to this place in the letter
+confidence: How confident you are this place reference is correct
+</places_instructions>
+
+<relationships_instructions>
+Discover ALL person-to-person relationships evidenced in the letter. These are BIDIRECTIONAL (use the types below).
+
+Use EXACTLY these relationship types:
+${buildEntityRelationshipTypeDocs()}
+
+For each relationship:
+- person_a and person_b: Names as written in the letter
+- relationship_type: From the controlled vocabulary above
+- evidence: The quote or reasoning from the letter that reveals this relationship
+- confidence: How certain this relationship is
+
+IMPORTANT: Include relationships between ANY two people, not just relationships to the sender. For example, if the letter mentions "Barbara, Molly's daughter", that's a parent-child relationship between Molly and Barbara.
+</relationships_instructions>
+
+<person_place_connections>
+Map connections between people and places discovered in the letter.
+
+Use EXACTLY these connection types:
+${PERSON_PLACE_CONNECTION_TYPES.map(t => `  - "${t}"`).join('\n')}
+
+For each connection:
+- person_name: Name as written
+- place_name: Place name as written
+- connection_type: From the list above
+- evidence: Quote or reasoning from the letter
+</person_place_connections>
+
+<example>
+Given a letter where the sender writes to "Dearest Molly" about visiting, mentions "George" as a rival suitor, asks about "Barbara" doing well in school, and references walking on "Stockport Road":
+
+{
+  "people": [
+    {
+      "name": "Molly",
+      "aliases": [],
+      "role": "recipient",
+      "relationship_to_sender": "romantic-partner",
+      "details": [
+        { "detail": "Has a daughter named Barbara", "category": "family" },
+        { "detail": "Has another suitor named George", "category": "life_event" },
+        { "detail": "Lives in England (sender offers to 'fly over')", "category": "location" }
+      ],
+      "emotional_significance": "The sender's great love whom he is desperately trying not to lose to another man",
+      "quotes": [
+        { "text": "I am terribly disappointed but I still love you as much as ever.", "context": "Reveals depth of sender's love despite setback" },
+        { "text": "Please, please give me one more month.", "context": "Desperate plea directed at Molly" },
+        { "text": "George doesn't know you like I do.", "context": "Comparing his knowledge of Molly to rival" }
+      ],
+      "confidence": 0.95
+    },
+    {
+      "name": "George",
+      "aliases": [],
+      "role": "mentioned",
+      "relationship_to_sender": null,
+      "details": [
+        { "detail": "Another suitor competing for Molly's affection", "category": "life_event" }
+      ],
+      "emotional_significance": "A rival whom the sender views as inferior in his understanding of Molly",
+      "quotes": [
+        { "text": "George doesn't know you like I do.", "context": "Sender dismissing George as a lesser suitor" }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "name": "Barbara",
+      "aliases": [],
+      "role": "mentioned",
+      "relationship_to_sender": null,
+      "details": [
+        { "detail": "Currently attending school", "category": "education" },
+        { "detail": "Molly's daughter", "category": "family" }
+      ],
+      "emotional_significance": "Someone the sender cares about enough to send greetings, suggesting a warm relationship",
+      "quotes": [
+        { "text": "Tell Barbara I said hello. I hope she is doing well in school.", "context": "Shows sender's interest in Barbara's wellbeing" }
+      ],
+      "confidence": 0.85
+    }
+  ],
+  "places": [
+    {
+      "name": "Stockport Road",
+      "type": "street",
+      "role": "mentioned",
+      "why_mentioned": "Location of a meaningful shared memory between sender and Molly",
+      "descriptive_details": null,
+      "associated_people": ["Molly"],
+      "confidence": 0.95
+    }
+  ],
+  "relationships": [
+    {
+      "person_a": "Molly",
+      "person_b": "Barbara",
+      "relationship_type": "parent-child",
+      "evidence": "Sender asks Molly to 'Tell Barbara I said hello' and hopes 'she is doing well in school', implying Barbara is Molly's daughter living with her",
+      "confidence": 0.85
+    }
+  ],
+  "person_place_connections": [
+    {
+      "person_name": "Molly",
+      "place_name": "Stockport Road",
+      "connection_type": "associated_with",
+      "evidence": "Remember when we walked down Stockport Road together?"
+    }
+  ]
+}
+</example>
+
+<verification>
+Before returning, verify:
+1. ALL people mentioned in the letter are included (sender, recipient, and everyone discussed)
+2. ALL places mentioned are included
+3. Every person has at least one quote referencing them
+4. All names are spelled exactly as in the letter
+5. Relationship types match the controlled vocabulary exactly
+6. Person-place connection types match the controlled vocabulary exactly
+7. Confidence scores reflect actual certainty from the text
+</verification>`;
+
+/**
+ * Build entity extraction user prompt.
+ * Includes the letter text plus basic metadata from Prompt 1 as context.
+ */
+export function buildEntityExtractionUserPrompt(
+  transcriptionText: string,
+  basicMetadata?: {
+    sender?: string | null;
+    recipient?: string | null;
+    senderRecipientRelationship?: string | null;
+    summary?: string | null;
+  },
+  context?: {
+    collectionCode?: string;
+    dateRaw?: string;
+    dateFromFilename?: string | null;
+    extraContentTranscript?: string | null;
+  }
+): string {
+  let prompt = `<letter_transcription>\n${transcriptionText}\n</letter_transcription>`;
+
+  // Include extra content if available
+  if (context?.extraContentTranscript?.trim()) {
+    prompt += `\n\n<extra_content>\nThe following is transcribed text from related items (envelope, telegram, ephemera, etc.) that may provide additional context:\n\n${context.extraContentTranscript}\n</extra_content>`;
+  }
+
+  // Include basic metadata from Prompt 1 as context
+  if (basicMetadata) {
+    const metaParts: string[] = [];
+    if (basicMetadata.sender) metaParts.push(`Sender: ${basicMetadata.sender}`);
+    if (basicMetadata.recipient) metaParts.push(`Recipient: ${basicMetadata.recipient}`);
+    if (basicMetadata.senderRecipientRelationship) {
+      metaParts.push(`Sender-Recipient Relationship: ${basicMetadata.senderRecipientRelationship}`);
+    }
+    if (basicMetadata.summary) metaParts.push(`Summary: ${basicMetadata.summary}`);
+
+    if (metaParts.length > 0) {
+      prompt += `\n\n<basic_metadata>\nThe following metadata was already extracted from this letter:\n${metaParts.join('\n')}\n</basic_metadata>`;
+    }
+  }
+
+  if (context) {
+    const parts: string[] = [];
+    if (context.collectionCode) parts.push(`Collection: ${context.collectionCode}`);
+    if (context.dateRaw) parts.push(`Date string from filename: ${context.dateRaw}`);
+    if (context.dateFromFilename) parts.push(`Parsed date from filename: ${context.dateFromFilename}`);
+
+    if (parts.length > 0) {
+      prompt += `\n\n<context>\n${parts.join('\n')}\n</context>`;
+    }
+  }
+
+  prompt += '\n\nExtract all people, places, relationships, and person-place connections following the schema. Return JSON only.';
 
   return prompt;
 }

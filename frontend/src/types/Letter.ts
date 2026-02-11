@@ -155,6 +155,10 @@ export interface Letter {
   extraContentVerifiedBy?: string;
   // AI notes (observations, suggestions)
   aiNotes?: string;
+  // Entity extraction (Prompt 2)
+  entityExtractionStatus?: string;
+  entityExtractionJson?: unknown;
+  entityExtractionError?: string;
   // Legacy field
   transcriptConfirmedAt?: string;
   createdAt: string;

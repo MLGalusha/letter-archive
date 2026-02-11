@@ -411,6 +411,9 @@ export default function AdminDashboard() {
   const [wasRunning, setWasRunning] = useState(false);
   const [lastCompletedAt, setLastCompletedAt] = useState<number | null>(null);
   const processButtonRef = useRef<HTMLDivElement>(null);
+  const [showUnconfirmedDialog, setShowUnconfirmedDialog] = useState(false);
+  const [unconfirmedCount, setUnconfirmedCount] = useState(0);
+  const [pendingMetadataIds, setPendingMetadataIds] = useState<string[]>([]);
 
   const fetchLetters = useCallback(async (showLoading = false, page = pagination.page) => {
     if (showLoading) setLoading(true);
@@ -897,19 +900,37 @@ export default function AdminDashboard() {
     dateTo: dateToFilter ?? undefined,
   });
 
+  const summarizeSkipReasons = (reasons: Array<{ reason: string }>) => {
+    const counts = new Map<string, number>();
+    for (const { reason } of reasons) {
+      counts.set(reason, (counts.get(reason) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([reason, count]) => count > 1 ? `${count} ${reason}` : reason)
+      .join(', ');
+  };
+
   const handleStartTranscription = async () => {
     try {
       setShowProcessMenu(false);
       if (selectedIds.size > 0) {
-        // Process only selected items using bulk endpoint
         const result = await bulkTranscribe(Array.from(selectedIds));
-        showToast(`Queued ${result.queued} letters for transcription${result.skipped > 0 ? ` (${result.skipped} skipped)` : ''}`, 'info');
+        if (result.queued === 0 && result.skipped > 0) {
+          const summary = result.skipReasons ? summarizeSkipReasons(result.skipReasons) : `${result.skipped} skipped`;
+          showToast(`No letters processed: ${summary}`, 'error');
+        } else if (result.skipped > 0) {
+          const summary = result.skipReasons ? summarizeSkipReasons(result.skipReasons) : `${result.skipped} skipped`;
+          const verb = result.processing ? 'Processing' : 'Queued';
+          showToast(`${verb} ${result.queued} for transcription. Skipped: ${summary}`, 'info');
+        } else {
+          const verb = result.processing ? 'Processing' : 'Queued';
+          showToast(`${verb} ${result.queued} letters for transcription`, 'success');
+        }
         setSelectedIds(new Set());
         await fetchLetters();
       } else {
-        // Process all letters matching current filters
         const result = await startTranscription(buildProcessingFilters());
-        showToast(`Started transcription for ${result.total} letters`, 'info');
+        showToast(`Started transcription for ${result.total} letters`, 'success');
       }
     } catch (err) {
       console.error("Failed to start transcription:", err);
@@ -917,24 +938,47 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleStartMetadataExtraction = async () => {
+  const handleStartMetadataExtraction = async (skipConfirmation = false) => {
     try {
       setShowProcessMenu(false);
       if (selectedIds.size > 0) {
-        // Process only selected items using bulk endpoint
-        const result = await bulkExtractMetadata(Array.from(selectedIds));
-        showToast(`Queued ${result.queued} letters for metadata extraction${result.skipped > 0 ? ` (${result.skipped} skipped)` : ''}`, 'info');
+        const ids = skipConfirmation ? pendingMetadataIds : Array.from(selectedIds);
+        const result = await bulkExtractMetadata(ids, skipConfirmation);
+
+        // If there are unconfirmed letters and user hasn't confirmed, show dialog
+        if (result.unconfirmedCount && result.unconfirmedCount > 0 && !skipConfirmation && result.queued === 0) {
+          setUnconfirmedCount(result.unconfirmedCount);
+          setPendingMetadataIds(ids);
+          setShowUnconfirmedDialog(true);
+          return;
+        }
+
+        if (result.queued === 0 && result.skipped > 0) {
+          const summary = result.skipReasons ? summarizeSkipReasons(result.skipReasons) : `${result.skipped} skipped`;
+          showToast(`No letters processed: ${summary}`, 'error');
+        } else if (result.skipped > 0) {
+          const summary = result.skipReasons ? summarizeSkipReasons(result.skipReasons) : `${result.skipped} skipped`;
+          const verb = result.processing ? 'Processing' : 'Queued';
+          showToast(`${verb} ${result.queued} for metadata extraction. Skipped: ${summary}`, 'info');
+        } else {
+          const verb = result.processing ? 'Processing' : 'Queued';
+          showToast(`${verb} ${result.queued} letters for metadata extraction`, 'success');
+        }
         setSelectedIds(new Set());
         await fetchLetters();
       } else {
-        // Process all letters matching current filters
         const result = await startMetadataExtraction(buildProcessingFilters());
-        showToast(`Started metadata extraction for ${result.total} letters`, 'info');
+        showToast(`Started metadata extraction for ${result.total} letters`, 'success');
       }
     } catch (err) {
       console.error("Failed to start metadata extraction:", err);
       showToast(err instanceof Error ? err.message : "Failed to start metadata extraction", 'error');
     }
+  };
+
+  const handleConfirmUnverified = async () => {
+    setShowUnconfirmedDialog(false);
+    await handleStartMetadataExtraction(true);
   };
 
   const handleAnalyzeCollection = async () => {
@@ -1230,12 +1274,12 @@ export default function AdminDashboard() {
               <DropdownItem
                 title="Transcribe"
                 description={selectedIds.size > 0 ? `Process ${selectedIds.size} selected` : "Process UPLOADED letters"}
-                onClick={handleStartTranscription}
+                onClick={() => handleStartTranscription()}
               />
               <DropdownItem
                 title="Extract Metadata"
                 description={selectedIds.size > 0 ? `Process ${selectedIds.size} selected` : "Process TRANSCRIBED letters"}
-                onClick={handleStartMetadataExtraction}
+                onClick={() => handleStartMetadataExtraction()}
               />
               <DropdownItem
                 title="Analyze Collection"
@@ -1837,6 +1881,15 @@ export default function AdminDashboard() {
         loading={bulkActionLoading}
         onConfirm={handleConfirmClearMetadata}
         onCancel={() => setShowClearMetadataModal(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={showUnconfirmedDialog}
+        title="Unverified Transcripts"
+        message={`${unconfirmedCount} of the selected letter${unconfirmedCount === 1 ? ' has an' : 's have'} unverified transcript${unconfirmedCount === 1 ? '' : 's'}. Metadata extraction may be less accurate without verified transcripts. Do you want to proceed anyway?`}
+        confirmText="Extract Anyway"
+        onConfirm={handleConfirmUnverified}
+        onCancel={() => setShowUnconfirmedDialog(false)}
       />
 
       {/* Floating edit toolbar - always visible in edit mode */}

@@ -6,11 +6,12 @@ OpenAI-powered transcription and metadata extraction for historical letters.
 
 ```
 backend/src/ai/
-├── openai.ts           # API client wrapper, transcription, extraction
-├── prompts.ts          # System prompts, controlled vocabularies
-├── resync.ts           # Metadata auditing and regeneration
+├── openai.ts              # API client wrapper, transcription, extraction
+├── prompts.ts             # System prompts, controlled vocabularies
+├── resync.ts              # Metadata auditing and regeneration
 └── schemas/
-    └── metadataV2.ts   # Zod schema + JSON schema for structured outputs
+    ├── metadataV2.ts      # Zod schema for basic metadata (Prompt 1)
+    └── entityExtraction.ts # Zod schema for entity extraction (Prompt 2)
 ```
 
 ## Models Used
@@ -19,7 +20,8 @@ backend/src/ai/
 |------|-------|-------|
 | Transcription | GPT-5.2 | Vision model, base64 images |
 | Metadata V1 | GPT-5.2 | JSON mode (legacy) |
-| Metadata V2 | GPT-5.2 | Responses API + structured outputs |
+| Metadata V2 (Prompt 1) | GPT-5.2 | Basic metadata - structured outputs |
+| Entity Extraction (Prompt 2) | GPT-5.2 | Rich people/places - structured outputs |
 | Resync audit | GPT-4o-mini | Fast, cheap decision model |
 | Resync regen | GPT-5.2 | Quality regeneration |
 
@@ -68,7 +70,7 @@ const result = await extractMetadataV2({
 // result.isStub - true if stub mode
 ```
 
-**V2 Schema fields:**
+**V2 Schema fields (Prompt 1 - basic metadata):**
 - `sender`, `recipient`, `location_written` - with confidence scores
 - `extracted_date`, `extracted_date_confidence`
 - `hook` (max 150 chars), `summary`
@@ -76,7 +78,32 @@ const result = await extractMetadataV2({
 - `sender_recipient_relationship` - enum (spouse, parent, friend, etc.)
 - `primary_topics[]` - from fixed vocabulary
 - `notable_quotes[]` - with position and context
-- `entities[]` - people and places mentioned
+
+## Entity Extraction (Prompt 2)
+
+Runs after basic metadata extraction. Extracts rich profiles of people and places.
+
+```typescript
+import { extractEntities } from './ai/openai.js';
+
+const result = await extractEntities({
+  transcriptionText: '...',
+  basicMetadata: { sender, recipient, senderRecipientRelationship, summary },
+  context: { collectionCode: '009' },
+});
+// result.entities.people[] - rich person profiles with aliases, details, quotes
+// result.entities.places[] - places with type, context, associated people
+// result.entities.relationships[] - person-to-person relationships with evidence
+// result.entities.person_place_connections[] - person-to-place connections
+```
+
+**Entity Schema fields:**
+- `people[]` - name, aliases, role, details (freeform `{detail, category}`), emotional_significance, quotes, confidence
+- `places[]` - name, type, role, why_mentioned, descriptive_details, associated_people, confidence
+- `relationships[]` - person_a, person_b, relationship_type (bidirectional), evidence, confidence
+- `person_place_connections[]` - person_name, place_name, connection_type, evidence
+
+**Two-phase pipeline:** Phase 2 failure is non-fatal — basic metadata from Phase 1 is always preserved. Entity extraction can be re-run independently via `POST /admin/letters/:id/regenerate-entities`.
 
 ## Controlled Vocabularies
 
@@ -184,4 +211,5 @@ All AI functions:
 | [openai.ts](../../backend/src/ai/openai.ts) | API client, transcription, extraction functions |
 | [prompts.ts](../../backend/src/ai/prompts.ts) | System prompts, controlled vocabulary definitions |
 | [resync.ts](../../backend/src/ai/resync.ts) | Two-model audit + regeneration |
-| [schemas/metadataV2.ts](../../backend/src/ai/schemas/metadataV2.ts) | Zod + JSON schema for V2 |
+| [schemas/metadataV2.ts](../../backend/src/ai/schemas/metadataV2.ts) | Zod + JSON schema for basic metadata (Prompt 1) |
+| [schemas/entityExtraction.ts](../../backend/src/ai/schemas/entityExtraction.ts) | Zod + JSON schema for entity extraction (Prompt 2) |

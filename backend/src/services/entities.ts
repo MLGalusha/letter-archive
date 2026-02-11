@@ -24,6 +24,15 @@ import {
   type PersonRelationshipType,
   type VisibilityState,
 } from '../db/index.js';
+import type {
+  EntityExtraction,
+  ExtractedPerson,
+  ExtractedPlace,
+  DiscoveredRelationship,
+} from '../ai/schemas/entityExtraction.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger({ module: 'entity-processing' });
 
 // ============================================================================
 // MATCH THRESHOLDS
@@ -1240,4 +1249,296 @@ export async function getPlaceDetailsForMerge(
     mentionedCount: roleCounts.mentioned,
     destinationCount: roleCounts.destination,
   };
+}
+
+// ============================================================================
+// RICH ENTITY EXTRACTION PROCESSING (Prompt 2)
+// ============================================================================
+
+/**
+ * Process the full entity extraction result from Prompt 2.
+ * Handles each entity independently so one failure doesn't block others.
+ * Returns a summary of what was processed.
+ */
+export async function processEntityExtraction(
+  extraction: EntityExtraction,
+  letterId: string
+): Promise<{ peopleProcessed: number; placesProcessed: number; relationshipsCreated: number; errors: string[] }> {
+  const errors: string[] = [];
+  let peopleProcessed = 0;
+  let placesProcessed = 0;
+  let relationshipsCreated = 0;
+
+  // Track resolved person IDs by name for relationship creation
+  const resolvedPersonIds = new Map<string, string>();
+
+  // Process people
+  for (const person of extraction.people) {
+    try {
+      const personId = await processExtractedPerson(person, letterId);
+      if (personId) {
+        resolvedPersonIds.set(person.name.toLowerCase(), personId);
+        // Also map aliases
+        for (const alias of person.aliases) {
+          resolvedPersonIds.set(alias.toLowerCase(), personId);
+        }
+      }
+      peopleProcessed++;
+    } catch (err) {
+      const msg = `Failed to process person "${person.name}": ${err instanceof Error ? err.message : String(err)}`;
+      log.error({ letterId, personName: person.name, err }, msg);
+      errors.push(msg);
+    }
+  }
+
+  // Process places
+  for (const place of extraction.places) {
+    try {
+      await processExtractedPlace(place, letterId);
+      placesProcessed++;
+    } catch (err) {
+      const msg = `Failed to process place "${place.name}": ${err instanceof Error ? err.message : String(err)}`;
+      log.error({ letterId, placeName: place.name, err }, msg);
+      errors.push(msg);
+    }
+  }
+
+  // Process relationships (after people, so we can resolve names to IDs)
+  for (const rel of extraction.relationships) {
+    try {
+      const created = await autoCreateRelationship(rel, letterId, resolvedPersonIds);
+      if (created) relationshipsCreated++;
+    } catch (err) {
+      const msg = `Failed to create relationship "${rel.person_a}" <-> "${rel.person_b}": ${err instanceof Error ? err.message : String(err)}`;
+      log.error({ letterId, personA: rel.person_a, personB: rel.person_b, err }, msg);
+      errors.push(msg);
+    }
+  }
+
+  log.info(
+    { letterId, peopleProcessed, placesProcessed, relationshipsCreated, errorCount: errors.length },
+    'Entity extraction processing completed'
+  );
+
+  return { peopleProcessed, placesProcessed, relationshipsCreated, errors };
+}
+
+/**
+ * Process a single extracted person from Prompt 2.
+ * Uses existing fuzzy matching with enriched context.
+ * Returns the canonical person ID (new or matched).
+ */
+async function processExtractedPerson(
+  person: ExtractedPerson,
+  letterId: string
+): Promise<string | null> {
+  const matches = await findMatchingPersons(person.name);
+  const bestMatch = matches[0];
+  const aiConfidence = Math.round(person.confidence * 100);
+
+  // Build rich context from details and emotional significance
+  const contextParts: string[] = [];
+  if (person.emotional_significance) contextParts.push(person.emotional_significance);
+  for (const detail of person.details.slice(0, 3)) {
+    contextParts.push(detail.detail);
+  }
+  const richContext = contextParts.join('; ') || null;
+
+  if (bestMatch && bestMatch.similarity >= 85) {
+    // HIGH CONFIDENCE: Auto-link to existing entity
+    await createLetterPerson({
+      letterId,
+      personId: bestMatch.entityId,
+      role: person.role as PersonRole,
+      nameAsWritten: person.name,
+      relationshipToSender: person.relationship_to_sender,
+      context: richContext,
+      confidence: Math.min(aiConfidence, bestMatch.similarity),
+    });
+
+    // Add aliases to canonical person if they're new
+    if (person.aliases.length > 0) {
+      const existing = await getCanonicalPersonById(bestMatch.entityId);
+      if (existing) {
+        const existingAliases = new Set((existing.aliases || []).map(a => a.toLowerCase()));
+        const newAliases = person.aliases.filter(a => !existingAliases.has(a.toLowerCase()));
+        if (newAliases.length > 0) {
+          await updateCanonicalPerson(bestMatch.entityId, {
+            aliases: [...(existing.aliases || []), ...newAliases],
+          });
+        }
+      }
+    }
+
+    return bestMatch.entityId;
+  } else if (bestMatch && bestMatch.similarity >= 50) {
+    // MEDIUM CONFIDENCE: Add to review queue
+    await addToReviewQueue({
+      entityType: 'person',
+      extractedText: person.name,
+      letterId,
+      suggestedEntityId: bestMatch.entityId,
+      context: richContext ?? undefined,
+      confidence: bestMatch.similarity,
+    });
+    return null;
+  } else {
+    // NO MATCH: Create new canonical person
+    const newPersonId = await createCanonicalPerson({
+      canonicalName: person.name,
+      aliases: person.aliases.length > 0 ? person.aliases : undefined,
+    });
+
+    await createLetterPerson({
+      letterId,
+      personId: newPersonId,
+      role: person.role as PersonRole,
+      nameAsWritten: person.name,
+      relationshipToSender: person.relationship_to_sender,
+      context: richContext,
+      confidence: aiConfidence,
+    });
+
+    return newPersonId;
+  }
+}
+
+/**
+ * Process a single extracted place from Prompt 2.
+ * Uses existing fuzzy matching with enriched context.
+ */
+async function processExtractedPlace(
+  place: ExtractedPlace,
+  letterId: string
+): Promise<void> {
+  const matches = await findMatchingPlaces(place.name);
+  const bestMatch = matches[0];
+  const aiConfidence = Math.round(place.confidence * 100);
+
+  // Build rich context
+  const contextParts: string[] = [place.why_mentioned];
+  if (place.descriptive_details) contextParts.push(place.descriptive_details);
+  const richContext = contextParts.join('; ');
+
+  if (bestMatch && bestMatch.similarity >= 85) {
+    // HIGH CONFIDENCE: Auto-link
+    await createLetterPlace({
+      letterId,
+      placeId: bestMatch.entityId,
+      role: place.role as PlaceRole,
+      nameAsWritten: place.name,
+      context: richContext,
+      confidence: Math.min(aiConfidence, bestMatch.similarity),
+    });
+
+    // Update place type if the canonical place doesn't have one
+    const existing = await getCanonicalPlaceById(bestMatch.entityId);
+    if (existing && !existing.placeType && place.type !== 'other') {
+      await updateCanonicalPlace(bestMatch.entityId, {
+        placeType: place.type as PlaceType,
+      });
+    }
+  } else if (bestMatch && bestMatch.similarity >= 50) {
+    // MEDIUM CONFIDENCE: Review queue
+    await addToReviewQueue({
+      entityType: 'place',
+      extractedText: place.name,
+      letterId,
+      suggestedEntityId: bestMatch.entityId,
+      context: richContext,
+      confidence: bestMatch.similarity,
+    });
+  } else {
+    // NO MATCH: Create new canonical place
+    const newPlaceId = await createCanonicalPlace({
+      canonicalName: place.name,
+      placeType: place.type as PlaceType,
+    });
+
+    await createLetterPlace({
+      letterId,
+      placeId: newPlaceId,
+      role: place.role as PlaceRole,
+      nameAsWritten: place.name,
+      context: richContext,
+      confidence: aiConfidence,
+    });
+  }
+}
+
+/**
+ * Auto-create a person-to-person relationship discovered in the letter.
+ * Resolves names to canonical person IDs via the resolved map or fuzzy matching.
+ * Returns true if a relationship was created, false if skipped.
+ */
+async function autoCreateRelationship(
+  rel: DiscoveredRelationship,
+  letterId: string,
+  resolvedPersonIds: Map<string, string>
+): Promise<boolean> {
+  // Try to resolve both person names to canonical IDs
+  let personAId = resolvedPersonIds.get(rel.person_a.toLowerCase());
+  let personBId = resolvedPersonIds.get(rel.person_b.toLowerCase());
+
+  // If not in the resolved map, try fuzzy matching
+  if (!personAId) {
+    const matches = await findMatchingPersons(rel.person_a, 1);
+    if (matches[0] && matches[0].similarity >= 85) {
+      personAId = matches[0].entityId;
+    }
+  }
+  if (!personBId) {
+    const matches = await findMatchingPersons(rel.person_b, 1);
+    if (matches[0] && matches[0].similarity >= 85) {
+      personBId = matches[0].entityId;
+    }
+  }
+
+  // Can't create relationship if either person is unresolved
+  if (!personAId || !personBId) {
+    log.debug(
+      { personA: rel.person_a, personB: rel.person_b, resolvedA: !!personAId, resolvedB: !!personBId },
+      'Skipping relationship: one or both persons unresolved'
+    );
+    return false;
+  }
+
+  // Don't create self-relationships
+  if (personAId === personBId) {
+    return false;
+  }
+
+  // Check if relationship already exists (normalize ordering)
+  const [first, second] = [personAId, personBId].sort();
+  const existing = await db
+    .select({ id: personRelationships.id })
+    .from(personRelationships)
+    .where(
+      and(
+        eq(personRelationships.personAId, first),
+        eq(personRelationships.personBId, second)
+      )
+    )
+    .limit(1);
+
+  if (existing.length > 0) {
+    log.debug(
+      { personA: rel.person_a, personB: rel.person_b },
+      'Relationship already exists, skipping'
+    );
+    return false;
+  }
+
+  // Create the relationship
+  const aiConfidence = Math.round(rel.confidence * 100);
+  await createRelationship({
+    personAId,
+    personBId,
+    relationshipType: rel.relationship_type as PersonRelationshipType,
+    notes: rel.evidence,
+    discoveredInLetterId: letterId,
+    confidence: aiConfidence,
+  });
+
+  return true;
 }

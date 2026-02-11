@@ -130,6 +130,10 @@ export interface FrontendLetter {
   transcriptConfirmedAt?: string;
   createdAt: string;
   updatedAt?: string;
+  // Entity extraction (Prompt 2)
+  entityExtractionStatus?: string;
+  entityExtractionJson?: unknown;
+  entityExtractionError?: string;
   // Linked entities (populated when fetching letter detail)
   linkedPersons?: FrontendLinkedPerson[];
   linkedPlaces?: FrontendLinkedPlace[];
@@ -426,6 +430,10 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
     extraContentVerifiedBy: letter.extraContentVerifiedBy || undefined,
     // AI notes
     aiNotes: letter.aiNotes || undefined,
+    // Entity extraction (Prompt 2)
+    entityExtractionStatus: letter.entityExtractionStatus || undefined,
+    entityExtractionJson: letter.entityExtractionJson || undefined,
+    entityExtractionError: letter.entityExtractionError || undefined,
     // Legacy field
     transcriptConfirmedAt: letter.transcriptConfirmedAt?.toISOString(),
     createdAt: letter.createdAt.toISOString(),

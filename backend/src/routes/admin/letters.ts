@@ -5,7 +5,7 @@ import { db, letters, letterPages, collections, letterVersions, letterPersons, c
 import { getLetterById, resetLetterForProcessing } from '../../services/letters.js';
 import { transformLetterToDTO, transformLetterWithRelatedToDTO, type LetterWithRelations } from '../../dto/index.js';
 import { processLetter, processMetadata, runTranscription } from '../../pipeline/processor.js';
-import { runMetadataExtractionV2 } from '../../pipeline/metadataV2.js';
+import { runMetadataExtractionV2, runEntityExtractionOnly } from '../../pipeline/metadataV2.js';
 import { resyncMetadata, auditMetadata, type MetadataAuditContext, type LinkedPersonInfo } from '../../ai/resync.js';
 import { checkExtraContentForText, transcribeExtraContent } from '../../ai/openai.js';
 import { createLogger } from '../../utils/logger.js';
@@ -730,6 +730,225 @@ router.get('/processing/status', (_req, res) => {
   res.json(processingState);
 });
 
+/**
+ * GET /admin/processing/queue - Get full queue status with active, queued, and recent jobs
+ */
+router.get('/processing/queue', async (_req, res, next) => {
+  try {
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+
+    // Active jobs: any status = RUNNING
+    const activeLetters = await db.query.letters.findMany({
+      where: and(
+        isNull(letters.deletedAt),
+        or(
+          eq(letters.transcriptionStatus, 'RUNNING'),
+          eq(letters.metadataStatus, 'RUNNING'),
+          eq(letters.entityExtractionStatus, 'RUNNING')
+        )
+      ),
+      with: { collection: true },
+    });
+
+    const active = activeLetters.flatMap(l => {
+      const jobs: Array<{
+        letterId: string;
+        letterTitle: string;
+        collectionCode: string;
+        sender: string | null;
+        recipient: string | null;
+        type: string;
+        startedAt: string;
+      }> = [];
+      if (l.transcriptionStatus === 'RUNNING') {
+        jobs.push({
+          letterId: l.id,
+          letterTitle: l.dateRaw,
+          collectionCode: l.collection.collectionCode,
+          sender: l.sender,
+          recipient: l.recipient,
+          type: 'transcription',
+          startedAt: l.updatedAt?.toISOString() ?? now.toISOString(),
+        });
+      }
+      if (l.metadataStatus === 'RUNNING') {
+        jobs.push({
+          letterId: l.id,
+          letterTitle: l.dateRaw,
+          collectionCode: l.collection.collectionCode,
+          sender: l.sender,
+          recipient: l.recipient,
+          type: 'metadata',
+          startedAt: l.updatedAt?.toISOString() ?? now.toISOString(),
+        });
+      }
+      if (l.entityExtractionStatus === 'RUNNING') {
+        jobs.push({
+          letterId: l.id,
+          letterTitle: l.dateRaw,
+          collectionCode: l.collection.collectionCode,
+          sender: l.sender,
+          recipient: l.recipient,
+          type: 'entity_extraction',
+          startedAt: l.updatedAt?.toISOString() ?? now.toISOString(),
+        });
+      }
+      return jobs;
+    });
+
+    // Queued transcription jobs
+    const queuedTranscription = await db.query.letters.findMany({
+      where: and(
+        eq(letters.type, 'L'),
+        eq(letters.workflow, 'UPLOADED'),
+        eq(letters.transcriptionStatus, 'PENDING'),
+        isNull(letters.deletedAt)
+      ),
+      with: { collection: true },
+      orderBy: (l, { asc }) => [asc(l.createdAt)],
+      limit: 50,
+    });
+
+    // Queued metadata jobs
+    const queuedMetadata = await db.query.letters.findMany({
+      where: and(
+        eq(letters.type, 'L'),
+        eq(letters.workflow, 'TRANSCRIBED'),
+        eq(letters.metadataStatus, 'PENDING'),
+        isNotNull(letters.transcriptConfirmedAt),
+        isNull(letters.deletedAt)
+      ),
+      with: { collection: true },
+      orderBy: (l, { asc }) => [asc(l.createdAt)],
+      limit: 50,
+    });
+
+    // Queued entity extraction jobs
+    const queuedEntityExtraction = await db.query.letters.findMany({
+      where: and(
+        eq(letters.type, 'L'),
+        eq(letters.entityExtractionStatus, 'PENDING'),
+        isNull(letters.deletedAt)
+      ),
+      with: { collection: true },
+      orderBy: (l, { asc }) => [asc(l.createdAt)],
+      limit: 50,
+    });
+
+    // Recent completions/failures (last hour, limit 20)
+    // Query letters updated recently that have SUCCESS or FAILED status
+    const recentLetters = await db.query.letters.findMany({
+      where: and(
+        isNull(letters.deletedAt),
+        sql`${letters.updatedAt} >= ${oneHourAgo.toISOString()}`,
+        or(
+          eq(letters.transcriptionStatus, 'SUCCESS'),
+          eq(letters.transcriptionStatus, 'FAILED'),
+          eq(letters.metadataStatus, 'SUCCESS'),
+          eq(letters.metadataStatus, 'FAILED'),
+          eq(letters.entityExtractionStatus, 'SUCCESS'),
+          eq(letters.entityExtractionStatus, 'FAILED')
+        )
+      ),
+      with: { collection: true },
+      orderBy: (l, { desc }) => [desc(l.updatedAt)],
+      limit: 30,
+    });
+
+    const recent: Array<{
+      letterId: string;
+      letterTitle: string;
+      collectionCode: string;
+      type: string;
+      status: string;
+      error?: string;
+      completedAt: string;
+    }> = [];
+
+    // Helper to check if a failure was an admin action (clear/remove from queue)
+    const isAdminCleared = (error: string | null) => error?.includes('from queue by admin');
+
+    for (const l of recentLetters) {
+      const letterUpdatedAt = l.updatedAt?.toISOString() ?? now.toISOString();
+
+      // For transcription, use transcribedAt if available — only show if it's recent
+      // This prevents old transcription entries from appearing when metadata updates the letter
+      const transcriptionTime = l.transcribedAt?.getTime();
+      const transcriptionRecent = transcriptionTime && transcriptionTime >= oneHourAgo.getTime();
+
+      if (transcriptionRecent && (l.transcriptionStatus === 'SUCCESS' || (l.transcriptionStatus === 'FAILED' && !isAdminCleared(l.transcriptionError)))) {
+        recent.push({
+          letterId: l.id,
+          letterTitle: l.dateRaw,
+          collectionCode: l.collection.collectionCode,
+          type: 'transcription',
+          status: l.transcriptionStatus,
+          error: l.transcriptionStatus === 'FAILED' ? (l.transcriptionError ?? undefined) : undefined,
+          completedAt: l.transcribedAt!.toISOString(),
+        });
+      }
+      if (l.metadataStatus === 'SUCCESS' || (l.metadataStatus === 'FAILED' && !isAdminCleared(l.metadataError))) {
+        recent.push({
+          letterId: l.id,
+          letterTitle: l.dateRaw,
+          collectionCode: l.collection.collectionCode,
+          type: 'metadata',
+          status: l.metadataStatus,
+          error: l.metadataStatus === 'FAILED' ? (l.metadataError ?? undefined) : undefined,
+          completedAt: letterUpdatedAt,
+        });
+      }
+      if (l.entityExtractionStatus === 'SUCCESS' || (l.entityExtractionStatus === 'FAILED' && !isAdminCleared(l.entityExtractionError))) {
+        recent.push({
+          letterId: l.id,
+          letterTitle: l.dateRaw,
+          collectionCode: l.collection.collectionCode,
+          type: 'entity_extraction',
+          status: l.entityExtractionStatus,
+          error: l.entityExtractionStatus === 'FAILED' ? (l.entityExtractionError ?? undefined) : undefined,
+          completedAt: letterUpdatedAt,
+        });
+      }
+    }
+
+    // Sort recent by completedAt desc and limit to 20
+    recent.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
+    recent.splice(20);
+
+    const mapQueued = (items: typeof queuedTranscription) =>
+      items.map(l => ({
+        letterId: l.id,
+        letterTitle: l.dateRaw,
+        collectionCode: l.collection.collectionCode,
+        sender: l.sender,
+        recipient: l.recipient,
+        queuedAt: l.updatedAt?.toISOString() ?? l.createdAt.toISOString(),
+      }));
+
+    res.json({
+      active,
+      queued: {
+        transcription: mapQueued(queuedTranscription),
+        metadata: mapQueued(queuedMetadata),
+        entityExtraction: mapQueued(queuedEntityExtraction),
+      },
+      recent,
+      counts: {
+        activeCount: active.length,
+        queuedTranscription: queuedTranscription.length,
+        queuedMetadata: queuedMetadata.length,
+        queuedEntityExtraction: queuedEntityExtraction.length,
+        recentSuccessCount: recent.filter(r => r.status === 'SUCCESS').length,
+        recentFailedCount: recent.filter(r => r.status === 'FAILED').length,
+      },
+      onDemandProcessing: processingState,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Schema for processing filter options (matches frontend StartProcessingOptions)
 const processingFilterSchema = z.object({
   collectionCode: z.string().optional(),
@@ -1000,6 +1219,200 @@ router.post('/processing/abort', async (req, res, next) => {
 });
 
 // ============================================================================
+// QUEUE MANAGEMENT ENDPOINTS
+// ============================================================================
+
+const queueJobTypeSchema = z.enum(['transcription', 'metadata', 'entity_extraction']);
+
+/**
+ * POST /admin/processing/queue/remove - Remove a letter from the processing queue
+ * Only works for PENDING items (can't cancel RUNNING).
+ */
+router.post('/processing/queue/remove', async (req, res, next) => {
+  try {
+    const schema = z.object({
+      letterId: z.string().uuid(),
+      type: queueJobTypeSchema,
+    });
+    const { letterId, type } = schema.parse(req.body);
+
+    const letter = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+    });
+
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    if (type === 'transcription') {
+      if (letter.transcriptionStatus !== 'PENDING') {
+        res.status(400).json({ error: `Cannot remove: transcription status is ${letter.transcriptionStatus}` });
+        return;
+      }
+      // Transcription PENDING is the default state, no reset needed beyond confirming it stays
+    } else if (type === 'metadata') {
+      if (letter.metadataStatus !== 'PENDING') {
+        res.status(400).json({ error: `Cannot remove: metadata status is ${letter.metadataStatus}` });
+        return;
+      }
+      // Reset to a state where worker won't pick it up: set to SUCCESS with no data or reset attempt count
+      // Since we can't truly "un-queue" from PENDING (it's the default), we mark it as FAILED with a note
+      await db.update(letters).set({
+        metadataStatus: 'FAILED',
+        metadataError: 'Removed from queue by admin',
+        updatedAt: new Date(),
+      }).where(eq(letters.id, letterId));
+    } else if (type === 'entity_extraction') {
+      if (letter.entityExtractionStatus !== 'PENDING') {
+        res.status(400).json({ error: `Cannot remove: entity extraction status is ${letter.entityExtractionStatus}` });
+        return;
+      }
+      await db.update(letters).set({
+        entityExtractionStatus: 'FAILED',
+        entityExtractionError: 'Removed from queue by admin',
+        updatedAt: new Date(),
+      }).where(eq(letters.id, letterId));
+    }
+
+    res.json({ message: 'Removed from queue' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/processing/queue/clear - Clear all queued items of a given type
+ */
+router.post('/processing/queue/clear', async (req, res, next) => {
+  try {
+    const schema = z.object({ type: queueJobTypeSchema });
+    const { type } = schema.parse(req.body);
+
+    let cleared = 0;
+
+    if (type === 'transcription') {
+      const queued = await db.query.letters.findMany({
+        where: and(
+          eq(letters.type, 'L'),
+          eq(letters.workflow, 'UPLOADED'),
+          eq(letters.transcriptionStatus, 'PENDING'),
+          isNull(letters.deletedAt)
+        ),
+        columns: { id: true },
+      });
+      if (queued.length > 0) {
+        await db.update(letters).set({
+          transcriptionStatus: 'FAILED',
+          transcriptionError: 'Cleared from queue by admin',
+          updatedAt: new Date(),
+        }).where(inArray(letters.id, queued.map(l => l.id)));
+        cleared = queued.length;
+      }
+    } else if (type === 'metadata') {
+      const queued = await db.query.letters.findMany({
+        where: and(
+          eq(letters.type, 'L'),
+          eq(letters.workflow, 'TRANSCRIBED'),
+          eq(letters.metadataStatus, 'PENDING'),
+          isNotNull(letters.transcriptConfirmedAt),
+          isNull(letters.deletedAt)
+        ),
+        columns: { id: true },
+      });
+      if (queued.length > 0) {
+        await db.update(letters).set({
+          metadataStatus: 'FAILED',
+          metadataError: 'Cleared from queue by admin',
+          updatedAt: new Date(),
+        }).where(inArray(letters.id, queued.map(l => l.id)));
+        cleared = queued.length;
+      }
+    } else if (type === 'entity_extraction') {
+      const queued = await db.query.letters.findMany({
+        where: and(
+          eq(letters.type, 'L'),
+          eq(letters.entityExtractionStatus, 'PENDING'),
+          isNull(letters.deletedAt)
+        ),
+        columns: { id: true },
+      });
+      if (queued.length > 0) {
+        await db.update(letters).set({
+          entityExtractionStatus: 'FAILED',
+          entityExtractionError: 'Cleared from queue by admin',
+          updatedAt: new Date(),
+        }).where(inArray(letters.id, queued.map(l => l.id)));
+        cleared = queued.length;
+      }
+    }
+
+    res.json({ message: `Cleared ${cleared} items from ${type} queue`, cleared });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/processing/queue/retry - Retry a failed job
+ * Resets status to PENDING so the worker picks it up again.
+ */
+router.post('/processing/queue/retry', async (req, res, next) => {
+  try {
+    const schema = z.object({
+      letterId: z.string().uuid(),
+      type: queueJobTypeSchema,
+    });
+    const { letterId, type } = schema.parse(req.body);
+
+    const letter = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+    });
+
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    if (type === 'transcription') {
+      if (letter.transcriptionStatus !== 'FAILED') {
+        res.status(400).json({ error: `Cannot retry: transcription status is ${letter.transcriptionStatus}` });
+        return;
+      }
+      await db.update(letters).set({
+        transcriptionStatus: 'PENDING',
+        transcriptionError: null,
+        updatedAt: new Date(),
+      }).where(eq(letters.id, letterId));
+    } else if (type === 'metadata') {
+      if (letter.metadataStatus !== 'FAILED') {
+        res.status(400).json({ error: `Cannot retry: metadata status is ${letter.metadataStatus}` });
+        return;
+      }
+      await db.update(letters).set({
+        metadataStatus: 'PENDING',
+        metadataError: null,
+        updatedAt: new Date(),
+      }).where(eq(letters.id, letterId));
+    } else if (type === 'entity_extraction') {
+      if (letter.entityExtractionStatus !== 'FAILED') {
+        res.status(400).json({ error: `Cannot retry: entity extraction status is ${letter.entityExtractionStatus}` });
+        return;
+      }
+      await db.update(letters).set({
+        entityExtractionStatus: 'PENDING',
+        entityExtractionError: null,
+        updatedAt: new Date(),
+      }).where(eq(letters.id, letterId));
+    }
+
+    res.json({ message: `Retrying ${type} for letter ${letterId}` });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
 // BULK OPERATIONS (must be defined before parameterized routes)
 // ============================================================================
 
@@ -1011,6 +1424,7 @@ const bulkLetterIdsSchema = z.object({
  * POST /admin/letters/bulk/transcribe - Queue multiple letters for transcription
  *
  * Only processes L-type letters with workflow='UPLOADED' and at least one page.
+ * Returns detailed skip reasons for any letters that can't be processed.
  */
 router.post('/letters/bulk/transcribe', async (req, res, next) => {
   try {
@@ -1024,40 +1438,106 @@ router.post('/letters/bulk/transcribe', async (req, res, next) => {
 
     req.log.info({ requestedCount: letterIds.length }, 'Bulk transcribe request received');
 
-    // Fetch letters with pages
-    const lettersToProcess = await db.query.letters.findMany({
+    // Fetch ALL requested letters with pages (not pre-filtered) so we can report skip reasons
+    const allRequested = await db.query.letters.findMany({
       where: and(
         inArray(letters.id, letterIds),
-        eq(letters.type, 'L'),
-        eq(letters.workflow, 'UPLOADED'),
         isNull(letters.deletedAt)
       ),
       with: { pages: true },
     });
 
-    // Filter to those with pages and not already running
-    const eligible = lettersToProcess.filter(
-      (l) => l.pages.length > 0 && l.transcriptionStatus !== 'RUNNING'
-    );
+    const foundIds = new Set(allRequested.map(l => l.id));
+    const eligible: typeof allRequested = [];
+    const skipReasons: Array<{ letterId: string; reason: string }> = [];
 
-    // Queue them
-    for (const letter of eligible) {
-      await db.update(letters).set({
-        transcriptionStatus: 'PENDING',
-        transcriptionError: null,
-        updatedAt: new Date(),
-      }).where(eq(letters.id, letter.id));
+    // Report letters not found
+    for (const id of letterIds) {
+      if (!foundIds.has(id)) {
+        skipReasons.push({ letterId: id, reason: 'Letter not found or deleted' });
+      }
     }
 
-    req.log.info(
-      { queued: eligible.length, skipped: letterIds.length - eligible.length },
-      'Bulk transcribe completed'
-    );
+    // Check each letter individually for eligibility
+    for (const letter of allRequested) {
+      if (letter.type !== 'L') {
+        skipReasons.push({ letterId: letter.id, reason: `Type is '${letter.type}' (only type 'L' supported)` });
+      } else if (letter.workflow !== 'UPLOADED') {
+        skipReasons.push({ letterId: letter.id, reason: `Already past upload stage (workflow: ${letter.workflow})` });
+      } else if (letter.pages.length === 0) {
+        skipReasons.push({ letterId: letter.id, reason: 'No page images uploaded' });
+      } else if (letter.transcriptionStatus === 'RUNNING') {
+        skipReasons.push({ letterId: letter.id, reason: 'Transcription already running' });
+      } else {
+        eligible.push(letter);
+      }
+    }
 
-    res.json({
-      queued: eligible.length,
-      skipped: letterIds.length - eligible.length,
-    });
+    if (eligible.length > 0) {
+      if (processingState.isRunning) {
+        // Another batch is already running — queue for later pickup
+        for (const letter of eligible) {
+          await db.update(letters).set({
+            transcriptionStatus: 'PENDING',
+            transcriptionError: null,
+            updatedAt: new Date(),
+          }).where(eq(letters.id, letter.id));
+        }
+        req.log.info(
+          { queued: eligible.length, skipped: skipReasons.length },
+          'Bulk transcribe queued (another batch running)'
+        );
+        res.json({
+          queued: eligible.length,
+          skipped: skipReasons.length,
+          skipReasons,
+          processing: false,
+        });
+      } else {
+        // Set status to PENDING before processing (processLetter checks for this)
+        for (const letter of eligible) {
+          await db.update(letters).set({
+            transcriptionStatus: 'PENDING',
+            transcriptionError: null,
+            updatedAt: new Date(),
+          }).where(eq(letters.id, letter.id));
+        }
+        // Start processing immediately
+        processingState = {
+          isRunning: true,
+          isPaused: false,
+          shouldAbort: false,
+          currentJob: null,
+          completed: 0,
+          failed: 0,
+          total: eligible.length,
+          errors: [],
+          lastCompletedAt: null,
+        };
+        processLettersAsync(eligible.map(l => l.id), 'transcription');
+        req.log.info(
+          { queued: eligible.length, skipped: skipReasons.length },
+          'Bulk transcribe started immediately'
+        );
+        res.json({
+          queued: eligible.length,
+          skipped: skipReasons.length,
+          skipReasons,
+          processing: true,
+        });
+      }
+    } else {
+      req.log.info(
+        { skipped: skipReasons.length },
+        'Bulk transcribe: no eligible letters'
+      );
+      res.json({
+        queued: 0,
+        skipped: skipReasons.length,
+        skipReasons,
+        processing: false,
+      });
+    }
   } catch (error) {
     next(error);
   }
@@ -1067,45 +1547,122 @@ router.post('/letters/bulk/transcribe', async (req, res, next) => {
  * POST /admin/letters/bulk/extract-metadata - Queue multiple letters for metadata extraction
  *
  * Only processes L-type letters with workflow='TRANSCRIBED' and confirmed transcript.
+ * Returns detailed skip reasons for any letters that can't be processed.
  */
 router.post('/letters/bulk/extract-metadata', async (req, res, next) => {
   try {
-    const parseResult = bulkLetterIdsSchema.safeParse(req.body);
+    const bulkMetadataSchema = z.object({
+      letterIds: z.array(z.string().uuid()).min(1),
+      skipConfirmationCheck: z.boolean().optional().default(false),
+    });
+    const parseResult = bulkMetadataSchema.safeParse(req.body);
     if (!parseResult.success) {
       res.status(400).json({ error: 'Invalid request', details: parseResult.error.errors });
       return;
     }
-    const { letterIds } = parseResult.data;
+    const { letterIds, skipConfirmationCheck } = parseResult.data;
 
-    // Fetch eligible letters
-    const lettersToProcess = await db.query.letters.findMany({
+    // Fetch ALL requested letters (not pre-filtered) so we can report skip reasons
+    const allRequested = await db.query.letters.findMany({
       where: and(
         inArray(letters.id, letterIds),
-        eq(letters.type, 'L'),
-        eq(letters.workflow, 'TRANSCRIBED'),
-        isNotNull(letters.transcriptConfirmedAt),
         isNull(letters.deletedAt)
       ),
     });
 
-    // Filter out already running
-    const eligible = lettersToProcess.filter(
-      (l) => l.metadataStatus !== 'RUNNING'
-    );
+    const foundIds = new Set(allRequested.map(l => l.id));
+    const eligible: typeof allRequested = [];
+    const skipReasons: Array<{ letterId: string; reason: string }> = [];
+    let unconfirmedCount = 0;
 
-    // Queue them
-    for (const letter of eligible) {
-      await db.update(letters).set({
-        metadataStatus: 'PENDING',
-        metadataError: null,
-        updatedAt: new Date(),
-      }).where(eq(letters.id, letter.id));
+    // Report letters not found
+    for (const id of letterIds) {
+      if (!foundIds.has(id)) {
+        skipReasons.push({ letterId: id, reason: 'Letter not found or deleted' });
+      }
     }
 
-    res.json({
-      queued: eligible.length,
-      skipped: letterIds.length - eligible.length,
-    });
+    // Check each letter individually for eligibility
+    for (const letter of allRequested) {
+      if (letter.type !== 'L') {
+        skipReasons.push({ letterId: letter.id, reason: `Type is '${letter.type}' (only type 'L' supported)` });
+      } else if (letter.workflow === 'UPLOADED') {
+        skipReasons.push({ letterId: letter.id, reason: 'Needs transcription first (workflow: UPLOADED)' });
+      } else if (letter.workflow !== 'TRANSCRIBED') {
+        skipReasons.push({ letterId: letter.id, reason: `Already processed (workflow: ${letter.workflow})` });
+      } else if (!letter.transcriptConfirmedAt && !skipConfirmationCheck) {
+        unconfirmedCount++;
+        skipReasons.push({ letterId: letter.id, reason: 'Transcript not yet confirmed' });
+      } else if (letter.metadataStatus === 'RUNNING') {
+        skipReasons.push({ letterId: letter.id, reason: 'Metadata extraction already running' });
+      } else {
+        eligible.push(letter);
+      }
+    }
+
+    // If there are unconfirmed letters and user hasn't confirmed, return early
+    // so frontend can show a confirmation dialog
+    if (unconfirmedCount > 0 && !skipConfirmationCheck && eligible.length === 0) {
+      res.json({
+        queued: 0,
+        skipped: skipReasons.length,
+        skipReasons,
+        processing: false,
+        unconfirmedCount,
+      });
+      return;
+    }
+
+    if (eligible.length > 0) {
+      // Set status to PENDING before processing (processMetadata checks for this)
+      for (const letter of eligible) {
+        await db.update(letters).set({
+          metadataStatus: 'PENDING',
+          metadataError: null,
+          updatedAt: new Date(),
+        }).where(eq(letters.id, letter.id));
+      }
+
+      if (processingState.isRunning) {
+        // Another batch is already running — letters are queued as PENDING
+        res.json({
+          queued: eligible.length,
+          skipped: skipReasons.length,
+          skipReasons,
+          processing: false,
+          unconfirmedCount,
+        });
+      } else {
+        // Start processing immediately
+        processingState = {
+          isRunning: true,
+          isPaused: false,
+          shouldAbort: false,
+          currentJob: null,
+          completed: 0,
+          failed: 0,
+          total: eligible.length,
+          errors: [],
+          lastCompletedAt: null,
+        };
+        processLettersAsync(eligible.map(l => l.id), 'metadata');
+        res.json({
+          queued: eligible.length,
+          skipped: skipReasons.length,
+          skipReasons,
+          processing: true,
+          unconfirmedCount,
+        });
+      }
+    } else {
+      res.json({
+        queued: 0,
+        skipped: skipReasons.length,
+        skipReasons,
+        processing: false,
+        unconfirmedCount,
+      });
+    }
   } catch (error) {
     next(error);
   }
@@ -1655,6 +2212,54 @@ router.post('/letters/:letterId/regenerate-metadata', async (req, res, next) => 
 
     // Run metadata extraction immediately
     await runMetadataExtractionV2(letterId);
+
+    // Fetch and return updated letter
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(500).json({ error: 'Failed to fetch updated letter' });
+      return;
+    }
+
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/letters/:letterId/regenerate-entities - Regenerate entity extraction for a letter
+ *
+ * Runs only the entity extraction (Prompt 2) without re-running basic metadata.
+ * Useful when entity extraction failed or needs improvement.
+ */
+router.post('/letters/:letterId/regenerate-entities', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    const existingLetter = await getLetterById(letterId);
+    if (!existingLetter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Must have a transcription
+    if (!existingLetter.transcriptionText) {
+      res.status(400).json({
+        error: 'Letter must have a transcription before extracting entities',
+      });
+      return;
+    }
+
+    // Cannot regenerate while already running
+    if (existingLetter.entityExtractionStatus === 'RUNNING') {
+      res.status(400).json({
+        error: 'Entity extraction is already in progress',
+      });
+      return;
+    }
+
+    // Run entity extraction
+    await runEntityExtractionOnly(letterId);
 
     // Fetch and return updated letter
     const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);

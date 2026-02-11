@@ -475,6 +475,15 @@ entities:
 - For people: type="person", role=sender/recipient/mentioned, include relationship_to_sender if known
 - For places: type="place", role=written_from/mentioned/destination
 - IMPORTANT: Also extract entities from the extra content section if present (e.g., addresses on envelopes, names in telegrams)
+
+ai_notes:
+- Observations, hunches, and connections that may help the admin review this letter
+- Note potential name connections (e.g., "Jimmie may be same person as James C. Kawler Jr. mentioned in telegram")
+- Flag unclear or ambiguous content worth reviewing (e.g., "Unclear if 'John' refers to sender's brother or friend")
+- Suggest possible relationships or context that needs verification
+- Note any interesting historical context or patterns you observe
+- Keep concise - use bullet points
+- Set null if no notable observations
 </field_instructions>
 
 <example>
@@ -515,7 +524,8 @@ Extracted metadata:
     { "type": "person", "name": "George", "role": "mentioned", "context": "Molly's other suitor", "relationship_to_sender": null, "confidence": 0.9 },
     { "type": "person", "name": "Barbara", "role": "mentioned", "context": "Molly's daughter in school", "relationship_to_sender": null, "confidence": 0.85 },
     { "type": "place", "name": "Stockport Road", "role": "mentioned", "context": "Where they walked together", "relationship_to_sender": null, "confidence": 0.95 }
-  ]
+  ],
+  "ai_notes": "• Barbara appears to be Molly's daughter - suggests Molly may be a widow or divorced\n• Stockport Road is in Manchester, UK - sender mentions 'flying over' suggesting transatlantic correspondence\n• The unsigned closing 'Your devoted admirer' makes sender identification difficult"
 }
 </example>
 
@@ -565,6 +575,146 @@ export function buildMetadataV2UserPrompt(
   }
 
   prompt += '\n\nExtract metadata following the schema. Return JSON only.';
+
+  return prompt;
+}
+
+// ============================================================================
+// PERSON BIOGRAPHY GENERATION
+// ============================================================================
+
+/**
+ * System prompt for generating person biographies from letter summaries.
+ * Follows OpenAI Cookbook's structured output patterns.
+ */
+export const BIOGRAPHY_SYSTEM_PROMPT = `You are an expert archivist writing biographical narratives about people who appear in historical letters.
+
+<guidelines>
+- Write in third person, past tense
+- Base ALL content on provided letter summaries and relationships
+- NEVER fabricate information not present in the source material
+- Length should be ADAPTIVE based on available information:
+  - 1-5 letters: 2-3 sentences
+  - 5-15 letters: 1 paragraph
+  - 15+ letters: 2-3 paragraphs
+- Focus on relationships, life events, and personality revealed through letters
+- Use temporal markers when known (e.g., "In 1943...", "During the war...")
+- Include uncertainty markers (e.g., "apparently", "it seems") for inferred content
+</guidelines>
+
+<structure>
+For substantial biographies, organize as:
+1. Opening: Who they were and their key relationships
+2. Middle: Life events and patterns revealed in letters
+3. Closing: Final known status or summary of their role in the correspondence
+</structure>
+
+<verification>
+Before responding, verify:
+1. Every claim is supported by provided letter data
+2. No invented names, dates, or events
+3. Length matches information density
+4. Tone is appropriate for historical archive
+</verification>`;
+
+/**
+ * Build user prompt for biography generation.
+ * Includes person name, relationships, and chronological letter summaries.
+ */
+export function buildBiographyUserPrompt(
+  personName: string,
+  relationships: Array<{ name: string; type: string }>,
+  letterSummaries: Array<{ date: string; summary: string; role: 'sender' | 'recipient' | 'mentioned' }>
+): string {
+  let prompt = `Generate a biography for: ${personName}\n\n`;
+
+  if (relationships.length > 0) {
+    prompt += '<relationships>\n';
+    for (const rel of relationships) {
+      prompt += `- ${rel.type} of ${rel.name}\n`;
+    }
+    prompt += '</relationships>\n\n';
+  }
+
+  prompt += '<letters_chronological>\n';
+  for (const letter of letterSummaries) {
+    prompt += `- ${letter.date} (${letter.role}): ${letter.summary}\n`;
+  }
+  prompt += '</letters_chronological>\n\n';
+
+  prompt += 'Write the biography based ONLY on this information. Do not fabricate any details.';
+  return prompt;
+}
+
+// ============================================================================
+// COLLECTION ANALYSIS
+// ============================================================================
+
+/**
+ * System prompt for analyzing a collection of letters to discover entities and connections.
+ */
+export const COLLECTION_ANALYSIS_SYSTEM_PROMPT = `You are an expert archivist analyzing a collection of historical letters to discover connections between people and places.
+
+<task>
+Analyze all letters in this collection and:
+1. Identify ALL people mentioned (senders, recipients, and mentioned individuals)
+2. Identify ALL places mentioned
+3. Discover relationships between people based on letter content
+4. Flag potential duplicates (same person with different name spellings)
+</task>
+
+<guidelines>
+- Extract exact names as written in letters
+- Note relationship evidence (e.g., "my brother John" → sibling relationship)
+- Flag fuzzy matches for review (e.g., "Jimmie" and "James" may be same person)
+- For places, infer type when possible (city, region, country)
+- Confidence scoring:
+  - 0.85+ = obvious duplicate (same name, minor spelling variation)
+  - 0.50-0.84 = possible duplicate (nicknames, similar names)
+</guidelines>
+
+<output_format>
+Return JSON with this structure:
+{
+  "people": [
+    { "name": "...", "role": "sender|recipient|mentioned", "letterCount": N }
+  ],
+  "places": [
+    { "name": "...", "type": "city|region|country|street|landmark|other", "letterCount": N }
+  ],
+  "relationships": [
+    { "person1": "...", "person2": "...", "type": "...", "evidence": "..." }
+  ],
+  "potentialDuplicates": [
+    { "name1": "...", "name2": "...", "confidence": 0.0-1.0, "reason": "..." }
+  ]
+}
+</output_format>`;
+
+/**
+ * Build user prompt for collection analysis.
+ * Includes letter summaries with entity information.
+ */
+export function buildCollectionAnalysisPrompt(
+  letters: Array<{
+    date: string;
+    sender: string | null;
+    recipient: string | null;
+    summary: string | null;
+    hook: string | null;
+  }>
+): string {
+  let prompt = '<collection_letters>\n';
+
+  for (const letter of letters) {
+    prompt += `\n--- Letter (${letter.date}) ---\n`;
+    if (letter.sender) prompt += `From: ${letter.sender}\n`;
+    if (letter.recipient) prompt += `To: ${letter.recipient}\n`;
+    if (letter.summary) prompt += `Summary: ${letter.summary}\n`;
+  }
+
+  prompt += '</collection_letters>\n\n';
+  prompt += 'Analyze this collection and extract all entities, relationships, and potential duplicates. Return JSON only.';
 
   return prompt;
 }

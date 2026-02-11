@@ -508,6 +508,7 @@ function generateStubMetadataV2(params: ExtractMetadataV2Params): ExtractMetadat
       primary_topics: [],
       notable_quotes: [],
       entities: [],
+      ai_notes: null,
     },
     isStub: true,
   };

@@ -1,54 +1,23 @@
 .places-page {
-  min-height: 100vh;
+  height: 100%;
   background: var(--bg);
-}
-
-.places-page .page-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  background: var(--bg-light);
-  border-bottom: solid 1px var(--border);
-  padding: var(--spacing-sm) var(--spacing-lg);
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 1px 3px hsla(0, 0%, 0%, 0.1);
+  flex-direction: column;
 }
 
-.places-page .page-header h1 {
-  margin: 0;
-  font-size: 1.5rem;
-  flex: 1;
-  text-align: center;
-}
-
-.places-page .back-link {
+.places-page .page-actions {
   display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: 0.5rem 1rem;
-  background: var(--bg);
-  color: var(--text);
-  text-decoration: none;
-  border: solid 1px var(--border);
-  border-radius: var(--radius-md);
-  font-size: var(--font-sm);
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.places-page .back-link:hover {
+  justify-content: flex-end;
+  padding: var(--spacing-sm) var(--spacing-md);
   background: var(--bg-light);
+  border-bottom: 1px solid var(--border);
 }
 
 /* Page content - split view */
 .places-page .page-content {
   display: flex;
-  margin-top: 53px;
-  height: calc(100vh - 53px);
+  flex: 1;
+  overflow: hidden;
 }
 
 /* Left panel - Places list */
@@ -72,11 +41,67 @@
   border-radius: var(--radius-md);
   font-size: var(--font-sm);
   background: var(--bg);
+  box-sizing: border-box;
 }
 
 .places-page .search-box input:focus {
   outline: none;
   border-color: var(--text-muted);
+}
+
+/* Ensure placeholder text has sufficient contrast in dark mode */
+body.dark .places-page .search-box input::placeholder {
+  color: #9e9e9e !important; /* Ensures 7:1 contrast ratio on dark bg */
+  opacity: 1 !important;
+}
+
+/* Bulk selection controls */
+.places-page .bulk-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: solid 1px var(--border);
+  background: var(--bg);
+}
+
+.places-page .select-all-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  cursor: pointer;
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+
+.places-page .select-all-checkbox input {
+  cursor: pointer;
+}
+
+.places-page .bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.places-page .selected-count {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.places-page .clear-selection-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  cursor: pointer;
+  padding: var(--spacing-xs);
+}
+
+.places-page .clear-selection-btn:hover {
+  color: var(--text);
+  text-decoration: underline;
 }
 
 .places-list {
@@ -85,9 +110,11 @@
 }
 
 .place-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   border-bottom: solid 1px var(--border);
-  cursor: pointer;
   transition: background 0.15s ease;
 }
 
@@ -98,6 +125,24 @@
 .place-item.selected {
   background: #e3f2fd;
   border-left: 3px solid #1976d2;
+}
+
+.place-item.checked {
+  background: #f3e5f5;
+}
+
+.place-item.selected.checked {
+  background: #e3f2fd;
+}
+
+.places-page .item-checkbox {
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.place-content {
+  flex: 1;
+  cursor: pointer;
 }
 
 .place-name {
@@ -134,7 +179,7 @@
 
 .place-type-badge.street {
   background: #fff3e0;
-  color: #e65100;
+  color: #bf360c; /* Darker orange for better contrast */
 }
 
 .place-type-badge.landmark {
@@ -336,4 +381,128 @@
 .places-page .result-similarity {
   font-size: var(--font-xs);
   color: var(--text-muted);
+}
+
+/* Custom checkbox styling */
+.places-page .item-checkbox,
+.places-page .select-all-checkbox input[type="checkbox"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  margin: 0;
+  cursor: pointer;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  position: relative;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.places-page .item-checkbox:hover,
+.places-page .select-all-checkbox input[type="checkbox"]:hover {
+  border-color: var(--text-muted);
+}
+
+.places-page .item-checkbox:checked,
+.places-page .select-all-checkbox input[type="checkbox"]:checked {
+  background: var(--bg-light);
+  border-color: var(--text-muted);
+}
+
+.places-page .item-checkbox:checked::after,
+.places-page .select-all-checkbox input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 8px;
+  border: solid var(--text);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* Dark mode badge adjustments for better contrast */
+body.dark .place-type-badge.street {
+  background: #4e342e;
+  color: #ffcc80;
+}
+
+body.dark .place-type-badge.city {
+  background: #1a237e;
+  color: #90caf9;
+}
+
+body.dark .place-type-badge.region {
+  background: #4a148c;
+  color: #ce93d8;
+}
+
+body.dark .place-type-badge.country {
+  background: #1b5e20;
+  color: #a5d6a7;
+}
+
+body.dark .place-type-badge.landmark {
+  background: #880e4f;
+  color: #f48fb1;
+}
+
+body.dark .place-type-badge.other {
+  background: #37474f;
+  color: #b0bec5;
+}
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  .places-page {
+    overflow-x: hidden;
+  }
+
+  .places-page .page-content {
+    flex-direction: column;
+  }
+
+  .places-list-panel {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    max-height: 40vh;
+  }
+
+  .place-detail-panel {
+    padding: var(--spacing-md);
+  }
+
+  .places-page .detail-header {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .places-page .detail-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .places-page .detail-actions {
+    width: 100%;
+  }
+
+  .places-page .detail-actions button {
+    flex: 1;
+  }
+
+  .places-page .bulk-controls {
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+  }
+
+  .places-page .bulk-actions {
+    flex-wrap: wrap;
+    width: 100%;
+    justify-content: flex-end;
+  }
 }

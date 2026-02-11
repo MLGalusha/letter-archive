@@ -6,6 +6,7 @@
 .split-pane-horizontal {
   display: grid;
   grid-template-columns: var(--first-size) var(--second-size);
+  grid-template-rows: minmax(0, 1fr); /* Prevent row from exceeding container height */
   gap: var(--split-gap, var(--spacing-lg));
   height: 100%;
   position: relative;

@@ -150,3 +150,20 @@ export async function getAdminLetterById(id: string): Promise<Letter> {
 export async function deleteLetter(id: string): Promise<void> {
   await apiDelete(`/admin/letters/${id}`);
 }
+
+/**
+ * Adjacent letters response
+ */
+export interface AdjacentLettersResponse {
+  prev: string | null;
+  next: string | null;
+  position: number;
+  total: number;
+}
+
+/**
+ * Get adjacent (prev/next) letters in the same collection
+ */
+export async function getAdjacentLetters(id: string): Promise<AdjacentLettersResponse> {
+  return apiGet<AdjacentLettersResponse>(`/letters/${id}/adjacent`);
+}

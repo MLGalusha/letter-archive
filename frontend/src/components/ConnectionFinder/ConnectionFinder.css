@@ -1,0 +1,200 @@
+.connection-finder {
+  padding: 16px;
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.finder-header {
+  margin-bottom: 16px;
+}
+
+.finder-header h3 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.finder-header p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.finder-inputs {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.finder-input-group {
+  flex: 1;
+  position: relative;
+}
+
+.finder-input-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.finder-search {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background-color: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.finder-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.finder-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  max-height: 150px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.finder-suggestions li {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.finder-suggestions li:hover {
+  background-color: var(--bg-light);
+}
+
+.finder-suggestions li.no-results {
+  color: var(--text-muted);
+  font-style: italic;
+  cursor: default;
+}
+
+.selected-person {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: var(--bg-light);
+  border-radius: 4px;
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.selected-person .clear-btn {
+  margin-left: auto;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.selected-person .clear-btn:hover {
+  color: var(--text);
+}
+
+.finder-arrow {
+  flex-shrink: 0;
+  padding-top: 26px;
+  font-size: 20px;
+  color: var(--text-muted);
+}
+
+.finder-clear-btn {
+  display: inline-block;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background-color: var(--bg);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.finder-clear-btn:hover {
+  background-color: var(--bg-light);
+}
+
+.finder-loading {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.finder-error {
+  padding: 12px;
+  background-color: #ffebee;
+  border-radius: 4px;
+  color: #c62828;
+  font-size: 14px;
+}
+
+.finder-result {
+  padding: 12px;
+  background-color: var(--bg-light);
+  border-radius: 4px;
+}
+
+.no-connection {
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+}
+
+.connection-path .path-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.path-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.path-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.path-person {
+  font-weight: 500;
+  color: #1976d2;
+}
+
+.path-relation {
+  font-size: 13px;
+  color: var(--text-muted);
+}

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getCollectionByCode, type CollectionWithLetters } from '../api/collections';
 import LetterCard from '../components/LetterCard/LetterCard';
+import Breadcrumb from '../components/Breadcrumb';
 import Footer from '../components/Footer/Footer';
 import './CollectionDetailPage.css';
 
@@ -68,11 +69,14 @@ export default function CollectionDetailPage() {
 
   return (
     <div className="body-layout">
+      <Breadcrumb
+        items={[
+          { label: 'Home', href: '/' },
+          { label: 'Collections', href: '/collections' },
+          { label: collection.title || collection.collectionCode },
+        ]}
+      />
       <div className="collection-detail-public">
-        <button onClick={handleBack} className="back-link">
-          &larr; All Collections
-        </button>
-
         <div className="collection-header-info">
           <span className="collection-code-display">{collection.collectionCode}</span>
           <h1>{collection.title || `Collection ${collection.collectionCode}`}</h1>

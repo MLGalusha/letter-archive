@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button, Icon, Modal } from "../../components/common";
 import { useToast } from "../../contexts/ToastContext";
@@ -7,10 +7,15 @@ import {
   createPlace,
   updatePlace,
   searchPlaces,
+  mergePlaces,
+  bulkMergePlaces,
   type PlaceWithCount,
   type EntityMatch,
 } from "../../api/entities";
 import type { PlaceType } from "../../types/Letter";
+import DuplicateSuggestions from "../../components/DuplicateSuggestions";
+import MergeComparison from "../../components/MergeComparison";
+import BulkMergeModal from "../../components/BulkMergeModal";
 import "./PlacesPage.css";
 
 const PLACE_TYPES: { value: PlaceType; label: string }[] = [
@@ -34,10 +39,23 @@ export default function PlacesPage() {
   // Selected place for detail view
   const [selectedPlace, setSelectedPlace] = useState<PlaceWithCount | null>(null);
 
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkMergeModal, setShowBulkMergeModal] = useState(false);
+  const [bulkMerging, setBulkMerging] = useState(false);
+
+  // Merge comparison state
+  const [showMergeComparison, setShowMergeComparison] = useState(false);
+  const [mergeCompareA, setMergeCompareA] = useState<{ id: string; name: string } | null>(null);
+  const [mergeCompareB, setMergeCompareB] = useState<{ id: string; name: string } | null>(null);
+
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showMergeModal, setShowMergeModal] = useState(false);
+
+  // Refresh trigger for suggestions
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Form state
   const [formName, setFormName] = useState("");
@@ -60,23 +78,24 @@ export default function PlacesPage() {
   }, [navigate]);
 
   // Fetch places
-  useEffect(() => {
-    async function fetchPlaces() {
-      setLoading(true);
-      try {
-        const response = await getAllPlaces();
-        setPlaces(response.places);
-      } catch (err) {
-        showToast(
-          err instanceof Error ? err.message : "Failed to load places",
-          "error"
-        );
-      } finally {
-        setLoading(false);
-      }
+  const fetchPlaces = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await getAllPlaces();
+      setPlaces(response.places);
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to load places",
+        "error"
+      );
+    } finally {
+      setLoading(false);
     }
-    fetchPlaces();
   }, [showToast]);
+
+  useEffect(() => {
+    fetchPlaces();
+  }, [fetchPlaces]);
 
   // Filtered places
   const filteredPlaces = useMemo(() => {
@@ -107,9 +126,7 @@ export default function PlacesPage() {
       showToast("Place created", "success");
       setShowCreateModal(false);
       resetForm();
-      // Refresh list
-      const response = await getAllPlaces();
-      setPlaces(response.places);
+      await fetchPlaces();
     } catch (err) {
       showToast(
         err instanceof Error ? err.message : "Failed to create place",
@@ -137,10 +154,9 @@ export default function PlacesPage() {
       });
       showToast("Place updated", "success");
       setShowEditModal(false);
-      // Refresh list
-      const response = await getAllPlaces();
-      setPlaces(response.places);
+      await fetchPlaces();
       // Update selected place
+      const response = await getAllPlaces();
       const updated = response.places.find((p) => p.id === selectedPlace.id);
       if (updated) setSelectedPlace(updated);
     } catch (err) {
@@ -162,8 +178,37 @@ export default function PlacesPage() {
       setMergeSearchResults(
         response.matches.filter((m) => m.entityId !== selectedPlace?.id)
       );
-    } catch (err) {
+    } catch {
       showToast("Search failed", "error");
+    }
+  };
+
+  // Handle merge
+  const handleMerge = async () => {
+    if (!selectedPlace || !mergeTargetId) return;
+    setSaving(true);
+    try {
+      await mergePlaces(selectedPlace.id, mergeTargetId);
+      showToast("Places merged successfully", "success");
+      setShowMergeModal(false);
+      setMergeTargetId(null);
+      setMergeSearchQuery("");
+      setMergeSearchResults([]);
+      await fetchPlaces();
+      setRefreshKey((k) => k + 1);
+      // Keep current place selected (it was the "keep" place)
+      const response = await getAllPlaces();
+      const updated = response.places.find((p) => p.id === selectedPlace.id);
+      if (updated) {
+        setSelectedPlace(updated);
+      }
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to merge places",
+        "error"
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -185,20 +230,106 @@ export default function PlacesPage() {
     setFormNotes("");
   };
 
+  // Bulk selection handlers
+  const handleToggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredPlaces.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredPlaces.map((p) => p.id)));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  // Handle bulk merge
+  const handleBulkMerge = async (keepId: string, mergeIds: string[]) => {
+    setBulkMerging(true);
+    try {
+      await bulkMergePlaces(keepId, mergeIds);
+      showToast(`${mergeIds.length} places merged successfully`, "success");
+      setShowBulkMergeModal(false);
+      setSelectedIds(new Set());
+      await fetchPlaces();
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to merge places",
+        "error"
+      );
+    } finally {
+      setBulkMerging(false);
+    }
+  };
+
+  // Handle duplicate suggestion merge
+  const handleSuggestionMerge = (keepId: string, mergeId: string, keepName: string, mergeName: string) => {
+    setMergeCompareA({ id: keepId, name: keepName });
+    setMergeCompareB({ id: mergeId, name: mergeName });
+    setShowMergeComparison(true);
+  };
+
+  // Handle merge from comparison modal
+  const handleComparisonMerge = async (keepId: string, mergeId: string) => {
+    setSaving(true);
+    try {
+      await mergePlaces(keepId, mergeId);
+      showToast("Places merged successfully", "success");
+      setShowMergeComparison(false);
+      setMergeCompareA(null);
+      setMergeCompareB(null);
+      await fetchPlaces();
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to merge places",
+        "error"
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Get selected entities for bulk merge modal
+  const selectedEntities = useMemo(() => {
+    return filteredPlaces
+      .filter((p) => selectedIds.has(p.id))
+      .map((p) => ({
+        id: p.id,
+        name: p.canonicalName,
+        letterCount: p.letterCount,
+        aliases: p.aliases || [],
+      }));
+  }, [filteredPlaces, selectedIds]);
+
   return (
     <div className="places-page">
-      <header className="page-header">
-        <Link to="/admin" className="back-link">
-          <Icon name="back" size={16} />
-          <span>Dashboard</span>
-        </Link>
-        <h1>Places</h1>
+      <div className="page-actions">
         <Button onClick={() => setShowCreateModal(true)}>Add Place</Button>
-      </header>
+      </div>
 
       <div className="page-content">
         {/* Left: Places List */}
         <div className="places-list-panel">
+          {/* Duplicate Suggestions */}
+          <DuplicateSuggestions
+            key={refreshKey}
+            entityType="place"
+            onMerge={handleSuggestionMerge}
+            onRefresh={() => setRefreshKey((k) => k + 1)}
+          />
+
           <div className="search-box">
             <input
               type="text"
@@ -207,6 +338,36 @@ export default function PlacesPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
+
+          {/* Bulk Selection Controls */}
+          {filteredPlaces.length > 0 && (
+            <div className="bulk-controls">
+              <label className="select-all-checkbox">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.size === filteredPlaces.length && filteredPlaces.length > 0}
+                  onChange={handleSelectAll}
+                />
+                <span>Select All</span>
+              </label>
+              {selectedIds.size > 0 && (
+                <div className="bulk-actions">
+                  <span className="selected-count">{selectedIds.size} selected</span>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setShowBulkMergeModal(true)}
+                    disabled={selectedIds.size < 2}
+                  >
+                    Merge Selected
+                  </Button>
+                  <button className="clear-selection-btn" onClick={handleClearSelection}>
+                    Clear
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {loading ? (
             <div className="loading-state">Loading...</div>
@@ -217,24 +378,33 @@ export default function PlacesPage() {
               {filteredPlaces.map((place) => (
                 <div
                   key={place.id}
-                  className={`place-item ${selectedPlace?.id === place.id ? "selected" : ""}`}
-                  onClick={() => setSelectedPlace(place)}
+                  className={`place-item ${selectedPlace?.id === place.id ? "selected" : ""} ${selectedIds.has(place.id) ? "checked" : ""}`}
                 >
-                  <div className="place-name">
-                    {place.canonicalName}
-                    {place.placeType && (
-                      <span className={`place-type-badge ${place.placeType}`}>
-                        {PLACE_TYPES.find((t) => t.value === place.placeType)?.label || place.placeType}
-                      </span>
-                    )}
-                  </div>
-                  <div className="place-meta">
-                    {place.letterCount} letter{place.letterCount !== 1 && "s"}
-                    {place.aliases && place.aliases.length > 0 && (
-                      <span className="aliases-indicator">
-                        +{place.aliases.length} alias{place.aliases.length !== 1 && "es"}
-                      </span>
-                    )}
+                  <input
+                    type="checkbox"
+                    className="item-checkbox"
+                    checked={selectedIds.has(place.id)}
+                    onChange={() => handleToggleSelect(place.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Select ${place.canonicalName}`}
+                  />
+                  <div className="place-content" onClick={() => setSelectedPlace(place)}>
+                    <div className="place-name">
+                      {place.canonicalName}
+                      {place.placeType && (
+                        <span className={`place-type-badge ${place.placeType}`}>
+                          {PLACE_TYPES.find((t) => t.value === place.placeType)?.label || place.placeType}
+                        </span>
+                      )}
+                    </div>
+                    <div className="place-meta">
+                      {place.letterCount} letter{place.letterCount !== 1 && "s"}
+                      {place.aliases && place.aliases.length > 0 && (
+                        <span className="aliases-indicator">
+                          +{place.aliases.length} alias{place.aliases.length !== 1 && "es"}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -442,7 +612,7 @@ export default function PlacesPage() {
         <div className="modal-form">
           <p className="merge-info">
             Search for places to merge into <strong>{selectedPlace?.canonicalName}</strong>.
-            Note: Place merging is not yet implemented in the backend.
+            The selected place will be deleted and its associations moved to the current place.
           </p>
           <div className="search-input-row">
             <input
@@ -472,20 +642,50 @@ export default function PlacesPage() {
               onClick={() => {
                 setShowMergeModal(false);
                 setMergeTargetId(null);
+                setMergeSearchQuery("");
+                setMergeSearchResults([]);
               }}
             >
               Cancel
             </Button>
             <Button
               variant="danger"
-              disabled={true}
-              title="Not yet implemented"
+              onClick={handleMerge}
+              disabled={!mergeTargetId || saving}
             >
-              Merge (Coming Soon)
+              {saving ? "Merging..." : "Merge"}
             </Button>
           </div>
         </div>
       </Modal>
+
+      {/* Merge Comparison Modal */}
+      {mergeCompareA && mergeCompareB && (
+        <MergeComparison
+          isOpen={showMergeComparison}
+          onClose={() => {
+            setShowMergeComparison(false);
+            setMergeCompareA(null);
+            setMergeCompareB(null);
+          }}
+          entityType="place"
+          entityAId={mergeCompareA.id}
+          entityBId={mergeCompareB.id}
+          entityAName={mergeCompareA.name}
+          entityBName={mergeCompareB.name}
+          onConfirm={handleComparisonMerge}
+        />
+      )}
+
+      {/* Bulk Merge Modal */}
+      <BulkMergeModal
+        isOpen={showBulkMergeModal}
+        onClose={() => setShowBulkMergeModal(false)}
+        entityType="place"
+        selectedEntities={selectedEntities}
+        onConfirm={handleBulkMerge}
+        loading={bulkMerging}
+      />
     </div>
   );
 }

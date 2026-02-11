@@ -47,6 +47,9 @@ export default function Header() {
         <Link to="/collections" className="page-selector">
           Collections
         </Link>
+        <Link to="/explore" className="page-selector">
+          Explore
+        </Link>
         <Link to="/about" className="page-selector">
           About
         </Link>

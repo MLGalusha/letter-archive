@@ -65,18 +65,44 @@ Matching checks both `canonicalName` and `aliases[]`.
 When two entities are duplicates, merge them:
 
 ```typescript
-import { mergePersons } from './services/entities.js';
+import { mergePersons, bulkMergePersons } from './services/entities.js';
 
+// Merge a single entity
 await mergePersons(keepId, mergeId);
 // - Merged name becomes alias of kept entity
 // - All letter links transfer to kept entity
 // - Merged entity is deleted
+
+// Bulk merge multiple entities
+await bulkMergePersons(keepId, [mergeId1, mergeId2, mergeId3]);
+// - All merged entities' names/aliases become aliases of kept entity
+// - All letter links transfer to kept entity
+// - All merged entities are deleted
 ```
 
 The merge:
 1. Adds merged entity's name + aliases to kept entity's aliases
 2. Reassigns all `letterPersons` from merged → kept
 3. Deletes the merged entity
+
+## Duplicate Suggestions
+
+AI-powered duplicate detection using trigram similarity:
+
+```typescript
+import { findPotentialDuplicatePersons } from './services/entities.js';
+
+const suggestions = await findPotentialDuplicatePersons(20);
+// Returns pairs of entities with 50-99% similarity
+// [{ entityAId, entityAName, entityBId, entityBName, similarity }]
+```
+
+**UI Features:**
+- Collapsible "Potential Duplicates" section on People/Places pages
+- Dismiss suggestions (stored in localStorage)
+- Click "Merge" to open side-by-side comparison modal
+- Comparison shows detailed stats for both entities
+- Swap which entity to keep with radio buttons
 
 ## Database Tables
 
@@ -125,18 +151,25 @@ created_at  TIMESTAMP
 
 ## Admin Pages
 
-### People Page (`/admin/people`)
+### People Page (`/admin/entities/people`)
 - Lists all canonical persons
 - Shows letter count for each
-- Edit canonical name
-- Merge duplicates
-- View linked letters
+- Edit canonical name and aliases
+- Single merge (search for entity to merge)
+- Bulk selection with checkboxes
+- Bulk merge (select master, merge all others)
+- Duplicate suggestions section (collapsible)
+- Side-by-side comparison modal before merging
+- Biography generation and verification
 
-### Places Page (`/admin/places`)
+### Places Page (`/admin/entities/places`)
 - Lists all canonical places
-- Edit name and type
-- Merge duplicates
-- View linked letters
+- Edit name, type, and aliases
+- Single merge (search for entity to merge)
+- Bulk selection with checkboxes
+- Bulk merge (select master, merge all others)
+- Duplicate suggestions section (collapsible)
+- Side-by-side comparison modal before merging
 
 ### Entity Review Page (`/admin/entities/:type/:id`)
 - View entity details
@@ -149,12 +182,17 @@ See [api/admin.md](api/admin.md) for full endpoint documentation.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| GET | `/admin/entities/suggestions` | Get duplicate suggestions (entityType=person\|place) |
 | GET | `/admin/entities/persons` | List all persons |
 | GET | `/admin/entities/places` | List all places |
 | GET | `/admin/entities/persons/:id` | Get person details |
-| PATCH | `/admin/entities/persons/:id` | Update person |
-| POST | `/admin/entities/persons/:id/merge` | Merge persons |
-| DELETE | `/admin/entities/persons/:id` | Delete person |
+| GET | `/admin/entities/persons/:id/merge-details` | Get detailed stats for merge comparison |
+| GET | `/admin/entities/places/:id/merge-details` | Get detailed stats for merge comparison |
+| PUT | `/admin/entities/persons/:id` | Update person |
+| POST | `/admin/entities/persons/merge` | Merge two persons |
+| POST | `/admin/entities/persons/bulk-merge` | Bulk merge multiple persons |
+| POST | `/admin/entities/places/merge` | Merge two places |
+| POST | `/admin/entities/places/bulk-merge` | Bulk merge multiple places |
 
 ## Workflow
 
@@ -174,7 +212,10 @@ When sender/recipient names are updated:
 
 | File | Purpose |
 |------|---------|
-| [services/entities.ts](../../backend/src/services/entities.ts) | Entity CRUD, matching, merge |
+| [services/entities.ts](../../backend/src/services/entities.ts) | Entity CRUD, matching, merge, duplicate suggestions |
 | [routes/admin/entities.ts](../../backend/src/routes/admin/entities.ts) | API endpoints |
 | [pages/admin/PeoplePage.tsx](../../frontend/src/pages/admin/PeoplePage.tsx) | People management UI |
 | [pages/admin/PlacesPage.tsx](../../frontend/src/pages/admin/PlacesPage.tsx) | Places management UI |
+| [components/DuplicateSuggestions](../../frontend/src/components/DuplicateSuggestions/) | Collapsible duplicate suggestions panel |
+| [components/MergeComparison](../../frontend/src/components/MergeComparison/) | Side-by-side merge comparison modal |
+| [components/BulkMergeModal](../../frontend/src/components/BulkMergeModal/) | Bulk merge selection modal |

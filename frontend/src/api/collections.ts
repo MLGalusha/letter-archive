@@ -2,7 +2,7 @@
  * Collections API service
  */
 
-import { apiGet, apiPut } from './client';
+import { apiGet, apiPut, apiPost } from './client';
 import type { Letter } from '../types/Letter';
 
 export interface CollectionInfo {
@@ -77,4 +77,62 @@ export async function updateCollection(
   data: { title?: string; description?: string | null }
 ): Promise<CollectionInfo> {
   return apiPut<CollectionInfo>(`/admin/collections/${code}`, data);
+}
+
+/**
+ * Collection analysis result types
+ */
+export interface CollectionAnalysisEntity {
+  name: string;
+  role: 'sender' | 'recipient' | 'mentioned';
+  letterCount: number;
+}
+
+export interface CollectionAnalysisPlace {
+  name: string;
+  type: string;
+  letterCount: number;
+}
+
+export interface CollectionAnalysisRelationship {
+  person1: string;
+  person2: string;
+  type: string;
+  evidence: string;
+}
+
+export interface CollectionAnalysisDuplicate {
+  name1: string;
+  name2: string;
+  confidence: number;
+  reason: string;
+}
+
+export interface CollectionAnalysisResult {
+  collectionId: string;
+  collectionCode: string;
+  letterCount: number;
+  analysis: {
+    people: CollectionAnalysisEntity[];
+    places: CollectionAnalysisPlace[];
+    relationships: CollectionAnalysisRelationship[];
+    potentialDuplicates: CollectionAnalysisDuplicate[];
+  };
+  stats: {
+    peopleFound: number;
+    placesFound: number;
+    relationshipsFound: number;
+    duplicatesFound: number;
+    entitiesCreated: number;
+    entitiesLinked: number;
+    itemsQueuedForReview: number;
+  };
+  isStub: boolean;
+}
+
+/**
+ * Analyze a collection to discover entities, relationships, and potential duplicates
+ */
+export async function analyzeCollection(code: string): Promise<CollectionAnalysisResult> {
+  return apiPost<CollectionAnalysisResult>(`/admin/collections/${code}/analyze`);
 }

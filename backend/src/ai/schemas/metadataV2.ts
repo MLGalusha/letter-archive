@@ -201,6 +201,9 @@ export const MetadataV2Schema = z.object({
 
   // Entities (people and places)
   entities: z.array(ExtractedEntitySchema),
+
+  // AI observations and hunches for admin review
+  ai_notes: z.string().nullable(),
 });
 
 export type MetadataV2 = z.infer<typeof MetadataV2Schema>;
@@ -304,6 +307,7 @@ export const METADATA_V2_JSON_SCHEMA = {
         additionalProperties: false,
       },
     },
+    ai_notes: { type: ['string', 'null'] },
   },
   required: [
     'sender',
@@ -318,6 +322,7 @@ export const METADATA_V2_JSON_SCHEMA = {
     'primary_topics',
     'notable_quotes',
     'entities',
+    'ai_notes',
   ],
   additionalProperties: false,
 } as const;

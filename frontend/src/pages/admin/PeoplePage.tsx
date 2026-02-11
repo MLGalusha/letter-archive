@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button, Icon, Modal } from "../../components/common";
 import { useToast } from "../../contexts/ToastContext";
@@ -8,14 +8,22 @@ import {
   createPerson,
   updatePerson,
   mergePersons,
+  bulkMergePersons,
   searchPersons,
   createRelationship,
   deleteRelationship,
+  generateBiography,
+  saveBiography,
+  unverifyBiography,
   type PersonWithCount,
   type PersonRelationship,
   type PersonRelationshipType,
   type EntityMatch,
+  type CanonicalPerson,
 } from "../../api/entities";
+import DuplicateSuggestions from "../../components/DuplicateSuggestions";
+import MergeComparison from "../../components/MergeComparison";
+import BulkMergeModal from "../../components/BulkMergeModal";
 import "./PeoplePage.css";
 
 const RELATIONSHIP_TYPES: { value: PersonRelationshipType; label: string }[] = [
@@ -49,11 +57,30 @@ export default function PeoplePage() {
   const [selectedRelationships, setSelectedRelationships] = useState<PersonRelationship[]>([]);
   const [loadingRelationships, setLoadingRelationships] = useState(false);
 
+  // Biography state
+  const [biographyText, setBiographyText] = useState("");
+  const [biographyStatus, setBiographyStatus] = useState<string | undefined>(undefined);
+  const [generatingBiography, setGeneratingBiography] = useState(false);
+  const [savingBiography, setSavingBiography] = useState(false);
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkMergeModal, setShowBulkMergeModal] = useState(false);
+  const [bulkMerging, setBulkMerging] = useState(false);
+
+  // Merge comparison state
+  const [showMergeComparison, setShowMergeComparison] = useState(false);
+  const [mergeCompareA, setMergeCompareA] = useState<{ id: string; name: string } | null>(null);
+  const [mergeCompareB, setMergeCompareB] = useState<{ id: string; name: string } | null>(null);
+
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [showAddRelationshipModal, setShowAddRelationshipModal] = useState(false);
+
+  // Refresh trigger for suggestions
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Form state
   const [formName, setFormName] = useState("");
@@ -81,23 +108,24 @@ export default function PeoplePage() {
   }, [navigate]);
 
   // Fetch persons
-  useEffect(() => {
-    async function fetchPersons() {
-      setLoading(true);
-      try {
-        const response = await getAllPersons();
-        setPersons(response.persons);
-      } catch (err) {
-        showToast(
-          err instanceof Error ? err.message : "Failed to load persons",
-          "error"
-        );
-      } finally {
-        setLoading(false);
-      }
+  const fetchPersons = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await getAllPersons();
+      setPersons(response.persons);
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to load persons",
+        "error"
+      );
+    } finally {
+      setLoading(false);
     }
-    fetchPersons();
   }, [showToast]);
+
+  useEffect(() => {
+    fetchPersons();
+  }, [fetchPersons]);
 
   // Fetch relationships when person is selected
   useEffect(() => {
@@ -118,6 +146,17 @@ export default function PeoplePage() {
     }
     fetchRelationships();
   }, [selectedPerson, showToast]);
+
+  // Update biography state when person is selected
+  useEffect(() => {
+    if (selectedPerson) {
+      setBiographyText((selectedPerson as unknown as CanonicalPerson).biography || "");
+      setBiographyStatus((selectedPerson as unknown as CanonicalPerson).biographyStatus);
+    } else {
+      setBiographyText("");
+      setBiographyStatus(undefined);
+    }
+  }, [selectedPerson]);
 
   // Filtered persons
   const filteredPersons = useMemo(() => {
@@ -316,20 +355,158 @@ export default function PeoplePage() {
       : relationship.personAName;
   };
 
+  // Handle generate biography
+  const handleGenerateBiography = async () => {
+    if (!selectedPerson) return;
+    setGeneratingBiography(true);
+    try {
+      const response = await generateBiography(selectedPerson.id);
+      setBiographyText(response.person.biography || "");
+      setBiographyStatus(response.person.biographyStatus);
+      showToast("Biography generated", "success");
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to generate biography",
+        "error"
+      );
+    } finally {
+      setGeneratingBiography(false);
+    }
+  };
+
+  // Handle save biography
+  const handleSaveBiography = async (verify = false) => {
+    if (!selectedPerson) return;
+    setSavingBiography(true);
+    try {
+      const response = await saveBiography(selectedPerson.id, {
+        biography: biographyText,
+        verify,
+      });
+      setBiographyStatus(response.person.biographyStatus);
+      showToast(verify ? "Biography verified" : "Biography saved", "success");
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to save biography",
+        "error"
+      );
+    } finally {
+      setSavingBiography(false);
+    }
+  };
+
+  // Handle unverify biography
+  const handleUnverifyBiography = async () => {
+    if (!selectedPerson) return;
+    try {
+      const response = await unverifyBiography(selectedPerson.id);
+      setBiographyStatus(response.person.biographyStatus);
+      showToast("Biography unverified", "success");
+    } catch (err) {
+      showToast("Failed to unverify biography", "error");
+    }
+  };
+
+  // Bulk selection handlers
+  const handleToggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredPersons.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredPersons.map((p) => p.id)));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  // Handle bulk merge
+  const handleBulkMerge = async (keepId: string, mergeIds: string[]) => {
+    setBulkMerging(true);
+    try {
+      await bulkMergePersons(keepId, mergeIds);
+      showToast(`${mergeIds.length} persons merged successfully`, "success");
+      setShowBulkMergeModal(false);
+      setSelectedIds(new Set());
+      await fetchPersons();
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to merge persons",
+        "error"
+      );
+    } finally {
+      setBulkMerging(false);
+    }
+  };
+
+  // Handle duplicate suggestion merge
+  const handleSuggestionMerge = (keepId: string, mergeId: string, keepName: string, mergeName: string) => {
+    setMergeCompareA({ id: keepId, name: keepName });
+    setMergeCompareB({ id: mergeId, name: mergeName });
+    setShowMergeComparison(true);
+  };
+
+  // Handle merge from comparison modal
+  const handleComparisonMerge = async (keepId: string, mergeId: string) => {
+    setSaving(true);
+    try {
+      await mergePersons(keepId, mergeId);
+      showToast("Persons merged successfully", "success");
+      setShowMergeComparison(false);
+      setMergeCompareA(null);
+      setMergeCompareB(null);
+      await fetchPersons();
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to merge persons",
+        "error"
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Get selected entities for bulk merge modal
+  const selectedEntities = useMemo(() => {
+    return filteredPersons
+      .filter((p) => selectedIds.has(p.id))
+      .map((p) => ({
+        id: p.id,
+        name: p.canonicalName,
+        letterCount: p.letterCount,
+        aliases: p.aliases || [],
+      }));
+  }, [filteredPersons, selectedIds]);
+
   return (
     <div className="people-page">
-      <header className="page-header">
-        <Link to="/admin" className="back-link">
-          <Icon name="back" size={16} />
-          <span>Dashboard</span>
-        </Link>
-        <h1>People</h1>
+      <div className="page-actions">
         <Button onClick={() => setShowCreateModal(true)}>Add Person</Button>
-      </header>
+      </div>
 
       <div className="page-content">
         {/* Left: People List */}
         <div className="people-list-panel">
+          {/* Duplicate Suggestions */}
+          <DuplicateSuggestions
+            key={refreshKey}
+            entityType="person"
+            onMerge={handleSuggestionMerge}
+            onRefresh={() => setRefreshKey((k) => k + 1)}
+          />
+
           <div className="search-box">
             <input
               type="text"
@@ -338,6 +515,36 @@ export default function PeoplePage() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
+
+          {/* Bulk Selection Controls */}
+          {filteredPersons.length > 0 && (
+            <div className="bulk-controls">
+              <label className="select-all-checkbox">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.size === filteredPersons.length && filteredPersons.length > 0}
+                  onChange={handleSelectAll}
+                />
+                <span>Select All</span>
+              </label>
+              {selectedIds.size > 0 && (
+                <div className="bulk-actions">
+                  <span className="selected-count">{selectedIds.size} selected</span>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setShowBulkMergeModal(true)}
+                    disabled={selectedIds.size < 2}
+                  >
+                    Merge Selected
+                  </Button>
+                  <button className="clear-selection-btn" onClick={handleClearSelection}>
+                    Clear
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {loading ? (
             <div className="loading-state">Loading...</div>
@@ -348,17 +555,26 @@ export default function PeoplePage() {
               {filteredPersons.map((person) => (
                 <div
                   key={person.id}
-                  className={`person-item ${selectedPerson?.id === person.id ? "selected" : ""}`}
-                  onClick={() => setSelectedPerson(person)}
+                  className={`person-item ${selectedPerson?.id === person.id ? "selected" : ""} ${selectedIds.has(person.id) ? "checked" : ""}`}
                 >
-                  <div className="person-name">{person.canonicalName}</div>
-                  <div className="person-meta">
-                    {person.letterCount} letter{person.letterCount !== 1 && "s"}
-                    {person.aliases && person.aliases.length > 0 && (
-                      <span className="aliases-indicator">
-                        +{person.aliases.length} alias{person.aliases.length !== 1 && "es"}
-                      </span>
-                    )}
+                  <input
+                    type="checkbox"
+                    className="item-checkbox"
+                    checked={selectedIds.has(person.id)}
+                    onChange={() => handleToggleSelect(person.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Select ${person.canonicalName}`}
+                  />
+                  <div className="person-content" onClick={() => setSelectedPerson(person)}>
+                    <div className="person-name">{person.canonicalName}</div>
+                    <div className="person-meta">
+                      {person.letterCount} letter{person.letterCount !== 1 && "s"}
+                      {person.aliases && person.aliases.length > 0 && (
+                        <span className="aliases-indicator">
+                          +{person.aliases.length} alias{person.aliases.length !== 1 && "es"}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -406,6 +622,66 @@ export default function PeoplePage() {
                     <span className="field-value">{selectedPerson.notes}</span>
                   </div>
                 )}
+              </div>
+
+              <div className="detail-section biography-section">
+                <div className="section-header">
+                  <h3>Biography</h3>
+                  <div className="biography-actions">
+                    {biographyStatus === "VERIFIED" ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleUnverifyBiography}
+                      >
+                        Unverify
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleGenerateBiography}
+                          disabled={generatingBiography}
+                        >
+                          {generatingBiography ? "Generating..." : "Generate"}
+                        </Button>
+                        {biographyText && (
+                          <>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleSaveBiography(false)}
+                              disabled={savingBiography}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleSaveBiography(true)}
+                              disabled={savingBiography}
+                            >
+                              Verify
+                            </Button>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+                {biographyStatus && (
+                  <div className={`biography-status status-${biographyStatus.toLowerCase()}`}>
+                    {biographyStatus.replace("_", " ")}
+                  </div>
+                )}
+                <textarea
+                  className="biography-editor"
+                  value={biographyText}
+                  onChange={(e) => setBiographyText(e.target.value)}
+                  placeholder="No biography yet. Click 'Generate' to create one from letter summaries."
+                  rows={8}
+                  disabled={biographyStatus === "VERIFIED"}
+                />
               </div>
 
               <div className="detail-section">
@@ -682,6 +958,34 @@ export default function PeoplePage() {
           </div>
         </div>
       </Modal>
+
+      {/* Merge Comparison Modal */}
+      {mergeCompareA && mergeCompareB && (
+        <MergeComparison
+          isOpen={showMergeComparison}
+          onClose={() => {
+            setShowMergeComparison(false);
+            setMergeCompareA(null);
+            setMergeCompareB(null);
+          }}
+          entityType="person"
+          entityAId={mergeCompareA.id}
+          entityBId={mergeCompareB.id}
+          entityAName={mergeCompareA.name}
+          entityBName={mergeCompareB.name}
+          onConfirm={handleComparisonMerge}
+        />
+      )}
+
+      {/* Bulk Merge Modal */}
+      <BulkMergeModal
+        isOpen={showBulkMergeModal}
+        onClose={() => setShowBulkMergeModal(false)}
+        entityType="person"
+        selectedEntities={selectedEntities}
+        onConfirm={handleBulkMerge}
+        loading={bulkMerging}
+      />
     </div>
   );
 }

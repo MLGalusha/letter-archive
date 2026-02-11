@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db, letters, collections, letterPages } from '../../db/index.js';
 import { getCollectionByCode } from '../../services/collections.js';
 import { transformLettersToDTO, type LetterWithRelations } from '../../dto/index.js';
+import { analyzeCollection } from '../../ai/analyze-collection.js';
 
 const router = Router();
 
@@ -151,6 +152,27 @@ router.put('/:code', async (req, res, next) => {
       .returning();
 
     res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/collections/:code/analyze
+ * Analyze a collection to discover entities, relationships, and potential duplicates
+ */
+router.post('/:code/analyze', async (req, res, next) => {
+  try {
+    const { code } = req.params;
+    const collection = await getCollectionByCode(code);
+
+    if (!collection) {
+      res.status(404).json({ error: 'Collection not found' });
+      return;
+    }
+
+    const result = await analyzeCollection(collection.id);
+    res.json(result);
   } catch (error) {
     next(error);
   }

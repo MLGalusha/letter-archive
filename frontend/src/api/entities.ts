@@ -3,7 +3,7 @@
  */
 
 import { apiGet, apiPost, apiPut, apiDelete } from './client';
-import type { PersonRole, PlaceRole, PlaceType } from '../types/Letter';
+import type { PersonRole, PlaceRole, PlaceType, ContentStatus } from '../types/Letter';
 
 // ============================================================================
 // TYPES
@@ -14,6 +14,10 @@ export interface CanonicalPerson {
   canonicalName: string;
   aliases: string[];
   notes?: string;
+  biography?: string;
+  biographyStatus?: ContentStatus;
+  biographyVerifiedAt?: string;
+  biographyVerifiedBy?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -229,6 +233,19 @@ export async function updatePlace(
   return apiPut<{ place: CanonicalPlace }>(`/admin/entities/places/${placeId}`, data);
 }
 
+/**
+ * Merge two places (moves all letter associations to keepId, deletes mergeId)
+ */
+export async function mergePlaces(
+  keepId: string,
+  mergeId: string
+): Promise<{ place: CanonicalPlace; message: string }> {
+  return apiPost<{ place: CanonicalPlace; message: string }>(
+    '/admin/entities/places/merge',
+    { keepId, mergeId }
+  );
+}
+
 // ============================================================================
 // REVIEW QUEUE API
 // ============================================================================
@@ -317,4 +334,333 @@ export async function updateRelationship(
  */
 export async function deleteRelationship(relationshipId: string): Promise<{ message: string }> {
   return apiDelete<{ message: string }>(`/admin/entities/relationships/${relationshipId}`);
+}
+
+// ============================================================================
+// PUBLIC ENTITY API
+// ============================================================================
+
+export interface PublicLetterForEntity {
+  id: string;
+  dateRaw: string;
+  letterDate?: string;
+  role: PersonRole | PlaceRole;
+  sender?: string;
+  recipient?: string;
+  hook?: string;
+  summary?: string;
+}
+
+export interface PublicPersonDetail {
+  person: {
+    id: string;
+    canonicalName: string;
+    aliases: string[];
+    biography?: string;
+    biographyStatus?: ContentStatus;
+  };
+  relationships: Array<{
+    id: string;
+    relatedPersonId: string;
+    relatedPersonName: string;
+    relationshipType: PersonRelationshipType;
+  }>;
+  stats: {
+    asSender: number;
+    asRecipient: number;
+    asMentioned: number;
+    total: number;
+  };
+  letters: PublicLetterForEntity[];
+}
+
+export interface PublicPlaceDetail {
+  place: {
+    id: string;
+    canonicalName: string;
+    aliases: string[];
+    placeType?: PlaceType;
+    notes?: string;
+  };
+  stats: {
+    writtenFrom: number;
+    mentioned: number;
+    destination: number;
+    total: number;
+  };
+  letters: PublicLetterForEntity[];
+}
+
+/**
+ * Get public person detail (for public person page)
+ */
+export async function getPersonPublic(personId: string): Promise<PublicPersonDetail> {
+  return apiGet<PublicPersonDetail>(`/persons/${personId}`);
+}
+
+/**
+ * Get public place detail (for public place page)
+ */
+export async function getPlacePublic(placeId: string): Promise<PublicPlaceDetail> {
+  return apiGet<PublicPlaceDetail>(`/places/${placeId}`);
+}
+
+// ============================================================================
+// BIOGRAPHY API
+// ============================================================================
+
+/**
+ * Generate AI biography for a person
+ */
+export async function generateBiography(
+  personId: string
+): Promise<{ person: CanonicalPerson }> {
+  return apiPost<{ person: CanonicalPerson }>(
+    `/admin/entities/persons/${personId}/biography/generate`
+  );
+}
+
+/**
+ * Save/verify biography
+ */
+export async function saveBiography(
+  personId: string,
+  data: { biography: string; verify?: boolean }
+): Promise<{ person: CanonicalPerson }> {
+  return apiPut<{ person: CanonicalPerson }>(
+    `/admin/entities/persons/${personId}/biography`,
+    data
+  );
+}
+
+/**
+ * Unverify biography (revert to editable state)
+ */
+export async function unverifyBiography(
+  personId: string
+): Promise<{ person: CanonicalPerson }> {
+  return apiPost<{ person: CanonicalPerson }>(
+    `/admin/entities/persons/${personId}/biography/unverify`
+  );
+}
+
+// ============================================================================
+// RELATIONSHIP GRAPH API (Public)
+// ============================================================================
+
+export interface GraphNode {
+  id: string;
+  name: string;
+  letterCount: number;
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  relationshipType: PersonRelationshipType;
+  confidence: number;
+}
+
+export interface RelationshipGraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface PathNode {
+  id: string;
+  name: string;
+}
+
+export interface PathEdge {
+  id: string;
+  type: string;
+}
+
+export interface ConnectionPath {
+  path: PathNode[];
+  edges: PathEdge[];
+  message?: string;
+}
+
+/**
+ * Get all relationships for graph visualization
+ */
+export async function getRelationshipGraph(): Promise<RelationshipGraphData> {
+  return apiGet<RelationshipGraphData>('/relationships');
+}
+
+/**
+ * Get relationships for a specific collection
+ */
+export async function getRelationshipGraphByCollection(
+  collectionId: string
+): Promise<RelationshipGraphData> {
+  return apiGet<RelationshipGraphData>(`/relationships/collection/${collectionId}`);
+}
+
+/**
+ * Find connection path between two people
+ */
+export async function findConnectionPath(
+  personAId: string,
+  personBId: string
+): Promise<ConnectionPath> {
+  return apiGet<ConnectionPath>(`/relationships/path/${personAId}/${personBId}`);
+}
+
+// ============================================================================
+// ADMIN RELATIONSHIP API
+// ============================================================================
+
+/**
+ * Get all relationships for admin view
+ */
+export async function getAdminRelationships(): Promise<PersonRelationship[]> {
+  return apiGet<PersonRelationship[]>('/admin/relationships');
+}
+
+/**
+ * Create a new relationship (admin)
+ */
+export async function createAdminRelationship(data: {
+  personAId: string;
+  personBId: string;
+  relationshipType: PersonRelationshipType;
+  notes?: string;
+  discoveredInLetterId?: string;
+  confidence?: number;
+}): Promise<PersonRelationship> {
+  return apiPost<PersonRelationship>('/admin/relationships', data);
+}
+
+/**
+ * Update a relationship (admin)
+ */
+export async function updateAdminRelationship(
+  relationshipId: string,
+  data: {
+    relationshipType?: PersonRelationshipType;
+    notes?: string | null;
+    confidence?: number;
+  }
+): Promise<PersonRelationship> {
+  return apiPut<PersonRelationship>(`/admin/relationships/${relationshipId}`, data);
+}
+
+/**
+ * Delete a relationship (admin)
+ */
+export async function deleteAdminRelationship(relationshipId: string): Promise<void> {
+  return apiDelete<void>(`/admin/relationships/${relationshipId}`);
+}
+
+// ============================================================================
+// DUPLICATE SUGGESTIONS API (Phase 5)
+// ============================================================================
+
+export interface DuplicateSuggestion {
+  entityAId: string;
+  entityAName: string;
+  entityALetterCount: number;
+  entityAAliases: string[];
+  entityBId: string;
+  entityBName: string;
+  entityBLetterCount: number;
+  entityBAliases: string[];
+  similarity: number;
+}
+
+/**
+ * Get AI-suggested duplicate entities
+ */
+export async function getDuplicateSuggestions(
+  entityType: 'person' | 'place',
+  limit: number = 20
+): Promise<{ suggestions: DuplicateSuggestion[] }> {
+  return apiGet<{ suggestions: DuplicateSuggestion[] }>(
+    '/admin/entities/suggestions',
+    { entityType, limit }
+  );
+}
+
+// ============================================================================
+// BULK MERGE API (Phase 5)
+// ============================================================================
+
+/**
+ * Bulk merge multiple persons into one
+ */
+export async function bulkMergePersons(
+  keepId: string,
+  mergeIds: string[]
+): Promise<{ person: CanonicalPerson; message: string }> {
+  return apiPost<{ person: CanonicalPerson; message: string }>(
+    '/admin/entities/persons/bulk-merge',
+    { keepId, mergeIds }
+  );
+}
+
+/**
+ * Bulk merge multiple places into one
+ */
+export async function bulkMergePlaces(
+  keepId: string,
+  mergeIds: string[]
+): Promise<{ place: CanonicalPlace; message: string }> {
+  return apiPost<{ place: CanonicalPlace; message: string }>(
+    '/admin/entities/places/bulk-merge',
+    { keepId, mergeIds }
+  );
+}
+
+// ============================================================================
+// MERGE DETAILS API (Phase 5)
+// ============================================================================
+
+export interface PersonMergeDetails {
+  id: string;
+  canonicalName: string;
+  aliases: string[];
+  letterCount: number;
+  asSender: number;
+  asRecipient: number;
+  asMentioned: number;
+  relationshipCount: number;
+  relationships: Array<{
+    personId: string;
+    personName: string;
+    relationshipType: string;
+  }>;
+  biography?: string;
+  biographyStatus?: ContentStatus;
+}
+
+export interface PlaceMergeDetails {
+  id: string;
+  canonicalName: string;
+  aliases: string[];
+  placeType?: PlaceType;
+  letterCount: number;
+  writtenFrom: number;
+  destination: number;
+  mentioned: number;
+}
+
+/**
+ * Get detailed info for person merge comparison
+ */
+export async function getPersonMergeDetails(
+  personId: string
+): Promise<PersonMergeDetails> {
+  return apiGet<PersonMergeDetails>(`/admin/entities/persons/${personId}/merge-details`);
+}
+
+/**
+ * Get detailed info for place merge comparison
+ */
+export async function getPlaceMergeDetails(
+  placeId: string
+): Promise<PlaceMergeDetails> {
+  return apiGet<PlaceMergeDetails>(`/admin/entities/places/${placeId}/merge-details`);
 }

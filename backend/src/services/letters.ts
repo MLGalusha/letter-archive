@@ -267,6 +267,9 @@ export async function updateMetadataV2(
     updates.senderRecipientRelationship = metadata.sender_recipient_relationship as RelationshipType | null;
     updates.primaryTopics = metadata.primary_topics;
 
+    // AI notes (observations, hunches from extraction)
+    updates.aiNotes = metadata.ai_notes;
+
     // Store full V2 JSON for entity processing and future features
     updates.metadataV2Json = metadata;
 

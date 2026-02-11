@@ -1,0 +1,208 @@
+.person-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--spacing-xl);
+}
+
+.person-page .back-link {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 0;
+  margin-bottom: var(--spacing-lg);
+  display: inline-block;
+}
+
+.person-page .back-link:hover {
+  color: var(--text);
+}
+
+.person-header {
+  margin-bottom: var(--spacing-xl);
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--border);
+}
+
+.person-header h1 {
+  margin: 0 0 var(--spacing-sm) 0;
+  font-size: 2rem;
+  color: var(--text);
+}
+
+.person-header .aliases {
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+.biography-section,
+.relationships-section,
+.stats-section,
+.letters-section {
+  margin-bottom: var(--spacing-xl);
+}
+
+.biography-section h2,
+.relationships-section h2,
+.stats-section h2,
+.letters-section h2 {
+  font-size: 1.25rem;
+  margin: 0 0 var(--spacing-md) 0;
+  color: var(--text);
+}
+
+.biography-text {
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.biography-text p {
+  margin: 0 0 var(--spacing-md) 0;
+}
+
+.biography-text p:last-child {
+  margin-bottom: 0;
+}
+
+.relationships-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.relationships-list li {
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.relationships-list li:last-child {
+  border-bottom: none;
+}
+
+.relationships-list a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.relationships-list a:hover {
+  text-decoration: underline;
+}
+
+.relationship-type {
+  color: var(--text-muted);
+  margin-left: var(--spacing-sm);
+  font-size: 0.9rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.stat-item {
+  background: var(--bg-light);
+  padding: var(--spacing-lg);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.stat-item.stat-total {
+  background: var(--accent);
+  color: white;
+}
+
+.stat-value {
+  display: block;
+  font-size: 2rem;
+  font-weight: 600;
+  margin-bottom: var(--spacing-xs);
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.letters-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.letter-item {
+  background: var(--bg-light);
+  padding: var(--spacing-lg);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.letter-item:hover {
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+}
+
+.letter-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.letter-date {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.letter-role {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: capitalize;
+}
+
+.letter-role.role-sender {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.letter-role.role-recipient {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.letter-role.role-mentioned {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.letter-parties {
+  display: flex;
+  gap: var(--spacing-lg);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-bottom: var(--spacing-sm);
+}
+
+.letter-hook {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.no-letters {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.loading-message,
+.error-text {
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--spacing-xl);
+}

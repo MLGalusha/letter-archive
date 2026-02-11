@@ -1,0 +1,133 @@
+.duplicate-suggestions {
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.suggestions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+  user-select: none;
+}
+
+.suggestions-header:hover {
+  background: var(--bg);
+}
+
+.suggestions-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-weight: 500;
+  color: var(--text);
+}
+
+.suggestions-count {
+  background: var(--warning);
+  color: white;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.clear-dismissed-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: var(--spacing-xs);
+}
+
+.clear-dismissed-btn:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.suggestions-list {
+  border-top: 1px solid var(--border);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--border);
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.suggestion-item:hover {
+  background: var(--bg);
+}
+
+.suggestion-entities {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex: 1;
+}
+
+.entity-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+}
+
+.entity-name {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.entity-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.entity-aliases {
+  margin-left: var(--spacing-xs);
+  font-style: italic;
+}
+
+.similarity-badge {
+  background: var(--primary);
+  color: white;
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.suggestion-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.dismiss-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: var(--spacing-xs);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dismiss-btn:hover {
+  background: var(--bg);
+  color: var(--text);
+}

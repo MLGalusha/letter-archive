@@ -26,9 +26,9 @@ import {
   removeLinkedPlace,
 } from "../../api/admin";
 import LetterViewer from "../../components/LetterViewer/LetterViewer";
+import AdminLayout from "../../components/AdminLayout";
 import { useToast } from "../../contexts/ToastContext";
 import {
-  Button,
   Icon,
   WorkflowBadge,
   ResizableSplitPane,
@@ -1083,10 +1083,6 @@ export default function LetterReviewPage() {
     }
   };
 
-  const handleBack = () => {
-    navigate("/admin");
-  };
-
   const handlePageChange = useCallback((_index: number, image: LetterImage) => {
     setCurrentFilename(image.originalFilename);
   }, []);
@@ -1494,85 +1490,91 @@ export default function LetterReviewPage() {
 
   if (loading || !letter) {
     return (
-      <div className="letter-review-page">
-        <header className="review-header">
-          <h1>Letter Review</h1>
-          <Button icon="back" onClick={handleBack}>
-            Back to Dashboard
-          </Button>
-        </header>
-        <div className="review-content">
-          <p>{message || (loading ? "Loading..." : "Letter not found")}</p>
+      <AdminLayout title="Letter Review" fullHeight>
+        <div className="letter-review-page">
+          <div className="review-content loading-content">
+            <p>{message || (loading ? "Loading..." : "Letter not found")}</p>
+          </div>
         </div>
-      </div>
+      </AdminLayout>
     );
   }
 
-  return (
-    <div className="letter-review-page">
-      <header className="review-header">
-        <Button icon="back" onClick={handleBack}>
-          Back
-        </Button>
-        <h1>{letter.title}</h1>
-        {/* Auto-save status indicator */}
-        <div className="auto-save-indicator">
-          {autoSaveStatus === "saving" && (
-            <span className="save-status saving">Saving...</span>
-          )}
-          {autoSaveStatus === "saved" && (
-            <span className="save-status saved">Saved</span>
-          )}
-          {autoSaveStatus === "error" && (
-            <span className="save-status error">Save failed</span>
-          )}
-        </div>
-        <div className="header-actions">
-          <button
-            className="header-action save"
-            onClick={() => handleSave()}
-            disabled={saving}
-            data-tooltip="Save"
-          >
-            <Icon name="save" size={18} />
-          </button>
+  // Check if letter has letter-type images (for transcript section visibility)
+  const hasLetterPages = letter.images.some((img) => img.type === "letter");
 
-          {/* Confirm button - only for TRANSCRIBED without confirmation */}
-          {letter.workflowState === "TRANSCRIBED" &&
-            !letter.transcriptConfirmedAt && (
-              <button
-                className="header-action confirm"
-                onClick={handleConfirmTranscript}
-                disabled={saving}
-                data-tooltip="Confirm Transcript"
-              >
-                <Icon name="confirm" size={18} />
-              </button>
-            )}
+  // Types that produce transcribable extra content (photo is excluded — can't transcribe photos)
+  const hasExtras = letter.images.some((img) =>
+    ["telegram", "cover", "ephemera"].includes(img.type)
+  );
 
-          {/* Revert button - when editing a verified transcript with changes */}
-          {isTranscriptEditing && hasTranscriptChanges && (
+  const headerActions = (
+    <>
+      <div className="auto-save-indicator">
+        {autoSaveStatus === "saving" && (
+          <span className="save-status saving">Saving...</span>
+        )}
+        {autoSaveStatus === "saved" && (
+          <span className="save-status saved">Saved</span>
+        )}
+        {autoSaveStatus === "error" && (
+          <span className="save-status error">Save failed</span>
+        )}
+      </div>
+      <div className="header-actions">
+        <button
+          className="header-action save"
+          onClick={() => handleSave()}
+          disabled={saving}
+          data-tooltip="Save"
+        >
+          <Icon name="save" size={18} />
+        </button>
+
+        {/* Confirm button - only for TRANSCRIBED without confirmation */}
+        {letter.workflowState === "TRANSCRIBED" &&
+          !letter.transcriptConfirmedAt && (
             <button
-              className="header-action revert"
-              onClick={handleTranscriptRevert}
+              className="header-action confirm"
+              onClick={handleConfirmTranscript}
               disabled={saving}
-              data-tooltip="Revert Changes"
+              data-tooltip="Confirm Transcript"
             >
-              <Icon name="reset" size={18} />
+              <Icon name="confirm" size={18} />
             </button>
           )}
 
+        {/* Revert button - when editing a verified transcript with changes */}
+        {isTranscriptEditing && hasTranscriptChanges && (
           <button
-            className="header-action delete"
-            onClick={handleDelete}
+            className="header-action revert"
+            onClick={handleTranscriptRevert}
             disabled={saving}
-            data-tooltip="Delete"
+            data-tooltip="Revert Changes"
           >
-            <Icon name="delete" size={18} />
+            <Icon name="reset" size={18} />
           </button>
-        </div>
-      </header>
+        )}
 
+        <button
+          className="header-action delete"
+          onClick={handleDelete}
+          disabled={saving}
+          data-tooltip="Delete"
+        >
+          <Icon name="delete" size={18} />
+        </button>
+      </div>
+    </>
+  );
+
+  return (
+    <AdminLayout
+      title={letter.title || "Letter Review"}
+      headerActions={headerActions}
+      fullHeight
+    >
+    <div className="letter-review-page">
       <div className="review-body">
         <ResizableSplitPane
           letterId={letterId}
@@ -1629,7 +1631,8 @@ export default function LetterReviewPage() {
               </div>
             </div>
 
-            {/* Transcription Editor */}
+            {/* Transcription Editor - only shown when letter has letter-type images */}
+            {hasLetterPages && (
             <div className="editor-section">
               <div className="editor-header">
                 <h2>
@@ -1711,7 +1714,7 @@ export default function LetterReviewPage() {
                     isTranscriptEditing
                   }
                   suppressContentEditableWarning
-                  data-placeholder="Enter letter transcription..."
+                  data-placeholder=""
                   style={
                     {
                       "--transcript-font-size": transcriptFontSize,
@@ -1744,17 +1747,16 @@ export default function LetterReviewPage() {
                 </div>
               )}
             </div>
+            )}
 
-            {/* Extra Content Section (always visible) */}
+            {/* Extra Content Section - only shown when letter has transcribable extras */}
+            {hasExtras && (
             <div className="editor-section extra-content-section">
               <div className="editor-header">
                 <h2>Extra Content</h2>
                 <div className="header-right">
                   {/* Transcribe button - hidden when verified */}
-                  {letter.images.some((img) =>
-                    ["telegram", "cover", "ephemera"].includes(img.type),
-                  ) &&
-                    (letter.extraContentStatus !== "VERIFIED" ||
+                  {(letter.extraContentStatus !== "VERIFIED" ||
                       isExtraContentEditing) && (
                       <button
                         className="action-btn transcribe-btn"
@@ -1810,21 +1812,6 @@ export default function LetterReviewPage() {
                 </div>
               </div>
               <div className="extra-content-container">
-                {letter.extraContentStatus === "EMPTY" &&
-                !letter.images.some((img) =>
-                  ["telegram", "cover", "ephemera"].includes(img.type),
-                ) ? (
-                  <div className="empty-state">
-                    <p>No extra content for this letter</p>
-                  </div>
-                ) : letter.extraContentStatus === "EMPTY" ? (
-                  <div className="empty-state">
-                    <p>
-                      Click "Transcribe" to extract text from extras (telegrams,
-                      covers, ephemera)
-                    </p>
-                  </div>
-                ) : (
                   <DynamicEditor
                     ref={extraContentRef}
                     value={extraContent}
@@ -1832,7 +1819,7 @@ export default function LetterReviewPage() {
                     onKeyDown={handleExtraContentKeyDown}
                     onClick={handleExtraContentClick}
                     onDoubleClick={handleExtraContentDoubleClick}
-                    placeholder="Extra content transcription..."
+                    placeholder=""
                     readOnly={
                       letter.extraContentStatus === "VERIFIED" &&
                       !isExtraContentEditing
@@ -1844,7 +1831,6 @@ export default function LetterReviewPage() {
                     baseFontSize={1.0}
                     minHeight={180}
                   />
-                )}
 
                 {/* Double-click to edit tooltip for extra content */}
                 {showExtraContentTooltip && (
@@ -1863,6 +1849,7 @@ export default function LetterReviewPage() {
                 )}
               </div>
             </div>
+            )}
 
             {/* Metadata Form */}
             <div className="metadata-section">
@@ -2683,5 +2670,6 @@ export default function LetterReviewPage() {
         </div>
       )}
     </div>
+    </AdminLayout>
   );
 }

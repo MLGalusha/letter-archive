@@ -12,6 +12,7 @@ export type IconName =
   | 'process'
   | 'arrow-left'
   | 'arrow-right'
+  | 'arrows-horizontal'
   | 'close'
   | 'confirm'
   | 'eye'
@@ -25,10 +26,16 @@ export type IconName =
   | 'refresh'
   | 'chevron-down'
   | 'chevron-right'
+  | 'down'
+  | 'right'
   | 'lock'
   | 'unlock'
   | 'zoom-in'
-  | 'zoom-out';
+  | 'zoom-out'
+  | 'person'
+  | 'place'
+  | 'relationships'
+  | 'columns';
 
 interface IconProps {
   name: IconName;
@@ -87,6 +94,13 @@ const iconPaths: Record<IconName, React.ReactNode> = {
   ),
   'arrow-left': <polyline points="15,18 9,12 15,6" />,
   'arrow-right': <polyline points="9,18 15,12 9,6" />,
+  'arrows-horizontal': (
+    <>
+      <line x1="5" y1="12" x2="19" y2="12" />
+      <polyline points="8,8 4,12 8,16" />
+      <polyline points="16,8 20,12 16,16" />
+    </>
+  ),
   close: (
     <>
       <line x1="18" y1="6" x2="6" y2="18" />
@@ -154,6 +168,8 @@ const iconPaths: Record<IconName, React.ReactNode> = {
   ),
   'chevron-down': <polyline points="6,9 12,15 18,9" />,
   'chevron-right': <polyline points="9,6 15,12 9,18" />,
+  down: <polyline points="6,9 12,15 18,9" />,
+  right: <polyline points="9,6 15,12 9,18" />,
   minus: <line x1="5" y1="12" x2="19" y2="12" />,
   lock: (
     <>
@@ -180,6 +196,32 @@ const iconPaths: Record<IconName, React.ReactNode> = {
       <circle cx="11" cy="11" r="8" />
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
       <line x1="8" y1="11" x2="14" y2="11" />
+    </>
+  ),
+  person: (
+    <>
+      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </>
+  ),
+  place: (
+    <>
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+      <circle cx="12" cy="9" r="2.5" />
+      <ellipse cx="12" cy="22" rx="6" ry="2" />
+    </>
+  ),
+  relationships: (
+    <>
+      <circle cx="8.5" cy="12" r="6.5" />
+      <circle cx="15.5" cy="12" r="6.5" />
+    </>
+  ),
+  columns: (
+    <>
+      <line x1="6" y1="4" x2="6" y2="20" />
+      <line x1="12" y1="4" x2="12" y2="20" />
+      <line x1="18" y1="4" x2="18" y2="20" />
     </>
   ),
 };

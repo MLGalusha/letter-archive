@@ -307,6 +307,11 @@ export const canonicalPersons = pgTable(
     canonicalName: text('canonical_name').notNull(),
     aliases: text('aliases').array().default([]),
     notes: text('notes'),
+    // Biography fields for AI-generated person narratives
+    biography: text('biography'),
+    biographyStatus: contentStatusEnum('biography_status').notNull().default('EMPTY'),
+    biographyVerifiedAt: timestamp('biography_verified_at', { withTimezone: true }),
+    biographyVerifiedBy: text('biography_verified_by'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

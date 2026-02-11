@@ -29,12 +29,25 @@ body.dark {
     --bg: hsl(0 0% 5%);
     --bg-light: hsl(0 0% 10%);
     --text: hsl(0 0% 95%);
-    --text-muted: hsl(0 0% 70%);
+    --text-muted: hsl(0 0% 65%); /* Improved from 70% for better contrast */
     --border: hsl(0 0% 30%);
     --gradient: linear-gradient(0deg, var(--bg), 95%, var(--bg-light));
     --gradient-hover: linear-gradient(0deg, var(--bg), var(--bg-light));
     --highlight: hsl(0 0% 60%);
     --border-card: solid 1px var(--border);
+}
+
+/* Dark mode placeholder text - ensure readable contrast (WCAG AA requires 4.5:1) */
+body.dark input::placeholder,
+body.dark textarea::placeholder {
+    color: hsl(0 0% 62%) !important; /* #9e9e9e on #0d0d0d bg provides good contrast */
+    opacity: 1 !important;
+}
+
+/* Dark mode link colors in muted contexts */
+body.dark .letter-link,
+body.dark a.text-muted {
+    color: hsl(210 50% 70%);
 }
 
 /* Typography */

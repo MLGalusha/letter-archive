@@ -1,33 +1,15 @@
 .letter-review-page {
-  min-height: 100vh;
-  background: var(--bg);
-}
-
-/* Header - Fixed at top, never moves */
-.review-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  background: var(--bg-light);
-  border-bottom: solid 1px var(--border);
-  padding: var(--spacing-sm) var(--spacing-lg);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 1px 3px hsla(0, 0%, 0%, 0.1);
-}
-
-.review-header h1 {
-  margin: 0;
-  font-size: 1.5rem;
   flex: 1;
+  min-height: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.loading-content {
+  padding: var(--spacing-lg);
   text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 0 var(--spacing-sm);
+  color: var(--text-muted);
 }
 
 /* Header Action Buttons */
@@ -204,13 +186,10 @@
   transform: scale(1.025);
 }
 
-/* Body - Fixed below header, fills remaining viewport */
+/* Body - fills remaining space */
 .review-body {
-  position: fixed;
-  top: 53px; /* Header height */
-  left: 0;
-  right: 0;
-  bottom: 0;
+  flex: 1;
+  height: 0; /* Definite height so children's height: 100% resolves correctly */
   overflow: hidden;
 }
 
@@ -232,19 +211,6 @@
 
 /* Mobile view - ResizableSplitPane handles the vertical layout */
 @media (max-width: 768px) {
-  .review-header {
-    padding: var(--spacing-sm);
-  }
-
-  .review-header h1 {
-    font-size: 1.25rem;
-  }
-
-  .review-body {
-    position: static;
-    padding-top: 53px; /* Space for fixed header */
-  }
-
   .review-layout {
     padding: var(--spacing-sm);
   }
@@ -275,7 +241,7 @@
   flex: 1;
   min-height: 0;
   /* Spacing: top, right (gap from divider), bottom, left */
-  margin: var(--spacing-lg) var(--spacing-sm) var(--spacing-sm) 0;
+  margin: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) 0;
 }
 
 .images-panel h2 {

@@ -1,53 +1,15 @@
 .letter-display {
   min-height: 100vh;
   background: var(--bg);
-}
-
-/* Header - Fixed at top, never moves */
-.display-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  background: var(--bg-light);
-  border-bottom: solid 1px var(--border);
-  padding: var(--spacing-sm) var(--spacing-lg);
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 1px 3px hsla(0, 0%, 0%, 0.1);
+  flex-direction: column;
 }
 
-.display-header h1 {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
-.back-button {
-  padding: 0.5rem 1rem;
-  background: var(--bg);
-  color: var(--text);
-  border: solid 1px var(--border);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: var(--font-sm);
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.back-button:hover {
-  background: var(--bg-light);
-  transform: scale(1.025);
-}
-
-/* Body - Fixed below header, fills remaining viewport */
+/* Body - fills remaining viewport */
 .display-body {
-  position: fixed;
-  top: 53px; /* Header height */
-  left: 0;
-  right: 0;
-  bottom: 0;
+  flex: 1;
+  display: flex;
+  overflow: hidden;
   overflow: hidden;
 }
 

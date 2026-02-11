@@ -10,8 +10,9 @@ import {
   updateCanonicalPerson,
   updateCanonicalPlace,
   mergePersons,
-  getLettersForPerson,
-  getLettersForPlace,
+  mergePlaces,
+  getLettersForPersonEnriched,
+  getLettersForPlaceEnriched,
   getPendingReviewItems,
   resolveReviewItem,
   getReviewQueueStats,
@@ -24,11 +25,44 @@ import {
   createRelationship,
   updateRelationship,
   deleteRelationship,
+  // Phase 5: Merge enhancements
+  findPotentialDuplicatePersons,
+  findPotentialDuplicatePlaces,
+  bulkMergePersons,
+  bulkMergePlaces,
+  getPersonDetailsForMerge,
+  getPlaceDetailsForMerge,
 } from '../../services/entities.js';
+import { updatePersonBiography, type BiographyUpdateData } from '../../services/biography.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger({ module: 'admin-entities' });
 const router = Router();
+
+// ============================================================================
+// DUPLICATE SUGGESTIONS ENDPOINTS
+// ============================================================================
+
+/**
+ * GET /admin/entities/suggestions - Get AI-suggested potential duplicates
+ * Query params:
+ *   - entityType: 'person' | 'place' (required)
+ *   - limit: number (optional, default 20)
+ */
+router.get('/suggestions', async (req, res, next) => {
+  try {
+    const entityType = z.enum(['person', 'place']).parse(req.query.entityType);
+    const limit = z.coerce.number().min(1).max(100).optional().parse(req.query.limit) ?? 20;
+
+    const suggestions = entityType === 'person'
+      ? await findPotentialDuplicatePersons(limit)
+      : await findPotentialDuplicatePlaces(limit);
+
+    res.json({ suggestions });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ============================================================================
 // PERSONS ENDPOINTS
@@ -60,7 +94,7 @@ router.get('/persons/search', async (req, res, next) => {
 });
 
 /**
- * GET /admin/entities/persons/:id - Get person detail with related letters
+ * GET /admin/entities/persons/:id - Get person detail with related letters and relationships
  */
 router.get('/persons/:id', async (req, res, next) => {
   try {
@@ -70,8 +104,9 @@ router.get('/persons/:id', async (req, res, next) => {
       return;
     }
 
-    const letters = await getLettersForPerson(req.params.id);
-    res.json({ person, letters });
+    const letters = await getLettersForPersonEnriched(req.params.id);
+    const relationships = await getRelationshipsForPerson(req.params.id);
+    res.json({ person, letters, relationships });
   } catch (error) {
     next(error);
   }
@@ -136,6 +171,136 @@ router.post('/persons/merge', async (req, res, next) => {
   }
 });
 
+const bulkMergePersonsSchema = z.object({
+  keepId: z.string().uuid(),
+  mergeIds: z.array(z.string().uuid()).min(1),
+});
+
+/**
+ * POST /admin/entities/persons/bulk-merge - Merge multiple persons into one
+ */
+router.post('/persons/bulk-merge', async (req, res, next) => {
+  try {
+    const { keepId, mergeIds } = bulkMergePersonsSchema.parse(req.body);
+    await bulkMergePersons(keepId, mergeIds);
+    const person = await getCanonicalPersonById(keepId);
+    res.json({ person, message: `${mergeIds.length} persons merged successfully` });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /admin/entities/persons/:id/merge-details - Get detailed info for merge comparison
+ */
+router.get('/persons/:id/merge-details', async (req, res, next) => {
+  try {
+    const details = await getPersonDetailsForMerge(req.params.id);
+    if (!details) {
+      res.status(404).json({ error: 'Person not found' });
+      return;
+    }
+    res.json(details);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
+// BIOGRAPHY ENDPOINTS
+// ============================================================================
+
+/**
+ * POST /admin/entities/persons/:id/biography/generate - Generate AI biography
+ */
+router.post('/persons/:id/biography/generate', async (req, res, next) => {
+  try {
+    const { generateBiography } = await import('../../ai/biography.js');
+    const person = await getCanonicalPersonById(req.params.id);
+    if (!person) {
+      res.status(404).json({ error: 'Person not found' });
+      return;
+    }
+
+    log.info({ personId: req.params.id }, 'Generating biography for person');
+    const biography = await generateBiography(req.params.id);
+
+    // Save as AI_DRAFT
+    await updatePersonBiography(req.params.id, {
+      biography,
+      biographyStatus: 'AI_DRAFT',
+    });
+
+    const updated = await getCanonicalPersonById(req.params.id);
+    res.json({ person: updated });
+  } catch (error) {
+    log.error({ error, personId: req.params.id }, 'Failed to generate biography');
+    next(error);
+  }
+});
+
+const saveBiographySchema = z.object({
+  biography: z.string(),
+  verify: z.boolean().optional(),
+});
+
+/**
+ * PUT /admin/entities/persons/:id/biography - Save/verify biography
+ */
+router.put('/persons/:id/biography', async (req, res, next) => {
+  try {
+    const data = saveBiographySchema.parse(req.body);
+    const person = await getCanonicalPersonById(req.params.id);
+    if (!person) {
+      res.status(404).json({ error: 'Person not found' });
+      return;
+    }
+
+    const updateData: BiographyUpdateData = {
+      biography: data.biography,
+    };
+
+    if (data.verify) {
+      updateData.biographyStatus = 'VERIFIED';
+      updateData.biographyVerifiedAt = new Date();
+      updateData.biographyVerifiedBy = 'admin';
+    } else {
+      // If edited after verified, mark as edited
+      updateData.biographyStatus = 'EDITED';
+    }
+
+    await updatePersonBiography(req.params.id, updateData);
+    const updated = await getCanonicalPersonById(req.params.id);
+    res.json({ person: updated });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/entities/persons/:id/biography/unverify - Revert to editable state
+ */
+router.post('/persons/:id/biography/unverify', async (req, res, next) => {
+  try {
+    const person = await getCanonicalPersonById(req.params.id);
+    if (!person) {
+      res.status(404).json({ error: 'Person not found' });
+      return;
+    }
+
+    await updatePersonBiography(req.params.id, {
+      biographyStatus: 'EDITED',
+      biographyVerifiedAt: null,
+      biographyVerifiedBy: null,
+    });
+
+    const updated = await getCanonicalPersonById(req.params.id);
+    res.json({ person: updated });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ============================================================================
 // PLACES ENDPOINTS
 // ============================================================================
@@ -176,7 +341,7 @@ router.get('/places/:id', async (req, res, next) => {
       return;
     }
 
-    const letters = await getLettersForPlace(req.params.id);
+    const letters = await getLettersForPlaceEnriched(req.params.id);
     res.json({ place, letters });
   } catch (error) {
     next(error);
@@ -220,6 +385,60 @@ router.put('/places/:id', async (req, res, next) => {
     await updateCanonicalPlace(req.params.id, data);
     const place = await getCanonicalPlaceById(req.params.id);
     res.json({ place });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const mergePlacesSchema = z.object({
+  keepId: z.string().uuid(),
+  mergeId: z.string().uuid(),
+});
+
+/**
+ * POST /admin/entities/places/merge - Merge two places
+ */
+router.post('/places/merge', async (req, res, next) => {
+  try {
+    const { keepId, mergeId } = mergePlacesSchema.parse(req.body);
+    await mergePlaces(keepId, mergeId);
+    const place = await getCanonicalPlaceById(keepId);
+    res.json({ place, message: 'Places merged successfully' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const bulkMergePlacesSchema = z.object({
+  keepId: z.string().uuid(),
+  mergeIds: z.array(z.string().uuid()).min(1),
+});
+
+/**
+ * POST /admin/entities/places/bulk-merge - Merge multiple places into one
+ */
+router.post('/places/bulk-merge', async (req, res, next) => {
+  try {
+    const { keepId, mergeIds } = bulkMergePlacesSchema.parse(req.body);
+    await bulkMergePlaces(keepId, mergeIds);
+    const place = await getCanonicalPlaceById(keepId);
+    res.json({ place, message: `${mergeIds.length} places merged successfully` });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /admin/entities/places/:id/merge-details - Get detailed info for merge comparison
+ */
+router.get('/places/:id/merge-details', async (req, res, next) => {
+  try {
+    const details = await getPlaceDetailsForMerge(req.params.id);
+    if (!details) {
+      res.status(404).json({ error: 'Place not found' });
+      return;
+    }
+    res.json(details);
   } catch (error) {
     next(error);
   }

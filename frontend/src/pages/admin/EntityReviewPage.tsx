@@ -130,15 +130,6 @@ export default function EntityReviewPage() {
 
   return (
     <div className="entity-review-page">
-      <header className="review-header">
-        <Link to="/admin" className="back-link">
-          <Icon name="back" size={16} />
-          <span>Dashboard</span>
-        </Link>
-        <h1>Entity Review Queue</h1>
-        <div className="header-spacer" />
-      </header>
-
       <div className="review-content">
         {/* Stats Bar */}
         {stats && (

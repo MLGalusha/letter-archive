@@ -24,7 +24,8 @@ import {
   DropdownItem,
   DropdownDivider,
 } from "../../components/common";
-import { getRecentEdits, formatTimeAgo, type RecentEdit } from "../../utils/recentEdits";
+import { analyzeCollection, type CollectionAnalysisResult } from "../../api/collections";
+import AdminLayout from "../../components/AdminLayout";
 
 // Visibility filter type (inline instead of from FilterSidebar)
 type VisibilityFilter = 'ALL' | 'PUBLISHED' | 'HIDDEN';
@@ -70,7 +71,7 @@ interface SortColumn {
 }
 
 // Column definitions for visibility toggle
-type ColumnId = 'sender' | 'recipient' | 'date' | 'collection' | 'letters' | 'extras' | 'transcript' | 'metadata' | 'extraContent' | 'visibility' | 'created' | 'sync';
+type ColumnId = 'sender' | 'recipient' | 'date' | 'collection' | 'letters' | 'extras' | 'transcript' | 'metadata' | 'visibility' | 'created' | 'sync';
 
 interface ColumnDef {
   id: ColumnId;
@@ -87,7 +88,6 @@ const ALL_COLUMNS: ColumnDef[] = [
   { id: 'extras', label: 'Extras', defaultVisible: true },
   { id: 'transcript', label: 'Transcript', defaultVisible: true },
   { id: 'metadata', label: 'Metadata', defaultVisible: true },
-  { id: 'extraContent', label: 'Extra Trans', defaultVisible: false },
   { id: 'sync', label: 'Sync', defaultVisible: true },
   { id: 'visibility', label: 'Visibility', defaultVisible: true },
   { id: 'created', label: 'Created', defaultVisible: true },
@@ -123,8 +123,8 @@ const DEFAULT_VISIBLE_COLUMNS = new Set<ColumnId>(
 const COLUMN_STORAGE_KEY = 'adminDashboardColumns';
 
 // Status icon component for two-track workflow
-function StatusIcon({ status, type }: { status: ContentStatus; type: 'T' | 'M' | 'E' }) {
-  const titleMap = { T: 'Transcript', M: 'Metadata', E: 'Extra Content' };
+function StatusIcon({ status, type }: { status: ContentStatus; type: 'T' | 'M' }) {
+  const titleMap = { T: 'Transcript', M: 'Metadata' };
   const title = titleMap[type];
   switch (status) {
     case 'EMPTY':
@@ -138,6 +138,34 @@ function StatusIcon({ status, type }: { status: ContentStatus; type: 'T' | 'M' |
     default:
       return <span className="status-icon">—</span>;
   }
+}
+
+// Combine transcript + extra content status into a single status.
+// Only considers sections that actually exist (have corresponding images).
+function getCombinedTranscriptStatus(
+  transcriptStatus: ContentStatus,
+  extraContentStatus: ContentStatus,
+  hasLetterPages: boolean,
+  hasExtras: boolean,
+): ContentStatus {
+  // Only include statuses for sections that exist
+  const statuses: ContentStatus[] = [];
+  if (hasLetterPages) statuses.push(transcriptStatus);
+  if (hasExtras) statuses.push(extraContentStatus);
+
+  // No relevant sections
+  if (statuses.length === 0) return 'EMPTY';
+
+  // Single section — use its status directly
+  if (statuses.length === 1) return statuses[0];
+
+  // Both sections exist: both must be VERIFIED
+  if (statuses.every(s => s === 'VERIFIED')) return 'VERIFIED';
+  // Either EDITED (or one verified, one edited) counts as edited
+  if (statuses.some(s => s === 'EDITED' || s === 'VERIFIED') && statuses.every(s => s !== 'EMPTY')) return 'EDITED';
+  // Either AI_DRAFT
+  if (statuses.some(s => s === 'AI_DRAFT')) return 'AI_DRAFT';
+  return 'EMPTY';
 }
 
 // Parse dateRaw into formatted MM/DD/YYYY string
@@ -279,11 +307,6 @@ export default function AdminDashboard() {
       }
     };
   }, [searchInput]);
-
-  // Recent edits state
-  const [recentEdits, setRecentEdits] = useState<RecentEdit[]>([]);
-  const [showRecentDropdown, setShowRecentDropdown] = useState(false);
-  const recentDropdownRef = useRef<HTMLDivElement>(null);
 
   // Multi-column sorting - array maintains priority order (first = highest priority)
   const [sortColumns, setSortColumns] = useState<SortColumn[]>(
@@ -452,14 +475,6 @@ export default function AdminDashboard() {
     fetchLetters(true, 1);
   }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
-  // Load recent edits on mount and when window gains focus
-  useEffect(() => {
-    const loadRecent = () => setRecentEdits(getRecentEdits());
-    loadRecent();
-    window.addEventListener('focus', loadRecent);
-    return () => window.removeEventListener('focus', loadRecent);
-  }, []);
-
   useEffect(() => {
     const isAuth = sessionStorage.getItem("adminAuth");
     if (!isAuth) {
@@ -468,11 +483,6 @@ export default function AdminDashboard() {
     }
     fetchLetters(isInitialLoad);
   }, [navigate, fetchLetters, isInitialLoad]);
-
-  const handleLogout = () => {
-    sessionStorage.removeItem("adminAuth");
-    navigate("/admin-login");
-  };
 
   const handleRowClick = (letterId: string, index: number, e: React.MouseEvent) => {
     if (editMode) {
@@ -675,7 +685,6 @@ export default function AdminDashboard() {
     } else {
       // Entering edit mode, close other dropdowns
       setShowProcessMenu(false);
-      setShowRecentDropdown(false);
       setShowDateDropdown(false);
       setEditMode(true);
     }
@@ -871,7 +880,6 @@ export default function AdminDashboard() {
     const newState = !showProcessMenu;
     if (newState) {
       // Close other dropdowns when opening process menu
-      setShowRecentDropdown(false);
       setShowDateDropdown(false);
     }
     setShowProcessMenu(newState);
@@ -926,6 +934,28 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error("Failed to start metadata extraction:", err);
       showToast(err instanceof Error ? err.message : "Failed to start metadata extraction", 'error');
+    }
+  };
+
+  const handleAnalyzeCollection = async () => {
+    if (collectionFilter === 'all') {
+      showToast('Select a collection filter to analyze', 'error');
+      return;
+    }
+    try {
+      setShowProcessMenu(false);
+      showToast(`Analyzing collection ${collectionFilter}...`, 'info');
+      const result: CollectionAnalysisResult = await analyzeCollection(collectionFilter);
+      const { stats } = result;
+      showToast(
+        `Analysis complete: ${stats.peopleFound} people, ${stats.placesFound} places, ` +
+        `${stats.relationshipsFound} relationships. Created ${stats.entitiesCreated}, ` +
+        `linked ${stats.entitiesLinked}, ${stats.itemsQueuedForReview} queued for review.`,
+        'success'
+      );
+    } catch (err) {
+      console.error("Failed to analyze collection:", err);
+      showToast(err instanceof Error ? err.message : "Failed to analyze collection", 'error');
     }
   };
 
@@ -1109,11 +1139,6 @@ export default function AdminDashboard() {
         setShowProcessMenu(false);
       }
 
-      // Close recent dropdown if clicking outside
-      if (recentDropdownRef.current && !recentDropdownRef.current.contains(target)) {
-        setShowRecentDropdown(false);
-      }
-
       // Close date dropdown if clicking outside
       if (dateDropdownRef.current && !dateDropdownRef.current.contains(target)) {
         setShowDateDropdown(false);
@@ -1126,12 +1151,7 @@ export default function AdminDashboard() {
   if (loading && isInitialLoad) {
     return (
       <div className="admin-dashboard">
-        <header className="admin-header">
-          <div className="header-row header-row-primary">
-            <h1>Admin Panel</h1>
-          </div>
-        </header>
-        <div className="admin-content">
+        <div className="admin-content loading-content">
           <p>Loading letters...</p>
         </div>
       </div>
@@ -1141,121 +1161,146 @@ export default function AdminDashboard() {
   if (error) {
     return (
       <div className="admin-dashboard">
-        <header className="admin-header">
-          <div className="header-row header-row-primary">
-            <h1>Admin Panel</h1>
-          </div>
-        </header>
-        <div className="admin-content">
+        <div className="admin-content error-content">
           <p className="error-message">{error}</p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="admin-dashboard">
-      {/* Combined Header + Toolbar */}
-      <header className="admin-header">
-        <div className="header-row header-row-primary">
-          <h1>Admin Panel</h1>
-          <div className="toolbar-buttons">
-            {/* Edit mode toggle */}
-            <Button
-              icon={editMode ? "close" : "edit"}
-              active={editMode}
-              onClick={toggleEditMode}
-            >
-              {editMode ? "Exit Edit" : "Edit"}
-            </Button>
+  // Header action buttons for AdminLayout
+  const headerActions = (
+    <div className="toolbar-buttons">
+      {/* Edit mode toggle */}
+      <Button
+        icon={editMode ? "close" : "edit"}
+        active={editMode}
+        onClick={toggleEditMode}
+      >
+        {editMode ? "Exit Edit" : "Edit"}
+      </Button>
 
-            {/* Upload button */}
-            <Button icon="upload" onClick={handleUploadClick}>Upload</Button>
+      {/* Upload button */}
+      <Button icon="upload" onClick={handleUploadClick}>Upload</Button>
 
-            {/* Process button or controls */}
-            {processingStatus?.isRunning ? (
-              <div className="processing-controls">
-                <div className="processing-progress">
-                  <span className="progress-text">
-                    {processingStatus.currentJob?.type === "transcription" ? "Transcribing" : "Extracting"}:{" "}
-                    {processingStatus.completed}/{processingStatus.total}
-                    {processingStatus.failed > 0 && (
-                      <span className="failed-count"> ({processingStatus.failed} failed)</span>
-                    )}
-                  </span>
-                  <div className="progress-bar">
-                    <div
-                      className="progress-fill"
-                      style={{
-                        width: `${processingStatus.total > 0 ? (processingStatus.completed / processingStatus.total) * 100 : 0}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-                {processingStatus.isPaused ? (
-                  <button onClick={handleResumeProcessing} className="resume-button">
-                    Resume
-                  </button>
-                ) : (
-                  <button onClick={handlePauseProcessing} className="pause-button">
-                    Pause
-                  </button>
-                )}
-                <button onClick={handleAbortProcessing} className="abort-button">
-                  Abort
-                </button>
-              </div>
-            ) : (
-              <div className="process-button-container" ref={processButtonRef}>
-                <Button
-                  icon="process"
-                  active={showProcessMenu}
-                  onClick={handleProcessMenuToggle}
-                >
-                  Process
-                </Button>
-                {showProcessMenu && (
-                  <div className="dropdown-menu">
-                    <DropdownItem
-                      title="Transcribe"
-                      description={selectedIds.size > 0 ? `Process ${selectedIds.size} selected` : "Process UPLOADED letters"}
-                      onClick={handleStartTranscription}
-                    />
-                    <DropdownItem
-                      title="Extract Metadata"
-                      description={selectedIds.size > 0 ? `Process ${selectedIds.size} selected` : "Process TRANSCRIBED letters"}
-                      onClick={handleStartMetadataExtraction}
-                    />
-                    <DropdownDivider />
-                    <DropdownItem
-                      title="Reset Transcriptions"
-                      description="Clear transcripts, return to UPLOADED"
-                      onClick={handleResetTranscriptionsClick}
-                      disabled={selectedIds.size === 0}
-                    />
-                    <DropdownItem
-                      title="Clear Metadata"
-                      description="Clear metadata, keep transcripts"
-                      onClick={handleClearMetadataClick}
-                      disabled={selectedIds.size === 0}
-                    />
-                    <DropdownItem
-                      title="Delete"
-                      description="Permanently delete selected letters"
-                      onClick={handleDeleteClick}
-                      disabled={selectedIds.size === 0}
-                      variant="danger"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
+      {/* Process button or controls */}
+      {processingStatus?.isRunning ? (
+        <div className="processing-controls">
+          <div className="processing-progress">
+            <span className="progress-text">
+              {processingStatus.currentJob?.type === "transcription" ? "Transcribing" : "Extracting"}:{" "}
+              {processingStatus.completed}/{processingStatus.total}
+              {processingStatus.failed > 0 && (
+                <span className="failed-count"> ({processingStatus.failed} failed)</span>
+              )}
+            </span>
+            <div className="progress-bar">
+              <div
+                className="progress-fill"
+                style={{
+                  width: `${processingStatus.total > 0 ? (processingStatus.completed / processingStatus.total) * 100 : 0}%`,
+                }}
+              />
+            </div>
           </div>
-          <Button icon="logout" onClick={handleLogout}>Logout</Button>
+          {processingStatus.isPaused ? (
+            <button onClick={handleResumeProcessing} className="resume-button">
+              Resume
+            </button>
+          ) : (
+            <button onClick={handlePauseProcessing} className="pause-button">
+              Pause
+            </button>
+          )}
+          <button onClick={handleAbortProcessing} className="abort-button">
+            Abort
+          </button>
         </div>
+      ) : (
+        <div className="process-button-container" ref={processButtonRef}>
+          <Button
+            icon="process"
+            active={showProcessMenu}
+            onClick={handleProcessMenuToggle}
+          >
+            Process
+          </Button>
+          {showProcessMenu && (
+            <div className="dropdown-menu">
+              <DropdownItem
+                title="Transcribe"
+                description={selectedIds.size > 0 ? `Process ${selectedIds.size} selected` : "Process UPLOADED letters"}
+                onClick={handleStartTranscription}
+              />
+              <DropdownItem
+                title="Extract Metadata"
+                description={selectedIds.size > 0 ? `Process ${selectedIds.size} selected` : "Process TRANSCRIBED letters"}
+                onClick={handleStartMetadataExtraction}
+              />
+              <DropdownItem
+                title="Analyze Collection"
+                description={collectionFilter !== 'all' ? `Discover entities in collection ${collectionFilter}` : "Filter by collection first"}
+                onClick={handleAnalyzeCollection}
+                disabled={collectionFilter === 'all'}
+              />
+              <DropdownDivider />
+              <DropdownItem
+                title="Reset Transcriptions"
+                description="Clear transcripts, return to UPLOADED"
+                onClick={handleResetTranscriptionsClick}
+                disabled={selectedIds.size === 0}
+              />
+              <DropdownItem
+                title="Clear Metadata"
+                description="Clear metadata, keep transcripts"
+                onClick={handleClearMetadataClick}
+                disabled={selectedIds.size === 0}
+              />
+              <DropdownItem
+                title="Delete"
+                description="Permanently delete selected letters"
+                onClick={handleDeleteClick}
+                disabled={selectedIds.size === 0}
+                variant="danger"
+              />
+            </div>
+          )}
+        </div>
+      )}
 
-        {/* Filter pills - single row with all filters */}
-        <div className="header-row header-row-filters">
+      {/* Columns toggle */}
+      <div className="dropdown-container" ref={columnMenuRef}>
+        <Button
+          icon="columns"
+          active={showColumnMenu}
+          onClick={() => setShowColumnMenu(!showColumnMenu)}
+        >
+          Columns
+        </Button>
+        {showColumnMenu && (
+          <div className="column-toggle-dropdown">
+            {ALL_COLUMNS.map(col => (
+              <label key={col.id} className="column-toggle-item">
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.has(col.id)}
+                  onChange={() => toggleColumnVisibility(col.id)}
+                />
+                {col.label}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+    </div>
+  );
+
+  return (
+    <AdminLayout title="Dashboard" headerActions={headerActions} fullHeight>
+    <div className="admin-dashboard">
+      {/* Filter pills - single row with all filters */}
+      <div className="dashboard-filter-bar">
           <div className="filter-pills">
             {/* Visibility filters */}
             <div className="filter-group-inline">
@@ -1364,76 +1409,12 @@ export default function AdminDashboard() {
               maxLength={3}
             />
 
-            {/* Columns toggle */}
-            <div className="dropdown-container" ref={columnMenuRef}>
-              <button
-                className="dropdown-trigger"
-                onClick={() => setShowColumnMenu(!showColumnMenu)}
-              >
-                Columns ▾
-              </button>
-              {showColumnMenu && (
-                <div className="column-toggle-dropdown">
-                  {ALL_COLUMNS.map(col => (
-                    <label key={col.id} className="column-toggle-item">
-                      <input
-                        type="checkbox"
-                        checked={visibleColumns.has(col.id)}
-                        onChange={() => toggleColumnVisibility(col.id)}
-                      />
-                      {col.label}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* History dropdown */}
-            <div className="dropdown-container" ref={recentDropdownRef}>
-              <button
-                className="dropdown-trigger"
-                onClick={() => {
-                  const newState = !showRecentDropdown;
-                  if (newState) {
-                    setShowProcessMenu(false);
-                    setShowDateDropdown(false);
-                  }
-                  setShowRecentDropdown(newState);
-                }}
-              >
-                History {recentEdits.length > 0 && `(${recentEdits.length})`} ▾
-              </button>
-              {showRecentDropdown && (
-                <div className="history-dropdown">
-                  <div className="history-header">Edit History</div>
-                  {recentEdits.length === 0 ? (
-                    <div className="history-empty">No recent edits</div>
-                  ) : (
-                    recentEdits.map((edit) => (
-                      <div
-                        key={edit.id}
-                        className="history-item"
-                        onClick={() => {
-                          navigate(`/admin/letters/${edit.id}`);
-                          setShowRecentDropdown(false);
-                        }}
-                      >
-                        <span className="history-info">{edit.displayName}</span>
-                        <span className="history-time">{formatTimeAgo(edit.editedAt)}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-
             {/* Date dropdown */}
             <div className="dropdown-container" ref={dateDropdownRef}>
               <button
                 className={`dropdown-trigger ${hasDateFilter ? 'active' : ''}`}
                 onClick={() => {
                   setShowDateDropdown(!showDateDropdown);
-                  setShowRecentDropdown(false);
                   setShowProcessMenu(false);
                 }}
               >
@@ -1554,7 +1535,6 @@ export default function AdminDashboard() {
             {((pagination.page - 1) * pagination.limit) + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
           </span>
         </div>
-      </header>
 
       <div className={`admin-content ${editMode ? 'has-edit-toolbar' : ''}`}>
         {/* Single table with sticky header - scrolls together horizontally */}
@@ -1569,7 +1549,6 @@ export default function AdminDashboard() {
               {visibleColumns.has('extras') && <col style={{ width: '50px' }} />}
               {visibleColumns.has('transcript') && <col style={{ width: '70px' }} />}
               {visibleColumns.has('metadata') && <col style={{ width: '70px' }} />}
-              {visibleColumns.has('extraContent') && <col style={{ width: '70px' }} />}
               {visibleColumns.has('sync') && <col style={{ width: '50px' }} />}
               {visibleColumns.has('visibility') && <col style={{ width: '70px' }} />}
               {visibleColumns.has('created') && <col style={{ width: '80px' }} />}
@@ -1690,9 +1669,6 @@ export default function AdminDashboard() {
                 {visibleColumns.has('metadata') && (
                   <th className="status-header">Metadata</th>
                 )}
-                {visibleColumns.has('extraContent') && (
-                  <th className="status-header" title="Extra content transcription (telegrams, covers, ephemera)">Extra</th>
-                )}
                 {visibleColumns.has('sync') && (
                   <th className="status-header" title="Identity/content sync status">Sync</th>
                 )}
@@ -1770,17 +1746,17 @@ export default function AdminDashboard() {
                       {visibleColumns.has('extras') && <td className="count-cell">{extrasCount || "—"}</td>}
                       {visibleColumns.has('transcript') && (
                         <td className="status-cell">
-                          <StatusIcon status={letter.transcriptStatus} type="T" />
+                          <StatusIcon status={getCombinedTranscriptStatus(
+                            letter.transcriptStatus,
+                            letter.extraContentStatus,
+                            letter.images.some(img => img.type === 'letter'),
+                            letter.images.some(img => ['telegram', 'cover', 'ephemera'].includes(img.type)),
+                          )} type="T" />
                         </td>
                       )}
                       {visibleColumns.has('metadata') && (
                         <td className="status-cell">
                           <StatusIcon status={letter.metadataContentStatus} type="M" />
-                        </td>
-                      )}
-                      {visibleColumns.has('extraContent') && (
-                        <td className="status-cell">
-                          <StatusIcon status={letter.extraContentStatus} type="E" />
                         </td>
                       )}
                       {visibleColumns.has('sync') && (
@@ -1918,5 +1894,6 @@ export default function AdminDashboard() {
         </div>
       )}
     </div>
+    </AdminLayout>
   );
 }

@@ -221,4 +221,76 @@ router.get('/letters/:letterId', async (req, res, next) => {
   }
 });
 
+/**
+ * GET /letters/:letterId/adjacent - Get prev/next letters in the same collection
+ * Returns the adjacent letter IDs and the current position within the collection
+ */
+router.get('/letters/:letterId/adjacent', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    // Find the current letter
+    const letter = await db.query.letters.findFirst({
+      where: and(
+        eq(letters.id, letterId),
+        isNull(letters.deletedAt),
+        eq(letters.visibility, 'PUBLISHED')
+      ),
+      columns: {
+        id: true,
+        collectionId: true,
+        dateRaw: true,
+        createdAt: true,
+      },
+    });
+
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Only include L-type (letter) records in navigation, ordered by date
+    const collectionLetters = await db.query.letters.findMany({
+      where: and(
+        eq(letters.collectionId, letter.collectionId),
+        eq(letters.type, 'L'),
+        eq(letters.visibility, 'PUBLISHED'),
+        isNull(letters.deletedAt)
+      ),
+      columns: {
+        id: true,
+        dateRaw: true,
+        createdAt: true,
+      },
+      orderBy: [asc(letters.dateRaw), asc(letters.createdAt)],
+    });
+
+    // Find current position
+    const currentIndex = collectionLetters.findIndex(l => l.id === letterId);
+
+    if (currentIndex === -1) {
+      // Letter exists but not in L-type list (might be a cover)
+      res.json({
+        prev: null,
+        next: null,
+        position: 0,
+        total: 0,
+      });
+      return;
+    }
+
+    const prev = currentIndex > 0 ? collectionLetters[currentIndex - 1].id : null;
+    const next = currentIndex < collectionLetters.length - 1 ? collectionLetters[currentIndex + 1].id : null;
+
+    res.json({
+      prev,
+      next,
+      position: currentIndex + 1,
+      total: collectionLetters.length,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

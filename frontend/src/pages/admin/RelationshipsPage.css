@@ -1,0 +1,383 @@
+.relationships-page {
+  height: 100%;
+  background-color: var(--bg-light);
+  padding: var(--spacing-lg);
+  overflow-y: auto;
+}
+
+.relationships-page .page-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--spacing-md);
+}
+
+/* View Controls */
+.view-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.view-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.toggle-btn {
+  padding: 8px 16px;
+  border: none;
+  background-color: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.toggle-btn:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+.toggle-btn:hover {
+  background-color: var(--bg-light);
+}
+
+.toggle-btn.active {
+  background-color: #1976d2;
+  color: white;
+}
+
+.table-filters {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+}
+
+.search-input {
+  flex: 1;
+  max-width: 300px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background-color: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.type-filter {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background-color: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  min-width: 150px;
+}
+
+.finder-toggle {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background-color: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.finder-toggle:hover {
+  background-color: var(--bg-light);
+}
+
+.finder-toggle.active {
+  background-color: #1976d2;
+  color: white;
+  border-color: #1976d2;
+}
+
+/* Loading / Empty */
+.relationships-page .loading-state,
+.relationships-page .empty-state {
+  padding: 48px;
+  text-align: center;
+  color: var(--text-muted);
+  background-color: var(--bg);
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+/* Table View */
+.table-view {
+  background-color: var(--bg);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.relationships-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.relationships-table th,
+.relationships-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.relationships-table th {
+  background-color: var(--bg-light);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.relationships-table td {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.relationships-table tbody tr:hover {
+  background-color: var(--bg-light);
+}
+
+.rel-type-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  background-color: #e0e0e0;
+  color: #424242;
+}
+
+.rel-type-badge.rel-spouse,
+.rel-type-badge.rel-fiancé\/fiancée,
+.rel-type-badge.rel-romantic-partner {
+  background-color: #fce4ec;
+  color: #c2185b;
+}
+
+.rel-type-badge.rel-parent-child,
+.rel-type-badge.rel-sibling,
+.rel-type-badge.rel-grandparent-grandchild,
+.rel-type-badge.rel-aunt-uncle-niece-nephew,
+.rel-type-badge.rel-cousin {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+.rel-type-badge.rel-in-law {
+  background-color: #e0f7fa;
+  color: #00838f;
+}
+
+.rel-type-badge.rel-friend,
+.rel-type-badge.rel-acquaintance {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.rel-type-badge.rel-business-associate,
+.rel-type-badge.rel-employer-employee {
+  background-color: #fff3e0;
+  color: #e65100;
+}
+
+.delete-btn {
+  padding: 4px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.delete-btn:hover {
+  color: #c62828;
+}
+
+.table-summary {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  background-color: var(--bg-light);
+}
+
+/* Graph View */
+.graph-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.connection-finder-container {
+  max-width: 600px;
+}
+
+.graph-wrapper {
+  background-color: var(--bg);
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 600px;
+}
+
+/* Add Relationship Modal */
+.add-relationship-form {
+  padding: 16px;
+}
+
+.person-select-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.person-select {
+  flex: 1;
+}
+
+.relationship-type-select {
+  width: 180px;
+  flex-shrink: 0;
+}
+
+.person-select label,
+.relationship-type-select label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.relationship-type-select select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background-color: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.search-row {
+  display: flex;
+  gap: 8px;
+}
+
+.search-row input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background-color: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.search-results {
+  margin: 8px 0 0 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.search-results li {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.search-results li:hover {
+  background-color: var(--bg-light);
+}
+
+.selected-person {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background-color: var(--bg-light);
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.selected-person button {
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.selected-person button:hover {
+  color: var(--text);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  .relationships-page {
+    padding: var(--spacing-md);
+    overflow-x: hidden;
+  }
+
+  .view-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .table-filters {
+    flex-direction: column;
+  }
+
+  .search-input {
+    max-width: 100%;
+  }
+
+  .type-filter {
+    width: 100%;
+  }
+
+  .table-view {
+    overflow-x: auto;
+  }
+
+  .relationships-table {
+    min-width: 500px;
+  }
+
+  .person-select-row {
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+
+  .relationship-type-select {
+    width: 100%;
+  }
+
+  .graph-wrapper {
+    min-height: 400px;
+  }
+}

@@ -1,8 +1,9 @@
 import { useCallback, useRef, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import type { Letter, LetterImage } from "../../types/Letter";
 import LetterViewer from "../LetterViewer/LetterViewer";
-import { Button, ResizableSplitPane } from "../common";
+import Breadcrumb from "../Breadcrumb";
+import LetterNav from "../LetterNav";
+import { ResizableSplitPane } from "../common";
 import "./LetterDisplay.css";
 
 interface LetterDisplayProps {
@@ -10,16 +11,24 @@ interface LetterDisplayProps {
 }
 
 export default function LetterDisplay({ letter }: LetterDisplayProps) {
-  const navigate = useNavigate();
   const transcriptRef = useRef<HTMLDivElement>(null);
   const [isTranscriptVisible, setIsTranscriptVisible] = useState(true);
 
   // Count letter pages for single-page header hiding
   const letterPageCount = letter.images.filter(img => img.type === 'letter').length;
 
-  const handleBack = () => {
-    navigate(-1);
-  };
+  // Build breadcrumb items
+  const breadcrumbItems = [
+    { label: 'Home', href: '/' },
+    { label: 'Collections', href: '/collections' },
+  ];
+  if (letter.collectionCode) {
+    breadcrumbItems.push({
+      label: letter.collectionCode,
+      href: `/collections/${letter.collectionCode}`,
+    });
+  }
+  breadcrumbItems.push({ label: letter.title });
 
   // Track transcript visibility with Intersection Observer
   useEffect(() => {
@@ -58,12 +67,8 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
 
   return (
     <div className="letter-display">
-      <header className="display-header">
-        <h1>{letter.title}</h1>
-        <Button icon="back" onClick={handleBack}>
-          Back
-        </Button>
-      </header>
+      <Breadcrumb items={breadcrumbItems} />
+      <LetterNav letterId={letter.id} />
 
       <div className="display-body">
         <ResizableSplitPane
@@ -82,7 +87,8 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
 
           {/* Right side: Read-only content */}
           <div className="details-panel-content">
-            {/* Transcript Section */}
+            {/* Transcript Section - only shown when letter has letter-type images */}
+            {letterPageCount > 0 && (
             <div className="transcript-section">
               <div className="section-header">
                 <h2>Transcript</h2>
@@ -110,6 +116,7 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
                 )}
               </div>
             </div>
+            )}
 
             {/* Metadata Section */}
             <div className="metadata-section">

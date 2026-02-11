@@ -70,7 +70,7 @@ interface SortColumn {
 }
 
 // Column definitions for visibility toggle
-type ColumnId = 'sender' | 'recipient' | 'date' | 'collection' | 'letters' | 'extras' | 'transcript' | 'metadata' | 'visibility' | 'created' | 'sync';
+type ColumnId = 'sender' | 'recipient' | 'date' | 'collection' | 'letters' | 'extras' | 'transcript' | 'metadata' | 'extraContent' | 'visibility' | 'created' | 'sync';
 
 interface ColumnDef {
   id: ColumnId;
@@ -87,6 +87,7 @@ const ALL_COLUMNS: ColumnDef[] = [
   { id: 'extras', label: 'Extras', defaultVisible: true },
   { id: 'transcript', label: 'Transcript', defaultVisible: true },
   { id: 'metadata', label: 'Metadata', defaultVisible: true },
+  { id: 'extraContent', label: 'Extra Trans', defaultVisible: false },
   { id: 'sync', label: 'Sync', defaultVisible: true },
   { id: 'visibility', label: 'Visibility', defaultVisible: true },
   { id: 'created', label: 'Created', defaultVisible: true },
@@ -122,8 +123,9 @@ const DEFAULT_VISIBLE_COLUMNS = new Set<ColumnId>(
 const COLUMN_STORAGE_KEY = 'adminDashboardColumns';
 
 // Status icon component for two-track workflow
-function StatusIcon({ status, type }: { status: ContentStatus; type: 'T' | 'M' }) {
-  const title = type === 'T' ? 'Transcript' : 'Metadata';
+function StatusIcon({ status, type }: { status: ContentStatus; type: 'T' | 'M' | 'E' }) {
+  const titleMap = { T: 'Transcript', M: 'Metadata', E: 'Extra Content' };
+  const title = titleMap[type];
   switch (status) {
     case 'EMPTY':
       return <span className="status-icon status-empty" title={`${title}: Empty`}>—</span>;
@@ -148,10 +150,10 @@ function formatDateRaw(dateRaw: string | undefined): string {
   const monthStr = dateRaw.slice(4, 6);
   const dayStr = dateRaw.slice(6, 8);
 
-  // Handle unknown components with ?
-  const year = yearStr.includes('X') ? yearStr.replace(/X/g, '?') : yearStr;
-  const month = monthStr.includes('X') ? '??' : monthStr;
-  const day = dayStr.includes('X') ? '??' : dayStr;
+  // Keep X for unknown components (no conversion needed, just pass through)
+  const year = yearStr;
+  const month = monthStr;
+  const day = dayStr;
 
   // Format as MM/DD/YYYY
   return `${month}/${day}/${year}`;
@@ -371,6 +373,7 @@ export default function AdminDashboard() {
   const [dragMode, setDragMode] = useState<"select" | "deselect" | null>(null);
   const [draggedIds, setDraggedIds] = useState<Set<string>>(new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
+  const [hasDragMoved, setHasDragMoved] = useState(false);
 
   // Copy-paste edit mode state
   const [copyModeActive, setCopyModeActive] = useState(false);
@@ -473,6 +476,10 @@ export default function AdminDashboard() {
 
   const handleRowClick = (letterId: string, index: number, e: React.MouseEvent) => {
     if (editMode) {
+      // If this was a drag operation (moved to other rows), don't toggle
+      // The drag handlers already applied the selection
+      if (hasDragMoved) return;
+
       if (e.shiftKey && lastClickedIndex !== null) {
         // Shift-click: select range from last clicked to current
         const start = Math.min(lastClickedIndex, index);
@@ -483,6 +490,7 @@ export default function AdminDashboard() {
         }
         setSelectedIds(newSelected);
       } else {
+        // Simple click: toggle this row's selection
         toggleSelection(letterId);
         setLastClickedIndex(index);
       }
@@ -508,15 +516,11 @@ export default function AdminDashboard() {
     setDragStartIndex(index);
     setDragMode(mode);
     setDraggedIds(new Set([letterId]));
+    setHasDragMoved(false); // Not a drag yet, just a mousedown
 
-    // Apply immediately to the first item
-    const newSelected = new Set(selectedIds);
-    if (mode === "select") {
-      newSelected.add(letterId);
-    } else {
-      newSelected.delete(letterId);
-    }
-    setSelectedIds(newSelected);
+    // Don't apply selection yet - wait to see if it's a click or drag
+    // If user drags to another row, handleRowMouseEnter will apply selection
+    // If user just clicks, handleRowClick will apply selection
 
     // Prevent text selection during drag
     e.preventDefault();
@@ -524,6 +528,11 @@ export default function AdminDashboard() {
 
   const handleRowMouseEnter = (index: number) => {
     if (!isDragging || dragStartIndex === null || dragMode === null) return;
+
+    // Mark that this is a real drag (moved to a different row)
+    if (!hasDragMoved) {
+      setHasDragMoved(true);
+    }
 
     // Calculate range from drag start to current position
     const start = Math.min(dragStartIndex, index);
@@ -633,8 +642,9 @@ export default function AdminDashboard() {
 
         switch (field) {
           case 'letters':
-            const aLetters = a.images.filter(img => img.type === 'letter').length;
-            const bLetters = b.images.filter(img => img.type === 'letter').length;
+            // Use lettersCount from API (counts L-type pages across the letter group)
+            const aLetters = a.lettersCount ?? a.images.filter(img => img.type === 'letter').length;
+            const bLetters = b.lettersCount ?? b.images.filter(img => img.type === 'letter').length;
             comparison = aLetters - bLetters;
             break;
           case 'extras':
@@ -1559,6 +1569,7 @@ export default function AdminDashboard() {
               {visibleColumns.has('extras') && <col style={{ width: '50px' }} />}
               {visibleColumns.has('transcript') && <col style={{ width: '70px' }} />}
               {visibleColumns.has('metadata') && <col style={{ width: '70px' }} />}
+              {visibleColumns.has('extraContent') && <col style={{ width: '70px' }} />}
               {visibleColumns.has('sync') && <col style={{ width: '50px' }} />}
               {visibleColumns.has('visibility') && <col style={{ width: '70px' }} />}
               {visibleColumns.has('created') && <col style={{ width: '80px' }} />}
@@ -1679,6 +1690,9 @@ export default function AdminDashboard() {
                 {visibleColumns.has('metadata') && (
                   <th className="status-header">Metadata</th>
                 )}
+                {visibleColumns.has('extraContent') && (
+                  <th className="status-header" title="Extra content transcription (telegrams, covers, ephemera)">Extra</th>
+                )}
                 {visibleColumns.has('sync') && (
                   <th className="status-header" title="Identity/content sync status">Sync</th>
                 )}
@@ -1707,7 +1721,9 @@ export default function AdminDashboard() {
             </thead>
             <tbody>
               {filteredLetters.map((letter, index) => {
-                  const pageCount = letter.images.filter((img) => img.type === "letter").length;
+                  // Use lettersCount from API (counts L-type pages across the letter group)
+                  // Fallback to computing from images for backward compatibility
+                  const pageCount = letter.lettersCount ?? letter.images.filter((img) => img.type === "letter").length;
                   // Use extrasCount from API (includes related items like photos, covers)
                   // Fallback to computing from images for backward compatibility
                   const extrasCount = letter.extrasCount ?? letter.images.filter((img) => img.type !== "letter").length;
@@ -1760,6 +1776,11 @@ export default function AdminDashboard() {
                       {visibleColumns.has('metadata') && (
                         <td className="status-cell">
                           <StatusIcon status={letter.metadataContentStatus} type="M" />
+                        </td>
+                      )}
+                      {visibleColumns.has('extraContent') && (
+                        <td className="status-cell">
+                          <StatusIcon status={letter.extraContentStatus} type="E" />
                         </td>
                       )}
                       {visibleColumns.has('sync') && (

@@ -119,6 +119,13 @@ export interface FrontendLetter {
   transcriptVerifiedBy?: string;
   metadataVerifiedAt?: string;
   metadataVerifiedBy?: string;
+  // Extra content transcription (telegrams, covers, ephemera)
+  extraContentTranscript?: string;
+  extraContentStatus: ContentStatus;
+  extraContentVerifiedAt?: string;
+  extraContentVerifiedBy?: string;
+  // AI notes (observations, suggestions)
+  aiNotes?: string;
   // Legacy field kept for backward compat
   transcriptConfirmedAt?: string;
   createdAt: string;
@@ -412,6 +419,13 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
     transcriptVerifiedBy: letter.transcriptVerifiedBy || undefined,
     metadataVerifiedAt: letter.metadataVerifiedAt?.toISOString(),
     metadataVerifiedBy: letter.metadataVerifiedBy || undefined,
+    // Extra content transcription
+    extraContentTranscript: letter.extraContentTranscript || undefined,
+    extraContentStatus: letter.extraContentStatus,
+    extraContentVerifiedAt: letter.extraContentVerifiedAt?.toISOString(),
+    extraContentVerifiedBy: letter.extraContentVerifiedBy || undefined,
+    // AI notes
+    aiNotes: letter.aiNotes || undefined,
     // Legacy field
     transcriptConfirmedAt: letter.transcriptConfirmedAt?.toISOString(),
     createdAt: letter.createdAt.toISOString(),

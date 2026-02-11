@@ -144,3 +144,9 @@
 .split-pane.dragging .split-pane-second {
   pointer-events: none;
 }
+
+/* Prevent native drag behavior and text selection on divider */
+.split-pane-divider {
+  user-select: none;
+  -webkit-user-select: none;
+}

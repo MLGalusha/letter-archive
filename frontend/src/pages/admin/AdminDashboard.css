@@ -1787,14 +1787,14 @@
   border: solid 1px #ffcc80;
 }
 
-/* Verified - green success */
+/* Verified - blue */
 .status-icon.status-verified {
   min-width: 50px;
   padding: 0.2rem 0.5rem;
   border-radius: var(--radius-sm);
-  background: #d4edda;
-  color: #155724;
-  border: solid 1px #c3e6cb;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: solid 1px #93c5fd;
 }
 
 /* Sync status indicator */

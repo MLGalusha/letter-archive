@@ -17,6 +17,8 @@
 import OpenAI from 'openai';
 import { env, hasOpenAI } from '../config/env.js';
 import { createLogger } from '../utils/logger.js';
+import { getFirstName } from '../utils/names.js';
+import type { NotableQuote } from './schemas/metadataV2.js';
 
 const log = createLogger({ module: 'resync' });
 
@@ -144,6 +146,7 @@ export interface MetadataAuditContext {
   hook: string | null;
   relationshipType: string | null;
   linkedPersons: LinkedPersonInfo[];
+  quoteContexts?: NotableQuote[];
 }
 
 export interface ResyncDecision {
@@ -152,6 +155,7 @@ export interface ResyncDecision {
   shouldCreateSenderPerson: boolean;
   shouldCreateRecipientPerson: boolean;
   shouldUpdateRelationship: boolean;
+  shouldUpdateQuoteContexts: boolean;
   issues: string[];
   reason: string;
 }
@@ -162,6 +166,7 @@ export interface ResyncResult {
   senderPerson: { name: string; role: 'sender' } | null;
   recipientPerson: { name: string; role: 'recipient' } | null;
   relationshipType: string | null;
+  updatedQuoteContexts: NotableQuote[] | null;
   wasUpdated: boolean;
 }
 
@@ -175,18 +180,21 @@ You will be given:
 - The core identity fields: sender name, recipient name, date
 - The derived fields: summary, hook (teaser text)
 - The linked persons: who is currently linked to this letter and in what role
+- The notable quotes with their context explanations
 
 Check each item and set the corresponding boolean to true if there's an issue:
 
-1. **shouldUpdateSummary = true** if: The summary uses generic terms like "the sender", "the writer", "the recipient", "the addressee" when actual names are known.
+1. **shouldUpdateSummary = true** if: The summary uses generic terms like "the sender", "the writer", "the recipient", "the addressee", OR pronouns like "he", "she", "they" referring to sender/recipient, when actual names are known.
 
-2. **shouldUpdateHook = true** if: The hook uses generic terms instead of actual names when names are known.
+2. **shouldUpdateHook = true** if: The hook uses generic terms like "the sender", "the writer", "the recipient", "the addressee", OR pronouns like "he", "she", "they" referring to sender/recipient, when actual names are known.
 
 3. **shouldCreateSenderPerson = true** if: We have a sender name BUT there is NO linked person with role="sender" that matches that name (case-insensitive).
 
 4. **shouldCreateRecipientPerson = true** if: We have a recipient name BUT there is NO linked person with role="recipient" that matches that name (case-insensitive).
 
 5. **shouldUpdateRelationship = true** if: Both sender and recipient are known but relationship type is not set.
+
+6. **shouldUpdateQuoteContexts = true** if: Any quote context uses pronouns like "He", "She", "They", or generic terms like "the sender", "the writer", "the recipient", "the addressee" when actual names are known.
 
 IMPORTANT: The boolean values must directly reflect whether each issue exists. If you identify an issue in the "issues" list, the corresponding boolean MUST be true.
 
@@ -197,6 +205,7 @@ Return JSON:
   "shouldCreateSenderPerson": boolean,
   "shouldCreateRecipientPerson": boolean,
   "shouldUpdateRelationship": boolean,
+  "shouldUpdateQuoteContexts": boolean,
   "issues": ["list of specific issues found"],
   "reason": "brief overall summary"
 }
@@ -232,6 +241,16 @@ function buildDecisionPrompt(
   parts.push('');
   parts.push(`Relationship type: ${context.relationshipType || '(not set)'}`);
 
+  // Add quote contexts if available
+  if (context.quoteContexts && context.quoteContexts.length > 0) {
+    parts.push('');
+    parts.push('=== QUOTE CONTEXTS ===');
+    context.quoteContexts.forEach((quote, idx) => {
+      parts.push(`Quote ${idx + 1}: "${quote.text}"`);
+      parts.push(`  Context: ${quote.context}`);
+    });
+  }
+
   // If there was a specific change, mention it
   if (change) {
     const changes: string[] = [];
@@ -260,30 +279,60 @@ function buildDecisionPrompt(
 
 // Build the regeneration prompt dynamically to include controlled vocabulary
 function buildRegenerationSystemPrompt(): string {
-  return `You regenerate and fix metadata fields for historical letters.
+  return `You update metadata fields for historical letters by adding names.
+
+CRITICAL: Your job is to ADD names to existing text, NOT to rewrite it.
 
 You will be given:
 - The letter transcription
-- The correct sender and recipient names
+- The correct sender and recipient names (both full name and first name)
+- The current summary, hook, and quote contexts
 - A list of issues that need fixing
-- Which fields to update
 
-For each requested update, generate the corrected content.
+## NAME USAGE RULES
+
+### For Linked Persons (canonical_persons):
+- Use the FULL name exactly as provided (e.g., "Molly Bowles", "Jimmie Galusha")
+- This ensures proper identity linking in the database
+
+### For Summary, Hook, and Quote Contexts:
+- Use FIRST names only (e.g., "Jimmie", "Molly")
+- Do NOT use full names in these narrative fields
+- This creates a more intimate, readable narrative
+
+## IMPORTANT RULES
+
+1. PRESERVE the existing text structure and wording exactly
+2. ONLY replace generic terms and pronouns with FIRST names:
+   - "the sender", "the writer", "He", "She" (referring to sender) → sender's first name
+   - "the recipient", "the addressee", "He", "She" (referring to recipient) → recipient's first name
+3. Do NOT rewrite, rephrase, or restructure sentences
+4. Keep the original tone, style, and word choices
+5. If a sentence is already using names correctly, leave it unchanged
 
 ## FIELD SPECIFICATIONS
 
 ### HOOK (if updating)
-- 1-2 sentence teaser, max 150 characters
-- Present tense, third person
-- Focus on the most compelling human element
-- ALWAYS use the actual names (e.g., "Jimmie writes to Molly..." not "The sender writes...")
+- Replace generic terms and pronouns with FIRST names only
+- Keep everything else exactly as-is
+- Example: "The sender expresses love" → "Jimmie expresses love"
 
 ### SUMMARY (if updating)
-- Length proportional to letter content
-- Factual description, neutral tone
-- ALWAYS use the actual names throughout (never "the sender" or "the recipient")
+- Replace generic terms and pronouns with FIRST names only
+- Keep the rest of the text word-for-word
+- Example: "The writer asks the recipient about health" → "Jimmie asks Molly about health"
+
+### QUOTE CONTEXTS (if updating)
+- Replace pronouns and generic terms with FIRST names
+- Keep the quote text unchanged - only update the context field
+- Examples:
+  - "He refuses to be deterred" → "Jimmie refuses to be deterred"
+  - "She expresses concern" → "Molly expresses concern"
+  - "The sender pleads" → "Jimmie pleads"
+- Return ALL quotes, not just the updated ones
 
 ### LINKED PERSONS (if creating)
+- Use the FULL name for the canonical person record
 - Return the person info needed to create the link
 
 ### RELATIONSHIP TYPE (if updating)
@@ -299,9 +348,12 @@ Return JSON with ONLY the fields being updated. Use null for fields not being up
 {
   "summary": "string | null",
   "hook": "string | null",
-  "senderPerson": { "name": "string" } | null,
-  "recipientPerson": { "name": "string" } | null,
-  "relationshipType": "spouse" | "fiancé/fiancée" | "romantic-partner" | "parent" | "child" | "sibling" | "grandparent" | "grandchild" | "aunt/uncle" | "nephew/niece" | "cousin" | "in-law" | "friend" | "acquaintance" | "business-associate" | "employer" | "employee" | "unknown" | null
+  "senderPerson": { "name": "string (FULL NAME)" } | null,
+  "recipientPerson": { "name": "string (FULL NAME)" } | null,
+  "relationshipType": "spouse" | ... | null,
+  "quoteContexts": [
+    { "text": "original quote (unchanged)", "context": "updated context with first name", "position": "opening|middle|closing" }
+  ] | null
 }
 \`\`\`
 
@@ -316,17 +368,23 @@ interface RegenerationRequest {
   decision: ResyncDecision;
   currentSummary: string | null;
   currentHook: string | null;
+  currentQuotes?: NotableQuote[];
 }
 
 function buildRegenerationPrompt(request: RegenerationRequest): string {
+  const senderFirst = getFirstName(request.sender);
+  const recipientFirst = getFirstName(request.recipient);
+
   const parts = [
     '<letter_transcription>',
     request.transcript,
     '</letter_transcription>',
     '',
     '<correct_identities>',
-    `Sender: ${request.sender || '(unknown)'}`,
-    `Recipient: ${request.recipient || '(unknown)'}`,
+    `Sender (full name): ${request.sender || '(unknown)'}`,
+    `Sender (first name): ${senderFirst || '(unknown)'}`,
+    `Recipient (full name): ${request.recipient || '(unknown)'}`,
+    `Recipient (first name): ${recipientFirst || '(unknown)'}`,
     `Date: ${request.date || '(unknown)'}`,
     '</correct_identities>',
     '',
@@ -344,13 +402,24 @@ function buildRegenerationPrompt(request: RegenerationRequest): string {
     parts.push(`Hook: YES (current: "${request.currentHook || ''}")`);
   }
   if (request.decision.shouldCreateSenderPerson) {
-    parts.push(`Create sender person: YES (name: "${request.sender}")`);
+    parts.push(`Create sender person: YES (full name: "${request.sender}")`);
   }
   if (request.decision.shouldCreateRecipientPerson) {
-    parts.push(`Create recipient person: YES (name: "${request.recipient}")`);
+    parts.push(`Create recipient person: YES (full name: "${request.recipient}")`);
   }
   if (request.decision.shouldUpdateRelationship) {
     parts.push('Infer relationship: YES');
+  }
+  if (request.decision.shouldUpdateQuoteContexts && request.currentQuotes && request.currentQuotes.length > 0) {
+    parts.push('Quote contexts: YES');
+    parts.push('<current_quotes>');
+    request.currentQuotes.forEach((q, idx) => {
+      parts.push(`  Quote ${idx + 1}:`);
+      parts.push(`    text: "${q.text}"`);
+      parts.push(`    context: "${q.context}"`);
+      parts.push(`    position: ${q.position}`);
+    });
+    parts.push('</current_quotes>');
   }
 
   parts.push('</fields_to_update>');
@@ -393,6 +462,7 @@ export async function auditMetadata(
     shouldCreateSenderPerson: false,
     shouldCreateRecipientPerson: false,
     shouldUpdateRelationship: false,
+    shouldUpdateQuoteContexts: false,
     issues: [],
     reason: 'No issues detected',
   };
@@ -435,6 +505,19 @@ export async function auditMetadata(
       issues.push(`Recipient "${context.recipient}" is not linked as a person`);
     }
 
+    // Check quote contexts for pronouns
+    let hasQuoteIssues = false;
+    if (context.quoteContexts && context.quoteContexts.length > 0 && (context.sender || context.recipient)) {
+      for (const quote of context.quoteContexts) {
+        const contextLower = quote.context.toLowerCase();
+        if (contextLower.match(/\b(he|she|they|the sender|the writer|the recipient|the addressee)\b/)) {
+          hasQuoteIssues = true;
+          issues.push('Quote context uses pronouns or generic terms instead of names');
+          break;
+        }
+      }
+    }
+
     if (issues.length === 0) {
       return noIssues;
     }
@@ -445,6 +528,7 @@ export async function auditMetadata(
       shouldCreateSenderPerson: context.sender ? !hasSenderLinked : false,
       shouldCreateRecipientPerson: context.recipient ? !hasRecipientLinked : false,
       shouldUpdateRelationship: false,
+      shouldUpdateQuoteContexts: hasQuoteIssues,
       issues,
       reason: `Found ${issues.length} issue(s) in stub mode`,
     };
@@ -462,7 +546,6 @@ export async function auditMetadata(
       ],
       response_format: { type: 'json_object' },
       max_completion_tokens: 512,
-      temperature: 0,
     });
 
     const duration = Date.now() - start;
@@ -550,6 +633,7 @@ export async function regenerateMetadata(request: RegenerationRequest): Promise<
     recipient: request.recipient,
     updateSummary: decision.shouldUpdateSummary,
     updateHook: decision.shouldUpdateHook,
+    updateQuoteContexts: decision.shouldUpdateQuoteContexts,
     createSender: decision.shouldCreateSenderPerson,
     createRecipient: decision.shouldCreateRecipientPerson,
     transcriptLength: request.transcript.length,
@@ -561,7 +645,8 @@ export async function regenerateMetadata(request: RegenerationRequest): Promise<
     decision.shouldUpdateHook ||
     decision.shouldCreateSenderPerson ||
     decision.shouldCreateRecipientPerson ||
-    decision.shouldUpdateRelationship;
+    decision.shouldUpdateRelationship ||
+    decision.shouldUpdateQuoteContexts;
 
   if (!needsWork) {
     return {
@@ -570,26 +655,37 @@ export async function regenerateMetadata(request: RegenerationRequest): Promise<
       senderPerson: null,
       recipientPerson: null,
       relationshipType: null,
+      updatedQuoteContexts: null,
       wasUpdated: false,
     };
   }
 
   if (!hasOpenAI || !openai) {
     log.debug(logContext, 'Using stub regeneration (no API key)');
+
+    const senderFirst = getFirstName(request.sender) || 'Someone';
+    const recipientFirst = getFirstName(request.recipient) || 'someone';
+
     return {
       summary: decision.shouldUpdateSummary
-        ? `[STUB] ${request.sender || 'Someone'} writes to ${request.recipient || 'someone'} in this letter.`
+        ? `[STUB] ${senderFirst} writes to ${recipientFirst} in this letter.`
         : null,
       hook: decision.shouldUpdateHook
-        ? `[STUB] ${request.sender || 'Someone'} reaches out to ${request.recipient || 'someone'}.`
+        ? `[STUB] ${senderFirst} reaches out to ${recipientFirst}.`
         : null,
       senderPerson: decision.shouldCreateSenderPerson && request.sender
-        ? { name: request.sender, role: 'sender' as const }
+        ? { name: request.sender, role: 'sender' as const }  // Full name for linked person
         : null,
       recipientPerson: decision.shouldCreateRecipientPerson && request.recipient
-        ? { name: request.recipient, role: 'recipient' as const }
+        ? { name: request.recipient, role: 'recipient' as const }  // Full name for linked person
         : null,
       relationshipType: decision.shouldUpdateRelationship ? 'unknown' : null,
+      updatedQuoteContexts: decision.shouldUpdateQuoteContexts && request.currentQuotes
+        ? request.currentQuotes.map(q => ({
+            ...q,
+            context: `[STUB] ${senderFirst} expresses this sentiment.`,
+          }))
+        : null,
       wasUpdated: true,
     };
   }
@@ -606,7 +702,6 @@ export async function regenerateMetadata(request: RegenerationRequest): Promise<
       ],
       response_format: { type: 'json_object' },
       max_completion_tokens: 1024,
-      temperature: 0.3,
     });
 
     const duration = Date.now() - start;
@@ -620,6 +715,7 @@ export async function regenerateMetadata(request: RegenerationRequest): Promise<
         senderPerson: null,
         recipientPerson: null,
         relationshipType: null,
+        updatedQuoteContexts: null,
         wasUpdated: false,
       };
     }
@@ -630,6 +726,7 @@ export async function regenerateMetadata(request: RegenerationRequest): Promise<
       senderPerson?: { name: string } | null;
       recipientPerson?: { name: string } | null;
       relationshipType?: string | null;
+      quoteContexts?: NotableQuote[] | null;
     };
 
     log.info(
@@ -642,6 +739,7 @@ export async function regenerateMetadata(request: RegenerationRequest): Promise<
         hasSenderPerson: !!parsed.senderPerson,
         hasRecipientPerson: !!parsed.recipientPerson,
         relationshipType: parsed.relationshipType,
+        hasQuoteContexts: !!parsed.quoteContexts,
         usage: response.usage,
       },
       'Metadata regenerated'
@@ -657,6 +755,7 @@ export async function regenerateMetadata(request: RegenerationRequest): Promise<
         ? { name: parsed.recipientPerson.name, role: 'recipient' as const }
         : null,
       relationshipType: decision.shouldUpdateRelationship ? (parsed.relationshipType || null) : null,
+      updatedQuoteContexts: decision.shouldUpdateQuoteContexts ? (parsed.quoteContexts || null) : null,
       wasUpdated: true,
     };
   } catch (error) {
@@ -683,6 +782,7 @@ export async function regenerateDerivedFields(
     shouldCreateSenderPerson: false,
     shouldCreateRecipientPerson: false,
     shouldUpdateRelationship: false,
+    shouldUpdateQuoteContexts: false,
     issues: [],
     reason: 'Legacy call',
   };
@@ -719,7 +819,8 @@ export async function resyncMetadata(params: {
     decision.shouldUpdateHook ||
     decision.shouldCreateSenderPerson ||
     decision.shouldCreateRecipientPerson ||
-    decision.shouldUpdateRelationship;
+    decision.shouldUpdateRelationship ||
+    decision.shouldUpdateQuoteContexts;
 
   if (!needsWork) {
     return {
@@ -728,6 +829,7 @@ export async function resyncMetadata(params: {
       senderPerson: null,
       recipientPerson: null,
       relationshipType: null,
+      updatedQuoteContexts: null,
       wasUpdated: false,
       decision,
     };
@@ -742,6 +844,7 @@ export async function resyncMetadata(params: {
     decision,
     currentSummary: params.context.summary,
     currentHook: params.context.hook,
+    currentQuotes: params.context.quoteContexts,
   });
 
   return {

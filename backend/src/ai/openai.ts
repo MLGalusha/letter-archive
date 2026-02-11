@@ -5,9 +5,13 @@ import {
   TRANSCRIPTION_SYSTEM_PROMPT,
   METADATA_SYSTEM_PROMPT,
   METADATA_V2_SYSTEM_PROMPT,
+  EXTRA_CONTENT_CHECK_SYSTEM_PROMPT,
+  EXTRA_CONTENT_TRANSCRIPTION_SYSTEM_PROMPT,
   buildTranscriptionUserPrompt,
   buildMetadataUserPrompt,
   buildMetadataV2UserPrompt,
+  buildExtraContentCheckPrompt,
+  buildExtraContentTranscriptionPrompt,
 } from './prompts.js';
 import {
   MetadataV2Schema,
@@ -328,6 +332,7 @@ export interface ExtractMetadataV2Params {
     collectionCode?: string;
     dateRaw?: string;
     dateFromFilename?: string | null;
+    extraContentTranscript?: string | null;
   };
 }
 
@@ -372,7 +377,6 @@ export async function extractMetadataV2(
     // Use Responses API with structured outputs
     const response = await openai.responses.create({
       model: env.OPENAI_MODEL,
-      temperature: 0, // Deterministic for consistent extraction
       input: [
         { role: 'system', content: METADATA_V2_SYSTEM_PROMPT },
         { role: 'user', content: buildMetadataV2UserPrompt(params.transcriptionText, params.context) },
@@ -507,4 +511,242 @@ function generateStubMetadataV2(params: ExtractMetadataV2Params): ExtractMetadat
     },
     isStub: true,
   };
+}
+
+// ============================================================================
+// EXTRA CONTENT TRANSCRIPTION (Telegrams, Covers, Ephemera)
+// ============================================================================
+
+export interface CheckExtraContentParams {
+  filePath: string;
+  documentType?: string;
+}
+
+export interface CheckExtraContentResult {
+  hasTranscribableText: boolean;
+  reason: string;
+  textType: 'telegram' | 'envelope' | 'note' | 'ephemera' | 'none';
+  isStub: boolean;
+}
+
+/**
+ * Checks if an extra content image has transcribable text.
+ * Uses GPT-4o-mini for quick, cheap check before full transcription.
+ */
+export async function checkExtraContentForText(
+  params: CheckExtraContentParams
+): Promise<CheckExtraContentResult> {
+  const context = {
+    filePath: params.filePath,
+    documentType: params.documentType,
+  };
+
+  if (!hasOpenAI || !openai) {
+    log.debug(context, 'Using stub extra content check (no API key)');
+    return {
+      hasTranscribableText: true, // Assume yes for stub mode
+      reason: 'Stub mode - assuming transcribable',
+      textType: 'note',
+      isStub: true,
+    };
+  }
+
+  log.debug(context, 'Checking extra content for transcribable text');
+  const start = Date.now();
+
+  try {
+    // Read image and convert to base64
+    const { readFile } = await import('node:fs/promises');
+    const imageBuffer = await readFile(params.filePath);
+    const base64Image = imageBuffer.toString('base64');
+
+    // Determine MIME type from file extension
+    const ext = params.filePath.toLowerCase().split('.').pop();
+    const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+
+    // Use GPT-4o-mini for quick check
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: EXTRA_CONTENT_CHECK_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: buildExtraContentCheckPrompt({ documentType: params.documentType }) },
+            {
+              type: 'image_url',
+              image_url: { url: `data:${mimeType};base64,${base64Image}` },
+            },
+          ],
+        },
+      ],
+      response_format: { type: 'json_object' },
+      max_completion_tokens: 256,
+    });
+
+    const duration = Date.now() - start;
+    const content = response.choices[0]?.message?.content;
+
+    if (!content) {
+      log.warn({ ...context, duration }, 'No response from extra content check');
+      return {
+        hasTranscribableText: false,
+        reason: 'No response from AI',
+        textType: 'none',
+        isStub: false,
+      };
+    }
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      log.warn({ ...context, duration, content: content.substring(0, 200) }, 'Failed to parse extra content check response');
+      return {
+        hasTranscribableText: false,
+        reason: 'Failed to parse AI response',
+        textType: 'none',
+        isStub: false,
+      };
+    }
+
+    const result: CheckExtraContentResult = {
+      hasTranscribableText: Boolean(parsed.hasTranscribableText),
+      reason: String(parsed.reason || ''),
+      textType: (parsed.textType as CheckExtraContentResult['textType']) || 'none',
+      isStub: false,
+    };
+
+    log.info(
+      {
+        ...context,
+        duration,
+        hasText: result.hasTranscribableText,
+        textType: result.textType,
+      },
+      'Extra content check completed'
+    );
+
+    return result;
+  } catch (error) {
+    const duration = Date.now() - start;
+    log.error({ ...context, duration, err: error }, 'Extra content check failed');
+    // On error, assume there might be text to avoid skipping content
+    return {
+      hasTranscribableText: true,
+      reason: 'Check failed, assuming transcribable',
+      textType: 'note',
+      isStub: false,
+    };
+  }
+}
+
+export interface TranscribeExtraContentParams {
+  filePath: string;
+  documentType?: string;
+  context?: {
+    collectionCode?: string;
+    dateRaw?: string;
+  };
+}
+
+export interface TranscribeExtraContentResult {
+  text: string;
+  isStub: boolean;
+}
+
+/**
+ * Transcribes extra content (telegrams, covers, ephemera) from an image.
+ */
+export async function transcribeExtraContent(
+  params: TranscribeExtraContentParams
+): Promise<TranscribeExtraContentResult> {
+  const context = {
+    filePath: params.filePath,
+    documentType: params.documentType,
+    collectionCode: params.context?.collectionCode,
+    dateRaw: params.context?.dateRaw,
+  };
+
+  if (!hasOpenAI || !openai) {
+    log.debug(context, 'Using stub extra content transcription (no API key)');
+    return {
+      text: `[STUB EXTRA CONTENT TRANSCRIPTION]
+
+Document type: ${params.documentType || 'Unknown'}
+File: ${params.filePath}
+
+[This is placeholder text. Set OPENAI_API_KEY for real transcription.]`,
+      isStub: true,
+    };
+  }
+
+  log.debug(context, 'Starting extra content transcription');
+  const start = Date.now();
+
+  try {
+    // Read image and convert to base64
+    const { readFile } = await import('node:fs/promises');
+    const imageBuffer = await readFile(params.filePath);
+    const base64Image = imageBuffer.toString('base64');
+    const imageSizeKb = Math.round(imageBuffer.length / 1024);
+
+    log.debug({ ...context, imageSizeKb }, 'Image loaded for extra content transcription');
+
+    // Determine MIME type from file extension
+    const ext = params.filePath.toLowerCase().split('.').pop();
+    const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+
+    const response = await openai.chat.completions.create({
+      model: env.OPENAI_MODEL,
+      messages: [
+        { role: 'system', content: EXTRA_CONTENT_TRANSCRIPTION_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: buildExtraContentTranscriptionPrompt({
+                documentType: params.documentType,
+                collectionCode: params.context?.collectionCode,
+                dateRaw: params.context?.dateRaw,
+              }),
+            },
+            {
+              type: 'image_url',
+              image_url: { url: `data:${mimeType};base64,${base64Image}` },
+            },
+          ],
+        },
+      ],
+      max_completion_tokens: 2048,
+    });
+
+    const duration = Date.now() - start;
+    const text = response.choices[0]?.message?.content ?? '';
+    const usage = response.usage;
+
+    log.info(
+      {
+        ...context,
+        duration,
+        model: env.OPENAI_MODEL,
+        textLength: text.length,
+        promptTokens: usage?.prompt_tokens,
+        completionTokens: usage?.completion_tokens,
+      },
+      'Extra content transcription completed'
+    );
+
+    logIfSlow(log, 'OpenAI extra content transcription', duration, TIMING_THRESHOLDS.OPENAI_API, context);
+
+    return {
+      text: text.trim(),
+      isStub: false,
+    };
+  } catch (error) {
+    const duration = Date.now() - start;
+    log.error({ ...context, duration, err: error }, 'Extra content transcription failed');
+    throw error;
+  }
 }

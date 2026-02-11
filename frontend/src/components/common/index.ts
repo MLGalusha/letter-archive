@@ -26,6 +26,9 @@ export {
 export { FormGroup, type FormGroupProps } from './FormGroup';
 export { AutoResizeTextarea, type AutoResizeTextareaProps } from './AutoResizeTextarea';
 
+// Editors
+export { DynamicEditor, type DynamicEditorRef } from './DynamicEditor';
+
 // Dropdowns
 export {
   Dropdown,

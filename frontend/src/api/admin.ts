@@ -2,7 +2,7 @@
  * Admin API service
  */
 
-import { apiGet, apiPost, apiPut, apiPatch } from './client';
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from './client';
 import type { Letter } from '../types/Letter';
 
 // ============================================================================
@@ -94,6 +94,14 @@ export async function processLetter(letterId: string): Promise<{ message: string
  */
 export async function confirmTranscript(letterId: string): Promise<Letter> {
   return apiPost<Letter>(`/admin/letters/${letterId}/confirm-transcript`);
+}
+
+/**
+ * Regenerate metadata for a letter
+ * Queues the letter for fresh AI metadata extraction
+ */
+export async function regenerateMetadata(letterId: string): Promise<Letter> {
+  return apiPost<Letter>(`/admin/letters/${letterId}/regenerate-metadata`);
 }
 
 // ============================================================================
@@ -324,6 +332,7 @@ export interface ResyncDecision {
   shouldCreateSenderPerson: boolean;
   shouldCreateRecipientPerson: boolean;
   shouldUpdateRelationship: boolean;
+  shouldUpdateQuoteContexts: boolean;
   issues: string[];
   reason: string;
 }
@@ -338,6 +347,7 @@ export interface ResyncResponse {
       senderPerson: boolean;
       recipientPerson: boolean;
       relationshipType: boolean;
+      quoteContexts: boolean;
     };
     decision: ResyncDecision;
   };
@@ -373,4 +383,168 @@ export async function checkResyncNeeded(
   change: ResyncRequest
 ): Promise<ResyncCheckResponse> {
   return apiPost<ResyncCheckResponse>(`/admin/letters/${letterId}/resync-check`, change);
+}
+
+// ============================================================================
+// EXTRA CONTENT TRANSCRIPTION
+// ============================================================================
+
+export interface TranscribeExtrasResponse {
+  letter: Letter;
+  transcribedCount: number;
+  extraContentStatus: 'EMPTY' | 'AI_DRAFT';
+}
+
+/**
+ * Transcribe extra content (telegrams, covers, ephemera) for a letter
+ */
+export async function transcribeExtras(letterId: string): Promise<TranscribeExtrasResponse> {
+  return apiPost<TranscribeExtrasResponse>(`/admin/letters/${letterId}/transcribe-extras`);
+}
+
+/**
+ * Update extra content transcription
+ */
+export async function updateExtraContent(
+  letterId: string,
+  extraContentTranscript: string
+): Promise<Letter> {
+  return apiPut<Letter>(`/admin/letters/${letterId}/extra-content`, { extraContentTranscript });
+}
+
+/**
+ * Verify extra content transcription
+ */
+export async function verifyExtraContent(letterId: string): Promise<Letter> {
+  return apiPost<Letter>(`/admin/letters/${letterId}/verify-extra-content`);
+}
+
+/**
+ * Unverify extra content transcription
+ */
+export async function unverifyExtraContent(letterId: string): Promise<Letter> {
+  return apiPost<Letter>(`/admin/letters/${letterId}/unverify-extra-content`);
+}
+
+/**
+ * Update AI notes for a letter
+ */
+export async function updateAiNotes(letterId: string, aiNotes: string): Promise<Letter> {
+  return apiPut<Letter>(`/admin/letters/${letterId}/ai-notes`, { aiNotes });
+}
+
+// ============================================================================
+// TRANSCRIPTION
+// ============================================================================
+
+export interface TranscribeLetterResponse {
+  letter: Letter;
+  transcribed: {
+    pageCount: number;
+    textLength: number;
+  };
+}
+
+/**
+ * Transcribe only the letter content (no extras)
+ *
+ * This is for manual transcription of just the letter pages (type='L').
+ * Does NOT transcribe extra content (T, C, E types).
+ */
+export async function transcribeLetter(letterId: string): Promise<TranscribeLetterResponse> {
+  return apiPost<TranscribeLetterResponse>(`/admin/letters/${letterId}/transcribe-letter`);
+}
+
+export interface RegenerateTranscriptionResponse {
+  letter: Letter;
+  regenerated: {
+    mainTranscript: boolean;
+    extras: boolean;
+    extrasCount: number;
+  };
+}
+
+/**
+ * Regenerate transcription for a letter (includes extras)
+ *
+ * Re-runs the AI transcription on the letter images, overwriting any existing transcription.
+ * Also re-transcribes extra content (telegrams, covers, ephemera).
+ * This is called during automatic upload processing.
+ */
+export async function regenerateTranscription(
+  letterId: string,
+  includeExtras = true
+): Promise<RegenerateTranscriptionResponse> {
+  const url = includeExtras
+    ? `/admin/letters/${letterId}/regenerate-transcription?includeExtras=true`
+    : `/admin/letters/${letterId}/regenerate-transcription`;
+  return apiPost<RegenerateTranscriptionResponse>(url);
+}
+
+// ============================================================================
+// LINKED ENTITY EDITING
+// ============================================================================
+
+/**
+ * Update a linked person's canonical name
+ */
+export async function updateLinkedPerson(
+  letterId: string,
+  linkId: string,
+  canonicalName: string
+): Promise<Letter> {
+  return apiPut<Letter>(`/admin/letters/${letterId}/linked-persons/${linkId}`, { canonicalName });
+}
+
+/**
+ * Update a linked place's canonical name
+ */
+export async function updateLinkedPlace(
+  letterId: string,
+  linkId: string,
+  canonicalName: string
+): Promise<Letter> {
+  return apiPut<Letter>(`/admin/letters/${letterId}/linked-places/${linkId}`, { canonicalName });
+}
+
+/**
+ * Add a linked person to a letter
+ */
+export async function addLinkedPerson(
+  letterId: string,
+  name: string,
+  role: 'sender' | 'recipient' | 'mentioned'
+): Promise<Letter> {
+  return apiPost<Letter>(`/admin/letters/${letterId}/linked-persons`, { name, role });
+}
+
+/**
+ * Add a linked place to a letter
+ */
+export async function addLinkedPlace(
+  letterId: string,
+  name: string,
+  role: 'written_from' | 'mentioned' | 'destination'
+): Promise<Letter> {
+  return apiPost<Letter>(`/admin/letters/${letterId}/linked-places`, { name, role });
+}
+
+/**
+ * Remove a linked person from a letter
+ */
+export async function removeLinkedPerson(
+  letterId: string,
+  linkId: string
+): Promise<Letter> {
+  return apiDelete<Letter>(`/admin/letters/${letterId}/linked-persons/${linkId}`);
+}
+
+/**
+ * Remove a linked place from a letter
+ */
+export async function removeLinkedPlace(
+  letterId: string,
+  linkId: string
+): Promise<Letter> {
+  return apiDelete<Letter>(`/admin/letters/${letterId}/linked-places/${linkId}`);
 }

@@ -148,6 +148,13 @@ export interface Letter {
   transcriptVerifiedBy?: string;
   metadataVerifiedAt?: string;
   metadataVerifiedBy?: string;
+  // Extra content transcription (telegrams, covers, ephemera)
+  extraContentTranscript?: string;
+  extraContentStatus: ContentStatus;
+  extraContentVerifiedAt?: string;
+  extraContentVerifiedBy?: string;
+  // AI notes (observations, suggestions)
+  aiNotes?: string;
   // Legacy field
   transcriptConfirmedAt?: string;
   createdAt: string;
@@ -155,6 +162,8 @@ export interface Letter {
   // Linked entities (populated when fetching letter detail)
   linkedPersons?: LinkedPerson[];
   linkedPlaces?: LinkedPlace[];
+  // Count of L-type pages across the letter group - only in list responses
+  lettersCount?: number;
   // Count of related items (envelopes, photos, etc.) - only in list responses
   extrasCount?: number;
 }

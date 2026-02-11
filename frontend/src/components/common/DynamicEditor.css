@@ -1,0 +1,49 @@
+/* Dynamic Editor - contentEditable div with auto-sizing font */
+
+.dynamic-editor {
+  width: 100%;
+  padding: var(--spacing-md);
+  border: solid 1px var(--border);
+  border-radius: var(--radius-md);
+  font-family: 'Courier New', Courier, monospace;
+  font-size: var(--dynamic-editor-font-size, 1.1rem);
+  line-height: 1.6;
+  background: var(--bg);
+  color: var(--text);
+  min-height: var(--dynamic-editor-min-height, 200px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  white-space: pre; /* Preserve line breaks exactly, NEVER wrap lines */
+  word-wrap: normal;
+  overflow-wrap: normal;
+  transition: font-size 0.15s ease-out; /* Smooth font size transition during resize */
+  text-align: left;
+}
+
+.dynamic-editor:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px hsla(0, 0%, 50%, 0.1);
+}
+
+.dynamic-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+/* Verified state - blue border */
+.dynamic-editor.verified {
+  border-color: #3b82f6;
+}
+
+/* Read-only state */
+.dynamic-editor.read-only {
+  cursor: default;
+  background: var(--bg);
+  opacity: 0.9;
+}
+
+.dynamic-editor.read-only:focus {
+  box-shadow: none;
+}

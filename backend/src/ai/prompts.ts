@@ -1,3 +1,123 @@
+// ============================================================================
+// EXTRA CONTENT TRANSCRIPTION (Telegrams, Covers, Ephemera)
+// ============================================================================
+
+/**
+ * System prompt for checking if an image has transcribable text.
+ * Uses GPT-4o-mini for quick check before full transcription.
+ */
+export const EXTRA_CONTENT_CHECK_SYSTEM_PROMPT = `You are an expert archivist analyzing historical documents. Your task is to determine if an image contains readable text that should be transcribed.
+
+ANALYZE THE IMAGE AND DETERMINE:
+1. Does this image contain readable text (handwritten or printed)?
+2. Is the text significant enough to warrant transcription?
+
+TEXT TYPES TO TRANSCRIBE:
+- Telegram messages (sender, recipient, message content)
+- Envelope addresses and postmarks
+- Cover letters or notes
+- Printed ephemera with text (postcards, cards, programs)
+- Handwritten notes or inscriptions
+
+TEXT TYPES TO SKIP:
+- Purely visual content (photos with no text)
+- Illegible or damaged text that cannot be read
+- Minor incidental text (postal stamps, form numbers)
+
+RESPOND WITH JSON:
+{
+  "hasTranscribableText": true/false,
+  "reason": "Brief explanation of what text was found or why there is none",
+  "textType": "telegram" | "envelope" | "note" | "ephemera" | "none"
+}`;
+
+/**
+ * System prompt for transcribing extra content (telegrams, covers, ephemera).
+ * Similar to main transcription but adapted for document types.
+ */
+export const EXTRA_CONTENT_TRANSCRIPTION_SYSTEM_PROMPT = `You are an expert archivist specializing in historical document transcription. Your task is to accurately transcribe text from telegrams, envelopes, covers, and other ephemera.
+
+CRITICAL GUIDELINES:
+- Transcribe the text exactly as written, preserving original spelling, punctuation, and capitalization
+- DO NOT fabricate or guess at content you cannot read
+- DO NOT add any commentary, headers, or metadata to the transcription
+
+DOCUMENT-SPECIFIC GUIDELINES:
+
+TELEGRAMS:
+- Include sender and recipient information if visible
+- Transcribe the message exactly as written (telegrams often use abbreviated style)
+- Note "STOP" markers and telegram formatting
+- Include any routing information or timestamps
+
+ENVELOPES/COVERS:
+- Transcribe addresses as written (may span multiple lines)
+- Include postmarks if readable (dates, locations)
+- Note any return address information
+- Include stamps or postal markings if they contain text
+
+EPHEMERA:
+- Transcribe all readable text
+- Preserve original layout where possible
+- Note printed vs handwritten text
+
+HANDLING UNCERTAINTY:
+- Use [illegible] for words that cannot be read at all
+- Use [unclear: best guess] for words you can partially make out
+- Note crossed-out text as [crossed out: text if readable]
+
+OUTPUT FORMAT:
+Return ONLY the transcription text, nothing else. No headers, no explanations, no "Here is the transcription:" - just the transcribed text.`;
+
+/**
+ * Build user prompt for extra content text check.
+ */
+export function buildExtraContentCheckPrompt(context?: {
+  documentType?: string;
+}): string {
+  let prompt = 'Analyze this image and determine if it contains transcribable text.';
+
+  if (context?.documentType) {
+    prompt += `\n\nDocument type hint: ${context.documentType}`;
+  }
+
+  return prompt;
+}
+
+/**
+ * Build user prompt for extra content transcription.
+ */
+export function buildExtraContentTranscriptionPrompt(context?: {
+  documentType?: string;
+  collectionCode?: string;
+  dateRaw?: string;
+}): string {
+  let prompt = 'Please transcribe this document image.';
+
+  if (context) {
+    const parts: string[] = [];
+    if (context.documentType) {
+      parts.push(`Document type: ${context.documentType}`);
+    }
+    if (context.collectionCode) {
+      parts.push(`Collection: ${context.collectionCode}`);
+    }
+    if (context.dateRaw) {
+      parts.push(`Date from filename: ${context.dateRaw}`);
+    }
+
+    if (parts.length > 0) {
+      prompt += `\n\nContext (for reference only, do not include in transcription):\n${parts.join('\n')}`;
+    }
+  }
+
+  return prompt;
+}
+
+// ============================================================================
+// MAIN LETTER TRANSCRIPTION
+// ============================================================================
+
 export const TRANSCRIPTION_SYSTEM_PROMPT = `You are an expert archivist specializing in historical document transcription. Your task is to accurately transcribe handwritten letters from images.
 
 CRITICAL GUIDELINES:
@@ -351,9 +471,10 @@ notable_quotes (1-3):
 - Each quote: exact text, brief context explaining significance, position in letter
 
 entities:
-- Extract ALL people and places mentioned
+- Extract ALL people and places mentioned in BOTH the letter AND any extra content (envelopes, telegrams, etc.)
 - For people: type="person", role=sender/recipient/mentioned, include relationship_to_sender if known
 - For places: type="place", role=written_from/mentioned/destination
+- IMPORTANT: Also extract entities from the extra content section if present (e.g., addresses on envelopes, names in telegrams)
 </field_instructions>
 
 <example>
@@ -416,9 +537,15 @@ export function buildMetadataV2UserPrompt(
     collectionCode?: string;
     dateRaw?: string;
     dateFromFilename?: string | null;
+    extraContentTranscript?: string | null;
   }
 ): string {
   let prompt = `<letter_transcription>\n${transcriptionText}\n</letter_transcription>`;
+
+  // Include extra content if available (telegrams, envelopes, ephemera)
+  if (context?.extraContentTranscript?.trim()) {
+    prompt += `\n\n<extra_content>\nThe following is transcribed text from related items (envelope, telegram, ephemera, etc.) that may provide additional context:\n\n${context.extraContentTranscript}\n</extra_content>`;
+  }
 
   if (context) {
     const parts: string[] = [];

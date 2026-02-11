@@ -373,12 +373,12 @@ export default function PeoplePage() {
               <div className="detail-header">
                 <h2>{selectedPerson.canonicalName}</h2>
                 <div className="detail-actions">
-                  <Button variant="secondary" size="small" onClick={openEditModal}>
+                  <Button variant="secondary" size="sm" onClick={openEditModal}>
                     Edit
                   </Button>
                   <Button
                     variant="secondary"
-                    size="small"
+                    size="sm"
                     onClick={() => setShowMergeModal(true)}
                   >
                     Merge
@@ -413,7 +413,7 @@ export default function PeoplePage() {
                   <h3>Relationships</h3>
                   <Button
                     variant="secondary"
-                    size="small"
+                    size="sm"
                     onClick={() => setShowAddRelationshipModal(true)}
                   >
                     Add

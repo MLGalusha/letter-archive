@@ -82,12 +82,10 @@ export function ResizableSplitPane({
 
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dividerRef = useRef<HTMLDivElement>(null);
   const splitRatioRef = useRef(splitRatio);
   const letterIdRef = useRef(letterId);
-
-  // Store handlers in refs for proper cleanup
-  const mouseMoveRef = useRef<((e: MouseEvent) => void) | null>(null);
-  const mouseUpRef = useRef<(() => void) | null>(null);
+  const isDraggingRef = useRef(false); // Ref for use in document event listeners
 
   // Keep refs in sync
   useEffect(() => {
@@ -137,7 +135,7 @@ export function ResizableSplitPane({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Calculate new split ratio based on mouse/touch position
+  // Calculate new split ratio based on pointer position
   const updateSplitRatio = useCallback(
     (clientX: number, clientY: number) => {
       if (!containerRef.current) return;
@@ -164,81 +162,114 @@ export function ResizableSplitPane({
     [isMobile, minFirstPanel, minSecondPanel, onSplitChange]
   );
 
-  // Cleanup function for mouse handlers
-  const cleanupMouseHandlers = useCallback(() => {
-    if (mouseMoveRef.current) {
-      document.removeEventListener("mousemove", mouseMoveRef.current);
-      mouseMoveRef.current = null;
-    }
-    if (mouseUpRef.current) {
-      document.removeEventListener("mouseup", mouseUpRef.current);
-      mouseUpRef.current = null;
-    }
-    document.body.style.userSelect = "";
-    document.body.style.cursor = "";
-    setIsDragging(false);
-  }, []);
+  // ============================================================================
+  // POINTER EVENT HANDLERS (using setPointerCapture for reliable drag)
+  // ============================================================================
+  // Using Pointer Events with setPointerCapture guarantees that the divider
+  // element will receive ALL pointer events until pointerup, regardless of
+  // where the pointer moves. This solves issues with contentEditable,
+  // scrollable containers, and other elements that might interfere.
+  // See: https://javascript.info/pointer-events
+  // ============================================================================
 
-  // Mouse handlers
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // Only handle primary button (left click / touch)
+      if (e.button !== 0) return;
+
       e.preventDefault();
+      e.stopPropagation();
 
-      // Clean up any existing handlers first
-      cleanupMouseHandlers();
+      // Capture all pointer events to this element until pointerup
+      // This is the key to making drag work reliably!
+      e.currentTarget.setPointerCapture(e.pointerId);
 
       setIsDragging(true);
-
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        updateSplitRatio(moveEvent.clientX, moveEvent.clientY);
-      };
-
-      const handleMouseUp = () => {
-        cleanupMouseHandlers();
-      };
-
-      // Store refs for cleanup
-      mouseMoveRef.current = handleMouseMove;
-      mouseUpRef.current = handleMouseUp;
+      isDraggingRef.current = true;
 
       // Prevent text selection during drag
       document.body.style.userSelect = "none";
       document.body.style.cursor = isMobile ? "row-resize" : "grabbing";
-
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
     },
-    [isMobile, updateSplitRatio, cleanupMouseHandlers]
+    [isMobile]
   );
 
-  // Cleanup on unmount or when isDragging becomes false unexpectedly
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // Only process if we're dragging (have pointer capture)
+      if (!isDragging) return;
+
+      e.preventDefault();
+      updateSplitRatio(e.clientX, e.clientY);
+    },
+    [isDragging, updateSplitRatio]
+  );
+
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!isDragging) return;
+
+      e.preventDefault();
+
+      // Release pointer capture (also happens automatically on pointerup)
+      e.currentTarget.releasePointerCapture(e.pointerId);
+
+      setIsDragging(false);
+      isDraggingRef.current = false;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    },
+    [isDragging]
+  );
+
+  // Handle pointer cancel (e.g., if browser interrupts the drag)
+  const handlePointerCancel = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+      setIsDragging(false);
+      isDraggingRef.current = false;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    },
+    []
+  );
+
+  // ============================================================================
+  // FALLBACK: Document-level mouse/pointer listeners
+  // ============================================================================
+  // In some browsers/situations, setPointerCapture doesn't reliably deliver
+  // pointerup to the element (e.g., when releasing over contentEditable).
+  // This fallback ensures we catch the release event no matter what.
+  // ============================================================================
+
   useEffect(() => {
-    return () => {
-      cleanupMouseHandlers();
-    };
-  }, [cleanupMouseHandlers]);
-
-  // Touch handlers
-  const handleTouchStart = useCallback(
-    (_e: React.TouchEvent) => {
-      setIsDragging(true);
-
-      const handleTouchMove = (moveEvent: TouchEvent) => {
-        const touch = moveEvent.touches[0];
-        updateSplitRatio(touch.clientX, touch.clientY);
-      };
-
-      const handleTouchEnd = () => {
+    const handleDocumentPointerUp = () => {
+      if (isDraggingRef.current) {
         setIsDragging(false);
-        document.removeEventListener("touchmove", handleTouchMove);
-        document.removeEventListener("touchend", handleTouchEnd);
-      };
+        isDraggingRef.current = false;
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+      }
+    };
 
-      document.addEventListener("touchmove", handleTouchMove, { passive: true });
-      document.addEventListener("touchend", handleTouchEnd);
-    },
-    [updateSplitRatio]
-  );
+    const handleDocumentMouseUp = () => {
+      if (isDraggingRef.current) {
+        setIsDragging(false);
+        isDraggingRef.current = false;
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+      }
+    };
+
+    // Listen on both pointer and mouse events for maximum compatibility
+    document.addEventListener("pointerup", handleDocumentPointerUp, true);
+    document.addEventListener("mouseup", handleDocumentMouseUp, true);
+
+    return () => {
+      document.removeEventListener("pointerup", handleDocumentPointerUp, true);
+      document.removeEventListener("mouseup", handleDocumentMouseUp, true);
+    };
+  }, []);
 
   // Calculate panel sizes
   const firstSize = isMobile
@@ -270,9 +301,17 @@ export function ResizableSplitPane({
       <div className={`split-pane-first ${firstPanelClassName}`}>{children[0]}</div>
 
       <div
+        ref={dividerRef}
         className={`split-pane-divider ${isDragging ? "dragging" : ""}`}
-        onMouseDown={handleMouseDown}
-        onTouchStart={handleTouchStart}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        // Prevent native behaviors
+        onDragStart={(e) => e.preventDefault()}
+        draggable={false}
+        // touch-action CSS prevents browser gestures from interfering
+        style={{ touchAction: "none" }}
       />
 
       <div className={`split-pane-second ${secondPanelClassName}`}>{children[1]}</div>

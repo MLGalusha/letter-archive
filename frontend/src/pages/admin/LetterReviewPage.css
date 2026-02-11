@@ -144,6 +144,31 @@
   background: #e8f5e9;
 }
 
+/* Regenerate transcription button - purple color scheme */
+.header-action.regenerate {
+  border-color: #7c3aed;
+  color: #7c3aed;
+}
+
+.header-action.regenerate:hover:not(:disabled) {
+  background: #f3e8ff;
+}
+
+/* Active state for regenerate button */
+.header-action.regenerate.regenerating {
+  background: #f3e8ff;
+}
+
+.header-action.regenerate.regenerating .icon {
+  animation: spin 1s linear infinite;
+}
+
+.header-action.regenerate.done {
+  border-color: #4caf50;
+  color: #4caf50;
+  background: #e8f5e9;
+}
+
 .header-action.revert {
   border-color: #e65100;
   color: #e65100;
@@ -510,9 +535,9 @@
   opacity: 0.6;
 }
 
-/* Verified state - green border on editor */
+/* Verified state - blue border on editor */
 .transcript-editor.verified {
-  border-color: #4caf50;
+  border-color: #3b82f6;
 }
 
 /* Metadata Section */
@@ -901,9 +926,9 @@
 }
 
 .status-verified {
-  background: #e8f5e9;
-  color: #2e7d32;
-  border: 1px solid #a5d6a7;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #93c5fd;
 }
 
 /* Header status group (for editor headers) */
@@ -920,24 +945,25 @@
   gap: var(--spacing-sm);
 }
 
-/* Verify button (checkmark icon button) */
+/* Verify button */
 .verify-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
   height: 32px;
-  padding: 0;
+  padding: 0 var(--spacing-sm);
   background: transparent;
-  border: solid 1px #4caf50;
+  border: solid 1px #3b82f6;
   border-radius: var(--radius-md);
-  color: #4caf50;
+  color: #3b82f6;
+  font-size: var(--font-sm);
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .verify-btn:hover:not(:disabled) {
-  background: #e8f5e9;
+  background: #dbeafe;
 }
 
 .verify-btn:disabled {
@@ -978,12 +1004,73 @@
 }
 
 .sync-status-indicator.done {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 .sync-status-indicator .spinning {
   animation: spin 1s linear infinite;
+}
+
+/* Regenerate transcription status indicator (in transcript header) */
+.regen-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  margin-left: var(--spacing-sm);
+  font-weight: 500;
+}
+
+.regen-status-indicator.regenerating {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.regen-status-indicator.done {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.regen-status-indicator .spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* Sync countdown timer */
+.sync-countdown {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: #fef3c7;
+  color: #92400e;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  position: relative;
+  cursor: pointer;
+}
+
+.sync-countdown:hover {
+  background: #fde68a;
+}
+
+.sync-countdown .cancel-hint {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-dark, #1f2937);
+  color: var(--text-light, #f9fafb);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  margin-top: 4px;
+  z-index: 10;
+  pointer-events: none;
 }
 
 /* Legacy resync indicator (can be removed if not used) */
@@ -1033,7 +1120,7 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
-  color: #2e7d32;
+  color: #1d4ed8;
   font-size: var(--font-sm);
   font-weight: 500;
 }
@@ -1074,35 +1161,15 @@
   padding-top: var(--spacing-md);
 }
 
-.v2-section-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  width: 100%;
-  padding: var(--spacing-sm) 0;
-  background: transparent;
-  border: none;
-  cursor: pointer;
+.v2-section-header {
   font-size: var(--font-sm);
   font-weight: 600;
   color: var(--text);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-}
-
-.v2-section-toggle:hover {
-  color: var(--text-muted);
-}
-
-.v2-preview-badge {
-  margin-left: auto;
-  padding: 0.15rem 0.5rem;
-  background: #e3f2fd;
-  color: #1565c0;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-xs);
-  font-weight: 500;
-  text-transform: capitalize;
+  margin: 0;
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--border);
 }
 
 .v2-fields {
@@ -1112,40 +1179,91 @@
   margin-top: var(--spacing-xs);
 }
 
-/* Topics Grid */
-.topics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+/* Topics Display - Badge-based UI */
+.topics-display {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.topic-tags {
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--spacing-xs);
-  max-height: 200px;
-  overflow-y: auto;
-  padding: var(--spacing-sm);
+}
+
+.topic-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  background: var(--bg);
+  border: solid 1px var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  color: var(--text);
+  text-transform: capitalize;
+}
+
+.topic-tag-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin-left: 2px;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.topic-tag-remove:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.no-topics {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.add-topic-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.65rem;
   background: var(--bg);
   border: solid 1px var(--border);
   border-radius: var(--radius-md);
-}
-
-.topic-checkbox {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
   font-size: var(--font-xs);
+  color: var(--text-muted);
   cursor: pointer;
-  padding: 0.25rem;
-  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
 }
 
-.topic-checkbox:hover {
+.add-topic-btn:hover {
   background: var(--bg-light);
+  border-color: var(--text-muted);
+  color: var(--text);
 }
 
-.topic-checkbox input {
-  margin: 0;
-  cursor: pointer;
+.topics-dropdown-content {
+  max-height: 280px;
+  overflow-y: auto;
 }
 
-.topic-checkbox span {
-  text-transform: capitalize;
+.dropdown-empty {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  text-align: center;
 }
 
 /* Notable Quotes */
@@ -1247,6 +1365,174 @@
   color: var(--text-muted);
 }
 
+.entity-name.editable {
+  cursor: pointer;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease;
+}
+
+.entity-name.editable:hover {
+  background: var(--bg-light);
+}
+
+.entity-name-input {
+  flex: 1;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  font-size: inherit;
+  font-weight: 500;
+  font-family: inherit;
+  border: solid 1px var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-light);
+  color: var(--text);
+  outline: none;
+}
+
+.entity-name-input:focus {
+  border-color: var(--text-muted);
+  box-shadow: 0 0 0 2px hsla(0, 0%, 50%, 0.1);
+}
+
+.entity-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-xs);
+}
+
+.entity-group-header label {
+  margin-bottom: 0;
+}
+
+.add-entity-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: var(--font-xs);
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: solid 1px var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.add-entity-btn:hover {
+  color: var(--text);
+  background: var(--bg-light);
+  border-color: var(--text-muted);
+}
+
+.entity-remove-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.15s ease;
+}
+
+.entity-item:hover .entity-remove-btn {
+  opacity: 1;
+}
+
+.entity-remove-btn:hover {
+  color: #d32f2f;
+  background: hsla(0, 73%, 50%, 0.1);
+}
+
+.no-entities {
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  font-style: italic;
+  padding: var(--spacing-xs) 0;
+}
+
+/* Add Entity Dialog */
+.add-entity-dialog {
+  min-width: 360px;
+  max-width: 420px;
+}
+
+.add-entity-dialog h3 {
+  margin-bottom: var(--spacing-md);
+}
+
+.add-entity-dialog .form-group {
+  margin-bottom: var(--spacing-md);
+}
+
+.add-entity-dialog .form-group:last-of-type {
+  margin-bottom: var(--spacing-lg);
+}
+
+.add-entity-dialog label {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+  font-weight: 600;
+  font-size: var(--font-sm);
+  color: var(--text);
+}
+
+.add-entity-dialog input,
+.add-entity-dialog select {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: var(--font-sm);
+  font-family: inherit;
+  border: solid 1px var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  box-sizing: border-box;
+}
+
+.add-entity-dialog input::placeholder {
+  color: var(--text-muted);
+}
+
+.add-entity-dialog input:focus,
+.add-entity-dialog select:focus {
+  outline: none;
+  border-color: #1976d2;
+  box-shadow: 0 0 0 3px hsla(210, 79%, 46%, 0.15);
+}
+
+.add-entity-dialog select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.add-entity-dialog .btn-confirm {
+  background: #1976d2;
+}
+
+.add-entity-dialog .btn-confirm:hover:not(:disabled) {
+  background: #1565c0;
+}
+
+.add-entity-dialog .btn-confirm:disabled {
+  background: #90caf9;
+  cursor: not-allowed;
+}
 
 /* Re-sync prompt modal */
 .resync-prompt {
@@ -1294,13 +1580,15 @@
    VERIFIED TRANSCRIPT EDITING FLOW STYLES
    ============================================================================ */
 
-/* Double-click to edit tooltip */
-.edit-tooltip {
+/* Double-click to edit tooltip (used for both transcript and metadata) */
+.edit-tooltip,
+.field-tooltip {
   position: fixed;
-  background: var(--text);
-  color: var(--bg);
+  background: var(--bg-light);
+  color: var(--text);
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
+  border: 1px solid var(--border);
   font-size: var(--font-sm);
   box-shadow: var(--shadow-lg);
   z-index: 1000;
@@ -1324,5 +1612,383 @@
 .transcript-editor.verified {
   cursor: pointer;
   user-select: none;
+}
+
+/* Verified field styling - subtle indication that fields are locked */
+.verified-field {
+  cursor: not-allowed !important;
+  background: var(--bg) !important;
+  opacity: 0.85;
+}
+
+.verified-field:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Verified metadata form - cursor indicates click behavior */
+.metadata-form.verified {
+  cursor: pointer;
+}
+
+.metadata-form.verified input,
+.metadata-form.verified textarea,
+.metadata-form.verified select {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ============================================================================
+   EXTRA CONTENT SECTION STYLES
+   ============================================================================ */
+
+.extra-content-section {
+  background: var(--bg-light);
+  border: var(--border-card);
+  border-top: solid 1px var(--highlight);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: visible;
+  min-width: 0;
+}
+
+.extra-content-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.extra-content-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.extra-content-container {
+  padding: var(--spacing-sm);
+  min-height: 200px;
+  min-width: 0;
+}
+
+/* Transcribe button */
+.action-btn.transcribe-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  background: #fff3e0;
+  color: #e65100;
+  border: solid 1px #ffcc80;
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-btn.transcribe-btn:hover:not(:disabled) {
+  background: #ffe0b2;
+  border-color: #ffb74d;
+}
+
+.action-btn.transcribe-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn.transcribe-btn .spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* Empty state styling */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.empty-state-icon {
+  font-size: 2.5rem;
+  margin-bottom: var(--spacing-sm);
+  opacity: 0.5;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: var(--font-sm);
+}
+
+.empty-state .transcribe-prompt {
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: #fff3e0;
+  color: #e65100;
+  border: solid 1px #ffcc80;
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.empty-state .transcribe-prompt:hover:not(:disabled) {
+  background: #ffe0b2;
+}
+
+.empty-state .transcribe-prompt:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   AI NOTES SECTION STYLES
+   ============================================================================ */
+
+.ai-notes-section {
+  background: var(--bg-light);
+  border: var(--border-card);
+  border-top: solid 1px var(--highlight);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: visible;
+  min-width: 0;
+}
+
+.ai-notes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.ai-notes-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.ai-notes-container {
+  padding: var(--spacing-sm);
+  min-width: 0;
+}
+
+.ai-notes-editor {
+  width: 100%;
+  padding: var(--spacing-md);
+  border: solid 1px var(--border);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  line-height: 1.6;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 120px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  resize: vertical;
+  transition: border-color 0.2s ease;
+}
+
+.ai-notes-editor:focus {
+  outline: none;
+  border-color: var(--text-muted);
+  box-shadow: 0 0 0 3px hsla(0, 0%, 50%, 0.1);
+}
+
+.ai-notes-editor::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+/* No extra content indicator - used when letter has no extras */
+.no-extras-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--bg);
+  border: solid 1px var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+
+.no-extras-indicator svg {
+  opacity: 0.5;
+}
+
+/* ============================================================================
+   GENERATE / SYNC BUTTON STYLES (same as transcribe-btn)
+   ============================================================================ */
+
+.action-btn.generate-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  background: #fff3e0;
+  color: #e65100;
+  border: solid 1px #ffcc80;
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-btn.generate-btn:hover:not(:disabled) {
+  background: #ffe0b2;
+  border-color: #ffb74d;
+}
+
+.action-btn.generate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn.sync-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  background: #fff3e0;
+  color: #e65100;
+  border: solid 1px #ffcc80;
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-btn.sync-btn:hover:not(:disabled) {
+  background: #ffe0b2;
+  border-color: #ffb74d;
+}
+
+.action-btn.sync-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn.sync-btn.done {
+  background: #e8f5e9;
+  color: #4caf50;
+  border-color: #81c784;
+}
+
+.action-btn.sync-btn .spinning,
+.action-btn.generate-btn .spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* Transcription status indicator (in transcript header) */
+.transcribe-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  margin-left: var(--spacing-sm);
+  font-weight: 500;
+}
+
+.transcribe-status-indicator.transcribing {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.transcribe-status-indicator.done {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.transcribe-status-indicator .spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* ============================================================================
+   CONFIRMATION DIALOG STYLES
+   ============================================================================ */
+
+.confirm-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.confirm-dialog {
+  background: var(--bg-light);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  padding: var(--spacing-lg);
+  max-width: 400px;
+  width: 90%;
+}
+
+.confirm-dialog h3 {
+  margin: 0 0 var(--spacing-sm) 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.confirm-dialog p {
+  margin: 0 0 var(--spacing-md) 0;
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  line-height: 1.5;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
+.confirm-dialog .btn-cancel {
+  padding: 0.5rem 1rem;
+  background: var(--bg);
+  color: var(--text-muted);
+  border: solid 1px var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.confirm-dialog .btn-cancel:hover {
+  background: var(--bg-light);
+  border-color: var(--text-muted);
+}
+
+.confirm-dialog .btn-confirm {
+  padding: 0.5rem 1rem;
+  background: #e65100;
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.confirm-dialog .btn-confirm:hover {
+  background: #d84315;
 }
 

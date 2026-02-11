@@ -1,15 +1,24 @@
 import { Router } from 'express';
-import { eq, and, isNull, isNotNull, inArray, sql, or, ilike, asc, desc, count } from 'drizzle-orm';
+import { eq, and, isNull, isNotNull, inArray, sql, or, ilike, count } from 'drizzle-orm';
 import { z } from 'zod';
-import { db, letters, letterPages, collections, letterVersions, letterPersons, letterPlaces, canonicalPersons, canonicalPlaces } from '../../db/index.js';
+import { db, letters, letterPages, collections, letterVersions, letterPersons, canonicalPersons, letterPlaces, canonicalPlaces } from '../../db/index.js';
 import { getLetterById, resetLetterForProcessing } from '../../services/letters.js';
 import { transformLetterToDTO, transformLetterWithRelatedToDTO, type LetterWithRelations } from '../../dto/index.js';
-import { processLetter, processMetadata } from '../../pipeline/processor.js';
+import { processLetter, processMetadata, runTranscription } from '../../pipeline/processor.js';
+import { runMetadataExtractionV2 } from '../../pipeline/metadataV2.js';
 import { resyncMetadata, auditMetadata, type MetadataAuditContext, type LinkedPersonInfo } from '../../ai/resync.js';
+import { checkExtraContentForText, transcribeExtraContent } from '../../ai/openai.js';
 import { createLogger } from '../../utils/logger.js';
+import { env } from '../../config/env.js';
 
 const log = createLogger({ module: 'admin-letters' });
 const router = Router();
+
+// Helper to extract rows from db.execute result (handles both postgres.js and drizzle formats)
+function getRows<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  return ((result as { rows?: T[] }).rows ?? []) as T[];
+}
 
 // ============================================================================
 // ENUM VALIDATION HELPERS
@@ -87,6 +96,53 @@ function normalizeRelationshipType(value: string | null | undefined): Relationsh
   return 'unknown';
 }
 
+/**
+ * Helper to fetch a letter with its related items (covers, telegrams, ephemera, etc.)
+ * and transform it to a DTO with all images properly included.
+ *
+ * This should be used by any endpoint that returns a letter to the frontend,
+ * to ensure the images array includes all related items.
+ *
+ * @param includeEntities - Also fetch linked persons and places (for detail view)
+ */
+async function fetchLetterWithRelatedAndTransform(
+  letterId: string,
+  includeEntities = true
+): Promise<ReturnType<typeof transformLetterWithRelatedToDTO> | null> {
+  const letter = await db.query.letters.findFirst({
+    where: and(eq(letters.id, letterId), isNull(letters.deletedAt)),
+    with: {
+      collection: true,
+      pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
+      // Optionally include linked persons/places
+      ...(includeEntities ? {
+        persons: { with: { person: true } },
+        places: { with: { place: true } },
+      } : {}),
+    },
+  });
+
+  if (!letter) return null;
+
+  // Fetch related items (all other types with same date/sequence)
+  const related = await db.query.letters.findMany({
+    where: and(
+      eq(letters.collectionId, letter.collectionId),
+      eq(letters.dateRaw, letter.dateRaw),
+      eq(letters.typeSequence, letter.typeSequence),
+      sql`${letters.type} != ${letter.type}`,
+      isNull(letters.deletedAt)
+    ),
+    with: {
+      collection: true,
+      pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
+    },
+    orderBy: (l, { asc }) => [asc(l.type)],
+  });
+
+  return transformLetterWithRelatedToDTO(letter as LetterWithRelations, related as LetterWithRelations[]);
+}
+
 // ============================================================================
 // ADMIN LETTERS LIST WITH SERVER-SIDE FILTERING + PAGINATION
 // ============================================================================
@@ -94,7 +150,7 @@ function normalizeRelationshipType(value: string | null | undefined): Relationsh
 const adminLettersQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(50),
-  visibility: z.enum(['PUBLISHED', 'HIDDEN']).optional(),
+  visibility: z.enum(['PUBLISHED', 'HIDDEN', 'all']).optional(),
   workflow: z.preprocess(
     // Preprocess: split comma-separated string into array BEFORE validation
     (val) => {
@@ -139,6 +195,15 @@ const adminLettersQuerySchema = z.object({
     },
     z.array(z.enum(contentStatusValues)).optional()
   ),
+  extraContentStatus: z.preprocess(
+    (val) => {
+      if (typeof val === 'string' && val.includes(',')) {
+        return val.split(',');
+      }
+      return val ? [val] : undefined;
+    },
+    z.array(z.enum(contentStatusValues)).optional()
+  ),
 });
 
 /**
@@ -172,7 +237,6 @@ router.get('/letters', async (req, res, next) => {
     // Build base conditions
     const conditions: ReturnType<typeof eq>[] = [
       isNull(letters.deletedAt),
-      eq(letters.type, 'L'), // Only L-type letters in admin view
     ];
 
     // Collection filter - supports partial matching (e.g., "7" matches "007", "017", "107")
@@ -196,8 +260,8 @@ router.get('/letters', async (req, res, next) => {
       }
     }
 
-    // Visibility filter
-    if (query.visibility) {
+    // Visibility filter ('all' means no filter)
+    if (query.visibility && query.visibility !== 'all') {
       conditions.push(eq(letters.visibility, query.visibility));
     }
 
@@ -256,140 +320,255 @@ router.get('/letters', async (req, res, next) => {
     if (query.metadataStatus && query.metadataStatus.length > 0) {
       conditions.push(inArray(letters.metadataContentStatus, query.metadataStatus));
     }
+    if (query.extraContentStatus && query.extraContentStatus.length > 0) {
+      conditions.push(inArray(letters.extraContentStatus, query.extraContentStatus));
+    }
 
     // Calculate stats for the collection (unfiltered by visibility/workflow/search)
     // This lets filter pills show accurate counts
-    const statsConditions: ReturnType<typeof eq>[] = [
-      isNull(letters.deletedAt),
-      eq(letters.type, 'L'),
-    ];
-    if (collectionIds.length > 0) {
-      statsConditions.push(inArray(letters.collectionId, collectionIds));
-    }
+    // Use DISTINCT ON to count unique letter groups, not individual type rows
+    const collectionFilter = collectionIds.length > 0
+      ? sql`AND collection_id = ANY(ARRAY[${sql.join(collectionIds.map(id => sql`${id}`), sql`, `)}]::uuid[])`
+      : sql``;
 
-    const statsResult = await db.select({
-      total: count(),
-      // Legacy workflow stats (for backward compat)
-      uploaded: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'UPLOADED')`,
-      transcribing: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'TRANSCRIBING')`,
-      transcribed: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'TRANSCRIBED')`,
-      metadataExtracting: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'METADATA_EXTRACTING')`,
-      metadataReady: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'METADATA_DRAFTED')`,
-      reviewed: sql<number>`COUNT(*) FILTER (WHERE ${letters.workflow} = 'REVIEWED')`,
-      // Visibility stats
-      published: sql<number>`COUNT(*) FILTER (WHERE ${letters.visibility} = 'PUBLISHED')`,
-      hidden: sql<number>`COUNT(*) FILTER (WHERE ${letters.visibility} = 'HIDDEN')`,
-      // Two-track transcript stats
-      transcriptEmpty: sql<number>`COUNT(*) FILTER (WHERE ${letters.transcriptStatus} = 'EMPTY')`,
-      transcriptAiDraft: sql<number>`COUNT(*) FILTER (WHERE ${letters.transcriptStatus} = 'AI_DRAFT')`,
-      transcriptEdited: sql<number>`COUNT(*) FILTER (WHERE ${letters.transcriptStatus} = 'EDITED')`,
-      transcriptVerified: sql<number>`COUNT(*) FILTER (WHERE ${letters.transcriptStatus} = 'VERIFIED')`,
-      // Two-track metadata stats
-      metadataEmpty: sql<number>`COUNT(*) FILTER (WHERE ${letters.metadataContentStatus} = 'EMPTY')`,
-      metadataAiDraft: sql<number>`COUNT(*) FILTER (WHERE ${letters.metadataContentStatus} = 'AI_DRAFT')`,
-      metadataEdited: sql<number>`COUNT(*) FILTER (WHERE ${letters.metadataContentStatus} = 'EDITED')`,
-      metadataVerified: sql<number>`COUNT(*) FILTER (WHERE ${letters.metadataContentStatus} = 'VERIFIED')`,
-    })
-      .from(letters)
-      .where(and(...statsConditions));
+    const statsResult = await db.execute(sql`
+      WITH unique_groups AS (
+        SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
+          workflow, visibility, transcript_status, metadata_content_status, extra_content_status
+        FROM letters
+        WHERE deleted_at IS NULL ${collectionFilter}
+        ORDER BY collection_id, date_raw, type_sequence,
+          CASE WHEN type = 'L' THEN 0 ELSE 1 END, type
+      )
+      SELECT
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE workflow = 'UPLOADED') as uploaded,
+        COUNT(*) FILTER (WHERE workflow = 'TRANSCRIBING') as transcribing,
+        COUNT(*) FILTER (WHERE workflow = 'TRANSCRIBED') as transcribed,
+        COUNT(*) FILTER (WHERE workflow = 'METADATA_EXTRACTING') as metadata_extracting,
+        COUNT(*) FILTER (WHERE workflow = 'METADATA_DRAFTED') as metadata_ready,
+        COUNT(*) FILTER (WHERE workflow = 'REVIEWED') as reviewed,
+        COUNT(*) FILTER (WHERE visibility = 'PUBLISHED') as published,
+        COUNT(*) FILTER (WHERE visibility = 'HIDDEN') as hidden,
+        COUNT(*) FILTER (WHERE transcript_status = 'EMPTY') as transcript_empty,
+        COUNT(*) FILTER (WHERE transcript_status = 'AI_DRAFT') as transcript_ai_draft,
+        COUNT(*) FILTER (WHERE transcript_status = 'EDITED') as transcript_edited,
+        COUNT(*) FILTER (WHERE transcript_status = 'VERIFIED') as transcript_verified,
+        COUNT(*) FILTER (WHERE metadata_content_status = 'EMPTY') as metadata_empty,
+        COUNT(*) FILTER (WHERE metadata_content_status = 'AI_DRAFT') as metadata_ai_draft,
+        COUNT(*) FILTER (WHERE metadata_content_status = 'EDITED') as metadata_edited,
+        COUNT(*) FILTER (WHERE metadata_content_status = 'VERIFIED') as metadata_verified,
+        COUNT(*) FILTER (WHERE extra_content_status = 'EMPTY') as extra_content_empty,
+        COUNT(*) FILTER (WHERE extra_content_status = 'AI_DRAFT') as extra_content_ai_draft,
+        COUNT(*) FILTER (WHERE extra_content_status = 'EDITED') as extra_content_edited,
+        COUNT(*) FILTER (WHERE extra_content_status = 'VERIFIED') as extra_content_verified
+      FROM unique_groups
+    `);
 
-    const stats = statsResult[0] || {
-      total: 0, uploaded: 0, transcribing: 0, transcribed: 0,
-      metadataExtracting: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0,
-      transcriptEmpty: 0, transcriptAiDraft: 0, transcriptEdited: 0, transcriptVerified: 0,
-      metadataEmpty: 0, metadataAiDraft: 0, metadataEdited: 0, metadataVerified: 0,
+    const statsRows = getRows<Record<string, number | string | bigint>>(statsResult);
+    const statsRow = statsRows[0] || {};
+    const stats = {
+      total: Number(statsRow.total || 0),
+      uploaded: Number(statsRow.uploaded || 0),
+      transcribing: Number(statsRow.transcribing || 0),
+      transcribed: Number(statsRow.transcribed || 0),
+      metadataExtracting: Number(statsRow.metadata_extracting || 0),
+      metadataReady: Number(statsRow.metadata_ready || 0),
+      reviewed: Number(statsRow.reviewed || 0),
+      published: Number(statsRow.published || 0),
+      hidden: Number(statsRow.hidden || 0),
+      transcriptEmpty: Number(statsRow.transcript_empty || 0),
+      transcriptAiDraft: Number(statsRow.transcript_ai_draft || 0),
+      transcriptEdited: Number(statsRow.transcript_edited || 0),
+      transcriptVerified: Number(statsRow.transcript_verified || 0),
+      metadataEmpty: Number(statsRow.metadata_empty || 0),
+      metadataAiDraft: Number(statsRow.metadata_ai_draft || 0),
+      metadataEdited: Number(statsRow.metadata_edited || 0),
+      metadataVerified: Number(statsRow.metadata_verified || 0),
+      extraContentEmpty: Number(statsRow.extra_content_empty || 0),
+      extraContentAiDraft: Number(statsRow.extra_content_ai_draft || 0),
+      extraContentEdited: Number(statsRow.extra_content_edited || 0),
+      extraContentVerified: Number(statsRow.extra_content_verified || 0),
     };
 
+    // Build WHERE clause fragments for the raw SQL queries
+    // We need to convert Drizzle conditions to raw SQL for DISTINCT ON
+    const buildWhereClause = () => {
+      const clauses: ReturnType<typeof sql>[] = [sql`deleted_at IS NULL`];
+
+      if (collectionIds.length > 0) {
+        clauses.push(sql`collection_id = ANY(ARRAY[${sql.join(collectionIds.map(id => sql`${id}`), sql`, `)}]::uuid[])`);
+      }
+      if (query.visibility) {
+        clauses.push(sql`visibility = ${query.visibility}`);
+      }
+      if (workflowValues && workflowValues.length > 0) {
+        clauses.push(sql`workflow = ANY(ARRAY[${sql.join(workflowValues.map(w => sql`${w}`), sql`, `)}]::text[])`);
+      }
+      if (query.search && query.search.trim()) {
+        const searchTerm = `%${query.search.trim()}%`;
+        clauses.push(sql`(sender ILIKE ${searchTerm} OR recipient ILIKE ${searchTerm} OR summary ILIKE ${searchTerm} OR hook ILIKE ${searchTerm})`);
+      }
+      if (query.year) {
+        clauses.push(sql`SUBSTRING(date_raw, 1, 4) = ${query.year.toString()}`);
+      }
+      if (query.month) {
+        const monthStr = query.month.toString().padStart(2, '0');
+        clauses.push(sql`SUBSTRING(date_raw, 5, 2) = ${monthStr}`);
+      }
+      if (query.day) {
+        const dayStr = query.day.toString().padStart(2, '0');
+        clauses.push(sql`SUBSTRING(date_raw, 7, 2) = ${dayStr}`);
+      }
+      if (query.dateFrom && !query.year && !query.month && !query.day) {
+        clauses.push(sql`REPLACE(date_raw, 'X', '0') >= ${query.dateFrom}`);
+      }
+      if (query.dateTo && !query.year && !query.month && !query.day) {
+        clauses.push(sql`REPLACE(date_raw, 'X', '9') <= ${query.dateTo}`);
+      }
+      if (query.transcriptStatus && query.transcriptStatus.length > 0) {
+        clauses.push(sql`transcript_status = ANY(ARRAY[${sql.join(query.transcriptStatus.map(s => sql`${s}`), sql`, `)}]::content_status[])`);
+      }
+      if (query.metadataStatus && query.metadataStatus.length > 0) {
+        clauses.push(sql`metadata_content_status = ANY(ARRAY[${sql.join(query.metadataStatus.map(s => sql`${s}`), sql`, `)}]::content_status[])`);
+      }
+      if (query.extraContentStatus && query.extraContentStatus.length > 0) {
+        clauses.push(sql`extra_content_status = ANY(ARRAY[${sql.join(query.extraContentStatus.map(s => sql`${s}`), sql`, `)}]::content_status[])`);
+      }
+
+      return sql.join(clauses, sql` AND `);
+    };
+
+    const whereClause = buildWhereClause();
+
     // Get total count for filtered results (for pagination)
-    const countResult = await db.select({ count: count() })
-      .from(letters)
-      .where(and(...conditions));
-    const totalFiltered = countResult[0]?.count || 0;
+    // Count unique groups, not individual type rows
+    const countResult = await db.execute(sql`
+      SELECT COUNT(*) as count FROM (
+        SELECT DISTINCT collection_id, date_raw, type_sequence
+        FROM letters
+        WHERE ${whereClause}
+      ) groups
+    `);
+    const countRows = getRows<{ count: number | bigint }>(countResult);
+    const totalFiltered = Number(countRows[0]?.count || 0);
     const totalPages = Math.ceil(totalFiltered / query.limit);
 
-    // Determine sort order direction
-    const sortDirection = query.sortOrder === 'asc' ? asc : desc;
+    // Determine sort order direction for raw SQL
+    const sortDir = query.sortOrder === 'asc' ? sql`ASC` : sql`DESC`;
 
-    // Build orderBy based on sort field
-    const getOrderBy = () => {
+    // Build ORDER BY expression for raw SQL
+    const getSortExpression = () => {
       switch (query.sort) {
         case 'letterDate':
-          return sortDirection(sql`REPLACE(${letters.dateRaw}, 'X', '0')`);
+          return sql`REPLACE(date_raw, 'X', '0')`;
         case 'sender':
-          return sortDirection(letters.sender);
+          return sql`sender`;
         case 'recipient':
-          return sortDirection(letters.recipient);
+          return sql`recipient`;
         case 'workflow':
-          return sortDirection(letters.workflow);
+          return sql`workflow`;
         case 'visibility':
-          return sortDirection(letters.visibility);
+          return sql`visibility`;
         case 'collection':
-          // Sort by collectionId - letters in same collection have same ID, so this groups them
-          // Not perfect alphabetically but functional for grouping
-          return sortDirection(letters.collectionId);
+          return sql`collection_id`;
         case 'createdAt':
         default:
-          return sortDirection(letters.createdAt);
+          return sql`created_at`;
       }
     };
 
-    // Fetch paginated results
+    // Fetch paginated results using DISTINCT ON to get one row per letter group
+    // Prefers 'L' type if available, otherwise uses first available type
     const offset = (query.page - 1) * query.limit;
-    const results = await db.query.letters.findMany({
-      where: and(...conditions),
-      with: {
-        collection: true,
-        pages: {
-          orderBy: (p, { asc: pageAsc }) => [pageAsc(p.pageNumber)],
-        },
-      },
-      orderBy: getOrderBy(),
-      limit: query.limit,
-      offset,
-    });
 
-    // Count related items (extras) for each letter in the result set
-    // Related items share collectionId, dateRaw, typeSequence but have type != 'L'
+    const representativeIdsResult = await db.execute(sql`
+      SELECT id FROM (
+        SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
+          id, ${getSortExpression()} as sort_key
+        FROM letters
+        WHERE ${whereClause}
+        ORDER BY collection_id, date_raw, type_sequence,
+          CASE WHEN type = 'L' THEN 0 ELSE 1 END, type
+      ) representatives
+      ORDER BY sort_key ${sortDir}
+      LIMIT ${query.limit}
+      OFFSET ${offset}
+    `);
+
+    const representativeRows = getRows<{ id: string }>(representativeIdsResult);
+    const representativeIds = representativeRows.map(r => r.id);
+
+    // Fetch full letter data with relations using the representative IDs
+    let results: Awaited<ReturnType<typeof db.query.letters.findMany>> = [];
+    if (representativeIds.length > 0) {
+      results = await db.query.letters.findMany({
+        where: inArray(letters.id, representativeIds),
+        with: {
+          collection: true,
+          pages: {
+            orderBy: (p, { asc: pageAsc }) => [pageAsc(p.pageNumber)],
+          },
+        },
+      });
+
+      // Re-sort results to match the SQL order (Drizzle doesn't preserve inArray order)
+      const idOrder = new Map(representativeIds.map((id: string, idx: number) => [id, idx]));
+      results.sort((a, b) => (idOrder.get(a.id) ?? 0) - (idOrder.get(b.id) ?? 0));
+    }
+
+    // Count pages for each letter group - both L-type (letters) and non-L-type (extras)
+    // All items in a group share collectionId, dateRaw, typeSequence
+    const lettersCountMap = new Map<string, number>();
     const extrasCountMap = new Map<string, number>();
     if (results.length > 0) {
-      // Build conditions for related items query
-      // We need to count pages from letters that match our results' keys
-      const relatedConditions = results.map(letter =>
+      // Build conditions for all items in each group (any type)
+      const groupConditions = results.map(letter =>
         and(
           eq(letters.collectionId, letter.collectionId),
           eq(letters.dateRaw, letter.dateRaw),
           eq(letters.typeSequence, letter.typeSequence),
-          sql`${letters.type} != 'L'`,
           isNull(letters.deletedAt)
         )
       );
 
-      // Query to count pages from related items grouped by their parent letter's key
-      const relatedCounts = await db
+      // Query to count pages grouped by key and whether type='L'
+      const pageCounts = await db
         .select({
           collectionId: letters.collectionId,
           dateRaw: letters.dateRaw,
           typeSequence: letters.typeSequence,
+          isLType: sql<boolean>`${letters.type} = 'L'`,
           pageCount: count(),
         })
         .from(letters)
         .innerJoin(letterPages, eq(letterPages.letterId, letters.id))
-        .where(or(...relatedConditions))
-        .groupBy(letters.collectionId, letters.dateRaw, letters.typeSequence);
+        .where(or(...groupConditions))
+        .groupBy(
+          letters.collectionId,
+          letters.dateRaw,
+          letters.typeSequence,
+          sql`${letters.type} = 'L'`
+        );
 
-      // Build lookup map: key = "collectionId:dateRaw:typeSequence" -> count
-      for (const row of relatedCounts) {
+      // Build lookup maps: key = "collectionId:dateRaw:typeSequence" -> count
+      for (const row of pageCounts) {
         const key = `${row.collectionId}:${row.dateRaw}:${row.typeSequence}`;
-        extrasCountMap.set(key, row.pageCount);
+        if (row.isLType) {
+          lettersCountMap.set(key, row.pageCount);
+        } else {
+          extrasCountMap.set(key, (extrasCountMap.get(key) || 0) + row.pageCount);
+        }
       }
     }
 
-    // Transform to DTOs with extras count
+    // Transform to DTOs with letters count and extras count
     const transformedLetters = (results as LetterWithRelations[]).map(letter => {
       const dto = transformLetterToDTO(letter);
       const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
       return {
         ...dto,
+        lettersCount: lettersCountMap.get(key) || 0,
         extrasCount: extrasCountMap.get(key) || 0,
       };
     });
@@ -431,6 +610,13 @@ router.get('/letters', async (req, res, next) => {
           aiDraft: Number(stats.metadataAiDraft),
           edited: Number(stats.metadataEdited),
           verified: Number(stats.metadataVerified),
+        },
+        // Extra content stats
+        extraContent: {
+          empty: Number(stats.extraContentEmpty),
+          aiDraft: Number(stats.extraContentAiDraft),
+          edited: Number(stats.extraContentEdited),
+          verified: Number(stats.extraContentVerified),
         },
       },
     });
@@ -1370,7 +1556,13 @@ router.put('/letters/:letterId', async (req, res, next) => {
       'Letter updated'
     );
 
-    res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
+    // Use helper to include related items in response
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+    res.json(letterDTO);
   } catch (error) {
     next(error);
   }
@@ -1409,23 +1601,69 @@ router.post('/letters/:letterId/confirm-transcript', async (req, res, next) => {
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
 
-    // Fetch and return updated letter
-    const updatedLetter = await db.query.letters.findFirst({
-      where: eq(letters.id, letterId),
-      with: {
-        collection: true,
-        pages: {
-          orderBy: (p, { asc }) => [asc(p.pageNumber)],
-        },
-      },
-    });
-
-    if (!updatedLetter) {
+    // Fetch and return updated letter with related items
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
       res.status(500).json({ error: 'Failed to fetch updated letter' });
       return;
     }
 
-    res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/letters/:letterId/regenerate-metadata - Regenerate metadata for a letter
+ *
+ * Runs metadata extraction immediately (not queued).
+ * Works on letters that already have metadata (workflow ENRICHED or COMPLETE).
+ */
+router.post('/letters/:letterId/regenerate-metadata', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    const existingLetter = await getLetterById(letterId);
+    if (!existingLetter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Must have a confirmed transcript
+    if (!existingLetter.transcriptConfirmedAt) {
+      res.status(400).json({
+        error: 'Transcript must be confirmed before regenerating metadata',
+      });
+      return;
+    }
+
+    // Cannot regenerate while already running
+    if (existingLetter.metadataStatus === 'RUNNING') {
+      res.status(400).json({
+        error: 'Metadata extraction is already in progress',
+      });
+      return;
+    }
+
+    // Reset attempt count so extraction can proceed
+    await db.update(letters).set({
+      metadataAttemptCount: 0,
+      metadataError: null,
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+
+    // Run metadata extraction immediately
+    await runMetadataExtractionV2(letterId);
+
+    // Fetch and return updated letter
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(500).json({ error: 'Failed to fetch updated letter' });
+      return;
+    }
+
+    res.json(letterDTO);
   } catch (error) {
     next(error);
   }
@@ -1616,16 +1854,14 @@ router.post('/letters/:letterId/versions/:versionNumber/restore', async (req, re
 
     req.log.info({ letterId, fieldType, restoredVersion: versionNumber }, 'Version restored');
 
-    // Fetch and return updated letter
-    const updatedLetter = await db.query.letters.findFirst({
-      where: eq(letters.id, letterId),
-      with: {
-        collection: true,
-        pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
-      },
-    });
+    // Fetch and return updated letter with related items
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
 
-    res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
+    res.json(letterDTO);
   } catch (error) {
     next(error);
   }
@@ -1651,15 +1887,6 @@ router.post('/letters/:letterId/verify-transcript', async (req, res, next) => {
       return;
     }
 
-    // Can only verify if there's content (not EMPTY)
-    if (existingLetter.transcriptStatus === 'EMPTY') {
-      res.status(400).json({
-        error: 'Cannot verify empty transcript',
-        currentStatus: existingLetter.transcriptStatus,
-      });
-      return;
-    }
-
     // Update transcript status to VERIFIED
     await db.update(letters).set({
       transcriptStatus: 'VERIFIED',
@@ -1670,16 +1897,14 @@ router.post('/letters/:letterId/verify-transcript', async (req, res, next) => {
 
     req.log.info({ letterId, previousStatus: existingLetter.transcriptStatus }, 'Transcript verified');
 
-    // Fetch and return updated letter
-    const updatedLetter = await db.query.letters.findFirst({
-      where: eq(letters.id, letterId),
-      with: {
-        collection: true,
-        pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
-      },
-    });
+    // Fetch and return updated letter with related items
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
 
-    res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
+    res.json(letterDTO);
   } catch (error) {
     next(error);
   }
@@ -1718,15 +1943,13 @@ router.post('/letters/:letterId/unverify-transcript', async (req, res, next) => 
 
     req.log.info({ letterId }, 'Transcript verification removed');
 
-    const updatedLetter = await db.query.letters.findFirst({
-      where: eq(letters.id, letterId),
-      with: {
-        collection: true,
-        pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
-      },
-    });
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
 
-    res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
+    res.json(letterDTO);
   } catch (error) {
     next(error);
   }
@@ -1747,15 +1970,6 @@ router.post('/letters/:letterId/verify-metadata', async (req, res, next) => {
       return;
     }
 
-    // Can only verify if there's content (not EMPTY)
-    if (existingLetter.metadataContentStatus === 'EMPTY') {
-      res.status(400).json({
-        error: 'Cannot verify empty metadata',
-        currentStatus: existingLetter.metadataContentStatus,
-      });
-      return;
-    }
-
     // Update metadata status to VERIFIED
     await db.update(letters).set({
       metadataContentStatus: 'VERIFIED',
@@ -1769,15 +1983,13 @@ router.post('/letters/:letterId/verify-metadata', async (req, res, next) => {
 
     req.log.info({ letterId, previousStatus: existingLetter.metadataContentStatus }, 'Metadata verified');
 
-    const updatedLetter = await db.query.letters.findFirst({
-      where: eq(letters.id, letterId),
-      with: {
-        collection: true,
-        pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
-      },
-    });
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
 
-    res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
+    res.json(letterDTO);
   } catch (error) {
     next(error);
   }
@@ -1816,15 +2028,993 @@ router.post('/letters/:letterId/unverify-metadata', async (req, res, next) => {
 
     req.log.info({ letterId }, 'Metadata verification removed');
 
-    const updatedLetter = await db.query.letters.findFirst({
-      where: eq(letters.id, letterId),
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/letters/:letterId/regenerate-transcription - Re-transcribe a letter
+ *
+ * Regenerates the main letter transcription and optionally extra content.
+ * This is a synchronous operation that runs the transcription pipeline directly.
+ *
+ * Query params:
+ *   includeExtras: boolean - Also re-transcribe extra content (T, C, E types)
+ */
+router.post('/letters/:letterId/regenerate-transcription', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+    const includeExtras = req.query.includeExtras === 'true';
+
+    // Fetch the letter
+    const letter = await db.query.letters.findFirst({
+      where: and(eq(letters.id, letterId), isNull(letters.deletedAt)),
       with: {
         collection: true,
         pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
       },
     });
 
-    res.json(transformLetterToDTO(updatedLetter as LetterWithRelations));
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Only allow regeneration for type='L' letters
+    if (letter.type !== 'L') {
+      res.status(400).json({ error: 'Can only regenerate transcription for letter type (L)' });
+      return;
+    }
+
+    req.log.info({ letterId, includeExtras }, 'Starting transcription regeneration');
+
+    // Reset transcription-related fields to allow re-transcription
+    await db.update(letters).set({
+      workflow: 'UPLOADED',
+      transcriptionStatus: 'PENDING',
+      transcriptionError: null,
+      transcriptionAttemptCount: 0,
+      // Reset transcript status but don't touch verified status - user intentionally regenerating
+      transcriptStatus: 'EMPTY',
+      transcriptVerifiedAt: null,
+      transcriptVerifiedBy: null,
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+
+    // Run the transcription pipeline synchronously
+    await runTranscription(letterId);
+
+    // After transcription, update status to AI_DRAFT
+    await db.update(letters).set({
+      transcriptStatus: 'AI_DRAFT',
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+
+    let extrasTranscribed = 0;
+
+    // Optionally re-transcribe extra content
+    if (includeExtras) {
+      // Fetch related items (T, C, E types with same date/sequence)
+      const relatedItems = await db.query.letters.findMany({
+        where: and(
+          eq(letters.collectionId, letter.collectionId),
+          eq(letters.dateRaw, letter.dateRaw),
+          eq(letters.typeSequence, letter.typeSequence),
+          inArray(letters.type, ['T', 'C', 'E']),
+          isNull(letters.deletedAt)
+        ),
+        with: {
+          pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
+        },
+        orderBy: (l, { asc }) => [asc(l.type)],
+      });
+
+      if (relatedItems.length > 0) {
+        const typeCounters: Record<string, number> = {};
+        const transcriptions: { type: string; index: number; text: string }[] = [];
+
+        for (const item of relatedItems) {
+          const docType = getDocumentTypeFromCode(item.type);
+          typeCounters[item.type] = (typeCounters[item.type] || 0) + 1;
+          const typeIndex = typeCounters[item.type];
+
+          for (const page of item.pages) {
+            const { getAbsoluteStoragePath } = await import('../../services/storage.js');
+            const filePath = getAbsoluteStoragePath(page.storagePath);
+
+            const checkResult = await checkExtraContentForText({
+              filePath,
+              documentType: docType,
+            });
+
+            if (!checkResult.hasTranscribableText) continue;
+
+            const transcription = await transcribeExtraContent({
+              filePath,
+              documentType: docType,
+              context: {
+                collectionCode: letter.collection.collectionCode,
+                dateRaw: letter.dateRaw,
+              },
+            });
+
+            if (transcription.text.trim()) {
+              transcriptions.push({
+                type: docType,
+                index: typeIndex,
+                text: transcription.text.trim(),
+              });
+              extrasTranscribed++;
+            }
+          }
+        }
+
+        // Combine transcriptions with headers
+        let combinedExtraContent = '';
+        if (transcriptions.length > 0) {
+          combinedExtraContent = transcriptions
+            .map((t) => {
+              const header = `--- ${t.type.charAt(0).toUpperCase() + t.type.slice(1)} ${t.index} ---`;
+              return `${header}\n\n${t.text}`;
+            })
+            .join('\n\n');
+        }
+
+        // Update letter with extra content
+        await db.update(letters).set({
+          extraContentTranscript: combinedExtraContent || null,
+          extraContentStatus: combinedExtraContent ? 'AI_DRAFT' : 'EMPTY',
+          extraContentVerifiedAt: null,
+          extraContentVerifiedBy: null,
+          updatedAt: new Date(),
+        }).where(eq(letters.id, letterId));
+      }
+    }
+
+    req.log.info({ letterId, includeExtras, extrasTranscribed }, 'Transcription regeneration completed');
+
+    // Fetch and return updated letter with related items
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+
+    res.json({
+      letter: letterDTO,
+      regenerated: {
+        mainTranscript: true,
+        extras: includeExtras,
+        extrasCount: extrasTranscribed,
+      },
+    });
+  } catch (error) {
+    req.log.error({ err: error }, 'Transcription regeneration failed');
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/letters/:letterId/transcribe-letter - Transcribe only the letter content
+ *
+ * This is for manual transcription of just the letter pages (type='L').
+ * Does NOT transcribe extra content (T, C, E types).
+ * Used when a user wants to re-transcribe just the letter without affecting extras.
+ */
+router.post('/letters/:letterId/transcribe-letter', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    // Fetch the letter
+    const letter = await db.query.letters.findFirst({
+      where: and(eq(letters.id, letterId), isNull(letters.deletedAt)),
+      with: {
+        collection: true,
+        pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
+      },
+    });
+
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Only allow for type='L' letters
+    if (letter.type !== 'L') {
+      res.status(400).json({ error: 'Can only transcribe letter type (L)' });
+      return;
+    }
+
+    req.log.info({ letterId }, 'Starting letter-only transcription');
+
+    // Reset transcription-related fields to allow re-transcription
+    await db.update(letters).set({
+      workflow: 'UPLOADED',
+      transcriptionStatus: 'PENDING',
+      transcriptionError: null,
+      transcriptionAttemptCount: 0,
+      transcriptStatus: 'EMPTY',
+      transcriptVerifiedAt: null,
+      transcriptVerifiedBy: null,
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+
+    // Run transcription on letter pages only (using transcribeImage directly)
+    const { transcribeImage } = await import('../../ai/openai.js');
+    const { getAbsoluteStoragePath } = await import('../../services/storage.js');
+
+    const pages = letter.pages;
+    if (pages.length === 0) {
+      res.status(400).json({ error: 'Letter has no pages to transcribe' });
+      return;
+    }
+
+    const pageTranscriptions: string[] = [];
+
+    for (const page of pages) {
+      const absolutePath = getAbsoluteStoragePath(page.storagePath);
+
+      const result = await transcribeImage({
+        filePath: absolutePath,
+        context: {
+          collectionCode: letter.collection.collectionCode,
+          dateRaw: letter.dateRaw,
+          pageNumber: page.pageNumber,
+          totalPages: pages.length,
+        },
+      });
+
+      pageTranscriptions.push(result.text);
+    }
+
+    // Combine transcriptions with page separators
+    let combinedTranscription: string;
+    if (pageTranscriptions.length === 1) {
+      combinedTranscription = pageTranscriptions[0];
+    } else {
+      combinedTranscription = pageTranscriptions
+        .map((text, i) => `--- Page ${i + 1} ---\n\n${text}`)
+        .join('\n\n');
+    }
+
+    // Update letter with transcription (letter only, no extras)
+    await db.update(letters).set({
+      transcriptionText: combinedTranscription,
+      transcriptionStatus: 'SUCCESS',
+      transcriptionError: null,
+      workflow: 'TRANSCRIBED',
+      transcriptStatus: 'AI_DRAFT',
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+
+    req.log.info({ letterId, pageCount: pages.length }, 'Letter-only transcription completed');
+
+    // Fetch and return updated letter with related items
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+
+    res.json({
+      letter: letterDTO,
+      transcribed: {
+        pageCount: pages.length,
+        textLength: combinedTranscription.length,
+      },
+    });
+  } catch (error) {
+    req.log.error({ err: error }, 'Letter-only transcription failed');
+    next(error);
+  }
+});
+
+// ============================================================================
+// EXTRA CONTENT TRANSCRIPTION ENDPOINTS
+// ============================================================================
+
+/**
+ * Map letter type codes to human-readable document types
+ */
+function getDocumentTypeFromCode(type: string): string {
+  switch (type) {
+    case 'T':
+      return 'telegram';
+    case 'C':
+      return 'cover/envelope';
+    case 'E':
+      return 'ephemera';
+    case 'N':
+      return 'card';
+    case 'P':
+      return 'photo';
+    default:
+      return 'document';
+  }
+}
+
+/**
+ * POST /admin/letters/:letterId/transcribe-extras - Transcribe extra content for a letter
+ *
+ * Finds all related items (T, C, E types) and transcribes them.
+ * Uses GPT-4o-mini to check if each has transcribable text first.
+ * Combines all transcriptions into a single block with separators.
+ */
+router.post('/letters/:letterId/transcribe-extras', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    // Fetch the letter and its related items
+    const letter = await db.query.letters.findFirst({
+      where: and(eq(letters.id, letterId), isNull(letters.deletedAt)),
+      with: {
+        collection: true,
+        pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
+      },
+    });
+
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Fetch related items (T, C, E types with same date/sequence)
+    const relatedItems = await db.query.letters.findMany({
+      where: and(
+        eq(letters.collectionId, letter.collectionId),
+        eq(letters.dateRaw, letter.dateRaw),
+        eq(letters.typeSequence, letter.typeSequence),
+        inArray(letters.type, ['T', 'C', 'E']), // Only transcribable extra types
+        isNull(letters.deletedAt)
+      ),
+      with: {
+        pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
+      },
+      orderBy: (l, { asc }) => [asc(l.type)], // Consistent ordering
+    });
+
+    if (relatedItems.length === 0) {
+      // No extra content to transcribe
+      await db.update(letters).set({
+        extraContentStatus: 'EMPTY',
+        extraContentTranscript: null,
+        updatedAt: new Date(),
+      }).where(eq(letters.id, letterId));
+
+      res.json({
+        message: 'No extra content found to transcribe',
+        extraContentStatus: 'EMPTY',
+        transcribedCount: 0,
+      });
+      return;
+    }
+
+    req.log.info(
+      { letterId, relatedCount: relatedItems.length, types: relatedItems.map(r => r.type) },
+      'Starting extra content transcription'
+    );
+
+    // Group items by type and count them for numbering
+    const typeCounters: Record<string, number> = {};
+    const transcriptions: { type: string; index: number; text: string }[] = [];
+
+    for (const item of relatedItems) {
+      const docType = getDocumentTypeFromCode(item.type);
+
+      // Count items of this type for numbering
+      typeCounters[item.type] = (typeCounters[item.type] || 0) + 1;
+      const typeIndex = typeCounters[item.type];
+
+      // Process each page of this item
+      for (const page of item.pages) {
+        // Get the absolute file path for this page
+        const { getAbsoluteStoragePath } = await import('../../services/storage.js');
+        const filePath = getAbsoluteStoragePath(page.storagePath);
+
+        // Check if this page has transcribable text
+        const checkResult = await checkExtraContentForText({
+          filePath,
+          documentType: docType,
+        });
+
+        if (!checkResult.hasTranscribableText) {
+          req.log.debug(
+            { pageId: page.id, type: item.type, reason: checkResult.reason },
+            'Skipping page - no transcribable text'
+          );
+          continue;
+        }
+
+        // Transcribe this page
+        const transcription = await transcribeExtraContent({
+          filePath,
+          documentType: docType,
+          context: {
+            collectionCode: letter.collection.collectionCode,
+            dateRaw: letter.dateRaw,
+          },
+        });
+
+        if (transcription.text && transcription.text.trim()) {
+          transcriptions.push({
+            type: item.type,
+            index: typeIndex,
+            text: transcription.text.trim(),
+          });
+        }
+      }
+    }
+
+    // Combine transcriptions with separators
+    let combinedTranscript = '';
+    if (transcriptions.length > 0) {
+      // Count total items per type to determine if we need numbering
+      const typeTotals: Record<string, number> = {};
+      for (const item of relatedItems) {
+        typeTotals[item.type] = (typeTotals[item.type] || 0) + 1;
+      }
+
+      // Build combined transcript
+      const parts: string[] = [];
+      for (const t of transcriptions) {
+        const docTypeName = getDocumentTypeFromCode(t.type);
+        // Capitalize first letter
+        const displayName = docTypeName.charAt(0).toUpperCase() + docTypeName.slice(1);
+
+        // Add number suffix only if there are multiple of this type
+        const label = typeTotals[t.type] > 1
+          ? `--- ${displayName} ${t.index} ---`
+          : `--- ${displayName} ---`;
+
+        parts.push(`${label}\n\n${t.text}`);
+      }
+
+      combinedTranscript = parts.join('\n\n');
+    }
+
+    // Update the letter with the combined transcript
+    const newStatus = combinedTranscript ? 'AI_DRAFT' : 'EMPTY';
+    await db.update(letters).set({
+      extraContentTranscript: combinedTranscript || null,
+      extraContentStatus: newStatus,
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+
+    req.log.info(
+      { letterId, transcribedCount: transcriptions.length, status: newStatus },
+      'Extra content transcription completed'
+    );
+
+    // Fetch and return updated letter with related items
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+
+    res.json({
+      letter: letterDTO,
+      transcribedCount: transcriptions.length,
+      extraContentStatus: newStatus,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /admin/letters/:letterId/extra-content - Update extra content transcription
+ */
+router.put('/letters/:letterId/extra-content', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+    const { extraContentTranscript } = req.body;
+
+    const existingLetter = await getLetterById(letterId);
+    if (!existingLetter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Determine new status based on edit
+    let newStatus = existingLetter.extraContentStatus;
+    if (existingLetter.extraContentStatus === 'AI_DRAFT') {
+      newStatus = 'EDITED';
+    }
+
+    await db.update(letters).set({
+      extraContentTranscript: extraContentTranscript || null,
+      extraContentStatus: newStatus,
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+
+    req.log.debug({ letterId, previousStatus: existingLetter.extraContentStatus, newStatus }, 'Extra content updated');
+
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/letters/:letterId/verify-extra-content - Mark extra content as verified
+ */
+router.post('/letters/:letterId/verify-extra-content', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    const existingLetter = await getLetterById(letterId);
+    if (!existingLetter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    await db.update(letters).set({
+      extraContentStatus: 'VERIFIED',
+      extraContentVerifiedAt: new Date(),
+      extraContentVerifiedBy: 'admin', // TODO: Use actual user when auth is implemented
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+
+    req.log.info({ letterId, previousStatus: existingLetter.extraContentStatus }, 'Extra content verified');
+
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/letters/:letterId/unverify-extra-content - Reset extra content verification
+ */
+router.post('/letters/:letterId/unverify-extra-content', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    const existingLetter = await getLetterById(letterId);
+    if (!existingLetter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    if (existingLetter.extraContentStatus !== 'VERIFIED') {
+      res.status(400).json({
+        error: 'Extra content is not verified',
+        currentStatus: existingLetter.extraContentStatus,
+      });
+      return;
+    }
+
+    await db.update(letters).set({
+      extraContentStatus: 'EDITED',
+      extraContentVerifiedAt: null,
+      extraContentVerifiedBy: null,
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+
+    req.log.info({ letterId }, 'Extra content verification removed');
+
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /admin/letters/:letterId/ai-notes - Update AI notes
+ */
+router.put('/letters/:letterId/ai-notes', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+    const { aiNotes } = req.body;
+
+    const existingLetter = await getLetterById(letterId);
+    if (!existingLetter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    await db.update(letters).set({
+      aiNotes: aiNotes || null,
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+
+    req.log.debug({ letterId }, 'AI notes updated');
+
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
+// LINKED ENTITY EDITING ENDPOINTS
+// ============================================================================
+
+const updateLinkedPersonSchema = z.object({
+  canonicalName: z.string().min(1, 'Name is required'),
+});
+
+/**
+ * PUT /admin/letters/:letterId/linked-persons/:linkId - Update a linked person's canonical name
+ */
+router.put('/letters/:letterId/linked-persons/:linkId', async (req, res, next) => {
+  try {
+    const { letterId, linkId } = req.params;
+
+    const parseResult = updateLinkedPersonSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
+      return;
+    }
+
+    const { canonicalName } = parseResult.data;
+
+    // Verify the link exists and belongs to this letter
+    const link = await db.query.letterPersons.findFirst({
+      where: and(
+        eq(letterPersons.id, linkId),
+        eq(letterPersons.letterId, letterId)
+      ),
+      with: { person: true },
+    });
+
+    if (!link) {
+      res.status(404).json({ error: 'Linked person not found' });
+      return;
+    }
+
+    // Update the canonical person's name
+    await db.update(canonicalPersons).set({
+      canonicalName,
+      updatedAt: new Date(),
+    }).where(eq(canonicalPersons.id, link.personId));
+
+    req.log.info({ letterId, linkId, personId: link.personId, newName: canonicalName }, 'Linked person name updated');
+
+    // Return updated letter
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const updateLinkedPlaceSchema = z.object({
+  canonicalName: z.string().min(1, 'Name is required'),
+});
+
+/**
+ * PUT /admin/letters/:letterId/linked-places/:linkId - Update a linked place's canonical name
+ */
+router.put('/letters/:letterId/linked-places/:linkId', async (req, res, next) => {
+  try {
+    const { letterId, linkId } = req.params;
+
+    const parseResult = updateLinkedPlaceSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
+      return;
+    }
+
+    const { canonicalName } = parseResult.data;
+
+    // Verify the link exists and belongs to this letter
+    const link = await db.query.letterPlaces.findFirst({
+      where: and(
+        eq(letterPlaces.id, linkId),
+        eq(letterPlaces.letterId, letterId)
+      ),
+      with: { place: true },
+    });
+
+    if (!link) {
+      res.status(404).json({ error: 'Linked place not found' });
+      return;
+    }
+
+    // Update the canonical place's name
+    await db.update(canonicalPlaces).set({
+      canonicalName,
+      updatedAt: new Date(),
+    }).where(eq(canonicalPlaces.id, link.placeId));
+
+    req.log.info({ letterId, linkId, placeId: link.placeId, newName: canonicalName }, 'Linked place name updated');
+
+    // Return updated letter
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
+// ADD LINKED ENTITIES
+// ============================================================================
+
+const addLinkedPersonSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  role: z.enum(['sender', 'recipient', 'mentioned']),
+});
+
+/**
+ * POST /admin/letters/:letterId/linked-persons - Add a linked person to a letter
+ *
+ * Creates or finds a canonical person and links them to this letter.
+ */
+router.post('/letters/:letterId/linked-persons', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    // Verify letter exists
+    const letter = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+    });
+
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    const parseResult = addLinkedPersonSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
+      return;
+    }
+
+    const { name, role } = parseResult.data;
+
+    // Check if a canonical person with this exact name already exists
+    let person = await db.query.canonicalPersons.findFirst({
+      where: eq(canonicalPersons.canonicalName, name),
+    });
+
+    // If not found, create a new canonical person
+    if (!person) {
+      const [newPerson] = await db.insert(canonicalPersons).values({
+        canonicalName: name,
+      }).returning();
+      person = newPerson;
+      req.log.info({ letterId, personId: person.id, name }, 'Created new canonical person');
+    }
+
+    // Check if this person is already linked to this letter with this role
+    const existingLink = await db.query.letterPersons.findFirst({
+      where: and(
+        eq(letterPersons.letterId, letterId),
+        eq(letterPersons.personId, person.id),
+        eq(letterPersons.role, role)
+      ),
+    });
+
+    if (existingLink) {
+      res.status(400).json({ error: 'Person already linked with this role' });
+      return;
+    }
+
+    // Create the link
+    await db.insert(letterPersons).values({
+      letterId,
+      personId: person.id,
+      role,
+      nameAsWritten: name,
+      confidence: 100, // Manual link = high confidence
+    });
+
+    req.log.info({ letterId, personId: person.id, name, role }, 'Linked person to letter');
+
+    // Return updated letter
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const addLinkedPlaceSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  role: z.enum(['written_from', 'mentioned', 'destination']),
+});
+
+/**
+ * POST /admin/letters/:letterId/linked-places - Add a linked place to a letter
+ *
+ * Creates or finds a canonical place and links them to this letter.
+ */
+router.post('/letters/:letterId/linked-places', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+
+    // Verify letter exists
+    const letter = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+    });
+
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    const parseResult = addLinkedPlaceSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
+      return;
+    }
+
+    const { name, role } = parseResult.data;
+
+    // Check if a canonical place with this exact name already exists
+    let place = await db.query.canonicalPlaces.findFirst({
+      where: eq(canonicalPlaces.canonicalName, name),
+    });
+
+    // If not found, create a new canonical place
+    if (!place) {
+      const [newPlace] = await db.insert(canonicalPlaces).values({
+        canonicalName: name,
+        placeType: 'other', // Default type
+      }).returning();
+      place = newPlace;
+      req.log.info({ letterId, placeId: place.id, name }, 'Created new canonical place');
+    }
+
+    // Check if this place is already linked to this letter with this role
+    const existingLink = await db.query.letterPlaces.findFirst({
+      where: and(
+        eq(letterPlaces.letterId, letterId),
+        eq(letterPlaces.placeId, place.id),
+        eq(letterPlaces.role, role)
+      ),
+    });
+
+    if (existingLink) {
+      res.status(400).json({ error: 'Place already linked with this role' });
+      return;
+    }
+
+    // Create the link
+    await db.insert(letterPlaces).values({
+      letterId,
+      placeId: place.id,
+      role,
+      nameAsWritten: name,
+      confidence: 100, // Manual link = high confidence
+    });
+
+    req.log.info({ letterId, placeId: place.id, name, role }, 'Linked place to letter');
+
+    // Return updated letter
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * DELETE /admin/letters/:letterId/linked-persons/:linkId - Remove a linked person from a letter
+ */
+router.delete('/letters/:letterId/linked-persons/:linkId', async (req, res, next) => {
+  try {
+    const { letterId, linkId } = req.params;
+
+    // Verify the link exists and belongs to this letter
+    const link = await db.query.letterPersons.findFirst({
+      where: and(
+        eq(letterPersons.id, linkId),
+        eq(letterPersons.letterId, letterId)
+      ),
+    });
+
+    if (!link) {
+      res.status(404).json({ error: 'Linked person not found' });
+      return;
+    }
+
+    // Delete the link
+    await db.delete(letterPersons).where(eq(letterPersons.id, linkId));
+
+    req.log.info({ letterId, linkId }, 'Removed linked person from letter');
+
+    // Return updated letter
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * DELETE /admin/letters/:letterId/linked-places/:linkId - Remove a linked place from a letter
+ */
+router.delete('/letters/:letterId/linked-places/:linkId', async (req, res, next) => {
+  try {
+    const { letterId, linkId } = req.params;
+
+    // Verify the link exists and belongs to this letter
+    const link = await db.query.letterPlaces.findFirst({
+      where: and(
+        eq(letterPlaces.id, linkId),
+        eq(letterPlaces.letterId, letterId)
+      ),
+    });
+
+    if (!link) {
+      res.status(404).json({ error: 'Linked place not found' });
+      return;
+    }
+
+    // Delete the link
+    await db.delete(letterPlaces).where(eq(letterPlaces.id, linkId));
+
+    req.log.info({ letterId, linkId }, 'Removed linked place from letter');
+
+    // Return updated letter
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+
+    res.json(letterDTO);
   } catch (error) {
     next(error);
   }
@@ -1900,6 +3090,12 @@ router.post('/letters/:letterId/resync-check', async (req, res, next) => {
       role: lp.role as 'sender' | 'recipient' | 'mentioned',
     }));
 
+    // Extract quote contexts from metadataV2Json
+    const metadataV2 = letter.metadataV2Json as {
+      notable_quotes?: Array<{ text: string; context: string; position: 'opening' | 'middle' | 'closing' }>;
+    } | null;
+    const quoteContexts = metadataV2?.notable_quotes || [];
+
     // Build full audit context
     const auditContext: MetadataAuditContext = {
       sender: newSender || letter.sender || null,
@@ -1909,6 +3105,7 @@ router.post('/letters/:letterId/resync-check', async (req, res, next) => {
       hook: letter.hook || null,
       relationshipType: letter.senderRecipientRelationship || null,
       linkedPersons,
+      quoteContexts,
     };
 
     // Build change info if there was a change
@@ -1924,7 +3121,8 @@ router.post('/letters/:letterId/resync-check', async (req, res, next) => {
       decision.shouldUpdateHook ||
       decision.shouldCreateSenderPerson ||
       decision.shouldCreateRecipientPerson ||
-      decision.shouldUpdateRelationship;
+      decision.shouldUpdateRelationship ||
+      decision.shouldUpdateQuoteContexts;
 
     req.log.debug(
       {
@@ -1949,13 +3147,14 @@ router.post('/letters/:letterId/resync-check', async (req, res, next) => {
  * POST /admin/letters/:letterId/resync - Full metadata sync
  *
  * Uses a two-model approach:
- * 1. GPT-4o-mini audits all metadata for issues
- * 2. GPT-5.2 regenerates/fixes the affected fields
+ * 1. GPT-5-mini audits all metadata for issues
+ * 2. Main model regenerates/fixes the affected fields
  *
  * Can fix:
- * - Summary using generic terms instead of names
- * - Hook using generic terms instead of names
- * - Missing linked persons for sender/recipient
+ * - Summary using generic terms instead of first names
+ * - Hook using generic terms instead of first names
+ * - Quote contexts using pronouns instead of first names
+ * - Missing linked persons for sender/recipient (uses full names)
  * - Missing relationship type
  */
 router.post('/letters/:letterId/resync', async (req, res, next) => {
@@ -2004,6 +3203,14 @@ router.post('/letters/:letterId/resync', async (req, res, next) => {
       role: lp.role as 'sender' | 'recipient' | 'mentioned',
     }));
 
+    // Extract quote contexts from metadataV2Json
+    const existingMetadataV2 = letter.metadataV2Json as Record<string, unknown> | null;
+    const quoteContexts = (existingMetadataV2?.notable_quotes || []) as Array<{
+      text: string;
+      context: string;
+      position: 'opening' | 'middle' | 'closing';
+    }>;
+
     // Build full audit context
     const auditContext: MetadataAuditContext = {
       sender: newSender || letter.sender || null,
@@ -2013,6 +3220,7 @@ router.post('/letters/:letterId/resync', async (req, res, next) => {
       hook: letter.hook || null,
       relationshipType: letter.senderRecipientRelationship || null,
       linkedPersons,
+      quoteContexts,
     };
 
     // Build change info if there was a change
@@ -2048,6 +3256,13 @@ router.post('/letters/:letterId/resync', async (req, res, next) => {
         if (normalizedRelationship) {
           dbUpdates.senderRecipientRelationship = normalizedRelationship;
         }
+      }
+      if (result.updatedQuoteContexts) {
+        // Update quote contexts in metadataV2Json
+        dbUpdates.metadataV2Json = {
+          ...(existingMetadataV2 || {}),
+          notable_quotes: result.updatedQuoteContexts,
+        };
       }
 
       await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
@@ -2125,6 +3340,7 @@ router.post('/letters/:letterId/resync', async (req, res, next) => {
           createdSenderPerson: Boolean(result.senderPerson),
           createdRecipientPerson: Boolean(result.recipientPerson),
           updatedRelationship: Boolean(result.relationshipType),
+          updatedQuoteContexts: Boolean(result.updatedQuoteContexts),
           decision: result.decision.reason,
         },
         'Metadata sync completed'
@@ -2133,27 +3349,15 @@ router.post('/letters/:letterId/resync', async (req, res, next) => {
       req.log.info({ letterId, reason: result.decision.reason }, 'Metadata sync: no updates needed');
     }
 
-    // Fetch and return updated letter with linked persons AND places
-    const updatedLetter = await db.query.letters.findFirst({
-      where: eq(letters.id, letterId),
-      with: {
-        collection: true,
-        pages: { orderBy: (p, { asc: asc2 }) => [asc2(p.pageNumber)] },
-        persons: {
-          with: {
-            person: true,
-          },
-        },
-        places: {
-          with: {
-            place: true,
-          },
-        },
-      },
-    });
+    // Fetch and return updated letter with related items and entities
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId, true);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
 
     res.json({
-      letter: transformLetterToDTO(updatedLetter as LetterWithRelations),
+      letter: letterDTO,
       resync: {
         wasUpdated: result.wasUpdated,
         updatedFields: {
@@ -2162,6 +3366,7 @@ router.post('/letters/:letterId/resync', async (req, res, next) => {
           senderPerson: Boolean(result.senderPerson),
           recipientPerson: Boolean(result.recipientPerson),
           relationshipType: Boolean(result.relationshipType),
+          quoteContexts: Boolean(result.updatedQuoteContexts),
         },
         decision: result.decision,
       },

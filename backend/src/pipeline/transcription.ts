@@ -1,10 +1,28 @@
-import { transcribeImage } from '../ai/openai.js';
+import { transcribeImage, checkExtraContentForText, transcribeExtraContent } from '../ai/openai.js';
 import { getLetterWithPages, updateTranscriptionStatus, updateLetterWorkflow, incrementTranscriptionAttempts } from '../services/letters.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
 import { createLogger } from '../utils/logger.js';
+import { db, letters } from '../db/index.js';
+import { eq, and, inArray, isNull } from 'drizzle-orm';
 
 const log = createLogger({ module: 'transcription-pipeline' });
 const MAX_ATTEMPTS = 3;
+
+/**
+ * Map letter type codes to human-readable document types for transcription
+ */
+function getDocumentTypeFromCode(type: string): string {
+  switch (type) {
+    case 'T':
+      return 'telegram';
+    case 'C':
+      return 'cover/envelope';
+    case 'E':
+      return 'ephemera';
+    default:
+      return 'document';
+  }
+}
 
 /**
  * Runs transcription for a letter.
@@ -119,6 +137,100 @@ export async function runTranscription(letterId: string): Promise<void> {
     await updateTranscriptionStatus(letterId, 'SUCCESS', combinedTranscription, null);
     await updateLetterWorkflow(letterId, 'TRANSCRIBED');
 
+    // Also set transcriptStatus to AI_DRAFT since we just generated it
+    await db.update(letters).set({
+      transcriptStatus: 'AI_DRAFT',
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+
+    // === Automatically transcribe extra content (T, C, E types) ===
+    let extrasTranscribed = 0;
+    try {
+      const relatedItems = await db.query.letters.findMany({
+        where: and(
+          eq(letters.collectionId, letter.collectionId),
+          eq(letters.dateRaw, letter.dateRaw),
+          eq(letters.typeSequence, letter.typeSequence),
+          inArray(letters.type, ['T', 'C', 'E']),
+          isNull(letters.deletedAt)
+        ),
+        with: {
+          pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
+        },
+        orderBy: (l, { asc }) => [asc(l.type)],
+      });
+
+      if (relatedItems.length > 0) {
+        letterLog.debug({ relatedCount: relatedItems.length }, 'Found related extra content items');
+
+        const typeCounters: Record<string, number> = {};
+        const transcriptions: { type: string; index: number; text: string }[] = [];
+
+        for (const item of relatedItems) {
+          const docType = getDocumentTypeFromCode(item.type);
+          typeCounters[item.type] = (typeCounters[item.type] || 0) + 1;
+          const typeIndex = typeCounters[item.type];
+
+          for (const page of item.pages) {
+            const filePath = getAbsoluteStoragePath(page.storagePath);
+
+            const checkResult = await checkExtraContentForText({
+              filePath,
+              documentType: docType,
+            });
+
+            if (!checkResult.hasTranscribableText) {
+              letterLog.debug({ docType, reason: checkResult.reason }, 'Skipping extra - no transcribable text');
+              continue;
+            }
+
+            const transcription = await transcribeExtraContent({
+              filePath,
+              documentType: docType,
+              context: {
+                collectionCode: letter.collection.collectionCode,
+                dateRaw: letter.dateRaw,
+              },
+            });
+
+            if (transcription.text.trim()) {
+              transcriptions.push({
+                type: docType,
+                index: typeIndex,
+                text: transcription.text.trim(),
+              });
+              extrasTranscribed++;
+            }
+          }
+        }
+
+        // Combine transcriptions with headers
+        let combinedExtraContent = '';
+        if (transcriptions.length > 0) {
+          combinedExtraContent = transcriptions
+            .map((t) => {
+              const header = `--- ${t.type.charAt(0).toUpperCase() + t.type.slice(1)} ${t.index} ---`;
+              return `${header}\n\n${t.text}`;
+            })
+            .join('\n\n');
+        }
+
+        // Update letter with extra content
+        await db.update(letters).set({
+          extraContentTranscript: combinedExtraContent || null,
+          extraContentStatus: combinedExtraContent ? 'AI_DRAFT' : 'EMPTY',
+          extraContentVerifiedAt: null,
+          extraContentVerifiedBy: null,
+          updatedAt: new Date(),
+        }).where(eq(letters.id, letterId));
+
+        letterLog.info({ extrasTranscribed }, 'Extra content transcription completed');
+      }
+    } catch (extrasError) {
+      // Log but don't fail the whole transcription if extras fail
+      letterLog.warn({ err: extrasError }, 'Failed to transcribe extra content - continuing');
+    }
+
     const duration = Date.now() - start;
     letterLog.info(
       {
@@ -128,6 +240,7 @@ export async function runTranscription(letterId: string): Promise<void> {
         totalTextLength: combinedTranscription.length,
         stubMode,
         attemptNumber,
+        extrasTranscribed,
       },
       'Transcription pipeline completed successfully'
     );

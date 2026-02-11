@@ -238,7 +238,7 @@ export default function EntityReviewPage() {
                   {item.suggestedEntityId && (
                     <Button
                       variant="primary"
-                      size="small"
+                      size="sm"
                       onClick={() => handleResolve(item, "confirmed")}
                       disabled={processingId === item.id}
                     >
@@ -247,7 +247,7 @@ export default function EntityReviewPage() {
                   )}
                   <Button
                     variant="secondary"
-                    size="small"
+                    size="sm"
                     onClick={() => handleResolve(item, "new_entity")}
                     disabled={processingId === item.id}
                   >
@@ -255,7 +255,7 @@ export default function EntityReviewPage() {
                   </Button>
                   <Button
                     variant="secondary"
-                    size="small"
+                    size="sm"
                     onClick={() => openSearchModal(item)}
                     disabled={processingId === item.id}
                   >
@@ -263,7 +263,7 @@ export default function EntityReviewPage() {
                   </Button>
                   <Button
                     variant="danger"
-                    size="small"
+                    size="sm"
                     onClick={() => handleResolve(item, "rejected")}
                     disabled={processingId === item.id}
                   >

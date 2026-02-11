@@ -81,6 +81,7 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
         collectionCode: letter.collection.collectionCode,
         dateRaw: letter.dateRaw,
         dateFromFilename: letter.letterDate,
+        extraContentTranscript: letter.extraContentTranscript,
       },
     });
 

@@ -249,12 +249,12 @@ export default function PlacesPage() {
               <div className="detail-header">
                 <h2>{selectedPlace.canonicalName}</h2>
                 <div className="detail-actions">
-                  <Button variant="secondary" size="small" onClick={openEditModal}>
+                  <Button variant="secondary" size="sm" onClick={openEditModal}>
                     Edit
                   </Button>
                   <Button
                     variant="secondary"
-                    size="small"
+                    size="sm"
                     onClick={() => setShowMergeModal(true)}
                   >
                     Merge

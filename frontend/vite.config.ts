@@ -4,4 +4,25 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  server: {
+    // Force browser to always check for updates in development
+    headers: {
+      'Cache-Control': 'no-store',
+    },
+    // Ensure HMR works properly
+    hmr: {
+      overlay: true,
+    },
+  },
+  build: {
+    // Add content hashes to filenames for cache busting in production
+    rollupOptions: {
+      output: {
+        // Ensure CSS files get hashed names
+        assetFileNames: 'assets/[name]-[hash][extname]',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+      },
+    },
+  },
 })

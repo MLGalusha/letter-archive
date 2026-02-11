@@ -195,6 +195,15 @@ export const letters = pgTable(
     transcriptConfirmedAt: timestamp('transcript_confirmed_at', { withTimezone: true }),
     transcriptConfirmedBy: text('transcript_confirmed_by'),
 
+    // Extra content transcription (telegrams, covers, ephemera)
+    extraContentTranscript: text('extra_content_transcript'),
+    extraContentStatus: contentStatusEnum('extra_content_status').notNull().default('EMPTY'),
+    extraContentVerifiedAt: timestamp('extra_content_verified_at', { withTimezone: true }),
+    extraContentVerifiedBy: text('extra_content_verified_by'),
+
+    // AI notes (observations, suggestions, hunches)
+    aiNotes: text('ai_notes'),
+
     // Admin review
     reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
     reviewedBy: text('reviewed_by'),
@@ -437,6 +446,28 @@ export const personRelationships = pgTable(
 );
 
 /**
+ * Audit log for tracking admin changes to entities and content
+ */
+export const auditLog = pgTable(
+  'audit_log',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    timestamp: timestamp('timestamp', { withTimezone: true }).notNull().defaultNow(),
+    userId: text('user_id'),
+    action: text('action').notNull(), // 'create', 'update', 'delete', 'merge', 'verify', etc.
+    entityType: text('entity_type').notNull(), // 'letter', 'person', 'place', 'relationship', etc.
+    entityId: uuid('entity_id'),
+    changes: jsonb('changes'), // { before: {...}, after: {...} } or action-specific data
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_audit_log_timestamp').on(table.timestamp),
+    index('idx_audit_log_entity').on(table.entityType, table.entityId),
+    index('idx_audit_log_user').on(table.userId),
+  ]
+);
+
+/**
  * Review queue for pending entity matches needing admin confirmation
  */
 export const entityReviewQueue = pgTable(
@@ -599,3 +630,7 @@ export type EntityReviewStatus = 'pending' | 'confirmed' | 'rejected' | 'new_ent
 export type PersonRelationship = typeof personRelationships.$inferSelect;
 export type NewPersonRelationship = typeof personRelationships.$inferInsert;
 export type PersonRelationshipType = 'spouse' | 'fiancé/fiancée' | 'romantic-partner' | 'parent-child' | 'sibling' | 'grandparent-grandchild' | 'aunt-uncle-niece-nephew' | 'cousin' | 'in-law' | 'friend' | 'acquaintance' | 'business-associate' | 'employer-employee' | 'unknown';
+
+// Audit log types
+export type AuditLog = typeof auditLog.$inferSelect;
+export type NewAuditLog = typeof auditLog.$inferInsert;

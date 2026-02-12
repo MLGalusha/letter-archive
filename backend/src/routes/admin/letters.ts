@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { eq, and, isNull, isNotNull, inArray, sql, or, ilike, count } from 'drizzle-orm';
 import { z } from 'zod';
-import { db, letters, letterPages, collections, letterVersions, letterPersons, canonicalPersons, letterPlaces, canonicalPlaces } from '../../db/index.js';
+import { db, letters, letterPages, collections, letterVersions, letterPersons, canonicalPersons, letterPlaces, canonicalPlaces, personRelationships } from '../../db/index.js';
 import { getLetterById, resetLetterForProcessing } from '../../services/letters.js';
 import { transformLetterToDTO, transformLetterWithRelatedToDTO, type LetterWithRelations } from '../../dto/index.js';
 import { processLetter, processMetadata, runTranscription } from '../../pipeline/processor.js';
@@ -1669,32 +1669,44 @@ router.post('/letters/bulk/extract-metadata', async (req, res, next) => {
 });
 
 /**
- * POST /admin/letters/bulk/reset-transcriptions - Reset transcriptions for selected letters
+ * POST /admin/letters/bulk/clear-transcriptions - Clear transcriptions for selected letters
  *
- * Sets workflow back to UPLOADED, clears transcription text, clears transcript confirmation.
+ * Sets workflow back to UPLOADED, clears all transcription text (including extra content),
+ * clears all metadata and entity links since they depend on transcription.
  * This is used for re-testing transcription with updated prompts.
  */
-router.post('/letters/bulk/reset-transcriptions', async (req, res, next) => {
+router.post('/letters/bulk/clear-transcriptions', async (req, res, next) => {
   try {
     const parseResult = bulkLetterIdsSchema.safeParse(req.body);
     if (!parseResult.success) {
-      req.log.warn({ errors: parseResult.error.errors }, 'Invalid bulk reset request');
+      req.log.warn({ errors: parseResult.error.errors }, 'Invalid bulk clear transcriptions request');
       res.status(400).json({ error: 'Invalid request', details: parseResult.error.errors });
       return;
     }
     const { letterIds } = parseResult.data;
 
-    req.log.info({ count: letterIds.length }, 'Bulk reset transcriptions requested');
+    req.log.info({ count: letterIds.length }, 'Bulk clear transcriptions requested');
 
-    // Update all selected letters
-    const result = await db.update(letters).set({
+    // Delete entity links for these letters
+    await db.delete(letterPersons).where(inArray(letterPersons.letterId, letterIds));
+    await db.delete(letterPlaces).where(inArray(letterPlaces.letterId, letterIds));
+    await db.delete(personRelationships).where(inArray(personRelationships.discoveredInLetterId, letterIds));
+
+    // Update all selected letters - clear everything
+    await db.update(letters).set({
       workflow: 'UPLOADED',
+      // Clear transcription
       transcriptionText: null,
       transcriptConfirmedAt: null,
       transcriptConfirmedBy: null,
       transcriptionStatus: 'PENDING',
       transcriptionError: null,
-      // Also clear metadata since it depends on transcription
+      // Clear extra content transcription
+      extraContentTranscript: null,
+      extraContentStatus: 'EMPTY',
+      extraContentVerifiedAt: null,
+      extraContentVerifiedBy: null,
+      // Clear metadata (depends on transcription)
       metadataStatus: 'PENDING',
       metadataError: null,
       sender: null,
@@ -1705,6 +1717,15 @@ router.post('/letters/bulk/reset-transcriptions', async (req, res, next) => {
       extractedDate: null,
       extractedDateConfidence: null,
       tags: null,
+      // Clear V2 metadata fields
+      emotionalTone: null,
+      senderRecipientRelationship: null,
+      primaryTopics: null,
+      aiNotes: null,
+      // Clear entity extraction
+      entityExtractionJson: null,
+      entityExtractionStatus: 'PENDING',
+      entityExtractionError: null,
       // Reset two-track content status
       transcriptStatus: 'EMPTY',
       transcriptVerifiedAt: null,
@@ -1720,10 +1741,10 @@ router.post('/letters/bulk/reset-transcriptions', async (req, res, next) => {
       )
     );
 
-    req.log.info({ updated: letterIds.length }, 'Bulk reset transcriptions completed');
+    req.log.info({ updated: letterIds.length }, 'Bulk clear transcriptions completed');
 
     res.json({
-      message: 'Transcriptions reset',
+      message: 'Transcriptions cleared',
       updated: letterIds.length,
     });
   } catch (error) {
@@ -1797,8 +1818,8 @@ router.patch('/letters/bulk/update-fields', async (req, res, next) => {
 /**
  * POST /admin/letters/bulk/clear-metadata - Clear metadata for selected letters
  *
- * Clears metadata fields but keeps the transcription intact.
- * Resets workflow to TRANSCRIBED if it was past that point.
+ * Clears all metadata fields (including V2 fields and entity links) but keeps
+ * the transcription intact. Resets workflow to TRANSCRIBED.
  */
 router.post('/letters/bulk/clear-metadata', async (req, res, next) => {
   try {
@@ -1809,7 +1830,12 @@ router.post('/letters/bulk/clear-metadata', async (req, res, next) => {
     }
     const { letterIds } = parseResult.data;
 
-    // Update all selected letters - clear metadata but keep transcription
+    // Delete entity links for these letters
+    await db.delete(letterPersons).where(inArray(letterPersons.letterId, letterIds));
+    await db.delete(letterPlaces).where(inArray(letterPlaces.letterId, letterIds));
+    await db.delete(personRelationships).where(inArray(personRelationships.discoveredInLetterId, letterIds));
+
+    // Update all selected letters - clear all metadata but keep transcription
     await db.update(letters).set({
       sender: null,
       recipient: null,
@@ -1821,6 +1847,15 @@ router.post('/letters/bulk/clear-metadata', async (req, res, next) => {
       tags: null,
       metadataStatus: 'PENDING',
       metadataError: null,
+      // Clear V2 metadata fields
+      emotionalTone: null,
+      senderRecipientRelationship: null,
+      primaryTopics: null,
+      aiNotes: null,
+      // Clear entity extraction
+      entityExtractionJson: null,
+      entityExtractionStatus: 'PENDING',
+      entityExtractionError: null,
       // Reset metadata two-track status (keep transcript status intact)
       metadataContentStatus: 'EMPTY',
       metadataVerifiedAt: null,

@@ -8,7 +8,7 @@ import {
   pauseProcessing,
   resumeProcessing,
   abortProcessing,
-  bulkResetTranscriptions,
+  bulkClearTranscriptions,
   bulkClearMetadata,
   bulkTranscribe,
   bulkExtractMetadata,
@@ -832,24 +832,24 @@ export default function AdminDashboard() {
   };
 
   // Bulk action handlers
-  const handleResetTranscriptionsClick = () => {
+  const handleClearTranscriptionsClick = () => {
     if (selectedIds.size > 0) {
       setShowResetModal(true);
     }
   };
 
-  const handleConfirmResetTranscriptions = async () => {
+  const handleConfirmClearTranscriptions = async () => {
     setBulkActionLoading(true);
     const count = selectedIds.size;
     try {
-      await bulkResetTranscriptions(Array.from(selectedIds));
+      await bulkClearTranscriptions(Array.from(selectedIds));
       setSelectedIds(new Set());
       setShowResetModal(false);
-      showToast(`Reset ${count} letter${count === 1 ? '' : 's'} to UPLOADED`, 'success');
+      showToast(`Cleared transcriptions for ${count} letter${count === 1 ? '' : 's'}`, 'success');
       await fetchLetters();
     } catch (err) {
-      console.error("Failed to reset transcriptions:", err);
-      showToast(err instanceof Error ? err.message : "Failed to reset transcriptions", 'error');
+      console.error("Failed to clear transcriptions:", err);
+      showToast(err instanceof Error ? err.message : "Failed to clear transcriptions", 'error');
     } finally {
       setBulkActionLoading(false);
     }
@@ -1289,9 +1289,9 @@ export default function AdminDashboard() {
               />
               <DropdownDivider />
               <DropdownItem
-                title="Reset Transcriptions"
+                title="Clear Transcriptions"
                 description="Clear transcripts, return to UPLOADED"
-                onClick={handleResetTranscriptionsClick}
+                onClick={handleClearTranscriptionsClick}
                 disabled={selectedIds.size === 0}
               />
               <DropdownItem
@@ -1861,14 +1861,14 @@ export default function AdminDashboard() {
         onCancel={handleCancelDelete}
       />
 
-      {/* Reset transcriptions confirmation modal */}
+      {/* Clear transcriptions confirmation modal */}
       <ConfirmDialog
         isOpen={showResetModal}
-        title="Reset Transcriptions"
-        message={`This will reset ${selectedIds.size} letter${selectedIds.size === 1 ? "" : "s"} to UPLOADED state and clear their transcriptions. You will need to re-transcribe them.`}
-        confirmText={bulkActionLoading ? "Resetting..." : "Reset"}
+        title="Clear Transcriptions"
+        message={`This will clear all transcriptions (including extra content), metadata, and entity links for ${selectedIds.size} letter${selectedIds.size === 1 ? "" : "s"}, returning them to UPLOADED state. You will need to re-transcribe them.`}
+        confirmText={bulkActionLoading ? "Clearing..." : "Clear Transcriptions"}
         loading={bulkActionLoading}
-        onConfirm={handleConfirmResetTranscriptions}
+        onConfirm={handleConfirmClearTranscriptions}
         onCancel={() => setShowResetModal(false)}
       />
 
@@ -1876,7 +1876,7 @@ export default function AdminDashboard() {
       <ConfirmDialog
         isOpen={showClearMetadataModal}
         title="Clear Metadata"
-        message={`This will clear metadata (sender, recipient, summary, etc.) for ${selectedIds.size} letter${selectedIds.size === 1 ? "" : "s"}. The transcriptions will be kept intact.`}
+        message={`This will clear all metadata, entity links, and extracted entities for ${selectedIds.size} letter${selectedIds.size === 1 ? "" : "s"}. The transcriptions will be kept intact.`}
         confirmText={bulkActionLoading ? "Clearing..." : "Clear Metadata"}
         loading={bulkActionLoading}
         onConfirm={handleConfirmClearMetadata}

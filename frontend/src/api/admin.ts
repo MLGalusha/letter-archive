@@ -229,10 +229,10 @@ export interface BulkUpdateResponse {
 }
 
 /**
- * Reset transcriptions for selected letters (back to UPLOADED state)
+ * Clear transcriptions for selected letters (back to UPLOADED state)
  */
-export async function bulkResetTranscriptions(letterIds: string[]): Promise<BulkUpdateResponse> {
-  return apiPost<BulkUpdateResponse>('/admin/letters/bulk/reset-transcriptions', { letterIds });
+export async function bulkClearTranscriptions(letterIds: string[]): Promise<BulkUpdateResponse> {
+  return apiPost<BulkUpdateResponse>('/admin/letters/bulk/clear-transcriptions', { letterIds });
 }
 
 /**

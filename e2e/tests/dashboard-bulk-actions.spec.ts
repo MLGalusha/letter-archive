@@ -8,7 +8,7 @@ import {
 /**
  * E2E tests for Admin Dashboard Bulk Actions
  *
- * Tests cover process menu, bulk delete, reset, and metadata operations.
+ * Tests cover process menu, bulk delete, clear transcriptions, and metadata operations.
  * Note: Some tests are marked as potentially destructive - be careful with test data.
  */
 
@@ -41,15 +41,15 @@ test.describe('Dashboard Bulk Actions', () => {
       await expect(metadataOption).toBeVisible();
     });
 
-    test('process menu shows reset option (disabled when no selection)', async ({ page }) => {
+    test('process menu shows clear transcriptions option (disabled when no selection)', async ({ page }) => {
       await page.locator(SELECTORS.dashboard.processBtn).click();
 
-      const resetOption = page.locator('.dropdown-menu').getByText('Reset Transcriptions');
-      await expect(resetOption).toBeVisible();
+      const clearOption = page.locator('.dropdown-menu').getByText('Clear Transcriptions');
+      await expect(clearOption).toBeVisible();
 
       // Check if it has disabled class or attribute
-      const resetItem = page.locator('[class*="dropdown-item"]:has-text("Reset Transcriptions")');
-      await expect(resetItem).toHaveClass(/disabled/);
+      const clearItem = page.locator('[class*="dropdown-item"]:has-text("Clear Transcriptions")');
+      await expect(clearItem).toHaveClass(/disabled/);
     });
 
     test('process menu shows delete option (disabled when no selection)', async ({ page }) => {
@@ -76,7 +76,7 @@ test.describe('Dashboard Bulk Actions', () => {
   });
 
   test.describe('Bulk Selection Actions', () => {
-    test('reset option becomes enabled when rows are selected', async ({ page }) => {
+    test('clear transcriptions option becomes enabled when rows are selected', async ({ page }) => {
       // Enter edit mode and select a row
       await page.locator(SELECTORS.dashboard.editBtn).click();
       await page.locator(SELECTORS.dashboard.tableRow).first().click();
@@ -84,9 +84,9 @@ test.describe('Dashboard Bulk Actions', () => {
       // Open process menu
       await page.locator(SELECTORS.dashboard.processBtn).click();
 
-      // Reset option should now be enabled
-      const resetItem = page.locator('[class*="dropdown-item"]:has-text("Reset Transcriptions")');
-      await expect(resetItem).not.toHaveClass(/disabled/);
+      // Clear transcriptions option should now be enabled
+      const clearItem = page.locator('[class*="dropdown-item"]:has-text("Clear Transcriptions")');
+      await expect(clearItem).not.toHaveClass(/disabled/);
     });
 
     test('delete option becomes enabled when rows are selected', async ({ page }) => {
@@ -163,25 +163,25 @@ test.describe('Dashboard Bulk Actions', () => {
     });
   });
 
-  test.describe('Reset Confirmation', () => {
-    test('clicking reset shows confirmation dialog', async ({ page }) => {
+  test.describe('Clear Transcriptions Confirmation', () => {
+    test('clicking clear transcriptions shows confirmation dialog', async ({ page }) => {
       await page.locator(SELECTORS.dashboard.editBtn).click();
       await page.locator(SELECTORS.dashboard.tableRow).first().click();
 
       await page.locator(SELECTORS.dashboard.processBtn).click();
-      await page.locator('[class*="dropdown-item"]:has-text("Reset Transcriptions")').click();
+      await page.locator('[class*="dropdown-item"]:has-text("Clear Transcriptions")').click();
 
       const dialog = page.locator(SELECTORS.modal.confirmDialog);
       await expect(dialog).toBeVisible();
-      await expect(dialog).toContainText('Reset');
+      await expect(dialog).toContainText('Clear Transcriptions');
     });
 
-    test('can cancel reset confirmation', async ({ page }) => {
+    test('can cancel clear transcriptions confirmation', async ({ page }) => {
       await page.locator(SELECTORS.dashboard.editBtn).click();
       await page.locator(SELECTORS.dashboard.tableRow).first().click();
 
       await page.locator(SELECTORS.dashboard.processBtn).click();
-      await page.locator('[class*="dropdown-item"]:has-text("Reset Transcriptions")').click();
+      await page.locator('[class*="dropdown-item"]:has-text("Clear Transcriptions")').click();
 
       await page.locator(SELECTORS.modal.cancelBtn).click();
 

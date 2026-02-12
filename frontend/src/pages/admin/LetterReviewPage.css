@@ -160,13 +160,25 @@
   background: #fff3e0;
 }
 
-.header-action.delete {
-  border-color: #dc3545;
-  color: #dc3545;
+/* More menu button (vertical dots) in filename row */
+.more-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 32px;
+  padding: 0;
+  border: solid 1px var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
-.header-action.delete:hover:not(:disabled) {
-  background: #ffebee;
+.more-menu-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-light);
 }
 
 .back-button {
@@ -279,14 +291,21 @@
   margin-bottom: calc(var(--spacing-xl) * 2);
 }
 
-/* Filename Display (inside status-panel) */
+/* Filename row: outer container with space-between for label+value vs more button */
+.filename-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: var(--spacing-sm);
+  border-bottom: solid 1px var(--border);
+  margin-bottom: var(--spacing-xs);
+}
+
+/* Filename Display: inner container for label + value */
 .filename-display {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  padding-bottom: var(--spacing-sm);
-  border-bottom: solid 1px var(--border);
-  margin-bottom: var(--spacing-xs);
 }
 
 .filename-label {
@@ -1004,26 +1023,26 @@
   animation: spin 1s linear infinite;
 }
 
-/* Sync countdown timer */
-.sync-countdown {
-  display: inline-flex;
-  align-items: center;
-  font-size: 0.8rem;
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
+/* Sync button with countdown state */
+.action-btn.sync-btn.has-countdown {
   background: #fef3c7;
   color: #92400e;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
+  border-color: #fcd34d;
   position: relative;
-  cursor: pointer;
 }
 
-.sync-countdown:hover {
+.action-btn.sync-btn.has-countdown:hover:not(:disabled) {
   background: #fde68a;
+  border-color: #fbbf24;
 }
 
-.sync-countdown .cancel-hint {
+.sync-countdown-text {
+  font-variant-numeric: tabular-nums;
+  min-width: 2.5em;
+  text-align: center;
+}
+
+.action-btn.sync-btn .cancel-hint {
   position: absolute;
   top: 100%;
   left: 50%;

@@ -602,10 +602,6 @@ export default function AdminDashboard() {
     }
   }, [editMode, handleMouseUp]);
 
-  const handleUploadClick = () => {
-    navigate("/admin/upload");
-  };
-
   // Multi-column sort handler: click cycles through asc → desc → none
   const handleSort = (field: ExtendedSortField) => {
     setSortColumns((prev) => {
@@ -1223,9 +1219,6 @@ export default function AdminDashboard() {
       >
         {editMode ? "Exit Edit" : "Edit"}
       </Button>
-
-      {/* Upload button */}
-      <Button icon="upload" onClick={handleUploadClick}>Upload</Button>
 
       {/* Process button or controls */}
       {processingStatus?.isRunning ? (

@@ -305,6 +305,7 @@ export default function LetterReviewPage() {
   );
   const [syncCountdown, setSyncCountdown] = useState<number | null>(null);
   const [showCancelHint, setShowCancelHint] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const cancelHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -814,8 +815,8 @@ export default function LetterReviewPage() {
     // Clear existing timer
     clearSyncTimer();
 
-    // Start countdown at 5 minutes (300 seconds)
-    setSyncCountdown(300);
+    // Start countdown at 3 minutes (180 seconds)
+    setSyncCountdown(180);
 
     // Update countdown every second
     countdownIntervalRef.current = setInterval(() => {
@@ -827,13 +828,13 @@ export default function LetterReviewPage() {
       });
     }, 1000);
 
-    // Set 5-minute timer for auto-sync
+    // Set 3-minute timer for auto-sync
     syncTimerRef.current = setTimeout(
       () => {
         clearSyncTimer();
         handleAISync();
       },
-      5 * 60 * 1000,
+      3 * 60 * 1000,
     );
   }, [clearSyncTimer, handleAISync]);
 
@@ -984,7 +985,6 @@ export default function LetterReviewPage() {
           }
 
           setAutoSaveStatus("saved");
-          setTimeout(() => setAutoSaveStatus("idle"), 2000);
 
           // Track edit
           trackEdit({
@@ -1410,7 +1410,6 @@ export default function LetterReviewPage() {
           const updated = await updateExtraContent(letterId, newContent);
           setLetter(updated);
           setAutoSaveStatus("saved");
-          setTimeout(() => setAutoSaveStatus("idle"), 2000);
         } catch (err) {
           setAutoSaveStatus("error");
           console.error("Extra content auto-save error:", err);
@@ -1438,7 +1437,6 @@ export default function LetterReviewPage() {
           const updated = await updateAiNotes(letterId, newNotes);
           setLetter(updated);
           setAutoSaveStatus("saved");
-          setTimeout(() => setAutoSaveStatus("idle"), 2000);
         } catch (err) {
           setAutoSaveStatus("error");
           console.error("AI notes auto-save error:", err);
@@ -1523,15 +1521,6 @@ export default function LetterReviewPage() {
         )}
       </div>
       <div className="header-actions">
-        <button
-          className="header-action save"
-          onClick={() => handleSave()}
-          disabled={saving}
-          data-tooltip="Save"
-        >
-          <Icon name="save" size={18} />
-        </button>
-
         {/* Confirm button - only for TRANSCRIBED without confirmation */}
         {letter.workflowState === "TRANSCRIBED" &&
           !letter.transcriptConfirmedAt && (
@@ -1557,14 +1546,6 @@ export default function LetterReviewPage() {
           </button>
         )}
 
-        <button
-          className="header-action delete"
-          onClick={handleDelete}
-          disabled={saving}
-          data-tooltip="Delete"
-        >
-          <Icon name="delete" size={18} />
-        </button>
       </div>
     </>
   );
@@ -1597,11 +1578,34 @@ export default function LetterReviewPage() {
             <div className="status-panel">
               {/* Filename Display - shows current page's filename */}
               {(currentFilename || letter.images[0]?.originalFilename) && (
-                <div className="filename-display">
-                  <span className="filename-label">File</span>
-                  <code className="filename-value">
-                    {currentFilename || letter.images[0]?.originalFilename}
-                  </code>
+                <div className="filename-row">
+                  <div className="filename-display">
+                    <span className="filename-label">File</span>
+                    <code className="filename-value">
+                      {currentFilename || letter.images[0]?.originalFilename}
+                    </code>
+                  </div>
+                  <Dropdown
+                    trigger={
+                      <button
+                        className="more-menu-btn"
+                        onClick={() => setShowMoreMenu(!showMoreMenu)}
+                      >
+                        <Icon name="more" size={16} />
+                      </button>
+                    }
+                    isOpen={showMoreMenu}
+                    onClose={() => setShowMoreMenu(false)}
+                    align="right"
+                  >
+                    <DropdownItem
+                      title="Delete Letter"
+                      description="Permanently delete this letter"
+                      onClick={() => { setShowMoreMenu(false); handleDelete(); }}
+                      disabled={saving}
+                      variant="danger"
+                    />
+                  </Dropdown>
                 </div>
               )}
 
@@ -1901,14 +1905,18 @@ export default function LetterReviewPage() {
                   {letter.metadataContentStatus !== "EMPTY" &&
                     letter.metadataContentStatus !== "VERIFIED" && (
                       <button
-                        className={`action-btn sync-btn ${syncState !== "idle" ? syncState : ""}`}
-                        onClick={handleAISync}
+                        className={`action-btn sync-btn ${syncState !== "idle" ? syncState : ""} ${syncCountdown !== null && syncState === "idle" ? "has-countdown" : ""}`}
+                        onClick={syncCountdown !== null && syncState === "idle" ? handleCountdownClick : handleAISync}
+                        onDoubleClick={syncCountdown !== null && syncState === "idle" ? handleCountdownDoubleClick : undefined}
                         disabled={
                           saving ||
-                          syncState !== "idle" ||
+                          (syncState !== "idle" && syncCountdown === null) ||
                           !letter.transcript.fullText
                         }
-                        title="Sync metadata with identity changes"
+                        title={syncCountdown !== null && syncState === "idle"
+                          ? "Click to sync now, double-click to cancel"
+                          : "Sync metadata with identity changes"
+                        }
                       >
                         {syncState === "checking" ||
                         syncState === "updating" ? (
@@ -1925,6 +1933,18 @@ export default function LetterReviewPage() {
                             <Icon name="check" size={14} />
                             <span>Synced</span>
                           </>
+                        ) : syncCountdown !== null ? (
+                          <>
+                            <Icon name="process" size={14} />
+                            <span className="sync-countdown-text">
+                              {Math.floor(syncCountdown / 60)}:{String(syncCountdown % 60).padStart(2, "0")}
+                            </span>
+                            {showCancelHint && (
+                              <span className="cancel-hint">
+                                Double-click to cancel
+                              </span>
+                            )}
+                          </>
                         ) : (
                           <>
                             <Icon name="process" size={14} />
@@ -1933,23 +1953,6 @@ export default function LetterReviewPage() {
                         )}
                       </button>
                     )}
-
-                  {/* Sync countdown (when 5-min timer is running) */}
-                  {syncCountdown !== null && syncState === "idle" && (
-                    <span
-                      className="sync-countdown"
-                      onClick={handleCountdownClick}
-                      onDoubleClick={handleCountdownDoubleClick}
-                    >
-                      Syncing in {Math.floor(syncCountdown / 60)}:
-                      {String(syncCountdown % 60).padStart(2, "0")}
-                      {showCancelHint && (
-                        <span className="cancel-hint">
-                          Double-click to cancel
-                        </span>
-                      )}
-                    </span>
-                  )}
 
                   {/* AI sync status indicator */}
                   {syncMessage && (

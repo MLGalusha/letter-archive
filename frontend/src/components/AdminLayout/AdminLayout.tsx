@@ -14,7 +14,10 @@ interface AdminLayoutProps {
 
 export default function AdminLayout({ children, title, headerActions, fullHeight }: AdminLayoutProps) {
   const navigate = useNavigate();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const stored = localStorage.getItem('adminSidebarCollapsed');
+    return stored !== null ? stored === 'true' : false;
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [recentEdits, setRecentEdits] = useState<RecentEdit[]>([]);
   const [showRecent, setShowRecent] = useState(false);
@@ -54,7 +57,11 @@ export default function AdminLayout({ children, title, headerActions, fullHeight
     <div className={`admin-layout ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <AdminSidebar
         collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onToggle={() => {
+          const next = !sidebarCollapsed;
+          setSidebarCollapsed(next);
+          localStorage.setItem('adminSidebarCollapsed', String(next));
+        }}
       />
 
       {/* Mobile overlay */}

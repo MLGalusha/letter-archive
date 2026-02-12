@@ -1142,7 +1142,6 @@
 
 .v2-metadata-section {
   margin-top: var(--spacing-md);
-  border-top: solid 1px var(--border);
   padding-top: var(--spacing-md);
 }
 
@@ -1731,10 +1730,10 @@
 }
 
 /* ============================================================================
-   AI NOTES SECTION STYLES
+   NOTES SECTION STYLES
    ============================================================================ */
 
-.ai-notes-section {
+.notes-section {
   background: var(--bg-light);
   border: var(--border-card);
   border-top: solid 1px var(--highlight);
@@ -1744,20 +1743,12 @@
   min-width: 0;
 }
 
-.ai-notes-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-sm) var(--spacing-md);
+.notes-section-header {
+  padding: var(--spacing-sm) var(--spacing-sm) 0;
+  text-align: right;
 }
 
-.ai-notes-header h2 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.ai-notes-container {
+.notes-container {
   padding: var(--spacing-sm);
   min-width: 0;
 }
@@ -1772,11 +1763,11 @@
   line-height: 1.6;
   background: var(--bg);
   color: var(--text);
-  min-height: 120px;
-  overflow-y: auto;
+  min-height: 80px;
+  overflow-y: hidden;
   overflow-x: hidden;
   box-sizing: border-box;
-  resize: vertical;
+  resize: none;
   transition: border-color 0.2s ease;
 }
 

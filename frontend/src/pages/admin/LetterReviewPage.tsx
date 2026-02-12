@@ -489,41 +489,17 @@ export default function LetterReviewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [letter?.id]);
 
-  // Auto-resize hook textarea (min 80px)
-  useEffect(() => {
-    const textarea = hookRef.current;
-    if (textarea) {
-      textarea.style.height = "auto";
-      textarea.style.height = Math.max(textarea.scrollHeight, 80) + "px";
-    }
-  }, [hook]);
+  // Auto-resize textareas to fit content
+  const autoResizeTextarea = (textarea: HTMLTextAreaElement | null, minHeight = 80) => {
+    if (!textarea) return;
+    textarea.style.height = "0px";
+    textarea.style.height = Math.max(textarea.scrollHeight, minHeight) + "px";
+  };
 
-  // Auto-resize description textarea (min 80px)
-  useEffect(() => {
-    const textarea = descriptionRef.current;
-    if (textarea) {
-      textarea.style.height = "auto";
-      textarea.style.height = Math.max(textarea.scrollHeight, 80) + "px";
-    }
-  }, [description]);
-
-  // Auto-resize notes textarea (min 80px)
-  useEffect(() => {
-    const textarea = notesRef.current;
-    if (textarea) {
-      textarea.style.height = "auto";
-      textarea.style.height = Math.max(textarea.scrollHeight, 80) + "px";
-    }
-  }, [notes]);
-
-  // Auto-resize AI notes textarea (min 80px)
-  useEffect(() => {
-    const textarea = aiNotesRef.current;
-    if (textarea) {
-      textarea.style.height = "auto";
-      textarea.style.height = Math.max(textarea.scrollHeight, 80) + "px";
-    }
-  }, [aiNotes]);
+  useEffect(() => autoResizeTextarea(hookRef.current), [hook]);
+  useEffect(() => autoResizeTextarea(descriptionRef.current), [description]);
+  useEffect(() => autoResizeTextarea(notesRef.current), [notes]);
+  useEffect(() => autoResizeTextarea(aiNotesRef.current), [aiNotes]);
 
   const handleSave = async () => {
     if (!letterId) return;
@@ -2145,49 +2121,9 @@ export default function LetterReviewPage() {
                   />
                 </div>
 
-                <div className="form-group">
-                  <label htmlFor="tags">Tags</label>
-                  <input
-                    type="text"
-                    id="tags"
-                    value={tags}
-                    onChange={(e) => setTags(e.target.value)}
-                    placeholder="family, business, travel (comma separated)"
-                    readOnly={letter.metadataContentStatus === "VERIFIED"}
-                    className={
-                      letter.metadataContentStatus === "VERIFIED"
-                        ? "verified-field"
-                        : ""
-                    }
-                  />
-                  <span className="help-text">Comma-separated list</span>
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="notes">Admin Notes</label>
-                  <textarea
-                    ref={notesRef}
-                    id="notes"
-                    value={notes}
-                    onChange={(e) => {
-                      setNotes(e.target.value);
-                      triggerAutoSave({ notes: e.target.value || null });
-                    }}
-                    placeholder="Internal notes (not shown publicly)"
-                    readOnly={letter.metadataContentStatus === "VERIFIED"}
-                    className={
-                      letter.metadataContentStatus === "VERIFIED"
-                        ? "verified-field"
-                        : ""
-                    }
-                  />
-                  <span className="help-text">For internal reference only</span>
-                </div>
 
                 {/* AI-Extracted Metadata Section */}
                 <div className="v2-metadata-section">
-                  <h3 className="v2-section-header">AI-Extracted Metadata</h3>
-
                   <div className="v2-fields">
                     <div className="form-row">
                       <div className="form-group">
@@ -2473,22 +2409,41 @@ export default function LetterReviewPage() {
               )}
             </div>
 
-            {/* AI Notes Section (always visible) */}
-            <div className="editor-section ai-notes-section">
-              <div className="editor-header">
-                <h2>AI Notes</h2>
-                <span className="help-text">
-                  Observations, suggestions, and hunches from AI analysis
-                </span>
+            {/* Notes Section */}
+            <div className="editor-section notes-section">
+              <div className="notes-section-header">
+                <span className="help-text">Internal reference only</span>
               </div>
-              <div className="ai-notes-container">
-                <textarea
-                  ref={aiNotesRef}
-                  className="ai-notes-editor"
-                  value={aiNotes}
-                  onChange={(e) => handleAiNotesChange(e.target.value)}
-                  placeholder="AI observations and admin notes will appear here. You can edit or add your own notes."
-                />
+              <div className="notes-container">
+                <div className="form-group">
+                  <label htmlFor="notes">Admin Notes</label>
+                  <textarea
+                    ref={notesRef}
+                    id="notes"
+                    value={notes}
+                    onChange={(e) => {
+                      setNotes(e.target.value);
+                      triggerAutoSave({ notes: e.target.value || null });
+                    }}
+                    placeholder="Internal notes (not shown publicly)"
+                    readOnly={letter.metadataContentStatus === "VERIFIED"}
+                    className={
+                      letter.metadataContentStatus === "VERIFIED"
+                        ? "verified-field"
+                        : ""
+                    }
+                  />
+                </div>
+                <div className="form-group">
+                  <label>AI Notes</label>
+                  <textarea
+                    ref={aiNotesRef}
+                    className="ai-notes-editor"
+                    value={aiNotes}
+                    onChange={(e) => handleAiNotesChange(e.target.value)}
+                    placeholder="AI observations and admin notes will appear here. You can edit or add your own notes."
+                  />
+                </div>
               </div>
             </div>
 

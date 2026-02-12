@@ -148,22 +148,35 @@
   height: 24px;
 }
 
-/* Slider track */
+/* Slider track — tall padding for easy grabbing, visual track via ::before */
 .zoom-slider-track {
   position: relative;
   width: 150px;
+  height: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.zoom-slider-track::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   height: 6px;
   background: rgba(255, 255, 255, 0.3);
   border-radius: 3px;
-  cursor: pointer;
 }
 
 /* Filled portion of track */
 .zoom-slider-fill {
   position: absolute;
   left: 0;
-  top: 0;
-  height: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 6px;
   background: rgba(255, 255, 255, 0.8);
   border-radius: 3px;
   pointer-events: none;
@@ -178,8 +191,8 @@
 .zoom-slider-handle {
   position: absolute;
   top: 50%;
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   background: white;
   border-radius: 50%;
   transform: translate(-50%, -50%);

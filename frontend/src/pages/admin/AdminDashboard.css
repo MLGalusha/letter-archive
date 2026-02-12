@@ -802,36 +802,36 @@
 
 /* Unified content filter pill colors (used for both transcript and metadata) */
 .filter-pill.filter-content-draft {
-  background: #fff8e1;
-  color: #f57c00;
-  border-color: #ffe082;
+  background: #f0f0f0;
+  color: #6c757d;
+  border-color: #d6d8db;
 }
 
 .filter-pill.filter-content-edited {
-  background: #e3f2fd;
-  color: #1976d2;
-  border-color: #90caf9;
+  background: #fff3e0;
+  color: #e65100;
+  border-color: #ffcc80;
 }
 
 .filter-pill.filter-content-verified {
-  background: #e8f5e9;
-  color: #388e3c;
-  border-color: #a5d6a7;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-color: #93c5fd;
 }
 
 .filter-pill.filter-content-draft.active {
-  box-shadow: 0 0 0 3px rgba(245, 124, 0, 0.5), 0 2px 8px rgba(245, 124, 0, 0.2);
-  background: #ffecb3;
+  box-shadow: 0 0 0 3px rgba(108, 117, 125, 0.5), 0 2px 8px rgba(108, 117, 125, 0.2);
+  background: #d6d8db;
 }
 
 .filter-pill.filter-content-edited.active {
-  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.5), 0 2px 8px rgba(25, 118, 210, 0.2);
-  background: #bbdefb;
+  box-shadow: 0 0 0 3px rgba(230, 81, 0, 0.5), 0 2px 8px rgba(230, 81, 0, 0.2);
+  background: #ffe0b2;
 }
 
 .filter-pill.filter-content-verified.active {
-  box-shadow: 0 0 0 3px rgba(56, 142, 60, 0.5), 0 2px 8px rgba(56, 142, 60, 0.2);
-  background: #c8e6c9;
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.5), 0 2px 8px rgba(29, 78, 216, 0.2);
+  background: #bfdbfe;
 }
 
 /* Inline filter sections */

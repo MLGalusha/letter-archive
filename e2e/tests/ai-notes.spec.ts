@@ -30,6 +30,10 @@ async function navigateToFirstLetter(page: Page) {
   await firstLetterRow.click();
   await page.waitForURL(/\/admin\/letters\//);
   await page.waitForLoadState('networkidle');
+  await Promise.race([
+    page.locator('.metadata-section').first().waitFor({ state: 'visible', timeout: 15000 }),
+    page.locator('.ai-notes-editor').first().waitFor({ state: 'visible', timeout: 15000 }),
+  ]).catch(() => {});
 }
 
 // Helper to find a letter with transcription (needed for metadata extraction)
@@ -43,7 +47,7 @@ async function findLetterWithTranscription(page: Page): Promise<boolean> {
     await page.waitForLoadState('networkidle');
 
     // Check if this letter has a transcription
-    const transcriptEditor = page.locator('.transcript-section [contenteditable]');
+    const transcriptEditor = page.locator('.editor-section .transcript-editor, .transcript-section .transcript-editor, .editor-section [contenteditable], .transcript-section [contenteditable]');
     if (await transcriptEditor.isVisible()) {
       const content = await transcriptEditor.textContent();
       if (content && content.length > 50) {
@@ -60,18 +64,15 @@ async function findLetterWithTranscription(page: Page): Promise<boolean> {
 }
 
 test.describe('AI Notes Section', () => {
+  test.describe.configure({ mode: 'serial' });
 
   test('AI notes section is always visible on letter review page', async ({ page }) => {
     await loginAsAdmin(page);
     await navigateToFirstLetter(page);
 
-    // AI notes section should always be visible
-    const aiNotesSection = page.locator('.ai-notes-section');
-    await expect(aiNotesSection).toBeVisible();
-
-    // Should have the "AI Notes" header
-    const header = page.locator('.ai-notes-section h2');
-    await expect(header).toHaveText('AI Notes');
+    const label = page.locator('label:has-text("AI Notes")');
+    await expect(label).toBeVisible();
+    await expect(page.locator('.ai-notes-editor')).toBeVisible();
   });
 
   test('shows placeholder text when AI notes are empty', async ({ page }) => {
@@ -91,10 +92,9 @@ test.describe('AI Notes Section', () => {
     await loginAsAdmin(page);
     await navigateToFirstLetter(page);
 
-    // Check for help text
-    const helpText = page.locator('.ai-notes-section .help-text');
-    await expect(helpText).toBeVisible();
-    await expect(helpText).toContainText('Observations');
+    const textarea = page.locator('.ai-notes-editor');
+    await expect(textarea).toBeVisible();
+    await expect(textarea).toHaveAttribute('placeholder', /AI observations/i);
   });
 
   test('can type and edit AI notes', async ({ page }) => {
@@ -164,21 +164,13 @@ test.describe('AI Notes Section', () => {
     await textarea.fill('');
     await page.waitForTimeout(2000); // Wait for save
 
-    // Find and click the Extract Metadata button
-    const extractBtn = page.locator('button:has-text("Extract Metadata")');
-
-    if (!(await extractBtn.isVisible())) {
-      // May need to look in a different location
-      const extractBtn2 = page.locator('.metadata-section button:has-text("Extract")');
-      if (await extractBtn2.isVisible()) {
-        await extractBtn2.click();
-      } else {
-        test.skip(true, 'Extract Metadata button not found');
-        return;
-      }
-    } else {
-      await extractBtn.click();
+    // Find and click Generate/Regenerate metadata button
+    const extractBtn = page.locator('.metadata-section button:has-text("Generate"), .metadata-section button:has-text("Regenerate")').first();
+    if (!(await extractBtn.isVisible().catch(() => false))) {
+      test.skip(true, 'Generate/Regenerate metadata button not found');
+      return;
     }
+    await extractBtn.click();
 
     // Wait for metadata extraction to complete (API call)
     // The button may show loading state or be disabled during extraction

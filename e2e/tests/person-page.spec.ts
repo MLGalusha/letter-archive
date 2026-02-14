@@ -1,7 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin } from './utils/test-helpers';
-
-const API_BASE = 'http://localhost:3001';
+import { API_BASE_URL, loginAsAdmin } from './utils/test-helpers';
 
 /**
  * E2E tests for Person Detail Pages (Public and Admin)
@@ -12,7 +10,7 @@ const API_BASE = 'http://localhost:3001';
 test.describe('Public Person Page', () => {
   test('displays person information', async ({ page, request }) => {
     // Get a person from the API
-    const response = await request.get(`${API_BASE}/admin/entities/persons`);
+    const response = await request.get(`${API_BASE_URL}/admin/entities/persons`);
     const data = await response.json();
     const person = data.persons[0];
 
@@ -31,7 +29,7 @@ test.describe('Public Person Page', () => {
 
   test('shows letter statistics', async ({ page, request }) => {
     // Get a person with letters
-    const response = await request.get(`${API_BASE}/admin/entities/persons`);
+    const response = await request.get(`${API_BASE_URL}/admin/entities/persons`);
     const data = await response.json();
     const personWithLetters = data.persons.find((p: { letterCount: number }) => p.letterCount > 0);
 
@@ -50,7 +48,7 @@ test.describe('Public Person Page', () => {
 
   test('shows letters list when letters exist', async ({ page, request }) => {
     // Get a person with letters
-    const response = await request.get(`${API_BASE}/admin/entities/persons`);
+    const response = await request.get(`${API_BASE_URL}/admin/entities/persons`);
     const data = await response.json();
     const personWithLetters = data.persons.find((p: { letterCount: number }) => p.letterCount > 0);
 
@@ -68,7 +66,7 @@ test.describe('Public Person Page', () => {
   });
 
   test('can navigate back', async ({ page, request }) => {
-    const response = await request.get(`${API_BASE}/admin/entities/persons`);
+    const response = await request.get(`${API_BASE_URL}/admin/entities/persons`);
     const data = await response.json();
     const person = data.persons[0];
 
@@ -80,12 +78,18 @@ test.describe('Public Person Page', () => {
     await page.goto(`/people/${person.id}`);
     await page.waitForLoadState('networkidle');
 
-    const backButton = page.locator('.back-link');
-    await expect(backButton).toBeVisible();
+    const breadcrumb = page.locator('nav[aria-label="Breadcrumb"]');
+    await expect(breadcrumb).toBeVisible();
+
+    const peopleLink = breadcrumb.getByRole('link', { name: 'People' });
+    await expect(peopleLink).toBeVisible();
+
+    await peopleLink.click();
+    await expect(page).toHaveURL(/\/explore$/);
   });
 
   test('shows biography when available', async ({ page, request }) => {
-    const response = await request.get(`${API_BASE}/admin/entities/persons`);
+    const response = await request.get(`${API_BASE_URL}/admin/entities/persons`);
     const data = await response.json();
     const personWithBio = data.persons.find((p: { biography?: string }) => p.biography);
 

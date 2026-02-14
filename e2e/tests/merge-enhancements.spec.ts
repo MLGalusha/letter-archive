@@ -1,7 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin } from './utils/test-helpers';
-
-const API_BASE = 'http://localhost:3001';
+import { API_BASE_URL, loginAsAdmin } from './utils/test-helpers';
 
 /**
  * E2E tests for Phase 5: Merge Enhancements
@@ -15,7 +13,9 @@ const API_BASE = 'http://localhost:3001';
 
 test.describe('Duplicate Suggestions API', () => {
   test('GET /admin/entities/suggestions returns suggestions for persons', async ({ request }) => {
-    const response = await request.get(`${API_BASE}/admin/entities/suggestions?entityType=person&limit=10`);
+    const response = await request.get(
+      `${API_BASE_URL}/admin/entities/suggestions?entityType=person&limit=10`
+    );
     expect(response.status()).toBe(200);
 
     const data = await response.json();
@@ -40,7 +40,9 @@ test.describe('Duplicate Suggestions API', () => {
   });
 
   test('GET /admin/entities/suggestions returns suggestions for places', async ({ request }) => {
-    const response = await request.get(`${API_BASE}/admin/entities/suggestions?entityType=place&limit=10`);
+    const response = await request.get(
+      `${API_BASE_URL}/admin/entities/suggestions?entityType=place&limit=10`
+    );
     expect(response.status()).toBe(200);
 
     const data = await response.json();
@@ -49,21 +51,21 @@ test.describe('Duplicate Suggestions API', () => {
   });
 
   test('suggestions endpoint requires entityType parameter', async ({ request }) => {
-    const response = await request.get(`${API_BASE}/admin/entities/suggestions`);
+    const response = await request.get(`${API_BASE_URL}/admin/entities/suggestions`);
     expect(response.status()).toBe(400);
   });
 });
 
 test.describe('Bulk Merge API', () => {
   test('bulk-merge endpoint requires keepId and mergeIds', async ({ request }) => {
-    const response = await request.post(`${API_BASE}/admin/entities/persons/bulk-merge`, {
+    const response = await request.post(`${API_BASE_URL}/admin/entities/persons/bulk-merge`, {
       data: { keepId: 'invalid' },
     });
     expect(response.status()).toBe(400);
   });
 
   test('bulk-merge endpoint validates UUID format', async ({ request }) => {
-    const response = await request.post(`${API_BASE}/admin/entities/persons/bulk-merge`, {
+    const response = await request.post(`${API_BASE_URL}/admin/entities/persons/bulk-merge`, {
       data: {
         keepId: 'not-a-uuid',
         mergeIds: ['also-not-uuid'],
@@ -76,7 +78,7 @@ test.describe('Bulk Merge API', () => {
 test.describe('Merge Details API', () => {
   test('GET /admin/entities/persons/:id/merge-details returns person details', async ({ request }) => {
     // First get a person ID
-    const personsResponse = await request.get(`${API_BASE}/admin/entities/persons`);
+    const personsResponse = await request.get(`${API_BASE_URL}/admin/entities/persons`);
     const personsData = await personsResponse.json();
 
     if (personsData.persons.length === 0) {
@@ -85,7 +87,9 @@ test.describe('Merge Details API', () => {
     }
 
     const personId = personsData.persons[0].id;
-    const response = await request.get(`${API_BASE}/admin/entities/persons/${personId}/merge-details`);
+    const response = await request.get(
+      `${API_BASE_URL}/admin/entities/persons/${personId}/merge-details`
+    );
     expect(response.status()).toBe(200);
 
     const data = await response.json();
@@ -93,16 +97,15 @@ test.describe('Merge Details API', () => {
     expect(data).toHaveProperty('canonicalName');
     expect(data).toHaveProperty('aliases');
     expect(data).toHaveProperty('letterCount');
-    expect(data).toHaveProperty('asSender');
-    expect(data).toHaveProperty('asRecipient');
-    expect(data).toHaveProperty('asMentioned');
+    expect(data).toHaveProperty('senderCount');
+    expect(data).toHaveProperty('recipientCount');
+    expect(data).toHaveProperty('mentionedCount');
     expect(data).toHaveProperty('relationshipCount');
-    expect(data).toHaveProperty('relationships');
   });
 
   test('GET /admin/entities/places/:id/merge-details returns place details', async ({ request }) => {
     // First get a place ID
-    const placesResponse = await request.get(`${API_BASE}/admin/entities/places`);
+    const placesResponse = await request.get(`${API_BASE_URL}/admin/entities/places`);
     const placesData = await placesResponse.json();
 
     if (placesData.places.length === 0) {
@@ -111,7 +114,9 @@ test.describe('Merge Details API', () => {
     }
 
     const placeId = placesData.places[0].id;
-    const response = await request.get(`${API_BASE}/admin/entities/places/${placeId}/merge-details`);
+    const response = await request.get(
+      `${API_BASE_URL}/admin/entities/places/${placeId}/merge-details`
+    );
     expect(response.status()).toBe(200);
 
     const data = await response.json();
@@ -119,9 +124,9 @@ test.describe('Merge Details API', () => {
     expect(data).toHaveProperty('canonicalName');
     expect(data).toHaveProperty('aliases');
     expect(data).toHaveProperty('letterCount');
-    expect(data).toHaveProperty('writtenFrom');
-    expect(data).toHaveProperty('destination');
-    expect(data).toHaveProperty('mentioned');
+    expect(data).toHaveProperty('writtenFromCount');
+    expect(data).toHaveProperty('destinationCount');
+    expect(data).toHaveProperty('mentionedCount');
   });
 });
 

@@ -1,7 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin } from './utils/test-helpers';
-
-const API_BASE = 'http://localhost:3001';
+import { API_BASE_URL, loginAsAdmin } from './utils/test-helpers';
 
 /**
  * E2E tests for Place Detail Pages (Public and Admin)
@@ -12,7 +10,7 @@ const API_BASE = 'http://localhost:3001';
 test.describe('Public Place Page', () => {
   test('displays place information', async ({ page, request }) => {
     // Get a place from the API
-    const response = await request.get(`${API_BASE}/admin/entities/places`);
+    const response = await request.get(`${API_BASE_URL}/admin/entities/places`);
     const data = await response.json();
     const place = data.places[0];
 
@@ -30,7 +28,7 @@ test.describe('Public Place Page', () => {
   });
 
   test('shows place type badge', async ({ page, request }) => {
-    const response = await request.get(`${API_BASE}/admin/entities/places`);
+    const response = await request.get(`${API_BASE_URL}/admin/entities/places`);
     const data = await response.json();
     const placeWithType = data.places.find((p: { placeType: string }) => p.placeType);
 
@@ -47,7 +45,7 @@ test.describe('Public Place Page', () => {
   });
 
   test('shows letter statistics', async ({ page, request }) => {
-    const response = await request.get(`${API_BASE}/admin/entities/places`);
+    const response = await request.get(`${API_BASE_URL}/admin/entities/places`);
     const data = await response.json();
     const placeWithLetters = data.places.find((p: { letterCount: number }) => p.letterCount > 0);
 
@@ -65,7 +63,7 @@ test.describe('Public Place Page', () => {
   });
 
   test('shows letters list when letters exist', async ({ page, request }) => {
-    const response = await request.get(`${API_BASE}/admin/entities/places`);
+    const response = await request.get(`${API_BASE_URL}/admin/entities/places`);
     const data = await response.json();
     const placeWithLetters = data.places.find((p: { letterCount: number }) => p.letterCount > 0);
 
@@ -83,7 +81,7 @@ test.describe('Public Place Page', () => {
   });
 
   test('can navigate back', async ({ page, request }) => {
-    const response = await request.get(`${API_BASE}/admin/entities/places`);
+    const response = await request.get(`${API_BASE_URL}/admin/entities/places`);
     const data = await response.json();
     const place = data.places[0];
 
@@ -95,12 +93,18 @@ test.describe('Public Place Page', () => {
     await page.goto(`/places/${place.id}`);
     await page.waitForLoadState('networkidle');
 
-    const backButton = page.locator('.back-link');
-    await expect(backButton).toBeVisible();
+    const breadcrumb = page.locator('nav[aria-label="Breadcrumb"]');
+    await expect(breadcrumb).toBeVisible();
+
+    const placesLink = breadcrumb.getByRole('link', { name: 'Places' });
+    await expect(placesLink).toBeVisible();
+
+    await placesLink.click();
+    await expect(page).toHaveURL(/\/explore$/);
   });
 
   test('shows role breakdown in stats', async ({ page, request }) => {
-    const response = await request.get(`${API_BASE}/admin/entities/places`);
+    const response = await request.get(`${API_BASE_URL}/admin/entities/places`);
     const data = await response.json();
     const placeWithLetters = data.places.find((p: { letterCount: number }) => p.letterCount > 0);
 

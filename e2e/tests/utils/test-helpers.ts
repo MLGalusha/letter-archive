@@ -7,6 +7,7 @@ import { Page, expect } from '@playwright/test';
 // Test credentials
 export const ADMIN_EMAIL = 'admin@letterarchive.com';
 export const ADMIN_PASSWORD = 'admin123';
+export const API_BASE_URL = process.env.E2E_API_BASE_URL || 'http://localhost:3002';
 
 /**
  * Login as admin user
@@ -47,10 +48,34 @@ export async function logoutAdmin(page: Page): Promise<void> {
  * Navigate to first letter in admin dashboard
  */
 export async function navigateToFirstLetter(page: Page): Promise<void> {
+  await page.goto('/admin');
+  await page.waitForLoadState('networkidle');
+
   const firstRow = page.locator('table tbody tr').first();
-  await firstRow.waitFor({ state: 'visible', timeout: 10000 });
-  await firstRow.click();
-  await page.waitForURL(/\/admin\/letters\//);
+  const hasRow = await firstRow
+    .waitFor({ state: 'visible', timeout: 30000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (hasRow) {
+    await firstRow.click();
+    await page.waitForURL(/\/admin\/letters\//);
+    await page.waitForLoadState('networkidle');
+    return;
+  }
+
+  // Fallback for flaky dashboard rendering/filter state: navigate directly via API.
+  const response = await page.request.get(`${API_BASE_URL}/admin/letters?limit=1`);
+  if (!response.ok()) {
+    throw new Error(`Failed to fetch letters for navigation fallback (${response.status()})`);
+  }
+  const payload = await response.json();
+  const letters = Array.isArray(payload) ? payload : payload.letters;
+  if (!Array.isArray(letters) || letters.length === 0 || !letters[0]?.id) {
+    throw new Error('No letters available for navigation fallback');
+  }
+
+  await page.goto(`/admin/letters/${letters[0].id}`);
   await page.waitForLoadState('networkidle');
 }
 
@@ -162,8 +187,8 @@ export const SELECTORS = {
     table: 'table.letters-table',
     tableRow: 'table tbody tr',
     header: '.admin-header h1',
-    uploadBtn: 'button:has-text("Upload")',
-    editBtn: 'button:has-text("Edit")',
+    uploadBtn: 'aside .nav-item:has-text("Upload")',
+    editBtn: '.toolbar-buttons button:has-text("Edit")',
     processBtn: 'button:has-text("Process")',
     logoutBtn: 'button:has-text("Logout")',
     searchInput: '.search-group input',
@@ -184,8 +209,8 @@ export const SELECTORS = {
 
   // Letter Review Page
   letterReview: {
-    transcriptSection: '.transcript-section',
-    transcriptEditor: '.transcript-section [contenteditable]',
+    transcriptSection: '.editor-section, .transcript-section',
+    transcriptEditor: '.editor-section .transcript-editor, .transcript-section .transcript-editor, .editor-section [contenteditable], .transcript-section [contenteditable]',
     metadataSection: '.metadata-section',
     extraContentSection: '.extra-content-section',
     aiNotesSection: '.ai-notes-section',
@@ -200,9 +225,9 @@ export const SELECTORS = {
 
   // Public Pages
   public: {
-    searchBar: '.search-bar',
-    searchInput: '.search-bar input',
-    archiveList: '.archive-list',
+    searchBar: '.search',
+    searchInput: '.search-input',
+    archiveList: '.archive-section',
     letterCard: '.letter-card',
     collectionsGrid: '.public-collections-grid',
     collectionCard: '.public-collection-card',

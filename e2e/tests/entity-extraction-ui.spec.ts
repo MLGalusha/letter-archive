@@ -1,5 +1,9 @@
 import { test, expect, Page } from '@playwright/test';
-import { loginAsAdmin, navigateToFirstLetter } from './utils/test-helpers';
+import {
+  API_BASE_URL,
+  loginAsAdmin,
+  navigateToFirstLetter,
+} from './utils/test-helpers';
 
 /**
  * E2E tests for Entity Extraction UI on Letter Review Page
@@ -21,7 +25,7 @@ async function findTranscribedLetter(page: Page): Promise<boolean> {
     await page.waitForLoadState('networkidle');
 
     // Check for transcription content
-    const transcriptEditor = page.locator('.transcript-section [contenteditable]');
+    const transcriptEditor = page.locator('.editor-section .transcript-editor, .transcript-section .transcript-editor, .editor-section [contenteditable], .transcript-section [contenteditable]');
     if (await transcriptEditor.isVisible().catch(() => false)) {
       const content = await transcriptEditor.textContent();
       if (content && content.length > 50) {
@@ -38,7 +42,7 @@ async function findTranscribedLetter(page: Page): Promise<boolean> {
 // Helper to find a letter with entity extraction completed via API, then navigate to it
 async function findLetterWithEntities(page: Page): Promise<boolean> {
   // Use API to find a letter with SUCCESS entity extraction
-  const response = await page.request.get('http://localhost:3001/admin/letters?limit=100');
+  const response = await page.request.get(`${API_BASE_URL}/admin/letters?limit=100`);
   const body = await response.json();
   const letters = body.letters || body;
 
@@ -312,8 +316,7 @@ test.describe('Entity Extraction UI', () => {
       const letterId = letterIdMatch[1];
 
       // Fetch via API to check the JSON data
-      const API_BASE = 'http://localhost:3001';
-      const loginRes = await request.post(`${API_BASE}/admin/auth/login`, {
+      const loginRes = await request.post(`${API_BASE_URL}/admin/auth/login`, {
         data: {
           email: 'admin@letterarchive.com',
           password: 'admin123',
@@ -321,7 +324,7 @@ test.describe('Entity Extraction UI', () => {
       });
       const cookies = loginRes.headers()['set-cookie'] || '';
 
-      const res = await request.get(`${API_BASE}/admin/letters/${letterId}`, {
+      const res = await request.get(`${API_BASE_URL}/admin/letters/${letterId}`, {
         headers: { Cookie: cookies },
       });
       const letter = await res.json();

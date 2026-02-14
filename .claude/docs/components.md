@@ -125,3 +125,22 @@ Location: `frontend/src/pages/admin/AdminDashboard/`
   - Recent letters table: sortable columns, edit-mode cell interactions, status/sync indicators, and pagination controls.
 
 `frontend/src/pages/admin/AdminDashboard.tsx` keeps data/state/business logic and composes these sections via props.
+
+## Admin Upload Components
+
+Location: `frontend/src/pages/admin/UploadLetter/`
+
+- `ImageThumbnail.tsx`
+  - Reusable thumbnail tile with select/view/delete behavior for upload images.
+- `UncategorizedCarousel.tsx`
+  - Paginated uncategorized image browser with selection and light animation transitions.
+- `CollectionCard.tsx`
+  - Collection summary card used in organize mode and browsing mode.
+- `CollectionModal.tsx`
+  - Letter-level preview modal for a collection with image drill-in and letter delete action.
+- `Lightbox.tsx`
+  - Fullscreen image preview with keyboard navigation.
+- `types.ts`
+  - Shared upload page interfaces (`UploadedImage`, `LetterGroup`, `CollectionGroup`, `EditState`, `LightboxState`).
+
+`frontend/src/pages/admin/UploadLetterPage.tsx` now composes these components and focuses on upload workflow/state.

@@ -1,4 +1,4 @@
-import { useRef, type RefObject, type CSSProperties } from "react";
+import type { RefObject, CSSProperties } from "react";
 import { Icon } from "../../../components/common";
 
 interface TranscriptionSectionProps {
@@ -22,7 +22,7 @@ interface TranscriptionSectionProps {
   onTranscriptClick: (e: React.MouseEvent) => void;
   onTranscriptDoubleClick: (e: React.MouseEvent) => void;
   onTranscriptInput: (text: string) => void;
-  onEditorKeyDown: (e: React.KeyboardEvent) => void;
+  onEditorKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
 }
 
 export default function TranscriptionSection({
@@ -30,8 +30,8 @@ export default function TranscriptionSection({
   letterTranscribeState,
   letterTranscribeMessage,
   isTranscriptEditing,
-  hasTranscriptChanges,
-  originalTranscriptText,
+  hasTranscriptChanges: _hasTranscriptChanges,
+  originalTranscriptText: _originalTranscriptText,
   transcriptFontSize,
   showEditTooltip,
   tooltipPosition,

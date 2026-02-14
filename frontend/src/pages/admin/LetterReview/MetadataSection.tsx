@@ -90,7 +90,7 @@ interface MetadataSectionProps {
 
 export default function MetadataSection({
   letter,
-  letterId,
+  letterId: _letterId,
   sender,
   recipient,
   date,

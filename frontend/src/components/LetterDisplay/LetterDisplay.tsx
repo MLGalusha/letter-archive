@@ -28,7 +28,7 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
       href: `/collections/${letter.collectionCode}`,
     });
   }
-  breadcrumbItems.push({ label: letter.title });
+  breadcrumbItems.push({ label: letter.title, href: `/letters/${letter.id}` });
 
   // Track transcript visibility with Intersection Observer
   useEffect(() => {

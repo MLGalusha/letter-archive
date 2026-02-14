@@ -69,7 +69,6 @@ export default function LetterReviewPage() {
   const [location, setLocation] = useState("");
   const [hook, setHook] = useState("");
   const [description, setDescription] = useState("");
-  const [tags, setTags] = useState("");
   const [notes, setNotes] = useState("");
 
   // V2 Metadata state
@@ -208,7 +207,6 @@ export default function LetterReviewPage() {
           setLocation(foundLetter.metadata.location || "");
           setHook(foundLetter.metadata.hook || "");
           setDescription(foundLetter.metadata.description || "");
-          setTags(foundLetter.metadata.tags?.join(", ") || "");
           setNotes(foundLetter.metadata.notes || "");
           // V2 metadata
           setEmotionalTone(foundLetter.metadata.emotionalTone || "");
@@ -325,69 +323,6 @@ export default function LetterReviewPage() {
   useEffect(() => autoResizeTextarea(descriptionRef.current), [description]);
   useEffect(() => autoResizeTextarea(notesRef.current), [notes]);
   useEffect(() => autoResizeTextarea(aiNotesRef.current), [aiNotes]);
-
-  const handleSave = async () => {
-    if (!letterId) return;
-
-    const tagsArray = tags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-
-    // Read transcript directly from contenteditable ref to ensure we have latest content
-    const currentTranscript = editorRef.current?.innerText || transcript;
-
-    const saveData = {
-      transcriptionText: currentTranscript,
-      sender: sender || null,
-      recipient: recipient || null,
-      extractedDate: date || null,
-      extractedDateConfidence: dateConfidence,
-      locationWritten: location || null,
-      hook: hook || null,
-      summary: description || null,
-      tags: tagsArray.length > 0 ? tagsArray : null,
-      notes: notes || null,
-    };
-
-    // Proceed with save
-    setSaving(true);
-    setMessage("");
-
-    try {
-      const updated = await updateLetter(letterId, saveData);
-
-      // Sync all states with the response to ensure UI reflects saved data
-      setLetter(updated);
-      setTranscript(updated.transcript.fullText);
-      setSender(updated.metadata.sender || "");
-      setRecipient(updated.metadata.recipient || "");
-      setDate(updated.metadata.date || "");
-      setDateConfidence(updated.metadata.dateConfidence || "unknown");
-      setLocation(updated.metadata.location || "");
-      setHook(updated.metadata.hook || "");
-      setDescription(updated.metadata.description || "");
-      setTags(updated.metadata.tags?.join(", ") || "");
-      setNotes(updated.metadata.notes || "");
-      // Update original values after successful save
-      setOriginalSender(updated.metadata.sender || "");
-      setOriginalRecipient(updated.metadata.recipient || "");
-
-      // Track this edit for the Recent Activity feature
-      trackEdit({
-        id: updated.id,
-        metadata: updated.metadata,
-        collectionCode: updated.collectionCode,
-      });
-
-      showToast("Changes saved", "success");
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to save", "error");
-      console.error("Save error:", err);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   // Clear any pending sync timer
   const clearSyncTimer = useCallback(() => {
@@ -703,7 +638,6 @@ export default function LetterReviewPage() {
       setLocation(updated.metadata.location || "");
       setHook(updated.metadata.hook || "");
       setDescription(updated.metadata.description || "");
-      setTags(updated.metadata.tags?.join(", ") || "");
       setEmotionalTone(updated.metadata.emotionalTone || "");
       setRelationship(updated.metadata.senderRecipientRelationship || "");
       setPrimaryTopics(updated.metadata.primaryTopics || []);

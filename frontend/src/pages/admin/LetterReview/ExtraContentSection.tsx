@@ -1,4 +1,4 @@
-import React, { RefObject } from "react";
+import React, { type RefObject } from "react";
 import { Icon, DynamicEditor, type DynamicEditorRef } from "../../../components/common";
 
 interface ExtraContentSectionProps {
@@ -16,9 +16,9 @@ interface ExtraContentSectionProps {
   onTranscribeExtras: () => void;
   onVerifyExtraContent: () => void;
   onExtraContentChange: (value: string) => void;
-  onExtraContentKeyDown: (e: React.KeyboardEvent) => void;
-  onExtraContentClick: (e: React.MouseEvent) => void;
-  onExtraContentDoubleClick: (e: React.MouseEvent) => void;
+  onExtraContentKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
+  onExtraContentClick: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onExtraContentDoubleClick: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
 export const ExtraContentSection: React.FC<ExtraContentSectionProps> = ({

@@ -5,6 +5,7 @@ import type {
   PlaceRole,
   PlaceType,
 } from "../../types/Letter";
+export type { PersonRelationshipType } from "../../types/Letter";
 
 export interface CanonicalPerson {
   id: string;

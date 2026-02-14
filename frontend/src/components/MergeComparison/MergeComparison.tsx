@@ -31,8 +31,8 @@ export default function MergeComparison({
   entityType,
   entityAId,
   entityBId,
-  entityAName,
-  entityBName,
+  entityAName: _entityAName,
+  entityBName: _entityBName,
   onConfirm,
 }: MergeComparisonProps) {
   const [loading, setLoading] = useState(true);

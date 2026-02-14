@@ -20,12 +20,13 @@ import type { Letter, ContentStatus } from "../../types/Letter";
 import {
   Button,
   ConfirmDialog,
-  VisibilityBadge,
   DropdownItem,
   DropdownDivider,
 } from "../../components/common";
 import { analyzeCollection, type CollectionAnalysisResult } from "../../api/collections";
 import AdminLayout from "../../components/AdminLayout";
+import DashboardFilterBar from "./AdminDashboard/DashboardFilterBar";
+import RecentActivityTable from "./AdminDashboard/RecentActivityTable";
 
 // Visibility filter type (inline instead of from FilterSidebar)
 type VisibilityFilter = 'ALL' | 'PUBLISHED' | 'HIDDEN';
@@ -1336,510 +1337,76 @@ export default function AdminDashboard() {
   return (
     <AdminLayout title="Dashboard" headerActions={headerActions} fullHeight>
     <div className="admin-dashboard">
-      {/* Filter pills - single row with all filters */}
-      <div className="dashboard-filter-bar">
-          <div className="filter-pills">
-            {/* Visibility filters */}
-            <div className="filter-group-inline">
-              <span className="filter-section-label">Visibility</span>
-              <div className="filter-buttons">
-                <button
-                  className={`filter-pill filter-published ${visibilityFilter === 'PUBLISHED' ? 'active' : ''}`}
-                  onClick={() => toggleVisibilityFilter('PUBLISHED')}
-                  title="Published letters"
-                >
-                  {stats.published} Pub
-                </button>
-                <button
-                  className={`filter-pill filter-hidden ${visibilityFilter === 'HIDDEN' ? 'active' : ''}`}
-                  onClick={() => toggleVisibilityFilter('HIDDEN')}
-                  title="Hidden letters"
-                >
-                  {stats.hidden} Hidden
-                </button>
-              </div>
-            </div>
-
-            {/* Transcript/Metadata toggle filter */}
-            <div className="filter-group-inline">
-              <div className="content-filter-toggle">
-                <button
-                  className={`content-toggle-btn ${contentFilterView === 'transcript' ? 'active' : ''}`}
-                  onClick={() => setContentFilterView('transcript')}
-                >
-                  Transcript
-                  {contentFilterView !== 'transcript' && transcriptStatusFilters.length > 0 && (
-                    <span className="toggle-badge">{transcriptStatusFilters.length}</span>
-                  )}
-                </button>
-                <button
-                  className={`content-toggle-btn ${contentFilterView === 'metadata' ? 'active' : ''}`}
-                  onClick={() => setContentFilterView('metadata')}
-                >
-                  Metadata
-                  {contentFilterView !== 'metadata' && metadataStatusFilters.length > 0 && (
-                    <span className="toggle-badge">{metadataStatusFilters.length}</span>
-                  )}
-                </button>
-              </div>
-              <div className="filter-buttons">
-                {contentFilterView === 'transcript' ? (
-                  <>
-                    <button
-                      className={`filter-pill filter-content-draft ${transcriptStatusFilters.includes('AI_DRAFT') ? 'active' : ''}`}
-                      onClick={() => toggleTranscriptFilter('AI_DRAFT')}
-                      title="AI Draft transcripts"
-                    >
-                      {stats.transcriptAiDraft} Draft
-                    </button>
-                    <button
-                      className={`filter-pill filter-content-edited ${transcriptStatusFilters.includes('EDITED') ? 'active' : ''}`}
-                      onClick={() => toggleTranscriptFilter('EDITED')}
-                      title="Edited transcripts"
-                    >
-                      {stats.transcriptEdited} Edit
-                    </button>
-                    <button
-                      className={`filter-pill filter-content-verified ${transcriptStatusFilters.includes('VERIFIED') ? 'active' : ''}`}
-                      onClick={() => toggleTranscriptFilter('VERIFIED')}
-                      title="Verified transcripts"
-                    >
-                      {stats.transcriptVerified} Done
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      className={`filter-pill filter-content-draft ${metadataStatusFilters.includes('AI_DRAFT') ? 'active' : ''}`}
-                      onClick={() => toggleMetadataFilter('AI_DRAFT')}
-                      title="AI Draft metadata"
-                    >
-                      {stats.metadataAiDraft} Draft
-                    </button>
-                    <button
-                      className={`filter-pill filter-content-edited ${metadataStatusFilters.includes('EDITED') ? 'active' : ''}`}
-                      onClick={() => toggleMetadataFilter('EDITED')}
-                      title="Edited metadata"
-                    >
-                      {stats.metadataEdited} Edit
-                    </button>
-                    <button
-                      className={`filter-pill filter-content-verified ${metadataStatusFilters.includes('VERIFIED') ? 'active' : ''}`}
-                      onClick={() => toggleMetadataFilter('VERIFIED')}
-                      title="Verified metadata"
-                    >
-                      {stats.metadataVerified} Done
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Collection input */}
-            <input
-              type="text"
-              className="collection-input"
-              placeholder="000"
-              title="Filter by collection number"
-              value={collectionInput}
-              onChange={(e) => handleCollectionInputChange(e.target.value)}
-              maxLength={3}
-            />
-
-            {/* Date dropdown */}
-            <div className="dropdown-container" ref={dateDropdownRef}>
-              <button
-                className={`dropdown-trigger ${hasDateFilter ? 'active' : ''}`}
-                onClick={() => {
-                  setShowDateDropdown(!showDateDropdown);
-                  setShowProcessMenu(false);
-                }}
-              >
-                {getDateButtonText()} ▾
-              </button>
-              {showDateDropdown && (
-                <div className="date-dropdown-panel">
-                  <div className="date-mode-toggle">
-                    <button
-                      className={`mode-btn ${dateMode === 'specific' ? 'active' : ''}`}
-                      onClick={() => setDateMode('specific')}
-                    >
-                      Specific
-                    </button>
-                    <button
-                      className={`mode-btn ${dateMode === 'range' ? 'active' : ''}`}
-                      onClick={() => setDateMode('range')}
-                    >
-                      Range
-                    </button>
-                  </div>
-                  {dateMode === 'specific' ? (
-                    <div className="date-dropdowns">
-                      <select
-                        value={yearFilter ?? ''}
-                        onChange={(e) => setYearFilter(e.target.value ? Number(e.target.value) : null)}
-                      >
-                        <option value="">Year</option>
-                        {YEAR_OPTIONS.map((y) => (
-                          <option key={y} value={y}>{y}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={monthFilter ?? ''}
-                        onChange={(e) => setMonthFilter(e.target.value ? Number(e.target.value) : null)}
-                      >
-                        <option value="">Month</option>
-                        {MONTH_OPTIONS.map((m) => (
-                          <option key={m.value} value={m.value}>{m.label}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={dayFilter ?? ''}
-                        onChange={(e) => setDayFilter(e.target.value ? Number(e.target.value) : null)}
-                      >
-                        <option value="">Day</option>
-                        {DAY_OPTIONS.map((d) => (
-                          <option key={d} value={d}>{d}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="date-range-inputs">
-                      <div className="date-range-field">
-                        <label>From</label>
-                        <input
-                          type="text"
-                          placeholder="mm/dd/yyyy"
-                          value={dateFromFilter ? dateRawToDisplay(dateFromFilter) : ''}
-                          onChange={(e) => {
-                            const raw = displayToDateRaw(e.target.value);
-                            setDateFromFilter(raw);
-                          }}
-                          maxLength={10}
-                        />
-                      </div>
-                      <div className="date-range-field">
-                        <label>To</label>
-                        <input
-                          type="text"
-                          placeholder="mm/dd/yyyy"
-                          value={dateToFilter ? dateRawToDisplay(dateToFilter) : ''}
-                          onChange={(e) => {
-                            const raw = displayToDateRaw(e.target.value);
-                            setDateToFilter(raw);
-                          }}
-                          maxLength={10}
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {hasDateFilter && (
-                    <button className="date-clear-btn" onClick={clearDateFilters}>
-                      Clear Date
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Search input */}
-            <div className="filter-group search-group">
-              <input
-                type="text"
-                placeholder="Search..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-              />
-            </div>
-
-            {/* Clear All button */}
-            {activeFilterCount > 0 && (
-              <button className="clear-all-btn" onClick={handleClearAllFilters}>
-                Clear All
-              </button>
-            )}
-
-            {/* Processing indicator */}
-            {processingStatus?.isRunning && (
-              <span className="stat-processing">
-                Processing: {processingStatus.completed}/{processingStatus.total}
-              </span>
-            )}
-          </div>
-
-          {/* Letter count - far right of filter row */}
-          <span className="letter-count">
-            {((pagination.page - 1) * pagination.limit) + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
-          </span>
-        </div>
+      <DashboardFilterBar
+        visibilityFilter={visibilityFilter}
+        onToggleVisibilityFilter={toggleVisibilityFilter}
+        contentFilterView={contentFilterView}
+        onContentFilterViewChange={setContentFilterView}
+        transcriptStatusFilters={transcriptStatusFilters}
+        metadataStatusFilters={metadataStatusFilters}
+        onToggleTranscriptFilter={toggleTranscriptFilter}
+        onToggleMetadataFilter={toggleMetadataFilter}
+        collectionInput={collectionInput}
+        onCollectionInputChange={handleCollectionInputChange}
+        dateDropdownRef={dateDropdownRef}
+        showDateDropdown={showDateDropdown}
+        hasDateFilter={hasDateFilter}
+        dateButtonText={getDateButtonText()}
+        onToggleDateDropdown={() => {
+          setShowDateDropdown(!showDateDropdown);
+          setShowProcessMenu(false);
+        }}
+        dateMode={dateMode}
+        onDateModeChange={setDateMode}
+        yearFilter={yearFilter}
+        monthFilter={monthFilter}
+        dayFilter={dayFilter}
+        onYearFilterChange={setYearFilter}
+        onMonthFilterChange={setMonthFilter}
+        onDayFilterChange={setDayFilter}
+        yearOptions={YEAR_OPTIONS}
+        monthOptions={MONTH_OPTIONS}
+        dayOptions={DAY_OPTIONS}
+        dateFromFilter={dateFromFilter}
+        dateToFilter={dateToFilter}
+        dateRawToDisplay={dateRawToDisplay}
+        displayToDateRaw={displayToDateRaw}
+        onDateFromChange={setDateFromFilter}
+        onDateToChange={setDateToFilter}
+        onClearDateFilters={clearDateFilters}
+        searchInput={searchInput}
+        onSearchInputChange={setSearchInput}
+        activeFilterCount={activeFilterCount}
+        onClearAllFilters={handleClearAllFilters}
+        processingStatus={processingStatus}
+        pagination={pagination}
+        stats={stats}
+      />
 
       <div className={`admin-content ${editMode ? 'has-edit-toolbar' : ''}`}>
-        {/* Single table with sticky header - scrolls together horizontally */}
-        <div className={`letters-table-container ${filteredLetters.length === 0 ? 'empty' : ''}`}>
-          <table className="letters-table">
-            <colgroup>
-              {visibleColumns.has('sender') && <col style={{ width: '12%' }} />}
-              {visibleColumns.has('recipient') && <col style={{ width: '12%' }} />}
-              {visibleColumns.has('date') && <col style={{ width: '100px' }} />}
-              {visibleColumns.has('collection') && <col style={{ width: '80px' }} />}
-              {visibleColumns.has('letters') && <col style={{ width: '55px' }} />}
-              {visibleColumns.has('extras') && <col style={{ width: '50px' }} />}
-              {visibleColumns.has('transcript') && <col style={{ width: '70px' }} />}
-              {visibleColumns.has('metadata') && <col style={{ width: '70px' }} />}
-              {visibleColumns.has('sync') && <col style={{ width: '50px' }} />}
-              {visibleColumns.has('visibility') && <col style={{ width: '70px' }} />}
-              {visibleColumns.has('created') && <col style={{ width: '80px' }} />}
-            </colgroup>
-            <thead>
-              <tr>
-                {visibleColumns.has('sender') && (
-                  <th
-                    className={`sortable-header ${getSortInfo("sender") ? "sorted" : ""}`}
-                    onClick={() => handleSort("sender")}
-                  >
-                    <span className="header-content">
-                      Sender
-                      {getSortInfo("sender") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("sender")?.direction === "asc" ? "↑" : "↓"}</span>
-                          {getSortInfo("sender")!.total > 1 && (
-                            <span className="sort-priority">{getSortInfo("sender")?.priority}</span>
-                          )}
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('recipient') && (
-                  <th
-                    className={`sortable-header ${getSortInfo("recipient") ? "sorted" : ""}`}
-                    onClick={() => handleSort("recipient")}
-                  >
-                    <span className="header-content">
-                      Recipient
-                      {getSortInfo("recipient") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("recipient")?.direction === "asc" ? "↑" : "↓"}</span>
-                          {getSortInfo("recipient")!.total > 1 && (
-                            <span className="sort-priority">{getSortInfo("recipient")?.priority}</span>
-                          )}
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('date') && (
-                  <th
-                    className={`date-header sortable-header ${getSortInfo("letterDate") ? "sorted" : ""}`}
-                    onClick={() => handleSort("letterDate")}
-                  >
-                    <span className="header-content">
-                      Date
-                      {getSortInfo("letterDate") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("letterDate")?.direction === "asc" ? "↑" : "↓"}</span>
-                          {getSortInfo("letterDate")!.total > 1 && (
-                            <span className="sort-priority">{getSortInfo("letterDate")?.priority}</span>
-                          )}
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('collection') && (
-                  <th
-                    className={`sortable-header ${getSortInfo("collection") ? "sorted" : ""}`}
-                    onClick={() => handleSort("collection")}
-                  >
-                    <span className="header-content">
-                      Collection
-                      {getSortInfo("collection") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("collection")?.direction === "asc" ? "↑" : "↓"}</span>
-                          {getSortInfo("collection")!.total > 1 && (
-                            <span className="sort-priority">{getSortInfo("collection")?.priority}</span>
-                          )}
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('letters') && (
-                  <th
-                    className={`sortable-header ${getSortInfo("letters") ? "sorted" : ""}`}
-                    onClick={() => handleSort("letters")}
-                  >
-                    <span className="header-content">
-                      Letters
-                      {getSortInfo("letters") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("letters")?.direction === "asc" ? "↑" : "↓"}</span>
-                          {getSortInfo("letters")!.total > 1 && (
-                            <span className="sort-priority">{getSortInfo("letters")?.priority}</span>
-                          )}
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('extras') && (
-                  <th
-                    className={`sortable-header ${getSortInfo("extras") ? "sorted" : ""}`}
-                    onClick={() => handleSort("extras")}
-                  >
-                    <span className="header-content">
-                      Extras
-                      {getSortInfo("extras") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("extras")?.direction === "asc" ? "↑" : "↓"}</span>
-                          {getSortInfo("extras")!.total > 1 && (
-                            <span className="sort-priority">{getSortInfo("extras")?.priority}</span>
-                          )}
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-                {visibleColumns.has('transcript') && (
-                  <th className="status-header">Transcript</th>
-                )}
-                {visibleColumns.has('metadata') && (
-                  <th className="status-header">Metadata</th>
-                )}
-                {visibleColumns.has('sync') && (
-                  <th className="status-header" title="Identity/content sync status">Sync</th>
-                )}
-                {visibleColumns.has('visibility') && (
-                  <th>Visibility</th>
-                )}
-                {visibleColumns.has('created') && (
-                  <th
-                    className={`sortable-header ${getSortInfo("createdAt") ? "sorted" : ""}`}
-                    onClick={() => handleSort("createdAt")}
-                  >
-                    <span className="header-content">
-                      Created
-                      {getSortInfo("createdAt") && (
-                        <span className="sort-indicator">
-                          <span className="sort-arrow">{getSortInfo("createdAt")?.direction === "asc" ? "↑" : "↓"}</span>
-                          {getSortInfo("createdAt")!.total > 1 && (
-                            <span className="sort-priority">{getSortInfo("createdAt")?.priority}</span>
-                          )}
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredLetters.map((letter, index) => {
-                  // Use lettersCount from API (counts L-type pages across the letter group)
-                  // Fallback to computing from images for backward compatibility
-                  const pageCount = letter.lettersCount ?? letter.images.filter((img) => img.type === "letter").length;
-                  // Use extrasCount from API (includes related items like photos, covers)
-                  // Fallback to computing from images for backward compatibility
-                  const extrasCount = letter.extrasCount ?? letter.images.filter((img) => img.type !== "letter").length;
-                  const formattedDate = formatDateRaw(letter.metadata.dateRaw);
-                  return (
-                    <tr
-                      key={letter.id}
-                      onClick={(e) => handleRowClick(letter.id, index, e)}
-                      onMouseDown={(e) => handleRowMouseDown(index, e)}
-                      onMouseEnter={() => handleRowMouseEnter(index)}
-                      className={`letter-row ${selectedIds.has(letter.id) ? "selected" : ""} ${editMode ? "edit-mode" : ""}`}
-                    >
-                      {visibleColumns.has('sender') && (
-                        <td
-                          className={`
-                            ${copyModeActive ? 'copyable-cell' : ''}
-                            ${sourceCell?.letterId === letter.id && sourceCell?.column === 'sender' ? 'source-cell' : ''}
-                            ${pendingChanges.has(letter.id) && pendingChanges.get(letter.id)?.sender !== undefined ? 'changed-cell' : ''}
-                          `}
-                          onClick={(e) => copyModeActive ? handleCellClick(letter.id, 'sender', letter.metadata.sender ?? null, e) : undefined}
-                        >
-                          {pendingChanges.get(letter.id)?.sender !== undefined
-                            ? pendingChanges.get(letter.id)?.sender || "—"
-                            : letter.metadata.sender || "—"}
-                        </td>
-                      )}
-                      {visibleColumns.has('recipient') && (
-                        <td
-                          className={`
-                            ${copyModeActive ? 'copyable-cell' : ''}
-                            ${sourceCell?.letterId === letter.id && sourceCell?.column === 'recipient' ? 'source-cell' : ''}
-                            ${pendingChanges.has(letter.id) && pendingChanges.get(letter.id)?.recipient !== undefined ? 'changed-cell' : ''}
-                          `}
-                          onClick={(e) => copyModeActive ? handleCellClick(letter.id, 'recipient', letter.metadata.recipient ?? null, e) : undefined}
-                        >
-                          {pendingChanges.get(letter.id)?.recipient !== undefined
-                            ? pendingChanges.get(letter.id)?.recipient || "—"
-                            : letter.metadata.recipient || "—"}
-                        </td>
-                      )}
-                      {visibleColumns.has('date') && <td className="date-cell">{formattedDate}</td>}
-                      {visibleColumns.has('collection') && <td>{letter.collectionCode || "—"}</td>}
-                      {visibleColumns.has('letters') && <td className="count-cell">{pageCount || "—"}</td>}
-                      {visibleColumns.has('extras') && <td className="count-cell">{extrasCount || "—"}</td>}
-                      {visibleColumns.has('transcript') && (
-                        <td className="status-cell">
-                          <StatusIcon status={getCombinedTranscriptStatus(
-                            letter.transcriptStatus,
-                            letter.extraContentStatus,
-                            letter.images.some(img => img.type === 'letter'),
-                            letter.images.some(img => ['telegram', 'cover', 'ephemera'].includes(img.type)),
-                          )} type="T" />
-                        </td>
-                      )}
-                      {visibleColumns.has('metadata') && (
-                        <td className="status-cell">
-                          <StatusIcon status={letter.metadataContentStatus} type="M" />
-                        </td>
-                      )}
-                      {visibleColumns.has('sync') && (
-                        <td className="status-cell sync-cell">
-                          {checkNeedsSync(letter) ? (
-                            <span className="sync-indicator needs-sync" title="Names may not match summary/hook">⚠</span>
-                          ) : (
-                            <span className="sync-indicator synced" title="Synced">✓</span>
-                          )}
-                        </td>
-                      )}
-                      {visibleColumns.has('visibility') && (
-                        <td>
-                          <VisibilityBadge state={letter.visibility} />
-                        </td>
-                      )}
-                      {visibleColumns.has('created') && <td className="date-cell">{formatDate(letter.createdAt)}</td>}
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination controls */}
-        {pagination.totalPages > 1 && (
-          <div className="pagination-controls">
-            <button
-              className="pagination-btn"
-              onClick={() => fetchLetters(true, pagination.page - 1)}
-              disabled={pagination.page <= 1 || loading}
-            >
-              ← Previous
-            </button>
-            <span className="pagination-info">
-              Page {pagination.page} of {pagination.totalPages}
-            </span>
-            <button
-              className="pagination-btn"
-              onClick={() => fetchLetters(true, pagination.page + 1)}
-              disabled={pagination.page >= pagination.totalPages || loading}
-            >
-              Next →
-            </button>
-          </div>
-        )}
+        <RecentActivityTable
+          filteredLetters={filteredLetters}
+          visibleColumns={visibleColumns}
+          getSortInfo={getSortInfo}
+          onSort={handleSort}
+          onRowClick={handleRowClick}
+          onRowMouseDown={handleRowMouseDown}
+          onRowMouseEnter={handleRowMouseEnter}
+          selectedIds={selectedIds}
+          editMode={editMode}
+          copyModeActive={copyModeActive}
+          sourceCell={sourceCell}
+          pendingChanges={pendingChanges}
+          onCellClick={handleCellClick}
+          formatDate={formatDate}
+          formatDateRaw={formatDateRaw}
+          checkNeedsSync={checkNeedsSync}
+          getCombinedTranscriptStatus={getCombinedTranscriptStatus}
+          renderStatusIcon={(status, type) => <StatusIcon status={status} type={type} />}
+          pagination={pagination}
+          loading={loading}
+          onPageChange={(page) => fetchLetters(true, page)}
+        />
       </div>
 
       {/* Delete confirmation modal */}

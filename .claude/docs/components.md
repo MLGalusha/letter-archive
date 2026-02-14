@@ -114,3 +114,14 @@ Location: `frontend/src/pages/admin/LetterReview/`
   - Inline editable linked entity row used by `MetadataSection`.
 
 `frontend/src/pages/admin/LetterReviewPage.tsx` now owns state and handlers, then composes these sub-components via props.
+
+## Admin Dashboard Components
+
+Location: `frontend/src/pages/admin/AdminDashboard/`
+
+- `DashboardFilterBar.tsx`
+  - Dashboard filter/stats row: visibility pills, transcript/metadata status filters, collection input, date dropdown, search, and active filter controls.
+- `RecentActivityTable.tsx`
+  - Recent letters table: sortable columns, edit-mode cell interactions, status/sync indicators, and pagination controls.
+
+`frontend/src/pages/admin/AdminDashboard.tsx` keeps data/state/business logic and composes these sections via props.

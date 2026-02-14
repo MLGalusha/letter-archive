@@ -13,6 +13,33 @@ export default function CollectionDetailPage() {
   const [collection, setCollection] = useState<CollectionWithLetters | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const collectionLetters = collection?.letters ?? [];
+
+  const topCorrespondents = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const letter of collectionLetters) {
+      const sender = letter.metadata.sender?.trim();
+      const recipient = letter.metadata.recipient?.trim();
+      if (sender) counts.set(sender, (counts.get(sender) || 0) + 1);
+      if (recipient) counts.set(recipient, (counts.get(recipient) || 0) + 1);
+    }
+
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [collectionLetters]);
+
+  const dateRange = useMemo(() => {
+    const values = collectionLetters
+      .map((letter) => letter.metadata.date || letter.metadata.dateRaw)
+      .filter(Boolean) as string[];
+
+    if (values.length === 0) return null;
+
+    const sorted = [...values].sort();
+    return { start: sorted[0], end: sorted[sorted.length - 1] };
+  }, [collectionLetters]);
 
   useEffect(() => {
     if (!collectionCode) return;
@@ -66,32 +93,6 @@ export default function CollectionDetailPage() {
       </div>
     );
   }
-
-  const topCorrespondents = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const letter of collection.letters) {
-      const sender = letter.metadata.sender?.trim();
-      const recipient = letter.metadata.recipient?.trim();
-      if (sender) counts.set(sender, (counts.get(sender) || 0) + 1);
-      if (recipient) counts.set(recipient, (counts.get(recipient) || 0) + 1);
-    }
-
-    return Array.from(counts.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-  }, [collection.letters]);
-
-  const dateRange = useMemo(() => {
-    const values = collection.letters
-      .map((letter) => letter.metadata.date || letter.metadata.dateRaw)
-      .filter(Boolean) as string[];
-
-    if (values.length === 0) return null;
-
-    const sorted = [...values].sort();
-    return { start: sorted[0], end: sorted[sorted.length - 1] };
-  }, [collection.letters]);
 
   return (
     <div className="body-layout">

@@ -261,6 +261,16 @@ test.describe('Relationships API', () => {
     expect(Array.isArray(data.edges)).toBe(true);
   });
 
+  test('GET /relationships/path rejects invalid UUID params', async ({ request }) => {
+    const response = await request.get(`${API_BASE_URL}/relationships/path/not-a-uuid/not-a-uuid`);
+    expect(response.status()).toBe(400);
+  });
+
+  test('GET /relationships/collection rejects invalid UUID params', async ({ request }) => {
+    const response = await request.get(`${API_BASE_URL}/relationships/collection/not-a-uuid`);
+    expect(response.status()).toBe(400);
+  });
+
   test('GET /admin/relationships returns relationship list', async ({ request }) => {
     const response = await request.get(`${API_BASE_URL}/admin/relationships`);
     expect(response.status()).toBe(200);
@@ -318,6 +328,8 @@ test.describe('Connection Finder', () => {
 
     const data = await response.json();
     expect(data.path).toHaveLength(1);
+    expect(data.path[0]).toHaveProperty('id');
+    expect(data.path[0]).toHaveProperty('name');
     expect(data.edges).toHaveLength(0);
   });
 });

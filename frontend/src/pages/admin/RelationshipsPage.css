@@ -244,6 +244,14 @@
   text-decoration: underline;
 }
 
+body.dark .person-link {
+  color: hsl(205 92% 75%);
+}
+
+body.dark .person-link:hover {
+  color: hsl(205 95% 82%);
+}
+
 .rel-type-badge {
   display: inline-flex;
   align-items: center;

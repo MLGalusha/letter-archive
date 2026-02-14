@@ -51,6 +51,7 @@ Public relationship graph data.
 Relationship graph filtered to a specific collection.
 
 **Params**: `collectionId` UUID (validated)
+**Errors**: `400` when `collectionId` is not a valid UUID
 
 ---
 
@@ -59,6 +60,7 @@ Relationship graph filtered to a specific collection.
 Find shortest connection path between two people.
 
 **Params**: `personAId` UUID, `personBId` UUID (validated)
+**Errors**: `400` when either ID is not a valid UUID
 
 **Response**:
 - Connected: `{ path: [{ id, name }], edges: [{ id, type }] }`

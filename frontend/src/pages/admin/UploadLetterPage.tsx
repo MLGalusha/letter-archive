@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { uploadFiles, type UploadResult, type UploadError } from "../../api/admin";
 import {
   parseFilename,
-  getFileExtension,
 } from "../../utils/filename-parser";
 import { Button, ConfirmDialog } from "../../components/common";
 import AdminLayout from "../../components/AdminLayout/AdminLayout";
@@ -13,203 +12,24 @@ import Lightbox from "./UploadLetter/Lightbox";
 import UncategorizedCarousel from "./UploadLetter/UncategorizedCarousel";
 import type {
   UploadedImage,
-  LetterGroup,
   CollectionGroup,
   EditState,
   LightboxState,
+  UploadProgress,
+  UploadResultsState,
+  ConfirmDialogState,
+  UploadBannerState,
+  DeleteDialogState,
 } from "./UploadLetter/types";
+import {
+  formatDate,
+  formatFileSize,
+  generateId,
+  generateNewFilename,
+  getNextCollectionCode,
+  groupImagesByCollection,
+} from "./UploadLetter/utils";
 import "./UploadLetterPage.css";
-
-// ============================================================================
-// Types
-// ============================================================================
-
-interface UploadProgress {
-  current: number;
-  total: number;
-  collectionCode: string;
-}
-
-interface UploadResultsState {
-  uploaded: UploadResult[];    // new files successfully uploaded
-  existing: UploadResult[];    // files that already exist (need confirmation)
-  replaced: UploadResult[];    // files that were force-replaced
-  skipped: UploadResult[];     // files user declined to replace
-  failed: UploadError[];       // errors
-  show: boolean;               // whether to show results panel
-}
-
-interface ConfirmDialogState {
-  show: boolean;
-  files: File[];               // files to re-upload with force
-  filenames: string[];         // display names
-}
-
-interface UploadBannerState {
-  show: boolean;
-  fileCount: number;
-  totalSize: string;
-  collectionCount: number;
-  replacedCount: number;
-  skippedCount: number;
-}
-
-interface DeleteDialogState {
-  show: boolean;
-  type: 'collection' | 'letter' | 'image';
-  collectionCode: string;
-  letterKey?: string;
-  imageId?: string;
-  itemName: string;
-}
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 11);
-}
-
-function groupImagesByCollection(images: UploadedImage[]): CollectionGroup[] {
-  const collectionMap = new Map<string, UploadedImage[]>();
-
-  // Group categorized images by collection
-  for (const img of images) {
-    if (img.parsed) {
-      const code = img.parsed.collectionCode;
-      const existing = collectionMap.get(code) || [];
-      existing.push(img);
-      collectionMap.set(code, existing);
-    }
-  }
-
-  // Convert to CollectionGroup array
-  const groups: CollectionGroup[] = [];
-  for (const [collectionCode, imgs] of collectionMap) {
-    // Group by dateRaw and typeSequence within collection
-    // L01 and L02 on the same date are separate letters
-    // C01/E01 belong with L01, C02/E02 belong with L02, etc.
-    const letterMap = new Map<string, UploadedImage[]>();
-
-    for (const img of imgs) {
-      if (img.parsed) {
-        // typeSequence indicates which letter this belongs to
-        // e.g., L01, C01, E01 all belong to letter 01
-        const dateKey = `${img.parsed.dateRaw}-${String(img.parsed.typeSequence).padStart(2, "0")}`;
-        const existing = letterMap.get(dateKey) || [];
-        existing.push(img);
-        letterMap.set(dateKey, existing);
-      }
-    }
-
-    // Build letters array
-    const letters: LetterGroup[] = [];
-    for (const [dateKey, letterImgs] of letterMap) {
-      const firstParsed = letterImgs[0].parsed!;
-
-      // Count letter pages vs extras
-      const letterPageCount = letterImgs.filter(
-        (img) => img.parsed?.type === "L",
-      ).length;
-      const extraCount = letterImgs.length - letterPageCount;
-
-      letters.push({
-        letterKey: dateKey,
-        dateRaw: dateKey,
-        letterDate: firstParsed.letterDate,
-        letterPageCount,
-        extraCount,
-        images: letterImgs.sort((a, b) => {
-          // Sort by type first (L before others), then by sequence, then by page
-          const aType = a.parsed?.type || "Z";
-          const bType = b.parsed?.type || "Z";
-          if (aType !== bType) {
-            if (aType === "L") return -1;
-            if (bType === "L") return 1;
-            return aType.localeCompare(bType);
-          }
-          const aSeq = a.parsed?.typeSequence || 0;
-          const bSeq = b.parsed?.typeSequence || 0;
-          if (aSeq !== bSeq) return aSeq - bSeq;
-          return (a.parsed?.pageNumber || 0) - (b.parsed?.pageNumber || 0);
-        }),
-      });
-    }
-
-    // Sort letters by date
-    letters.sort((a, b) => a.dateRaw.localeCompare(b.dateRaw));
-
-    // Calculate date range from letters
-    let dateRange = "Unknown";
-    const knownDates = letters
-      .filter((l) => l.letterDate !== null)
-      .map((l) => l.letterDate as string)
-      .sort();
-    if (knownDates.length > 0) {
-      if (knownDates.length === 1) {
-        dateRange = knownDates[0];
-      } else {
-        dateRange = `${knownDates[0]} - ${knownDates[knownDates.length - 1]}`;
-      }
-    }
-
-    groups.push({
-      collectionCode,
-      letters,
-      totalImages: imgs.length,
-      dateRange,
-    });
-  }
-
-  // Sort by collection code
-  return groups.sort((a, b) =>
-    a.collectionCode.localeCompare(b.collectionCode),
-  );
-}
-
-function getNextCollectionCode(collections: CollectionGroup[]): string {
-  if (collections.length === 0) return "001";
-  const maxCode = Math.max(
-    ...collections.map((c) => parseInt(c.collectionCode, 10)),
-  );
-  return String(maxCode + 1).padStart(3, "0");
-}
-
-function formatDate(isoDate: string): string {
-  const [year, month, day] = isoDate.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-}
-
-function generateNewFilename(
-  originalFilename: string,
-  collectionCode: string,
-  type: string,
-  typeSequence: number,
-  pageNumber: number,
-): string {
-  const ext = getFileExtension(originalFilename);
-  const typeSeq = String(typeSequence).padStart(2, "0");
-  const page = String(pageNumber).padStart(2, "0");
-  return `${collectionCode}-XXXXXXXX-${type}${typeSeq}-${page}.${ext}`;
-}
-
-// ============================================================================
-// Main Component
-// ============================================================================
 
 export default function UploadLetterPage() {
   const navigate = useNavigate();

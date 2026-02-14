@@ -147,7 +147,9 @@ Location: `frontend/src/pages/admin/UploadLetter/`
 - `Lightbox.tsx`
   - Fullscreen image preview with keyboard navigation.
 - `types.ts`
-  - Shared upload page interfaces (`UploadedImage`, `LetterGroup`, `CollectionGroup`, `EditState`, `LightboxState`).
+  - Shared upload page interfaces (`UploadedImage`, `LetterGroup`, `CollectionGroup`, `EditState`, `LightboxState`) plus upload workflow UI state types (progress/results/dialog/banner/delete state).
+- `utils.ts`
+  - Shared upload helper logic (`groupImagesByCollection`, `getNextCollectionCode`, filename/date/size formatters) covered by unit tests.
 
 `frontend/src/pages/admin/UploadLetterPage.tsx` now composes these components and focuses on upload workflow/state.
 

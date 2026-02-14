@@ -2,7 +2,7 @@
  * Base HTTP client for API calls
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 const isDev = import.meta.env.DEV;
 
 // Simple frontend logger

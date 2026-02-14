@@ -1,9 +1,10 @@
 import type { RefObject } from "react";
 import type { ContentStatus } from "../../../types/Letter";
-
-type VisibilityFilter = "ALL" | "PUBLISHED" | "HIDDEN";
-type DateMode = "specific" | "range";
-type ContentFilterView = "transcript" | "metadata";
+import type {
+  ContentFilterView,
+  DateMode,
+  VisibilityFilter,
+} from "./types";
 
 interface DashboardStats {
   published: number;

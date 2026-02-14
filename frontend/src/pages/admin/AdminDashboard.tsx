@@ -27,203 +27,33 @@ import { analyzeCollection, type CollectionAnalysisResult } from "../../api/coll
 import AdminLayout from "../../components/AdminLayout";
 import DashboardFilterBar from "./AdminDashboard/DashboardFilterBar";
 import RecentActivityTable from "./AdminDashboard/RecentActivityTable";
-
-// Visibility filter type (inline instead of from FilterSidebar)
-type VisibilityFilter = 'ALL' | 'PUBLISHED' | 'HIDDEN';
-
-// Date filter mode
-type DateMode = 'specific' | 'range';
-
-// Year/month/day options for date dropdowns
-const YEAR_OPTIONS = Array.from({ length: 151 }, (_, i) => 1800 + i);
-const MONTH_OPTIONS = [
-  { value: 1, label: 'Jan' },
-  { value: 2, label: 'Feb' },
-  { value: 3, label: 'Mar' },
-  { value: 4, label: 'Apr' },
-  { value: 5, label: 'May' },
-  { value: 6, label: 'Jun' },
-  { value: 7, label: 'Jul' },
-  { value: 8, label: 'Aug' },
-  { value: 9, label: 'Sep' },
-  { value: 10, label: 'Oct' },
-  { value: 11, label: 'Nov' },
-  { value: 12, label: 'Dec' },
-];
-const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
+import {
+  ALL_COLUMNS,
+  COLUMN_STORAGE_KEY,
+  DAY_OPTIONS,
+  DEFAULT_VISIBLE_COLUMNS,
+  MONTH_OPTIONS,
+  YEAR_OPTIONS,
+} from "./AdminDashboard/constants";
+import type {
+  ColumnId,
+  ContentFilterView,
+  DateMode,
+  ExtendedSortField,
+  ServerSortField,
+  SortColumn,
+  VisibilityFilter,
+} from "./AdminDashboard/types";
+import {
+  checkNeedsSync,
+  formatDateRaw,
+  getCombinedTranscriptStatus,
+  isServerSortField,
+  loadPersistedState,
+  savePersistedState,
+  StatusIcon,
+} from "./AdminDashboard/utils";
 import "./AdminDashboard.css";
-
-// Server-side sort fields (must match backend Zod schema)
-type ServerSortField = 'createdAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection';
-// Client-side computed sort fields (sorted locally after fetch)
-type ClientSortField = 'letters' | 'extras';
-// Extended sort field to include client-side computed columns
-type ExtendedSortField = ServerSortField | ClientSortField;
-type SortDirection = 'asc' | 'desc';
-
-// Helper to check if a field is server-sortable
-const isServerSortField = (field: ExtendedSortField): field is ServerSortField => {
-  return ['createdAt', 'letterDate', 'sender', 'recipient', 'workflow', 'visibility', 'collection'].includes(field);
-};
-
-interface SortColumn {
-  field: ExtendedSortField;
-  direction: SortDirection;
-}
-
-// Column definitions for visibility toggle
-type ColumnId = 'sender' | 'recipient' | 'date' | 'collection' | 'letters' | 'extras' | 'transcript' | 'metadata' | 'visibility' | 'created' | 'sync';
-
-interface ColumnDef {
-  id: ColumnId;
-  label: string;
-  defaultVisible: boolean;
-}
-
-const ALL_COLUMNS: ColumnDef[] = [
-  { id: 'sender', label: 'Sender', defaultVisible: true },
-  { id: 'recipient', label: 'Recipient', defaultVisible: true },
-  { id: 'date', label: 'Date', defaultVisible: true },
-  { id: 'collection', label: 'Collection', defaultVisible: true },
-  { id: 'letters', label: 'Letters', defaultVisible: true },
-  { id: 'extras', label: 'Extras', defaultVisible: true },
-  { id: 'transcript', label: 'Transcript', defaultVisible: true },
-  { id: 'metadata', label: 'Metadata', defaultVisible: true },
-  { id: 'sync', label: 'Sync', defaultVisible: true },
-  { id: 'visibility', label: 'Visibility', defaultVisible: true },
-  { id: 'created', label: 'Created', defaultVisible: true },
-];
-
-/**
- * Checks if a letter's derived fields (summary/hook) may be out of sync with identities.
- * Returns true if sender/recipient are set but don't appear in the summary or hook.
- */
-function checkNeedsSync(letter: Letter): boolean {
-  const { sender, recipient, description, hook } = letter.metadata;
-
-  // No sender/recipient set - nothing to check
-  if (!sender && !recipient) return false;
-
-  // No summary/hook to check against
-  if (!description && !hook) return false;
-
-  const combinedText = ((description || '') + ' ' + (hook || '')).toLowerCase();
-
-  // Check if identities appear in derived fields
-  const senderMissing = sender && !combinedText.includes(sender.toLowerCase());
-  const recipientMissing = recipient && !combinedText.includes(recipient.toLowerCase());
-
-  // If either identity is missing from derived fields, may need sync
-  return Boolean(senderMissing || recipientMissing);
-}
-
-const DEFAULT_VISIBLE_COLUMNS = new Set<ColumnId>(
-  ALL_COLUMNS.filter(c => c.defaultVisible).map(c => c.id)
-);
-
-const COLUMN_STORAGE_KEY = 'adminDashboardColumns';
-
-// Status icon component for two-track workflow
-function StatusIcon({ status, type }: { status: ContentStatus; type: 'T' | 'M' }) {
-  const titleMap = { T: 'Transcript', M: 'Metadata' };
-  const title = titleMap[type];
-  switch (status) {
-    case 'EMPTY':
-      return <span className="status-icon status-empty" title={`${title}: Empty`}>—</span>;
-    case 'AI_DRAFT':
-      return <span className="status-icon status-draft" title={`${title}: Draft`}>Draft</span>;
-    case 'EDITED':
-      return <span className="status-icon status-edited" title={`${title}: Edited`}>Edited</span>;
-    case 'VERIFIED':
-      return <span className="status-icon status-verified" title={`${title}: Verified`}>✓</span>;
-    default:
-      return <span className="status-icon">—</span>;
-  }
-}
-
-// Combine transcript + extra content status into a single status.
-// Only considers sections that actually exist (have corresponding images).
-function getCombinedTranscriptStatus(
-  transcriptStatus: ContentStatus,
-  extraContentStatus: ContentStatus,
-  hasLetterPages: boolean,
-  hasExtras: boolean,
-): ContentStatus {
-  // Only include statuses for sections that exist
-  const statuses: ContentStatus[] = [];
-  if (hasLetterPages) statuses.push(transcriptStatus);
-  if (hasExtras) statuses.push(extraContentStatus);
-
-  // No relevant sections
-  if (statuses.length === 0) return 'EMPTY';
-
-  // Single section — use its status directly
-  if (statuses.length === 1) return statuses[0];
-
-  // Both sections exist: both must be VERIFIED
-  if (statuses.every(s => s === 'VERIFIED')) return 'VERIFIED';
-  // Either EDITED (or one verified, one edited) counts as edited
-  if (statuses.some(s => s === 'EDITED' || s === 'VERIFIED') && statuses.every(s => s !== 'EMPTY')) return 'EDITED';
-  // Either AI_DRAFT
-  if (statuses.some(s => s === 'AI_DRAFT')) return 'AI_DRAFT';
-  return 'EMPTY';
-}
-
-// Parse dateRaw into formatted MM/DD/YYYY string
-function formatDateRaw(dateRaw: string | undefined): string {
-  if (!dateRaw || dateRaw.length !== 8) {
-    return '—';
-  }
-
-  const yearStr = dateRaw.slice(0, 4);
-  const monthStr = dateRaw.slice(4, 6);
-  const dayStr = dateRaw.slice(6, 8);
-
-  // Keep X for unknown components (no conversion needed, just pass through)
-  const year = yearStr;
-  const month = monthStr;
-  const day = dayStr;
-
-  // Format as MM/DD/YYYY
-  return `${month}/${day}/${year}`;
-}
-
-// localStorage key for persisting filters and sorting
-const STORAGE_KEY = 'adminDashboardState';
-
-interface PersistedState {
-  visibilityFilter: VisibilityFilter;
-  collectionFilter: string;
-  searchQuery: string;
-  sortColumns: SortColumn[];
-  // Date filters
-  dateMode: DateMode;
-  year: number | null;
-  month: number | null;
-  day: number | null;
-  dateFrom: string | null;
-  dateTo: string | null;
-}
-
-function loadPersistedState(): Partial<PersistedState> {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      return JSON.parse(saved);
-    }
-  } catch (e) {
-    console.warn('Failed to load persisted state:', e);
-  }
-  return {};
-}
-
-function savePersistedState(state: PersistedState): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
-    console.warn('Failed to save persisted state:', e);
-  }
-}
 
 
 export default function AdminDashboard() {
@@ -254,7 +84,6 @@ export default function AdminDashboard() {
   const dateDropdownRef = useRef<HTMLDivElement>(null);
 
   // Content status toggle (Transcript vs Metadata view)
-  type ContentFilterView = 'transcript' | 'metadata';
   const [contentFilterView, setContentFilterView] = useState<ContentFilterView>('transcript');
 
   // Collection input for number-based filtering

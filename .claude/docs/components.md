@@ -123,6 +123,12 @@ Location: `frontend/src/pages/admin/AdminDashboard/`
   - Dashboard filter/stats row: visibility pills, transcript/metadata status filters, collection input, date dropdown, search, and active filter controls.
 - `RecentActivityTable.tsx`
   - Recent letters table: sortable columns, edit-mode cell interactions, status/sync indicators, and pagination controls.
+- `types.ts`
+  - Shared dashboard type definitions (sorting, column IDs, persisted filter state) used by dashboard parent + child components.
+- `constants.ts`
+  - Shared dashboard constants (date options, column defaults, storage keys, server-sort fields).
+- `utils.tsx`
+  - Shared dashboard utility logic (`isServerSortField`, sync/status/date helpers, persisted-state load/save, status icon renderer) with dedicated unit coverage.
 
 `frontend/src/pages/admin/AdminDashboard.tsx` keeps data/state/business logic and composes these sections via props.
 

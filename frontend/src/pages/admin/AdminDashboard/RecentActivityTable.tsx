@@ -1,40 +1,12 @@
 import type React from "react";
 import { VisibilityBadge } from "../../../components/common";
 import type { Letter, ContentStatus } from "../../../types/Letter";
-
-type ExtendedSortField =
-  | "createdAt"
-  | "letterDate"
-  | "sender"
-  | "recipient"
-  | "workflow"
-  | "visibility"
-  | "collection"
-  | "letters"
-  | "extras";
-
-type ColumnId =
-  | "sender"
-  | "recipient"
-  | "date"
-  | "collection"
-  | "letters"
-  | "extras"
-  | "transcript"
-  | "metadata"
-  | "visibility"
-  | "created"
-  | "sync";
+import type { ColumnId, ExtendedSortField, PendingChange } from "./types";
 
 interface SortInfo {
   direction: "asc" | "desc";
   priority: number;
   total: number;
-}
-
-interface PendingChange {
-  sender?: string;
-  recipient?: string;
 }
 
 interface PaginationState {

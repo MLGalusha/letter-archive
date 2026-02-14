@@ -221,6 +221,10 @@ When sender/recipient names are updated:
 | [services/entities/relationships.ts](../../backend/src/services/entities/relationships.ts) | Person relationship CRUD and query helpers |
 | [services/entities/extraction.ts](../../backend/src/services/entities/extraction.ts) | Entity extraction processing/orchestration helpers |
 | [routes/admin/entities.ts](../../backend/src/routes/admin/entities.ts) | API endpoints |
+| [api/entities.ts](../../frontend/src/api/entities.ts) | Frontend compatibility barrel for entity APIs |
+| [api/entities/index.ts](../../frontend/src/api/entities/index.ts) | Frontend entity API module exports |
+| [api/admin.ts](../../frontend/src/api/admin.ts) | Frontend compatibility barrel for admin APIs |
+| [api/admin/index.ts](../../frontend/src/api/admin/index.ts) | Frontend admin API module exports |
 | [pages/admin/PeoplePage.tsx](../../frontend/src/pages/admin/PeoplePage.tsx) | People management UI |
 | [pages/admin/PlacesPage.tsx](../../frontend/src/pages/admin/PlacesPage.tsx) | Places management UI |
 | [components/DuplicateSuggestions](../../frontend/src/components/DuplicateSuggestions/) | Collapsible duplicate suggestions panel |

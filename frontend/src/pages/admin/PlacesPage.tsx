@@ -13,19 +13,11 @@ import {
   type EntityMatch,
 } from "../../api/entities";
 import type { PlaceType } from "../../types/Letter";
+import { PLACE_TYPE_OPTIONS } from "../../constants/enums";
 import MergeComparison from "../../components/MergeComparison";
 import BulkMergeModal from "../../components/BulkMergeModal";
 import EntityListPanel from "./EntityManagement/EntityListPanel";
 import "./PlacesPage.css";
-
-const PLACE_TYPES: { value: PlaceType; label: string }[] = [
-  { value: "city", label: "City" },
-  { value: "region", label: "Region/State" },
-  { value: "country", label: "Country" },
-  { value: "street", label: "Street/Address" },
-  { value: "landmark", label: "Landmark" },
-  { value: "other", label: "Other" },
-];
 
 export default function PlacesPage() {
   const navigate = useNavigate();
@@ -349,7 +341,7 @@ export default function PlacesPage() {
                 {place.canonicalName}
                 {place.placeType && (
                   <span className={`place-type-badge ${place.placeType}`}>
-                    {PLACE_TYPES.find((t) => t.value === place.placeType)?.label || place.placeType}
+                    {PLACE_TYPE_OPTIONS.find((t) => t.value === place.placeType)?.label || place.placeType}
                   </span>
                 )}
               </div>
@@ -395,7 +387,7 @@ export default function PlacesPage() {
                   <div className="detail-field">
                     <span className="field-label">Type:</span>
                     <span className="field-value">
-                      {PLACE_TYPES.find((t) => t.value === selectedPlace.placeType)?.label ||
+                      {PLACE_TYPE_OPTIONS.find((t) => t.value === selectedPlace.placeType)?.label ||
                         selectedPlace.placeType}
                     </span>
                   </div>
@@ -450,7 +442,7 @@ export default function PlacesPage() {
               onChange={(e) => setFormPlaceType(e.target.value as PlaceType | "")}
             >
               <option value="">Select type...</option>
-              {PLACE_TYPES.map((type) => (
+              {PLACE_TYPE_OPTIONS.map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
                 </option>
@@ -515,7 +507,7 @@ export default function PlacesPage() {
               onChange={(e) => setFormPlaceType(e.target.value as PlaceType | "")}
             >
               <option value="">Select type...</option>
-              {PLACE_TYPES.map((type) => (
+              {PLACE_TYPE_OPTIONS.map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
                 </option>

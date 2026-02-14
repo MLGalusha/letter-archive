@@ -3,7 +3,13 @@
  */
 
 import { apiGet, apiPost, apiPut, apiDelete } from './client';
-import type { PersonRole, PlaceRole, PlaceType, ContentStatus } from '../types/Letter';
+import type {
+  PersonRole,
+  PlaceRole,
+  PlaceType,
+  ContentStatus,
+  PersonRelationshipType,
+} from '../types/Letter';
 
 // ============================================================================
 // TYPES
@@ -74,23 +80,6 @@ export interface LetterForEntity {
   role: PersonRole | PlaceRole;
   confidence: number;
 }
-
-// Relationship types
-export type PersonRelationshipType =
-  | 'spouse'
-  | 'fiancé/fiancée'
-  | 'romantic-partner'
-  | 'parent-child'
-  | 'sibling'
-  | 'grandparent-grandchild'
-  | 'aunt-uncle-niece-nephew'
-  | 'cousin'
-  | 'in-law'
-  | 'friend'
-  | 'acquaintance'
-  | 'business-associate'
-  | 'employer-employee'
-  | 'unknown';
 
 export interface PersonRelationship {
   id: string;

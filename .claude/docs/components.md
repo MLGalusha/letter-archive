@@ -153,3 +153,17 @@ Location: `frontend/src/pages/admin/EntityManagement/`
   - Shared entity list/suggestions/search/selection panel used by both `PeoplePage` and `PlacesPage`.
 
 `frontend/src/pages/admin/PeoplePage.tsx` and `frontend/src/pages/admin/PlacesPage.tsx` now reuse this component for the common entity-management list workflow and keep entity-specific detail panels/modals local.
+
+## Shared Enum Options
+
+Location: `frontend/src/constants/enums.ts`
+
+- Centralized option lists for:
+  - Emotional tones
+  - Metadata relationship labels
+  - Person relationship labels
+  - Place type labels
+  - Person/place role labels
+  - Primary topic options
+
+Pages now consume these shared options instead of duplicating local arrays (`PeoplePage`, `RelationshipsPage`, `PlacesPage`, `LetterReview/MetadataSection`, `LetterReview/AddEntityModal`).

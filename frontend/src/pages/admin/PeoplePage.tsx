@@ -17,31 +17,15 @@ import {
   unverifyBiography,
   type PersonWithCount,
   type PersonRelationship,
-  type PersonRelationshipType,
   type EntityMatch,
   type CanonicalPerson,
 } from "../../api/entities";
 import MergeComparison from "../../components/MergeComparison";
 import BulkMergeModal from "../../components/BulkMergeModal";
+import { PERSON_RELATIONSHIP_OPTIONS } from "../../constants/enums";
+import type { PersonRelationshipType } from "../../types/Letter";
 import EntityListPanel from "./EntityManagement/EntityListPanel";
 import "./PeoplePage.css";
-
-const RELATIONSHIP_TYPES: { value: PersonRelationshipType; label: string }[] = [
-  { value: "spouse", label: "Spouse" },
-  { value: "fiancé/fiancée", label: "Fiancé/Fiancée" },
-  { value: "romantic-partner", label: "Romantic Partner" },
-  { value: "parent-child", label: "Parent/Child" },
-  { value: "sibling", label: "Sibling" },
-  { value: "grandparent-grandchild", label: "Grandparent/Grandchild" },
-  { value: "aunt-uncle-niece-nephew", label: "Aunt/Uncle/Niece/Nephew" },
-  { value: "cousin", label: "Cousin" },
-  { value: "in-law", label: "In-law" },
-  { value: "friend", label: "Friend" },
-  { value: "acquaintance", label: "Acquaintance" },
-  { value: "business-associate", label: "Business Associate" },
-  { value: "employer-employee", label: "Employer/Employee" },
-  { value: "unknown", label: "Unknown" },
-];
 
 export default function PeoplePage() {
   const navigate = useNavigate();
@@ -658,7 +642,7 @@ export default function PeoplePage() {
                       <div key={rel.id} className="relationship-item">
                         <div className="relationship-info">
                           <span className="relationship-type">
-                            {RELATIONSHIP_TYPES.find((t) => t.value === rel.relationshipType)?.label ||
+                            {PERSON_RELATIONSHIP_OPTIONS.find((t) => t.value === rel.relationshipType)?.label ||
                               rel.relationshipType}
                           </span>
                           <span className="relationship-person">
@@ -863,7 +847,7 @@ export default function PeoplePage() {
               value={relationshipType}
               onChange={(e) => setRelationshipType(e.target.value as PersonRelationshipType)}
             >
-              {RELATIONSHIP_TYPES.map((type) => (
+              {PERSON_RELATIONSHIP_OPTIONS.map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
                 </option>

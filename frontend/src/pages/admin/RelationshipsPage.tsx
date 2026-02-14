@@ -9,31 +9,15 @@ import {
   searchPersons,
   getRelationshipGraph,
   type PersonRelationship,
-  type PersonRelationshipType,
   type EntityMatch,
   type GraphNode,
   type GraphEdge,
 } from "../../api/entities";
+import { PERSON_RELATIONSHIP_OPTIONS } from "../../constants/enums";
+import type { PersonRelationshipType } from "../../types/Letter";
 import RelationshipGraph from "../../components/RelationshipGraph/RelationshipGraph";
 import ConnectionFinder from "../../components/ConnectionFinder/ConnectionFinder";
 import "./RelationshipsPage.css";
-
-const RELATIONSHIP_TYPES: { value: PersonRelationshipType; label: string }[] = [
-  { value: "spouse", label: "Spouse" },
-  { value: "fiancé/fiancée", label: "Fiancé/Fiancée" },
-  { value: "romantic-partner", label: "Romantic Partner" },
-  { value: "parent-child", label: "Parent/Child" },
-  { value: "sibling", label: "Sibling" },
-  { value: "grandparent-grandchild", label: "Grandparent/Grandchild" },
-  { value: "aunt-uncle-niece-nephew", label: "Aunt/Uncle/Niece/Nephew" },
-  { value: "cousin", label: "Cousin" },
-  { value: "in-law", label: "In-law" },
-  { value: "friend", label: "Friend" },
-  { value: "acquaintance", label: "Acquaintance" },
-  { value: "business-associate", label: "Business Associate" },
-  { value: "employer-employee", label: "Employer/Employee" },
-  { value: "unknown", label: "Unknown" },
-];
 
 type ViewMode = "table" | "graph";
 
@@ -207,7 +191,7 @@ export default function RelationshipsPage() {
   };
 
   const getRelationshipLabel = (type: PersonRelationshipType) => {
-    return RELATIONSHIP_TYPES.find((t) => t.value === type)?.label || type;
+    return PERSON_RELATIONSHIP_OPTIONS.find((t) => t.value === type)?.label || type;
   };
 
   return (
@@ -248,7 +232,7 @@ export default function RelationshipsPage() {
               aria-label="Filter by relationship type"
             >
               <option value="all">All Types</option>
-              {RELATIONSHIP_TYPES.map((type) => (
+              {PERSON_RELATIONSHIP_OPTIONS.map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
                 </option>
@@ -403,7 +387,7 @@ export default function RelationshipsPage() {
                 value={newRelType}
                 onChange={(e) => setNewRelType(e.target.value as PersonRelationshipType)}
               >
-                {RELATIONSHIP_TYPES.map((type) => (
+                {PERSON_RELATIONSHIP_OPTIONS.map((type) => (
                   <option key={type.value} value={type.value}>
                     {type.label}
                   </option>

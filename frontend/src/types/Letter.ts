@@ -44,6 +44,22 @@ export type RelationshipType =
   | 'employee'
   | 'unknown';
 
+export type PersonRelationshipType =
+  | 'spouse'
+  | 'fiancé/fiancée'
+  | 'romantic-partner'
+  | 'parent-child'
+  | 'sibling'
+  | 'grandparent-grandchild'
+  | 'aunt-uncle-niece-nephew'
+  | 'cousin'
+  | 'in-law'
+  | 'friend'
+  | 'acquaintance'
+  | 'business-associate'
+  | 'employer-employee'
+  | 'unknown';
+
 export type PersonRole = 'sender' | 'recipient' | 'mentioned';
 export type PlaceRole = 'written_from' | 'mentioned' | 'destination';
 export type PlaceType = 'city' | 'region' | 'country' | 'street' | 'landmark' | 'other';

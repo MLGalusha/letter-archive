@@ -2,69 +2,11 @@ import type { RefObject } from "react";
 import { Icon, Dropdown, DropdownItem } from "../../../components/common";
 import EditableEntityItem from "./EditableEntityItem";
 import type { Letter, EmotionalTone, RelationshipType } from "../../../types/Letter";
-
-// V2 Metadata constants
-const EMOTIONAL_TONES: { value: EmotionalTone; label: string }[] = [
-  { value: "joyful", label: "Joyful" },
-  { value: "hopeful", label: "Hopeful" },
-  { value: "neutral", label: "Neutral" },
-  { value: "anxious", label: "Anxious" },
-  { value: "sad", label: "Sad" },
-  { value: "angry", label: "Angry" },
-  { value: "desperate", label: "Desperate" },
-];
-
-const RELATIONSHIP_TYPES: { value: RelationshipType; label: string }[] = [
-  { value: "spouse", label: "Spouse" },
-  { value: "fiancé/fiancée", label: "Fiancé/Fiancée" },
-  { value: "romantic-partner", label: "Romantic Partner" },
-  { value: "parent", label: "Parent" },
-  { value: "child", label: "Child" },
-  { value: "sibling", label: "Sibling" },
-  { value: "grandparent", label: "Grandparent" },
-  { value: "grandchild", label: "Grandchild" },
-  { value: "aunt/uncle", label: "Aunt/Uncle" },
-  { value: "nephew/niece", label: "Nephew/Niece" },
-  { value: "cousin", label: "Cousin" },
-  { value: "in-law", label: "In-Law" },
-  { value: "friend", label: "Friend" },
-  { value: "acquaintance", label: "Acquaintance" },
-  { value: "business-associate", label: "Business Associate" },
-  { value: "employer", label: "Employer" },
-  { value: "employee", label: "Employee" },
-  { value: "unknown", label: "Unknown" },
-];
-
-const PRIMARY_TOPICS: string[] = [
-  "family/marriage",
-  "family/children",
-  "family/death-grief",
-  "family/separation",
-  "family/reunion",
-  "health/illness",
-  "health/recovery",
-  "health/pregnancy-birth",
-  "work/employment",
-  "work/job-loss",
-  "finances/hardship",
-  "finances/prosperity",
-  "travel/journey",
-  "travel/immigration",
-  "home/moving",
-  "home/property",
-  "correspondence/news-sharing",
-  "correspondence/advice",
-  "correspondence/gratitude",
-  "correspondence/apology",
-  "war/service",
-  "war/homefront",
-  "religion/faith",
-  "community/local-events",
-  "daily-life/weather",
-  "daily-life/farming",
-  "daily-life/household",
-  "daily-life/social",
-];
+import {
+  EMOTIONAL_TONE_OPTIONS,
+  METADATA_RELATIONSHIP_OPTIONS,
+  PRIMARY_TOPIC_OPTIONS,
+} from "../../../constants/enums";
 
 interface MetadataSectionProps {
   letter: Letter;
@@ -515,7 +457,7 @@ export default function MetadataSection({
                   }
                 >
                   <option value="">— Select —</option>
-                  {EMOTIONAL_TONES.map((t) => (
+                  {EMOTIONAL_TONE_OPTIONS.map((t) => (
                     <option key={t.value} value={t.value}>
                       {t.label}
                     </option>
@@ -542,7 +484,7 @@ export default function MetadataSection({
                   }
                 >
                   <option value="">— Select —</option>
-                  {RELATIONSHIP_TYPES.map((r) => (
+                  {METADATA_RELATIONSHIP_OPTIONS.map((r) => (
                     <option key={r.value} value={r.value}>
                       {r.label}
                     </option>
@@ -592,7 +534,7 @@ export default function MetadataSection({
                     align="left"
                   >
                     <div className="topics-dropdown-content">
-                      {PRIMARY_TOPICS.filter((t) => !primaryTopics.includes(t)).map((topic) => (
+                      {PRIMARY_TOPIC_OPTIONS.filter((t) => !primaryTopics.includes(t)).map((topic) => (
                         <DropdownItem
                           key={topic}
                           title={topic.replace("/", " / ")}
@@ -602,7 +544,7 @@ export default function MetadataSection({
                           }}
                         />
                       ))}
-                      {PRIMARY_TOPICS.filter((t) => !primaryTopics.includes(t)).length === 0 && (
+                      {PRIMARY_TOPIC_OPTIONS.filter((t) => !primaryTopics.includes(t)).length === 0 && (
                         <div className="dropdown-empty">All topics selected</div>
                       )}
                     </div>

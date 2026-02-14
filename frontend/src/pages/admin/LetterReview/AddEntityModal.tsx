@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PERSON_ROLE_OPTIONS, PLACE_ROLE_OPTIONS } from "../../../constants/enums";
 
 interface AddEntityModalProps {
   type: "person" | "place";
@@ -14,19 +15,7 @@ export default function AddEntityModal({ type, isOpen, isAdding, onClose, onAdd 
 
   if (!isOpen) return null;
 
-  const personRoles = [
-    { value: "sender", label: "Sender" },
-    { value: "recipient", label: "Recipient" },
-    { value: "mentioned", label: "Mentioned" },
-  ];
-
-  const placeRoles = [
-    { value: "written_from", label: "Written From" },
-    { value: "destination", label: "Destination" },
-    { value: "mentioned", label: "Mentioned" },
-  ];
-
-  const roles = type === "person" ? personRoles : placeRoles;
+  const roles = type === "person" ? PERSON_ROLE_OPTIONS : PLACE_ROLE_OPTIONS;
   const title = type === "person" ? "Add Linked Person" : "Add Linked Place";
   const placeholder = type === "person" ? "Enter person's name" : "Enter place name";
   const buttonText = type === "person" ? "Add Person" : "Add Place";

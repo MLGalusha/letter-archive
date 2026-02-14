@@ -6,7 +6,7 @@ REST API at `backend/src/routes/`. Public endpoints unauthenticated; admin requi
 
 | Domain | Doc | Routes |
 |--------|-----|--------|
-| Public | [public.md](public.md) | Letters, collections, images |
+| Public | [public.md](public.md) | Letters, collections, relationship graph/path, images |
 | Admin | [admin.md](admin.md) | Letter CRUD, bulk operations |
 | Processing | [processing.md](processing.md) | Transcription, metadata extraction |
 

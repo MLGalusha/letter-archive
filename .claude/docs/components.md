@@ -176,3 +176,16 @@ Location: `frontend/src/constants/enums.ts`
   - Primary topic options
 
 Pages now consume these shared options instead of duplicating local arrays (`PeoplePage`, `RelationshipsPage`, `PlacesPage`, `LetterReview/MetadataSection`, `LetterReview/AddEntityModal`).
+
+## Public Discovery Components
+
+Location: `frontend/src/pages/`
+
+- `ExplorePage.tsx`
+  - Public relationship atlas with collection/type/confidence filters, graph insights cards, top connectors panel, random-person discovery action, and profile deep-linking from graph nodes.
+- `explore-utils.ts`
+  - Graph filtering + analytics helpers used by `ExplorePage` (`applyGraphFilters`, `buildGraphInsights`) with dedicated unit tests.
+- `CollectionsPage.tsx`
+  - Collection browse page now includes search/sort/random discovery controls and aggregate collection stats.
+- `CollectionDetailPage.tsx`
+  - Collection detail adds quick historical context cards (date span + frequent correspondents) to improve narrative discovery.

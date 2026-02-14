@@ -1,6 +1,6 @@
 # Public API
 
-Routes: `backend/src/routes/letters.ts`, `collections.ts`, `images.ts`
+Routes: `backend/src/routes/letters.ts`, `collections.ts`, `images.ts`, `relationships.ts`
 
 ## GET /letters
 
@@ -35,3 +35,31 @@ Collection with its published letters.
 ## GET /images/:pageId
 
 Binary image with 1-year cache.
+
+---
+
+## GET /relationships
+
+Public relationship graph data.
+
+**Response**: `{ nodes: [{ id, name, letterCount }], edges: [{ id, source, target, relationshipType, confidence }] }`
+
+---
+
+## GET /relationships/collection/:collectionId
+
+Relationship graph filtered to a specific collection.
+
+**Params**: `collectionId` UUID (validated)
+
+---
+
+## GET /relationships/path/:personAId/:personBId
+
+Find shortest connection path between two people.
+
+**Params**: `personAId` UUID, `personBId` UUID (validated)
+
+**Response**:
+- Connected: `{ path: [{ id, name }], edges: [{ id, type }] }`
+- Not connected: `{ path: [], edges: [], message }`

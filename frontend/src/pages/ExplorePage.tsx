@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   getRelationshipGraph,
@@ -10,6 +10,7 @@ import { listCollections, type CollectionInfo } from '../api/collections';
 import RelationshipGraph from '../components/RelationshipGraph/RelationshipGraph';
 import ConnectionFinder from '../components/ConnectionFinder/ConnectionFinder';
 import Footer from '../components/Footer/Footer';
+import { applyGraphFilters, buildGraphInsights } from './explore-utils';
 import './ExplorePage.css';
 
 export default function ExplorePage() {
@@ -20,11 +21,11 @@ export default function ExplorePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>();
-  const [selectedNodeName, setSelectedNodeName] = useState<string | undefined>();
   const [highlightedPath, setHighlightedPath] = useState<string[]>([]);
   const [showConnectionFinder, setShowConnectionFinder] = useState(false);
+  const [relationshipTypeFilter, setRelationshipTypeFilter] = useState<string>('all');
+  const [minConfidence, setMinConfidence] = useState(0);
 
-  // Fetch collections on mount
   useEffect(() => {
     async function fetchCollections() {
       try {
@@ -38,13 +39,11 @@ export default function ExplorePage() {
     fetchCollections();
   }, []);
 
-  // Fetch graph data when collection changes
   useEffect(() => {
     async function fetchGraphData() {
       setLoading(true);
       setError(null);
       setSelectedNodeId(undefined);
-      setSelectedNodeName(undefined);
       setHighlightedPath([]);
 
       try {
@@ -64,9 +63,56 @@ export default function ExplorePage() {
     fetchGraphData();
   }, [selectedCollection]);
 
-  const handleNodeClick = useCallback((nodeId: string, nodeName: string) => {
+  const filteredGraphData = useMemo(
+    () =>
+      applyGraphFilters(graphData.nodes, graphData.edges, {
+        relationshipType: relationshipTypeFilter,
+        minConfidence,
+      }),
+    [graphData.nodes, graphData.edges, relationshipTypeFilter, minConfidence],
+  );
+
+  const fullInsights = useMemo(
+    () => buildGraphInsights(graphData.nodes, graphData.edges),
+    [graphData.nodes, graphData.edges],
+  );
+
+  const insights = useMemo(
+    () => buildGraphInsights(filteredGraphData.nodes, filteredGraphData.edges),
+    [filteredGraphData],
+  );
+
+  useEffect(() => {
+    if (!selectedNodeId) return;
+    const stillVisible = filteredGraphData.nodes.some((node) => node.id === selectedNodeId);
+    if (!stillVisible) {
+      setSelectedNodeId(undefined);
+      setHighlightedPath([]);
+    }
+  }, [selectedNodeId, filteredGraphData.nodes]);
+
+  const selectedNode = useMemo(
+    () => filteredGraphData.nodes.find((node) => node.id === selectedNodeId),
+    [filteredGraphData.nodes, selectedNodeId],
+  );
+
+  const connectedRelationships = useMemo(() => {
+    if (!selectedNodeId) return [];
+    return filteredGraphData.edges.filter(
+      (edge) => edge.source === selectedNodeId || edge.target === selectedNodeId,
+    );
+  }, [filteredGraphData.edges, selectedNodeId]);
+
+  const nodeMap = useMemo(() => {
+    const map = new Map<string, GraphNode>();
+    for (const node of graphData.nodes) {
+      map.set(node.id, node);
+    }
+    return map;
+  }, [graphData.nodes]);
+
+  const handleNodeClick = useCallback((nodeId: string) => {
     setSelectedNodeId((prev) => (prev === nodeId ? undefined : nodeId));
-    setSelectedNodeName((prev) => (prev === nodeName ? undefined : nodeName));
     setHighlightedPath([]);
   }, []);
 
@@ -74,23 +120,28 @@ export default function ExplorePage() {
     (nodeId: string) => {
       navigate(`/people/${nodeId}`);
     },
-    [navigate]
+    [navigate],
   );
 
   const handlePathFound = useCallback((path: string[]) => {
     setHighlightedPath(path);
   }, []);
 
-  const getConnectedRelationships = () => {
-    if (!selectedNodeId) return [];
-    return graphData.edges.filter(
-      (e) => e.source === selectedNodeId || e.target === selectedNodeId
-    );
+  const handleRandomPerson = () => {
+    if (filteredGraphData.nodes.length === 0) return;
+    const index = Math.floor(Math.random() * filteredGraphData.nodes.length);
+    setSelectedNodeId(filteredGraphData.nodes[index].id);
+  };
+
+  const resetNetworkFilters = () => {
+    setRelationshipTypeFilter('all');
+    setMinConfidence(0);
+    setHighlightedPath([]);
   };
 
   const getRelatedPersonName = (edge: GraphEdge) => {
     const relatedId = edge.source === selectedNodeId ? edge.target : edge.source;
-    return graphData.nodes.find((n) => n.id === relatedId)?.name || 'Unknown';
+    return nodeMap.get(relatedId)?.name || 'Unknown';
   };
 
   return (
@@ -99,9 +150,32 @@ export default function ExplorePage() {
         <div className="explore-header">
           <h1>Explore Relationships</h1>
           <p className="page-description">
-            Discover connections between people mentioned in the letters. Click a person to see
-            their relationships, or double-click to view their profile.
+            Treat the archive as a living social map. Filter by relationship type, surface high-confidence connections,
+            and jump from graph nodes into full public profiles.
           </p>
+        </div>
+
+        <div className="explore-metrics">
+          <div className="metric-card">
+            <span>People Visible</span>
+            <strong>{insights.totalPeople}</strong>
+          </div>
+          <div className="metric-card">
+            <span>Connections</span>
+            <strong>{insights.totalConnections}</strong>
+          </div>
+          <div className="metric-card">
+            <span>Avg Confidence</span>
+            <strong>{insights.averageConfidence}%</strong>
+          </div>
+          <div className="metric-card">
+            <span>Most Common Link</span>
+            <strong>
+              {insights.strongestType
+                ? formatRelationshipType(insights.strongestType.type)
+                : '—'}
+            </strong>
+          </div>
         </div>
 
         <div className="explore-controls">
@@ -121,11 +195,49 @@ export default function ExplorePage() {
             </select>
           </div>
 
+          <div className="relationship-type-filter">
+            <label htmlFor="relationship-type-select">Relationship:</label>
+            <select
+              id="relationship-type-select"
+              value={relationshipTypeFilter}
+              onChange={(e) => setRelationshipTypeFilter(e.target.value)}
+            >
+              <option value="all">All Types</option>
+              {fullInsights.typeBreakdown.map((entry) => (
+                <option key={entry.type} value={entry.type}>
+                  {formatRelationshipType(entry.type)} ({entry.count})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <label className="confidence-control" htmlFor="confidence-filter">
+            Min confidence
+            <input
+              id="confidence-filter"
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={minConfidence}
+              onChange={(e) => setMinConfidence(Number(e.target.value))}
+            />
+            <span>{minConfidence}%</span>
+          </label>
+
           <button
             className={`finder-toggle ${showConnectionFinder ? 'active' : ''}`}
             onClick={() => setShowConnectionFinder(!showConnectionFinder)}
           >
             {showConnectionFinder ? 'Hide' : 'Show'} Connection Finder
+          </button>
+
+          <button className="explore-action" onClick={handleRandomPerson} disabled={filteredGraphData.nodes.length === 0}>
+            Random Person
+          </button>
+
+          <button className="explore-action" onClick={resetNetworkFilters}>
+            Reset Filters
           </button>
         </div>
 
@@ -140,22 +252,22 @@ export default function ExplorePage() {
           <div className="graph-container">
             {loading && <div className="loading-overlay">Loading relationships...</div>}
             {error && <div className="error-message">{error}</div>}
-            {!loading && !error && graphData.nodes.length === 0 && (
+            {!loading && !error && filteredGraphData.nodes.length === 0 && (
               <div className="empty-state">
                 <p>No relationships found.</p>
                 <p className="empty-hint">
                   {selectedCollection !== 'all'
-                    ? 'Try selecting a different collection or view all collections.'
-                    : 'Relationships will appear here once letters are processed.'}
+                    ? 'Try selecting a different collection or reducing confidence/type filters.'
+                    : 'Try reducing confidence/type filters to reveal more of the network.'}
                 </p>
               </div>
             )}
-            {!loading && !error && graphData.nodes.length > 0 && (
+            {!loading && !error && filteredGraphData.nodes.length > 0 && (
               <RelationshipGraph
-                nodes={graphData.nodes}
-                edges={graphData.edges}
-                width={800}
-                height={500}
+                nodes={filteredGraphData.nodes}
+                edges={filteredGraphData.edges}
+                width={900}
+                height={560}
                 onNodeClick={handleNodeClick}
                 onNodeDoubleClick={handleNodeDoubleClick}
                 selectedNodeId={selectedNodeId}
@@ -164,51 +276,83 @@ export default function ExplorePage() {
             )}
           </div>
 
-          {selectedNodeId && (
-            <div className="person-sidebar">
-              <div className="sidebar-header">
-                <h3>{selectedNodeName}</h3>
+          <div className="person-sidebar">
+            <div className="sidebar-header">
+              <h3>{selectedNode ? selectedNode.name : 'Discovery Panel'}</h3>
+              {selectedNodeId && (
                 <button className="close-btn" onClick={() => setSelectedNodeId(undefined)}>
                   ×
                 </button>
-              </div>
+              )}
+            </div>
 
-              <div className="sidebar-content">
-                <div className="stat-row">
-                  <span className="stat-label">Letters:</span>
-                  <span className="stat-value">
-                    {graphData.nodes.find((n) => n.id === selectedNodeId)?.letterCount || 0}
-                  </span>
-                </div>
+            <div className="sidebar-content">
+              {selectedNode ? (
+                <>
+                  <div className="stat-row">
+                    <span className="stat-label">Letters:</span>
+                    <span className="stat-value">{selectedNode.letterCount}</span>
+                  </div>
+                  <div className="stat-row">
+                    <span className="stat-label">Connections:</span>
+                    <span className="stat-value">{connectedRelationships.length}</span>
+                  </div>
 
-                <h4>Relationships</h4>
-                {getConnectedRelationships().length === 0 ? (
-                  <p className="no-relationships">No relationships recorded</p>
+                  <h4>Relationships</h4>
+                  {connectedRelationships.length === 0 ? (
+                    <p className="no-relationships">No relationships recorded</p>
+                  ) : (
+                    <ul className="relationship-list">
+                      {connectedRelationships.slice(0, 12).map((rel) => (
+                        <li key={rel.id}>
+                          <span className="rel-type">{formatRelationshipType(rel.relationshipType)}</span>
+                          <span
+                            className="rel-person"
+                            onClick={() =>
+                              setSelectedNodeId(
+                                rel.source === selectedNodeId ? rel.target : rel.source,
+                              )
+                            }
+                          >
+                            {getRelatedPersonName(rel)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <button
+                    className="view-profile-btn"
+                    onClick={() => navigate(`/people/${selectedNodeId}`)}
+                  >
+                    View Full Profile
+                  </button>
+                </>
+              ) : (
+                <p className="discovery-tip">
+                  Select a person node to inspect their relationship web. Double-click a node for the full profile page.
+                </p>
+              )}
+
+              <div className="connector-block">
+                <h4>Top Connectors</h4>
+                {insights.connectorLeaders.length === 0 ? (
+                  <p className="no-relationships">No connectors yet</p>
                 ) : (
-                  <ul className="relationship-list">
-                    {getConnectedRelationships().map((rel) => (
-                      <li key={rel.id}>
-                        <span className="rel-type">{formatRelationshipType(rel.relationshipType)}</span>
-                        <span
-                          className="rel-person"
-                          onClick={() => navigate(`/people/${rel.source === selectedNodeId ? rel.target : rel.source}`)}
-                        >
-                          {getRelatedPersonName(rel)}
-                        </span>
+                  <ul className="connector-list">
+                    {insights.connectorLeaders.map((connector) => (
+                      <li key={connector.id}>
+                        <button type="button" onClick={() => setSelectedNodeId(connector.id)}>
+                          <span>{connector.name}</span>
+                          <small>{connector.degree} links · {connector.letterCount} letters</small>
+                        </button>
                       </li>
                     ))}
                   </ul>
                 )}
-
-                <button
-                  className="view-profile-btn"
-                  onClick={() => navigate(`/people/${selectedNodeId}`)}
-                >
-                  View Full Profile
-                </button>
               </div>
             </div>
-          )}
+          </div>
         </div>
 
         <div className="graph-instructions">
@@ -216,9 +360,9 @@ export default function ExplorePage() {
           <ul>
             <li>Drag to pan the graph</li>
             <li>Scroll to zoom in/out</li>
-            <li>Click a person to see their relationships</li>
-            <li>Double-click to view their profile page</li>
-            <li>Drag nodes to rearrange the graph</li>
+            <li>Click a person to inspect their nearby network</li>
+            <li>Double-click a person to open their full profile</li>
+            <li>Use filters to reveal specific relationship storylines</li>
           </ul>
         </div>
       </div>
@@ -229,20 +373,20 @@ export default function ExplorePage() {
 
 function formatRelationshipType(type: string): string {
   const labels: Record<string, string> = {
-    'spouse': 'Spouse of',
-    'fiancé/fiancée': 'Fiancé(e) of',
-    'romantic-partner': 'Romantic partner of',
-    'parent-child': 'Parent/Child of',
-    'sibling': 'Sibling of',
-    'grandparent-grandchild': 'Grandparent/Grandchild of',
-    'aunt-uncle-niece-nephew': 'Aunt/Uncle or Niece/Nephew of',
-    'cousin': 'Cousin of',
-    'in-law': 'In-law of',
-    'friend': 'Friend of',
-    'acquaintance': 'Acquaintance of',
-    'business-associate': 'Business associate of',
-    'employer-employee': 'Employer/Employee of',
-    'unknown': 'Connected to',
+    spouse: 'Spouse',
+    'fiancé/fiancée': 'Fiancé(e)',
+    'romantic-partner': 'Romantic Partner',
+    'parent-child': 'Parent/Child',
+    sibling: 'Sibling',
+    'grandparent-grandchild': 'Grandparent/Grandchild',
+    'aunt-uncle-niece-nephew': 'Aunt/Uncle or Niece/Nephew',
+    cousin: 'Cousin',
+    'in-law': 'In-law',
+    friend: 'Friend',
+    acquaintance: 'Acquaintance',
+    'business-associate': 'Business Associate',
+    'employer-employee': 'Employer/Employee',
+    unknown: 'Connected',
   };
   return labels[type] || type;
 }

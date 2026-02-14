@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getCollectionByCode, type CollectionWithLetters } from '../api/collections';
 import LetterCard from '../components/LetterCard/LetterCard';
@@ -67,6 +67,32 @@ export default function CollectionDetailPage() {
     );
   }
 
+  const topCorrespondents = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const letter of collection.letters) {
+      const sender = letter.metadata.sender?.trim();
+      const recipient = letter.metadata.recipient?.trim();
+      if (sender) counts.set(sender, (counts.get(sender) || 0) + 1);
+      if (recipient) counts.set(recipient, (counts.get(recipient) || 0) + 1);
+    }
+
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [collection.letters]);
+
+  const dateRange = useMemo(() => {
+    const values = collection.letters
+      .map((letter) => letter.metadata.date || letter.metadata.dateRaw)
+      .filter(Boolean) as string[];
+
+    if (values.length === 0) return null;
+
+    const sorted = [...values].sort();
+    return { start: sorted[0], end: sorted[sorted.length - 1] };
+  }, [collection.letters]);
+
   return (
     <div className="body-layout">
       <Breadcrumb
@@ -87,6 +113,33 @@ export default function CollectionDetailPage() {
         )}
 
         <p className="letter-count-text">{collection.letterCount} letters in this collection</p>
+
+        <div className="collection-insight-grid">
+          <div className="insight-card">
+            <span>Date Span</span>
+            <strong>
+              {dateRange ? `${dateRange.start} → ${dateRange.end}` : 'Unknown'}
+            </strong>
+          </div>
+          <div className="insight-card">
+            <span>Top Correspondents</span>
+            <strong>{topCorrespondents.length > 0 ? topCorrespondents.length : 0}</strong>
+          </div>
+        </div>
+
+        {topCorrespondents.length > 0 && (
+          <div className="top-correspondents">
+            <h3>Frequent Names in This Collection</h3>
+            <ul>
+              {topCorrespondents.map((person) => (
+                <li key={person.name}>
+                  <span>{person.name}</span>
+                  <small>{person.count} mentions</small>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="letter-grid">
           {collection.letters.map((letter) => (

@@ -16,6 +16,71 @@
   max-width: 600px;
 }
 
+.collections-summary {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.summary-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  background: var(--bg-light);
+}
+
+.summary-pill span {
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summary-pill strong {
+  color: var(--text);
+  font-size: var(--font-sm);
+}
+
+.collection-controls {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.collection-controls input,
+.collection-controls select,
+.collection-controls button {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-light);
+  color: var(--text);
+  padding: 0.5rem 0.75rem;
+  font-size: var(--font-sm);
+}
+
+.collection-controls input {
+  min-width: 260px;
+  flex: 1;
+}
+
+.collection-controls button {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.collection-controls button:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.collection-controls button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .loading-message {
   color: var(--text-muted);
   font-style: italic;
@@ -88,4 +153,12 @@
   font-size: var(--font-xs);
   font-weight: 600;
   color: var(--text-muted);
+}
+
+@media (max-width: 760px) {
+  .collection-controls input,
+  .collection-controls select,
+  .collection-controls button {
+    width: 100%;
+  }
 }

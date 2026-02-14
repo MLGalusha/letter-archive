@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listCollections, type CollectionInfo } from '../api/collections';
 import Footer from '../components/Footer/Footer';
@@ -9,6 +9,8 @@ export default function CollectionsPage() {
   const [collections, setCollections] = useState<CollectionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortMode, setSortMode] = useState<'letters-desc' | 'letters-asc' | 'title-asc'>('letters-desc');
 
   useEffect(() => {
     async function fetchCollections() {
@@ -30,6 +32,35 @@ export default function CollectionsPage() {
     navigate(`/collections/${code}`);
   };
 
+  const visibleCollections = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const filtered = collections.filter((collection) => {
+      if (!query) return true;
+      return (
+        (collection.title || '').toLowerCase().includes(query) ||
+        collection.collectionCode.toLowerCase().includes(query) ||
+        (collection.description || '').toLowerCase().includes(query)
+      );
+    });
+
+    return filtered.sort((a, b) => {
+      if (sortMode === 'letters-desc') return (b.letterCount || 0) - (a.letterCount || 0);
+      if (sortMode === 'letters-asc') return (a.letterCount || 0) - (b.letterCount || 0);
+      return (a.title || a.collectionCode).localeCompare(b.title || b.collectionCode);
+    });
+  }, [collections, searchQuery, sortMode]);
+
+  const totalLetters = useMemo(
+    () => collections.reduce((sum, collection) => sum + (collection.letterCount || 0), 0),
+    [collections],
+  );
+
+  const handleRandomCollection = () => {
+    if (visibleCollections.length === 0) return;
+    const index = Math.floor(Math.random() * visibleCollections.length);
+    handleCollectionClick(visibleCollections[index].collectionCode);
+  };
+
   return (
     <div className="body-layout">
       <div className="collections-browse-page">
@@ -39,11 +70,44 @@ export default function CollectionsPage() {
           correspondence or thematic grouping.
         </p>
 
+        <div className="collections-summary">
+          <div className="summary-pill">
+            <span>Collections</span>
+            <strong>{collections.length}</strong>
+          </div>
+          <div className="summary-pill">
+            <span>Published Letters</span>
+            <strong>{totalLetters}</strong>
+          </div>
+        </div>
+
+        <div className="collection-controls">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by title, code, or description..."
+            aria-label="Search collections"
+          />
+          <select
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
+            aria-label="Sort collections"
+          >
+            <option value="letters-desc">Most letters</option>
+            <option value="letters-asc">Fewest letters</option>
+            <option value="title-asc">Title A-Z</option>
+          </select>
+          <button onClick={handleRandomCollection} disabled={visibleCollections.length === 0}>
+            Random Collection
+          </button>
+        </div>
+
         {loading && <p className="loading-message">Loading collections...</p>}
         {error && <p className="error-message">{error}</p>}
 
         <div className="public-collections-grid">
-          {collections.map((collection) => (
+          {visibleCollections.map((collection) => (
             <div
               key={collection.id}
               className="public-collection-card"
@@ -59,10 +123,10 @@ export default function CollectionsPage() {
           ))}
         </div>
 
-        {!loading && collections.length === 0 && !error && (
+        {!loading && visibleCollections.length === 0 && !error && (
           <div className="no-results">
-            <p>No collections available yet.</p>
-            <p className="no-results-hint">Check back later for published letters.</p>
+            <p>No matching collections found.</p>
+            <p className="no-results-hint">Try a different search or sorting strategy.</p>
           </div>
         )}
       </div>

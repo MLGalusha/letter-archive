@@ -212,7 +212,14 @@ When sender/recipient names are updated:
 
 | File | Purpose |
 |------|---------|
-| [services/entities.ts](../../backend/src/services/entities.ts) | Entity CRUD, matching, merge, duplicate suggestions |
+| [services/entities.ts](../../backend/src/services/entities.ts) | Compatibility barrel that re-exports entity service modules |
+| [services/entities/matching.ts](../../backend/src/services/entities/matching.ts) | Fuzzy matching for people/places |
+| [services/entities/persons.ts](../../backend/src/services/entities/persons.ts) | Person CRUD, stats, duplicate suggestions, merge details |
+| [services/entities/places.ts](../../backend/src/services/entities/places.ts) | Place CRUD, stats, duplicate suggestions, merge details |
+| [services/entities/junctions.ts](../../backend/src/services/entities/junctions.ts) | Letter-person/place link CRUD + enriched letter lookups |
+| [services/entities/review-queue.ts](../../backend/src/services/entities/review-queue.ts) | Entity review queue CRUD and stats |
+| [services/entities/relationships.ts](../../backend/src/services/entities/relationships.ts) | Person relationship CRUD and query helpers |
+| [services/entities/extraction.ts](../../backend/src/services/entities/extraction.ts) | Entity extraction processing/orchestration helpers |
 | [routes/admin/entities.ts](../../backend/src/routes/admin/entities.ts) | API endpoints |
 | [pages/admin/PeoplePage.tsx](../../frontend/src/pages/admin/PeoplePage.tsx) | People management UI |
 | [pages/admin/PlacesPage.tsx](../../frontend/src/pages/admin/PlacesPage.tsx) | Places management UI |

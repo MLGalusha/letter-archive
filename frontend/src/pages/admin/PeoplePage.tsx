@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button, Icon, Modal } from "../../components/common";
 import { useToast } from "../../contexts/ToastContext";
 import {
@@ -29,12 +29,14 @@ import "./PeoplePage.css";
 
 export default function PeoplePage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
 
   // Main state
   const [persons, setPersons] = useState<PersonWithCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [deepLinkedEntityId, setDeepLinkedEntityId] = useState<string | null>(null);
 
   // Selected person for detail view
   const [selectedPerson, setSelectedPerson] = useState<PersonWithCount | null>(null);
@@ -110,6 +112,30 @@ export default function PeoplePage() {
   useEffect(() => {
     fetchPersons();
   }, [fetchPersons]);
+
+  const deepLinkedPersonId = searchParams.get("personId");
+
+  useEffect(() => {
+    if (!deepLinkedPersonId || persons.length === 0) return;
+
+    const matched = persons.find((person) => person.id === deepLinkedPersonId);
+    if (matched) {
+      setSelectedPerson(matched);
+      setDeepLinkedEntityId(matched.id);
+      showToast(`Opened ${matched.canonicalName}`, "info");
+    } else {
+      showToast("Linked person was not found", "error");
+    }
+
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("personId");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [deepLinkedPersonId, persons, setSearchParams, showToast]);
 
   // Fetch relationships when person is selected
   useEffect(() => {
@@ -339,6 +365,27 @@ export default function PeoplePage() {
       : relationship.personAName;
   };
 
+  const getRelatedPersonId = (relationship: PersonRelationship) => {
+    if (!selectedPerson) return null;
+    return relationship.personAId === selectedPerson.id
+      ? relationship.personBId
+      : relationship.personAId;
+  };
+
+  const handleOpenRelatedPerson = (relationship: PersonRelationship) => {
+    const relatedId = getRelatedPersonId(relationship);
+    if (!relatedId) return;
+
+    const related = persons.find((person) => person.id === relatedId);
+    if (related) {
+      setSelectedPerson(related);
+      setDeepLinkedEntityId(related.id);
+      return;
+    }
+
+    navigate(`/admin/entities/people?personId=${relatedId}`);
+  };
+
   // Handle generate biography
   const handleGenerateBiography = async () => {
     if (!selectedPerson) return;
@@ -496,7 +543,10 @@ export default function PeoplePage() {
           selectedEntityId={selectedPerson?.id ?? null}
           selectedIds={selectedIds}
           onToggleSelect={handleToggleSelect}
-          onSelectItem={setSelectedPerson}
+          onSelectItem={(person) => {
+            setSelectedPerson(person);
+            setDeepLinkedEntityId(null);
+          }}
           onSelectAll={handleSelectAll}
           onOpenBulkMerge={() => setShowBulkMergeModal(true)}
           onClearSelection={handleClearSelection}
@@ -540,6 +590,9 @@ export default function PeoplePage() {
               </div>
 
               <div className="detail-section">
+                {deepLinkedEntityId === selectedPerson.id && (
+                  <div className="jump-context-banner">Opened from linked entity</div>
+                )}
                 <h3>Details</h3>
                 <div className="detail-field">
                   <span className="field-label">Letters:</span>
@@ -645,9 +698,13 @@ export default function PeoplePage() {
                             {PERSON_RELATIONSHIP_OPTIONS.find((t) => t.value === rel.relationshipType)?.label ||
                               rel.relationshipType}
                           </span>
-                          <span className="relationship-person">
+                          <button
+                            type="button"
+                            className="relationship-person-btn"
+                            onClick={() => handleOpenRelatedPerson(rel)}
+                          >
                             {getRelatedPersonName(rel)}
-                          </span>
+                          </button>
                         </div>
                         <button
                           className="delete-relationship"

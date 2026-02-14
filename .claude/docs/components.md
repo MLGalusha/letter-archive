@@ -111,7 +111,7 @@ Location: `frontend/src/pages/admin/LetterReview/`
 - `AddEntityModal.tsx`
   - Reusable modal for adding linked people or places.
 - `EditableEntityItem.tsx`
-  - Inline editable linked entity row used by `MetadataSection`.
+  - Inline editable linked entity row used by `MetadataSection`, including quick-open action to jump to the matching admin People/Places record.
 
 `frontend/src/pages/admin/LetterReviewPage.tsx` now owns state and handlers, then composes these sub-components via props.
 
@@ -153,6 +153,15 @@ Location: `frontend/src/pages/admin/EntityManagement/`
   - Shared entity list/suggestions/search/selection panel used by both `PeoplePage` and `PlacesPage`.
 
 `frontend/src/pages/admin/PeoplePage.tsx` and `frontend/src/pages/admin/PlacesPage.tsx` now reuse this component for the common entity-management list workflow and keep entity-specific detail panels/modals local.
+
+## Admin Relationships Components
+
+Location: `frontend/src/pages/admin/`
+
+- `RelationshipsPage.tsx`
+  - Relationships control center with table/graph modes, quality insights cards, confidence/type/search filters, inline edit modal, and direct navigation to People records.
+- `relationships-utils.ts`
+  - Shared filtering and analytics helpers (`filterRelationships`, `buildRelationshipInsights`) used by the relationships page and covered by unit tests.
 
 ## Shared Enum Options
 

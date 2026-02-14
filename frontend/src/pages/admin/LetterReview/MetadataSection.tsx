@@ -82,6 +82,8 @@ interface MetadataSectionProps {
   // Add entity modals
   onShowAddPersonModal: (show: boolean) => void;
   onShowAddPlaceModal: (show: boolean) => void;
+  onOpenLinkedPerson: (personId: string) => void;
+  onOpenLinkedPlace: (placeId: string) => void;
 
   // General state
   saving: boolean;
@@ -140,6 +142,8 @@ export default function MetadataSection({
   onSetLetter,
   onShowAddPersonModal,
   onShowAddPlaceModal,
+  onOpenLinkedPerson,
+  onOpenLinkedPlace,
   saving,
   showToast,
 }: MetadataSectionProps) {
@@ -614,6 +618,8 @@ export default function MetadataSection({
                         role={lp.role}
                         confidence={lp.confidence}
                         isVerified={letter.metadataContentStatus === "VERIFIED"}
+                        onOpenEntity={() => onOpenLinkedPerson(lp.personId)}
+                        openEntityLabel={`Open ${lp.canonicalName} in People`}
                         onSave={async (newName) => {
                           const updated = await onUpdateLinkedPerson(lp.id, newName);
                           onSetLetter(updated);
@@ -656,6 +662,8 @@ export default function MetadataSection({
                         role={lpl.role}
                         confidence={lpl.confidence}
                         isVerified={letter.metadataContentStatus === "VERIFIED"}
+                        onOpenEntity={() => onOpenLinkedPlace(lpl.placeId)}
+                        openEntityLabel={`Open ${lpl.canonicalName} in Places`}
                         onSave={async (newName) => {
                           const updated = await onUpdateLinkedPlace(lpl.id, newName);
                           onSetLetter(updated);

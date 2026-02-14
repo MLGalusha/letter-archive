@@ -11,6 +11,8 @@ export default function EditableEntityItem({
   onSave,
   onRemove,
   isVerified,
+  onOpenEntity,
+  openEntityLabel,
 }: {
   id: string;
   name: string;
@@ -19,6 +21,8 @@ export default function EditableEntityItem({
   onSave: (newName: string) => Promise<void>;
   onRemove?: () => Promise<void>;
   isVerified?: boolean;
+  onOpenEntity?: () => void;
+  openEntityLabel?: string;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(name);
@@ -96,6 +100,17 @@ export default function EditableEntityItem({
       )}
       <span className={`entity-role role-${role}`}>{role}</span>
       <span className="entity-confidence">{confidence}%</span>
+      {onOpenEntity && (
+        <button
+          type="button"
+          className="entity-open-btn"
+          onClick={onOpenEntity}
+          title={openEntityLabel ?? "Open linked entity"}
+          aria-label={openEntityLabel ?? `Open ${name}`}
+        >
+          ↗
+        </button>
+      )}
       {onRemove && !isVerified && (
         <button
           type="button"

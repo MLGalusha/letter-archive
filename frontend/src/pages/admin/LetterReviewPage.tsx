@@ -1296,6 +1296,20 @@ export default function LetterReviewPage() {
     [letterId, showToast],
   );
 
+  const handleOpenLinkedPerson = useCallback(
+    (personId: string) => {
+      navigate(`/admin/entities/people?personId=${personId}`);
+    },
+    [navigate],
+  );
+
+  const handleOpenLinkedPlace = useCallback(
+    (placeId: string) => {
+      navigate(`/admin/entities/places?placeId=${placeId}`);
+    },
+    [navigate],
+  );
+
   // Line highlighting - update on cursor move
   useEffect(() => {
     const isEditing =
@@ -1596,6 +1610,8 @@ export default function LetterReviewPage() {
               onSetLetter={(updatedLetter) => setLetter(updatedLetter)}
               onShowAddPersonModal={setShowAddPersonModal}
               onShowAddPlaceModal={setShowAddPlaceModal}
+              onOpenLinkedPerson={handleOpenLinkedPerson}
+              onOpenLinkedPlace={handleOpenLinkedPlace}
               saving={saving}
               showToast={showToast}
             />

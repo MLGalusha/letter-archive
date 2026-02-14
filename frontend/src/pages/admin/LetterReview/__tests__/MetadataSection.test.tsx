@@ -78,6 +78,8 @@ const buildProps = (overrides: Partial<ComponentProps<typeof MetadataSection>> =
     onSetLetter: vi.fn(),
     onShowAddPersonModal: vi.fn(),
     onShowAddPlaceModal: vi.fn(),
+    onOpenLinkedPerson: vi.fn(),
+    onOpenLinkedPlace: vi.fn(),
     saving: false,
     showToast: vi.fn(),
     ...overrides,

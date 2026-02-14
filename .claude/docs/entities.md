@@ -161,6 +161,8 @@ created_at  TIMESTAMP
 - Duplicate suggestions section (collapsible)
 - Side-by-side comparison modal before merging
 - Biography generation and verification
+- Supports deep-link query param `?personId=<uuid>` to open a specific person directly (used by Letter Review linked entity jump actions)
+- Relationship chips in the person detail panel are clickable for fast in-page pivoting to related people
 
 ### Places Page (`/admin/entities/places`)
 - Lists all canonical places
@@ -170,6 +172,15 @@ created_at  TIMESTAMP
 - Bulk merge (select master, merge all others)
 - Duplicate suggestions section (collapsible)
 - Side-by-side comparison modal before merging
+- Supports deep-link query param `?placeId=<uuid>` to open a specific place directly (used by Letter Review linked entity jump actions)
+
+### Relationships Page (`/admin/entities/relationships`)
+- Table + graph views for person-to-person relationships
+- Quality/coverage insights cards (total links, unique people, average confidence, low-confidence count)
+- Multi-filter table (search, type, min confidence)
+- Edit modal for relationship type, confidence, and notes
+- Add relationship modal with person lookup + confidence/notes
+- Direct person navigation links into `/admin/entities/people?personId=<uuid>`
 
 ### Entity Review Page (`/admin/entities/:type/:id`)
 - View entity details

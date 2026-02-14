@@ -271,6 +271,29 @@ Delete place (removes links).
 
 ---
 
+## Relationships (Admin)
+
+Routes: `backend/src/routes/admin/relationships.ts`
+
+### GET /admin/relationships
+List all person-to-person relationships for admin table/review UIs.
+
+### GET /admin/relationships/:id
+Get a single relationship by ID.
+
+### POST /admin/relationships
+Create relationship:
+`{ personAId, personBId, relationshipType, confidence?, notes?, discoveredInLetterId? }`
+
+### PUT /admin/relationships/:id
+Update relationship fields:
+`{ relationshipType?, confidence?, notes? }`
+
+### DELETE /admin/relationships/:id
+Delete relationship.
+
+---
+
 ## Uploads
 
 ### POST /admin/uploads

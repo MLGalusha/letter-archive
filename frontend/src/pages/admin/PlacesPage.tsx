@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button, Modal } from "../../components/common";
 import { useToast } from "../../contexts/ToastContext";
 import {
@@ -21,12 +21,14 @@ import "./PlacesPage.css";
 
 export default function PlacesPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
 
   // Main state
   const [places, setPlaces] = useState<PlaceWithCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [deepLinkedEntityId, setDeepLinkedEntityId] = useState<string | null>(null);
 
   // Selected place for detail view
   const [selectedPlace, setSelectedPlace] = useState<PlaceWithCount | null>(null);
@@ -88,6 +90,30 @@ export default function PlacesPage() {
   useEffect(() => {
     fetchPlaces();
   }, [fetchPlaces]);
+
+  const deepLinkedPlaceId = searchParams.get("placeId");
+
+  useEffect(() => {
+    if (!deepLinkedPlaceId || places.length === 0) return;
+
+    const matched = places.find((place) => place.id === deepLinkedPlaceId);
+    if (matched) {
+      setSelectedPlace(matched);
+      setDeepLinkedEntityId(matched.id);
+      showToast(`Opened ${matched.canonicalName}`, "info");
+    } else {
+      showToast("Linked place was not found", "error");
+    }
+
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("placeId");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [deepLinkedPlaceId, places, setSearchParams, showToast]);
 
   // Filtered places
   const filteredPlaces = useMemo(() => {
@@ -327,7 +353,10 @@ export default function PlacesPage() {
           selectedEntityId={selectedPlace?.id ?? null}
           selectedIds={selectedIds}
           onToggleSelect={handleToggleSelect}
-          onSelectItem={setSelectedPlace}
+          onSelectItem={(place) => {
+            setSelectedPlace(place);
+            setDeepLinkedEntityId(null);
+          }}
           onSelectAll={handleSelectAll}
           onOpenBulkMerge={() => setShowBulkMergeModal(true)}
           onClearSelection={handleClearSelection}
@@ -378,6 +407,9 @@ export default function PlacesPage() {
               </div>
 
               <div className="detail-section">
+                {deepLinkedEntityId === selectedPlace.id && (
+                  <div className="jump-context-banner">Opened from linked entity</div>
+                )}
                 <h3>Details</h3>
                 <div className="detail-field">
                   <span className="field-label">Letters:</span>

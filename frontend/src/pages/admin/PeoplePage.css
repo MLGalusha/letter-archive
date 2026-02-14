@@ -241,6 +241,18 @@ body.dark .people-page .aliases-indicator {
   color: var(--text);
 }
 
+.jump-context-banner {
+  margin-bottom: var(--spacing-sm);
+  padding: 0.4rem 0.65rem;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+}
+
 /* Relationships list */
 .relationships-list {
   display: flex;
@@ -273,8 +285,19 @@ body.dark .people-page .aliases-indicator {
   font-weight: 500;
 }
 
-.relationship-person {
+.relationship-person-btn {
   font-weight: 500;
+  color: var(--text);
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.relationship-person-btn:hover {
+  color: var(--accent);
+  text-decoration: underline;
 }
 
 .delete-relationship {

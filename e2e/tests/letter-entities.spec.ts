@@ -115,6 +115,18 @@ test.describe('Letter Entity Linking', () => {
       // Don't actually click - just verify button exists
       await expect(removeBtn.first()).toBeVisible();
     });
+
+    test('can jump from linked person to admin people record', async ({ page }) => {
+      const openBtn = page.locator('.entity-open-btn[aria-label*=\"People\"]');
+
+      if (!(await openBtn.first().isVisible().catch(() => false))) {
+        test.skip(true, 'No linked person jump button visible');
+        return;
+      }
+
+      await openBtn.first().click();
+      await expect(page).toHaveURL(/\/admin\/entities\/people\?personId=/);
+    });
   });
 
   test.describe('Place Link Management', () => {
@@ -139,6 +151,18 @@ test.describe('Letter Entity Linking', () => {
       }
 
       await expect(removeBtn.first()).toBeVisible();
+    });
+
+    test('can jump from linked place to admin places record', async ({ page }) => {
+      const openBtn = page.locator('.entity-open-btn[aria-label*=\"Places\"]');
+
+      if (!(await openBtn.first().isVisible().catch(() => false))) {
+        test.skip(true, 'No linked place jump button visible');
+        return;
+      }
+
+      await openBtn.first().click();
+      await expect(page).toHaveURL(/\/admin\/entities\/places\?placeId=/);
     });
   });
 

@@ -1349,6 +1349,26 @@
   color: var(--text-muted);
 }
 
+.entity-open-btn {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.entity-open-btn:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+  background: var(--bg-light);
+}
+
 .entity-name.editable {
   cursor: pointer;
   padding: 2px 4px;
@@ -1967,4 +1987,3 @@
 .confirm-dialog .btn-confirm:hover {
   background: #d84315;
 }
-

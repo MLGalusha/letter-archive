@@ -267,6 +267,18 @@ body.dark .places-page .search-box input::placeholder {
   color: var(--text);
 }
 
+.places-page .jump-context-banner {
+  margin-bottom: var(--spacing-sm);
+  padding: 0.4rem 0.65rem;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+}
+
 /* Loading & empty states */
 .places-page .loading-state,
 .places-page .empty-state {

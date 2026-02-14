@@ -1,7 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin } from './utils/test-helpers';
-
-const API_BASE = 'http://localhost:3001';
+import { API_BASE_URL, loginAsAdmin } from './utils/test-helpers';
 
 /**
  * E2E tests for Collection Analysis Feature
@@ -65,7 +63,7 @@ test.describe('Collection Analysis', () => {
 test.describe('Collection Analysis API', () => {
   test('analyze endpoint returns analysis results', async ({ request }) => {
     // Get collections first
-    const collectionsRes = await request.get(`${API_BASE}/admin/collections`);
+    const collectionsRes = await request.get(`${API_BASE_URL}/admin/collections`);
     const collections = await collectionsRes.json();
 
     if (!collections || collections.length === 0) {
@@ -81,7 +79,9 @@ test.describe('Collection Analysis API', () => {
     }
 
     // Call analyze endpoint
-    const analyzeRes = await request.post(`${API_BASE}/admin/collections/${collectionWithLetters.collectionCode}/analyze`);
+    const analyzeRes = await request.post(
+      `${API_BASE_URL}/admin/collections/${collectionWithLetters.collectionCode}/analyze`
+    );
     expect(analyzeRes.status()).toBe(200);
 
     const result = await analyzeRes.json();
@@ -108,7 +108,9 @@ test.describe('Collection Analysis API', () => {
   });
 
   test('analyze endpoint returns 404 for invalid collection', async ({ request }) => {
-    const analyzeRes = await request.post(`${API_BASE}/admin/collections/INVALID999/analyze`);
+    const analyzeRes = await request.post(
+      `${API_BASE_URL}/admin/collections/INVALID999/analyze`
+    );
     expect(analyzeRes.status()).toBe(404);
   });
 });

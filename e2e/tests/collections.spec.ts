@@ -119,16 +119,15 @@ test.describe('Collections Browse', () => {
       await page.waitForURL(/\/collections\//);
       await page.waitForLoadState('networkidle');
 
-      // Should show letter cards or letter list
-      const letterCards = page.locator(SELECTORS.public.letterCard);
-      const letterList = page.locator('.letter-list, .letters-grid');
-      const emptyState = page.locator('.no-results, .empty-state');
+      await expect(page.locator('.letter-count-text')).toBeVisible();
+      const letterCards = page.locator('.letter-grid > div');
+      const letterCount = await letterCards.count();
 
-      const hasCards = await letterCards.first().isVisible().catch(() => false);
-      const hasList = await letterList.isVisible().catch(() => false);
-      const hasEmpty = await emptyState.isVisible().catch(() => false);
-
-      expect(hasCards || hasList || hasEmpty).toBe(true);
+      if (letterCount > 0) {
+        await expect(letterCards.first()).toBeVisible();
+      } else {
+        await expect(page.locator('.no-results')).toBeVisible();
+      }
     });
 
     test('clicking letter navigates to letter detail', async ({ page }) => {
@@ -146,14 +145,15 @@ test.describe('Collections Browse', () => {
       await page.waitForURL(/\/collections\//);
       await page.waitForLoadState('networkidle');
 
-      const letterCard = page.locator(SELECTORS.public.letterCard).first();
+      const letterCards = page.locator('.letter-grid > div');
+      const letterCount = await letterCards.count();
 
-      if (!(await letterCard.isVisible().catch(() => false))) {
+      if (letterCount === 0) {
         test.skip(true, 'No letters in this collection');
         return;
       }
 
-      await letterCard.click();
+      await letterCards.first().click();
       await page.waitForURL(/\/letter\//);
 
       expect(page.url()).toContain('/letter/');

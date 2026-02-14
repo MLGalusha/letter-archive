@@ -1,7 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin } from './utils/test-helpers';
-
-const API_BASE = 'http://localhost:3001';
+import { API_BASE_URL, loginAsAdmin } from './utils/test-helpers';
 
 /**
  * E2E tests for Relationship Graph Feature (Phase 4)
@@ -213,7 +211,7 @@ test.describe('Admin Relationships Page', () => {
 
 test.describe('Relationships API', () => {
   test('GET /relationships returns graph data structure', async ({ request }) => {
-    const response = await request.get(`${API_BASE}/relationships`);
+    const response = await request.get(`${API_BASE_URL}/relationships`);
     expect(response.status()).toBe(200);
 
     const data = await response.json();
@@ -240,7 +238,7 @@ test.describe('Relationships API', () => {
 
   test('GET /relationships/path/:personAId/:personBId returns path structure', async ({ request }) => {
     // First get some relationships to get person IDs
-    const relResponse = await request.get(`${API_BASE}/relationships`);
+    const relResponse = await request.get(`${API_BASE_URL}/relationships`);
     const relData = await relResponse.json();
 
     if (relData.nodes.length < 2) {
@@ -251,7 +249,9 @@ test.describe('Relationships API', () => {
     const personAId = relData.nodes[0].id;
     const personBId = relData.nodes[1].id;
 
-    const response = await request.get(`${API_BASE}/relationships/path/${personAId}/${personBId}`);
+    const response = await request.get(
+      `${API_BASE_URL}/relationships/path/${personAId}/${personBId}`
+    );
     expect(response.status()).toBe(200);
 
     const data = await response.json();
@@ -262,7 +262,7 @@ test.describe('Relationships API', () => {
   });
 
   test('GET /admin/relationships returns relationship list', async ({ request }) => {
-    const response = await request.get(`${API_BASE}/admin/relationships`);
+    const response = await request.get(`${API_BASE_URL}/admin/relationships`);
     expect(response.status()).toBe(200);
 
     const data = await response.json();
@@ -300,7 +300,7 @@ test.describe('Connection Finder', () => {
 
   test('selecting same person shows path of length 1', async ({ request }) => {
     // Get a person ID
-    const relResponse = await request.get(`${API_BASE}/relationships`);
+    const relResponse = await request.get(`${API_BASE_URL}/relationships`);
     const relData = await relResponse.json();
 
     if (relData.nodes.length < 1) {
@@ -311,7 +311,9 @@ test.describe('Connection Finder', () => {
     const personId = relData.nodes[0].id;
 
     // Same person path
-    const response = await request.get(`${API_BASE}/relationships/path/${personId}/${personId}`);
+    const response = await request.get(
+      `${API_BASE_URL}/relationships/path/${personId}/${personId}`
+    );
     expect(response.status()).toBe(200);
 
     const data = await response.json();

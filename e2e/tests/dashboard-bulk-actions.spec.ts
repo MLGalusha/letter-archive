@@ -30,36 +30,33 @@ test.describe('Dashboard Bulk Actions', () => {
     test('process menu shows transcribe option', async ({ page }) => {
       await page.locator(SELECTORS.dashboard.processBtn).click();
 
-      const transcribeOption = page.locator('.dropdown-menu').getByText('Transcribe');
+      const transcribeOption = page.getByRole('button', { name: /^Transcribe\b/ });
       await expect(transcribeOption).toBeVisible();
     });
 
     test('process menu shows extract metadata option', async ({ page }) => {
       await page.locator(SELECTORS.dashboard.processBtn).click();
 
-      const metadataOption = page.locator('.dropdown-menu').getByText('Extract Metadata');
+      const metadataOption = page.getByRole('button', { name: /^Extract Metadata\b/ });
       await expect(metadataOption).toBeVisible();
     });
 
     test('process menu shows clear transcriptions option (disabled when no selection)', async ({ page }) => {
       await page.locator(SELECTORS.dashboard.processBtn).click();
 
-      const clearOption = page.locator('.dropdown-menu').getByText('Clear Transcriptions');
+      const clearOption = page.getByRole('button', { name: /^Clear Transcriptions\b/ });
       await expect(clearOption).toBeVisible();
 
-      // Check if it has disabled class or attribute
-      const clearItem = page.locator('[class*="dropdown-item"]:has-text("Clear Transcriptions")');
-      await expect(clearItem).toHaveClass(/disabled/);
+      await expect(clearOption).toBeDisabled();
     });
 
     test('process menu shows delete option (disabled when no selection)', async ({ page }) => {
       await page.locator(SELECTORS.dashboard.processBtn).click();
 
-      const deleteOption = page.locator('.dropdown-menu').getByText('Delete');
+      const deleteOption = page.getByRole('button', { name: /^Delete\b/ });
       await expect(deleteOption).toBeVisible();
 
-      const deleteItem = page.locator('[class*="dropdown-item"]:has-text("Delete")');
-      await expect(deleteItem).toHaveClass(/disabled/);
+      await expect(deleteOption).toBeDisabled();
     });
 
     test('closes process menu when clicking outside', async ({ page }) => {
@@ -85,8 +82,8 @@ test.describe('Dashboard Bulk Actions', () => {
       await page.locator(SELECTORS.dashboard.processBtn).click();
 
       // Clear transcriptions option should now be enabled
-      const clearItem = page.locator('[class*="dropdown-item"]:has-text("Clear Transcriptions")');
-      await expect(clearItem).not.toHaveClass(/disabled/);
+      const clearItem = page.getByRole('button', { name: /^Clear Transcriptions\b/ });
+      await expect(clearItem).toBeEnabled();
     });
 
     test('delete option becomes enabled when rows are selected', async ({ page }) => {
@@ -95,8 +92,8 @@ test.describe('Dashboard Bulk Actions', () => {
 
       await page.locator(SELECTORS.dashboard.processBtn).click();
 
-      const deleteItem = page.locator('[class*="dropdown-item"]:has-text("Delete")');
-      await expect(deleteItem).not.toHaveClass(/disabled/);
+      const deleteItem = page.getByRole('button', { name: /^Delete\b/ });
+      await expect(deleteItem).toBeEnabled();
     });
 
     test('process menu shows selected count in descriptions', async ({ page }) => {
@@ -109,9 +106,10 @@ test.describe('Dashboard Bulk Actions', () => {
 
       await page.locator(SELECTORS.dashboard.processBtn).click();
 
-      // Check transcribe option shows selected count
-      const transcribeItem = page.locator('.dropdown-menu').getByText(/Process 2 selected/);
+      const transcribeItem = page.getByRole('button', { name: /^Transcribe Process 2 selected$/ });
+      const metadataItem = page.getByRole('button', { name: /Extract Metadata Process 2/ });
       await expect(transcribeItem).toBeVisible();
+      await expect(metadataItem).toBeVisible();
     });
   });
 
@@ -122,7 +120,7 @@ test.describe('Dashboard Bulk Actions', () => {
 
       await page.locator(SELECTORS.dashboard.processBtn).click();
 
-      const deleteOption = page.locator('[class*="dropdown-item"]:has-text("Delete")');
+      const deleteOption = page.getByRole('button', { name: /^Delete\b/ });
       await deleteOption.click();
 
       // Confirmation dialog should appear
@@ -136,13 +134,13 @@ test.describe('Dashboard Bulk Actions', () => {
       await page.locator(SELECTORS.dashboard.tableRow).first().click();
 
       await page.locator(SELECTORS.dashboard.processBtn).click();
-      await page.locator('[class*="dropdown-item"]:has-text("Delete")').click();
+      await page.getByRole('button', { name: /^Delete\b/ }).click();
 
       const dialog = page.locator(SELECTORS.modal.confirmDialog);
       await expect(dialog).toBeVisible();
 
       // Cancel
-      await page.locator(SELECTORS.modal.cancelBtn).click();
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
 
       await expect(dialog).not.toBeVisible();
     });
@@ -156,7 +154,7 @@ test.describe('Dashboard Bulk Actions', () => {
       await rows.nth(1).click({ modifiers: ['Shift'] });
 
       await page.locator(SELECTORS.dashboard.processBtn).click();
-      await page.locator('[class*="dropdown-item"]:has-text("Delete")').click();
+      await page.getByRole('button', { name: /^Delete\b/ }).click();
 
       const dialog = page.locator(SELECTORS.modal.confirmDialog);
       await expect(dialog).toContainText('2 letters');
@@ -169,7 +167,7 @@ test.describe('Dashboard Bulk Actions', () => {
       await page.locator(SELECTORS.dashboard.tableRow).first().click();
 
       await page.locator(SELECTORS.dashboard.processBtn).click();
-      await page.locator('[class*="dropdown-item"]:has-text("Clear Transcriptions")').click();
+      await page.getByRole('button', { name: /^Clear Transcriptions\b/ }).click();
 
       const dialog = page.locator(SELECTORS.modal.confirmDialog);
       await expect(dialog).toBeVisible();
@@ -181,11 +179,12 @@ test.describe('Dashboard Bulk Actions', () => {
       await page.locator(SELECTORS.dashboard.tableRow).first().click();
 
       await page.locator(SELECTORS.dashboard.processBtn).click();
-      await page.locator('[class*="dropdown-item"]:has-text("Clear Transcriptions")').click();
+      await page.getByRole('button', { name: /^Clear Transcriptions\b/ }).click();
 
-      await page.locator(SELECTORS.modal.cancelBtn).click();
+      const dialog = page.locator(SELECTORS.modal.confirmDialog);
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
 
-      await expect(page.locator(SELECTORS.modal.confirmDialog)).not.toBeVisible();
+      await expect(dialog).not.toBeVisible();
     });
   });
 
@@ -195,7 +194,7 @@ test.describe('Dashboard Bulk Actions', () => {
       await page.locator(SELECTORS.dashboard.tableRow).first().click();
 
       await page.locator(SELECTORS.dashboard.processBtn).click();
-      await page.locator('[class*="dropdown-item"]:has-text("Clear Metadata")').click();
+      await page.getByRole('button', { name: /^Clear Metadata\b/ }).click();
 
       const dialog = page.locator(SELECTORS.modal.confirmDialog);
       await expect(dialog).toBeVisible();
@@ -207,7 +206,7 @@ test.describe('Dashboard Bulk Actions', () => {
       await page.locator(SELECTORS.dashboard.tableRow).first().click();
 
       await page.locator(SELECTORS.dashboard.processBtn).click();
-      await page.locator('[class*="dropdown-item"]:has-text("Clear Metadata")').click();
+      await page.getByRole('button', { name: /^Clear Metadata\b/ }).click();
 
       const dialog = page.locator(SELECTORS.modal.confirmDialog);
       await expect(dialog).toContainText(/transcript/i);
@@ -219,7 +218,7 @@ test.describe('Dashboard Bulk Actions', () => {
       // Don't select anything, just click transcribe
       await page.locator(SELECTORS.dashboard.processBtn).click();
 
-      const transcribeOption = page.locator('.dropdown-menu').getByText('Transcribe').first();
+      const transcribeOption = page.getByRole('button', { name: /^Transcribe\b/ });
       await transcribeOption.click();
 
       // Should show toast or start processing
@@ -244,7 +243,7 @@ test.describe('Dashboard Bulk Actions', () => {
       await page.locator(SELECTORS.dashboard.processBtn).click();
 
       // Click the specific option for selected items
-      const transcribeOption = page.locator('[class*="dropdown-item"]:has-text("Transcribe")');
+      const transcribeOption = page.getByRole('button', { name: /^Transcribe\b/ });
       await transcribeOption.click();
 
       // Should trigger action
@@ -280,7 +279,7 @@ test.describe('Dashboard Bulk Actions', () => {
       await expect(dropdown).toBeVisible();
 
       // Click transcribe
-      await page.locator('.dropdown-menu').getByText('Transcribe').first().click();
+      await page.getByRole('button', { name: /^Transcribe\b/ }).click();
 
       // Menu should close
       await expect(dropdown).not.toBeVisible();

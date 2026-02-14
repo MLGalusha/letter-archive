@@ -44,9 +44,9 @@ async function findLetterWithExtras(page: Page): Promise<boolean> {
     await page.waitForURL(/\/admin\/letters\//);
     await page.waitForLoadState('networkidle');
 
-    // Check if this letter has extras (transcribe button visible)
-    const transcribeBtn = page.locator('.extra-content-section .transcribe-btn');
-    if (await transcribeBtn.isVisible()) {
+    // Extra section is rendered only for letters with transcribable extras.
+    const extraSection = page.locator('.extra-content-section');
+    if (await extraSection.isVisible().catch(() => false)) {
       return true;
     }
 
@@ -60,48 +60,44 @@ async function findLetterWithExtras(page: Page): Promise<boolean> {
 
 test.describe('Extra Content Transcription', () => {
 
-  test('extra content section is always visible on letter review page', async ({ page }) => {
+  test('extra content section is visible when letter has transcribable extras', async ({ page }) => {
     await loginAsAdmin(page);
-    await navigateToFirstLetter(page);
+    const hasExtras = await findLetterWithExtras(page);
 
-    // Extra content section should always be visible
+    if (!hasExtras) {
+      test.skip(true, 'No letters with extras found in test data');
+      return;
+    }
+
     const extraContentSection = page.locator('.extra-content-section');
     await expect(extraContentSection).toBeVisible();
 
-    // Should have the "Extra Content" header
     const header = page.locator('.extra-content-section h2');
     await expect(header).toHaveText('Extra Content');
   });
 
-  test('shows empty state message when letter has no extras', async ({ page }) => {
+  test('handles letters with and without extras', async ({ page }) => {
     await loginAsAdmin(page);
     await navigateToFirstLetter(page);
 
-    // Find the extra content section
+    // The section is conditionally rendered based on whether extras exist.
     const extraContentSection = page.locator('.extra-content-section');
-    await expect(extraContentSection).toBeVisible();
+    const hasSection = await extraContentSection.isVisible().catch(() => false);
 
-    // Either:
-    // 1. Empty state with "No extra content" message
-    // 2. Empty state with "Click Transcribe" message (has transcribable extras)
-    // 3. DynamicEditor with content (already transcribed)
-    // 4. Transcribe button visible (has extras to transcribe)
+    if (hasSection) {
+      const transcribeBtn = extraContentSection.locator('.transcribe-btn');
+      const verifyBtn = extraContentSection.locator('.verify-btn');
+      const verifiedInfo = extraContentSection.locator('.verified-info');
+      const editor = extraContentSection.locator('[contenteditable]');
 
-    const emptyState = extraContentSection.locator('.empty-state');
-    const transcribeBtn = extraContentSection.locator('.transcribe-btn');
-    const editor = extraContentSection.locator('[contenteditable]');
+      const hasTranscribeBtn = await transcribeBtn.isVisible().catch(() => false);
+      const hasVerifyBtn = await verifyBtn.isVisible().catch(() => false);
+      const hasVerifiedInfo = await verifiedInfo.isVisible().catch(() => false);
+      const hasEditor = await editor.isVisible().catch(() => false);
 
-    const hasEmptyState = await emptyState.isVisible();
-    const hasTranscribeBtn = await transcribeBtn.isVisible();
-    const hasEditor = await editor.isVisible();
-
-    // At least one of these should be true
-    expect(hasEmptyState || hasTranscribeBtn || hasEditor).toBe(true);
-
-    if (hasEmptyState) {
-      // Check the empty state message contains expected text
-      const text = await emptyState.textContent();
-      expect(text).toMatch(/No extra content|Click.*Transcribe/i);
+      expect(hasTranscribeBtn || hasVerifyBtn || hasVerifiedInfo || hasEditor).toBe(true);
+    } else {
+      await expect(extraContentSection).toHaveCount(0);
     }
   });
 

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { API_BASE_URL } from './utils/test-helpers';
 
 /**
  * E2E tests for Entity Extraction API (Prompt 2)
@@ -10,8 +11,6 @@ import { test, expect } from '@playwright/test';
  * These tests call the real OpenAI API and validate prompt quality.
  * Run with: npx playwright test entity-extraction-api
  */
-
-const API_BASE = 'http://localhost:3001';
 
 // Letter shape from the admin API list endpoint
 interface AdminLetterSummary {
@@ -92,7 +91,7 @@ test.describe('Entity Extraction API', () => {
   test.describe('POST /admin/letters/:id/regenerate-entities', () => {
     test('returns 404 for non-existent letter', async ({ request }) => {
       const res = await request.post(
-        `${API_BASE}/admin/letters/00000000-0000-0000-0000-000000000000/regenerate-entities`
+        `${API_BASE_URL}/admin/letters/00000000-0000-0000-0000-000000000000/regenerate-entities`
       );
       expect(res.status()).toBe(404);
       const body = await res.json();
@@ -101,7 +100,7 @@ test.describe('Entity Extraction API', () => {
 
     test('returns 400 for letter without transcription', async ({ request }) => {
       // Find a letter without transcription
-      const listRes = await request.get(`${API_BASE}/admin/letters?limit=50`);
+      const listRes = await request.get(`${API_BASE_URL}/admin/letters?limit=50`);
       const listBody = await listRes.json();
       const letters: AdminLetterSummary[] = listBody.letters || listBody;
 
@@ -115,7 +114,7 @@ test.describe('Entity Extraction API', () => {
       }
 
       const res = await request.post(
-        `${API_BASE}/admin/letters/${noTranscript.id}/regenerate-entities`
+        `${API_BASE_URL}/admin/letters/${noTranscript.id}/regenerate-entities`
       );
       // Should be 400 (no transcription) or 200 if it has some text
       expect([200, 400]).toContain(res.status());
@@ -130,7 +129,7 @@ test.describe('Entity Extraction API', () => {
 
     test.beforeAll(async ({ request }) => {
       // Find a letter with substantial transcription text
-      const listRes = await request.get(`${API_BASE}/admin/letters?limit=50`);
+      const listRes = await request.get(`${API_BASE_URL}/admin/letters?limit=50`);
       const listBody = await listRes.json();
       const letters: AdminLetterSummary[] = listBody.letters || listBody;
 
@@ -162,7 +161,7 @@ test.describe('Entity Extraction API', () => {
       console.log(`\nTriggering entity extraction on letter: ${testLetterId}`);
 
       const res = await request.post(
-        `${API_BASE}/admin/letters/${testLetterId}/regenerate-entities`
+        `${API_BASE_URL}/admin/letters/${testLetterId}/regenerate-entities`
       );
 
       // Should succeed
@@ -308,7 +307,7 @@ test.describe('Entity Extraction API', () => {
 
       // Fetch the letter to get its current entity extraction
       const res = await request.get(
-        `${API_BASE}/admin/letters/${testLetterId}`
+        `${API_BASE_URL}/admin/letters/${testLetterId}`
       );
       const letter: AdminLetterSummary = await res.json();
 
@@ -376,7 +375,7 @@ test.describe('Entity Extraction API', () => {
       }
 
       const res = await request.get(
-        `${API_BASE}/admin/letters/${testLetterId}`
+        `${API_BASE_URL}/admin/letters/${testLetterId}`
       );
       const letter: AdminLetterSummary = await res.json();
 
@@ -425,7 +424,7 @@ test.describe('Entity Extraction API', () => {
       }
 
       const res = await request.get(
-        `${API_BASE}/admin/letters/${testLetterId}`
+        `${API_BASE_URL}/admin/letters/${testLetterId}`
       );
       const letter: AdminLetterSummary = await res.json();
 
@@ -485,7 +484,7 @@ test.describe('Entity Extraction API', () => {
       }
 
       const res = await request.get(
-        `${API_BASE}/admin/letters/${testLetterId}`
+        `${API_BASE_URL}/admin/letters/${testLetterId}`
       );
       const letter: AdminLetterSummary = await res.json();
 
@@ -529,7 +528,7 @@ test.describe('Entity Extraction API', () => {
 
     test('regenerate-metadata runs both phases', async ({ request }) => {
       // Find a letter with transcription
-      const listRes = await request.get(`${API_BASE}/admin/letters?limit=50`);
+      const listRes = await request.get(`${API_BASE_URL}/admin/letters?limit=50`);
       const listBody = await listRes.json();
       const letters: AdminLetterSummary[] = listBody.letters || listBody;
 
@@ -548,7 +547,7 @@ test.describe('Entity Extraction API', () => {
 
       // Trigger full metadata regeneration (synchronous — awaits completion)
       const res = await request.post(
-        `${API_BASE}/admin/letters/${withTranscript.id}/regenerate-metadata`
+        `${API_BASE_URL}/admin/letters/${withTranscript.id}/regenerate-metadata`
       );
 
       expect(res.status()).toBe(200);

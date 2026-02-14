@@ -41,7 +41,7 @@ test.describe('Admin Authentication', () => {
 
       // Should redirect to admin dashboard
       await page.waitForURL(/\/admin$/);
-      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Admin Panel');
+      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Dashboard');
     });
 
     test('shows error with invalid credentials', async ({ page }) => {
@@ -173,7 +173,7 @@ test.describe('Admin Authentication', () => {
       await page.waitForLoadState('networkidle');
 
       // Should still be on admin dashboard
-      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Admin Panel');
+      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Dashboard');
     });
 
     test('maintains session when navigating between admin pages', async ({ page }) => {
@@ -185,7 +185,7 @@ test.describe('Admin Authentication', () => {
 
       // Navigate back to dashboard (using browser back or direct navigation)
       await page.goto('/admin');
-      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Admin Panel');
+      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Dashboard');
     });
   });
 

@@ -144,3 +144,12 @@ Location: `frontend/src/pages/admin/UploadLetter/`
   - Shared upload page interfaces (`UploadedImage`, `LetterGroup`, `CollectionGroup`, `EditState`, `LightboxState`).
 
 `frontend/src/pages/admin/UploadLetterPage.tsx` now composes these components and focuses on upload workflow/state.
+
+## Admin Entity Management Components
+
+Location: `frontend/src/pages/admin/EntityManagement/`
+
+- `EntityListPanel.tsx`
+  - Shared entity list/suggestions/search/selection panel used by both `PeoplePage` and `PlacesPage`.
+
+`frontend/src/pages/admin/PeoplePage.tsx` and `frontend/src/pages/admin/PlacesPage.tsx` now reuse this component for the common entity-management list workflow and keep entity-specific detail panels/modals local.

@@ -21,9 +21,9 @@ import {
   type EntityMatch,
   type CanonicalPerson,
 } from "../../api/entities";
-import DuplicateSuggestions from "../../components/DuplicateSuggestions";
 import MergeComparison from "../../components/MergeComparison";
 import BulkMergeModal from "../../components/BulkMergeModal";
+import EntityListPanel from "./EntityManagement/EntityListPanel";
 import "./PeoplePage.css";
 
 const RELATIONSHIP_TYPES: { value: PersonRelationshipType; label: string }[] = [
@@ -498,89 +498,42 @@ export default function PeoplePage() {
 
       <div className="page-content">
         {/* Left: People List */}
-        <div className="people-list-panel">
-          {/* Duplicate Suggestions */}
-          <DuplicateSuggestions
-            key={refreshKey}
-            entityType="person"
-            onMerge={handleSuggestionMerge}
-            onRefresh={() => setRefreshKey((k) => k + 1)}
-          />
-
-          <div className="search-box">
-            <input
-              type="text"
-              placeholder="Search people..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-
-          {/* Bulk Selection Controls */}
-          {filteredPersons.length > 0 && (
-            <div className="bulk-controls">
-              <label className="select-all-checkbox">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.size === filteredPersons.length && filteredPersons.length > 0}
-                  onChange={handleSelectAll}
-                />
-                <span>Select All</span>
-              </label>
-              {selectedIds.size > 0 && (
-                <div className="bulk-actions">
-                  <span className="selected-count">{selectedIds.size} selected</span>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => setShowBulkMergeModal(true)}
-                    disabled={selectedIds.size < 2}
-                  >
-                    Merge Selected
-                  </Button>
-                  <button className="clear-selection-btn" onClick={handleClearSelection}>
-                    Clear
-                  </button>
-                </div>
-              )}
-            </div>
+        <EntityListPanel
+          entityType="person"
+          refreshKey={refreshKey}
+          onSuggestionMerge={handleSuggestionMerge}
+          onRefreshSuggestions={() => setRefreshKey((k) => k + 1)}
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          searchPlaceholder="Search people..."
+          items={filteredPersons}
+          loading={loading}
+          emptyMessage="No people found"
+          selectedEntityId={selectedPerson?.id ?? null}
+          selectedIds={selectedIds}
+          onToggleSelect={handleToggleSelect}
+          onSelectItem={setSelectedPerson}
+          onSelectAll={handleSelectAll}
+          onOpenBulkMerge={() => setShowBulkMergeModal(true)}
+          onClearSelection={handleClearSelection}
+          panelClassName="people-list-panel"
+          listClassName="people-list"
+          itemClassName="person-item"
+          contentClassName="person-content"
+          renderItemContent={(person) => (
+            <>
+              <div className="person-name">{person.canonicalName}</div>
+              <div className="person-meta">
+                {person.letterCount} letter{person.letterCount !== 1 && "s"}
+                {person.aliases && person.aliases.length > 0 && (
+                  <span className="aliases-indicator">
+                    +{person.aliases.length} alias{person.aliases.length !== 1 && "es"}
+                  </span>
+                )}
+              </div>
+            </>
           )}
-
-          {loading ? (
-            <div className="loading-state">Loading...</div>
-          ) : filteredPersons.length === 0 ? (
-            <div className="empty-state">No people found</div>
-          ) : (
-            <div className="people-list">
-              {filteredPersons.map((person) => (
-                <div
-                  key={person.id}
-                  className={`person-item ${selectedPerson?.id === person.id ? "selected" : ""} ${selectedIds.has(person.id) ? "checked" : ""}`}
-                >
-                  <input
-                    type="checkbox"
-                    className="item-checkbox"
-                    checked={selectedIds.has(person.id)}
-                    onChange={() => handleToggleSelect(person.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label={`Select ${person.canonicalName}`}
-                  />
-                  <div className="person-content" onClick={() => setSelectedPerson(person)}>
-                    <div className="person-name">{person.canonicalName}</div>
-                    <div className="person-meta">
-                      {person.letterCount} letter{person.letterCount !== 1 && "s"}
-                      {person.aliases && person.aliases.length > 0 && (
-                        <span className="aliases-indicator">
-                          +{person.aliases.length} alias{person.aliases.length !== 1 && "es"}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        />
 
         {/* Right: Person Detail */}
         <div className="person-detail-panel">

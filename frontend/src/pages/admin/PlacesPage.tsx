@@ -13,9 +13,9 @@ import {
   type EntityMatch,
 } from "../../api/entities";
 import type { PlaceType } from "../../types/Letter";
-import DuplicateSuggestions from "../../components/DuplicateSuggestions";
 import MergeComparison from "../../components/MergeComparison";
 import BulkMergeModal from "../../components/BulkMergeModal";
+import EntityListPanel from "./EntityManagement/EntityListPanel";
 import "./PlacesPage.css";
 
 const PLACE_TYPES: { value: PlaceType; label: string }[] = [
@@ -321,96 +321,49 @@ export default function PlacesPage() {
 
       <div className="page-content">
         {/* Left: Places List */}
-        <div className="places-list-panel">
-          {/* Duplicate Suggestions */}
-          <DuplicateSuggestions
-            key={refreshKey}
-            entityType="place"
-            onMerge={handleSuggestionMerge}
-            onRefresh={() => setRefreshKey((k) => k + 1)}
-          />
-
-          <div className="search-box">
-            <input
-              type="text"
-              placeholder="Search places..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-
-          {/* Bulk Selection Controls */}
-          {filteredPlaces.length > 0 && (
-            <div className="bulk-controls">
-              <label className="select-all-checkbox">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.size === filteredPlaces.length && filteredPlaces.length > 0}
-                  onChange={handleSelectAll}
-                />
-                <span>Select All</span>
-              </label>
-              {selectedIds.size > 0 && (
-                <div className="bulk-actions">
-                  <span className="selected-count">{selectedIds.size} selected</span>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => setShowBulkMergeModal(true)}
-                    disabled={selectedIds.size < 2}
-                  >
-                    Merge Selected
-                  </Button>
-                  <button className="clear-selection-btn" onClick={handleClearSelection}>
-                    Clear
-                  </button>
-                </div>
-              )}
-            </div>
+        <EntityListPanel
+          entityType="place"
+          refreshKey={refreshKey}
+          onSuggestionMerge={handleSuggestionMerge}
+          onRefreshSuggestions={() => setRefreshKey((k) => k + 1)}
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          searchPlaceholder="Search places..."
+          items={filteredPlaces}
+          loading={loading}
+          emptyMessage="No places found"
+          selectedEntityId={selectedPlace?.id ?? null}
+          selectedIds={selectedIds}
+          onToggleSelect={handleToggleSelect}
+          onSelectItem={setSelectedPlace}
+          onSelectAll={handleSelectAll}
+          onOpenBulkMerge={() => setShowBulkMergeModal(true)}
+          onClearSelection={handleClearSelection}
+          panelClassName="places-list-panel"
+          listClassName="places-list"
+          itemClassName="place-item"
+          contentClassName="place-content"
+          renderItemContent={(place) => (
+            <>
+              <div className="place-name">
+                {place.canonicalName}
+                {place.placeType && (
+                  <span className={`place-type-badge ${place.placeType}`}>
+                    {PLACE_TYPES.find((t) => t.value === place.placeType)?.label || place.placeType}
+                  </span>
+                )}
+              </div>
+              <div className="place-meta">
+                {place.letterCount} letter{place.letterCount !== 1 && "s"}
+                {place.aliases && place.aliases.length > 0 && (
+                  <span className="aliases-indicator">
+                    +{place.aliases.length} alias{place.aliases.length !== 1 && "es"}
+                  </span>
+                )}
+              </div>
+            </>
           )}
-
-          {loading ? (
-            <div className="loading-state">Loading...</div>
-          ) : filteredPlaces.length === 0 ? (
-            <div className="empty-state">No places found</div>
-          ) : (
-            <div className="places-list">
-              {filteredPlaces.map((place) => (
-                <div
-                  key={place.id}
-                  className={`place-item ${selectedPlace?.id === place.id ? "selected" : ""} ${selectedIds.has(place.id) ? "checked" : ""}`}
-                >
-                  <input
-                    type="checkbox"
-                    className="item-checkbox"
-                    checked={selectedIds.has(place.id)}
-                    onChange={() => handleToggleSelect(place.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label={`Select ${place.canonicalName}`}
-                  />
-                  <div className="place-content" onClick={() => setSelectedPlace(place)}>
-                    <div className="place-name">
-                      {place.canonicalName}
-                      {place.placeType && (
-                        <span className={`place-type-badge ${place.placeType}`}>
-                          {PLACE_TYPES.find((t) => t.value === place.placeType)?.label || place.placeType}
-                        </span>
-                      )}
-                    </div>
-                    <div className="place-meta">
-                      {place.letterCount} letter{place.letterCount !== 1 && "s"}
-                      {place.aliases && place.aliases.length > 0 && (
-                        <span className="aliases-indicator">
-                          +{place.aliases.length} alias{place.aliases.length !== 1 && "es"}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        />
 
         {/* Right: Place Detail */}
         <div className="place-detail-panel">

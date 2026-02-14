@@ -111,6 +111,11 @@
   opacity: 0.8;
 }
 
+.stat-item.stat-total .stat-label {
+  color: #ffffff;
+  opacity: 1;
+}
+
 .letters-list {
   display: flex;
   flex-direction: column;

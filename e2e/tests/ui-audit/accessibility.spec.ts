@@ -14,7 +14,7 @@ import {
 } from './helpers';
 
 // Output directory for accessibility reports
-const outputDir = path.join(process.cwd(), SCREENSHOT_DIR);
+const outputDir = path.resolve(process.cwd(), SCREENSHOT_DIR);
 
 test.beforeAll(async () => {
   if (!fs.existsSync(outputDir)) {

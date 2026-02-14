@@ -90,6 +90,14 @@
   text-decoration: underline;
 }
 
+body.dark .person-page .relationships-list a {
+  color: hsl(210 90% 72%);
+}
+
+body.dark .person-page .relationships-list a:hover {
+  color: hsl(210 95% 80%);
+}
+
 .relationship-type {
   color: var(--text-muted);
   margin-left: var(--spacing-sm);
@@ -125,6 +133,11 @@
   display: block;
   font-size: 0.85rem;
   opacity: 0.8;
+}
+
+.stat-item.stat-total .stat-label {
+  color: #ffffff;
+  opacity: 1;
 }
 
 .letters-list {

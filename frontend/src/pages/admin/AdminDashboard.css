@@ -629,7 +629,7 @@
 
 .filter-pill.filter-hidden {
   background: #e9ecef;
-  color: #6c757d;
+  color: #495057;
   border-color: #dee2e6;
 }
 
@@ -803,13 +803,13 @@
 /* Unified content filter pill colors (used for both transcript and metadata) */
 .filter-pill.filter-content-draft {
   background: #f0f0f0;
-  color: #6c757d;
+  color: #495057;
   border-color: #d6d8db;
 }
 
 .filter-pill.filter-content-edited {
   background: #fff3e0;
-  color: #e65100;
+  color: #9a3412;
   border-color: #ffcc80;
 }
 
@@ -1524,7 +1524,7 @@
   padding: 0.2rem 0.5rem;
   border-radius: var(--radius-sm);
   background: #e9ecef;
-  color: #6c757d;
+  color: #374151;
   border: solid 1px #dee2e6;
 }
 
@@ -1534,7 +1534,7 @@
   padding: 0.2rem 0.5rem;
   border-radius: var(--radius-sm);
   background: #fff3e0;
-  color: #e65100;
+  color: #9a3412;
   border: solid 1px #ffcc80;
 }
 

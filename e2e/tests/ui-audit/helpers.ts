@@ -38,6 +38,18 @@ export interface PageConfig {
   skip?: boolean;
 }
 
+const API_BASE_URL = process.env.VITE_API_URL || 'http://localhost:3002';
+
+async function fetchJson<T>(page: Page, url: string): Promise<T | null> {
+  try {
+    const response = await page.request.get(`${API_BASE_URL}${url}`);
+    if (!response.ok()) return null;
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * All pages to audit
  */
@@ -63,13 +75,10 @@ export const PUBLIC_PAGES: PageConfig[] = [
     path: '/collections/:code',
     requiresAuth: false,
     getPath: async (page) => {
-      // Go to collections page first to get a valid collection code
-      await page.goto('/collections');
-      await page.waitForLoadState('networkidle');
-      const firstCollection = page.locator('.public-collection-card, .collection-card, a[href^="/collections/"]').first();
-      if (await firstCollection.isVisible().catch(() => false)) {
-        const href = await firstCollection.getAttribute('href');
-        return href || null;
+      const collections = await fetchJson<Array<{ collectionCode: string; letterCount?: number }>>(page, '/collections');
+      const collection = collections?.find((c) => (c.letterCount ?? 0) > 0) ?? collections?.[0];
+      if (collection?.collectionCode) {
+        return `/collections/${collection.collectionCode}`;
       }
       return null;
     },
@@ -82,14 +91,9 @@ export const PUBLIC_PAGES: PageConfig[] = [
     path: '/letter/:id',
     requiresAuth: false,
     getPath: async (page) => {
-      // Find a letter to view
-      await page.goto('/');
-      await page.waitForLoadState('networkidle');
-      const firstLetter = page.locator('a[href^="/letter/"]').first();
-      if (await firstLetter.isVisible().catch(() => false)) {
-        const href = await firstLetter.getAttribute('href');
-        return href || null;
-      }
+      const letters = await fetchJson<{ letters: Array<{ id: string }> }>(page, '/letters?limit=1');
+      const letterId = letters?.letters?.[0]?.id;
+      if (letterId) return `/letter/${letterId}`;
       return null;
     },
     waitForReady: async (page) => {
@@ -103,14 +107,13 @@ export const PUBLIC_PAGES: PageConfig[] = [
     path: '/people/:id',
     requiresAuth: false,
     getPath: async (page) => {
-      // Find a person link
-      await page.goto('/explore');
-      await page.waitForLoadState('networkidle');
-      const personLink = page.locator('a[href^="/people/"]').first();
-      if (await personLink.isVisible().catch(() => false)) {
-        const href = await personLink.getAttribute('href');
-        return href || null;
-      }
+      const graph = await fetchJson<{ nodes: Array<{ id: string }> }>(page, '/relationships');
+      const graphPersonId = graph?.nodes?.[0]?.id;
+      if (graphPersonId) return `/people/${graphPersonId}`;
+
+      const people = await fetchJson<{ persons: Array<{ id: string }> }>(page, '/admin/entities/persons');
+      const personId = people?.persons?.[0]?.id;
+      if (personId) return `/people/${personId}`;
       return null;
     },
     waitForReady: async (page) => {
@@ -122,14 +125,9 @@ export const PUBLIC_PAGES: PageConfig[] = [
     path: '/places/:id',
     requiresAuth: false,
     getPath: async (page) => {
-      // Find a place link (might be on a letter page)
-      await page.goto('/');
-      await page.waitForLoadState('networkidle');
-      const placeLink = page.locator('a[href^="/places/"]').first();
-      if (await placeLink.isVisible().catch(() => false)) {
-        const href = await placeLink.getAttribute('href');
-        return href || null;
-      }
+      const places = await fetchJson<{ places: Array<{ id: string }> }>(page, '/admin/entities/places');
+      const placeId = places?.places?.[0]?.id;
+      if (placeId) return `/places/${placeId}`;
       return null;
     },
     waitForReady: async (page) => {
@@ -439,4 +437,4 @@ export async function checkCommonIssues(page: Page): Promise<UIIssue[]> {
 /**
  * Output directory for screenshots (absolute path)
  */
-export const SCREENSHOT_DIR = '/Users/masongalusha/Documents/CodeVault/letter-archive/e2e/ui-audit-output';
+export const SCREENSHOT_DIR = 'ui-audit-output';

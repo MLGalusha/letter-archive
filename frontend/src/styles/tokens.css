@@ -4,6 +4,7 @@
     --bg-light: hsl(0 0% 100%);
     --text: hsl(0 0% 5%);
     --text-muted: hsl(0 0% 30%);
+    --accent: hsl(220 70% 45%);
     --border: hsl(0 0% 70%);
     --gradient: linear-gradient(0deg, var(--bg), 95%, var(--bg-light));
     --gradient-hover: linear-gradient(0deg, var(--bg), var(--bg-light));
@@ -30,6 +31,7 @@ body.dark {
     --bg-light: hsl(0 0% 10%);
     --text: hsl(0 0% 95%);
     --text-muted: hsl(0 0% 65%); /* Improved from 70% for better contrast */
+    --accent: hsl(210 85% 42%);
     --border: hsl(0 0% 30%);
     --gradient: linear-gradient(0deg, var(--bg), 95%, var(--bg-light));
     --gradient-hover: linear-gradient(0deg, var(--bg), var(--bg-light));

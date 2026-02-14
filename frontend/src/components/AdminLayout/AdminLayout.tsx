@@ -119,7 +119,11 @@ export default function AdminLayout({ children, title, headerActions, fullHeight
           </div>
         </header>
 
-        <main className={`admin-content${fullHeight ? ' full-height' : ''}`}>
+        <main
+          className={`admin-content${fullHeight ? ' full-height' : ''}`}
+          tabIndex={0}
+          aria-label="Admin content"
+        >
           {children}
         </main>
       </div>

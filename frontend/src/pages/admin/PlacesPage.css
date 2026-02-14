@@ -41,6 +41,7 @@
   border-radius: var(--radius-md);
   font-size: var(--font-sm);
   background: var(--bg);
+  color: var(--text);
   box-sizing: border-box;
 }
 
@@ -51,7 +52,7 @@
 
 /* Ensure placeholder text has sufficient contrast in dark mode */
 body.dark .places-page .search-box input::placeholder {
-  color: #9e9e9e !important; /* Ensures 7:1 contrast ratio on dark bg */
+  color: #d5d5d5 !important;
   opacity: 1 !important;
 }
 

@@ -101,7 +101,12 @@ export default function RecentActivityTable({
 }: RecentActivityTableProps) {
   return (
     <>
-      <div className={`letters-table-container ${filteredLetters.length === 0 ? "empty" : ""}`}>
+      <div
+        className={`letters-table-container ${filteredLetters.length === 0 ? "empty" : ""}`}
+        tabIndex={0}
+        role="region"
+        aria-label="Letters table"
+      >
         <table className="letters-table">
           <colgroup>
             {visibleColumns.has("sender") && <col style={{ width: "12%" }} />}

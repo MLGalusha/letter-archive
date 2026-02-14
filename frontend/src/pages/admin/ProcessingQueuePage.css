@@ -70,6 +70,12 @@
   color: #2e7d32;
 }
 
+.pq-summary-chip.queued .pq-chip-label,
+.pq-summary-chip.success .pq-chip-label,
+.pq-summary-chip.failed .pq-chip-label {
+  color: #374151;
+}
+
 .pq-summary-chip.failed {
   background: #ffebee;
   border-color: #ef9a9a;
@@ -154,6 +160,10 @@
 
 .pq-status.failed {
   color: #c62828;
+}
+
+body.dark .pq-status.success {
+  color: #86efac;
 }
 
 .pq-error-hint {

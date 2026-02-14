@@ -97,3 +97,20 @@ Names: `upload`, `edit`, `check`, `delete`, `back`, `plus`, `save`, `process`, `
 
 <AutoResizeTextarea value={desc} onChange={setDesc} minHeight={80} />
 ```
+
+## Admin Letter Review Components
+
+Location: `frontend/src/pages/admin/LetterReview/`
+
+- `TranscriptionSection.tsx`
+  - Transcription editor UI, transcribe action, transcript verification status, and verified-edit tooltip.
+- `ExtraContentSection.tsx`
+  - Extra content editor UI for telegram/cover/ephemera transcription and verification.
+- `MetadataSection.tsx`
+  - Metadata form fields, AI sync/regenerate controls, linked entity editing, and notable quotes display.
+- `AddEntityModal.tsx`
+  - Reusable modal for adding linked people or places.
+- `EditableEntityItem.tsx`
+  - Inline editable linked entity row used by `MetadataSection`.
+
+`frontend/src/pages/admin/LetterReviewPage.tsx` now owns state and handlers, then composes these sub-components via props.

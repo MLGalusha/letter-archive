@@ -33,7 +33,6 @@ import {
   Icon,
   WorkflowBadge,
   ResizableSplitPane,
-  DynamicEditor,
   Dropdown,
   DropdownItem,
   type DynamicEditorRef,
@@ -46,181 +45,11 @@ import type {
   EmotionalTone,
   RelationshipType,
 } from "../../types/Letter";
+import TranscriptionSection from "./LetterReview/TranscriptionSection";
+import { ExtraContentSection } from "./LetterReview/ExtraContentSection";
+import MetadataSection from "./LetterReview/MetadataSection";
+import AddEntityModal from "./LetterReview/AddEntityModal";
 import "./LetterReviewPage.css";
-
-// V2 Metadata constants
-const EMOTIONAL_TONES: { value: EmotionalTone; label: string }[] = [
-  { value: "joyful", label: "Joyful" },
-  { value: "hopeful", label: "Hopeful" },
-  { value: "neutral", label: "Neutral" },
-  { value: "anxious", label: "Anxious" },
-  { value: "sad", label: "Sad" },
-  { value: "angry", label: "Angry" },
-  { value: "desperate", label: "Desperate" },
-];
-
-const RELATIONSHIP_TYPES: { value: RelationshipType; label: string }[] = [
-  { value: "spouse", label: "Spouse" },
-  { value: "fiancé/fiancée", label: "Fiancé/Fiancée" },
-  { value: "romantic-partner", label: "Romantic Partner" },
-  { value: "parent", label: "Parent" },
-  { value: "child", label: "Child" },
-  { value: "sibling", label: "Sibling" },
-  { value: "grandparent", label: "Grandparent" },
-  { value: "grandchild", label: "Grandchild" },
-  { value: "aunt/uncle", label: "Aunt/Uncle" },
-  { value: "nephew/niece", label: "Nephew/Niece" },
-  { value: "cousin", label: "Cousin" },
-  { value: "in-law", label: "In-Law" },
-  { value: "friend", label: "Friend" },
-  { value: "acquaintance", label: "Acquaintance" },
-  { value: "business-associate", label: "Business Associate" },
-  { value: "employer", label: "Employer" },
-  { value: "employee", label: "Employee" },
-  { value: "unknown", label: "Unknown" },
-];
-
-const PRIMARY_TOPICS = [
-  "family/marriage",
-  "family/children",
-  "family/death-grief",
-  "family/separation",
-  "family/reunion",
-  "health/illness",
-  "health/recovery",
-  "health/pregnancy-birth",
-  "work/employment",
-  "work/job-loss",
-  "finances/hardship",
-  "finances/prosperity",
-  "travel/journey",
-  "travel/immigration",
-  "home/moving",
-  "home/property",
-  "correspondence/news-sharing",
-  "correspondence/advice",
-  "correspondence/gratitude",
-  "correspondence/apology",
-  "war/service",
-  "war/homefront",
-  "religion/faith",
-  "community/local-events",
-  "daily-life/weather",
-  "daily-life/farming",
-  "daily-life/household",
-  "daily-life/social",
-];
-
-/**
- * Inline editable entity item component
- */
-function EditableEntityItem({
-  id,
-  name,
-  role,
-  confidence,
-  onSave,
-  onRemove,
-  isVerified,
-}: {
-  id: string;
-  name: string;
-  role: string;
-  confidence: number;
-  onSave: (newName: string) => Promise<void>;
-  onRemove?: () => Promise<void>;
-  isVerified?: boolean;
-}) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(name);
-  const [isSaving, setIsSaving] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [isEditing]);
-
-  const handleSave = async () => {
-    if (editValue.trim() === name || !editValue.trim()) {
-      setEditValue(name);
-      setIsEditing(false);
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      await onSave(editValue.trim());
-      setIsEditing(false);
-    } catch (err) {
-      console.error("Failed to save entity name:", err);
-      setEditValue(name);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSave();
-    } else if (e.key === "Escape") {
-      setEditValue(name);
-      setIsEditing(false);
-    }
-  };
-
-  const handleRemove = async () => {
-    if (!onRemove) return;
-    setIsSaving(true);
-    try {
-      await onRemove();
-    } catch (err) {
-      console.error("Failed to remove entity:", err);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <div key={id} className="entity-item">
-      {isEditing ? (
-        <input
-          ref={inputRef}
-          type="text"
-          className="entity-name-input"
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onBlur={handleSave}
-          onKeyDown={handleKeyDown}
-          disabled={isSaving}
-        />
-      ) : (
-        <span
-          className={`entity-name ${!isVerified ? "editable" : ""}`}
-          onClick={!isVerified ? () => setIsEditing(true) : undefined}
-          title={!isVerified ? "Click to edit" : undefined}
-        >
-          {name}
-        </span>
-      )}
-      <span className={`entity-role role-${role}`}>{role}</span>
-      <span className="entity-confidence">{confidence}%</span>
-      {onRemove && !isVerified && (
-        <button
-          type="button"
-          className="entity-remove-btn"
-          onClick={handleRemove}
-          disabled={isSaving}
-          title="Remove from letter"
-        >
-          ×
-        </button>
-      )}
-    </div>
-  );
-}
 
 export default function LetterReviewPage() {
   const { letterId } = useParams<{ letterId: string }>();
@@ -292,10 +121,6 @@ export default function LetterReviewPage() {
   // Add entity modal state
   const [showAddPersonModal, setShowAddPersonModal] = useState(false);
   const [showAddPlaceModal, setShowAddPlaceModal] = useState(false);
-  const [newPersonName, setNewPersonName] = useState("");
-  const [newPersonRole, setNewPersonRole] = useState<"sender" | "recipient" | "mentioned">("mentioned");
-  const [newPlaceName, setNewPlaceName] = useState("");
-  const [newPlaceRole, setNewPlaceRole] = useState<"written_from" | "mentioned" | "destination">("mentioned");
   const [addingEntity, setAddingEntity] = useState(false);
 
   // 5-minute auto-sync timer
@@ -1422,6 +1247,121 @@ export default function LetterReviewPage() {
     [letterId],
   );
 
+  const handleRegenerateEntities = useCallback(async (): Promise<void> => {
+    if (!letterId) {
+      throw new Error("Missing letter ID");
+    }
+    const updated = await regenerateEntities(letterId);
+    setLetter(updated);
+    showToast("Entities re-extracted successfully", "success");
+  }, [letterId, showToast]);
+
+  const handleUpdateLinkedPerson = useCallback(
+    async (personId: string, newName: string): Promise<Letter> => {
+      if (!letterId) {
+        throw new Error("Missing letter ID");
+      }
+      return updateLinkedPerson(letterId, personId, newName);
+    },
+    [letterId],
+  );
+
+  const handleUpdateLinkedPlace = useCallback(
+    async (placeId: string, newName: string): Promise<Letter> => {
+      if (!letterId) {
+        throw new Error("Missing letter ID");
+      }
+      return updateLinkedPlace(letterId, placeId, newName);
+    },
+    [letterId],
+  );
+
+  const handleRemoveLinkedPerson = useCallback(
+    async (personId: string): Promise<Letter> => {
+      if (!letterId) {
+        throw new Error("Missing letter ID");
+      }
+      return removeLinkedPerson(letterId, personId);
+    },
+    [letterId],
+  );
+
+  const handleRemoveLinkedPlace = useCallback(
+    async (placeId: string): Promise<Letter> => {
+      if (!letterId) {
+        throw new Error("Missing letter ID");
+      }
+      return removeLinkedPlace(letterId, placeId);
+    },
+    [letterId],
+  );
+
+  const handleAddPerson = useCallback(
+    async (name: string, role: string): Promise<void> => {
+      if (!letterId) {
+        throw new Error("Missing letter ID");
+      }
+
+      if (!["sender", "recipient", "mentioned"].includes(role)) {
+        throw new Error("Invalid person role");
+      }
+
+      setAddingEntity(true);
+      try {
+        const updated = await addLinkedPerson(
+          letterId,
+          name,
+          role as "sender" | "recipient" | "mentioned",
+        );
+        setLetter(updated);
+        setShowAddPersonModal(false);
+        showToast("Person added", "success");
+      } catch (err) {
+        showToast(
+          err instanceof Error ? err.message : "Failed to add person",
+          "error",
+        );
+        throw err;
+      } finally {
+        setAddingEntity(false);
+      }
+    },
+    [letterId, showToast],
+  );
+
+  const handleAddPlace = useCallback(
+    async (name: string, role: string): Promise<void> => {
+      if (!letterId) {
+        throw new Error("Missing letter ID");
+      }
+
+      if (!["written_from", "destination", "mentioned"].includes(role)) {
+        throw new Error("Invalid place role");
+      }
+
+      setAddingEntity(true);
+      try {
+        const updated = await addLinkedPlace(
+          letterId,
+          name,
+          role as "written_from" | "mentioned" | "destination",
+        );
+        setLetter(updated);
+        setShowAddPlaceModal(false);
+        showToast("Place added", "success");
+      } catch (err) {
+        showToast(
+          err instanceof Error ? err.message : "Failed to add place",
+          "error",
+        );
+        throw err;
+      } finally {
+        setAddingEntity(false);
+      }
+    },
+    [letterId, showToast],
+  );
+
   // Line highlighting - update on cursor move
   useEffect(() => {
     const isEditing =
@@ -1614,800 +1554,117 @@ export default function LetterReviewPage() {
 
             {/* Transcription Editor - only shown when letter has letter-type images */}
             {hasLetterPages && (
-            <div className="editor-section">
-              <div className="editor-header">
-                <h2>
-                  Transcription
-                  {/* Transcription status indicator */}
-                  {letterTranscribeState !== "idle" && (
-                    <span
-                      className={`transcribe-status-indicator ${letterTranscribeState}`}
-                    >
-                      {letterTranscribeState === "transcribing" && (
-                        <Icon name="process" size={14} className="spinning" />
-                      )}
-                      {letterTranscribeState === "done" && (
-                        <Icon name="check" size={14} />
-                      )}
-                      <span>{letterTranscribeMessage}</span>
-                    </span>
-                  )}
-                </h2>
-                <div className="header-right">
-                  {/* Transcribe button - hidden when verified */}
-                  {(letter.transcriptStatus !== "VERIFIED" ||
-                    isTranscriptEditing) && (
-                    <button
-                      className="action-btn transcribe-btn"
-                      onClick={() => handleTranscribeLetter()}
-                      disabled={
-                        saving || letterTranscribeState === "transcribing"
-                      }
-                      title="Transcribe letter pages"
-                    >
-                      {letterTranscribeState === "transcribing" ? (
-                        <>
-                          <Icon name="process" size={14} className="spinning" />
-                          <span>Transcribing...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Icon name="process" size={14} />
-                          <span>Transcribe</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-
-                  {/* Verification UI */}
-                  {letter.transcriptStatus === "VERIFIED" &&
-                  !isTranscriptEditing ? (
-                    <div className="verified-info">
-                      <Icon name="check" size={14} />
-                      <span>
-                        Verified
-                        {letter.transcriptVerifiedAt &&
-                          ` on ${new Date(letter.transcriptVerifiedAt).toLocaleDateString()}`}
-                      </span>
-                    </div>
-                  ) : (
-                    <button
-                      className="verify-btn"
-                      onClick={handleVerifyTranscript}
-                      disabled={saving}
-                      title="Mark transcript verified"
-                    >
-                      Verify
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div
-                className="editor-container"
-                onClick={handleTranscriptClick}
-                onDoubleClick={handleTranscriptDoubleClick}
-              >
-                <div
-                  ref={editorRef}
-                  className={`transcript-editor ${letter.transcriptStatus === "VERIFIED" && !isTranscriptEditing ? "verified" : ""}`}
-                  contentEditable={
-                    letter.transcriptStatus !== "VERIFIED" ||
-                    isTranscriptEditing
-                  }
-                  suppressContentEditableWarning
-                  data-placeholder=""
-                  style={
-                    {
-                      "--transcript-font-size": transcriptFontSize,
-                    } as React.CSSProperties
-                  }
-                  onInput={(e) => {
-                    const target = e.currentTarget;
-                    const newText = target.innerText;
-                    setTranscript(newText);
-                    setHasTranscriptChanges(
-                      originalTranscriptText !== null &&
-                        newText !== originalTranscriptText,
-                    );
-                    triggerAutoSave({ transcriptionText: newText });
-                  }}
-                  onKeyDown={handleEditorKeyDown}
-                />
-              </div>
-
-              {/* Double-click to edit tooltip */}
-              {showEditTooltip && (
-                <div
-                  className="edit-tooltip"
-                  style={{
-                    left: Math.min(tooltipPosition.x, window.innerWidth - 280),
-                    top: tooltipPosition.y + 10,
-                  }}
-                >
-                  Verified. Double-click to edit and unverify.
-                </div>
-              )}
-            </div>
+              <TranscriptionSection
+                letter={letter}
+                letterTranscribeState={letterTranscribeState}
+                letterTranscribeMessage={letterTranscribeMessage}
+                isTranscriptEditing={isTranscriptEditing}
+                hasTranscriptChanges={hasTranscriptChanges}
+                originalTranscriptText={originalTranscriptText}
+                transcriptFontSize={transcriptFontSize}
+                showEditTooltip={showEditTooltip}
+                tooltipPosition={tooltipPosition}
+                saving={saving}
+                editorRef={editorRef}
+                onTranscribeLetter={handleTranscribeLetter}
+                onVerifyTranscript={handleVerifyTranscript}
+                onTranscriptClick={handleTranscriptClick}
+                onTranscriptDoubleClick={handleTranscriptDoubleClick}
+                onTranscriptInput={(newText) => {
+                  setTranscript(newText);
+                  setHasTranscriptChanges(
+                    originalTranscriptText !== null &&
+                      newText !== originalTranscriptText,
+                  );
+                  triggerAutoSave({ transcriptionText: newText });
+                }}
+                onEditorKeyDown={handleEditorKeyDown}
+              />
             )}
 
             {/* Extra Content Section - only shown when letter has transcribable extras */}
             {hasExtras && (
-            <div className="editor-section extra-content-section">
-              <div className="editor-header">
-                <h2>Extra Content</h2>
-                <div className="header-right">
-                  {/* Transcribe button - hidden when verified */}
-                  {(letter.extraContentStatus !== "VERIFIED" ||
-                      isExtraContentEditing) && (
-                      <button
-                        className="action-btn transcribe-btn"
-                        onClick={() => handleTranscribeExtrasWithConfirm()}
-                        disabled={saving || extraContentTranscribing}
-                        title="Transcribe telegrams, covers, and ephemera"
-                      >
-                        {extraContentTranscribing ? (
-                          <>
-                            <Icon
-                              name="process"
-                              size={14}
-                              className="spinning"
-                            />
-                            <span>Transcribing...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Icon name="process" size={14} />
-                            <span>Transcribe</span>
-                          </>
-                        )}
-                      </button>
-                    )}
-
-                  {/* Verification UI */}
-                  {letter.extraContentStatus === "VERIFIED" ? (
-                    <div
-                      className="verified-info"
-                      onClick={handleUnverifyExtraContent}
-                      style={{ cursor: "pointer" }}
-                      title="Click to unverify"
-                    >
-                      <Icon name="check" size={14} />
-                      <span>
-                        Verified
-                        {letter.extraContentVerifiedAt &&
-                          ` on ${new Date(letter.extraContentVerifiedAt).toLocaleDateString()}`}
-                      </span>
-                    </div>
-                  ) : (
-                    letter.extraContentStatus !== "EMPTY" && (
-                      <button
-                        className="verify-btn"
-                        onClick={handleVerifyExtraContent}
-                        disabled={saving}
-                        title="Mark extra content verified"
-                      >
-                        Verify
-                      </button>
-                    )
-                  )}
-                </div>
-              </div>
-              <div className="extra-content-container">
-                  <DynamicEditor
-                    ref={extraContentRef}
-                    value={extraContent}
-                    onChange={handleExtraContentChange}
-                    onKeyDown={handleExtraContentKeyDown}
-                    onClick={handleExtraContentClick}
-                    onDoubleClick={handleExtraContentDoubleClick}
-                    placeholder=""
-                    readOnly={
-                      letter.extraContentStatus === "VERIFIED" &&
-                      !isExtraContentEditing
-                    }
-                    verified={
-                      letter.extraContentStatus === "VERIFIED" &&
-                      !isExtraContentEditing
-                    }
-                    baseFontSize={1.0}
-                    minHeight={180}
-                  />
-
-                {/* Double-click to edit tooltip for extra content */}
-                {showExtraContentTooltip && (
-                  <div
-                    className="edit-tooltip"
-                    style={{
-                      left: Math.min(
-                        extraContentTooltipPosition.x,
-                        window.innerWidth - 280,
-                      ),
-                      top: extraContentTooltipPosition.y + 10,
-                    }}
-                  >
-                    Verified. Double-click to edit and unverify.
-                  </div>
-                )}
-              </div>
-            </div>
+              <ExtraContentSection
+                letter={letter}
+                extraContent={extraContent}
+                extraContentTranscribing={extraContentTranscribing}
+                isExtraContentEditing={isExtraContentEditing}
+                showExtraContentTooltip={showExtraContentTooltip}
+                extraContentTooltipPosition={extraContentTooltipPosition}
+                saving={saving}
+                extraContentRef={extraContentRef}
+                onTranscribeExtras={handleTranscribeExtrasWithConfirm}
+                onVerifyExtraContent={
+                  letter.extraContentStatus === "VERIFIED"
+                    ? handleUnverifyExtraContent
+                    : handleVerifyExtraContent
+                }
+                onExtraContentChange={handleExtraContentChange}
+                onExtraContentKeyDown={handleExtraContentKeyDown}
+                onExtraContentClick={handleExtraContentClick}
+                onExtraContentDoubleClick={handleExtraContentDoubleClick}
+              />
             )}
 
-            {/* Metadata Form */}
-            <div className="metadata-section">
-              <div className="metadata-header">
-                <h2>Metadata</h2>
-                <div className="header-right">
-                  {/* Generate/Regenerate button - hidden when verified */}
-                  {letter.metadataContentStatus !== "VERIFIED" &&
-                    letter.transcript.fullText && (
-                      <button
-                        className={`action-btn generate-btn ${regenerateState !== "idle" ? regenerateState : ""}`}
-                        onClick={
-                          letter.metadataContentStatus === "EMPTY"
-                            ? handleConfirmTranscript
-                            : handleRegenerateMetadata
-                        }
-                        disabled={saving || regenerateState === "regenerating"}
-                        title={
-                          letter.metadataContentStatus === "EMPTY"
-                            ? "Generate metadata from transcript"
-                            : "Regenerate metadata from transcript"
-                        }
-                      >
-                        {regenerateState === "regenerating" ? (
-                          <>
-                            <Icon name="process" size={14} className="spinning" />
-                            <span>Regenerating...</span>
-                          </>
-                        ) : regenerateState === "done" ? (
-                          <>
-                            <Icon name="check" size={14} />
-                            <span>Queued</span>
-                          </>
-                        ) : (
-                          <>
-                            <Icon name="process" size={14} />
-                            <span>
-                              {letter.metadataContentStatus === "EMPTY"
-                                ? "Generate"
-                                : "Regenerate"}
-                            </span>
-                          </>
-                        )}
-                      </button>
-                    )}
-
-                  {/* Sync button - hidden when verified or empty */}
-                  {letter.metadataContentStatus !== "EMPTY" &&
-                    letter.metadataContentStatus !== "VERIFIED" && (
-                      <button
-                        className={`action-btn sync-btn ${syncState !== "idle" ? syncState : ""} ${syncCountdown !== null && syncState === "idle" ? "has-countdown" : ""}`}
-                        onClick={syncCountdown !== null && syncState === "idle" ? handleCountdownClick : handleAISync}
-                        onDoubleClick={syncCountdown !== null && syncState === "idle" ? handleCountdownDoubleClick : undefined}
-                        disabled={
-                          saving ||
-                          (syncState !== "idle" && syncCountdown === null) ||
-                          !letter.transcript.fullText
-                        }
-                        title={syncCountdown !== null && syncState === "idle"
-                          ? "Click to sync now, double-click to cancel"
-                          : "Sync metadata with identity changes"
-                        }
-                      >
-                        {syncState === "checking" ||
-                        syncState === "updating" ? (
-                          <>
-                            <Icon
-                              name="process"
-                              size={14}
-                              className="spinning"
-                            />
-                            <span>Syncing...</span>
-                          </>
-                        ) : syncState === "done" ? (
-                          <>
-                            <Icon name="check" size={14} />
-                            <span>Synced</span>
-                          </>
-                        ) : syncCountdown !== null ? (
-                          <>
-                            <Icon name="process" size={14} />
-                            <span className="sync-countdown-text">
-                              {Math.floor(syncCountdown / 60)}:{String(syncCountdown % 60).padStart(2, "0")}
-                            </span>
-                            {showCancelHint && (
-                              <span className="cancel-hint">
-                                Double-click to cancel
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <Icon name="process" size={14} />
-                            <span>Sync</span>
-                          </>
-                        )}
-                      </button>
-                    )}
-
-                  {/* AI sync status indicator */}
-                  {syncMessage && (
-                    <span className={`sync-status-indicator ${syncState}`}>
-                      {syncState === "checking" && (
-                        <Icon name="process" size={14} className="spinning" />
-                      )}
-                      {syncState === "updating" && (
-                        <Icon name="process" size={14} className="spinning" />
-                      )}
-                      {syncState === "done" && <Icon name="check" size={14} />}
-                      <span>{syncMessage}</span>
-                    </span>
-                  )}
-
-                  {/* Verification UI */}
-                  {letter.metadataContentStatus === "VERIFIED" ? (
-                    <div className="verified-info">
-                      <Icon name="check" size={14} />
-                      <span>
-                        Verified
-                        {letter.metadataVerifiedAt &&
-                          ` on ${new Date(letter.metadataVerifiedAt).toLocaleDateString()}`}
-                      </span>
-                    </div>
-                  ) : (
-                    <button
-                      className="verify-btn"
-                      onClick={handleVerifyMetadata}
-                      disabled={saving}
-                      title="Mark metadata verified"
-                    >
-                      Verify
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div
-                className={`metadata-form ${letter.metadataContentStatus === "VERIFIED" ? "verified" : ""}`}
-                onClick={handleMetadataFieldClick}
-                onDoubleClick={handleMetadataFieldDoubleClick}
-              >
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="sender">Sender</label>
-                    <input
-                      type="text"
-                      id="sender"
-                      value={sender}
-                      onChange={(e) => {
-                        setSender(e.target.value);
-                        triggerAutoSave({ sender: e.target.value || null });
-                        startSyncTimer();
-                      }}
-                      placeholder="Who wrote the letter"
-                      readOnly={letter.metadataContentStatus === "VERIFIED"}
-                      className={
-                        letter.metadataContentStatus === "VERIFIED"
-                          ? "verified-field"
-                          : ""
-                      }
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="recipient">Recipient</label>
-                    <input
-                      type="text"
-                      id="recipient"
-                      value={recipient}
-                      onChange={(e) => {
-                        setRecipient(e.target.value);
-                        triggerAutoSave({ recipient: e.target.value || null });
-                        startSyncTimer();
-                      }}
-                      placeholder="Who received the letter"
-                      readOnly={letter.metadataContentStatus === "VERIFIED"}
-                      className={
-                        letter.metadataContentStatus === "VERIFIED"
-                          ? "verified-field"
-                          : ""
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="date">Date</label>
-                    <input
-                      type="text"
-                      id="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      placeholder="e.g., March 15, 1920"
-                      readOnly={letter.metadataContentStatus === "VERIFIED"}
-                      className={
-                        letter.metadataContentStatus === "VERIFIED"
-                          ? "verified-field"
-                          : ""
-                      }
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="dateConfidence">Date Confidence</label>
-                    <select
-                      id="dateConfidence"
-                      value={dateConfidence}
-                      onChange={(e) =>
-                        setDateConfidence(
-                          e.target.value as typeof dateConfidence,
-                        )
-                      }
-                      disabled={letter.metadataContentStatus === "VERIFIED"}
-                      className={
-                        letter.metadataContentStatus === "VERIFIED"
-                          ? "verified-field"
-                          : ""
-                      }
-                    >
-                      <option value="exact">Exact</option>
-                      <option value="inferred">Inferred</option>
-                      <option value="unknown">Unknown</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="location">Location Written</label>
-                  <input
-                    type="text"
-                    id="location"
-                    value={location}
-                    onChange={(e) => {
-                      setLocation(e.target.value);
-                      triggerAutoSave({
-                        locationWritten: e.target.value || null,
-                      });
-                    }}
-                    placeholder="e.g., New York, NY"
-                    readOnly={letter.metadataContentStatus === "VERIFIED"}
-                    className={
-                      letter.metadataContentStatus === "VERIFIED"
-                        ? "verified-field"
-                        : ""
-                    }
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="hook">Hook</label>
-                  <textarea
-                    ref={hookRef}
-                    id="hook"
-                    value={hook}
-                    onChange={(e) => {
-                      setHook(e.target.value);
-                      triggerAutoSave({ hook: e.target.value || null });
-                    }}
-                    placeholder="Short teaser to engage readers (shown in list view)"
-                    maxLength={150}
-                    readOnly={letter.metadataContentStatus === "VERIFIED"}
-                    className={
-                      letter.metadataContentStatus === "VERIFIED"
-                        ? "verified-field"
-                        : ""
-                    }
-                  />
-                  <span className="help-text">
-                    Max 150 characters - displayed on letter cards
-                  </span>
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="description">Summary</label>
-                  <textarea
-                    ref={descriptionRef}
-                    id="description"
-                    value={description}
-                    onChange={(e) => {
-                      setDescription(e.target.value);
-                      triggerAutoSave({ summary: e.target.value || null });
-                    }}
-                    placeholder="Factual description of letter content (shown in detail view)"
-                    readOnly={letter.metadataContentStatus === "VERIFIED"}
-                    className={
-                      letter.metadataContentStatus === "VERIFIED"
-                        ? "verified-field"
-                        : ""
-                    }
-                  />
-                </div>
-
-
-                {/* AI-Extracted Metadata Section */}
-                <div className="v2-metadata-section">
-                  <div className="v2-fields">
-                    <div className="form-row">
-                      <div className="form-group">
-                        <label htmlFor="emotionalTone">Emotional Tone</label>
-                        <select
-                          id="emotionalTone"
-                          value={emotionalTone}
-                          onChange={(e) =>
-                            setEmotionalTone(
-                              e.target.value as EmotionalTone | "",
-                            )
-                          }
-                          disabled={
-                            letter.metadataContentStatus === "VERIFIED"
-                          }
-                          className={
-                            letter.metadataContentStatus === "VERIFIED"
-                              ? "verified-field"
-                              : ""
-                          }
-                        >
-                          <option value="">— Select —</option>
-                          {EMOTIONAL_TONES.map((t) => (
-                            <option key={t.value} value={t.value}>
-                              {t.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="relationship">Relationship</label>
-                        <select
-                          id="relationship"
-                          value={relationship}
-                          onChange={(e) =>
-                            setRelationship(
-                              e.target.value as RelationshipType | "",
-                            )
-                          }
-                          disabled={
-                            letter.metadataContentStatus === "VERIFIED"
-                          }
-                          className={
-                            letter.metadataContentStatus === "VERIFIED"
-                              ? "verified-field"
-                              : ""
-                          }
-                        >
-                          <option value="">— Select —</option>
-                          {RELATIONSHIP_TYPES.map((r) => (
-                            <option key={r.value} value={r.value}>
-                              {r.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="form-group">
-                      <label>Primary Topics</label>
-                      <div className="topics-display">
-                        {primaryTopics.length > 0 ? (
-                          <div className="topic-tags">
-                            {primaryTopics.map((topic) => (
-                              <span key={topic} className="topic-tag">
-                                {topic.replace("/", " / ")}
-                                {letter.metadataContentStatus !== "VERIFIED" && (
-                                  <button
-                                    type="button"
-                                    className="topic-tag-remove"
-                                    onClick={() => setPrimaryTopics(primaryTopics.filter((t) => t !== topic))}
-                                    title="Remove topic"
-                                  >
-                                    ×
-                                  </button>
-                                )}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="no-topics">No topics selected</span>
-                        )}
-                        {letter.metadataContentStatus !== "VERIFIED" && (
-                          <Dropdown
-                            trigger={
-                              <button
-                                type="button"
-                                className="add-topic-btn"
-                                onClick={() => setTopicsDropdownOpen(!topicsDropdownOpen)}
-                              >
-                                <Icon name="plus" size={14} />
-                                Add Topic
-                              </button>
-                            }
-                            isOpen={topicsDropdownOpen}
-                            onClose={() => setTopicsDropdownOpen(false)}
-                            align="left"
-                          >
-                            <div className="topics-dropdown-content">
-                              {PRIMARY_TOPICS.filter((t) => !primaryTopics.includes(t)).map((topic) => (
-                                <DropdownItem
-                                  key={topic}
-                                  title={topic.replace("/", " / ")}
-                                  onClick={() => {
-                                    setPrimaryTopics([...primaryTopics, topic]);
-                                    setTopicsDropdownOpen(false);
-                                  }}
-                                />
-                              ))}
-                              {PRIMARY_TOPICS.filter((t) => !primaryTopics.includes(t)).length === 0 && (
-                                <div className="dropdown-empty">All topics selected</div>
-                              )}
-                            </div>
-                          </Dropdown>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Linked Entities Section */}
-                    <div className="linked-entities">
-                      <div className="entity-extraction-status" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                        <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                          Entity extraction:{" "}
-                          <span style={{
-                            color: letter.entityExtractionStatus === "SUCCESS" ? "var(--green, #22c55e)"
-                              : letter.entityExtractionStatus === "FAILED" ? "var(--red, #ef4444)"
-                              : letter.entityExtractionStatus === "RUNNING" ? "var(--blue, #3b82f6)"
-                              : "var(--text-muted)",
-                            fontWeight: 600,
-                          }}>
-                            {letter.entityExtractionStatus || "PENDING"}
-                          </span>
-                          {letter.entityExtractionError && (
-                            <span title={letter.entityExtractionError} style={{ color: "var(--red, #ef4444)", marginLeft: "4px" }}> (error)</span>
-                          )}
-                        </span>
-                        <button
-                          type="button"
-                          className="add-entity-btn"
-                          onClick={async () => {
-                            try {
-                              showToast("Re-extracting entities...", "info");
-                              const updated = await regenerateEntities(letterId!);
-                              setLetter(updated);
-                              showToast("Entities re-extracted successfully", "success");
-                            } catch (err) {
-                              showToast("Failed to re-extract entities", "error");
-                            }
-                          }}
-                          title="Re-run entity extraction (Prompt 2)"
-                          disabled={letter.entityExtractionStatus === "RUNNING"}
-                          style={{ fontSize: "11px" }}
-                        >
-                          Re-extract
-                        </button>
-                      </div>
-                      <div className="entity-group">
-                        <div className="entity-group-header">
-                          <label>Linked People</label>
-                          {letter.metadataContentStatus !== "VERIFIED" && (
-                            <button
-                              type="button"
-                              className="add-entity-btn"
-                              onClick={() => setShowAddPersonModal(true)}
-                              title="Add a person"
-                            >
-                              <Icon name="plus" size={12} />
-                              Add
-                            </button>
-                          )}
-                        </div>
-                        <div className="entity-list">
-                          {letter.linkedPersons && letter.linkedPersons.length > 0 ? (
-                            letter.linkedPersons.map((lp) => (
-                              <EditableEntityItem
-                                key={lp.id}
-                                id={lp.id}
-                                name={lp.canonicalName}
-                                role={lp.role}
-                                confidence={lp.confidence}
-                                isVerified={letter.metadataContentStatus === "VERIFIED"}
-                                onSave={async (newName) => {
-                                  const updated = await updateLinkedPerson(letterId!, lp.id, newName);
-                                  setLetter(updated);
-                                  showToast("Person name updated", "success");
-                                }}
-                                onRemove={async () => {
-                                  const updated = await removeLinkedPerson(letterId!, lp.id);
-                                  setLetter(updated);
-                                  showToast("Person removed", "success");
-                                }}
-                              />
-                            ))
-                          ) : (
-                            <span className="no-entities">No people linked</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="entity-group">
-                        <div className="entity-group-header">
-                          <label>Linked Places</label>
-                          {letter.metadataContentStatus !== "VERIFIED" && (
-                            <button
-                              type="button"
-                              className="add-entity-btn"
-                              onClick={() => setShowAddPlaceModal(true)}
-                              title="Add a place"
-                            >
-                              <Icon name="plus" size={12} />
-                              Add
-                            </button>
-                          )}
-                        </div>
-                        <div className="entity-list">
-                          {letter.linkedPlaces && letter.linkedPlaces.length > 0 ? (
-                            letter.linkedPlaces.map((lpl) => (
-                              <EditableEntityItem
-                                key={lpl.id}
-                                id={lpl.id}
-                                name={lpl.canonicalName}
-                                role={lpl.role}
-                                confidence={lpl.confidence}
-                                isVerified={letter.metadataContentStatus === "VERIFIED"}
-                                onSave={async (newName) => {
-                                  const updated = await updateLinkedPlace(letterId!, lpl.id, newName);
-                                  setLetter(updated);
-                                  showToast("Place name updated", "success");
-                                }}
-                                onRemove={async () => {
-                                  const updated = await removeLinkedPlace(letterId!, lpl.id);
-                                  setLetter(updated);
-                                  showToast("Place removed", "success");
-                                }}
-                              />
-                            ))
-                          ) : (
-                            <span className="no-entities">No places linked</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Notable Quotes (read-only display) - at the bottom */}
-                    {letter.metadata.notableQuotes &&
-                      letter.metadata.notableQuotes.length > 0 && (
-                        <div className="form-group">
-                          <label>Notable Quotes</label>
-                          <div className="notable-quotes">
-                            {letter.metadata.notableQuotes.map(
-                              (quote, idx) => (
-                                <blockquote
-                                  key={idx}
-                                  className="notable-quote"
-                                >
-                                  <p>"{quote.text}"</p>
-                                  {quote.context && (
-                                    <cite>— {quote.context}</cite>
-                                  )}
-                                </blockquote>
-                              ),
-                            )}
-                          </div>
-                        </div>
-                      )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Metadata double-click tooltip */}
-              {showMetadataTooltip && (
-                <div
-                  className="field-tooltip"
-                  style={{
-                    left: Math.min(
-                      metadataTooltipPosition.x,
-                      window.innerWidth - 280,
-                    ),
-                    top: metadataTooltipPosition.y + 10,
-                  }}
-                >
-                  Verified. Double-click to edit.
-                </div>
-              )}
-            </div>
+            <MetadataSection
+              letter={letter}
+              letterId={letterId!}
+              sender={sender}
+              recipient={recipient}
+              date={date}
+              dateConfidence={dateConfidence}
+              location={location}
+              hook={hook}
+              description={description}
+              emotionalTone={emotionalTone}
+              relationship={relationship}
+              primaryTopics={primaryTopics}
+              topicsDropdownOpen={topicsDropdownOpen}
+              onSenderChange={setSender}
+              onRecipientChange={setRecipient}
+              onDateChange={setDate}
+              onDateConfidenceChange={setDateConfidence}
+              onLocationChange={setLocation}
+              onHookChange={setHook}
+              onDescriptionChange={setDescription}
+              onEmotionalToneChange={setEmotionalTone}
+              onRelationshipChange={setRelationship}
+              onPrimaryTopicsChange={setPrimaryTopics}
+              onTopicsDropdownOpenChange={setTopicsDropdownOpen}
+              onTriggerAutoSave={(updates) =>
+                triggerAutoSave(
+                  updates as Parameters<typeof triggerAutoSave>[0],
+                )
+              }
+              onStartSyncTimer={startSyncTimer}
+              hookRef={hookRef}
+              descriptionRef={descriptionRef}
+              syncState={syncState}
+              syncMessage={syncMessage}
+              syncCountdown={syncCountdown}
+              showCancelHint={showCancelHint}
+              regenerateState={regenerateState}
+              onAISync={handleAISync}
+              onCountdownClick={handleCountdownClick}
+              onCountdownDoubleClick={handleCountdownDoubleClick}
+              onVerifyMetadata={handleVerifyMetadata}
+              onConfirmTranscript={handleConfirmTranscript}
+              onRegenerateMetadata={handleRegenerateMetadata}
+              onRegenerateEntities={handleRegenerateEntities}
+              onMetadataFieldClick={handleMetadataFieldClick}
+              onMetadataFieldDoubleClick={handleMetadataFieldDoubleClick}
+              showMetadataTooltip={showMetadataTooltip}
+              metadataTooltipPosition={metadataTooltipPosition}
+              onUpdateLinkedPerson={handleUpdateLinkedPerson}
+              onUpdateLinkedPlace={handleUpdateLinkedPlace}
+              onRemoveLinkedPerson={handleRemoveLinkedPerson}
+              onRemoveLinkedPlace={handleRemoveLinkedPlace}
+              onSetLetter={(updatedLetter) => setLetter(updatedLetter)}
+              onShowAddPersonModal={setShowAddPersonModal}
+              onShowAddPlaceModal={setShowAddPlaceModal}
+              saving={saving}
+              showToast={showToast}
+            />
 
             {/* Notes Section */}
             <div className="editor-section notes-section">
@@ -2519,151 +1776,21 @@ export default function LetterReviewPage() {
         </div>
       )}
 
-      {/* Add Person Modal */}
-      {showAddPersonModal && (
-        <div
-          className="confirm-dialog-overlay"
-          onClick={() => {
-            setShowAddPersonModal(false);
-            setNewPersonName("");
-            setNewPersonRole("mentioned");
-          }}
-        >
-          <div className="confirm-dialog add-entity-dialog" onClick={(e) => e.stopPropagation()}>
-            <h3>Add Linked Person</h3>
-            <div className="form-group">
-              <label htmlFor="newPersonName">Name</label>
-              <input
-                type="text"
-                id="newPersonName"
-                value={newPersonName}
-                onChange={(e) => setNewPersonName(e.target.value)}
-                placeholder="Enter person's name"
-                autoFocus
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="newPersonRole">Role</label>
-              <select
-                id="newPersonRole"
-                value={newPersonRole}
-                onChange={(e) => setNewPersonRole(e.target.value as typeof newPersonRole)}
-              >
-                <option value="sender">Sender</option>
-                <option value="recipient">Recipient</option>
-                <option value="mentioned">Mentioned</option>
-              </select>
-            </div>
-            <div className="confirm-dialog-actions">
-              <button
-                className="btn-cancel"
-                onClick={() => {
-                  setShowAddPersonModal(false);
-                  setNewPersonName("");
-                  setNewPersonRole("mentioned");
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn-confirm"
-                disabled={!newPersonName.trim() || addingEntity}
-                onClick={async () => {
-                  if (!newPersonName.trim() || !letterId) return;
-                  setAddingEntity(true);
-                  try {
-                    const updated = await addLinkedPerson(letterId, newPersonName.trim(), newPersonRole);
-                    setLetter(updated);
-                    showToast("Person added", "success");
-                    setShowAddPersonModal(false);
-                    setNewPersonName("");
-                    setNewPersonRole("mentioned");
-                  } catch (err) {
-                    showToast(err instanceof Error ? err.message : "Failed to add person", "error");
-                  } finally {
-                    setAddingEntity(false);
-                  }
-                }}
-              >
-                {addingEntity ? "Adding..." : "Add Person"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AddEntityModal
+        type="person"
+        isOpen={showAddPersonModal}
+        isAdding={addingEntity}
+        onClose={() => setShowAddPersonModal(false)}
+        onAdd={handleAddPerson}
+      />
 
-      {/* Add Place Modal */}
-      {showAddPlaceModal && (
-        <div
-          className="confirm-dialog-overlay"
-          onClick={() => {
-            setShowAddPlaceModal(false);
-            setNewPlaceName("");
-            setNewPlaceRole("mentioned");
-          }}
-        >
-          <div className="confirm-dialog add-entity-dialog" onClick={(e) => e.stopPropagation()}>
-            <h3>Add Linked Place</h3>
-            <div className="form-group">
-              <label htmlFor="newPlaceName">Name</label>
-              <input
-                type="text"
-                id="newPlaceName"
-                value={newPlaceName}
-                onChange={(e) => setNewPlaceName(e.target.value)}
-                placeholder="Enter place name"
-                autoFocus
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="newPlaceRole">Role</label>
-              <select
-                id="newPlaceRole"
-                value={newPlaceRole}
-                onChange={(e) => setNewPlaceRole(e.target.value as typeof newPlaceRole)}
-              >
-                <option value="written_from">Written From</option>
-                <option value="destination">Destination</option>
-                <option value="mentioned">Mentioned</option>
-              </select>
-            </div>
-            <div className="confirm-dialog-actions">
-              <button
-                className="btn-cancel"
-                onClick={() => {
-                  setShowAddPlaceModal(false);
-                  setNewPlaceName("");
-                  setNewPlaceRole("mentioned");
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn-confirm"
-                disabled={!newPlaceName.trim() || addingEntity}
-                onClick={async () => {
-                  if (!newPlaceName.trim() || !letterId) return;
-                  setAddingEntity(true);
-                  try {
-                    const updated = await addLinkedPlace(letterId, newPlaceName.trim(), newPlaceRole);
-                    setLetter(updated);
-                    showToast("Place added", "success");
-                    setShowAddPlaceModal(false);
-                    setNewPlaceName("");
-                    setNewPlaceRole("mentioned");
-                  } catch (err) {
-                    showToast(err instanceof Error ? err.message : "Failed to add place", "error");
-                  } finally {
-                    setAddingEntity(false);
-                  }
-                }}
-              >
-                {addingEntity ? "Adding..." : "Add Place"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AddEntityModal
+        type="place"
+        isOpen={showAddPlaceModal}
+        isAdding={addingEntity}
+        onClose={() => setShowAddPlaceModal(false)}
+        onAdd={handleAddPlace}
+      />
     </div>
     </AdminLayout>
   );

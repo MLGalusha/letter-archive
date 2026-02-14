@@ -159,6 +159,8 @@ Location: `frontend/src/pages/admin/EntityManagement/`
 
 - `EntityListPanel.tsx`
   - Shared entity list/suggestions/search/selection panel used by both `PeoplePage` and `PlacesPage`.
+- `entity-utils.ts`
+  - Shared entity-management helpers for alias parsing, search filtering, and bulk-selection toggling used by `PeoplePage` and `PlacesPage`.
 
 `frontend/src/pages/admin/PeoplePage.tsx` and `frontend/src/pages/admin/PlacesPage.tsx` now reuse this component for the common entity-management list workflow and keep entity-specific detail panels/modals local.
 

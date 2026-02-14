@@ -25,6 +25,11 @@ import BulkMergeModal from "../../components/BulkMergeModal";
 import { PERSON_RELATIONSHIP_OPTIONS } from "../../constants/enums";
 import type { PersonRelationshipType } from "../../types/Letter";
 import EntityListPanel from "./EntityManagement/EntityListPanel";
+import {
+  filterEntitiesBySearch,
+  parseAliasInput,
+  toggleSelectedId,
+} from "./EntityManagement/entity-utils";
 import "./PeoplePage.css";
 
 export default function PeoplePage() {
@@ -170,13 +175,7 @@ export default function PeoplePage() {
 
   // Filtered persons
   const filteredPersons = useMemo(() => {
-    if (!searchQuery.trim()) return persons;
-    const query = searchQuery.toLowerCase();
-    return persons.filter(
-      (p) =>
-        p.canonicalName.toLowerCase().includes(query) ||
-        p.aliases?.some((a) => a.toLowerCase().includes(query))
-    );
+    return filterEntitiesBySearch(persons, searchQuery);
   }, [persons, searchQuery]);
 
   // Handle create
@@ -184,10 +183,7 @@ export default function PeoplePage() {
     if (!formName.trim()) return;
     setSaving(true);
     try {
-      const aliases = formAliases
-        .split(",")
-        .map((a) => a.trim())
-        .filter(Boolean);
+      const aliases = parseAliasInput(formAliases);
       await createPerson({
         canonicalName: formName.trim(),
         aliases: aliases.length > 0 ? aliases : undefined,
@@ -214,10 +210,7 @@ export default function PeoplePage() {
     if (!selectedPerson || !formName.trim()) return;
     setSaving(true);
     try {
-      const aliases = formAliases
-        .split(",")
-        .map((a) => a.trim())
-        .filter(Boolean);
+      const aliases = parseAliasInput(formAliases);
       await updatePerson(selectedPerson.id, {
         canonicalName: formName.trim(),
         aliases,
@@ -440,13 +433,7 @@ export default function PeoplePage() {
 
   // Bulk selection handlers
   const handleToggleSelect = (id: string) => {
-    const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
-    setSelectedIds(newSelected);
+    setSelectedIds((prev) => toggleSelectedId(prev, id));
   };
 
   const handleSelectAll = () => {

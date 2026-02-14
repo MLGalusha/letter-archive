@@ -6,7 +6,12 @@ OpenAI-powered transcription and metadata extraction for historical letters.
 
 ```
 backend/src/ai/
-├── openai.ts              # API client wrapper, transcription, extraction
+├── openai.ts              # Compatibility barrel for OpenAI modules
+├── openai/
+│   ├── client.ts          # OpenAI client initialization and logging
+│   ├── transcription.ts   # Letter + extra-content transcription
+│   ├── metadata.ts        # Metadata V1 + V2 extraction
+│   └── entities.ts        # Prompt 2 entity extraction
 ├── prompts.ts             # System prompts, controlled vocabularies
 ├── resync.ts              # Metadata auditing and regeneration
 └── schemas/
@@ -208,7 +213,11 @@ All AI functions:
 
 | File | Purpose |
 |------|---------|
-| [openai.ts](../../backend/src/ai/openai.ts) | API client, transcription, extraction functions |
+| [openai.ts](../../backend/src/ai/openai.ts) | Compatibility barrel for OpenAI AI functions |
+| [openai/client.ts](../../backend/src/ai/openai/client.ts) | OpenAI client initialization + shared logger |
+| [openai/transcription.ts](../../backend/src/ai/openai/transcription.ts) | Image transcription + extra-content transcription helpers |
+| [openai/metadata.ts](../../backend/src/ai/openai/metadata.ts) | Metadata extraction (V1 + V2) |
+| [openai/entities.ts](../../backend/src/ai/openai/entities.ts) | Prompt 2 entity extraction |
 | [prompts.ts](../../backend/src/ai/prompts.ts) | System prompts, controlled vocabulary definitions |
 | [resync.ts](../../backend/src/ai/resync.ts) | Two-model audit + regeneration |
 | [schemas/metadataV2.ts](../../backend/src/ai/schemas/metadataV2.ts) | Zod + JSON schema for basic metadata (Prompt 1) |

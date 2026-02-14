@@ -1,6 +1,6 @@
 # Processing Pipeline
 
-Location: `backend/src/pipeline/`, `backend/src/ai/openai.ts`
+Location: `backend/src/pipeline/`, `backend/src/ai/openai.ts`, `backend/src/ai/openai/`
 
 ## Workflow
 

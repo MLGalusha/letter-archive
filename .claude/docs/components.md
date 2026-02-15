@@ -208,3 +208,7 @@ Location: `frontend/src/pages/`
   - Collection detail adds quick historical context cards (date span + frequent correspondents) plus an Explore Paths panel with theme/person/story-thread filters to help readers follow specific narrative lanes through the letters.
 - `collection-detail-utils.ts`
   - Data-only collection discovery helpers (`buildCollectionFacets`, `applyCollectionFilters`, `getThreadKey`) used by the collection explorer UI and covered by unit tests.
+- `LetterDetailPage.tsx`
+  - Letter reader now includes discovery controls: collection jump actions, prev/next navigation in-collection, and linked people/place quick-jump cards.
+- `letter-detail-utils.ts`
+  - Public letter discovery helpers (`buildLetterDiscoveryLinks`) that dedupe linked entities and merge roles for stable navigation cards.

@@ -25,6 +25,7 @@ import BulkMergeModal from "../../components/BulkMergeModal";
 import EntityListPanel from "./EntityManagement/EntityListPanel";
 import {
   filterEntitiesBySearch,
+  getCanonicalNameConflicts,
   parseAliasInput,
   toggleSelectedId,
 } from "./EntityManagement/entity-utils";
@@ -247,11 +248,24 @@ export default function PlacesPage() {
   // Handle update
   const handleUpdate = async () => {
     if (!selectedPlace || !formName.trim()) return;
+
+    const nextCanonicalName = formName.trim();
+    const nameChanged = nextCanonicalName !== selectedPlace.canonicalName;
+    if (nameChanged) {
+      const conflicts = getCanonicalNameConflicts(places, selectedPlace.id, nextCanonicalName);
+      if (conflicts.length > 0) {
+        const proceed = confirm(
+          `${conflicts.length} other place profile(s) already use "${nextCanonicalName}". Continue with rename anyway?`,
+        );
+        if (!proceed) return;
+      }
+    }
+
     setSaving(true);
     try {
       const aliases = parseAliasInput(formAliases);
       const response = await updatePlace(selectedPlace.id, {
-        canonicalName: formName.trim(),
+        canonicalName: nextCanonicalName,
         aliases,
         placeType: formPlaceType || null,
         notes: formNotes.trim() || null,
@@ -260,7 +274,7 @@ export default function PlacesPage() {
         setLastUndoAction({
           actionId: response.undoActionId,
           actionType: "rename",
-          label: `Rename: ${selectedPlace.canonicalName} -> ${formName.trim()}`,
+          label: `Rename: ${selectedPlace.canonicalName} -> ${nextCanonicalName}`,
         });
       }
       showToast("Place updated", "success");

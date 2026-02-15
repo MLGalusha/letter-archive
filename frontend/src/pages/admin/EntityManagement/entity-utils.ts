@@ -3,6 +3,10 @@ interface SearchableEntity {
   aliases?: string[] | null;
 }
 
+interface NamedEntity extends SearchableEntity {
+  id: string;
+}
+
 export function filterEntitiesBySearch<T extends SearchableEntity>(
   entities: T[],
   searchQuery: string,
@@ -35,4 +39,19 @@ export function toggleSelectedId(
     next.add(id);
   }
   return next;
+}
+
+export function getCanonicalNameConflicts<T extends NamedEntity>(
+  entities: T[],
+  currentEntityId: string,
+  nextCanonicalName: string,
+): T[] {
+  const normalized = nextCanonicalName.trim().toLowerCase();
+  if (!normalized) return [];
+
+  return entities.filter(
+    (entity) =>
+      entity.id !== currentEntityId &&
+      entity.canonicalName.trim().toLowerCase() === normalized,
+  );
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   filterEntitiesBySearch,
+  getCanonicalNameConflicts,
   parseAliasInput,
   toggleSelectedId,
 } from "../entity-utils";
@@ -33,5 +34,17 @@ describe("entity management utils", () => {
     expect(Array.from(selected)).toEqual(["a"]);
     expect(Array.from(added).sort()).toEqual(["a", "b"]);
     expect(Array.from(removed)).toEqual(["b"]);
+  });
+
+  it("finds exact canonical-name conflicts excluding current entity", () => {
+    const entities = [
+      { id: "a", canonicalName: "John Smith" },
+      { id: "b", canonicalName: "JOHN SMITH" },
+      { id: "c", canonicalName: "Jane Smith" },
+    ];
+
+    const conflicts = getCanonicalNameConflicts(entities, "a", " john smith ");
+
+    expect(conflicts.map((entity) => entity.id)).toEqual(["b"]);
   });
 });

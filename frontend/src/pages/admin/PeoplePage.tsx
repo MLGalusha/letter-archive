@@ -31,6 +31,7 @@ import type { PersonRelationshipType } from "../../types/Letter";
 import EntityListPanel from "./EntityManagement/EntityListPanel";
 import {
   filterEntitiesBySearch,
+  getCanonicalNameConflicts,
   parseAliasInput,
   toggleSelectedId,
 } from "./EntityManagement/entity-utils";
@@ -251,11 +252,24 @@ export default function PeoplePage() {
   // Handle update
   const handleUpdate = async () => {
     if (!selectedPerson || !formName.trim()) return;
+
+    const nextCanonicalName = formName.trim();
+    const nameChanged = nextCanonicalName !== selectedPerson.canonicalName;
+    if (nameChanged) {
+      const conflicts = getCanonicalNameConflicts(persons, selectedPerson.id, nextCanonicalName);
+      if (conflicts.length > 0) {
+        const proceed = confirm(
+          `${conflicts.length} other person profile(s) already use "${nextCanonicalName}". Continue with rename anyway?`,
+        );
+        if (!proceed) return;
+      }
+    }
+
     setSaving(true);
     try {
       const aliases = parseAliasInput(formAliases);
       const response = await updatePerson(selectedPerson.id, {
-        canonicalName: formName.trim(),
+        canonicalName: nextCanonicalName,
         aliases,
         notes: formNotes.trim() || null,
       });
@@ -263,7 +277,7 @@ export default function PeoplePage() {
         setLastUndoAction({
           actionId: response.undoActionId,
           actionType: "rename",
-          label: `Rename: ${selectedPerson.canonicalName} -> ${formName.trim()}`,
+          label: `Rename: ${selectedPerson.canonicalName} -> ${nextCanonicalName}`,
         });
       }
       showToast("Person updated", "success");

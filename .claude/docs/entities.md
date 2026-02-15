@@ -178,6 +178,7 @@ created_at  TIMESTAMP
 - Supports deep-link query param `?personId=<uuid>` to open a specific person directly (used by Letter Review linked entity jump actions)
 - Relationship chips in the person detail panel are clickable for fast in-page pivoting to related people
 - Same-name disambiguation panel surfaces duplicate canonical-name profiles before merge/rename actions
+- Rename flow warns when another canonical person already has the target name (explicit admin confirmation required)
 
 ### Places Page (`/admin/entities/places`)
 - Lists all canonical places
@@ -192,6 +193,7 @@ created_at  TIMESTAMP
 - One-click AI theme generation (writes theme bullets into the notes theme block)
 - Supports deep-link query param `?placeId=<uuid>` to open a specific place directly (used by Letter Review linked entity jump actions)
 - Same-name disambiguation panel surfaces duplicate canonical-name profiles before merge/rename actions
+- Rename flow warns when another canonical place already has the target name (explicit admin confirmation required)
 
 ### Relationships Page (`/admin/entities/relationships`)
 - Table + graph views for person-to-person relationships

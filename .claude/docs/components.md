@@ -114,6 +114,10 @@ Location: `frontend/src/pages/admin/LetterReview/`
   - Inline editable linked entity row used by `MetadataSection`, including quick-open action to jump to the matching admin People/Places record.
 
 `frontend/src/pages/admin/LetterReviewPage.tsx` now owns state and handlers, then composes these sub-components via props.
+It also includes a review mode toggle that adds:
+- A line-by-line transcript review list
+- A compact metadata snapshot for quick verification
+- An image overlay showing the currently selected transcript line for closer visual comparison
 
 ## Admin Dashboard Components
 

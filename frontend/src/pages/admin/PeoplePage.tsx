@@ -9,6 +9,7 @@ import {
   updatePerson,
   mergePersons,
   bulkMergePersons,
+  undoPersonAction,
   searchPersons,
   createRelationship,
   deleteRelationship,
@@ -69,6 +70,12 @@ export default function PeoplePage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [showAddRelationshipModal, setShowAddRelationshipModal] = useState(false);
+  const [lastUndoAction, setLastUndoAction] = useState<{
+    actionId: string;
+    actionType: "rename" | "merge";
+    label: string;
+  } | null>(null);
+  const [undoingAction, setUndoingAction] = useState(false);
 
   // Refresh trigger for suggestions
   const [refreshKey, setRefreshKey] = useState(0);
@@ -211,11 +218,18 @@ export default function PeoplePage() {
     setSaving(true);
     try {
       const aliases = parseAliasInput(formAliases);
-      await updatePerson(selectedPerson.id, {
+      const response = await updatePerson(selectedPerson.id, {
         canonicalName: formName.trim(),
         aliases,
         notes: formNotes.trim() || null,
       });
+      if (response.undoActionId) {
+        setLastUndoAction({
+          actionId: response.undoActionId,
+          actionType: "rename",
+          label: `Rename: ${selectedPerson.canonicalName} -> ${formName.trim()}`,
+        });
+      }
       showToast("Person updated", "success");
       setShowEditModal(false);
       // Refresh list
@@ -253,7 +267,14 @@ export default function PeoplePage() {
     if (!selectedPerson || !mergeTargetId) return;
     setSaving(true);
     try {
-      await mergePersons(selectedPerson.id, mergeTargetId);
+      const response = await mergePersons(selectedPerson.id, mergeTargetId);
+      if (response.undoActionId) {
+        setLastUndoAction({
+          actionId: response.undoActionId,
+          actionType: "merge",
+          label: `Merge into ${selectedPerson.canonicalName}`,
+        });
+      }
       showToast("Persons merged", "success");
       setShowMergeModal(false);
       setMergeTargetId(null);
@@ -479,7 +500,15 @@ export default function PeoplePage() {
   const handleComparisonMerge = async (keepId: string, mergeId: string) => {
     setSaving(true);
     try {
-      await mergePersons(keepId, mergeId);
+      const response = await mergePersons(keepId, mergeId);
+      if (response.undoActionId) {
+        const kept = persons.find((person) => person.id === keepId);
+        setLastUndoAction({
+          actionId: response.undoActionId,
+          actionType: "merge",
+          label: `Merge into ${kept?.canonicalName || "selected person"}`,
+        });
+      }
       showToast("Persons merged successfully", "success");
       setShowMergeComparison(false);
       setMergeCompareA(null);
@@ -493,6 +522,29 @@ export default function PeoplePage() {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleUndoLastAction = async () => {
+    if (!lastUndoAction) return;
+    setUndoingAction(true);
+    try {
+      await undoPersonAction(lastUndoAction.actionId, lastUndoAction.actionType);
+      showToast("Person action undone", "success");
+      setLastUndoAction(null);
+      const response = await getAllPersons();
+      setPersons(response.persons);
+      if (selectedPerson) {
+        const refreshedSelected = response.persons.find((p) => p.id === selectedPerson.id);
+        setSelectedPerson(refreshedSelected || null);
+      }
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to undo action",
+        "error",
+      );
+    } finally {
+      setUndoingAction(false);
     }
   };
 
@@ -513,6 +565,30 @@ export default function PeoplePage() {
       <div className="page-actions">
         <Button onClick={() => setShowCreateModal(true)}>Add Person</Button>
       </div>
+
+      {lastUndoAction && (
+        <div className="undo-banner">
+          <span className="undo-banner-label">Last action: {lastUndoAction.label}</span>
+          <div className="undo-banner-actions">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleUndoLastAction}
+              disabled={undoingAction}
+            >
+              {undoingAction ? "Undoing..." : "Undo"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLastUndoAction(null)}
+              disabled={undoingAction}
+            >
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="page-content">
         {/* Left: People List */}

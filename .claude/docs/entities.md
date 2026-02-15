@@ -167,6 +167,7 @@ created_at  TIMESTAMP
 - Bulk merge (select master, merge all others)
 - Duplicate suggestions section (collapsible)
 - Side-by-side comparison modal before merging
+- Inline undo banner after rename/merge (uses undo action IDs returned by API)
 - Biography generation and verification
 - Supports deep-link query param `?personId=<uuid>` to open a specific person directly (used by Letter Review linked entity jump actions)
 - Relationship chips in the person detail panel are clickable for fast in-page pivoting to related people
@@ -179,6 +180,7 @@ created_at  TIMESTAMP
 - Bulk merge (select master, merge all others)
 - Duplicate suggestions section (collapsible)
 - Side-by-side comparison modal before merging
+- Inline undo banner after rename/merge (uses undo action IDs returned by API)
 - Supports deep-link query param `?placeId=<uuid>` to open a specific place directly (used by Letter Review linked entity jump actions)
 
 ### Relationships Page (`/admin/entities/relationships`)

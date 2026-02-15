@@ -39,15 +39,18 @@ export async function updatePerson(
     aliases?: string[];
     notes?: string | null;
   },
-): Promise<{ person: CanonicalPerson }> {
-  return apiPut<{ person: CanonicalPerson }>(`/admin/entities/persons/${personId}`, data);
+): Promise<{ person: CanonicalPerson; undoActionId?: string | null }> {
+  return apiPut<{ person: CanonicalPerson; undoActionId?: string | null }>(
+    `/admin/entities/persons/${personId}`,
+    data,
+  );
 }
 
 export async function mergePersons(
   keepId: string,
   mergeId: string,
-): Promise<{ person: CanonicalPerson; message: string }> {
-  return apiPost<{ person: CanonicalPerson; message: string }>(
+): Promise<{ person: CanonicalPerson; message: string; undoActionId?: string | null }> {
+  return apiPost<{ person: CanonicalPerson; message: string; undoActionId?: string | null }>(
     "/admin/entities/persons/merge",
     { keepId, mergeId },
   );
@@ -80,4 +83,13 @@ export async function saveBiography(
 
 export async function unverifyBiography(personId: string): Promise<{ person: CanonicalPerson }> {
   return apiPost<{ person: CanonicalPerson }>(`/admin/entities/persons/${personId}/biography/unverify`);
+}
+
+export async function undoPersonAction(
+  actionId: string,
+  actionType: "rename" | "merge",
+): Promise<{ message: string }> {
+  return apiPost<{ message: string }>(`/admin/entities/persons/actions/${actionId}/undo`, {
+    actionType,
+  });
 }

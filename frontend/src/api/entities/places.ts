@@ -40,15 +40,18 @@ export async function updatePlace(
     placeType?: PlaceType | null;
     notes?: string | null;
   },
-): Promise<{ place: CanonicalPlace }> {
-  return apiPut<{ place: CanonicalPlace }>(`/admin/entities/places/${placeId}`, data);
+): Promise<{ place: CanonicalPlace; undoActionId?: string | null }> {
+  return apiPut<{ place: CanonicalPlace; undoActionId?: string | null }>(
+    `/admin/entities/places/${placeId}`,
+    data,
+  );
 }
 
 export async function mergePlaces(
   keepId: string,
   mergeId: string,
-): Promise<{ place: CanonicalPlace; message: string }> {
-  return apiPost<{ place: CanonicalPlace; message: string }>(
+): Promise<{ place: CanonicalPlace; message: string; undoActionId?: string | null }> {
+  return apiPost<{ place: CanonicalPlace; message: string; undoActionId?: string | null }>(
     "/admin/entities/places/merge",
     { keepId, mergeId },
   );
@@ -66,4 +69,13 @@ export async function bulkMergePlaces(
 
 export async function getPlaceMergeDetails(placeId: string): Promise<PlaceMergeDetails> {
   return apiGet<PlaceMergeDetails>(`/admin/entities/places/${placeId}/merge-details`);
+}
+
+export async function undoPlaceAction(
+  actionId: string,
+  actionType: "rename" | "merge",
+): Promise<{ message: string }> {
+  return apiPost<{ message: string }>(`/admin/entities/places/actions/${actionId}/undo`, {
+    actionType,
+  });
 }

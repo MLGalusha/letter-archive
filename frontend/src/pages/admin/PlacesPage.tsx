@@ -9,6 +9,7 @@ import {
   searchPlaces,
   mergePlaces,
   bulkMergePlaces,
+  undoPlaceAction,
   type PlaceWithCount,
   type EntityMatch,
 } from "../../api/entities";
@@ -52,6 +53,12 @@ export default function PlacesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showMergeModal, setShowMergeModal] = useState(false);
+  const [lastUndoAction, setLastUndoAction] = useState<{
+    actionId: string;
+    actionType: "rename" | "merge";
+    label: string;
+  } | null>(null);
+  const [undoingAction, setUndoingAction] = useState(false);
 
   // Refresh trigger for suggestions
   const [refreshKey, setRefreshKey] = useState(0);
@@ -157,12 +164,19 @@ export default function PlacesPage() {
     setSaving(true);
     try {
       const aliases = parseAliasInput(formAliases);
-      await updatePlace(selectedPlace.id, {
+      const response = await updatePlace(selectedPlace.id, {
         canonicalName: formName.trim(),
         aliases,
         placeType: formPlaceType || null,
         notes: formNotes.trim() || null,
       });
+      if (response.undoActionId) {
+        setLastUndoAction({
+          actionId: response.undoActionId,
+          actionType: "rename",
+          label: `Rename: ${selectedPlace.canonicalName} -> ${formName.trim()}`,
+        });
+      }
       showToast("Place updated", "success");
       setShowEditModal(false);
       await fetchPlaces();
@@ -199,7 +213,14 @@ export default function PlacesPage() {
     if (!selectedPlace || !mergeTargetId) return;
     setSaving(true);
     try {
-      await mergePlaces(selectedPlace.id, mergeTargetId);
+      const response = await mergePlaces(selectedPlace.id, mergeTargetId);
+      if (response.undoActionId) {
+        setLastUndoAction({
+          actionId: response.undoActionId,
+          actionType: "merge",
+          label: `Merge into ${selectedPlace.canonicalName}`,
+        });
+      }
       showToast("Places merged successfully", "success");
       setShowMergeModal(false);
       setMergeTargetId(null);
@@ -289,7 +310,15 @@ export default function PlacesPage() {
   const handleComparisonMerge = async (keepId: string, mergeId: string) => {
     setSaving(true);
     try {
-      await mergePlaces(keepId, mergeId);
+      const response = await mergePlaces(keepId, mergeId);
+      if (response.undoActionId) {
+        const kept = places.find((place) => place.id === keepId);
+        setLastUndoAction({
+          actionId: response.undoActionId,
+          actionType: "merge",
+          label: `Merge into ${kept?.canonicalName || "selected place"}`,
+        });
+      }
       showToast("Places merged successfully", "success");
       setShowMergeComparison(false);
       setMergeCompareA(null);
@@ -303,6 +332,29 @@ export default function PlacesPage() {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleUndoLastAction = async () => {
+    if (!lastUndoAction) return;
+    setUndoingAction(true);
+    try {
+      await undoPlaceAction(lastUndoAction.actionId, lastUndoAction.actionType);
+      showToast("Place action undone", "success");
+      setLastUndoAction(null);
+      const response = await getAllPlaces();
+      setPlaces(response.places);
+      if (selectedPlace) {
+        const refreshedSelected = response.places.find((p) => p.id === selectedPlace.id);
+        setSelectedPlace(refreshedSelected || null);
+      }
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to undo action",
+        "error",
+      );
+    } finally {
+      setUndoingAction(false);
     }
   };
 
@@ -323,6 +375,30 @@ export default function PlacesPage() {
       <div className="page-actions">
         <Button onClick={() => setShowCreateModal(true)}>Add Place</Button>
       </div>
+
+      {lastUndoAction && (
+        <div className="undo-banner">
+          <span className="undo-banner-label">Last action: {lastUndoAction.label}</span>
+          <div className="undo-banner-actions">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleUndoLastAction}
+              disabled={undoingAction}
+            >
+              {undoingAction ? "Undoing..." : "Undo"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLastUndoAction(null)}
+              disabled={undoingAction}
+            >
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="page-content">
         {/* Left: Places List */}

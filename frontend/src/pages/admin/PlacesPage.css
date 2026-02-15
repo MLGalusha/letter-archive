@@ -13,6 +13,27 @@
   border-bottom: 1px solid var(--border);
 }
 
+.places-page .undo-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: #fff7e6;
+  border-bottom: 1px solid #ffd79a;
+}
+
+.places-page .undo-banner-label {
+  font-size: var(--font-sm);
+  color: #9a4f00;
+  font-weight: 500;
+}
+
+.places-page .undo-banner-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
 /* Page content - split view */
 .places-page .page-content {
   display: flex;
@@ -474,6 +495,19 @@ body.dark .place-type-badge.other {
 @media (max-width: 768px) {
   .places-page {
     overflow-x: hidden;
+  }
+
+  .places-page .undo-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .places-page .undo-banner-actions {
+    width: 100%;
+  }
+
+  .places-page .undo-banner-actions button {
+    flex: 1;
   }
 
   .places-page .page-content {

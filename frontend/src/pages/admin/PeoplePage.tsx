@@ -269,14 +269,14 @@ export default function PeoplePage() {
     setSaving(true);
     try {
       const aliases = parseAliasInput(formAliases);
-      const response = await updatePerson(selectedPerson.id, {
+      const updateResponse = await updatePerson(selectedPerson.id, {
         canonicalName: nextCanonicalName,
         aliases,
         notes: formNotes.trim() || null,
       });
-      if (response.undoActionId) {
+      if (updateResponse.undoActionId) {
         setLastUndoAction({
-          actionId: response.undoActionId,
+          actionId: updateResponse.undoActionId,
           actionType: "rename",
           label: `Rename: ${selectedPerson.canonicalName} -> ${nextCanonicalName}`,
         });
@@ -284,10 +284,10 @@ export default function PeoplePage() {
       showToast("Person updated", "success");
       setShowEditModal(false);
       // Refresh list
-      const response = await getAllPersons();
-      setPersons(response.persons);
+      const refreshedList = await getAllPersons();
+      setPersons(refreshedList.persons);
       // Update selected person
-      const updated = response.persons.find((p) => p.id === selectedPerson.id);
+      const updated = refreshedList.persons.find((p) => p.id === selectedPerson.id);
       if (updated) setSelectedPerson(updated);
     } catch (err) {
       showToast(

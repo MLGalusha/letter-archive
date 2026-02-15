@@ -265,15 +265,15 @@ export default function PlacesPage() {
     setSaving(true);
     try {
       const aliases = parseAliasInput(formAliases);
-      const response = await updatePlace(selectedPlace.id, {
+      const updateResponse = await updatePlace(selectedPlace.id, {
         canonicalName: nextCanonicalName,
         aliases,
         placeType: formPlaceType || null,
         notes: formNotes.trim() || null,
       });
-      if (response.undoActionId) {
+      if (updateResponse.undoActionId) {
         setLastUndoAction({
-          actionId: response.undoActionId,
+          actionId: updateResponse.undoActionId,
           actionType: "rename",
           label: `Rename: ${selectedPlace.canonicalName} -> ${nextCanonicalName}`,
         });
@@ -282,8 +282,8 @@ export default function PlacesPage() {
       setShowEditModal(false);
       await fetchPlaces();
       // Update selected place
-      const response = await getAllPlaces();
-      const updated = response.places.find((p) => p.id === selectedPlace.id);
+      const refreshedList = await getAllPlaces();
+      const updated = refreshedList.places.find((p) => p.id === selectedPlace.id);
       if (updated) setSelectedPlace(updated);
     } catch (err) {
       showToast(

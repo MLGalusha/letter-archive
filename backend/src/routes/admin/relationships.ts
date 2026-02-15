@@ -7,6 +7,7 @@ import {
   updateRelationship,
   deleteRelationship,
   getCanonicalPersonById,
+  backfillRelationshipsFromLetters,
 } from '../../services/entities.js';
 import { createLogger } from '../../utils/logger.js';
 import type { PersonRelationshipType } from '../../db/schema.js';
@@ -206,6 +207,18 @@ router.delete('/:id', async (req, res, next) => {
 
     await deleteRelationship(id);
     res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /admin/relationships/backfill-from-letters - Backfill relationships from letter metadata
+ */
+router.post('/backfill-from-letters', async (_req, res, next) => {
+  try {
+    const result = await backfillRelationshipsFromLetters();
+    res.json(result);
   } catch (error) {
     next(error);
   }

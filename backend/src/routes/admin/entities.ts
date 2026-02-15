@@ -38,6 +38,8 @@ import {
   bulkMergePlaces,
   getPersonDetailsForMerge,
   getPlaceDetailsForMerge,
+  getSameNamePersonCandidates,
+  getSameNamePlaceCandidates,
 } from '../../services/entities.js';
 import { updatePersonBiography, type BiographyUpdateData } from '../../services/biography.js';
 import { createLogger } from '../../utils/logger.js';
@@ -207,6 +209,15 @@ router.get('/persons/:id/merge-details', async (req, res, next) => {
       return;
     }
     res.json(details);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/persons/:id/same-name-candidates', async (req, res, next) => {
+  try {
+    const candidates = await getSameNamePersonCandidates(req.params.id);
+    res.json({ candidates });
   } catch (error) {
     next(error);
   }
@@ -482,6 +493,15 @@ router.get('/places/:id/merge-details', async (req, res, next) => {
       return;
     }
     res.json(details);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/places/:id/same-name-candidates', async (req, res, next) => {
+  try {
+    const candidates = await getSameNamePlaceCandidates(req.params.id);
+    res.json({ candidates });
   } catch (error) {
     next(error);
   }

@@ -781,6 +781,13 @@ export interface PersonDetailsForMerge {
   biographyStatus: string | null;
 }
 
+export interface SameNamePersonCandidate {
+  id: string;
+  canonicalName: string;
+  aliases: string[];
+  letterCount: number;
+}
+
 export async function getPersonDetailsForMerge(
   id: string,
 ): Promise<PersonDetailsForMerge | null> {
@@ -833,4 +840,38 @@ export async function getPersonDetailsForMerge(
     biography: person.biography,
     biographyStatus: person.biographyStatus,
   };
+}
+
+export async function getSameNamePersonCandidates(
+  id: string,
+): Promise<SameNamePersonCandidate[]> {
+  const person = await getCanonicalPersonById(id);
+  if (!person) {
+    return [];
+  }
+
+  const matches = await db
+    .select({
+      id: canonicalPersons.id,
+      canonicalName: canonicalPersons.canonicalName,
+      aliases: canonicalPersons.aliases,
+      letterCount: sql<number>`COUNT(DISTINCT ${letterPersons.letterId})`,
+    })
+    .from(canonicalPersons)
+    .leftJoin(letterPersons, eq(canonicalPersons.id, letterPersons.personId))
+    .where(
+      and(
+        eq(canonicalPersons.canonicalName, person.canonicalName),
+        sql`${canonicalPersons.id} <> ${id}`,
+      ),
+    )
+    .groupBy(canonicalPersons.id, canonicalPersons.canonicalName, canonicalPersons.aliases)
+    .orderBy(desc(sql`COUNT(DISTINCT ${letterPersons.letterId})`));
+
+  return matches.map((row) => ({
+    id: row.id,
+    canonicalName: row.canonicalName,
+    aliases: row.aliases || [],
+    letterCount: Number(row.letterCount),
+  }));
 }

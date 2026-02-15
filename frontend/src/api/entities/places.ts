@@ -4,6 +4,7 @@ import type {
   EntityMatch,
   LetterForEntity,
   PlaceMergeDetails,
+  SameNamePlaceCandidate,
   PlaceWithCount,
 } from "./types";
 import type { PlaceType } from "../../types/Letter";
@@ -69,6 +70,14 @@ export async function bulkMergePlaces(
 
 export async function getPlaceMergeDetails(placeId: string): Promise<PlaceMergeDetails> {
   return apiGet<PlaceMergeDetails>(`/admin/entities/places/${placeId}/merge-details`);
+}
+
+export async function getPlaceSameNameCandidates(
+  placeId: string,
+): Promise<{ candidates: SameNamePlaceCandidate[] }> {
+  return apiGet<{ candidates: SameNamePlaceCandidate[] }>(
+    `/admin/entities/places/${placeId}/same-name-candidates`,
+  );
 }
 
 export async function generatePlaceThemes(

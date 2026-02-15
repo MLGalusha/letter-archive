@@ -211,6 +211,13 @@ export interface PersonMergeDetails {
   biographyStatus?: ContentStatus;
 }
 
+export interface SameNamePersonCandidate {
+  id: string;
+  canonicalName: string;
+  aliases: string[];
+  letterCount: number;
+}
+
 export interface PlaceMergeDetails {
   id: string;
   canonicalName: string;
@@ -220,4 +227,12 @@ export interface PlaceMergeDetails {
   writtenFrom: number;
   destination: number;
   mentioned: number;
+}
+
+export interface SameNamePlaceCandidate {
+  id: string;
+  canonicalName: string;
+  aliases: string[];
+  placeType?: PlaceType | null;
+  letterCount: number;
 }

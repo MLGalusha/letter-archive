@@ -5,6 +5,7 @@ import { useToast } from "../../contexts/ToastContext";
 import {
   getAllPersons,
   getPersonById,
+  getPersonSameNameCandidates,
   createPerson,
   updatePerson,
   mergePersons,
@@ -19,6 +20,7 @@ import {
   type PersonWithCount,
   type PersonRelationship,
   type LetterForEntity,
+  type SameNamePersonCandidate,
   type EntityMatch,
   type CanonicalPerson,
 } from "../../api/entities";
@@ -49,6 +51,7 @@ export default function PeoplePage() {
   const [selectedPerson, setSelectedPerson] = useState<PersonWithCount | null>(null);
   const [selectedRelationships, setSelectedRelationships] = useState<PersonRelationship[]>([]);
   const [selectedLetters, setSelectedLetters] = useState<LetterForEntity[]>([]);
+  const [sameNameCandidates, setSameNameCandidates] = useState<SameNamePersonCandidate[]>([]);
   const [loadingRelationships, setLoadingRelationships] = useState(false);
 
   // Biography state
@@ -151,12 +154,39 @@ export default function PeoplePage() {
     );
   }, [deepLinkedPersonId, persons, setSearchParams, showToast]);
 
+  const openCandidatePerson = useCallback(async (personId: string) => {
+    const inMemoryMatch = persons.find((person) => person.id === personId);
+    if (inMemoryMatch) {
+      setSelectedPerson(inMemoryMatch);
+      setDeepLinkedEntityId(null);
+      return;
+    }
+
+    try {
+      const response = await getAllPersons();
+      setPersons(response.persons);
+      const refreshedMatch = response.persons.find((person) => person.id === personId);
+      if (refreshedMatch) {
+        setSelectedPerson(refreshedMatch);
+        setDeepLinkedEntityId(null);
+      } else {
+        showToast("Candidate profile is no longer available", "info");
+      }
+    } catch {
+      showToast("Failed to open candidate profile", "error");
+    }
+  }, [persons, showToast]);
+
   const fetchSelectedPersonDetails = useCallback(async (personId: string) => {
     setLoadingRelationships(true);
     try {
-      const response = await getPersonById(personId);
+      const [response, sameNameResponse] = await Promise.all([
+        getPersonById(personId),
+        getPersonSameNameCandidates(personId),
+      ]);
       setSelectedRelationships(response.relationships || []);
       setSelectedLetters(response.letters || []);
+      setSameNameCandidates(sameNameResponse.candidates || []);
     } catch {
       showToast("Failed to load person details", "error");
     } finally {
@@ -169,6 +199,7 @@ export default function PeoplePage() {
     if (!selectedPerson) {
       setSelectedRelationships([]);
       setSelectedLetters([]);
+      setSameNameCandidates([]);
       return;
     }
     fetchSelectedPersonDetails(selectedPerson.id);
@@ -681,6 +712,31 @@ export default function PeoplePage() {
                   </div>
                 )}
               </div>
+
+              {sameNameCandidates.length > 0 && (
+                <div className="detail-section disambiguation-section">
+                  <h3>Same-Name Candidates</h3>
+                  <p className="disambiguation-note">
+                    This name exists on other profiles. Review before merging or bulk renaming references.
+                  </p>
+                  <div className="same-name-list">
+                    {sameNameCandidates.map((candidate) => (
+                      <button
+                        key={candidate.id}
+                        type="button"
+                        className="same-name-item"
+                        onClick={() => openCandidatePerson(candidate.id)}
+                      >
+                        <span className="same-name-title">{candidate.canonicalName}</span>
+                        <span className="same-name-meta">
+                          {candidate.letterCount} letters
+                          {candidate.aliases.length > 0 ? ` · ${candidate.aliases.length} aliases` : ""}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="detail-section">
                 <div className="section-header">

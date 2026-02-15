@@ -5,6 +5,7 @@ import type {
   LetterForEntity,
   PersonRelationship,
   PersonMergeDetails,
+  SameNamePersonCandidate,
   PersonWithCount,
 } from "./types";
 
@@ -74,6 +75,14 @@ export async function bulkMergePersons(
 
 export async function getPersonMergeDetails(personId: string): Promise<PersonMergeDetails> {
   return apiGet<PersonMergeDetails>(`/admin/entities/persons/${personId}/merge-details`);
+}
+
+export async function getPersonSameNameCandidates(
+  personId: string,
+): Promise<{ candidates: SameNamePersonCandidate[] }> {
+  return apiGet<{ candidates: SameNamePersonCandidate[] }>(
+    `/admin/entities/persons/${personId}/same-name-candidates`,
+  );
 }
 
 export async function generateBiography(personId: string): Promise<{ person: CanonicalPerson }> {

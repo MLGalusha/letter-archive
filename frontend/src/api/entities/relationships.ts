@@ -88,3 +88,17 @@ export async function updateAdminRelationship(
 export async function deleteAdminRelationship(relationshipId: string): Promise<void> {
   return apiDelete<void>(`/admin/relationships/${relationshipId}`);
 }
+
+export async function backfillAdminRelationshipsFromLetters(): Promise<{
+  scannedLetters: number;
+  created: number;
+  updated: number;
+  skipped: number;
+}> {
+  return apiPost<{
+    scannedLetters: number;
+    created: number;
+    updated: number;
+    skipped: number;
+  }>('/admin/relationships/backfill-from-letters');
+}

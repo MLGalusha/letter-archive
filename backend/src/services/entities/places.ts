@@ -582,6 +582,14 @@ export interface PlaceDetailsForMerge {
   destinationCount: number;
 }
 
+export interface SameNamePlaceCandidate {
+  id: string;
+  canonicalName: string;
+  aliases: string[];
+  placeType: PlaceType | null;
+  letterCount: number;
+}
+
 export async function getPlaceDetailsForMerge(
   id: string,
 ): Promise<PlaceDetailsForMerge | null> {
@@ -620,4 +628,45 @@ export async function getPlaceDetailsForMerge(
     mentionedCount: roleCounts.mentioned,
     destinationCount: roleCounts.destination,
   };
+}
+
+export async function getSameNamePlaceCandidates(
+  id: string,
+): Promise<SameNamePlaceCandidate[]> {
+  const place = await getCanonicalPlaceById(id);
+  if (!place) {
+    return [];
+  }
+
+  const matches = await db
+    .select({
+      id: canonicalPlaces.id,
+      canonicalName: canonicalPlaces.canonicalName,
+      aliases: canonicalPlaces.aliases,
+      placeType: canonicalPlaces.placeType,
+      letterCount: sql<number>`COUNT(DISTINCT ${letterPlaces.letterId})`,
+    })
+    .from(canonicalPlaces)
+    .leftJoin(letterPlaces, eq(canonicalPlaces.id, letterPlaces.placeId))
+    .where(
+      and(
+        eq(canonicalPlaces.canonicalName, place.canonicalName),
+        sql`${canonicalPlaces.id} <> ${id}`,
+      ),
+    )
+    .groupBy(
+      canonicalPlaces.id,
+      canonicalPlaces.canonicalName,
+      canonicalPlaces.aliases,
+      canonicalPlaces.placeType,
+    )
+    .orderBy(desc(sql`COUNT(DISTINCT ${letterPlaces.letterId})`));
+
+  return matches.map((row) => ({
+    id: row.id,
+    canonicalName: row.canonicalName,
+    aliases: row.aliases || [],
+    placeType: row.placeType,
+    letterCount: Number(row.letterCount),
+  }));
 }

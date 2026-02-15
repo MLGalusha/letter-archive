@@ -1,10 +1,14 @@
-import { asc, eq, or, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, ne, or, sql } from 'drizzle-orm';
 import {
   db,
+  letterPersons,
+  letters,
   personRelationships,
+  type RelationshipType,
   type PersonRelationship,
   type PersonRelationshipType,
 } from '../../db/index.js';
+import { mapMetadataRelationshipToPersonRelationship } from './participant-sync.js';
 
 export interface PersonRelationshipWithNames extends PersonRelationship {
   personAName: string;
@@ -134,4 +138,93 @@ export async function getRelationshipById(
     .limit(1);
 
   return results[0];
+}
+
+export interface BackfillRelationshipsResult {
+  scannedLetters: number;
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
+export async function backfillRelationshipsFromLetters(): Promise<BackfillRelationshipsResult> {
+  const rows = await db
+    .select({
+      letterId: letters.id,
+      senderRecipientRelationship: letters.senderRecipientRelationship,
+      senderPersonId: sql<string | null>`sender_links.person_id`,
+      recipientPersonId: sql<string | null>`recipient_links.person_id`,
+    })
+    .from(letters)
+    .leftJoin(
+      sql`letter_persons sender_links`,
+      sql`sender_links.letter_id = ${letters.id} AND sender_links.role = 'sender'`,
+    )
+    .leftJoin(
+      sql`letter_persons recipient_links`,
+      sql`recipient_links.letter_id = ${letters.id} AND recipient_links.role = 'recipient'`,
+    )
+    .where(
+      and(
+        isNull(letters.deletedAt),
+        sql`${letters.senderRecipientRelationship} IS NOT NULL`,
+        ne(letters.senderRecipientRelationship, 'unknown'),
+      ),
+    );
+
+  let created = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  for (const row of rows) {
+    if (!row.senderPersonId || !row.recipientPersonId || row.senderPersonId === row.recipientPersonId) {
+      skipped++;
+      continue;
+    }
+
+    const relationshipType = mapMetadataRelationshipToPersonRelationship(
+      row.senderRecipientRelationship as RelationshipType | null,
+    );
+    const [personAId, personBId] = [row.senderPersonId, row.recipientPersonId].sort();
+
+    const existing = await db.query.personRelationships.findFirst({
+      where: and(
+        eq(personRelationships.personAId, personAId),
+        eq(personRelationships.personBId, personBId),
+      ),
+    });
+
+    if (!existing) {
+      await db.insert(personRelationships).values({
+        personAId,
+        personBId,
+        relationshipType,
+        discoveredInLetterId: row.letterId,
+        confidence: 90,
+        confirmedBy: 'system-backfill',
+      });
+      created++;
+      continue;
+    }
+
+    if (existing.relationshipType === 'unknown' && relationshipType !== 'unknown') {
+      await db.update(personRelationships).set({
+        relationshipType,
+        discoveredInLetterId: existing.discoveredInLetterId || row.letterId,
+        confidence: Math.max(existing.confidence, 90),
+        updatedAt: new Date(),
+      }).where(eq(personRelationships.id, existing.id));
+      updated++;
+      continue;
+    }
+
+    skipped++;
+  }
+
+  return {
+    scannedLetters: rows.length,
+    created,
+    updated,
+    skipped,
+  };
 }

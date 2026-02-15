@@ -5,6 +5,7 @@ import { useToast } from "../../contexts/ToastContext";
 import {
   getAllPlaces,
   getPlaceById,
+  getPlaceSameNameCandidates,
   createPlace,
   updatePlace,
   searchPlaces,
@@ -12,6 +13,7 @@ import {
   bulkMergePlaces,
   generatePlaceThemes,
   type LetterForEntity,
+  type SameNamePlaceCandidate,
   undoPlaceAction,
   type PlaceWithCount,
   type EntityMatch,
@@ -71,6 +73,7 @@ export default function PlacesPage() {
   // Selected place for detail view
   const [selectedPlace, setSelectedPlace] = useState<PlaceWithCount | null>(null);
   const [selectedLetters, setSelectedLetters] = useState<LetterForEntity[]>([]);
+  const [sameNameCandidates, setSameNameCandidates] = useState<SameNamePlaceCandidate[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
   // Bulk selection state
@@ -162,11 +165,38 @@ export default function PlacesPage() {
     );
   }, [deepLinkedPlaceId, places, setSearchParams, showToast]);
 
+  const openCandidatePlace = useCallback(async (placeId: string) => {
+    const inMemoryMatch = places.find((place) => place.id === placeId);
+    if (inMemoryMatch) {
+      setSelectedPlace(inMemoryMatch);
+      setDeepLinkedEntityId(null);
+      return;
+    }
+
+    try {
+      const response = await getAllPlaces();
+      setPlaces(response.places);
+      const refreshedMatch = response.places.find((place) => place.id === placeId);
+      if (refreshedMatch) {
+        setSelectedPlace(refreshedMatch);
+        setDeepLinkedEntityId(null);
+      } else {
+        showToast("Candidate place is no longer available", "info");
+      }
+    } catch {
+      showToast("Failed to open candidate place", "error");
+    }
+  }, [places, showToast]);
+
   const fetchSelectedPlaceDetails = useCallback(async (placeId: string) => {
     setLoadingDetails(true);
     try {
-      const response = await getPlaceById(placeId);
+      const [response, sameNameResponse] = await Promise.all([
+        getPlaceById(placeId),
+        getPlaceSameNameCandidates(placeId),
+      ]);
       setSelectedLetters(response.letters || []);
+      setSameNameCandidates(sameNameResponse.candidates || []);
     } catch {
       showToast("Failed to load place references", "error");
     } finally {
@@ -177,6 +207,7 @@ export default function PlacesPage() {
   useEffect(() => {
     if (!selectedPlace) {
       setSelectedLetters([]);
+      setSameNameCandidates([]);
       return;
     }
     fetchSelectedPlaceDetails(selectedPlace.id);
@@ -589,6 +620,31 @@ export default function PlacesPage() {
                   </div>
                 )}
               </div>
+
+              {sameNameCandidates.length > 0 && (
+                <div className="detail-section disambiguation-section">
+                  <h3>Same-Name Candidates</h3>
+                  <p className="disambiguation-note">
+                    This place name appears on other profiles. Confirm context before merging records.
+                  </p>
+                  <div className="same-name-list">
+                    {sameNameCandidates.map((candidate) => (
+                      <button
+                        key={candidate.id}
+                        type="button"
+                        className="same-name-item"
+                        onClick={() => openCandidatePlace(candidate.id)}
+                      >
+                        <span className="same-name-title">{candidate.canonicalName}</span>
+                        <span className="same-name-meta">
+                          {candidate.letterCount} letters
+                          {candidate.placeType ? ` · ${candidate.placeType}` : ""}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="detail-section">
                 <div className="section-header">

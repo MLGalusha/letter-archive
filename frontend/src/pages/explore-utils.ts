@@ -14,6 +14,14 @@ export interface GraphInsights {
   typeBreakdown: Array<{ type: string; count: number }>;
 }
 
+export interface DiscoveryPrompt {
+  id: "high-confidence-link" | "network-hub" | "unexpected-link";
+  title: string;
+  description: string;
+  nodeId: string;
+  secondaryNodeId?: string;
+}
+
 export function applyGraphFilters(
   nodes: GraphNode[],
   edges: GraphEdge[],
@@ -83,3 +91,60 @@ export function buildGraphInsights(nodes: GraphNode[], edges: GraphEdge[]): Grap
   };
 }
 
+function humanizeRelationshipType(type: string): string {
+  return type.replace(/-/g, " ");
+}
+
+export function buildDiscoveryPrompts(nodes: GraphNode[], edges: GraphEdge[]): DiscoveryPrompt[] {
+  if (nodes.length === 0 || edges.length === 0) {
+    return [];
+  }
+
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const prompts: DiscoveryPrompt[] = [];
+  const sortedByConfidence = [...edges].sort((a, b) => b.confidence - a.confidence);
+  const strongestEdge = sortedByConfidence[0];
+  const strongestSource = nodeMap.get(strongestEdge.source);
+  const strongestTarget = nodeMap.get(strongestEdge.target);
+
+  if (strongestSource && strongestTarget) {
+    prompts.push({
+      id: "high-confidence-link",
+      title: "Most Certain Link",
+      description: `${strongestSource.name} and ${strongestTarget.name} have a ${strongestEdge.confidence}% confidence ${humanizeRelationshipType(strongestEdge.relationshipType)} connection.`,
+      nodeId: strongestEdge.source,
+      secondaryNodeId: strongestEdge.target,
+    });
+  }
+
+  const insights = buildGraphInsights(nodes, edges);
+  const topConnector = insights.connectorLeaders[0];
+  if (topConnector) {
+    prompts.push({
+      id: "network-hub",
+      title: "Network Hub",
+      description: `${topConnector.name} links to ${topConnector.degree} people and appears in ${topConnector.letterCount} letters.`,
+      nodeId: topConnector.id,
+    });
+  }
+
+  const weakestEdge = [...edges]
+    .filter((edge) => edge.confidence < 70)
+    .sort((a, b) => a.confidence - b.confidence)[0];
+
+  if (weakestEdge) {
+    const weakSource = nodeMap.get(weakestEdge.source);
+    const weakTarget = nodeMap.get(weakestEdge.target);
+    if (weakSource && weakTarget) {
+      prompts.push({
+        id: "unexpected-link",
+        title: "Unexpected Link",
+        description: `${weakSource.name} and ${weakTarget.name} are connected at ${weakestEdge.confidence}% confidence. Verify if this tie should stay.`,
+        nodeId: weakestEdge.source,
+        secondaryNodeId: weakestEdge.target,
+      });
+    }
+  }
+
+  return prompts;
+}

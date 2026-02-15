@@ -197,9 +197,9 @@ Pages now consume these shared options instead of duplicating local arrays (`Peo
 Location: `frontend/src/pages/`
 
 - `ExplorePage.tsx`
-  - Public relationship atlas with collection/type/confidence filters, graph insights cards, top connectors panel, random-person discovery action, and profile deep-linking from graph nodes.
+  - Public relationship atlas with collection/type/confidence filters, graph insights cards, Story Sparks prompts (high-confidence links, hubs, and low-confidence ties), top connectors panel, random-person discovery action, and profile deep-linking from graph nodes.
 - `explore-utils.ts`
-  - Graph filtering + analytics helpers used by `ExplorePage` (`applyGraphFilters`, `buildGraphInsights`) with dedicated unit tests.
+  - Graph filtering + analytics helpers used by `ExplorePage` (`applyGraphFilters`, `buildGraphInsights`, `buildDiscoveryPrompts`) with dedicated unit tests.
 - `CollectionsPage.tsx`
   - Collection browse page now includes search/sort/random discovery controls and aggregate collection stats.
 - `CollectionDetailPage.tsx`

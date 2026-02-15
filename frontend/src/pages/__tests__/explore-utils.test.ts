@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { GraphEdge, GraphNode } from "../../api/entities";
-import { applyGraphFilters, buildGraphInsights } from "../explore-utils";
+import {
+  applyGraphFilters,
+  buildDiscoveryPrompts,
+  buildGraphInsights,
+} from "../explore-utils";
 
 const nodes: GraphNode[] = [
   { id: "a", name: "Alice", letterCount: 10 },
@@ -53,3 +57,21 @@ describe("buildGraphInsights", () => {
   });
 });
 
+describe("buildDiscoveryPrompts", () => {
+  it("creates discovery prompts from graph structure", () => {
+    const prompts = buildDiscoveryPrompts(nodes, edges);
+
+    expect(prompts.map((prompt) => prompt.id)).toEqual([
+      "high-confidence-link",
+      "network-hub",
+      "unexpected-link",
+    ]);
+    expect(prompts[0].description).toContain("Alice and Bob");
+    expect(prompts[1].description).toContain("Bob links to 2 people");
+    expect(prompts[2].description).toContain("62% confidence");
+  });
+
+  it("returns no prompts for an empty graph", () => {
+    expect(buildDiscoveryPrompts([], [])).toEqual([]);
+  });
+});

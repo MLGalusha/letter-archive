@@ -10,7 +10,7 @@ import { listCollections, type CollectionInfo } from '../api/collections';
 import RelationshipGraph from '../components/RelationshipGraph/RelationshipGraph';
 import ConnectionFinder from '../components/ConnectionFinder/ConnectionFinder';
 import Footer from '../components/Footer/Footer';
-import { applyGraphFilters, buildGraphInsights } from './explore-utils';
+import { applyGraphFilters, buildDiscoveryPrompts, buildGraphInsights } from './explore-utils';
 import './ExplorePage.css';
 
 export default function ExplorePage() {
@@ -82,6 +82,11 @@ export default function ExplorePage() {
     [filteredGraphData],
   );
 
+  const discoveryPrompts = useMemo(
+    () => buildDiscoveryPrompts(filteredGraphData.nodes, filteredGraphData.edges),
+    [filteredGraphData.nodes, filteredGraphData.edges],
+  );
+
   useEffect(() => {
     if (!selectedNodeId) return;
     const stillVisible = filteredGraphData.nodes.some((node) => node.id === selectedNodeId);
@@ -137,6 +142,11 @@ export default function ExplorePage() {
     setRelationshipTypeFilter('all');
     setMinConfidence(0);
     setHighlightedPath([]);
+  };
+
+  const focusDiscoveryPrompt = (nodeId: string, secondaryNodeId?: string) => {
+    setSelectedNodeId(nodeId);
+    setHighlightedPath(secondaryNodeId ? [nodeId, secondaryNodeId] : []);
   };
 
   const getRelatedPersonName = (edge: GraphEdge) => {
@@ -240,6 +250,29 @@ export default function ExplorePage() {
             Reset Filters
           </button>
         </div>
+
+        {discoveryPrompts.length > 0 && (
+          <section className="discovery-prompts">
+            <h2>Story Sparks</h2>
+            <p>
+              Quick ways to jump into notable network patterns and verify interesting ties.
+            </p>
+            <div className="discovery-prompt-grid">
+              {discoveryPrompts.map((prompt) => (
+                <article key={prompt.id} className="discovery-prompt-card">
+                  <h3>{prompt.title}</h3>
+                  <p>{prompt.description}</p>
+                  <button
+                    type="button"
+                    onClick={() => focusDiscoveryPrompt(prompt.nodeId, prompt.secondaryNodeId)}
+                  >
+                    Focus This Story
+                  </button>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         {showConnectionFinder && (
           <ConnectionFinder

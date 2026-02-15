@@ -272,6 +272,17 @@ body.dark .places-page .search-box input::placeholder {
   letter-spacing: 0.05em;
 }
 
+.places-page .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.places-page .section-header h3 {
+  margin: 0;
+}
+
 .places-page .detail-field {
   display: flex;
   gap: var(--spacing-sm);
@@ -298,6 +309,51 @@ body.dark .places-page .search-box input::placeholder {
   border: 1px solid #93c5fd;
   border-radius: var(--radius-sm);
   display: inline-flex;
+}
+
+.places-page .reference-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.places-page .reference-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-light);
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+}
+
+.places-page .reference-item:hover {
+  border-color: var(--text-muted);
+  background: var(--bg);
+}
+
+.places-page .reference-header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  margin-bottom: 4px;
+}
+
+.places-page .reference-date {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.places-page .reference-role {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.places-page .reference-preview {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  line-height: 1.35;
 }
 
 /* Loading & empty states */
@@ -551,5 +607,11 @@ body.dark .place-type-badge.other {
     flex-wrap: wrap;
     width: 100%;
     justify-content: flex-end;
+  }
+
+  .places-page .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
   }
 }

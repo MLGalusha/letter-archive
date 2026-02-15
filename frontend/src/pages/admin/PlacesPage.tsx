@@ -4,11 +4,13 @@ import { Button, Modal } from "../../components/common";
 import { useToast } from "../../contexts/ToastContext";
 import {
   getAllPlaces,
+  getPlaceById,
   createPlace,
   updatePlace,
   searchPlaces,
   mergePlaces,
   bulkMergePlaces,
+  type LetterForEntity,
   undoPlaceAction,
   type PlaceWithCount,
   type EntityMatch,
@@ -38,6 +40,8 @@ export default function PlacesPage() {
 
   // Selected place for detail view
   const [selectedPlace, setSelectedPlace] = useState<PlaceWithCount | null>(null);
+  const [selectedLetters, setSelectedLetters] = useState<LetterForEntity[]>([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -126,6 +130,26 @@ export default function PlacesPage() {
       { replace: true },
     );
   }, [deepLinkedPlaceId, places, setSearchParams, showToast]);
+
+  const fetchSelectedPlaceDetails = useCallback(async (placeId: string) => {
+    setLoadingDetails(true);
+    try {
+      const response = await getPlaceById(placeId);
+      setSelectedLetters(response.letters || []);
+    } catch {
+      showToast("Failed to load place references", "error");
+    } finally {
+      setLoadingDetails(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (!selectedPlace) {
+      setSelectedLetters([]);
+      return;
+    }
+    fetchSelectedPlaceDetails(selectedPlace.id);
+  }, [selectedPlace, fetchSelectedPlaceDetails]);
 
   // Filtered places
   const filteredPlaces = useMemo(() => {
@@ -260,6 +284,10 @@ export default function PlacesPage() {
     setFormAliases("");
     setFormPlaceType("");
     setFormNotes("");
+  };
+
+  const formatReferenceRole = (role: string) => {
+    return role.replace(/_/g, " ");
   };
 
   // Bulk selection handlers
@@ -499,6 +527,40 @@ export default function PlacesPage() {
                   <div className="detail-field">
                     <span className="field-label">Notes:</span>
                     <span className="field-value">{selectedPlace.notes}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="detail-section">
+                <div className="section-header">
+                  <h3>Letter References</h3>
+                </div>
+                {loadingDetails ? (
+                  <div className="loading-state">Loading references...</div>
+                ) : selectedLetters.length === 0 ? (
+                  <div className="empty-state">No linked letters yet</div>
+                ) : (
+                  <div className="reference-list">
+                    {selectedLetters.map((letter) => (
+                      <button
+                        key={`${letter.letterId}-${letter.role}`}
+                        type="button"
+                        className="reference-item"
+                        onClick={() => navigate(`/admin/letters/${letter.letterId}`)}
+                      >
+                        <div className="reference-header">
+                          <span className="reference-date">
+                            {letter.letterDate || letter.dateRaw}
+                          </span>
+                          <span className="reference-role">{formatReferenceRole(letter.role)}</span>
+                        </div>
+                        {(letter.hook || letter.summary || letter.context) && (
+                          <div className="reference-preview">
+                            {letter.hook || letter.summary || letter.context}
+                          </div>
+                        )}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>

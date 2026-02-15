@@ -67,10 +67,15 @@ export interface ReviewQueueStats {
 
 export interface LetterForEntity {
   letterId: string;
-  title: string;
-  dateRaw?: string;
+  dateRaw: string;
+  letterDate?: string | null;
   role: PersonRole | PlaceRole;
-  confidence: number;
+  context?: string | null;
+  sender?: string | null;
+  recipient?: string | null;
+  hook?: string | null;
+  summary?: string | null;
+  visibility?: "PUBLISHED" | "HIDDEN";
 }
 
 export interface PersonRelationship {

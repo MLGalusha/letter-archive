@@ -4,7 +4,7 @@ import { Button, Icon, Modal } from "../../components/common";
 import { useToast } from "../../contexts/ToastContext";
 import {
   getAllPersons,
-  getRelationshipsForPerson,
+  getPersonById,
   createPerson,
   updatePerson,
   mergePersons,
@@ -18,6 +18,7 @@ import {
   unverifyBiography,
   type PersonWithCount,
   type PersonRelationship,
+  type LetterForEntity,
   type EntityMatch,
   type CanonicalPerson,
 } from "../../api/entities";
@@ -47,6 +48,7 @@ export default function PeoplePage() {
   // Selected person for detail view
   const [selectedPerson, setSelectedPerson] = useState<PersonWithCount | null>(null);
   const [selectedRelationships, setSelectedRelationships] = useState<PersonRelationship[]>([]);
+  const [selectedLetters, setSelectedLetters] = useState<LetterForEntity[]>([]);
   const [loadingRelationships, setLoadingRelationships] = useState(false);
 
   // Biography state
@@ -149,25 +151,28 @@ export default function PeoplePage() {
     );
   }, [deepLinkedPersonId, persons, setSearchParams, showToast]);
 
-  // Fetch relationships when person is selected
-  useEffect(() => {
-    async function fetchRelationships() {
-      if (!selectedPerson) {
-        setSelectedRelationships([]);
-        return;
-      }
-      setLoadingRelationships(true);
-      try {
-        const response = await getRelationshipsForPerson(selectedPerson.id);
-        setSelectedRelationships(response.relationships);
-      } catch (err) {
-        showToast("Failed to load relationships", "error");
-      } finally {
-        setLoadingRelationships(false);
-      }
+  const fetchSelectedPersonDetails = useCallback(async (personId: string) => {
+    setLoadingRelationships(true);
+    try {
+      const response = await getPersonById(personId);
+      setSelectedRelationships(response.relationships || []);
+      setSelectedLetters(response.letters || []);
+    } catch {
+      showToast("Failed to load person details", "error");
+    } finally {
+      setLoadingRelationships(false);
     }
-    fetchRelationships();
-  }, [selectedPerson, showToast]);
+  }, [showToast]);
+
+  // Fetch relationships + references when person is selected
+  useEffect(() => {
+    if (!selectedPerson) {
+      setSelectedRelationships([]);
+      setSelectedLetters([]);
+      return;
+    }
+    fetchSelectedPersonDetails(selectedPerson.id);
+  }, [selectedPerson, fetchSelectedPersonDetails]);
 
   // Update biography state when person is selected
   useEffect(() => {
@@ -326,9 +331,7 @@ export default function PeoplePage() {
       setRelationshipSearchQuery("");
       setRelationshipSearchResults([]);
       setRelationshipType("unknown");
-      // Refresh relationships
-      const response = await getRelationshipsForPerson(selectedPerson.id);
-      setSelectedRelationships(response.relationships);
+      await fetchSelectedPersonDetails(selectedPerson.id);
     } catch (err) {
       showToast(
         err instanceof Error ? err.message : "Failed to add relationship",
@@ -345,10 +348,8 @@ export default function PeoplePage() {
     try {
       await deleteRelationship(relationshipId);
       showToast("Relationship removed", "success");
-      // Refresh relationships
       if (selectedPerson) {
-        const response = await getRelationshipsForPerson(selectedPerson.id);
-        setSelectedRelationships(response.relationships);
+        await fetchSelectedPersonDetails(selectedPerson.id);
       }
     } catch (err) {
       showToast("Failed to remove relationship", "error");
@@ -398,6 +399,10 @@ export default function PeoplePage() {
     }
 
     navigate(`/admin/entities/people?personId=${relatedId}`);
+  };
+
+  const formatReferenceRole = (role: string) => {
+    return role.replace(/_/g, " ");
   };
 
   // Handle generate biography
@@ -673,6 +678,40 @@ export default function PeoplePage() {
                   <div className="detail-field">
                     <span className="field-label">Notes:</span>
                     <span className="field-value">{selectedPerson.notes}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="detail-section">
+                <div className="section-header">
+                  <h3>Letter References</h3>
+                </div>
+                {loadingRelationships ? (
+                  <div className="loading-state">Loading references...</div>
+                ) : selectedLetters.length === 0 ? (
+                  <div className="empty-state">No linked letters yet</div>
+                ) : (
+                  <div className="reference-list">
+                    {selectedLetters.map((letter) => (
+                      <button
+                        key={`${letter.letterId}-${letter.role}`}
+                        type="button"
+                        className="reference-item"
+                        onClick={() => navigate(`/admin/letters/${letter.letterId}`)}
+                      >
+                        <div className="reference-header">
+                          <span className="reference-date">
+                            {letter.letterDate || letter.dateRaw}
+                          </span>
+                          <span className="reference-role">{formatReferenceRole(letter.role)}</span>
+                        </div>
+                        {(letter.hook || letter.summary || letter.context) && (
+                          <div className="reference-preview">
+                            {letter.hook || letter.summary || letter.context}
+                          </div>
+                        )}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>

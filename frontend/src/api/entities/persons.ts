@@ -3,6 +3,7 @@ import type {
   CanonicalPerson,
   EntityMatch,
   LetterForEntity,
+  PersonRelationship,
   PersonMergeDetails,
   PersonWithCount,
 } from "./types";
@@ -18,8 +19,13 @@ export async function searchPersons(query: string): Promise<{ matches: EntityMat
 export async function getPersonById(personId: string): Promise<{
   person: CanonicalPerson;
   letters: LetterForEntity[];
+  relationships: PersonRelationship[];
 }> {
-  return apiGet<{ person: CanonicalPerson; letters: LetterForEntity[] }>(
+  return apiGet<{
+    person: CanonicalPerson;
+    letters: LetterForEntity[];
+    relationships: PersonRelationship[];
+  }>(
     `/admin/entities/persons/${personId}`,
   );
 }

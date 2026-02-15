@@ -110,6 +110,12 @@ Update sender/recipient: `{ updates: [{ letterId, sender?, recipient? }] }`
 
 **Service**: `bulkUpdateFields()` in `letter-operations.ts`
 
+Manual sender/recipient edits now immediately run participant sync:
+- Auto-create canonical person if no confident match exists
+- Auto-link only on strict confidence thresholds
+- Queue ambiguous matches for review
+- Keep sender/recipient person links + relationship graph in sync
+
 ### POST /admin/letters/bulk/clear-metadata
 Keep transcript, clear metadata: `{ letterIds: [...] }`
 
@@ -251,23 +257,43 @@ Get person with linked letters.
 ### GET /admin/entities/places/:id
 Get place with linked letters.
 
-### PATCH /admin/entities/persons/:id
-Update person: `{ canonicalName, aliases, notes }`
+### GET /admin/entities/persons/search?q=<query>
+Fuzzy person lookup.
 
-### PATCH /admin/entities/places/:id
-Update place: `{ canonicalName, aliases, placeType, notes }`
+### GET /admin/entities/places/search?q=<query>
+Fuzzy place lookup.
 
-### POST /admin/entities/persons/:id/merge
-Merge into another person: `{ mergeIntoId }`
+### PUT /admin/entities/persons/:id
+Update person: `{ canonicalName?, aliases?, notes? }`
 
-### POST /admin/entities/places/:id/merge
-Merge into another place: `{ mergeIntoId }`
+Response includes optional `undoActionId` when a rename occurred.
 
-### DELETE /admin/entities/persons/:id
-Delete person (removes links).
+### PUT /admin/entities/places/:id
+Update place: `{ canonicalName?, aliases?, placeType?, notes? }`
 
-### DELETE /admin/entities/places/:id
-Delete place (removes links).
+Response includes optional `undoActionId` when a rename occurred.
+
+### POST /admin/entities/persons/merge
+Merge two people: `{ keepId, mergeId }`
+
+Response includes `undoActionId`.
+
+### POST /admin/entities/places/merge
+Merge two places: `{ keepId, mergeId }`
+
+Response includes `undoActionId`.
+
+### POST /admin/entities/persons/bulk-merge
+Bulk merge people: `{ keepId, mergeIds }`
+
+### POST /admin/entities/places/bulk-merge
+Bulk merge places: `{ keepId, mergeIds }`
+
+### POST /admin/entities/persons/actions/:actionId/undo
+Undo a person rename/merge: `{ actionType: 'rename' | 'merge', actor? }`
+
+### POST /admin/entities/places/actions/:actionId/undo
+Undo a place rename/merge: `{ actionType: 'rename' | 'merge', actor? }`
 
 ---
 

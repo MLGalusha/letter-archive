@@ -7,7 +7,7 @@
  * and metadata resync.
  */
 
-import { eq, and, isNull, inArray, sql, ilike } from 'drizzle-orm';
+import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
 import {
   db,
   letters,
@@ -17,6 +17,7 @@ import {
   canonicalPersons,
   canonicalPlaces,
   personRelationships,
+  type RelationshipType as DBRelationshipType,
 } from '../db/index.js';
 import { getLetterById } from '../services/letters.js';
 import { runTranscription } from '../pipeline/processor.js';
@@ -30,6 +31,7 @@ import {
   resetProcessingState,
   processLettersAsync,
 } from './processing-queue.js';
+import { syncLetterParticipantsFromMetadata } from './entities/participant-sync.js';
 
 const log = createLogger({ module: 'letter-operations' });
 
@@ -496,11 +498,14 @@ export async function bulkUpdateFields(updates: BulkUpdateFieldEntry[]): Promise
       updatedAt: new Date(),
     };
 
-    if (update.sender !== undefined) {
-      dbUpdates.sender = update.sender || null;
+    const sender = update.sender !== undefined ? (update.sender || null) : undefined;
+    const recipient = update.recipient !== undefined ? (update.recipient || null) : undefined;
+
+    if (sender !== undefined) {
+      dbUpdates.sender = sender;
     }
-    if (update.recipient !== undefined) {
-      dbUpdates.recipient = update.recipient || null;
+    if (recipient !== undefined) {
+      dbUpdates.recipient = recipient;
     }
 
     // Only update if there are actual field changes
@@ -511,6 +516,15 @@ export async function bulkUpdateFields(updates: BulkUpdateFieldEntry[]): Promise
           isNull(letters.deletedAt),
         ),
       );
+
+      if (sender !== undefined || recipient !== undefined) {
+        await syncLetterParticipantsFromMetadata({
+          letterId: update.letterId,
+          sender,
+          recipient,
+        });
+      }
+
       successCount++;
     }
   }
@@ -702,6 +716,14 @@ export async function buildLetterUpdates(
   // Apply updates
   await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
 
+  if (updates.sender !== undefined || updates.recipient !== undefined) {
+    await syncLetterParticipantsFromMetadata({
+      letterId,
+      sender: updates.sender ?? null,
+      recipient: updates.recipient ?? null,
+    });
+  }
+
   const workflowChange = dbUpdates.workflow
     ? `${currentWorkflow} -> ${dbUpdates.workflow}`
     : undefined;
@@ -846,6 +868,12 @@ export async function restoreVersion(
       metadataContentStatus: 'EDITED',
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
+
+    await syncLetterParticipantsFromMetadata({
+      letterId,
+      sender: (content.sender as string) || null,
+      recipient: (content.recipient as string) || null,
+    });
   }
 
   log.info({ letterId, fieldType, restoredVersion: versionNumber }, 'Version restored');
@@ -1518,6 +1546,9 @@ export async function addLinkedPerson(
     const [newPerson] = await db.insert(canonicalPersons).values({
       canonicalName: name,
     }).returning();
+    if (!newPerson) {
+      throw new Error('Failed to create canonical person');
+    }
     person = newPerson;
     log.info({ letterId, personId: person.id, name }, 'Created new canonical person');
   }
@@ -1579,6 +1610,9 @@ export async function addLinkedPlace(
       canonicalName: name,
       placeType: 'other', // Default type
     }).returning();
+    if (!newPlace) {
+      throw new Error('Failed to create canonical place');
+    }
     place = newPlace;
     log.info({ letterId, placeId: place.id, name }, 'Created new canonical place');
   }
@@ -1851,65 +1885,14 @@ export async function resyncLetterMetadata(letterId: string, body: ResyncInput):
 
     await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
 
-    // Create linked persons if needed
-    if (result.senderPerson) {
-      let senderPerson = await db.query.canonicalPersons.findFirst({
-        where: ilike(canonicalPersons.canonicalName, result.senderPerson.name),
+    if (result.senderPerson || result.recipientPerson || change) {
+      await syncLetterParticipantsFromMetadata({
+        letterId,
+        sender: newSender || letter.sender,
+        recipient: newRecipient || letter.recipient,
+        relationshipType: (dbUpdates.senderRecipientRelationship as DBRelationshipType | null | undefined)
+          ?? letter.senderRecipientRelationship,
       });
-
-      if (!senderPerson) {
-        const [newPerson] = await db.insert(canonicalPersons).values({
-          canonicalName: result.senderPerson.name,
-        }).returning();
-        senderPerson = newPerson;
-      }
-
-      const existingLink = await db.query.letterPersons.findFirst({
-        where: and(
-          eq(letterPersons.letterId, letterId),
-          eq(letterPersons.personId, senderPerson.id),
-          eq(letterPersons.role, 'sender'),
-        ),
-      });
-
-      if (!existingLink) {
-        await db.insert(letterPersons).values({
-          letterId,
-          personId: senderPerson.id,
-          role: 'sender',
-          confidence: 100,
-        });
-      }
-    }
-
-    if (result.recipientPerson) {
-      let recipientPerson = await db.query.canonicalPersons.findFirst({
-        where: ilike(canonicalPersons.canonicalName, result.recipientPerson.name),
-      });
-
-      if (!recipientPerson) {
-        const [newPerson] = await db.insert(canonicalPersons).values({
-          canonicalName: result.recipientPerson.name,
-        }).returning();
-        recipientPerson = newPerson;
-      }
-
-      const existingLink = await db.query.letterPersons.findFirst({
-        where: and(
-          eq(letterPersons.letterId, letterId),
-          eq(letterPersons.personId, recipientPerson.id),
-          eq(letterPersons.role, 'recipient'),
-        ),
-      });
-
-      if (!existingLink) {
-        await db.insert(letterPersons).values({
-          letterId,
-          personId: recipientPerson.id,
-          role: 'recipient',
-          confidence: 100,
-        });
-      }
     }
 
     log.info(

@@ -7,10 +7,14 @@ import {
   getCanonicalPlaceById,
   createCanonicalPerson,
   createCanonicalPlace,
-  updateCanonicalPerson,
-  updateCanonicalPlace,
-  mergePersons,
-  mergePlaces,
+  updateCanonicalPersonWithUndo,
+  updateCanonicalPlaceWithUndo,
+  mergePersonsWithUndo,
+  mergePlacesWithUndo,
+  undoPersonRename,
+  undoPersonMerge,
+  undoPlaceRename,
+  undoPlaceMerge,
   getLettersForPersonEnriched,
   getLettersForPlaceEnriched,
   getPendingReviewItems,
@@ -144,9 +148,9 @@ const updatePersonSchema = z.object({
 router.put('/persons/:id', async (req, res, next) => {
   try {
     const data = updatePersonSchema.parse(req.body);
-    await updateCanonicalPerson(req.params.id, data);
+    const { undoActionId } = await updateCanonicalPersonWithUndo(req.params.id, data);
     const person = await getCanonicalPersonById(req.params.id);
-    res.json({ person });
+    res.json({ person, undoActionId });
   } catch (error) {
     next(error);
   }
@@ -163,9 +167,9 @@ const mergePersonsSchema = z.object({
 router.post('/persons/merge', async (req, res, next) => {
   try {
     const { keepId, mergeId } = mergePersonsSchema.parse(req.body);
-    await mergePersons(keepId, mergeId);
+    const { undoActionId } = await mergePersonsWithUndo(keepId, mergeId);
     const person = await getCanonicalPersonById(keepId);
-    res.json({ person, message: 'Persons merged successfully' });
+    res.json({ person, message: 'Persons merged successfully', undoActionId });
   } catch (error) {
     next(error);
   }
@@ -201,6 +205,25 @@ router.get('/persons/:id/merge-details', async (req, res, next) => {
       return;
     }
     res.json(details);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const undoPersonActionSchema = z.object({
+  actionType: z.enum(['rename', 'merge']),
+  actor: z.string().optional().default('admin'),
+});
+
+router.post('/persons/actions/:actionId/undo', async (req, res, next) => {
+  try {
+    const data = undoPersonActionSchema.parse(req.body ?? {});
+    if (data.actionType === 'rename') {
+      await undoPersonRename(req.params.actionId, data.actor);
+    } else {
+      await undoPersonMerge(req.params.actionId, data.actor);
+    }
+    res.json({ message: 'Person action undone successfully' });
   } catch (error) {
     next(error);
   }
@@ -382,9 +405,9 @@ const updatePlaceSchema = z.object({
 router.put('/places/:id', async (req, res, next) => {
   try {
     const data = updatePlaceSchema.parse(req.body);
-    await updateCanonicalPlace(req.params.id, data);
+    const { undoActionId } = await updateCanonicalPlaceWithUndo(req.params.id, data);
     const place = await getCanonicalPlaceById(req.params.id);
-    res.json({ place });
+    res.json({ place, undoActionId });
   } catch (error) {
     next(error);
   }
@@ -401,9 +424,9 @@ const mergePlacesSchema = z.object({
 router.post('/places/merge', async (req, res, next) => {
   try {
     const { keepId, mergeId } = mergePlacesSchema.parse(req.body);
-    await mergePlaces(keepId, mergeId);
+    const { undoActionId } = await mergePlacesWithUndo(keepId, mergeId);
     const place = await getCanonicalPlaceById(keepId);
-    res.json({ place, message: 'Places merged successfully' });
+    res.json({ place, message: 'Places merged successfully', undoActionId });
   } catch (error) {
     next(error);
   }
@@ -439,6 +462,25 @@ router.get('/places/:id/merge-details', async (req, res, next) => {
       return;
     }
     res.json(details);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const undoPlaceActionSchema = z.object({
+  actionType: z.enum(['rename', 'merge']),
+  actor: z.string().optional().default('admin'),
+});
+
+router.post('/places/actions/:actionId/undo', async (req, res, next) => {
+  try {
+    const data = undoPlaceActionSchema.parse(req.body ?? {});
+    if (data.actionType === 'rename') {
+      await undoPlaceRename(req.params.actionId, data.actor);
+    } else {
+      await undoPlaceMerge(req.params.actionId, data.actor);
+    }
+    res.json({ message: 'Place action undone successfully' });
   } catch (error) {
     next(error);
   }

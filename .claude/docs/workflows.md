@@ -1,180 +1,123 @@
 # Admin Workflows
 
-Verification and processing workflows for the admin dashboard.
+Current processing and review behavior for the admin surface.
 
-## Two-Track Verification
+## Status Model
 
-Letters have separate verification tracks for transcription and metadata.
+The app currently uses two systems in parallel:
+- Legacy `workflow` state on letters (kept for compatibility)
+- Two-track content statuses for transcript and metadata (primary review model)
 
-### Transcription Track
-| Status | Meaning |
-|--------|---------|
-| `PENDING` | Not yet transcribed |
-| `AI_GENERATED` | AI transcription complete, needs review |
-| `VERIFIED` | Human-reviewed and confirmed |
+### Legacy Workflow (`letters.workflow`)
+- `UPLOADED`
+- `TRANSCRIBING`
+- `TRANSCRIBED`
+- `METADATA_EXTRACTING`
+- `METADATA_DRAFTED`
+- `REVIEWED` (legacy/deprecated)
 
-### Metadata Track
-| Status | Meaning |
-|--------|---------|
-| `PENDING` | Not yet extracted |
-| `AI_GENERATED` | AI extraction complete, needs review |
-| `VERIFIED` | Human-reviewed and confirmed |
+### Two-Track Content Status (`letters.transcript_status`, `letters.metadata_content_status`)
+- `EMPTY` -> no content
+- `AI_DRAFT` -> AI generated
+- `EDITED` -> human edited
+- `VERIFIED` -> human explicitly verified
 
-### Combined Workflow Status
-| Status | When |
-|--------|------|
-| `PENDING` | Both tracks pending |
-| `PROCESSING` | Either track in progress |
-| `REVIEW_NEEDED` | Either track is AI_GENERATED |
-| `VERIFIED` | Both tracks verified |
+`extra_content_status` uses the same enum.
 
-A letter can only be published when both tracks are `VERIFIED`.
+## Letter Review Workflow
 
-## Letter Processing Pipeline
+### Transcript
+1. Transcribe letter pages (`POST /admin/letters/:letterId/transcribe-letter` or bulk).
+2. AI draft is loaded.
+3. Admin edits as needed.
+4. Admin verifies/unverifies transcript via:
+   - `POST /admin/letters/:letterId/verify-transcript`
+   - `POST /admin/letters/:letterId/unverify-transcript`
 
-### 1. Upload
-```
-Images uploaded → Letter record created → PENDING status
-```
+### Metadata
+1. Generate/regenerate metadata from transcript:
+   - `POST /admin/letters/:letterId/regenerate-metadata`
+2. Admin edits fields (auto-save/version snapshots).
+3. Admin verifies/unverifies metadata via:
+   - `POST /admin/letters/:letterId/verify-metadata`
+   - `POST /admin/letters/:letterId/unverify-metadata`
 
-### 2. Transcription
-```
-PENDING → (AI processes) → AI_GENERATED → (human reviews) → VERIFIED
-```
+### Review Mode (LetterReviewPage)
+Letter review now includes a toggleable review mode:
+- line-by-line transcript selection
+- image overlay of selected transcript line
+- compact metadata snapshot for transcript-to-metadata checking
 
-Transcription uses GPT-5.2 vision model. See [ai.md](ai.md).
+Primary files:
+- `frontend/src/pages/admin/LetterReviewPage.tsx`
+- `frontend/src/pages/admin/LetterReviewPage.css`
 
-### 3. Metadata Extraction
-```
-Requires: transcription exists
-PENDING → (AI extracts) → AI_GENERATED → (human reviews) → VERIFIED
-```
+## Sender/Recipient Sync Workflow
 
-V2 extraction includes: sender, recipient, date, emotional tone, relationship, topics, quotes, entities.
+Manual sender/recipient edits now immediately run participant sync (single letter updates, bulk update fields, metadata restore, and resync path):
+1. Normalize names.
+2. Attempt strict safe match.
+3. Auto-create canonical person when no safe match exists.
+4. Upsert sender/recipient links in `letter_persons`.
+5. Sync sender-recipient relationship graph edge where possible.
 
-### 4. Publication
-```
-Requires: transcript VERIFIED + metadata VERIFIED
-visibility: DRAFT → PUBLISHED
-```
+Key file:
+- `backend/src/services/entities/participant-sync.ts`
 
-## Resync Feature
+## Resync Workflow
 
-Ensures metadata consistency when identities change.
+Resync still supports AI-assisted metadata repair when needed:
+- `POST /admin/letters/:letterId/resync-check`
+- `POST /admin/letters/:letterId/resync`
 
-### When to Use
-- After editing sender/recipient names
-- When linked persons are missing
-- When summary/hook uses generic terms
+Used after identity edits or metadata drift to refresh summary/hook/link consistency.
 
-### How It Works
+## Entity Operations Workflow
 
-**Step 1: Audit (GPT-4o-mini)**
-Fast check for issues:
-- Summary says "the sender" instead of actual name
-- No linked person for sender/recipient role
-- Missing relationship type
+### Rename/Merge with Undo
+People and places now return undo action IDs on rename/merge:
+- `PUT /admin/entities/persons/:id`
+- `PUT /admin/entities/places/:id`
+- `POST /admin/entities/persons/merge`
+- `POST /admin/entities/places/merge`
 
-**Step 2: Regenerate (GPT-5.2)**
-Fixes identified issues:
-- Rewrites summary/hook with actual names
-- Creates linked person records
-- Infers relationship type
+Undo endpoints:
+- `POST /admin/entities/persons/actions/:actionId/undo`
+- `POST /admin/entities/places/actions/:actionId/undo`
 
-### Triggering Resync
+Backed by snapshots in `audit_log`.
 
-From Letter Review page:
-1. Click "Resync" button
-2. System audits current metadata
-3. Shows what will be updated
-4. Confirm to apply changes
+### Places Theme Generation
+Admins can generate place themes:
+- `POST /admin/entities/places/:id/themes/generate`
 
-API:
-```
-POST /admin/letters/:id/resync
-```
+Themes are persisted into marked blocks in place notes and exposed on public place pages.
 
 ## Bulk Operations
 
-### Transcribe Selected
-Transcribes multiple letters at once.
-
-- From selection: Uses `POST /admin/letters/bulk/transcribe`
-- Skips letters already transcribed
-
-### Extract Metadata
-Extracts metadata for multiple letters.
-
-- Requires transcription to exist
-- From selection: Uses `POST /admin/letters/bulk/extract-metadata`
-- Skips letters without transcriptions
-
-### Reset Transcriptions
-Clears transcription data to re-run.
-
-- Requires selection (destructive)
-- Sets transcript status back to PENDING
-- Clears transcription text
-
-### Clear Metadata
-Clears all metadata fields.
-
-- Requires selection (destructive)
-- Sets metadata status back to PENDING
-- Clears extracted fields
-
-### Delete
-Soft-deletes selected letters.
-
-- Requires selection
-- Sets `deleted_at` timestamp
-- Can be restored by clearing `deleted_at`
+Supported bulk admin operations:
+- `POST /admin/letters/bulk/transcribe`
+- `POST /admin/letters/bulk/extract-metadata`
+- `PATCH /admin/letters/bulk/update-fields`
+- `POST /admin/letters/bulk/clear-transcriptions`
+- `POST /admin/letters/bulk/clear-metadata`
 
 ## Version History
 
-Changes to transcription and metadata are versioned.
+Transcript and metadata edits can be snapshotted and restored:
+- `GET /admin/letters/:letterId/versions`
+- `POST /admin/letters/:letterId/versions`
+- `POST /admin/letters/:letterId/versions/:versionNumber/restore`
 
-### letter_versions table
-```sql
-letter_id       UUID
-field_type      'transcript' | 'metadata'
-version_number  INTEGER (1, 2, 3...)
-content         JSONB
-source          'ai' | 'human'
-created_at      TIMESTAMP
-```
-
-### Viewing History
-From Letter Review page, click version history icon to see:
-- All previous versions
-- Who made each change (AI vs human)
-- Timestamp of each version
-
-### Rollback
-Select a previous version to restore it. Creates a new version with the old content.
-
-## Admin Dashboard Filters
-
-### Quick Filters
-| Filter | Shows |
-|--------|-------|
-| All | Everything not deleted |
-| Pending | Not yet processed |
-| Review | AI-generated, needs human review |
-| Verified | Both tracks verified |
-| Published | Visible to public |
-
-### Column Visibility
-Toggle columns: Date, Sender, Recipient, Transcript, Metadata, Visibility, Created, Updated
-
-### Collection Filter
-Filter by collection code to see only letters from one collection.
+Table: `letter_versions` (`field_type`, `version_number`, `content`, `source`).
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| [AdminDashboard.tsx](../../frontend/src/pages/admin/AdminDashboard.tsx) | Main dashboard with filters and bulk ops |
-| [LetterReviewPage.tsx](../../frontend/src/pages/admin/LetterReviewPage.tsx) | Individual letter review |
-| [routes/admin/letters.ts](../../backend/src/routes/admin/letters.ts) | Letter endpoints including resync |
-| [pipeline/processor.ts](../../backend/src/pipeline/processor.ts) | Background processing |
+| `frontend/src/pages/admin/AdminDashboard.tsx` | Admin listing + bulk actions |
+| `frontend/src/pages/admin/LetterReviewPage.tsx` | Letter review, edit, verify, review mode |
+| `backend/src/routes/admin/letters.ts` | Letter admin API routes |
+| `backend/src/services/letter-operations.ts` | Letter update/verification/resync/version logic |
+| `backend/src/services/entities/participant-sync.ts` | Sender/recipient canonical linking + relationship sync |
+| `backend/src/routes/admin/entities.ts` | Entity API routes including undo and place themes |

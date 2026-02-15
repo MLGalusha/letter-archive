@@ -6,13 +6,13 @@ Values that must match on both sides. When adding new options, update BOTH.
 
 | Field | Frontend | Backend |
 |-------|----------|---------|
-| createdAt | AdminDashboard.tsx | admin/letters.ts:37 |
-| letterDate | AdminDashboard.tsx | admin/letters.ts:37 |
-| sender | AdminDashboard.tsx | admin/letters.ts:37 |
-| recipient | AdminDashboard.tsx | admin/letters.ts:37 |
-| workflow | AdminDashboard.tsx | admin/letters.ts:37 |
-| visibility | AdminDashboard.tsx | admin/letters.ts:37 |
-| collection | AdminDashboard.tsx | admin/letters.ts:37 |
+| createdAt | AdminDashboard | admin letters query schema |
+| letterDate | AdminDashboard | admin letters query schema |
+| sender | AdminDashboard | admin letters query schema |
+| recipient | AdminDashboard | admin letters query schema |
+| workflow | AdminDashboard | admin letters query schema |
+| visibility | AdminDashboard | admin letters query schema |
+| collection | AdminDashboard | admin letters query schema |
 
 **Files:** `frontend/src/api/letters.ts` (SortField type), `backend/src/routes/admin/letters.ts` (Zod schema)
 
@@ -36,4 +36,4 @@ Values that must match on both sides. When adding new options, update BOTH.
 
 Must exist in `frontend/src/components/common/Icon.tsx`:
 
-`upload`, `edit`, `check`, `delete`, `back`, `plus`, `save`, `process`, `arrow-left`, `arrow-right`, `close`, `confirm`, `eye`, `eye-off`, `reset`, `clear`, `select-all`, `folder`, `file`, `logout`
+`upload`, `edit`, `check`, `delete`, `back`, `plus`, `minus`, `save`, `process`, `arrow-left`, `arrow-right`, `arrows-horizontal`, `close`, `confirm`, `eye`, `eye-off`, `reset`, `clear`, `select-all`, `folder`, `file`, `logout`, `refresh`, `chevron-down`, `chevron-right`, `down`, `right`, `lock`, `unlock`, `zoom-in`, `zoom-out`, `person`, `place`, `relationships`, `columns`, `more`

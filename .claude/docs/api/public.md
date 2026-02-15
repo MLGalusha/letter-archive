@@ -1,6 +1,6 @@
 # Public API
 
-Routes: `backend/src/routes/letters.ts`, `collections.ts`, `images.ts`, `relationships.ts`
+Routes: `backend/src/routes/letters.ts`, `collections.ts`, `images.ts`, `relationships.ts`, `persons.ts`, `places.ts`
 
 ## GET /letters
 

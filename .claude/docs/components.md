@@ -13,7 +13,7 @@ import { Button, Modal, Badge, Icon } from '../../components/common';
 <Icon name="check" size={24} />
 ```
 
-Names: `upload`, `edit`, `check`, `delete`, `back`, `plus`, `save`, `process`, `arrow-left`, `arrow-right`, `close`, `confirm`, `eye`, `eye-off`, `reset`, `clear`, `select-all`, `folder`, `file`, `logout`
+Names: `upload`, `edit`, `check`, `delete`, `back`, `plus`, `minus`, `save`, `process`, `arrow-left`, `arrow-right`, `arrows-horizontal`, `close`, `confirm`, `eye`, `eye-off`, `reset`, `clear`, `select-all`, `folder`, `file`, `logout`, `refresh`, `chevron-down`, `chevron-right`, `down`, `right`, `lock`, `unlock`, `zoom-in`, `zoom-out`, `person`, `place`, `relationships`, `columns`, `more`
 
 ## Button
 

@@ -12,9 +12,11 @@ id, collection_code (unique 3-digit), title, description, created_at
 ### letters
 **Identity:** `id`, `collection_id`, `date_raw`, `letter_date`, `date_confidence`, `type`, `type_sequence`
 
-**State:** `workflow`, `visibility`, `transcript_status`, `metadata_content_status`
+**State:** `workflow`, `visibility`, `transcript_status`, `metadata_content_status`, `extra_content_status`
 
-**Content:** `transcription_text`, `sender`, `recipient`, `location_written`, `hook`, `summary`, `tags[]`
+**Content:** `transcription_text`, `sender`, `recipient`, `location_written`, `hook`, `summary`, `tags[]`, `extra_content_transcript`, `ai_notes`
+
+**V2 metadata:** `emotional_tone`, `sender_recipient_relationship`, `primary_topics[]`, `metadata_v2_json`, `entity_extraction_json`
 
 **Tracking:** `reviewed_at`, `deleted_at`, timestamps
 
@@ -30,7 +32,7 @@ id, letter_id, field_type ('transcript'|'metadata'), version_number, content (js
 
 ### canonical_persons
 ```
-id, canonical_name, aliases[], notes, created_at, updated_at
+id, canonical_name, aliases[], notes, biography, biography_status, biography_verified_at, biography_verified_by, created_at, updated_at
 ```
 Unique individuals across all letters. Has trigram index for fuzzy matching.
 
@@ -38,19 +40,31 @@ Unique individuals across all letters. Has trigram index for fuzzy matching.
 ```
 id, canonical_name, aliases[], place_type, notes, created_at, updated_at
 ```
-Unique locations. `place_type`: city, state, country, address, region, other.
+Unique locations. `place_type`: city, region, country, street, landmark, other.
 
 ### letter_persons
 ```
-id, letter_id, person_id, role, confidence (0-100), context, created_at
+id, letter_id, person_id, role, name_as_written, relationship_to_sender, confidence (0-100), context, created_at
 ```
 Links letters to people. `role`: sender, recipient, mentioned.
 
 ### letter_places
 ```
-id, letter_id, place_id, role, confidence (0-100), context, created_at
+id, letter_id, place_id, role, name_as_written, confidence (0-100), context, created_at
 ```
 Links letters to places. `role`: written_from, mentioned, destination.
+
+### person_relationships
+```
+id, person_a_id, person_b_id, relationship_type, notes, discovered_in_letter_id, confidence, confirmed_by, confirmed_at, created_at, updated_at
+```
+Bidirectional relationship graph between canonical people.
+
+### audit_log
+```
+id, timestamp, user_id, action, entity_type, entity_id, changes (jsonb), created_at
+```
+Used for admin action history including rename/merge undo snapshots.
 
 ## Enums
 
@@ -68,7 +82,7 @@ Links letters to places. `role`: written_from, mentioned, destination.
 
 **place_role:** written_from, mentioned, destination
 
-**place_type:** city, state, country, address, region, other
+**place_type:** city, region, country, street, landmark, other
 
 **emotional_tone:** joyful, hopeful, neutral, anxious, sad, angry, desperate
 
@@ -112,7 +126,6 @@ db.execute(sql`
 ## Commands
 
 ```bash
-npm run db:push     # Push schema (dev)
-npm run db:generate # Generate migration
-npm run db:migrate  # Run migrations
+npm run drizzle:generate # Generate migration
+npm run drizzle:migrate  # Run migrations
 ```

@@ -356,6 +356,50 @@ body.dark .places-page .search-box input::placeholder {
   line-height: 1.35;
 }
 
+.places-page .disambiguation-section {
+  border: 1px solid #ffd9a8;
+  background: #fff8ed;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm);
+}
+
+.places-page .disambiguation-note {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-xs);
+  color: #8a4b00;
+}
+
+.places-page .same-name-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.places-page .same-name-item {
+  border: 1px solid #f1c37e;
+  background: #fff;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  cursor: pointer;
+}
+
+.places-page .same-name-item:hover {
+  background: #fff5e7;
+}
+
+.places-page .same-name-title {
+  display: block;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.places-page .same-name-meta {
+  display: block;
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+
 .places-page .themes-list {
   margin: 0;
   padding-left: 1.2rem;

@@ -177,6 +177,7 @@ created_at  TIMESTAMP
 - Letter references list with one-click navigation into `/admin/letters/:letterId`
 - Supports deep-link query param `?personId=<uuid>` to open a specific person directly (used by Letter Review linked entity jump actions)
 - Relationship chips in the person detail panel are clickable for fast in-page pivoting to related people
+- Same-name disambiguation panel surfaces duplicate canonical-name profiles before merge/rename actions
 
 ### Places Page (`/admin/entities/places`)
 - Lists all canonical places
@@ -190,6 +191,7 @@ created_at  TIMESTAMP
 - Letter references list with one-click navigation into `/admin/letters/:letterId`
 - One-click AI theme generation (writes theme bullets into the notes theme block)
 - Supports deep-link query param `?placeId=<uuid>` to open a specific place directly (used by Letter Review linked entity jump actions)
+- Same-name disambiguation panel surfaces duplicate canonical-name profiles before merge/rename actions
 
 ### Relationships Page (`/admin/entities/relationships`)
 - Table + graph views for person-to-person relationships
@@ -198,6 +200,7 @@ created_at  TIMESTAMP
 - Edit modal for relationship type, confidence, and notes
 - Add relationship modal with person lookup + confidence/notes
 - Direct person navigation links into `/admin/entities/people?personId=<uuid>`
+- One-click metadata backfill action to create/update relationship edges from sender/recipient metadata across letters
 
 ### Entity Review Page (`/admin/entities/:type/:id`)
 - View entity details
@@ -214,8 +217,10 @@ See [api/admin.md](api/admin.md) for full endpoint documentation.
 | GET | `/admin/entities/persons` | List all persons |
 | GET | `/admin/entities/places` | List all places |
 | GET | `/admin/entities/persons/:id` | Get person details |
+| GET | `/admin/entities/persons/:id/same-name-candidates` | List same-name disambiguation candidates for a person |
 | GET | `/admin/entities/persons/:id/merge-details` | Get detailed stats for merge comparison |
 | GET | `/admin/entities/places/:id/merge-details` | Get detailed stats for merge comparison |
+| GET | `/admin/entities/places/:id/same-name-candidates` | List same-name disambiguation candidates for a place |
 | PUT | `/admin/entities/persons/:id` | Update person |
 | POST | `/admin/entities/persons/actions/:actionId/undo` | Undo person rename/merge |
 | POST | `/admin/entities/persons/merge` | Merge two persons |
@@ -225,6 +230,7 @@ See [api/admin.md](api/admin.md) for full endpoint documentation.
 | POST | `/admin/entities/places/actions/:actionId/undo` | Undo place rename/merge |
 | POST | `/admin/entities/places/merge` | Merge two places |
 | POST | `/admin/entities/places/bulk-merge` | Bulk merge multiple places |
+| POST | `/admin/relationships/backfill-from-letters` | Backfill relationships from sender/recipient metadata |
 
 ## Workflow
 

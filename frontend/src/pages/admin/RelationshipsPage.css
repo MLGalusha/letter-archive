@@ -20,6 +20,13 @@
   font-size: var(--font-sm);
 }
 
+.relationships-header-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .relationship-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(160px, 1fr));
@@ -496,6 +503,10 @@ body.dark .person-link:hover {
   .relationships-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .relationships-header-actions {
+    justify-content: flex-start;
   }
 
   .relationship-summary-grid {

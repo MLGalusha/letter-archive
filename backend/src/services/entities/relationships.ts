@@ -1,7 +1,6 @@
 import { and, asc, eq, isNull, ne, or, sql } from 'drizzle-orm';
 import {
   db,
-  letterPersons,
   letters,
   personRelationships,
   type RelationshipType,

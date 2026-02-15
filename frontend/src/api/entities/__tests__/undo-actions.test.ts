@@ -13,15 +13,18 @@ vi.mock("../../client", () => ({
 }));
 
 import {
+  getPersonSameNameCandidates,
   mergePersons,
   undoPersonAction,
   updatePerson,
 } from "../persons";
 import {
+  getPlaceSameNameCandidates,
   mergePlaces,
   undoPlaceAction,
   updatePlace,
 } from "../places";
+import { backfillAdminRelationshipsFromLetters } from "../relationships";
 
 describe("entity undo API actions", () => {
   beforeEach(() => {
@@ -91,5 +94,42 @@ describe("entity undo API actions", () => {
     );
     expect(renameResponse.undoActionId).toBe("undo-place-rename");
     expect(mergeResponse.undoActionId).toBe("undo-place-merge");
+  });
+
+  it("calls same-name candidate endpoints for person and place", async () => {
+    apiGetMock
+      .mockResolvedValueOnce({ candidates: [] })
+      .mockResolvedValueOnce({ candidates: [] });
+
+    await getPersonSameNameCandidates("person-1");
+    await getPlaceSameNameCandidates("place-1");
+
+    expect(apiGetMock).toHaveBeenNthCalledWith(
+      1,
+      "/admin/entities/persons/person-1/same-name-candidates",
+    );
+    expect(apiGetMock).toHaveBeenNthCalledWith(
+      2,
+      "/admin/entities/places/place-1/same-name-candidates",
+    );
+  });
+
+  it("calls relationship metadata backfill endpoint", async () => {
+    apiPostMock.mockResolvedValue({
+      scannedLetters: 12,
+      created: 3,
+      updated: 2,
+      skipped: 7,
+    });
+
+    const response = await backfillAdminRelationshipsFromLetters();
+
+    expect(apiPostMock).toHaveBeenCalledWith("/admin/relationships/backfill-from-letters");
+    expect(response).toEqual({
+      scannedLetters: 12,
+      created: 3,
+      updated: 2,
+      skipped: 7,
+    });
   });
 });

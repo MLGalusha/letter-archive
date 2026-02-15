@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button, Icon, Modal } from "../../components/common";
 import { useToast } from "../../contexts/ToastContext";
 import {
+  backfillAdminRelationshipsFromLetters,
   getAdminRelationships,
   createAdminRelationship,
   updateAdminRelationship,
@@ -57,6 +58,7 @@ export default function RelationshipsPage() {
   const [newRelConfidence, setNewRelConfidence] = useState(100);
   const [newRelNotes, setNewRelNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingRelationship, setEditingRelationship] = useState<PersonRelationship | null>(null);
@@ -220,6 +222,25 @@ export default function RelationshipsPage() {
     }
   };
 
+  const handleBackfillRelationships = async () => {
+    setBackfilling(true);
+    try {
+      const result = await backfillAdminRelationshipsFromLetters();
+      showToast(
+        `Backfill complete: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped (${result.scannedLetters} scanned)`,
+        result.created > 0 || result.updated > 0 ? "success" : "info",
+      );
+      await fetchData();
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to backfill relationships",
+        "error",
+      );
+    } finally {
+      setBackfilling(false);
+    }
+  };
+
   const handleNodeClick = (nodeId: string) => {
     setSelectedNodeId((prev) => (prev === nodeId ? undefined : nodeId));
     setHighlightedPath([]);
@@ -251,7 +272,16 @@ export default function RelationshipsPage() {
             Maintain people-to-people links, resolve low-confidence edges, and jump directly to entity records.
           </p>
         </div>
-        <Button onClick={() => setShowAddModal(true)}>Add Relationship</Button>
+        <div className="relationships-header-actions">
+          <Button
+            variant="secondary"
+            onClick={handleBackfillRelationships}
+            disabled={backfilling}
+          >
+            {backfilling ? "Backfilling..." : "Backfill From Letters"}
+          </Button>
+          <Button onClick={() => setShowAddModal(true)}>Add Relationship</Button>
+        </div>
       </div>
 
       <div className="relationship-summary-grid">

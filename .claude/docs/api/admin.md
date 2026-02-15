@@ -254,8 +254,14 @@ List all canonical places with letter counts.
 ### GET /admin/entities/persons/:id
 Get person with linked letters.
 
+### GET /admin/entities/persons/:id/same-name-candidates
+Returns other person profiles that share the same canonical name (for disambiguation before merge/rename).
+
 ### GET /admin/entities/places/:id
 Get place with linked letters.
+
+### GET /admin/entities/places/:id/same-name-candidates
+Returns other place profiles that share the same canonical name (for disambiguation before merge/rename).
 
 ### GET /admin/entities/persons/search?q=<query>
 Fuzzy person lookup.
@@ -322,6 +328,11 @@ Update relationship fields:
 
 ### DELETE /admin/relationships/:id
 Delete relationship.
+
+### POST /admin/relationships/backfill-from-letters
+Backfill person-to-person relationship edges from letter-level sender/recipient metadata.
+
+Response: `{ scannedLetters, created, updated, skipped }`
 
 ---
 

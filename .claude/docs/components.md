@@ -167,13 +167,14 @@ Location: `frontend/src/pages/admin/EntityManagement/`
   - Shared entity-management helpers for alias parsing, search filtering, and bulk-selection toggling used by `PeoplePage` and `PlacesPage`.
 
 `frontend/src/pages/admin/PeoplePage.tsx` and `frontend/src/pages/admin/PlacesPage.tsx` now reuse this component for the common entity-management list workflow and keep entity-specific detail panels/modals local.
+Each detail panel also includes a same-name disambiguation card so admins can quickly inspect potential same-person/same-place collisions before merging.
 
 ## Admin Relationships Components
 
 Location: `frontend/src/pages/admin/`
 
 - `RelationshipsPage.tsx`
-  - Relationships control center with table/graph modes, quality insights cards, confidence/type/search filters, inline edit modal, and direct navigation to People records.
+  - Relationships control center with table/graph modes, quality insights cards, confidence/type/search filters, metadata backfill action, inline edit modal, and direct navigation to People records.
 - `relationships-utils.ts`
   - Shared filtering and analytics helpers (`filterRelationships`, `buildRelationshipInsights`) used by the relationships page and covered by unit tests.
 

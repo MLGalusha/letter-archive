@@ -29,6 +29,7 @@ import BulkMergeModal from "../../components/BulkMergeModal";
 import { PERSON_RELATIONSHIP_OPTIONS } from "../../constants/enums";
 import type { PersonRelationshipType } from "../../types/Letter";
 import EntityListPanel from "./EntityManagement/EntityListPanel";
+import SameNameCandidatesCard from "./EntityManagement/SameNameCandidatesCard";
 import {
   filterEntitiesBySearch,
   getCanonicalNameConflicts,
@@ -727,30 +728,15 @@ export default function PeoplePage() {
                 )}
               </div>
 
-              {sameNameCandidates.length > 0 && (
-                <div className="detail-section disambiguation-section">
-                  <h3>Same-Name Candidates</h3>
-                  <p className="disambiguation-note">
-                    This name exists on other profiles. Review before merging or bulk renaming references.
-                  </p>
-                  <div className="same-name-list">
-                    {sameNameCandidates.map((candidate) => (
-                      <button
-                        key={candidate.id}
-                        type="button"
-                        className="same-name-item"
-                        onClick={() => openCandidatePerson(candidate.id)}
-                      >
-                        <span className="same-name-title">{candidate.canonicalName}</span>
-                        <span className="same-name-meta">
-                          {candidate.letterCount} letters
-                          {candidate.aliases.length > 0 ? ` · ${candidate.aliases.length} aliases` : ""}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <SameNameCandidatesCard
+                title="Same-Name Candidates"
+                note="This name exists on other profiles. Review before merging or bulk renaming references."
+                candidates={sameNameCandidates}
+                renderMeta={(candidate) =>
+                  `${candidate.letterCount} letters${candidate.aliases.length > 0 ? ` · ${candidate.aliases.length} aliases` : ""}`
+                }
+                onSelect={openCandidatePerson}
+              />
 
               <div className="detail-section">
                 <div className="section-header">

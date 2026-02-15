@@ -163,6 +163,8 @@ Location: `frontend/src/pages/admin/EntityManagement/`
 
 - `EntityListPanel.tsx`
   - Shared entity list/suggestions/search/selection panel used by both `PeoplePage` and `PlacesPage`.
+- `SameNameCandidatesCard.tsx`
+  - Shared disambiguation card used by `PeoplePage` and `PlacesPage` to surface same-name profiles and quick profile pivot actions.
 - `entity-utils.ts`
   - Shared entity-management helpers for alias parsing, search filtering, bulk-selection toggling, and same-name rename conflict detection used by `PeoplePage` and `PlacesPage`.
 

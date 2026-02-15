@@ -23,6 +23,7 @@ import { PLACE_TYPE_OPTIONS } from "../../constants/enums";
 import MergeComparison from "../../components/MergeComparison";
 import BulkMergeModal from "../../components/BulkMergeModal";
 import EntityListPanel from "./EntityManagement/EntityListPanel";
+import SameNameCandidatesCard from "./EntityManagement/SameNameCandidatesCard";
 import {
   filterEntitiesBySearch,
   getCanonicalNameConflicts,
@@ -635,30 +636,15 @@ export default function PlacesPage() {
                 )}
               </div>
 
-              {sameNameCandidates.length > 0 && (
-                <div className="detail-section disambiguation-section">
-                  <h3>Same-Name Candidates</h3>
-                  <p className="disambiguation-note">
-                    This place name appears on other profiles. Confirm context before merging records.
-                  </p>
-                  <div className="same-name-list">
-                    {sameNameCandidates.map((candidate) => (
-                      <button
-                        key={candidate.id}
-                        type="button"
-                        className="same-name-item"
-                        onClick={() => openCandidatePlace(candidate.id)}
-                      >
-                        <span className="same-name-title">{candidate.canonicalName}</span>
-                        <span className="same-name-meta">
-                          {candidate.letterCount} letters
-                          {candidate.placeType ? ` · ${candidate.placeType}` : ""}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <SameNameCandidatesCard
+                title="Same-Name Candidates"
+                note="This place name appears on other profiles. Confirm context before merging records."
+                candidates={sameNameCandidates}
+                renderMeta={(candidate) =>
+                  `${candidate.letterCount} letters${candidate.placeType ? ` · ${candidate.placeType}` : ""}`
+                }
+                onSelect={openCandidatePlace}
+              />
 
               <div className="detail-section">
                 <div className="section-header">

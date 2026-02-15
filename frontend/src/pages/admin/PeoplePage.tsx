@@ -318,10 +318,10 @@ export default function PeoplePage() {
     if (!selectedPerson || !mergeTargetId) return;
     setSaving(true);
     try {
-      const response = await mergePersons(selectedPerson.id, mergeTargetId);
-      if (response.undoActionId) {
+      const mergeResponse = await mergePersons(selectedPerson.id, mergeTargetId);
+      if (mergeResponse.undoActionId) {
         setLastUndoAction({
-          actionId: response.undoActionId,
+          actionId: mergeResponse.undoActionId,
           actionType: "merge",
           label: `Merge into ${selectedPerson.canonicalName}`,
         });
@@ -332,10 +332,10 @@ export default function PeoplePage() {
       setMergeSearchQuery("");
       setMergeSearchResults([]);
       // Refresh list
-      const response = await getAllPersons();
-      setPersons(response.persons);
+      const refreshedList = await getAllPersons();
+      setPersons(refreshedList.persons);
       // Update selected person
-      const updated = response.persons.find((p) => p.id === selectedPerson.id);
+      const updated = refreshedList.persons.find((p) => p.id === selectedPerson.id);
       if (updated) setSelectedPerson(updated);
     } catch (err) {
       showToast(

@@ -314,10 +314,10 @@ export default function PlacesPage() {
     if (!selectedPlace || !mergeTargetId) return;
     setSaving(true);
     try {
-      const response = await mergePlaces(selectedPlace.id, mergeTargetId);
-      if (response.undoActionId) {
+      const mergeResponse = await mergePlaces(selectedPlace.id, mergeTargetId);
+      if (mergeResponse.undoActionId) {
         setLastUndoAction({
-          actionId: response.undoActionId,
+          actionId: mergeResponse.undoActionId,
           actionType: "merge",
           label: `Merge into ${selectedPlace.canonicalName}`,
         });
@@ -330,8 +330,8 @@ export default function PlacesPage() {
       await fetchPlaces();
       setRefreshKey((k) => k + 1);
       // Keep current place selected (it was the "keep" place)
-      const response = await getAllPlaces();
-      const updated = response.places.find((p) => p.id === selectedPlace.id);
+      const refreshedList = await getAllPlaces();
+      const updated = refreshedList.places.find((p) => p.id === selectedPlace.id);
       if (updated) {
         setSelectedPlace(updated);
       }

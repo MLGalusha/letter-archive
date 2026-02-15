@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import {
+  extractPlaceThemesFromNotes,
   getCanonicalPlaceById,
   getLettersForPlaceEnriched,
+  stripPlaceThemesFromNotes,
 } from '../services/entities.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -50,7 +52,8 @@ router.get('/places/:id', async (req, res, next) => {
         canonicalName: place.canonicalName,
         aliases: place.aliases || [],
         placeType: place.placeType,
-        notes: place.notes,
+        notes: stripPlaceThemesFromNotes(place.notes),
+        themes: extractPlaceThemesFromNotes(place.notes),
       },
       stats,
       letters: sortedLetters.map(l => ({

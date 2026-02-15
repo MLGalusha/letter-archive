@@ -6,3 +6,4 @@ export * from './entities/review-queue.js';
 export * from './entities/relationships.js';
 export * from './entities/extraction.js';
 export * from './entities/participant-sync.js';
+export * from './entities/place-themes.js';

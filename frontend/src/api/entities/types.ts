@@ -135,6 +135,7 @@ export interface PublicPlaceDetail {
     aliases: string[];
     placeType?: PlaceType;
     notes?: string;
+    themes?: string[];
   };
   stats: {
     writtenFrom: number;

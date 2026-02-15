@@ -15,6 +15,11 @@ Each canonical entity has:
 - `aliases[]` - alternate names/spellings that refer to the same entity
 - `notes` - optional admin notes
 
+Places can also store AI-generated theme bullets in a marked notes block:
+- `[AI_PLACE_THEMES_START]`
+- `- Theme sentence...`
+- `[AI_PLACE_THEMES_END]`
+
 ### Letter-Entity Links
 Junction tables connecting letters to the entities they mention.
 
@@ -183,6 +188,7 @@ created_at  TIMESTAMP
 - Side-by-side comparison modal before merging
 - Inline undo banner after rename/merge (uses undo action IDs returned by API)
 - Letter references list with one-click navigation into `/admin/letters/:letterId`
+- One-click AI theme generation (writes theme bullets into the notes theme block)
 - Supports deep-link query param `?placeId=<uuid>` to open a specific place directly (used by Letter Review linked entity jump actions)
 
 ### Relationships Page (`/admin/entities/relationships`)
@@ -215,6 +221,7 @@ See [api/admin.md](api/admin.md) for full endpoint documentation.
 | POST | `/admin/entities/persons/merge` | Merge two persons |
 | POST | `/admin/entities/persons/bulk-merge` | Bulk merge multiple persons |
 | PUT | `/admin/entities/places/:id` | Update place |
+| POST | `/admin/entities/places/:id/themes/generate` | Generate place theme bullets |
 | POST | `/admin/entities/places/actions/:actionId/undo` | Undo place rename/merge |
 | POST | `/admin/entities/places/merge` | Merge two places |
 | POST | `/admin/entities/places/bulk-merge` | Bulk merge multiple places |
@@ -248,6 +255,7 @@ When sender/recipient names are updated (single-letter update, bulk update, rest
 | [services/entities/relationships.ts](../../backend/src/services/entities/relationships.ts) | Person relationship CRUD and query helpers |
 | [services/entities/extraction.ts](../../backend/src/services/entities/extraction.ts) | Entity extraction processing/orchestration helpers |
 | [services/entities/participant-sync.ts](../../backend/src/services/entities/participant-sync.ts) | Manual sender/recipient name resolution, link upsert, and relationship sync |
+| [services/entities/place-themes.ts](../../backend/src/services/entities/place-themes.ts) | Place theme extraction/serialization and AI generation helper |
 | [routes/admin/entities.ts](../../backend/src/routes/admin/entities.ts) | API endpoints |
 | [api/entities.ts](../../frontend/src/api/entities.ts) | Frontend compatibility barrel for entity APIs |
 | [api/entities/index.ts](../../frontend/src/api/entities/index.ts) | Frontend entity API module exports |

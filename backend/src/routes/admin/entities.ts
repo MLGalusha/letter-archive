@@ -15,6 +15,8 @@ import {
   undoPersonMerge,
   undoPlaceRename,
   undoPlaceMerge,
+  generatePlaceThemes,
+  extractPlaceThemesFromNotes,
   getLettersForPersonEnriched,
   getLettersForPlaceEnriched,
   getPendingReviewItems,
@@ -366,6 +368,24 @@ router.get('/places/:id', async (req, res, next) => {
 
     const letters = await getLettersForPlaceEnriched(req.params.id);
     res.json({ place, letters });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/places/:id/themes/generate', async (req, res, next) => {
+  try {
+    const result = await generatePlaceThemes(req.params.id);
+    const place = await getCanonicalPlaceById(req.params.id);
+    if (!place) {
+      res.status(404).json({ error: 'Place not found' });
+      return;
+    }
+
+    res.json({
+      place,
+      themes: extractPlaceThemesFromNotes(result.notes),
+    });
   } catch (error) {
     next(error);
   }

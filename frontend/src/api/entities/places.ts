@@ -71,6 +71,14 @@ export async function getPlaceMergeDetails(placeId: string): Promise<PlaceMergeD
   return apiGet<PlaceMergeDetails>(`/admin/entities/places/${placeId}/merge-details`);
 }
 
+export async function generatePlaceThemes(
+  placeId: string,
+): Promise<{ place: CanonicalPlace; themes: string[] }> {
+  return apiPost<{ place: CanonicalPlace; themes: string[] }>(
+    `/admin/entities/places/${placeId}/themes/generate`,
+  );
+}
+
 export async function undoPlaceAction(
   actionId: string,
   actionType: "rename" | "merge",

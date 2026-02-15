@@ -356,6 +356,19 @@ body.dark .places-page .search-box input::placeholder {
   line-height: 1.35;
 }
 
+.places-page .themes-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  color: var(--text);
+}
+
+.places-page .themes-list li {
+  line-height: 1.4;
+}
+
 /* Loading & empty states */
 .places-page .loading-state,
 .places-page .empty-state {

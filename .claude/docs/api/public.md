@@ -65,3 +65,18 @@ Find shortest connection path between two people.
 **Response**:
 - Connected: `{ path: [{ id, name }], edges: [{ id, type }] }`
 - Not connected: `{ path: [], edges: [], message }`
+
+---
+
+## GET /persons/:id
+
+Public person profile with biography, relationships, and published letter references.
+
+---
+
+## GET /places/:id
+
+Public place profile with:
+- `notes` (manual/admin notes only)
+- `themes` (AI-generated place themes)
+- published letter references and role stats

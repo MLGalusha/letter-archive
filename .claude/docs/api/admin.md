@@ -283,6 +283,11 @@ Merge two places: `{ keepId, mergeId }`
 
 Response includes `undoActionId`.
 
+### POST /admin/entities/places/:id/themes/generate
+Generate/update AI themes for a place profile and persist them in notes markers.
+
+Response: `{ place, themes }`
+
 ### POST /admin/entities/persons/bulk-merge
 Bulk merge people: `{ keepId, mergeIds }`
 

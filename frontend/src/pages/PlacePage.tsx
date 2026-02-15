@@ -90,6 +90,17 @@ export default function PlacePage() {
           )}
         </div>
 
+        {place.themes && place.themes.length > 0 && (
+          <section className="notes-section">
+            <h2>Common Themes</h2>
+            <ul className="themes-list">
+              {place.themes.map((theme, index) => (
+                <li key={`${theme}-${index}`}>{theme}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {place.notes && (
           <section className="notes-section">
             <h2>Description</h2>

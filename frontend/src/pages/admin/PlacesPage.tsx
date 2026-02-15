@@ -10,6 +10,7 @@ import {
   searchPlaces,
   mergePlaces,
   bulkMergePlaces,
+  generatePlaceThemes,
   type LetterForEntity,
   undoPlaceAction,
   type PlaceWithCount,
@@ -26,6 +27,35 @@ import {
   toggleSelectedId,
 } from "./EntityManagement/entity-utils";
 import "./PlacesPage.css";
+
+const PLACE_THEME_START_MARKER = "[AI_PLACE_THEMES_START]";
+const PLACE_THEME_END_MARKER = "[AI_PLACE_THEMES_END]";
+
+function extractPlaceThemesFromNotes(notes: string | null | undefined): string[] {
+  if (!notes) return [];
+  const start = notes.indexOf(PLACE_THEME_START_MARKER);
+  const end = notes.indexOf(PLACE_THEME_END_MARKER);
+  if (start === -1 || end === -1 || end < start) return [];
+
+  return notes
+    .slice(start + PLACE_THEME_START_MARKER.length, end)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("- "))
+    .map((line) => line.replace(/^- /, "").trim())
+    .filter(Boolean);
+}
+
+function stripPlaceThemesFromNotes(notes: string | null | undefined): string {
+  if (!notes) return "";
+  const start = notes.indexOf(PLACE_THEME_START_MARKER);
+  const end = notes.indexOf(PLACE_THEME_END_MARKER);
+  if (start === -1 || end === -1 || end < start) return notes;
+
+  const before = notes.slice(0, start).trim();
+  const after = notes.slice(end + PLACE_THEME_END_MARKER.length).trim();
+  return [before, after].filter(Boolean).join("\n\n");
+}
 
 export default function PlacesPage() {
   const navigate = useNavigate();
@@ -57,6 +87,7 @@ export default function PlacesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showMergeModal, setShowMergeModal] = useState(false);
+  const [generatingThemes, setGeneratingThemes] = useState(false);
   const [lastUndoAction, setLastUndoAction] = useState<{
     actionId: string;
     actionType: "rename" | "merge";
@@ -386,6 +417,31 @@ export default function PlacesPage() {
     }
   };
 
+  const handleGenerateThemes = async () => {
+    if (!selectedPlace) return;
+    setGeneratingThemes(true);
+    try {
+      const response = await generatePlaceThemes(selectedPlace.id);
+      showToast(
+        `Generated ${response.themes.length} theme${response.themes.length === 1 ? "" : "s"}`,
+        "success",
+      );
+      await fetchPlaces();
+      const placesResponse = await getAllPlaces();
+      const refreshed = placesResponse.places.find((p) => p.id === selectedPlace.id);
+      if (refreshed) {
+        setSelectedPlace(refreshed);
+      }
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to generate place themes",
+        "error",
+      );
+    } finally {
+      setGeneratingThemes(false);
+    }
+  };
+
   // Get selected entities for bulk merge modal
   const selectedEntities = useMemo(() => {
     return filteredPlaces
@@ -397,6 +453,9 @@ export default function PlacesPage() {
         aliases: p.aliases || [],
       }));
   }, [filteredPlaces, selectedIds]);
+
+  const selectedPlaceThemes = extractPlaceThemesFromNotes(selectedPlace?.notes);
+  const selectedPlaceNotes = stripPlaceThemesFromNotes(selectedPlace?.notes);
 
   return (
     <div className="places-page">
@@ -523,11 +582,36 @@ export default function PlacesPage() {
                     </span>
                   </div>
                 )}
-                {selectedPlace.notes && (
+                {selectedPlaceNotes && (
                   <div className="detail-field">
                     <span className="field-label">Notes:</span>
-                    <span className="field-value">{selectedPlace.notes}</span>
+                    <span className="field-value">{selectedPlaceNotes}</span>
                   </div>
+                )}
+              </div>
+
+              <div className="detail-section">
+                <div className="section-header">
+                  <h3>Themes</h3>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleGenerateThemes}
+                    disabled={generatingThemes}
+                  >
+                    {generatingThemes ? "Generating..." : "Generate"}
+                  </Button>
+                </div>
+                {selectedPlaceThemes.length === 0 ? (
+                  <div className="empty-state">
+                    No themes yet. Generate once transcripted references are available.
+                  </div>
+                ) : (
+                  <ul className="themes-list">
+                    {selectedPlaceThemes.map((theme, index) => (
+                      <li key={`${theme}-${index}`}>{theme}</li>
+                    ))}
+                  </ul>
                 )}
               </div>
 

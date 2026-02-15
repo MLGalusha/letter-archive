@@ -84,6 +84,11 @@ const result = await extractMetadataV2({
 - `primary_topics[]` - from fixed vocabulary
 - `notable_quotes[]` - with position and context
 
+Truthfulness guardrails:
+- Hooks/summaries must be source-faithful and cannot introduce names/events/motives not present in source text
+- Prompt explicitly instructs model to set `hook`/`summary` to `null` when evidence is insufficient
+- Verification checklist includes invented-fact checks before response output
+
 ## Entity Extraction (Prompt 2)
 
 Runs after basic metadata extraction. Extracts rich profiles of people and places.

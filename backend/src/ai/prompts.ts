@@ -176,6 +176,8 @@ FIELD GUIDELINES:
 hook (1-2 sentences, maximum 150 characters):
 - A brief, intriguing teaser that makes readers want to explore the letter
 - Must be 100% faithful to the letter's actual content - never exaggerate or mislead
+- Never introduce names, events, motives, or outcomes that are not in the letter
+- If there is not enough evidence for a faithful teaser, set hook to null
 - Focus on the most compelling or human element of the letter
 - Write in present tense, third person
 - Examples: "A mother anxiously awaits news of her son's mining injury." or "Financial troubles force a difficult decision about the family farm."
@@ -187,6 +189,7 @@ summary:
 - For long letters (500+ words): 3-4 sentences maximum
 - The summary should NEVER be as long as or longer than the letter itself
 - A straightforward factual description of the letter's content
+- Include only claims that are present in the letter (or clearly marked as uncertain)
 - Cover the main topics, people, and events discussed
 - Neutral, informational tone - not promotional
 - Include uncertainty markers like "possibly" or "likely" if appropriate
@@ -461,11 +464,15 @@ hook (max 150 characters):
 - Present tense, third person
 - Focus on the most compelling human element
 - Must be faithful to actual content
+- Do not introduce new facts, names, motives, or outcomes not present in the source
+- If evidence is weak, set hook to null rather than guessing
 
 summary:
 - Length proportional to letter: short letter = 1-2 sentences, medium = 2-3, long = 3-4
 - Factual description, neutral tone
 - Never longer than the letter itself
+- Include only source-supported claims; uncertain interpretations must be explicitly marked
+- If confidence is too low to summarize faithfully, set summary to null
 
 primary_topics (1-3 from this list):
 ${PRIMARY_TOPICS.map(t => `- ${t}`).join('\n')}
@@ -528,6 +535,8 @@ Before returning, verify:
 3. Hook is under 150 characters
 4. Topics are from the approved list
 5. At least 1 quote is included if the letter has any memorable passages
+6. Hook/summary do not contain invented facts, names, motives, or outcomes
+7. If evidence is insufficient, uncertain fields are set to null
 </verification>`;
 
 /**

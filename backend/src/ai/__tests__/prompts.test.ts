@@ -30,6 +30,12 @@ describe('AI prompt builders', () => {
     expect(METADATA_V2_SYSTEM_PROMPT).toContain('COMMON MISTAKES TO AVOID');
   });
 
+  it('enforces truth-first hook and summary rules in metadata v2 prompt', () => {
+    expect(METADATA_V2_SYSTEM_PROMPT).toContain('If evidence is weak, set hook to null');
+    expect(METADATA_V2_SYSTEM_PROMPT).toContain('If confidence is too low to summarize faithfully, set summary to null');
+    expect(METADATA_V2_SYSTEM_PROMPT).toContain('Hook/summary do not contain invented facts');
+  });
+
   it('builds metadata v2 prompt with extra content and context blocks', () => {
     const prompt = buildMetadataV2UserPrompt('Letter text', {
       collectionCode: '007',

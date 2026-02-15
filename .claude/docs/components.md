@@ -205,4 +205,6 @@ Location: `frontend/src/pages/`
 - `CollectionsPage.tsx`
   - Collection browse page now includes search/sort/random discovery controls and aggregate collection stats.
 - `CollectionDetailPage.tsx`
-  - Collection detail adds quick historical context cards (date span + frequent correspondents) to improve narrative discovery.
+  - Collection detail adds quick historical context cards (date span + frequent correspondents) plus an Explore Paths panel with theme/person/story-thread filters to help readers follow specific narrative lanes through the letters.
+- `collection-detail-utils.ts`
+  - Data-only collection discovery helpers (`buildCollectionFacets`, `applyCollectionFilters`, `getThreadKey`) used by the collection explorer UI and covered by unit tests.

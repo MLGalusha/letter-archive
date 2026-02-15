@@ -4,6 +4,10 @@ import { getCollectionByCode, type CollectionWithLetters } from '../api/collecti
 import LetterCard from '../components/LetterCard/LetterCard';
 import Breadcrumb from '../components/Breadcrumb';
 import Footer from '../components/Footer/Footer';
+import {
+  applyCollectionFilters,
+  buildCollectionFacets,
+} from './collection-detail-utils';
 import './CollectionDetailPage.css';
 
 export default function CollectionDetailPage() {
@@ -13,6 +17,9 @@ export default function CollectionDetailPage() {
   const [collection, setCollection] = useState<CollectionWithLetters | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+  const [selectedCorrespondent, setSelectedCorrespondent] = useState<string | null>(null);
+  const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null);
   const collectionLetters = collection?.letters ?? [];
 
   const topCorrespondents = useMemo(() => {
@@ -41,6 +48,25 @@ export default function CollectionDetailPage() {
     return { start: sorted[0], end: sorted[sorted.length - 1] };
   }, [collectionLetters]);
 
+  const facets = useMemo(
+    () => buildCollectionFacets(collectionLetters),
+    [collectionLetters],
+  );
+
+  const filteredLetters = useMemo(
+    () =>
+      applyCollectionFilters(collectionLetters, {
+        topic: selectedTopic,
+        correspondent: selectedCorrespondent,
+        threadKey: selectedThreadKey,
+      }),
+    [collectionLetters, selectedCorrespondent, selectedThreadKey, selectedTopic],
+  );
+
+  const hasActiveFilters = Boolean(
+    selectedTopic || selectedCorrespondent || selectedThreadKey,
+  );
+
   useEffect(() => {
     if (!collectionCode) return;
 
@@ -58,12 +84,33 @@ export default function CollectionDetailPage() {
     fetchCollection();
   }, [collectionCode]);
 
+  useEffect(() => {
+    if (selectedTopic && !facets.topics.some((topic) => topic.value === selectedTopic)) {
+      setSelectedTopic(null);
+    }
+    if (
+      selectedCorrespondent &&
+      !facets.correspondents.some((correspondent) => correspondent.value === selectedCorrespondent)
+    ) {
+      setSelectedCorrespondent(null);
+    }
+    if (selectedThreadKey && !facets.threads.some((thread) => thread.key === selectedThreadKey)) {
+      setSelectedThreadKey(null);
+    }
+  }, [facets, selectedCorrespondent, selectedThreadKey, selectedTopic]);
+
   const handleLetterClick = (letterId: string) => {
     navigate(`/letter/${letterId}`);
   };
 
   const handleBack = () => {
     navigate('/collections');
+  };
+
+  const clearFilters = () => {
+    setSelectedTopic(null);
+    setSelectedCorrespondent(null);
+    setSelectedThreadKey(null);
   };
 
   if (loading) {
@@ -142,8 +189,86 @@ export default function CollectionDetailPage() {
           </div>
         )}
 
+        <section className="collection-explorer">
+          <div className="collection-explorer-header">
+            <h3>Explore Paths</h3>
+            {hasActiveFilters && (
+              <button type="button" onClick={clearFilters} className="clear-filters-btn">
+                Clear Filters
+              </button>
+            )}
+          </div>
+
+          {facets.topics.length > 0 && (
+            <div className="explorer-group">
+              <span className="explorer-label">Themes</span>
+              <div className="chip-list">
+                {facets.topics.map((topic) => (
+                  <button
+                    key={topic.value}
+                    type="button"
+                    className={`filter-chip ${selectedTopic === topic.value ? 'active' : ''}`}
+                    onClick={() => setSelectedTopic((current) => (current === topic.value ? null : topic.value))}
+                  >
+                    {topic.value} <small>{topic.count}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {facets.correspondents.length > 0 && (
+            <div className="explorer-group">
+              <span className="explorer-label">People</span>
+              <div className="chip-list">
+                {facets.correspondents.map((correspondent) => (
+                  <button
+                    key={correspondent.value}
+                    type="button"
+                    className={`filter-chip ${selectedCorrespondent === correspondent.value ? 'active' : ''}`}
+                    onClick={() =>
+                      setSelectedCorrespondent((current) =>
+                        current === correspondent.value ? null : correspondent.value,
+                      )
+                    }
+                  >
+                    {correspondent.value} <small>{correspondent.count}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {facets.threads.length > 0 && (
+            <div className="explorer-group">
+              <span className="explorer-label">Story Threads</span>
+              <div className="thread-list">
+                {facets.threads.map((thread) => (
+                  <button
+                    key={thread.key}
+                    type="button"
+                    className={`thread-card ${selectedThreadKey === thread.key ? 'active' : ''}`}
+                    onClick={() =>
+                      setSelectedThreadKey((current) => (current === thread.key ? null : thread.key))
+                    }
+                  >
+                    <strong>{thread.sender} → {thread.recipient}</strong>
+                    <span>{thread.count} letters</span>
+                    {thread.latestDate && <small>Latest: {thread.latestDate}</small>}
+                    {thread.sampleHook && <p>{thread.sampleHook}</p>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        <p className="filtered-count-text">
+          Showing {filteredLetters.length} of {collection.letters.length} letters
+        </p>
+
         <div className="letter-grid">
-          {collection.letters.map((letter) => (
+          {filteredLetters.map((letter) => (
             <LetterCard
               key={letter.id}
               id={letter.id}
@@ -157,9 +282,14 @@ export default function CollectionDetailPage() {
           ))}
         </div>
 
-        {collection.letters.length === 0 && (
+        {filteredLetters.length === 0 && (
           <div className="no-results">
-            <p>No published letters in this collection yet.</p>
+            <p>No letters match the current filters.</p>
+            {hasActiveFilters && (
+              <button type="button" onClick={clearFilters} className="clear-filters-inline">
+                Reset filters
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -7,6 +7,7 @@ const envSchema = z.object({
   STORAGE_DIR: z.string().default('./storage'),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-5.2'),
+  CORS_ORIGINS: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

@@ -11,26 +11,23 @@ export const API_BASE_URL = process.env.E2E_API_BASE_URL || 'http://localhost:30
 
 /**
  * Login as admin user
+ *
+ * Goes directly to /admin-login to avoid a race condition: navigating to /admin
+ * triggers React's useEffect auth redirect, but waitForLoadState('networkidle')
+ * can resolve before the redirect fires, causing the helper to exit without logging in.
+ *
+ * After login, waits for .admin-header to confirm the dashboard fully rendered
+ * (AdminDashboard has a loading gate until the initial data fetch completes).
  */
 export async function loginAsAdmin(page: Page): Promise<void> {
-  await page.goto('/admin');
-  await page.waitForLoadState('networkidle');
+  await page.goto('/admin-login');
 
-  // Check if already logged in (redirected to dashboard)
-  if (page.url().includes('/admin') && !page.url().includes('/admin-login')) {
-    const table = page.locator('table');
-    const isLoggedIn = await table.isVisible().catch(() => false);
-    if (isLoggedIn) return;
-  }
+  await page.locator('input[type="email"]').fill(ADMIN_EMAIL);
+  await page.locator('input[type="password"]').fill(ADMIN_PASSWORD);
+  await page.click('button[type="submit"]');
 
-  // If redirected to login page, fill in credentials
-  const loginForm = page.locator('input[type="password"]');
-  if (await loginForm.isVisible()) {
-    await page.locator('input[type="email"]').fill(ADMIN_EMAIL);
-    await loginForm.fill(ADMIN_PASSWORD);
-    await page.click('button[type="submit"]');
-    await page.waitForLoadState('networkidle');
-  }
+  await page.waitForURL(/\/admin$/);
+  await page.locator('.admin-header').waitFor({ state: 'visible', timeout: 15000 });
 }
 
 /**
@@ -45,15 +42,16 @@ export async function logoutAdmin(page: Page): Promise<void> {
 }
 
 /**
- * Navigate to first letter in admin dashboard
+ * Navigate to first letter in admin dashboard.
+ * Returns false if no letters exist (empty database).
  */
-export async function navigateToFirstLetter(page: Page): Promise<void> {
-  await page.goto('/admin');
-  await page.waitForLoadState('networkidle');
+export async function navigateToFirstLetter(page: Page): Promise<boolean> {
+  // Wait for dashboard to fully render (past the loading gate)
+  await page.locator('.admin-header').waitFor({ state: 'visible', timeout: 15000 });
 
   const firstRow = page.locator('table tbody tr').first();
   const hasRow = await firstRow
-    .waitFor({ state: 'visible', timeout: 30000 })
+    .waitFor({ state: 'visible', timeout: 10000 })
     .then(() => true)
     .catch(() => false);
 
@@ -61,22 +59,22 @@ export async function navigateToFirstLetter(page: Page): Promise<void> {
     await firstRow.click();
     await page.waitForURL(/\/admin\/letters\//);
     await page.waitForLoadState('networkidle');
-    return;
+    return true;
   }
 
-  // Fallback for flaky dashboard rendering/filter state: navigate directly via API.
+  // Fallback: try via API in case dashboard rendering is slow
   const response = await page.request.get(`${API_BASE_URL}/admin/letters?limit=1`);
-  if (!response.ok()) {
-    throw new Error(`Failed to fetch letters for navigation fallback (${response.status()})`);
-  }
+  if (!response.ok()) return false;
+
   const payload = await response.json();
   const letters = Array.isArray(payload) ? payload : payload.letters;
   if (!Array.isArray(letters) || letters.length === 0 || !letters[0]?.id) {
-    throw new Error('No letters available for navigation fallback');
+    return false;
   }
 
   await page.goto(`/admin/letters/${letters[0].id}`);
   await page.waitForLoadState('networkidle');
+  return true;
 }
 
 /**

@@ -1,13 +1,19 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { unlink } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { processUploadedFile } from '../../services/upload.js';
 
 const router = Router();
 
+// Resolve uploads temp dir relative to the backend project root (not process.cwd())
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const UPLOADS_TEMP_DIR = join(__dirname, '..', '..', '..', 'uploads');
+
 // Configure multer for file uploads
 const upload = multer({
-  dest: 'uploads/',
+  dest: UPLOADS_TEMP_DIR,
   limits: {
     fileSize: 50 * 1024 * 1024, // 50MB max file size
   },

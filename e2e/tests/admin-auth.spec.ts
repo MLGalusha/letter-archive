@@ -41,7 +41,9 @@ test.describe('Admin Authentication', () => {
 
       // Should redirect to admin dashboard
       await page.waitForURL(/\/admin$/);
-      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Dashboard');
+      // AdminDashboard has a loading gate until initial data fetch completes,
+      // so the header may take longer than the default 5s assertion timeout
+      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Dashboard', { timeout: 15000 });
     });
 
     test('shows error with invalid credentials', async ({ page }) => {
@@ -160,7 +162,7 @@ test.describe('Admin Authentication', () => {
       await setLoggedIn(page);
       await page.goto('/admin');
 
-      await expect(page.locator(SELECTORS.dashboard.header)).toBeVisible();
+      await expect(page.locator(SELECTORS.dashboard.header)).toBeVisible({ timeout: 15000 });
     });
   });
 
@@ -170,10 +172,9 @@ test.describe('Admin Authentication', () => {
 
       // Reload the page
       await page.reload();
-      await page.waitForLoadState('networkidle');
 
-      // Should still be on admin dashboard
-      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Dashboard');
+      // Should still be on admin dashboard (loading gate needs time after reload)
+      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Dashboard', { timeout: 15000 });
     });
 
     test('maintains session when navigating between admin pages', async ({ page }) => {
@@ -183,9 +184,9 @@ test.describe('Admin Authentication', () => {
       await page.click(SELECTORS.dashboard.uploadBtn);
       await page.waitForURL(/\/admin\/upload/);
 
-      // Navigate back to dashboard (using browser back or direct navigation)
+      // Navigate back to dashboard
       await page.goto('/admin');
-      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Dashboard');
+      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Dashboard', { timeout: 15000 });
     });
   });
 

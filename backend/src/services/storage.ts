@@ -1,8 +1,12 @@
 import { mkdir, copyFile, access, readFile, stat, unlink } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { env } from '../config/env.js';
 import { createLogger } from '../utils/logger.js';
+
+// Backend project root, used to resolve relative paths reliably regardless of cwd
+const PROJECT_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const log = createLogger({ module: 'storage' });
 
@@ -135,10 +139,11 @@ export async function storeFile(
 
 /**
  * Gets the full absolute path for a storage path.
+ * Resolves relative paths against the backend project root (not process.cwd()).
  */
 export function getAbsoluteStoragePath(storagePath: string): string {
   if (storagePath.startsWith('/')) {
     return storagePath;
   }
-  return join(process.cwd(), storagePath);
+  return join(PROJECT_ROOT, storagePath);
 }

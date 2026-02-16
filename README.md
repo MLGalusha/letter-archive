@@ -1,115 +1,116 @@
 # Letter Archive
 
-A platform for preserving and exploring historical letter collections. Transforms physical letters into a searchable digital archive where visitors can discover stories, follow relationships, and explore personal history.
+A full-stack platform for preserving and exploring historical letter collections. Transforms physical letters into a searchable digital archive using AI-powered transcription, structured metadata extraction, and a human-in-the-loop verification workflow.
 
-## The Vision
+> This is a personal project built around a private collection of historical letters. The archive data is not included in this repository — the codebase is shared to showcase the architecture and engineering.
 
-The goal is an AI-powered experience that feels like talking to **someone who has read every letter**:
+<!-- Screenshots: crop browser chrome before adding -->
+<!-- ![Admin Review](docs/screenshots/admin-review.png) -->
+<!-- ![Public Browse](docs/screenshots/public-browse.png) -->
 
-> "What letters do you have from the Civil War?"
-> "Tell me about someone who experienced loss."
-> "What was happening in 1942?"
+## What It Does
 
-Not database queries—thoughtful answers from a guide who knows all the stories.
+**For the archivist (admin):**
+- Upload scanned letter images organized by collection
+- AI transcribes handwritten text from letter scans
+- AI extracts structured metadata: dates, senders, recipients, locations, topics, emotional tone, and a narrative "hook" line
+- Two-track verification workflow — transcript and metadata reviewed independently
+- Entity management — merge duplicate people/places, track relationships across letters
+- Resync system to propagate identity corrections across all derived metadata
 
-## Features
+**For the visitor (public):**
+- Browse and search digitized collections
+- View high-resolution scans with zoom/pan alongside verified transcriptions
+- Filter by date, person, location, collection, or topic
+- Explore connections — follow a person, place, or theme across letters
+- Discovery navigation — jump between related entities while reading
 
-### Public Archive
-- Browse and search digitized letter collections
-- View high-quality scans with zoom and pan
-- Read AI-generated transcriptions (human-verified)
-- Filter by date, location, sender, recipient, or theme
-- Explore connections between people and places across letters
+## Architecture
 
-### Admin Dashboard
-- Upload and organize letter images by collection
-- AI-powered transcription with GPT-5.2
-- Structured metadata extraction (dates, people, places, topics)
-- Two-track verification: transcription review + metadata confirmation
-- Entity management: merge duplicate people/places, track relationships
-- Resync feature: automatically update derived fields when identities change
+```
+┌─────────────────────────────────────────────────────────┐
+│  React Frontend (Vite + TypeScript + React Router)      │
+│  ┌───────────┐ ┌──────────────┐ ┌────────────────────┐ │
+│  │ Public UI │ │ Admin Dashboard │ │ Image Viewer     │ │
+│  └───────────┘ └──────────────┘ └────────────────────┘ │
+└────────────────────────┬────────────────────────────────┘
+                         │ REST API
+┌────────────────────────┴────────────────────────────────┐
+│  Express Backend (Node.js + TypeScript)                  │
+│  ┌──────────┐ ┌──────────────┐ ┌──────────────────────┐│
+│  │ Routes   │ │ AI Pipeline  │ │ Processing Engine    ││
+│  └──────────┘ └──────┬───────┘ └──────────────────────┘│
+└───────────┬──────────┼──────────────────────────────────┘
+            │          │
+     ┌──────┴───┐  ┌───┴──────┐
+     │ Postgres │  │ OpenAI   │
+     │ (Drizzle)│  │ API      │
+     └──────────┘  └──────────┘
+```
 
-### AI Pipeline
-- **Transcription**: OCR-quality text from handwritten letters
-- **Metadata Extraction**: Structured data with confidence scores
-- **Controlled Vocabularies**: Consistent categorization (relationship types, emotional tones, topics)
-- **Resync**: Two-model approach for metadata consistency auditing and regeneration
-
-## Tech Stack
+### Tech Stack
 
 | Layer | Technology |
 |-------|------------|
 | Frontend | React, TypeScript, Vite, React Router |
 | Backend | Node.js, Express, TypeScript |
 | Database | PostgreSQL with Drizzle ORM |
-| AI | OpenAI GPT-5.2 (structured outputs) |
-| Storage | Local filesystem (GCP planned) |
+| AI | OpenAI structured outputs for transcription + metadata extraction |
+| Image Viewing | Pan/zoom viewer for high-res letter scans |
 
-## Getting Started
+## Key Engineering Decisions
 
-### Prerequisites
-- Node.js 20+
-- PostgreSQL 15+
-- OpenAI API key
+**AI Pipeline with Structured Outputs** — Transcription and metadata extraction use OpenAI's structured output mode to return validated JSON matching TypeScript schemas. This ensures consistent enum values (relationship types, emotional tones, topics) without post-processing.
 
-### Installation
+**Two-Track Verification** — Transcript status and metadata status are tracked independently (`EMPTY` → `AI_DRAFT` → `EDITED` → `VERIFIED`), separate from publication visibility. An archivist can verify a transcript while metadata is still in AI draft.
 
-```bash
-# Clone the repository
-git clone https://github.com/your-username/letter-archive.git
-cd letter-archive
+**Entity Resolution** — People and places extracted from letters are linked to canonical entities. When duplicates are discovered and merged, a resync system re-evaluates all affected letters using a two-model approach: one model audits what changed, another regenerates derived fields.
 
-# Install dependencies
-cd backend && npm install
-cd ../frontend && npm install
+**Controlled Vocabularies** — Metadata fields like relationship types, emotional tones, and topics use fixed enums enforced at the AI prompt level and validated in the schema. This keeps the archive consistent and filterable without manual tagging.
 
-# Set up environment
-cp backend/.env.example backend/.env
-# Edit .env with your database URL and OpenAI key
-
-# Run database migrations
-cd backend && npm run db:push
-
-# Start development servers
-cd backend && npm run dev     # API on localhost:3000
-cd frontend && npm run dev    # UI on localhost:5173
-```
+**Filename-Driven Organization** — Letter images follow a structured naming convention (`{collection}-{type}-{date}-{page}.jpg`) that encodes collection, document type (letter/envelope/cover), date, and page number — parsed automatically on upload.
 
 ## Project Structure
 
 ```
 letter-archive/
 ├── frontend/src/
-│   ├── components/common/   # Reusable UI components
+│   ├── components/common/   # Reusable UI component library
 │   ├── pages/               # Route pages (public + admin)
-│   ├── api/                 # API client functions
-│   └── types/               # TypeScript interfaces
+│   ├── api/                 # API client layer
+│   └── styles/              # CSS custom properties design system
 │
 ├── backend/src/
 │   ├── routes/              # Express route handlers
 │   ├── services/            # Business logic
 │   ├── db/                  # Drizzle schema + migrations
-│   ├── ai/                  # OpenAI integration + prompts
+│   ├── ai/                  # OpenAI integration + prompt templates
 │   └── pipeline/            # Processing workflows
 │
 └── .claude/docs/            # Architecture documentation
 ```
 
+## Not a Template
+
+This repository is shared as a portfolio piece, not a reusable starter kit. The application is built around a specific private letter collection and requires:
+
+- The original scanned letter images (not included)
+- A PostgreSQL database with the archive data
+- An OpenAI API key for the AI pipeline
+
+The codebase demonstrates the architecture, AI integration patterns, and full-stack workflow — but is not designed to be cloned and run as-is.
+
 ## Documentation
 
-See [.claude/docs/](.claude/docs/) for detailed documentation:
-- [API Reference](.claude/docs/api/) - Endpoint documentation
-- [Database Schema](.claude/docs/database.md) - Table structures
-- [Processing Pipeline](.claude/docs/processing.md) - AI workflow
-- [Components](.claude/docs/components.md) - UI component library
+See [.claude/docs/](.claude/docs/) for detailed architecture docs:
 
-## Roadmap
-
-- [ ] Public browsing interface
-- [ ] Semantic search with vector embeddings
-- [ ] AI guide chat interface
-- [ ] Collection sharing and permissions
-- [ ] GCP deployment with Cloud Storage
+- [About This Project](.claude/docs/about-this-project.md) — Vision and goals
+- [API Reference](.claude/docs/api/) — Endpoint documentation
+- [Database Schema](.claude/docs/database.md) — Table structures and relationships
+- [AI Integration](.claude/docs/ai.md) — Prompt design and structured outputs
+- [Processing Pipeline](.claude/docs/processing.md) — Transcription and extraction workflow
+- [Entity Management](.claude/docs/entities.md) — People, places, and relationship tracking
+- [Components](.claude/docs/components.md) — Frontend UI component library
 
 ## License
 

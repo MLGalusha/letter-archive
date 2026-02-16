@@ -142,6 +142,13 @@ jobs:
           cat /tmp/frontend.log || true
           exit 1
 
+      - name: Warmup frontend
+        run: |
+          # Pre-load admin pages so Vite compiles all modules before tests start
+          curl -sf http://localhost:5174/admin-login >/dev/null || true
+          curl -sf http://localhost:5174/admin >/dev/null || true
+          sleep 2
+
       - name: Run smoke e2e
         working-directory: e2e
         run: npx playwright test tests/admin-auth.spec.ts tests/navigation.spec.ts --workers=1
@@ -252,6 +259,12 @@ jobs:
           echo "Frontend did not become ready"
           cat /tmp/frontend.log || true
           exit 1
+
+      - name: Warmup frontend
+        run: |
+          curl -sf http://localhost:5174/admin-login >/dev/null || true
+          curl -sf http://localhost:5174/admin >/dev/null || true
+          sleep 2
 
       - name: Run full e2e
         working-directory: e2e

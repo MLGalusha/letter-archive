@@ -20,14 +20,18 @@ export const API_BASE_URL = process.env.E2E_API_BASE_URL || 'http://localhost:30
  * (AdminDashboard has a loading gate until the initial data fetch completes).
  */
 export async function loginAsAdmin(page: Page): Promise<void> {
-  await page.goto('/admin-login');
+  // Use networkidle to ensure Vite has finished serving all JS modules
+  // (cold CI Vite dev server compiles on-demand, which can be slow on first request)
+  await page.goto('/admin-login', { waitUntil: 'networkidle' });
 
   await page.locator('input[type="email"]').fill(ADMIN_EMAIL);
   await page.locator('input[type="password"]').fill(ADMIN_PASSWORD);
   await page.click('button[type="submit"]');
 
   await page.waitForURL(/\/admin$/);
-  await page.locator('.admin-header').waitFor({ state: 'visible', timeout: 15000 });
+  // AdminDashboard has a loading gate until initial data fetch completes.
+  // In CI, cold Vite + API call can take 15-20s on the first test.
+  await page.locator('.admin-header').waitFor({ state: 'visible', timeout: 30000 });
 }
 
 /**
@@ -47,7 +51,7 @@ export async function logoutAdmin(page: Page): Promise<void> {
  */
 export async function navigateToFirstLetter(page: Page): Promise<boolean> {
   // Wait for dashboard to fully render (past the loading gate)
-  await page.locator('.admin-header').waitFor({ state: 'visible', timeout: 15000 });
+  await page.locator('.admin-header').waitFor({ state: 'visible', timeout: 30000 });
 
   const firstRow = page.locator('table tbody tr').first();
   const hasRow = await firstRow

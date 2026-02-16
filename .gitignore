@@ -53,3 +53,7 @@ e2e/Users/
 # Backend specific
 backend/uploads/*
 !backend/uploads/.gitkeep
+
+# Claude
+CLAUDE.md
+.claude/

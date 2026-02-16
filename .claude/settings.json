@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allowedTools": ["Bash"],
-    "allow": [
-      "Edit:.claude/plans/**",
-      "Write:.claude/plans/**"
-    ]
-  }
-}

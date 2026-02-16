@@ -18,6 +18,7 @@ function makeLetter(overrides: Partial<Letter>): Letter {
       dateRaw: "19320101",
       hook: "Discusses family finances.",
       tags: [],
+      verified: false,
       ...overrides.metadata,
     },
     status: overrides.status || "published",

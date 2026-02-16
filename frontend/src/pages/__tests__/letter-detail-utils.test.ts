@@ -8,7 +8,7 @@ function buildLetter(overrides: Partial<Letter> = {}): Letter {
     title: overrides.title || "Letter",
     images: overrides.images || [],
     transcript: overrides.transcript || { pages: [], fullText: "", verified: false },
-    metadata: overrides.metadata || {},
+    metadata: overrides.metadata || { verified: false },
     status: overrides.status || "published",
     workflowState: overrides.workflowState || "REVIEWED",
     visibility: overrides.visibility || "PUBLISHED",

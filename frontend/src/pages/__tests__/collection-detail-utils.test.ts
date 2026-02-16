@@ -43,6 +43,7 @@ describe("collection detail utils", () => {
         hook: "Discusses ration planning.",
         tags: ["war", "family"],
         primaryTopics: ["Wartime life"],
+        verified: false,
       },
     }),
     makeLetter({
@@ -54,6 +55,7 @@ describe("collection detail utils", () => {
         hook: "Talks about local labor strike.",
         tags: ["labor"],
         primaryTopics: ["work"],
+        verified: false,
       },
     }),
     makeLetter({
@@ -64,6 +66,7 @@ describe("collection detail utils", () => {
         dateRaw: "19320311",
         hook: "Mentions family travel plans.",
         tags: ["family", "travel"],
+        verified: false,
       },
     }),
   ];

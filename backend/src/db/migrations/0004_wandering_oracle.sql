@@ -28,6 +28,8 @@ CREATE TYPE "public"."letter_type" AS ENUM('L', 'P', 'E', 'V', 'A', 'D', 'C', 'N
 ALTER TABLE "public"."letters" ALTER COLUMN "type" SET DATA TYPE "public"."letter_type" USING "type"::"public"."letter_type";--> statement-breakpoint
 ALTER TABLE "letters" DROP CONSTRAINT IF EXISTS "published_requires_review";--> statement-breakpoint
 ALTER TABLE "public"."letters" ALTER COLUMN "visibility" SET DATA TYPE text;--> statement-breakpoint
+ALTER TABLE "public"."letters" ALTER COLUMN "visibility" DROP DEFAULT;--> statement-breakpoint
 DROP TYPE "public"."visibility_state";--> statement-breakpoint
 CREATE TYPE "public"."visibility_state" AS ENUM('PUBLISHED', 'HIDDEN');--> statement-breakpoint
-ALTER TABLE "public"."letters" ALTER COLUMN "visibility" SET DATA TYPE "public"."visibility_state" USING "visibility"::"public"."visibility_state";
+ALTER TABLE "public"."letters" ALTER COLUMN "visibility" SET DATA TYPE "public"."visibility_state" USING "visibility"::"public"."visibility_state";--> statement-breakpoint
+ALTER TABLE "public"."letters" ALTER COLUMN "visibility" SET DEFAULT 'HIDDEN'::"public"."visibility_state";

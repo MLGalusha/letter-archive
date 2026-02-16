@@ -16,7 +16,9 @@
     "drizzle:generate": "drizzle-kit generate",
     "drizzle:migrate": "drizzle-kit migrate",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:validate-migrations": "vitest run src/db/__tests__/migrations.test.ts",
+    "db:test-migrations": "bash scripts/test-migrations.sh"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -1,3 +1,4 @@
+CREATE EXTENSION IF NOT EXISTS pg_trgm;--> statement-breakpoint
 CREATE TYPE "public"."entity_review_status" AS ENUM('pending', 'confirmed', 'rejected', 'new_entity');--> statement-breakpoint
 CREATE TYPE "public"."person_role" AS ENUM('sender', 'recipient', 'mentioned');--> statement-breakpoint
 CREATE TYPE "public"."place_role" AS ENUM('written_from', 'mentioned', 'destination');--> statement-breakpoint

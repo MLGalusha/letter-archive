@@ -54,15 +54,29 @@
     {
       "idx": 7,
       "version": "7",
-      "when": 1770810110899,
-      "tag": "0008_add_biography_fields",
+      "when": 1770750000000,
+      "tag": "0007_drop_published_requires_verified",
       "breakpoints": true
     },
     {
       "idx": 8,
       "version": "7",
+      "when": 1770810110899,
+      "tag": "0008_add_biography_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
       "when": 1770829846889,
       "tag": "0008_last_lake",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1770830000000,
+      "tag": "0001_add_gin_indexes_and_triggers",
       "breakpoints": true
     }
   ]

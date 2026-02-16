@@ -126,17 +126,17 @@ test.describe('Navigation', () => {
     });
 
     test('can navigate to review queue', async ({ page }) => {
-      const reviewLink = page.locator('a[href="/admin/review"], a:has-text("Review")');
+      const reviewLink = page.locator('a[href="/admin/entities/review"]');
 
       if (await reviewLink.first().isVisible()) {
         await reviewLink.first().click();
-        await page.waitForURL(/\/admin\/review/);
+        await page.waitForURL(/\/admin\/entities\/review/);
       } else {
-        await page.goto('/admin/review');
+        await page.goto('/admin/entities/review');
         await page.waitForLoadState('networkidle');
       }
 
-      expect(page.url()).toContain('/admin/review');
+      expect(page.url()).toContain('/admin/entities/review');
     });
 
     test('can navigate back to dashboard from letter review', async ({ page }) => {

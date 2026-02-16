@@ -1020,21 +1020,25 @@ export default function AdminDashboard() {
 
   if (loading && isInitialLoad) {
     return (
-      <div className="admin-dashboard">
-        <div className="admin-content loading-content">
-          <p>Loading letters...</p>
+      <AdminLayout title="Dashboard" fullHeight>
+        <div className="admin-dashboard">
+          <div className="admin-content loading-content">
+            <p>Loading letters...</p>
+          </div>
         </div>
-      </div>
+      </AdminLayout>
     );
   }
 
   if (error) {
     return (
-      <div className="admin-dashboard">
-        <div className="admin-content error-content">
-          <p className="error-message">{error}</p>
+      <AdminLayout title="Dashboard" fullHeight>
+        <div className="admin-dashboard">
+          <div className="admin-content error-content">
+            <p className="error-message">{error}</p>
+          </div>
         </div>
-      </div>
+      </AdminLayout>
     );
   }
 

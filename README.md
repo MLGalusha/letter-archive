@@ -11,6 +11,7 @@ A full-stack platform for preserving and exploring historical letter collections
 ## What It Does
 
 **For the archivist (admin):**
+
 - Upload scanned letter images organized by collection
 - AI transcribes handwritten text from letter scans
 - AI extracts structured metadata: dates, senders, recipients, locations, topics, emotional tone, and a narrative "hook" line
@@ -19,6 +20,7 @@ A full-stack platform for preserving and exploring historical letter collections
 - Resync system to propagate identity corrections across all derived metadata
 
 **For the visitor (public):**
+
 - Browse and search digitized collections
 - View high-resolution scans with zoom/pan alongside verified transcriptions
 - Filter by date, person, location, collection, or topic
@@ -30,16 +32,16 @@ A full-stack platform for preserving and exploring historical letter collections
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  React Frontend (Vite + TypeScript + React Router)      │
-│  ┌───────────┐ ┌──────────────┐ ┌────────────────────┐ │
-│  │ Public UI │ │ Admin Dashboard │ │ Image Viewer     │ │
-│  └───────────┘ └──────────────┘ └────────────────────┘ │
+│  ┌───────────┐ ┌─────────────────┐ ┌────────────────────┐
+│  │ Public UI │ │ Admin Dashboard │ │ Image Viewer       │
+│  └───────────┘ └─────────────────┘ └────────────────────┘
 └────────────────────────┬────────────────────────────────┘
                          │ REST API
 ┌────────────────────────┴────────────────────────────────┐
-│  Express Backend (Node.js + TypeScript)                  │
-│  ┌──────────┐ ┌──────────────┐ ┌──────────────────────┐│
-│  │ Routes   │ │ AI Pipeline  │ │ Processing Engine    ││
-│  └──────────┘ └──────┬───────┘ └──────────────────────┘│
+│  Express Backend (Node.js + TypeScript)                 │
+│  ┌──────────┐ ┌──────────────┐ ┌──────────────────────┐ │
+│  │ Routes   │ │ AI Pipeline  │ │ Processing Engine    │ │
+│  └──────────┘ └──────┬───────┘ └──────────────────────┘ │
 └───────────┬──────────┼──────────────────────────────────┘
             │          │
      ┌──────┴───┐  ┌───┴──────┐
@@ -50,13 +52,13 @@ A full-stack platform for preserving and exploring historical letter collections
 
 ### Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Frontend | React, TypeScript, Vite, React Router |
-| Backend | Node.js, Express, TypeScript |
-| Database | PostgreSQL with Drizzle ORM |
-| AI | OpenAI structured outputs for transcription + metadata extraction |
-| Image Viewing | Pan/zoom viewer for high-res letter scans |
+| Layer         | Technology                                                        |
+| ------------- | ----------------------------------------------------------------- |
+| Frontend      | React, TypeScript, Vite, React Router                             |
+| Backend       | Node.js, Express, TypeScript                                      |
+| Database      | PostgreSQL with Drizzle ORM                                       |
+| AI            | OpenAI structured outputs for transcription + metadata extraction |
+| Image Viewing | Pan/zoom viewer for high-res letter scans                         |
 
 ## Key Engineering Decisions
 

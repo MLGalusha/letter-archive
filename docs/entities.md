@@ -1,0 +1,276 @@
+# Entity Management
+
+System for tracking people and places across letters with deduplication and linking.
+
+## Concepts
+
+### Canonical Entities
+Unique, deduplicated records for people and places that appear across multiple letters.
+
+- **Canonical Person**: A unique individual (e.g., "Jimmie Galusha")
+- **Canonical Place**: A unique location (e.g., "Chicago, Illinois")
+
+Each canonical entity has:
+- `canonicalName` - primary display name
+- `aliases[]` - alternate names/spellings that refer to the same entity
+- `notes` - optional admin notes
+
+Places can also store AI-generated theme bullets in a marked notes block:
+- `[AI_PLACE_THEMES_START]`
+- `- Theme sentence...`
+- `[AI_PLACE_THEMES_END]`
+
+### Letter-Entity Links
+Junction tables connecting letters to the entities they mention.
+
+- **Letter Person**: Links a letter to a person with a role
+- **Letter Place**: Links a letter to a place with a role
+
+## Person Roles
+
+| Role | Description |
+|------|-------------|
+| `sender` | Author of the letter |
+| `recipient` | Person the letter is addressed to |
+| `mentioned` | Person referenced in the letter content |
+
+## Place Roles
+
+| Role | Description |
+|------|-------------|
+| `written_from` | Where the letter was written |
+| `mentioned` | Place referenced in content |
+| `destination` | Where recipient is located |
+
+## Place Types
+
+Optional classification: `city`, `state`, `country`, `address`, `region`, `other`
+
+## Fuzzy Matching
+
+Uses PostgreSQL trigram similarity (`pg_trgm`) for entity matching.
+
+```typescript
+import { findMatchingPersons } from './services/entities.js';
+
+const matches = await findMatchingPersons('James Galusha');
+// Returns matches with similarity scores:
+// [{ entityId: '...', canonicalName: 'Jimmie Galusha', similarity: 85 }]
+```
+
+**Thresholds:**
+- Extraction pipeline:
+  - `>= 85%`: Auto-link without review
+  - `>= 50%`: Suggest for review
+  - `< 50%`: Create new entity
+- Manual sender/recipient edits:
+  - Exact single match: auto-link
+  - Strict fuzzy auto-link only at very high confidence with separation from runner-up
+  - Ambiguous exact/fuzzy matches create a new canonical person + review item
+
+Matching checks both `canonicalName` and `aliases[]`.
+
+## Merge Logic
+
+When two entities are duplicates, merge them:
+
+```typescript
+import { mergePersons, bulkMergePersons } from './services/entities.js';
+
+// Merge a single entity
+await mergePersons(keepId, mergeId);
+// - Merged name becomes alias of kept entity
+// - All letter links transfer to kept entity
+// - Merged entity is deleted
+
+// Bulk merge multiple entities
+await bulkMergePersons(keepId, [mergeId1, mergeId2, mergeId3]);
+// - All merged entities' names/aliases become aliases of kept entity
+// - All letter links transfer to kept entity
+// - All merged entities are deleted
+```
+
+The merge:
+1. Adds merged entity's name + aliases to kept entity's aliases
+2. Reassigns all `letterPersons` from merged → kept (with duplicate-link conflict handling)
+3. Reconciles relationship conflicts (people only)
+4. Deletes the merged entity
+5. Writes undo snapshot to `audit_log` and returns `undoActionId`
+
+## Duplicate Suggestions
+
+AI-powered duplicate detection using trigram similarity:
+
+```typescript
+import { findPotentialDuplicatePersons } from './services/entities.js';
+
+const suggestions = await findPotentialDuplicatePersons(20);
+// Returns pairs of entities with 50-99% similarity
+// [{ entityAId, entityAName, entityBId, entityBName, similarity }]
+```
+
+**UI Features:**
+- Collapsible "Potential Duplicates" section on People/Places pages
+- Dismiss suggestions (stored in localStorage)
+- Click "Merge" to open side-by-side comparison modal
+- Comparison shows detailed stats for both entities
+- Swap which entity to keep with radio buttons
+
+## Database Tables
+
+### canonical_persons
+```sql
+id              UUID PRIMARY KEY
+canonical_name  TEXT NOT NULL
+aliases         TEXT[]
+notes           TEXT
+created_at      TIMESTAMP
+updated_at      TIMESTAMP
+```
+
+### canonical_places
+```sql
+id              UUID PRIMARY KEY
+canonical_name  TEXT NOT NULL
+aliases         TEXT[]
+place_type      place_type_enum
+notes           TEXT
+created_at      TIMESTAMP
+updated_at      TIMESTAMP
+```
+
+### letter_persons
+```sql
+id          UUID PRIMARY KEY
+letter_id   UUID REFERENCES letters
+person_id   UUID REFERENCES canonical_persons
+role        person_role_enum (sender, recipient, mentioned)
+confidence  INTEGER (0-100)
+context     TEXT
+created_at  TIMESTAMP
+```
+
+### letter_places
+```sql
+id          UUID PRIMARY KEY
+letter_id   UUID REFERENCES letters
+place_id    UUID REFERENCES canonical_places
+role        place_role_enum (written_from, mentioned, destination)
+confidence  INTEGER (0-100)
+context     TEXT
+created_at  TIMESTAMP
+```
+
+## Admin Pages
+
+### People Page (`/admin/entities/people`)
+- Lists all canonical persons
+- Shows letter count for each
+- Edit canonical name and aliases
+- Single merge (search for entity to merge)
+- Bulk selection with checkboxes
+- Bulk merge (select master, merge all others)
+- Duplicate suggestions section (collapsible)
+- Side-by-side comparison modal before merging
+- Inline undo banner after rename/merge (uses undo action IDs returned by API)
+- Biography generation and verification
+- Letter references list with one-click navigation into `/admin/letters/:letterId`
+- Supports deep-link query param `?personId=<uuid>` to open a specific person directly (used by Letter Review linked entity jump actions)
+- Relationship chips in the person detail panel are clickable for fast in-page pivoting to related people
+- Same-name disambiguation panel surfaces duplicate canonical-name profiles before merge/rename actions
+- Rename flow warns when another canonical person already has the target name (explicit admin confirmation required)
+
+### Places Page (`/admin/entities/places`)
+- Lists all canonical places
+- Edit name, type, and aliases
+- Single merge (search for entity to merge)
+- Bulk selection with checkboxes
+- Bulk merge (select master, merge all others)
+- Duplicate suggestions section (collapsible)
+- Side-by-side comparison modal before merging
+- Inline undo banner after rename/merge (uses undo action IDs returned by API)
+- Letter references list with one-click navigation into `/admin/letters/:letterId`
+- One-click AI theme generation (writes theme bullets into the notes theme block)
+- Supports deep-link query param `?placeId=<uuid>` to open a specific place directly (used by Letter Review linked entity jump actions)
+- Same-name disambiguation panel surfaces duplicate canonical-name profiles before merge/rename actions
+- Rename flow warns when another canonical place already has the target name (explicit admin confirmation required)
+
+### Relationships Page (`/admin/entities/relationships`)
+- Table + graph views for person-to-person relationships
+- Quality/coverage insights cards (total links, unique people, average confidence, low-confidence count)
+- Multi-filter table (search, type, min confidence)
+- Edit modal for relationship type, confidence, and notes
+- Add relationship modal with person lookup + confidence/notes
+- Direct person navigation links into `/admin/entities/people?personId=<uuid>`
+- One-click metadata backfill action to create/update relationship edges from sender/recipient metadata across letters
+
+### Entity Review Page (`/admin/entities/:type/:id`)
+- View entity details
+- See all linked letters
+- Edit entity
+
+## API Endpoints
+
+See [api/admin.md](api/admin.md) for full endpoint documentation.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/entities/suggestions` | Get duplicate suggestions (entityType=person\|place) |
+| GET | `/admin/entities/persons` | List all persons |
+| GET | `/admin/entities/places` | List all places |
+| GET | `/admin/entities/persons/:id` | Get person details |
+| GET | `/admin/entities/persons/:id/same-name-candidates` | List same-name disambiguation candidates for a person |
+| GET | `/admin/entities/persons/:id/merge-details` | Get detailed stats for merge comparison |
+| GET | `/admin/entities/places/:id/merge-details` | Get detailed stats for merge comparison |
+| GET | `/admin/entities/places/:id/same-name-candidates` | List same-name disambiguation candidates for a place |
+| PUT | `/admin/entities/persons/:id` | Update person |
+| POST | `/admin/entities/persons/actions/:actionId/undo` | Undo person rename/merge |
+| POST | `/admin/entities/persons/merge` | Merge two persons |
+| POST | `/admin/entities/persons/bulk-merge` | Bulk merge multiple persons |
+| PUT | `/admin/entities/places/:id` | Update place |
+| POST | `/admin/entities/places/:id/themes/generate` | Generate place theme bullets |
+| POST | `/admin/entities/places/actions/:actionId/undo` | Undo place rename/merge |
+| POST | `/admin/entities/places/merge` | Merge two places |
+| POST | `/admin/entities/places/bulk-merge` | Bulk merge multiple places |
+| POST | `/admin/relationships/backfill-from-letters` | Backfill relationships from sender/recipient metadata |
+
+## Workflow
+
+### During Metadata Extraction
+1. AI extracts entities from letter text
+2. System fuzzy-matches against existing entities
+3. High-confidence matches auto-link
+4. Low-confidence matches queue for review
+
+### During Manual Metadata Edits
+When sender/recipient names are updated (single-letter update, bulk update, restore metadata version, or resync):
+1. Normalize sender/recipient names
+2. Resolve canonical person with strict ambiguity checks
+3. Auto-create person when no safe match exists
+4. Upsert sender/recipient letter links
+5. Sync sender-recipient relationship edge in graph when possible
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| [services/entities.ts](../../backend/src/services/entities.ts) | Compatibility barrel that re-exports entity service modules |
+| [services/entities/matching.ts](../../backend/src/services/entities/matching.ts) | Fuzzy matching for people/places |
+| [services/entities/persons.ts](../../backend/src/services/entities/persons.ts) | Person CRUD, stats, duplicate suggestions, merge details |
+| [services/entities/places.ts](../../backend/src/services/entities/places.ts) | Place CRUD, stats, duplicate suggestions, merge details |
+| [services/entities/junctions.ts](../../backend/src/services/entities/junctions.ts) | Letter-person/place link CRUD + enriched letter lookups |
+| [services/entities/review-queue.ts](../../backend/src/services/entities/review-queue.ts) | Entity review queue CRUD and stats |
+| [services/entities/relationships.ts](../../backend/src/services/entities/relationships.ts) | Person relationship CRUD and query helpers |
+| [services/entities/extraction.ts](../../backend/src/services/entities/extraction.ts) | Entity extraction processing/orchestration helpers |
+| [services/entities/participant-sync.ts](../../backend/src/services/entities/participant-sync.ts) | Manual sender/recipient name resolution, link upsert, and relationship sync |
+| [services/entities/place-themes.ts](../../backend/src/services/entities/place-themes.ts) | Place theme extraction/serialization and AI generation helper |
+| [routes/admin/entities.ts](../../backend/src/routes/admin/entities.ts) | API endpoints |
+| [api/entities.ts](../../frontend/src/api/entities.ts) | Frontend compatibility barrel for entity APIs |
+| [api/entities/index.ts](../../frontend/src/api/entities/index.ts) | Frontend entity API module exports |
+| [api/admin.ts](../../frontend/src/api/admin.ts) | Frontend compatibility barrel for admin APIs |
+| [api/admin/index.ts](../../frontend/src/api/admin/index.ts) | Frontend admin API module exports |
+| [pages/admin/PeoplePage.tsx](../../frontend/src/pages/admin/PeoplePage.tsx) | People management UI |
+| [pages/admin/PlacesPage.tsx](../../frontend/src/pages/admin/PlacesPage.tsx) | Places management UI |
+| [components/DuplicateSuggestions](../../frontend/src/components/DuplicateSuggestions/) | Collapsible duplicate suggestions panel |
+| [components/MergeComparison](../../frontend/src/components/MergeComparison/) | Side-by-side merge comparison modal |
+| [components/BulkMergeModal](../../frontend/src/components/BulkMergeModal/) | Bulk merge selection modal |

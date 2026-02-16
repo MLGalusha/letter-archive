@@ -19,8 +19,6 @@ ALTER TABLE "letters" ADD COLUMN "transcript_verified_at" timestamp with time zo
 ALTER TABLE "letters" ADD COLUMN "transcript_verified_by" text;--> statement-breakpoint
 ALTER TABLE "letters" ADD COLUMN "metadata_verified_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "letters" ADD COLUMN "metadata_verified_by" text;--> statement-breakpoint
-ALTER TABLE "letters" ADD COLUMN "transcript_confirmed_at" timestamp with time zone;--> statement-breakpoint
-ALTER TABLE "letters" ADD COLUMN "transcript_confirmed_by" text;--> statement-breakpoint
 ALTER TABLE "letter_versions" ADD CONSTRAINT "letter_versions_letter_id_letters_id_fk" FOREIGN KEY ("letter_id") REFERENCES "public"."letters"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "letter_versions_unique" ON "letter_versions" USING btree ("letter_id","field_type","version_number");--> statement-breakpoint
 CREATE INDEX "idx_versions_letter" ON "letter_versions" USING btree ("letter_id");--> statement-breakpoint

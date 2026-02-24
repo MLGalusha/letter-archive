@@ -1590,11 +1590,6 @@
   font-weight: 500;
 }
 
-.duplicate-controls-actions {
-  display: flex;
-  gap: var(--spacing-xs);
-}
-
 .duplicate-control-btn {
   padding: 0.25rem 0.6rem;
   border-radius: var(--radius-sm);
@@ -1629,12 +1624,6 @@
 /* Duplicate stat in header stats bar */
 .header-stats .duplicate-stat {
   color: #f59e0b;
-}
-
-/* Will upload count */
-.header-stats .will-upload-stat {
-  color: var(--text);
-  font-weight: 600;
 }
 
 /* Checking indicator */

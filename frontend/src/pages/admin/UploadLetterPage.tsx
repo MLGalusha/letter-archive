@@ -139,7 +139,7 @@ export default function UploadLetterPage() {
           return {
             ...img,
             isDuplicate: response.duplicates[img.originalFilename],
-            replaceSelected: response.duplicates[img.originalFilename] ? img.replaceSelected : true,
+            replaceSelected: !response.duplicates[img.originalFilename],
           };
         }
         return img;
@@ -188,7 +188,7 @@ export default function UploadLetterPage() {
             return {
               ...img,
               isDuplicate: response.duplicates[img.originalFilename],
-              replaceSelected: true,
+              replaceSelected: !response.duplicates[img.originalFilename],
             };
           }
           return img;
@@ -590,6 +590,16 @@ export default function UploadLetterPage() {
     return result;
   }, [collections]);
 
+  // Sort collections: non-duplicate first, then by collection code
+  const sortedCollections = useMemo(() => {
+    return [...collections].sort((a, b) => {
+      const aAllDup = collectionDupAction[a.collectionCode] !== 'none';
+      const bAllDup = collectionDupAction[b.collectionCode] !== 'none';
+      if (aAllDup !== bAllDup) return aAllDup ? 1 : -1;
+      return a.collectionCode.localeCompare(b.collectionCode);
+    });
+  }, [collections, collectionDupAction]);
+
   const importDropdown = (
     <div className="upload-dropdown">
       <Button
@@ -651,8 +661,6 @@ export default function UploadLetterPage() {
       {images.length > 0 && (
         <div className="upload-toolbar">
           <div className="header-stats">
-            <span className="will-upload-stat">{stats.willUpload} to upload</span>
-            <span className="stat-divider">·</span>
             <span>{stats.totalImported} imported</span>
             <span className="stat-divider">·</span>
             <span>{stats.collections} collection{stats.collections !== 1 ? 's' : ''}</span>
@@ -720,7 +728,7 @@ export default function UploadLetterPage() {
             >
               {uploadProgress
                 ? `${uploadProgress.current}/${uploadProgress.total}`
-                : "Upload All"}
+                : `Upload (${stats.willUpload})`}
             </Button>
           </div>
         </div>
@@ -730,14 +738,12 @@ export default function UploadLetterPage() {
       {stats.duplicates > 0 && !editState.active && (
         <div className="duplicate-controls-bar">
           <span>{stats.duplicates} duplicate{stats.duplicates !== 1 ? 's' : ''} found</span>
-          <div className="duplicate-controls-actions">
-            <button className="duplicate-control-btn replace" onClick={() => handleToggleAllDuplicates(true)}>
-              Replace All
-            </button>
-            <button className="duplicate-control-btn skip" onClick={() => handleToggleAllDuplicates(false)}>
-              Skip All
-            </button>
-          </div>
+          <button
+            className={`duplicate-control-btn ${stats.duplicatesToReplace > 0 ? 'replace' : 'skip'}`}
+            onClick={() => handleToggleAllDuplicates(stats.duplicatesToReplace === 0)}
+          >
+            {stats.duplicatesToReplace > 0 ? 'Skip All' : 'Replace All'}
+          </button>
         </div>
       )}
 
@@ -772,7 +778,7 @@ export default function UploadLetterPage() {
           <div className="collections-section">
             <h2>Collections</h2>
             <div className="collection-grid">
-              {collections.map((collection) => (
+              {sortedCollections.map((collection) => (
                 <CollectionCard
                   key={collection.collectionCode}
                   collection={collection}
@@ -880,7 +886,7 @@ export default function UploadLetterPage() {
               <span className="step-number">3</span>
               <div>
                 <strong>Save to archive</strong>
-                <p>Click "Upload All" to save your organized letters.</p>
+                <p>Click "Upload" to save your organized letters.</p>
               </div>
             </div>
           </div>

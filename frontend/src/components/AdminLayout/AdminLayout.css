@@ -40,22 +40,6 @@
   box-shadow: 0 1px 3px hsla(0, 0%, 0%, 0.1);
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-
-.mobile-menu-btn {
-  display: none;
-  background: none;
-  border: none;
-  padding: var(--spacing-xs);
-  cursor: pointer;
-  color: var(--text);
-  border-radius: var(--radius-sm);
-}
-
 .header-title {
   margin: 0;
   font-size: 1.25rem;
@@ -84,7 +68,7 @@
   max-height: calc(100vh - 53px);
 }
 
-/* Mobile overlay */
+/* Mobile overlay: visible only when sidebar expanded on small screens */
 .mobile-overlay {
   display: none;
   position: fixed;
@@ -96,21 +80,19 @@
   z-index: 150;
 }
 
-/* Mobile responsive */
 @media (max-width: 768px) {
+  /* Content always at collapsed sidebar width */
   .admin-main {
-    margin-left: 0;
+    margin-left: 60px;
   }
 
   .admin-layout.sidebar-collapsed .admin-main {
-    margin-left: 0;
+    margin-left: 60px;
   }
 
-  .mobile-menu-btn {
-    display: flex;
-  }
-
-  .mobile-overlay {
+  /* Show overlay when sidebar is expanded */
+  .admin-layout:not(.sidebar-collapsed) .mobile-overlay {
     display: block;
   }
 }
+

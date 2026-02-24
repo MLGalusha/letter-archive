@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminSidebar from '../AdminSidebar';
-import Icon from '../common/Icon';
 import './AdminLayout.css';
 
 interface AdminLayoutProps {
@@ -17,7 +16,12 @@ export default function AdminLayout({ children, title, headerActions, fullHeight
     const stored = localStorage.getItem('adminSidebarCollapsed');
     return stored !== null ? stored === 'true' : false;
   });
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const toggleSidebar = () => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    localStorage.setItem('adminSidebarCollapsed', String(next));
+  };
 
   // Check authentication
   useEffect(() => {
@@ -31,30 +35,14 @@ export default function AdminLayout({ children, title, headerActions, fullHeight
     <div className={`admin-layout ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <AdminSidebar
         collapsed={sidebarCollapsed}
-        onToggle={() => {
-          const next = !sidebarCollapsed;
-          setSidebarCollapsed(next);
-          localStorage.setItem('adminSidebarCollapsed', String(next));
-        }}
+        onToggle={toggleSidebar}
       />
 
-      {/* Mobile overlay */}
-      {mobileMenuOpen && (
-        <div className="mobile-overlay" onClick={() => setMobileMenuOpen(false)} />
-      )}
+      {/* Mobile overlay: shown when sidebar is expanded on small screens */}
+      <div className="mobile-overlay" onClick={toggleSidebar} />
 
       <div className="admin-main">
         <header className="admin-header">
-          <div className="header-left">
-            <button
-              className="mobile-menu-btn"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-label="Toggle menu"
-            >
-              <Icon name="edit" size={20} />
-            </button>
-          </div>
-
           {headerActions && <div className="header-center">{headerActions}</div>}
         </header>
 

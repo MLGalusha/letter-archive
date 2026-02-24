@@ -144,17 +144,10 @@
   color: #c62828;
 }
 
-/* Mobile responsive */
+/* Mobile: expanded sidebar overlays content instead of pushing it */
 @media (max-width: 768px) {
-  .admin-sidebar {
-    transform: translateX(-100%);
-  }
-
-  .admin-sidebar.open {
-    transform: translateX(0);
-  }
-
-  .admin-sidebar.collapsed {
-    width: 220px;
+  .admin-sidebar:not(.collapsed) {
+    box-shadow: 4px 0 12px hsla(0, 0%, 0%, 0.15);
   }
 }
+

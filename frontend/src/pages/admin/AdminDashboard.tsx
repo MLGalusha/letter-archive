@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAdminLetters, deleteLetter } from "../../api/letters";
+import { getAdminLetters, getFilteredLetterIds, deleteLetter } from "../../api/letters";
 import {
   getProcessingStatus,
   startTranscription,
@@ -20,12 +20,11 @@ import type { Letter, ContentStatus } from "../../types/Letter";
 import {
   Button,
   ConfirmDialog,
-  DropdownItem,
-  DropdownDivider,
 } from "../../components/common";
 import { analyzeCollection, type CollectionAnalysisResult } from "../../api/collections";
 import AdminLayout from "../../components/AdminLayout";
-import DashboardFilterBar from "./AdminDashboard/DashboardFilterBar";
+import Icon from "../../components/common/Icon";
+import { getRecentEdits, formatTimeAgo, type RecentEdit } from "../../utils/recentEdits";
 import RecentActivityTable from "./AdminDashboard/RecentActivityTable";
 import {
   ALL_COLUMNS,
@@ -159,6 +158,33 @@ export default function AdminDashboard() {
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const columnMenuRef = useRef<HTMLDivElement>(null);
 
+  // Recent edits state (moved from AdminLayout)
+  const [recentEdits, setRecentEdits] = useState<RecentEdit[]>([]);
+  const [showRecent, setShowRecent] = useState(false);
+  const recentDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Load recent edits
+  useEffect(() => {
+    setRecentEdits(getRecentEdits());
+  }, []);
+
+  // Close recent dropdown on click outside
+  useEffect(() => {
+    if (!showRecent) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (recentDropdownRef.current && !recentDropdownRef.current.contains(e.target as Node)) {
+        setShowRecent(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showRecent]);
+
+  const handleRecentClick = (id: string) => {
+    setShowRecent(false);
+    navigate(`/admin/letters/${id}`);
+  };
+
   // Save column visibility changes
   useEffect(() => {
     try {
@@ -194,8 +220,6 @@ export default function AdminDashboard() {
   };
 
   // Persist state changes to localStorage
-  // Note: transcriptStatusFilters and metadataStatusFilters are not persisted
-  // since server-side filtering for them is not yet implemented
   useEffect(() => {
     savePersistedState({
       visibilityFilter,
@@ -214,6 +238,7 @@ export default function AdminDashboard() {
   // Edit mode
   const [editMode, setEditMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [allFilteredSelected, setAllFilteredSelected] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
@@ -235,15 +260,16 @@ export default function AdminDashboard() {
   const [pendingChanges, setPendingChanges] = useState<Map<string, { sender?: string; recipient?: string }>>(new Map());
   const [isSaving, setIsSaving] = useState(false);
 
-  // Process dropdown state
-  const [showProcessMenu, setShowProcessMenu] = useState(false);
+  // Processing state
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus | null>(null);
   const [wasRunning, setWasRunning] = useState(false);
   const [lastCompletedAt, setLastCompletedAt] = useState<number | null>(null);
-  const processButtonRef = useRef<HTMLDivElement>(null);
   const [showUnconfirmedDialog, setShowUnconfirmedDialog] = useState(false);
   const [unconfirmedCount, setUnconfirmedCount] = useState(0);
   const [pendingMetadataIds, setPendingMetadataIds] = useState<string[]>([]);
+  const [showTranscribeConfirm, setShowTranscribeConfirm] = useState(false);
+  const [showMetadataConfirm, setShowMetadataConfirm] = useState(false);
+  const [showAnalyzeConfirm, setShowAnalyzeConfirm] = useState(false);
 
   const fetchLetters = useCallback(async (showLoading = false, page = pagination.page) => {
     if (showLoading) setLoading(true);
@@ -319,12 +345,9 @@ export default function AdminDashboard() {
 
   const handleRowClick = (letterId: string, index: number, e: React.MouseEvent) => {
     if (editMode) {
-      // If this was a drag operation (moved to other rows), don't toggle
-      // The drag handlers already applied the selection
       if (hasDragMoved) return;
 
       if (e.shiftKey && lastClickedIndex !== null) {
-        // Shift-click: select range from last clicked to current
         const start = Math.min(lastClickedIndex, index);
         const end = Math.max(lastClickedIndex, index);
         const newSelected = new Set(selectedIds);
@@ -332,8 +355,8 @@ export default function AdminDashboard() {
           newSelected.add(filteredLetters[i].id);
         }
         setSelectedIds(newSelected);
+        setAllFilteredSelected(false);
       } else {
-        // Simple click: toggle this row's selection
         toggleSelection(letterId);
         setLastClickedIndex(index);
       }
@@ -345,55 +368,40 @@ export default function AdminDashboard() {
   // Drag selection handlers
   const handleRowMouseDown = (index: number, e: React.MouseEvent) => {
     if (!editMode) return;
-    // Only start drag on left mouse button
     if (e.button !== 0) return;
-    // Don't start drag if clicking on buttons or inputs
     const tagName = (e.target as HTMLElement).tagName;
     if (tagName === "INPUT" || tagName === "BUTTON") return;
 
     const letterId = filteredLetters[index].id;
-    // Determine if we're selecting or deselecting based on the first item
     const mode = selectedIds.has(letterId) ? "deselect" : "select";
 
     setIsDragging(true);
     setDragStartIndex(index);
     setDragMode(mode);
     setDraggedIds(new Set([letterId]));
-    setHasDragMoved(false); // Not a drag yet, just a mousedown
-
-    // Don't apply selection yet - wait to see if it's a click or drag
-    // If user drags to another row, handleRowMouseEnter will apply selection
-    // If user just clicks, handleRowClick will apply selection
-
-    // Prevent text selection during drag
+    setHasDragMoved(false);
     e.preventDefault();
   };
 
   const handleRowMouseEnter = (index: number) => {
     if (!isDragging || dragStartIndex === null || dragMode === null) return;
 
-    // Mark that this is a real drag (moved to a different row)
     if (!hasDragMoved) {
       setHasDragMoved(true);
     }
 
-    // Calculate range from drag start to current position
     const start = Math.min(dragStartIndex, index);
     const end = Math.max(dragStartIndex, index);
 
-    // Build set of IDs in the drag range
     const rangeIds = new Set<string>();
     for (let i = start; i <= end; i++) {
       rangeIds.add(filteredLetters[i].id);
     }
 
-    // Update selection based on drag mode (toggle behavior)
     const newSelected = new Set(selectedIds);
 
-    // First, undo any previously dragged items that are no longer in range
     draggedIds.forEach((id) => {
       if (!rangeIds.has(id)) {
-        // Revert this item to its pre-drag state
         if (dragMode === "select") {
           newSelected.delete(id);
         } else {
@@ -402,7 +410,6 @@ export default function AdminDashboard() {
       }
     });
 
-    // Apply the drag mode to items in the current range
     rangeIds.forEach((id) => {
       if (dragMode === "select") {
         newSelected.add(id);
@@ -413,6 +420,7 @@ export default function AdminDashboard() {
 
     setDraggedIds(rangeIds);
     setSelectedIds(newSelected);
+    setAllFilteredSelected(false);
   };
 
   const handleMouseUp = useCallback(() => {
@@ -424,7 +432,6 @@ export default function AdminDashboard() {
     }
   }, [isDragging]);
 
-  // Add global mouseup listener for drag selection
   useEffect(() => {
     if (editMode) {
       document.addEventListener("mouseup", handleMouseUp);
@@ -432,30 +439,26 @@ export default function AdminDashboard() {
     }
   }, [editMode, handleMouseUp]);
 
-  // Multi-column sort handler: click cycles through asc → desc → none
+  // Multi-column sort handler
   const handleSort = (field: ExtendedSortField) => {
     setSortColumns((prev) => {
       const existingIndex = prev.findIndex((col) => col.field === field);
 
       if (existingIndex === -1) {
-        // Not currently sorted - add as ascending
         return [...prev, { field, direction: 'asc' }];
       }
 
       const existing = prev[existingIndex];
       if (existing.direction === 'asc') {
-        // Currently ascending - change to descending
         const newColumns = [...prev];
         newColumns[existingIndex] = { field, direction: 'desc' };
         return newColumns;
       }
 
-      // Currently descending - remove from sort
       return prev.filter((col) => col.field !== field);
     });
   };
 
-  // Get sort indicator and priority number for a column
   const getSortInfo = (field: ExtendedSortField) => {
     const index = sortColumns.findIndex((col) => col.field === field);
     if (index === -1) return null;
@@ -466,13 +469,12 @@ export default function AdminDashboard() {
     };
   };
 
-  // Apply client-side sorting for computed columns (letters, extras)
+  // Apply client-side sorting for computed columns
   const filteredLetters = useMemo(() => {
-    // Find client-side sort columns (ones that can't be sorted server-side)
     const clientSortColumns = sortColumns.filter(col => !isServerSortField(col.field));
 
     if (clientSortColumns.length === 0) {
-      return letters; // No client-side sorting needed
+      return letters;
     }
 
     return [...letters].sort((a, b) => {
@@ -481,13 +483,11 @@ export default function AdminDashboard() {
 
         switch (field) {
           case 'letters':
-            // Use lettersCount from API (counts L-type pages across the letter group)
             const aLetters = a.lettersCount ?? a.images.filter(img => img.type === 'letter').length;
             const bLetters = b.lettersCount ?? b.images.filter(img => img.type === 'letter').length;
             comparison = aLetters - bLetters;
             break;
           case 'extras':
-            // Use extrasCount from API (includes related items like photos, covers)
             const aExtras = a.extrasCount ?? a.images.filter(img => img.type !== 'letter').length;
             const bExtras = b.extrasCount ?? b.images.filter(img => img.type !== 'letter').length;
             comparison = aExtras - bExtras;
@@ -507,13 +507,14 @@ export default function AdminDashboard() {
   };
 
   // Edit mode functions
-  const toggleEditMode = () => {
+  const toggleEditMode = async () => {
     if (editMode) {
-      // Exiting edit mode, clear all state
-      exitEditMode();
+      if (pendingChanges.size > 0) {
+        await handleSaveChanges();
+      } else {
+        exitEditMode();
+      }
     } else {
-      // Entering edit mode, close other dropdowns
-      setShowProcessMenu(false);
       setShowDateDropdown(false);
       setEditMode(true);
     }
@@ -527,17 +528,61 @@ export default function AdminDashboard() {
       newSelected.add(id);
     }
     setSelectedIds(newSelected);
+    setAllFilteredSelected(false);
+  };
+
+  // Select all on current page
+  const allPageSelected = filteredLetters.length > 0 && filteredLetters.every(l => selectedIds.has(l.id));
+  const somePageSelected = filteredLetters.some(l => selectedIds.has(l.id));
+
+  const handleSelectAllPage = () => {
+    if (allPageSelected) {
+      setSelectedIds(new Set());
+      setAllFilteredSelected(false);
+    } else {
+      // Add this page's items to existing selections
+      const newSelected = new Set(selectedIds);
+      for (const l of filteredLetters) {
+        newSelected.add(l.id);
+      }
+      setSelectedIds(newSelected);
+      setAllFilteredSelected(false);
+    }
+  };
+
+  const handleSelectAllFiltered = async () => {
+    try {
+      const visibilityParam = visibilityFilter !== 'ALL' ? visibilityFilter : undefined;
+      const serverSort = sortColumns.find(col => isServerSortField(col.field));
+      const allIds = await getFilteredLetterIds({
+        collection: collectionFilter === "all" ? undefined : collectionFilter,
+        visibility: visibilityParam,
+        search: searchQuery || undefined,
+        sort: serverSort ? (serverSort.field as ServerSortField) : 'createdAt',
+        sortOrder: serverSort ? serverSort.direction : 'desc',
+        year: yearFilter ?? undefined,
+        month: monthFilter ?? undefined,
+        day: dayFilter ?? undefined,
+        dateFrom: dateFromFilter ?? undefined,
+        dateTo: dateToFilter ?? undefined,
+        transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(',') : undefined,
+        metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(',') : undefined,
+      });
+      setSelectedIds(new Set(allIds));
+      setAllFilteredSelected(true);
+    } catch (err) {
+      console.error('Failed to select all filtered:', err);
+      showToast('Failed to select all filtered letters', 'error');
+    }
   };
 
   // Copy-paste mode handlers
   const toggleCopyMode = () => {
     if (copyModeActive) {
-      // Deactivate copy mode
       setCopyModeActive(false);
       setCopiedValue(null);
       setSourceCell(null);
     } else {
-      // Activate copy mode
       setCopyModeActive(true);
       setCopiedValue(null);
       setSourceCell(null);
@@ -547,22 +592,18 @@ export default function AdminDashboard() {
   const handleCellClick = (letterId: string, column: 'sender' | 'recipient', value: string | null, e: React.MouseEvent) => {
     if (!editMode || !copyModeActive) return;
 
-    e.stopPropagation(); // Prevent row selection
+    e.stopPropagation();
 
-    // Check if clicking on a cell that already has a pending change
     const existingChange = pendingChanges.get(letterId);
     const hasPendingChangeForColumn = existingChange && existingChange[column] !== undefined;
 
     if (sourceCell === null) {
-      // No source yet - this click sets the source
       setSourceCell({ letterId, column });
       setCopiedValue(value || '');
     } else if (sourceCell.letterId === letterId && sourceCell.column === column) {
-      // Clicking the source cell again - deselect it
       setSourceCell(null);
       setCopiedValue(null);
     } else if (hasPendingChangeForColumn) {
-      // Clicking a cell that already has a pending change - remove the change
       setPendingChanges(prev => {
         const next = new Map(prev);
         const existing = next.get(letterId);
@@ -577,7 +618,6 @@ export default function AdminDashboard() {
         return next;
       });
     } else {
-      // Paste the copied value to this cell
       setPendingChanges(prev => {
         const next = new Map(prev);
         const existing = next.get(letterId) || {};
@@ -592,7 +632,6 @@ export default function AdminDashboard() {
 
     setIsSaving(true);
     try {
-      // Group updates and send to API
       const updates = Array.from(pendingChanges.entries()).map(([letterId, changes]) => ({
         letterId,
         ...changes,
@@ -602,15 +641,14 @@ export default function AdminDashboard() {
 
       showToast(`Updated ${pendingChanges.size} letter${pendingChanges.size === 1 ? '' : 's'}`, 'success');
 
-      // Exit edit mode after successful save
       setEditMode(false);
       setSelectedIds(new Set());
+      setAllFilteredSelected(false);
       setPendingChanges(new Map());
       setCopyModeActive(false);
       setCopiedValue(null);
       setSourceCell(null);
 
-      // Refresh the list
       await fetchLetters();
     } catch (err) {
       console.error('Failed to save changes:', err);
@@ -623,6 +661,7 @@ export default function AdminDashboard() {
   const exitEditMode = () => {
     setEditMode(false);
     setSelectedIds(new Set());
+    setAllFilteredSelected(false);
     setPendingChanges(new Map());
     setCopyModeActive(false);
     setCopiedValue(null);
@@ -704,17 +743,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // Process menu handlers
-  const handleProcessMenuToggle = () => {
-    const newState = !showProcessMenu;
-    if (newState) {
-      // Close other dropdowns when opening process menu
-      setShowDateDropdown(false);
-    }
-    setShowProcessMenu(newState);
-  };
-
-  // Build filter options for processing endpoints (matches current filter state)
+  // Build filter options for processing endpoints
   const buildProcessingFilters = () => ({
     collectionCode: collectionFilter !== "all" ? collectionFilter : undefined,
     visibility: visibilityFilter !== 'ALL' ? visibilityFilter : undefined,
@@ -738,7 +767,6 @@ export default function AdminDashboard() {
 
   const handleStartTranscription = async () => {
     try {
-      setShowProcessMenu(false);
       if (selectedIds.size > 0) {
         const result = await bulkTranscribe(Array.from(selectedIds));
         if (result.queued === 0 && result.skipped > 0) {
@@ -766,12 +794,10 @@ export default function AdminDashboard() {
 
   const handleStartMetadataExtraction = async (skipConfirmation = false) => {
     try {
-      setShowProcessMenu(false);
       if (selectedIds.size > 0) {
         const ids = skipConfirmation ? pendingMetadataIds : Array.from(selectedIds);
         const result = await bulkExtractMetadata(ids, skipConfirmation);
 
-        // If there are unconfirmed letters and user hasn't confirmed, show dialog
         if (result.unconfirmedCount && result.unconfirmedCount > 0 && !skipConfirmation && result.queued === 0) {
           setUnconfirmedCount(result.unconfirmedCount);
           setPendingMetadataIds(ids);
@@ -813,7 +839,6 @@ export default function AdminDashboard() {
       return;
     }
     try {
-      setShowProcessMenu(false);
       showToast(`Analyzing collection ${collectionFilter}...`, 'info');
       const result: CollectionAnalysisResult = await analyzeCollection(collectionFilter);
       const { stats } = result;
@@ -876,17 +901,12 @@ export default function AdminDashboard() {
     );
   };
 
-  // Handle collection input change - filter immediately on any input
-  // "0" and "00" are treated as no filter (same as empty)
-  // Any non-zero value like "9", "09", "009", "090", "900" will filter
   const handleCollectionInputChange = (value: string) => {
     const cleaned = value.replace(/\D/g, '').slice(0, 3);
     setCollectionInput(cleaned);
-    // Treat empty, "0", and "00" as no filter
     if (cleaned === '' || cleaned === '0' || cleaned === '00') {
       setCollectionFilter('all');
     } else {
-      // Use the value as-is for partial matching (e.g., "7" matches "007", "017", etc.)
       setCollectionFilter(cleaned);
     }
   };
@@ -918,7 +938,6 @@ export default function AdminDashboard() {
     setDateToFilter(null);
   };
 
-  // Parse MM/DD/YYYY display to YYYYMMDD
   const displayToDateRaw = (display: string): string | null => {
     if (!display) return null;
     const parts = display.split('/');
@@ -928,7 +947,6 @@ export default function AdminDashboard() {
     return `${year}${month.padStart(2, '0')}${day.padStart(2, '0')}`;
   };
 
-  // Parse YYYYMMDD to MM/DD/YYYY display format
   const dateRawToDisplay = (dateRaw: string | null): string => {
     if (!dateRaw || dateRaw.length < 8) return '';
     const year = dateRaw.slice(0, 4);
@@ -937,7 +955,6 @@ export default function AdminDashboard() {
     return `${month}/${day}/${year}`;
   };
 
-  // Get date filter display text for button
   const getDateButtonText = () => {
     if (dateMode === 'specific') {
       const parts = [];
@@ -962,7 +979,6 @@ export default function AdminDashboard() {
     if (visibilityFilter !== 'ALL') count++;
     if (transcriptStatusFilters.length > 0) count += transcriptStatusFilters.length;
     if (metadataStatusFilters.length > 0) count += metadataStatusFilters.length;
-    // Date filters count
     if (yearFilter !== null) count++;
     if (monthFilter !== null) count++;
     if (dayFilter !== null) count++;
@@ -978,13 +994,11 @@ export default function AdminDashboard() {
         const status = await getProcessingStatus();
         setProcessingStatus(status);
 
-        // Refresh letter list when a NEW letter completes (live updates)
         if (status.lastCompletedAt && status.lastCompletedAt !== lastCompletedAt) {
           setLastCompletedAt(status.lastCompletedAt);
           fetchLetters();
         }
 
-        // Also refresh when processing finishes entirely
         if (!status.isRunning && wasRunning) {
           fetchLetters();
         }
@@ -1004,12 +1018,6 @@ export default function AdminDashboard() {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
 
-      // Close process menu if clicking outside
-      if (processButtonRef.current && !processButtonRef.current.contains(target)) {
-        setShowProcessMenu(false);
-      }
-
-      // Close date dropdown if clicking outside
       if (dateDropdownRef.current && !dateDropdownRef.current.contains(target)) {
         setShowDateDropdown(false);
       }
@@ -1042,180 +1050,294 @@ export default function AdminDashboard() {
     );
   }
 
-  // Header action buttons for AdminLayout
+  // Header action buttons for AdminLayout - now includes all filters
   const headerActions = (
-    <div className="toolbar-buttons">
-      {/* Edit mode toggle */}
-      <Button
-        icon={editMode ? "close" : "edit"}
-        active={editMode}
-        onClick={toggleEditMode}
-      >
-        {editMode ? "Exit Edit" : "Edit"}
-      </Button>
+    <div className="header-filters-row">
+      <div className="header-filters-left">
+        {/* Visibility group: pills stacked vertically */}
+        <div className="filter-group-stacked">
+          <div className="filter-buttons filter-buttons-vertical">
+            <button
+              className={`filter-pill filter-published ${visibilityFilter === "PUBLISHED" ? "active" : ""}`}
+              onClick={() => toggleVisibilityFilter("PUBLISHED")}
+              title="Published letters"
+            >
+              {stats.published} Public
+            </button>
+            <button
+              className={`filter-pill filter-hidden ${visibilityFilter === "HIDDEN" ? "active" : ""}`}
+              onClick={() => toggleVisibilityFilter("HIDDEN")}
+              title="Hidden letters"
+            >
+              {stats.hidden} Hidden
+            </button>
+          </div>
+        </div>
 
-      {/* Process button or controls */}
-      {processingStatus?.isRunning ? (
-        <div className="processing-controls">
-          <div className="processing-progress">
-            <span className="progress-text">
-              {processingStatus.currentJob?.type === "transcription" ? "Transcribing" : "Extracting"}:{" "}
-              {processingStatus.completed}/{processingStatus.total}
-              {processingStatus.failed > 0 && (
-                <span className="failed-count"> ({processingStatus.failed} failed)</span>
+        {/* Content filter group: toggle + status pills */}
+        <div className="filter-group-stacked">
+          <div className="content-filter-toggle">
+            <button
+              className={`content-toggle-btn ${contentFilterView === "transcript" ? "active" : ""}`}
+              onClick={() => setContentFilterView("transcript")}
+            >
+              Transcript
+              {contentFilterView !== "transcript" &&
+                transcriptStatusFilters.length > 0 && (
+                  <span className="toggle-badge">
+                    {transcriptStatusFilters.length}
+                  </span>
+                )}
+            </button>
+            <button
+              className={`content-toggle-btn ${contentFilterView === "metadata" ? "active" : ""}`}
+              onClick={() => setContentFilterView("metadata")}
+            >
+              Metadata
+              {contentFilterView !== "metadata" &&
+                metadataStatusFilters.length > 0 && (
+                  <span className="toggle-badge">
+                    {metadataStatusFilters.length}
+                  </span>
+                )}
+            </button>
+          </div>
+          <div className="filter-buttons">
+            {contentFilterView === "transcript" ? (
+              <>
+                <button
+                  className={`filter-pill filter-content-draft ${transcriptStatusFilters.includes("AI_DRAFT") ? "active" : ""}`}
+                  onClick={() => toggleTranscriptFilter("AI_DRAFT")}
+                  title="AI Draft transcripts"
+                >
+                  {stats.transcriptAiDraft} Draft
+                </button>
+                <button
+                  className={`filter-pill filter-content-edited ${transcriptStatusFilters.includes("EDITED") ? "active" : ""}`}
+                  onClick={() => toggleTranscriptFilter("EDITED")}
+                  title="Edited transcripts"
+                >
+                  {stats.transcriptEdited} Edit
+                </button>
+                <button
+                  className={`filter-pill filter-content-verified ${transcriptStatusFilters.includes("VERIFIED") ? "active" : ""}`}
+                  onClick={() => toggleTranscriptFilter("VERIFIED")}
+                  title="Verified transcripts"
+                >
+                  {stats.transcriptVerified} Done
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  className={`filter-pill filter-content-draft ${metadataStatusFilters.includes("AI_DRAFT") ? "active" : ""}`}
+                  onClick={() => toggleMetadataFilter("AI_DRAFT")}
+                  title="AI Draft metadata"
+                >
+                  {stats.metadataAiDraft} Draft
+                </button>
+                <button
+                  className={`filter-pill filter-content-edited ${metadataStatusFilters.includes("EDITED") ? "active" : ""}`}
+                  onClick={() => toggleMetadataFilter("EDITED")}
+                  title="Edited metadata"
+                >
+                  {stats.metadataEdited} Edit
+                </button>
+                <button
+                  className={`filter-pill filter-content-verified ${metadataStatusFilters.includes("VERIFIED") ? "active" : ""}`}
+                  onClick={() => toggleMetadataFilter("VERIFIED")}
+                  title="Verified metadata"
+                >
+                  {stats.metadataVerified} Done
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Filter controls: search on top, date+collection+clear on bottom */}
+        <div className="filter-group-stacked">
+          <div className="filter-group-row">
+            <div className="filter-group search-group">
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="filter-group-row">
+            <div className="dropdown-container" ref={dateDropdownRef}>
+              <button
+                className={`dropdown-trigger ${hasDateFilter ? "active" : ""}`}
+                onClick={() => setShowDateDropdown(!showDateDropdown)}
+              >
+                {getDateButtonText()} ▾
+              </button>
+              {showDateDropdown && (
+                <div className="date-dropdown-panel">
+                  <div className="date-mode-toggle">
+                    <button
+                      className={`mode-btn ${dateMode === "specific" ? "active" : ""}`}
+                      onClick={() => setDateMode("specific")}
+                    >
+                      Specific
+                    </button>
+                    <button
+                      className={`mode-btn ${dateMode === "range" ? "active" : ""}`}
+                      onClick={() => setDateMode("range")}
+                    >
+                      Range
+                    </button>
+                  </div>
+
+                  {dateMode === "specific" ? (
+                    <div className="date-dropdowns">
+                      <select
+                        value={yearFilter ?? ""}
+                        onChange={(e) =>
+                          setYearFilter(e.target.value ? Number(e.target.value) : null)
+                        }
+                      >
+                        <option value="">Year</option>
+                        {YEAR_OPTIONS.map((y) => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={monthFilter ?? ""}
+                        onChange={(e) =>
+                          setMonthFilter(e.target.value ? Number(e.target.value) : null)
+                        }
+                      >
+                        <option value="">Month</option>
+                        {MONTH_OPTIONS.map((m) => (
+                          <option key={m.value} value={m.value}>{m.label}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={dayFilter ?? ""}
+                        onChange={(e) =>
+                          setDayFilter(e.target.value ? Number(e.target.value) : null)
+                        }
+                      >
+                        <option value="">Day</option>
+                        {DAY_OPTIONS.map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="date-range-inputs">
+                      <div className="date-range-field">
+                        <label>From</label>
+                        <input
+                          type="text"
+                          placeholder="mm/dd/yyyy"
+                          value={dateFromFilter ? dateRawToDisplay(dateFromFilter) : ""}
+                          onChange={(e) => setDateFromFilter(displayToDateRaw(e.target.value))}
+                          maxLength={10}
+                        />
+                      </div>
+                      <div className="date-range-field">
+                        <label>To</label>
+                        <input
+                          type="text"
+                          placeholder="mm/dd/yyyy"
+                          value={dateToFilter ? dateRawToDisplay(dateToFilter) : ""}
+                          onChange={(e) => setDateToFilter(displayToDateRaw(e.target.value))}
+                          maxLength={10}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {hasDateFilter && (
+                    <button className="date-clear-btn" onClick={clearDateFilters}>
+                      Clear Date
+                    </button>
+                  )}
+                </div>
               )}
-            </span>
-            <div className="progress-bar">
-              <div
-                className="progress-fill"
-                style={{
-                  width: `${processingStatus.total > 0 ? (processingStatus.completed / processingStatus.total) * 100 : 0}%`,
-                }}
-              />
             </div>
+            <input
+              type="text"
+              className="collection-input"
+              placeholder="000"
+              title="Filter by collection number"
+              value={collectionInput}
+              onChange={(e) => handleCollectionInputChange(e.target.value)}
+              maxLength={3}
+            />
+            {activeFilterCount > 0 && (
+              <button className="clear-all-btn" onClick={handleClearAllFilters}>
+                Clear
+              </button>
+            )}
           </div>
-          {processingStatus.isPaused ? (
-            <button onClick={handleResumeProcessing} className="resume-button">
-              Resume
-            </button>
-          ) : (
-            <button onClick={handlePauseProcessing} className="pause-button">
-              Pause
-            </button>
-          )}
-          <button onClick={handleAbortProcessing} className="abort-button">
-            Abort
-          </button>
         </div>
-      ) : (
-        <div className="process-button-container" ref={processButtonRef}>
-          <Button
-            icon="process"
-            active={showProcessMenu}
-            onClick={handleProcessMenuToggle}
-          >
-            Process
-          </Button>
-          {showProcessMenu && (
-            <div className="dropdown-menu">
-              <DropdownItem
-                title="Transcribe"
-                description={selectedIds.size > 0 ? `Process ${selectedIds.size} selected` : "Process UPLOADED letters"}
-                onClick={() => handleStartTranscription()}
-              />
-              <DropdownItem
-                title="Extract Metadata"
-                description={selectedIds.size > 0 ? `Process ${selectedIds.size} selected` : "Process TRANSCRIBED letters"}
-                onClick={() => handleStartMetadataExtraction()}
-              />
-              <DropdownItem
-                title="Analyze Collection"
-                description={collectionFilter !== 'all' ? `Discover entities in collection ${collectionFilter}` : "Filter by collection first"}
-                onClick={handleAnalyzeCollection}
-                disabled={collectionFilter === 'all'}
-              />
-              <DropdownDivider />
-              <DropdownItem
-                title="Clear Transcriptions"
-                description="Clear transcripts, return to UPLOADED"
-                onClick={handleClearTranscriptionsClick}
-                disabled={selectedIds.size === 0}
-              />
-              <DropdownItem
-                title="Clear Metadata"
-                description="Clear metadata, keep transcripts"
-                onClick={handleClearMetadataClick}
-                disabled={selectedIds.size === 0}
-              />
-              <DropdownItem
-                title="Delete"
-                description="Permanently delete selected letters"
-                onClick={handleDeleteClick}
-                disabled={selectedIds.size === 0}
-                variant="danger"
-              />
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* Columns toggle */}
-      <div className="dropdown-container" ref={columnMenuRef}>
-        <Button
-          icon="columns"
-          active={showColumnMenu}
-          onClick={() => setShowColumnMenu(!showColumnMenu)}
-        >
-          Columns
-        </Button>
-        {showColumnMenu && (
-          <div className="column-toggle-dropdown">
-            {ALL_COLUMNS.map(col => (
-              <label key={col.id} className="column-toggle-item">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.has(col.id)}
-                  onChange={() => toggleColumnVisibility(col.id)}
-                />
-                {col.label}
-              </label>
-            ))}
-          </div>
+        {/* Processing status pill (when running and not in edit mode) */}
+        {processingStatus?.isRunning && !editMode && (
+          <span className="stat-pill stat-processing">
+            {processingStatus.currentJob?.type === "transcription" ? "T" : "M"}:{" "}
+            {processingStatus.completed}/{processingStatus.total}
+          </span>
         )}
       </div>
 
+      {/* Actions: Edit on top, Recent on bottom */}
+      <div className="header-actions-right">
+        <div className="filter-group-stacked">
+          <Button
+            icon={editMode ? "check" : "edit"}
+            size="sm"
+            active={editMode}
+            onClick={toggleEditMode}
+            disabled={isSaving}
+          >
+            {isSaving ? "Saving..." : editMode ? "Done" : "Edit"}
+          </Button>
+          <div className="recent-edits-dropdown" ref={recentDropdownRef}>
+            <button
+              className="recent-edits-btn"
+              onClick={() => setShowRecent(!showRecent)}
+            >
+              <Icon name="refresh" size={12} />
+              Recent
+              <Icon name="chevron-down" size={10} />
+            </button>
+            {showRecent && (
+              <div className="history-dropdown">
+                <div className="history-header">Edit History</div>
+                <div className="history-items">
+                  {recentEdits.length === 0 ? (
+                    <div className="history-empty">No recent edits</div>
+                  ) : (
+                    recentEdits.map((edit) => (
+                      <div
+                        key={edit.id}
+                        className="history-item"
+                        onClick={() => handleRecentClick(edit.id)}
+                      >
+                        <span className="history-info">{edit.displayName}</span>
+                        <span className="history-time">{formatTimeAgo(edit.editedAt)}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 
   return (
-    <AdminLayout headerActions={headerActions} fullHeight showRecent>
+    <AdminLayout headerActions={headerActions} fullHeight>
     <div className="admin-dashboard">
-      <DashboardFilterBar
-        visibilityFilter={visibilityFilter}
-        onToggleVisibilityFilter={toggleVisibilityFilter}
-        contentFilterView={contentFilterView}
-        onContentFilterViewChange={setContentFilterView}
-        transcriptStatusFilters={transcriptStatusFilters}
-        metadataStatusFilters={metadataStatusFilters}
-        onToggleTranscriptFilter={toggleTranscriptFilter}
-        onToggleMetadataFilter={toggleMetadataFilter}
-        collectionInput={collectionInput}
-        onCollectionInputChange={handleCollectionInputChange}
-        dateDropdownRef={dateDropdownRef}
-        showDateDropdown={showDateDropdown}
-        hasDateFilter={hasDateFilter}
-        dateButtonText={getDateButtonText()}
-        onToggleDateDropdown={() => {
-          setShowDateDropdown(!showDateDropdown);
-          setShowProcessMenu(false);
-        }}
-        dateMode={dateMode}
-        onDateModeChange={setDateMode}
-        yearFilter={yearFilter}
-        monthFilter={monthFilter}
-        dayFilter={dayFilter}
-        onYearFilterChange={setYearFilter}
-        onMonthFilterChange={setMonthFilter}
-        onDayFilterChange={setDayFilter}
-        yearOptions={YEAR_OPTIONS}
-        monthOptions={MONTH_OPTIONS}
-        dayOptions={DAY_OPTIONS}
-        dateFromFilter={dateFromFilter}
-        dateToFilter={dateToFilter}
-        dateRawToDisplay={dateRawToDisplay}
-        displayToDateRaw={displayToDateRaw}
-        onDateFromChange={setDateFromFilter}
-        onDateToChange={setDateToFilter}
-        onClearDateFilters={clearDateFilters}
-        searchInput={searchInput}
-        onSearchInputChange={setSearchInput}
-        activeFilterCount={activeFilterCount}
-        onClearAllFilters={handleClearAllFilters}
-        processingStatus={processingStatus}
-        pagination={pagination}
-        stats={stats}
-      />
-
       <div className={`admin-content ${editMode ? 'has-edit-toolbar' : ''}`}>
         <RecentActivityTable
           filteredLetters={filteredLetters}
@@ -1239,6 +1361,12 @@ export default function AdminDashboard() {
           pagination={pagination}
           loading={loading}
           onPageChange={(page) => fetchLetters(true, page)}
+          letterCountText={`${(pagination.page - 1) * pagination.limit + 1}–${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total}`}
+          allColumns={ALL_COLUMNS}
+          showColumnMenu={showColumnMenu}
+          onToggleColumnMenu={() => setShowColumnMenu(!showColumnMenu)}
+          onToggleColumn={toggleColumnVisibility}
+          columnMenuRef={columnMenuRef}
         />
       </div>
 
@@ -1285,15 +1413,70 @@ export default function AdminDashboard() {
         onCancel={() => setShowUnconfirmedDialog(false)}
       />
 
-      {/* Floating edit toolbar - always visible in edit mode */}
+      {/* Transcribe confirmation */}
+      <ConfirmDialog
+        isOpen={showTranscribeConfirm}
+        title="Transcribe Letters"
+        message={`Transcribe ${selectedIds.size > 0 ? `${selectedIds.size} selected` : 'all'} letter${selectedIds.size === 1 ? '' : 's'}?`}
+        confirmText="Transcribe"
+        onConfirm={() => {
+          setShowTranscribeConfirm(false);
+          handleStartTranscription();
+        }}
+        onCancel={() => setShowTranscribeConfirm(false)}
+      />
+
+      {/* Extract Metadata confirmation */}
+      <ConfirmDialog
+        isOpen={showMetadataConfirm}
+        title="Extract Metadata"
+        message={`Extract metadata for ${selectedIds.size > 0 ? `${selectedIds.size} selected` : 'all'} letter${selectedIds.size === 1 ? '' : 's'}?`}
+        confirmText="Extract"
+        onConfirm={() => {
+          setShowMetadataConfirm(false);
+          handleStartMetadataExtraction();
+        }}
+        onCancel={() => setShowMetadataConfirm(false)}
+      />
+
+      {/* Analyze Collection confirmation */}
+      <ConfirmDialog
+        isOpen={showAnalyzeConfirm}
+        title="Analyze Collection"
+        message={`Analyze all letters in the "${collectionFilter}" collection? This will process sender/recipient relationships.`}
+        confirmText="Analyze"
+        onConfirm={() => {
+          setShowAnalyzeConfirm(false);
+          handleAnalyzeCollection();
+        }}
+        onCancel={() => setShowAnalyzeConfirm(false)}
+      />
+
+      {/* Floating edit toolbar with process actions */}
       {editMode && (
         <div className="edit-toolbar visible">
           <div className="edit-toolbar-content">
-            {/* Left section: selection count and copy mode toggle */}
+            {/* Left section: select all, selection count, copy mode, hints, pending changes */}
             <div className="edit-toolbar-left">
+              <input
+                type="checkbox"
+                className="toolbar-select-all"
+                checked={allPageSelected}
+                ref={(el) => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
+                onChange={handleSelectAllPage}
+                title={allPageSelected ? "Deselect all" : "Select all on page"}
+              />
               <span className="toolbar-selection-count">
                 {selectedIds.size} selected
               </span>
+              {allPageSelected && pagination.total > filteredLetters.length && !allFilteredSelected && (
+                <button className="toolbar-select-all-filtered" onClick={handleSelectAllFiltered}>
+                  Select all {pagination.total}
+                </button>
+              )}
+              {allFilteredSelected && (
+                <span className="toolbar-all-selected-label">All {pagination.total} selected</span>
+              )}
               <div className="toolbar-divider" />
               <button
                 className={`toolbar-copy-btn ${copyModeActive ? 'active' : ''}`}
@@ -1302,16 +1485,12 @@ export default function AdminDashboard() {
               >
                 {copyModeActive ? '✓ Copy Mode' : 'Copy Mode'}
               </button>
-            </div>
-
-            {/* Center section: copy hints and change count */}
-            <div className="edit-toolbar-center">
               {copyModeActive && !sourceCell && (
-                <span className="toolbar-hint">Click a Sender or Recipient cell to copy</span>
+                <span className="toolbar-hint">Click a cell to copy</span>
               )}
               {copyModeActive && sourceCell && (
                 <span className="toolbar-hint">
-                  Copying: <strong>"{copiedValue || '(empty)'}"</strong> — click cells to paste, click again to undo
+                  Copying: <strong>"{copiedValue || '(empty)'}"</strong>
                 </span>
               )}
               {pendingChanges.size > 0 && (
@@ -1319,22 +1498,90 @@ export default function AdminDashboard() {
               )}
             </div>
 
-            {/* Right section: cancel and save buttons */}
-            <div className="edit-toolbar-actions">
-              <button
-                className="toolbar-btn toolbar-btn-cancel"
-                onClick={exitEditMode}
-                disabled={isSaving}
-              >
-                Cancel
-              </button>
-              <button
-                className="toolbar-btn toolbar-btn-save"
-                onClick={handleSaveChanges}
-                disabled={pendingChanges.size === 0 || isSaving}
-              >
-                {isSaving ? 'Saving...' : 'Save Changes'}
-              </button>
+            {/* Center section: process actions or processing progress */}
+            <div className="edit-toolbar-center">
+              {processingStatus?.isRunning ? (
+                <div className="toolbar-processing-controls">
+                  <div className="toolbar-progress">
+                    <span className="toolbar-progress-text">
+                      {processingStatus.currentJob?.type === "transcription" ? "Transcribing" : "Extracting"}:{" "}
+                      {processingStatus.completed}/{processingStatus.total}
+                      {processingStatus.failed > 0 && (
+                        <span className="failed-count"> ({processingStatus.failed} failed)</span>
+                      )}
+                    </span>
+                    <div className="toolbar-progress-bar">
+                      <div
+                        className="toolbar-progress-fill"
+                        style={{
+                          width: `${processingStatus.total > 0 ? (processingStatus.completed / processingStatus.total) * 100 : 0}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {processingStatus.isPaused ? (
+                    <button onClick={handleResumeProcessing} className="toolbar-process-btn toolbar-process-resume">
+                      Resume
+                    </button>
+                  ) : (
+                    <button onClick={handlePauseProcessing} className="toolbar-process-btn toolbar-process-pause">
+                      Pause
+                    </button>
+                  )}
+                  <button onClick={handleAbortProcessing} className="toolbar-process-btn toolbar-process-abort">
+                    Abort
+                  </button>
+                </div>
+              ) : (
+                <div className="toolbar-process-actions">
+                  <button
+                    className="toolbar-process-btn"
+                    onClick={() => setShowTranscribeConfirm(true)}
+                  >
+                    Transcribe{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+                  </button>
+                  <button
+                    className="toolbar-process-btn"
+                    onClick={() => setShowMetadataConfirm(true)}
+                  >
+                    Extract Metadata{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+                  </button>
+                  <button
+                    className="toolbar-process-btn"
+                    onClick={() => setShowAnalyzeConfirm(true)}
+                    disabled={collectionFilter === 'all'}
+                  >
+                    Analyze Collection
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Right section: destructive actions + cancel/save */}
+            <div className="edit-toolbar-right">
+              <div className="toolbar-destructive-actions">
+                <button
+                  className="toolbar-btn-destructive"
+                  onClick={handleClearTranscriptionsClick}
+                  disabled={selectedIds.size === 0 || bulkActionLoading}
+                >
+                  Clear Transcripts
+                </button>
+                <button
+                  className="toolbar-btn-destructive"
+                  onClick={handleClearMetadataClick}
+                  disabled={selectedIds.size === 0 || bulkActionLoading}
+                >
+                  Clear Metadata
+                </button>
+                <button
+                  className="toolbar-btn-danger"
+                  onClick={handleDeleteClick}
+                  disabled={selectedIds.size === 0}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         </div>

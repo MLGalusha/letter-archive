@@ -138,6 +138,26 @@ export async function getAdminLetters(params: AdminLetterQueryParams = {}): Prom
 }
 
 /**
+ * Fetch all filtered letter IDs (for select-all across pages)
+ */
+export async function getFilteredLetterIds(params: Omit<AdminLetterQueryParams, 'page' | 'limit'>): Promise<string[]> {
+  const ids: string[] = [];
+  let page = 1;
+  let totalPages = 1;
+  do {
+    const response = await apiGet<AdminLettersResponse>('/admin/letters', {
+      ...params,
+      page,
+      limit: 100,
+    });
+    ids.push(...response.letters.map(l => l.id));
+    totalPages = response.pagination.totalPages;
+    page++;
+  } while (page <= totalPages);
+  return ids;
+}
+
+/**
  * Fetch a single letter by ID for admin view (any visibility state)
  */
 export async function getAdminLetterById(id: string): Promise<Letter> {

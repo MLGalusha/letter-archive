@@ -1,5 +1,7 @@
 import type React from "react";
+import { type RefObject } from "react";
 import { VisibilityBadge } from "../../../components/common";
+import { Icon } from "../../../components/common/Icon";
 import type { Letter, ContentStatus } from "../../../types/Letter";
 import type { ColumnId, ExtendedSortField, PendingChange } from "./types";
 
@@ -46,6 +48,13 @@ interface RecentActivityTableProps {
   pagination: PaginationState;
   loading: boolean;
   onPageChange: (page: number) => void;
+  letterCountText?: string;
+  // Column toggle
+  allColumns: Array<{ id: ColumnId; label: string }>;
+  showColumnMenu: boolean;
+  onToggleColumnMenu: () => void;
+  onToggleColumn: (id: ColumnId) => void;
+  columnMenuRef: RefObject<HTMLDivElement | null>;
 }
 
 export default function RecentActivityTable({
@@ -70,6 +79,12 @@ export default function RecentActivityTable({
   pagination,
   loading,
   onPageChange,
+  letterCountText,
+  allColumns,
+  showColumnMenu,
+  onToggleColumnMenu,
+  onToggleColumn,
+  columnMenuRef,
 }: RecentActivityTableProps) {
   return (
     <>
@@ -79,6 +94,29 @@ export default function RecentActivityTable({
         role="region"
         aria-label="Letters table"
       >
+        <div className="column-toggle-in-table" ref={columnMenuRef}>
+          <button
+            className={`column-toggle-btn ${showColumnMenu ? 'active' : ''}`}
+            onClick={onToggleColumnMenu}
+            title="Toggle columns"
+          >
+            <Icon name="columns" size={14} />
+          </button>
+          {showColumnMenu && (
+            <div className="column-toggle-dropdown column-toggle-left">
+              {allColumns.map(col => (
+                <label key={col.id} className="column-toggle-item">
+                  <input
+                    type="checkbox"
+                    checked={visibleColumns.has(col.id)}
+                    onChange={() => onToggleColumn(col.id)}
+                  />
+                  {col.label}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
         <table className="letters-table">
           <colgroup>
             {visibleColumns.has("sender") && <col style={{ width: "12%" }} />}
@@ -371,27 +409,34 @@ export default function RecentActivityTable({
         </table>
       </div>
 
-      {pagination.totalPages > 1 && (
-        <div className="pagination-controls">
-          <button
-            className="pagination-btn"
-            onClick={() => onPageChange(pagination.page - 1)}
-            disabled={pagination.page <= 1 || loading}
-          >
-            ← Previous
-          </button>
-          <span className="pagination-info">
-            Page {pagination.page} of {pagination.totalPages}
-          </span>
-          <button
-            className="pagination-btn"
-            onClick={() => onPageChange(pagination.page + 1)}
-            disabled={pagination.page >= pagination.totalPages || loading}
-          >
-            Next →
-          </button>
-        </div>
-      )}
+      <div className="pagination-controls">
+        {pagination.totalPages > 1 ? (
+          <>
+            <button
+              className="pagination-btn"
+              onClick={() => onPageChange(pagination.page - 1)}
+              disabled={pagination.page <= 1 || loading}
+            >
+              ← Previous
+            </button>
+            <span className="pagination-info">
+              Page {pagination.page} of {pagination.totalPages}
+            </span>
+            <button
+              className="pagination-btn"
+              onClick={() => onPageChange(pagination.page + 1)}
+              disabled={pagination.page >= pagination.totalPages || loading}
+            >
+              Next →
+            </button>
+          </>
+        ) : (
+          <span className="pagination-info" />
+        )}
+        {letterCountText && (
+          <span className="letter-count">{letterCountText}</span>
+        )}
+      </div>
     </>
   );
 }

@@ -33,11 +33,10 @@
   z-index: 100;
   background: var(--bg-light);
   border-bottom: 1px solid var(--border);
-  padding: var(--spacing-sm) var(--spacing-lg);
+  padding: var(--spacing-xs) var(--spacing-sm);
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  min-height: 53px;
+  overflow: visible;
   box-shadow: 0 1px 3px hsla(0, 0%, 0%, 0.1);
 }
 
@@ -68,114 +67,7 @@
   align-items: center;
   gap: var(--spacing-sm);
   flex: 1;
-  justify-content: flex-end;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  margin-left: var(--spacing-md);
-}
-
-/* Recent Edits Dropdown */
-.recent-edits-dropdown {
-  position: relative;
-}
-
-.recent-edits-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  font-size: var(--font-sm);
-  color: var(--text);
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.recent-edits-btn:hover {
-  background: var(--bg-light);
-}
-
-/* History dropdown menu (used by Recent button) */
-.history-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  background: var(--bg-light);
-  border: solid 1px var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: 0 4px 12px hsla(0, 0%, 0%, 0.15);
-  min-width: 280px;
-  z-index: 200;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.history-items {
-  flex: 1;
-  overflow-y: auto;
-  max-height: 320px; /* ~6 items before scrolling */
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
-}
-
-.history-items::-webkit-scrollbar {
-  display: none; /* Chrome/Safari */
-}
-
-.history-header {
-  font-size: var(--font-sm);
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: var(--spacing-sm);
-  background: var(--bg);
-  border-bottom: solid 1px var(--border);
-}
-
-.history-empty {
-  padding: var(--spacing-md);
-  text-align: center;
-  color: var(--text-muted);
-  font-size: var(--font-sm);
-  font-style: italic;
-}
-
-.history-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-sm);
-  cursor: pointer;
-  border-bottom: solid 1px var(--border);
-  transition: background-color 0.15s ease;
-}
-
-.history-item:last-child {
-  border-bottom: none;
-}
-
-.history-item:hover {
-  background: var(--bg);
-}
-
-.history-info {
-  font-size: var(--font-sm);
-  font-family: ui-monospace, monospace;
-  color: var(--text);
-}
-
-.history-time {
-  font-size: var(--font-xs);
-  color: var(--text-muted);
-  white-space: nowrap;
+  min-width: 0;
 }
 
 /* Content */

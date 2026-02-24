@@ -55,7 +55,7 @@ describe("CollectionCard", () => {
         collection={collection}
         isSelected={false}
         editMode={false}
-        allDuplicate={false}
+        duplicateAction="none"
         onSelect={onSelect}
         onClick={onClick}
         onDelete={vi.fn()}
@@ -70,7 +70,7 @@ describe("CollectionCard", () => {
         collection={collection}
         isSelected={false}
         editMode
-        allDuplicate={false}
+        duplicateAction="none"
         onSelect={onSelect}
         onClick={onClick}
         onDelete={vi.fn()}
@@ -110,7 +110,7 @@ describe("UncategorizedCarousel", () => {
   });
 });
 
-describe("CollectionCard allDuplicate", () => {
+describe("CollectionCard duplicate action borders", () => {
   const collection: CollectionGroup = {
     collectionCode: "002",
     letters: [
@@ -127,13 +127,13 @@ describe("CollectionCard allDuplicate", () => {
     dateRange: "1886-03-14",
   };
 
-  it("applies all-duplicate class when allDuplicate is true", () => {
+  it("applies dup-replace class when duplicateAction is replace", () => {
     const { container } = render(
       <CollectionCard
         collection={collection}
         isSelected={false}
         editMode={false}
-        allDuplicate={true}
+        duplicateAction="replace"
         onSelect={vi.fn()}
         onClick={vi.fn()}
         onDelete={vi.fn()}
@@ -141,16 +141,16 @@ describe("CollectionCard allDuplicate", () => {
     );
 
     const card = container.querySelector(".collection-card");
-    expect(card).toHaveClass("all-duplicate");
+    expect(card).toHaveClass("dup-replace");
   });
 
-  it("does not apply all-duplicate class when allDuplicate is false", () => {
+  it("applies dup-skip class when duplicateAction is skip", () => {
     const { container } = render(
       <CollectionCard
         collection={collection}
         isSelected={false}
         editMode={false}
-        allDuplicate={false}
+        duplicateAction="skip"
         onSelect={vi.fn()}
         onClick={vi.fn()}
         onDelete={vi.fn()}
@@ -158,7 +158,25 @@ describe("CollectionCard allDuplicate", () => {
     );
 
     const card = container.querySelector(".collection-card");
-    expect(card).not.toHaveClass("all-duplicate");
+    expect(card).toHaveClass("dup-skip");
+  });
+
+  it("applies no duplicate class when duplicateAction is none", () => {
+    const { container } = render(
+      <CollectionCard
+        collection={collection}
+        isSelected={false}
+        editMode={false}
+        duplicateAction="none"
+        onSelect={vi.fn()}
+        onClick={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    const card = container.querySelector(".collection-card");
+    expect(card).not.toHaveClass("dup-replace");
+    expect(card).not.toHaveClass("dup-skip");
   });
 });
 
@@ -239,7 +257,7 @@ describe("CollectionModal", () => {
     expect(cards[2].textContent).toContain("16");
   });
 
-  it("applies all-duplicate class to letter cards where all images are duplicates", () => {
+  it("applies dup-replace class to all-duplicate letter cards with replaceSelected", () => {
     const collection: CollectionGroup = {
       collectionCode: "001",
       letters: [
@@ -262,12 +280,13 @@ describe("CollectionModal", () => {
 
     const letterCards = container.querySelectorAll(".letter-card");
     // First card is the non-duplicate (sorted first)
-    expect(letterCards[0]).not.toHaveClass("all-duplicate");
-    // Second card is the all-duplicate
-    expect(letterCards[1]).toHaveClass("all-duplicate");
+    expect(letterCards[0]).not.toHaveClass("dup-replace");
+    expect(letterCards[0]).not.toHaveClass("dup-skip");
+    // Second card is all-duplicate with replaceSelected=true → blue
+    expect(letterCards[1]).toHaveClass("dup-replace");
   });
 
-  it("does not apply all-duplicate class when letter has mixed images", () => {
+  it("does not apply duplicate class when letter has mixed images", () => {
     const mixedLetter: LetterGroup = {
       letterKey: "18860314-01",
       dateRaw: "18860314",
@@ -304,6 +323,7 @@ describe("CollectionModal", () => {
     );
 
     const letterCard = container.querySelector(".letter-card");
-    expect(letterCard).not.toHaveClass("all-duplicate");
+    expect(letterCard).not.toHaveClass("dup-replace");
+    expect(letterCard).not.toHaveClass("dup-skip");
   });
 });

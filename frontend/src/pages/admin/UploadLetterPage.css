@@ -1643,8 +1643,13 @@
   font-style: italic;
 }
 
-/* All-duplicate border — applied to both collection cards and letter cards */
-.collection-card.all-duplicate,
-.letter-card.all-duplicate {
+/* Duplicate action borders — blue for replacing, amber for skipping */
+.collection-card.dup-replace,
+.letter-card.dup-replace {
+  border-color: #3b82f6;
+}
+
+.collection-card.dup-skip,
+.letter-card.dup-skip {
   border-color: #f59e0b;
 }

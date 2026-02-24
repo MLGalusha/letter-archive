@@ -108,12 +108,13 @@ export default function CollectionModal({
         ) : (
           <div className="letter-grid">
             {sortedLetters.map((letter) => {
-              const allDuplicate = letter.images.length > 0 && letter.images.every(img => img.isDuplicate);
+              const allDup = letter.images.length > 0 && letter.images.every(img => img.isDuplicate);
+              const dupAction = !allDup ? 'none' : letter.images.every(img => img.replaceSelected) ? 'replace' : 'skip';
 
               return (
                 <div
                   key={letter.letterKey}
-                  className={`letter-card ${allDuplicate ? "all-duplicate" : ""}`}
+                  className={`letter-card ${dupAction !== 'none' ? `dup-${dupAction}` : ""}`}
                   onClick={() => setSelectedLetter(letter)}
                 >
                   <button

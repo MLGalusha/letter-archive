@@ -573,12 +573,19 @@ export default function UploadLetterPage() {
       (editState.selectedCollection === "new" &&
         editState.newCollectionCode.length > 0));
 
-  // Compute per-collection: whether ALL images are duplicates (for border)
-  const collectionAllDuplicate = useMemo(() => {
-    const result: Record<string, boolean> = {};
+  // Compute per-collection duplicate action: 'none' | 'replace' | 'skip'
+  const collectionDupAction = useMemo(() => {
+    const result: Record<string, 'none' | 'replace' | 'skip'> = {};
     for (const collection of collections) {
       const allImages = collection.letters.flatMap(l => l.images);
-      result[collection.collectionCode] = allImages.length > 0 && allImages.every(img => img.isDuplicate);
+      const allDup = allImages.length > 0 && allImages.every(img => img.isDuplicate);
+      if (!allDup) {
+        result[collection.collectionCode] = 'none';
+      } else if (allImages.every(img => img.replaceSelected)) {
+        result[collection.collectionCode] = 'replace';
+      } else {
+        result[collection.collectionCode] = 'skip';
+      }
     }
     return result;
   }, [collections]);
@@ -774,7 +781,7 @@ export default function UploadLetterPage() {
                     collection.collectionCode
                   }
                   editMode={editState.active}
-                  allDuplicate={collectionAllDuplicate[collection.collectionCode] || false}
+                  duplicateAction={collectionDupAction[collection.collectionCode] || 'none'}
                   onSelect={() =>
                     handleCollectionSelect(collection.collectionCode)
                   }

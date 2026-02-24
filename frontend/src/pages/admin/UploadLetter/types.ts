@@ -27,9 +27,11 @@ export interface CollectionGroup {
 
 export interface EditState {
   active: boolean;
+  mode: "organize" | "delete";
   selectedCollection: string | null;
   selectedImageIds: Set<string>;
   newCollectionCode: string;
+  deletionImageIds: Set<string>;
 }
 
 export interface LightboxState {
@@ -62,7 +64,7 @@ export interface UploadBannerState {
 
 export interface DeleteDialogState {
   show: boolean;
-  type: "collection" | "letter" | "image";
+  type: "collection" | "letter" | "image" | "bulk";
   collectionCode: string;
   letterKey?: string;
   imageId?: string;

@@ -43,9 +43,11 @@ export default function UploadLetterPage() {
   const [message, setMessage] = useState("");
   const [editState, setEditState] = useState<EditState>({
     active: false,
+    mode: "organize",
     selectedCollection: null,
     selectedImageIds: new Set(),
     newCollectionCode: "001",
+    deletionImageIds: new Set(),
   });
   const [openCollectionCode, setOpenCollectionCode] = useState<string | null>(null);
   const [lightboxState, setLightboxState] = useState<LightboxState | null>(
@@ -124,6 +126,13 @@ export default function UploadLetterPage() {
     const nextCode = getNextCollectionCode(collections);
     setEditState((prev) => ({ ...prev, newCollectionCode: nextCode }));
   }, [collections]);
+
+  // Fall back to delete mode if uncategorized images disappear while in organize mode
+  useEffect(() => {
+    if (uncategorizedImages.length === 0) {
+      setEditState((prev) => prev.mode === "organize" ? { ...prev, mode: "delete" } : prev);
+    }
+  }, [uncategorizedImages.length]);
 
   // Duplicate check helper
   const recheckDuplicates = useCallback(async (filenames: string[]) => {
@@ -230,8 +239,20 @@ export default function UploadLetterPage() {
     setEditState((prev) => ({
       ...prev,
       active: !prev.active,
+      mode: "delete",
       selectedCollection: null,
       selectedImageIds: new Set(),
+      deletionImageIds: new Set(),
+    }));
+  };
+
+  const switchEditMode = (mode: "organize" | "delete") => {
+    setEditState((prev) => ({
+      ...prev,
+      mode,
+      selectedCollection: null,
+      selectedImageIds: new Set(),
+      deletionImageIds: new Set(),
     }));
   };
 
@@ -502,68 +523,130 @@ export default function UploadLetterPage() {
     setUploadBanner(prev => ({ ...prev, show: false }));
   };
 
-  const handleDeleteCollection = (collectionCode: string) => {
-    setDeleteDialog({
-      show: true,
-      type: 'collection',
-      collectionCode,
-      itemName: `Collection ${collectionCode}`,
+  // Deletion toggle handlers
+  const handleToggleDeletionCollection = (collectionCode: string) => {
+    const collection = collections.find(c => c.collectionCode === collectionCode);
+    if (!collection) return;
+
+    const allImageIds = collection.letters.flatMap(l => l.images.map(img => img.id));
+
+    setEditState(prev => {
+      const next = new Set(prev.deletionImageIds);
+      const allSelected = allImageIds.every(id => next.has(id));
+      if (allSelected) {
+        allImageIds.forEach(id => next.delete(id));
+      } else {
+        allImageIds.forEach(id => next.add(id));
+      }
+      return { ...prev, deletionImageIds: next };
     });
   };
 
-  const handleDeleteLetter = (collectionCode: string, letterKey: string, letterDate: string | null) => {
+  const handleToggleDeletionLetter = (collectionCode: string, letterKey: string) => {
+    const collection = collections.find(c => c.collectionCode === collectionCode);
+    if (!collection) return;
+    const letter = collection.letters.find(l => l.letterKey === letterKey);
+    if (!letter) return;
+
+    const imageIds = letter.images.map(img => img.id);
+
+    setEditState(prev => {
+      const next = new Set(prev.deletionImageIds);
+      const allSelected = imageIds.every(id => next.has(id));
+      if (allSelected) {
+        imageIds.forEach(id => next.delete(id));
+      } else {
+        imageIds.forEach(id => next.add(id));
+      }
+      return { ...prev, deletionImageIds: next };
+    });
+  };
+
+  const handleToggleDeletionImage = (id: string) => {
+    setEditState(prev => {
+      const next = new Set(prev.deletionImageIds);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return { ...prev, deletionImageIds: next };
+    });
+  };
+
+  // Count: unique affected letters + uncategorized images
+  const deletionCount = useMemo(() => {
+    const uncategorizedCount = uncategorizedImages.filter(img => editState.deletionImageIds.has(img.id)).length;
+    const affectedLetters = new Set<string>();
+    for (const collection of collections) {
+      for (const letter of collection.letters) {
+        if (letter.images.some(img => editState.deletionImageIds.has(img.id))) {
+          affectedLetters.add(`${collection.collectionCode}:${letter.letterKey}`);
+        }
+      }
+    }
+    return affectedLetters.size + uncategorizedCount;
+  }, [editState.deletionImageIds, collections, uncategorizedImages]);
+
+  const handleBulkDelete = () => {
+    const uncategorizedCount = uncategorizedImages.filter(img => editState.deletionImageIds.has(img.id)).length;
+    const affectedLetters = new Set<string>();
+    for (const collection of collections) {
+      for (const letter of collection.letters) {
+        if (letter.images.some(img => editState.deletionImageIds.has(img.id))) {
+          affectedLetters.add(`${collection.collectionCode}:${letter.letterKey}`);
+        }
+      }
+    }
+
+    const parts: string[] = [];
+    if (affectedLetters.size > 0) {
+      const n = affectedLetters.size;
+      parts.push(`${n} letter${n !== 1 ? "s" : ""}`);
+    }
+    if (uncategorizedCount > 0) {
+      parts.push(`${uncategorizedCount} image${uncategorizedCount !== 1 ? "s" : ""}`);
+    }
     setDeleteDialog({
       show: true,
-      type: 'letter',
-      collectionCode,
-      letterKey,
-      itemName: letterDate ? formatDate(letterDate) : 'Unknown Date',
+      type: "bulk",
+      collectionCode: "",
+      itemName: parts.join(", "),
     });
   };
 
   const handleConfirmDelete = () => {
-    if (deleteDialog.type === 'collection') {
-      setImages(prev => prev.filter(img =>
-        !img.parsed || img.parsed.collectionCode !== deleteDialog.collectionCode
-      ));
-    } else if (deleteDialog.type === 'letter' && deleteDialog.letterKey) {
-      setImages(prev => prev.filter(img => {
-        if (!img.parsed || img.parsed.collectionCode !== deleteDialog.collectionCode) {
-          return true;
+    if (deleteDialog.type === "bulk") {
+      const summary = deleteDialog.itemName;
+      setImages(prev => prev.filter(img => !editState.deletionImageIds.has(img.id)));
+
+      // Close collection modal if all its images were deleted
+      if (openCollectionCode) {
+        const openColl = collections.find(c => c.collectionCode === openCollectionCode);
+        if (openColl) {
+          const allImagesDeleted = openColl.letters.every(l =>
+            l.images.every(img => editState.deletionImageIds.has(img.id))
+          );
+          if (allImagesDeleted) {
+            setOpenCollectionCode(null);
+          }
         }
-        const imgLetterKey = `${img.parsed.dateRaw}-${String(img.parsed.typeSequence).padStart(2, "0")}`;
-        return imgLetterKey !== deleteDialog.letterKey;
-      }));
-    } else if (deleteDialog.type === 'image' && deleteDialog.imageId) {
-      setImages(prev => prev.filter(img => img.id !== deleteDialog.imageId));
-    }
-
-    // Close collection modal if we deleted the current collection or its last letter
-    if (openCollectionCode && deleteDialog.collectionCode === openCollectionCode) {
-      const remainingInCollection = images.filter(img =>
-        img.parsed?.collectionCode === deleteDialog.collectionCode
-      );
-      const currentCollection = collections.find(c => c.collectionCode === openCollectionCode);
-      if (deleteDialog.type === 'collection' || remainingInCollection.length <= (currentCollection?.letters.find(l => l.letterKey === deleteDialog.letterKey)?.images.length || 0)) {
-        setOpenCollectionCode(null);
       }
+
+      // Clear deletion selections
+      setEditState(prev => ({
+        ...prev,
+        deletionImageIds: new Set(),
+      }));
+
+      showToast(`${summary} deleted`);
     }
 
-    setDeleteDialog({ show: false, type: 'collection', collectionCode: '', itemName: '' });
+    setDeleteDialog({ show: false, type: "collection", collectionCode: "", itemName: "" });
   };
 
   const handleCancelDelete = () => {
-    setDeleteDialog({ show: false, type: 'collection', collectionCode: '', itemName: '' });
-  };
-
-  const handleDeleteUncategorizedImage = (image: UploadedImage) => {
-    setDeleteDialog({
-      show: true,
-      type: 'image',
-      collectionCode: '',
-      imageId: image.id,
-      itemName: image.originalFilename,
-    });
+    setDeleteDialog({ show: false, type: "collection", collectionCode: "", itemName: "" });
   };
 
   const handleViewImage = (image: UploadedImage, allImages: UploadedImage[]) => {
@@ -632,11 +715,11 @@ export default function UploadLetterPage() {
       )}
 
       <div className="header-actions">
-        {editState.active && (
+        {editState.active && editState.mode === "organize" && (
           <span className="selected-count">{editState.selectedImageIds.size} selected</span>
         )}
 
-        {editState.active && editState.selectedCollection === "new" && (
+        {editState.active && editState.mode === "organize" && editState.selectedCollection === "new" && (
           <>
             <span className="collection-label">Collection #:</span>
             <input
@@ -650,19 +733,54 @@ export default function UploadLetterPage() {
           </>
         )}
 
-        {editState.active && (
+        {editState.active && editState.mode === "organize" && (
           <Button variant="primary" disabled={!canAdd} onClick={handleAddToCollection}>
             Add
           </Button>
         )}
 
-        {uncategorizedImages.length > 0 && (
+        {editState.active && editState.mode === "delete" && deletionCount > 0 && (
+          <Button variant="danger" icon="delete" onClick={handleBulkDelete}>
+            Delete ({deletionCount})
+          </Button>
+        )}
+
+        {editState.active && uncategorizedImages.length > 0 && (
+          <div className="edit-mode-toggle">
+            <button
+              className={`edit-mode-option ${editState.mode === "organize" ? "active" : ""}`}
+              onClick={() => switchEditMode("organize")}
+            >
+              Organize
+            </button>
+            <button
+              className={`edit-mode-option ${editState.mode === "delete" ? "active" : ""}`}
+              onClick={() => switchEditMode("delete")}
+            >
+              Delete
+            </button>
+          </div>
+        )}
+
+        {(uncategorizedImages.length > 0 || collections.length > 0) && (
           <Button
             icon={editState.active ? "check" : "edit"}
             onClick={toggleEditMode}
             active={editState.active}
           >
-            {editState.active ? "Done" : "Organize"}
+            {editState.active ? "Done" : "Edit"}
+          </Button>
+        )}
+
+        {images.length > 0 && (
+          <Button
+            icon="upload"
+            disabled={uploading}
+            onClick={handleSubmit}
+          >
+            {uploadProgress
+              ? `${uploadProgress.current}/${uploadProgress.total}`
+              : "Upload"}
           </Button>
         )}
 
@@ -678,35 +796,23 @@ export default function UploadLetterPage() {
             <div className="upload-menu">
               <button
                 onClick={() => {
-                  handleSelectFiles();
-                  setUploadMenuOpen(false);
-                }}
-              >
-                Files
-              </button>
-              <button
-                onClick={() => {
                   handleSelectFolder();
                   setUploadMenuOpen(false);
                 }}
               >
                 Folder
               </button>
+              <button
+                onClick={() => {
+                  handleSelectFiles();
+                  setUploadMenuOpen(false);
+                }}
+              >
+                Files
+              </button>
             </div>
           )}
         </div>
-
-        {images.length > 0 && (
-          <Button
-            icon="upload"
-            disabled={uploading}
-            onClick={handleSubmit}
-          >
-            {uploadProgress
-              ? `${uploadProgress.current}/${uploadProgress.total}`
-              : "Upload"}
-          </Button>
-        )}
       </div>
     </>
   );
@@ -775,16 +881,19 @@ export default function UploadLetterPage() {
                     editState.selectedCollection ===
                     collection.collectionCode
                   }
-                  editMode={editState.active}
+                  editMode={editState.active && editState.mode === "organize"}
+                  deletionMode={editState.active && editState.mode === "delete"}
                   hasDuplicates={collectionHasDuplicates[collection.collectionCode] || false}
+                  isMarkedForDeletion={collection.letters.length > 0 && collection.letters.every(l => l.images.every(img => editState.deletionImageIds.has(img.id)))}
+                  isPartialDeletion={collection.letters.some(l => l.images.some(img => editState.deletionImageIds.has(img.id))) && !collection.letters.every(l => l.images.every(img => editState.deletionImageIds.has(img.id)))}
                   onSelect={() =>
                     handleCollectionSelect(collection.collectionCode)
                   }
                   onClick={() => setOpenCollectionCode(collection.collectionCode)}
-                  onDelete={() => handleDeleteCollection(collection.collectionCode)}
+                  onToggleDeletion={() => handleToggleDeletionCollection(collection.collectionCode)}
                 />
               ))}
-              {editState.active && (
+              {editState.active && editState.mode === "organize" && (
                 <div
                   className={`collection-card new-collection ${editState.selectedCollection === "new" ? "selected" : ""}`}
                   onClick={handleNewCollectionSelect}
@@ -803,7 +912,7 @@ export default function UploadLetterPage() {
         )}
 
         {/* New Collection Card (when no collections exist but in edit mode) */}
-        {collections.length === 0 && editState.active && (
+        {collections.length === 0 && editState.active && editState.mode === "organize" && (
           <div className="collections-section">
             <h2>Collections</h2>
             <div className="collection-grid">
@@ -828,7 +937,7 @@ export default function UploadLetterPage() {
             editState={editState}
             onImageSelect={handleImageSelect}
             onViewImage={handleViewImage}
-            onDeleteImage={handleDeleteUncategorizedImage}
+            onToggleDeletionImage={handleToggleDeletionImage}
           />
         )}
 
@@ -886,9 +995,12 @@ export default function UploadLetterPage() {
       {openCollection && (
         <CollectionModal
           collection={openCollection}
+          deletionMode={editState.active && editState.mode === "delete"}
+          deletionImageIds={editState.deletionImageIds}
           onClose={() => setOpenCollectionCode(null)}
           onViewImage={handleViewImage}
-          onDeleteLetter={(letterKey, letterDate) => handleDeleteLetter(openCollection.collectionCode, letterKey, letterDate)}
+          onToggleDeletionLetter={handleToggleDeletionLetter}
+          onToggleDeletionImage={handleToggleDeletionImage}
         />
       )}
 
@@ -1003,12 +1115,16 @@ export default function UploadLetterPage() {
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
         isOpen={deleteDialog.show}
-        title={`Delete ${deleteDialog.type === 'collection' ? 'Collection' : deleteDialog.type === 'letter' ? 'Letter' : 'Image'}?`}
+        title={deleteDialog.type === 'bulk' ? 'Delete Selected Items?' : `Delete ${deleteDialog.type === 'collection' ? 'Collection' : deleteDialog.type === 'letter' ? 'Letter' : 'Image'}?`}
         message={
-          <>
-            Are you sure you want to delete <strong>{deleteDialog.itemName}</strong>?
-            {deleteDialog.type === 'collection' && ' This will remove all letters and images in this collection.'}
-          </>
+          deleteDialog.type === 'bulk' ? (
+            <>Are you sure you want to delete <strong>{deleteDialog.itemName}</strong>?</>
+          ) : (
+            <>
+              Are you sure you want to delete <strong>{deleteDialog.itemName}</strong>?
+              {deleteDialog.type === 'collection' && ' This will remove all letters and images in this collection.'}
+            </>
+          )
         }
         confirmText="Delete"
         variant="danger"

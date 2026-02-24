@@ -4,9 +4,12 @@ import type { CollectionGroup, LetterGroup, UploadedImage } from "./types";
 
 interface CollectionModalProps {
   collection: CollectionGroup;
+  deletionMode: boolean;
+  deletionImageIds: Set<string>;
   onClose: () => void;
   onViewImage: (image: UploadedImage, allImages: UploadedImage[]) => void;
-  onDeleteLetter: (letterKey: string, letterDate: string | null) => void;
+  onToggleDeletionLetter: (collectionCode: string, letterKey: string) => void;
+  onToggleDeletionImage: (id: string) => void;
 }
 
 function formatDate(isoDate: string): string {
@@ -21,9 +24,12 @@ function formatDate(isoDate: string): string {
 
 export default function CollectionModal({
   collection,
+  deletionMode,
+  deletionImageIds,
   onClose,
   onViewImage,
-  onDeleteLetter,
+  onToggleDeletionLetter,
+  onToggleDeletionImage,
 }: CollectionModalProps) {
   const [selectedLetter, setSelectedLetter] = useState<LetterGroup | null>(null);
 
@@ -37,10 +43,21 @@ export default function CollectionModal({
     }
   };
 
-  const handleDeleteLetter = (e: React.MouseEvent, letter: LetterGroup) => {
+  const handleToggleLetterDeletion = (e: React.MouseEvent, letter: LetterGroup) => {
     e.stopPropagation();
-    onDeleteLetter(letter.letterKey, letter.letterDate);
+    onToggleDeletionLetter(collection.collectionCode, letter.letterKey);
   };
+
+  const handleToggleImageDeletion = (e: React.MouseEvent, imgId: string) => {
+    e.stopPropagation();
+    onToggleDeletionImage(imgId);
+  };
+
+  const isLetterMarked = (letter: LetterGroup) =>
+    letter.images.length > 0 && letter.images.every(img => deletionImageIds.has(img.id));
+
+  const isLetterPartial = (letter: LetterGroup) =>
+    letter.images.some(img => deletionImageIds.has(img.id)) && !isLetterMarked(letter);
 
   // Sort letters: letters with any non-duplicate first, all-duplicate letters after
   const sortedLetters = [...collection.letters].sort((a, b) => {
@@ -75,40 +92,55 @@ export default function CollectionModal({
 
         {selectedLetter ? (
           <div className="letter-images">
-            {selectedLetter.images.map((img) => (
-              <div
-                key={img.id}
-                className={`letter-image-item ${img.isDuplicate ? "is-duplicate" : ""}`}
-                onClick={() => onViewImage(img, selectedLetter.images)}
-              >
-                <div className="image-type-badge">
-                  {getTypeName(img.parsed?.type || "L")}
+            {selectedLetter.images.map((img) => {
+              const imgMarked = deletionImageIds.has(img.id);
+              return (
+                <div
+                  key={img.id}
+                  className={`letter-image-item ${img.isDuplicate ? "is-duplicate" : ""} ${imgMarked ? "marked-for-deletion" : ""}`}
+                  onClick={() => onViewImage(img, selectedLetter.images)}
+                >
+                  {deletionMode && (
+                    <div
+                      className={`deletion-tab ${imgMarked ? "marked" : ""}`}
+                      onClick={(e) => handleToggleImageDeletion(e, img.id)}
+                    />
+                  )}
+                  <div className="image-type-badge">
+                    {getTypeName(img.parsed?.type || "L")}
+                  </div>
+                  <div className="image-page-badge">{img.parsed?.pageNumber || 1}</div>
+                  <img src={img.url} alt={img.originalFilename} />
                 </div>
-                <div className="image-page-badge">{img.parsed?.pageNumber || 1}</div>
-                <img src={img.url} alt={img.originalFilename} />
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="letter-grid">
             {sortedLetters.map((letter) => {
               const allDup = letter.images.length > 0 && letter.images.every(img => img.isDuplicate);
+              const marked = isLetterMarked(letter);
+              const partial = isLetterPartial(letter);
+
+              const classNames = [
+                "letter-card",
+                allDup ? "is-duplicate" : "",
+                marked ? "marked-for-deletion" : "",
+                partial ? "partial-deletion" : "",
+              ].filter(Boolean).join(" ");
 
               return (
                 <div
                   key={letter.letterKey}
-                  className={`letter-card ${allDup ? "is-duplicate" : ""}`}
+                  className={classNames}
                   onClick={() => setSelectedLetter(letter)}
                 >
-                  <button
-                    className="delete-letter-btn"
-                    onClick={(e) => handleDeleteLetter(e, letter)}
-                    title="Delete letter"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
-                    </svg>
-                  </button>
+                  {deletionMode && (
+                    <div
+                      className={`deletion-tab ${marked ? "marked" : ""}`}
+                      onClick={(e) => handleToggleLetterDeletion(e, letter)}
+                    />
+                  )}
                   <div className="letter-card-date">
                     {letter.letterDate ? formatDate(letter.letterDate) : "Unknown Date"}
                   </div>

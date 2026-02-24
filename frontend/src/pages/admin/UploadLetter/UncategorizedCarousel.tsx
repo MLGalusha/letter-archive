@@ -7,7 +7,7 @@ interface UncategorizedCarouselProps {
   editState: EditState;
   onImageSelect: (id: string) => void;
   onViewImage: (image: UploadedImage, allImages: UploadedImage[]) => void;
-  onDeleteImage: (image: UploadedImage) => void;
+  onToggleDeletionImage: (id: string) => void;
 }
 
 export default function UncategorizedCarousel({
@@ -15,7 +15,7 @@ export default function UncategorizedCarousel({
   editState,
   onImageSelect,
   onViewImage,
-  onDeleteImage,
+  onToggleDeletionImage,
 }: UncategorizedCarouselProps) {
   const [pageIndex, setPageIndex] = useState(0);
   const [previousPageIndex, setPreviousPageIndex] = useState<number | null>(null);
@@ -90,10 +90,12 @@ export default function UncategorizedCarousel({
                     key={image.id}
                     image={image}
                     isSelected={editState.selectedImageIds.has(image.id)}
-                    editMode={editState.active}
+                    editMode={editState.active && editState.mode === "organize"}
+                    deletionMode={editState.active && editState.mode === "delete"}
                     onSelect={() => onImageSelect(image.id)}
                     onView={() => onViewImage(image, images)}
-                    onDelete={() => onDeleteImage(image)}
+                    isMarkedForDeletion={editState.deletionImageIds.has(image.id)}
+                    onToggleDeletion={() => onToggleDeletionImage(image.id)}
                   />
                 ))}
               </div>
@@ -106,9 +108,11 @@ export default function UncategorizedCarousel({
                   image={image}
                   isSelected={editState.selectedImageIds.has(image.id)}
                   editMode={editState.active}
+                  deletionMode={editState.deletionMode}
                   onSelect={() => onImageSelect(image.id)}
                   onView={() => onViewImage(image, images)}
-                  onDelete={() => onDeleteImage(image)}
+                  isMarkedForDeletion={editState.deletionImageIds.has(image.id)}
+                  onToggleDeletion={() => onToggleDeletionImage(image.id)}
                 />
               ))}
             </div>
@@ -120,10 +124,12 @@ export default function UncategorizedCarousel({
                     key={image.id}
                     image={image}
                     isSelected={editState.selectedImageIds.has(image.id)}
-                    editMode={editState.active}
+                    editMode={editState.active && editState.mode === "organize"}
+                    deletionMode={editState.active && editState.mode === "delete"}
                     onSelect={() => onImageSelect(image.id)}
                     onView={() => onViewImage(image, images)}
-                    onDelete={() => onDeleteImage(image)}
+                    isMarkedForDeletion={editState.deletionImageIds.has(image.id)}
+                    onToggleDeletion={() => onToggleDeletionImage(image.id)}
                   />
                 ))}
               </div>

@@ -4,20 +4,26 @@ interface CollectionCardProps {
   collection: CollectionGroup;
   isSelected: boolean;
   editMode: boolean;
+  deletionMode: boolean;
   hasDuplicates: boolean;
+  isMarkedForDeletion: boolean;
+  isPartialDeletion: boolean;
   onSelect: () => void;
   onClick: () => void;
-  onDelete: () => void;
+  onToggleDeletion: () => void;
 }
 
 export default function CollectionCard({
   collection,
   isSelected,
   editMode,
+  deletionMode,
   hasDuplicates,
+  isMarkedForDeletion,
+  isPartialDeletion,
   onSelect,
   onClick,
-  onDelete,
+  onToggleDeletion,
 }: CollectionCardProps) {
   const handleClick = () => {
     if (editMode) {
@@ -27,25 +33,29 @@ export default function CollectionCard({
     }
   };
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleToggleDeletion = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onDelete();
+    onToggleDeletion();
   };
 
   const letterCount = collection.letters.length;
   const letterText = letterCount === 1 ? "1 letter" : `${letterCount} letters`;
 
+  const classNames = [
+    "collection-card",
+    isSelected ? "selected" : "",
+    hasDuplicates ? "has-duplicates" : "",
+    isMarkedForDeletion ? "marked-for-deletion" : "",
+    isPartialDeletion ? "partial-deletion" : "",
+  ].filter(Boolean).join(" ");
+
   return (
-    <div
-      className={`collection-card ${isSelected ? "selected" : ""} ${hasDuplicates ? "has-duplicates" : ""}`}
-      onClick={handleClick}
-    >
-      {!editMode && (
-        <button className="delete-card-btn" onClick={handleDelete} title="Delete collection">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
-          </svg>
-        </button>
+    <div className={classNames} onClick={handleClick}>
+      {deletionMode && (
+        <div
+          className={`deletion-tab ${isMarkedForDeletion ? "marked" : ""}`}
+          onClick={handleToggleDeletion}
+        />
       )}
       <div className="collection-code">Collection {collection.collectionCode}</div>
       <div className="collection-info">

@@ -260,6 +260,40 @@
   cursor: not-allowed;
 }
 
+/* Edit Mode Toggle (Organize / Delete) */
+.edit-mode-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.edit-mode-option {
+  all: unset;
+  padding: 0.35rem 0.7rem;
+  font-size: var(--font-sm);
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.edit-mode-option:first-child {
+  border-right: 1px solid var(--border);
+}
+
+.edit-mode-option:hover:not(.active) {
+  background: var(--bg-light);
+  color: var(--text);
+}
+
+.edit-mode-option.active {
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 600;
+}
+
 /* ============================================================================
    Content Area
    ============================================================================ */
@@ -611,40 +645,6 @@
   box-shadow: 0 0 0 2px var(--text);
 }
 
-.delete-thumb-btn {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 24px;
-  height: 24px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: all 0.15s ease;
-  color: var(--text-muted);
-  z-index: 5;
-}
-
-.image-thumb:hover .delete-thumb-btn {
-  opacity: 1;
-}
-
-.delete-thumb-btn:hover {
-  background: #fef2f2;
-  border-color: #fca5a5;
-  color: #dc2626;
-}
-
-.delete-thumb-btn svg {
-  width: 12px;
-  height: 12px;
-}
-
 .image-thumb img {
   width: 100%;
   height: 100%;
@@ -886,6 +886,7 @@
 }
 
 .letter-card {
+  position: relative;
   background: var(--bg);
   border: solid 2px var(--border);
   border-radius: var(--radius-md);
@@ -1365,82 +1366,85 @@
 }
 
 /* ============================================================================
-   Delete Button on Cards
+   Selection-Based Deletion (Edit Mode)
    ============================================================================ */
 
-.collection-card {
-  position: relative;
-}
-
-.delete-card-btn {
+.deletion-tab {
   position: absolute;
-  top: var(--spacing-xs);
-  right: var(--spacing-xs);
-  width: 28px;
-  height: 28px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  bottom: 0;
+  right: 0;
+  width: 40px;
+  height: 40px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: all 0.15s ease;
-  color: var(--text-muted);
+  z-index: 5;
+  overflow: hidden;
+  border-radius: 0 0 calc(var(--radius-md) - 2px) 0;
 }
 
-.collection-card:hover .delete-card-btn {
-  opacity: 1;
-}
-
-.delete-card-btn:hover {
-  background: #fef2f2;
-  border-color: #fca5a5;
-  color: #dc2626;
-}
-
-.delete-card-btn svg {
-  width: 14px;
-  height: 14px;
-}
-
-/* Delete button in letter card */
-.letter-card {
-  position: relative;
-}
-
-.delete-letter-btn {
+.deletion-tab::before {
+  content: "";
   position: absolute;
-  top: 6px;
+  bottom: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 0 40px 40px;
+  border-color: transparent transparent var(--text-muted) transparent;
+  transition: border-color 0.15s ease;
+}
+
+.deletion-tab:hover::before {
+  border-color: transparent transparent #dc2626 transparent;
+}
+
+.deletion-tab.marked::before {
+  border-color: transparent transparent #dc2626 transparent;
+}
+
+.deletion-tab.marked::after {
+  content: "✓";
+  position: absolute;
+  bottom: 6px;
   right: 6px;
-  width: 24px;
-  height: 24px;
-  background: var(--bg-light);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: all 0.15s ease;
-  color: var(--text-muted);
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
 }
 
-.letter-card:hover .delete-letter-btn {
-  opacity: 1;
-}
-
-.delete-letter-btn:hover {
-  background: #fef2f2;
+.collection-card.marked-for-deletion {
   border-color: #fca5a5;
-  color: #dc2626;
+  background: #fef2f2;
 }
 
-.delete-letter-btn svg {
-  width: 12px;
-  height: 12px;
+.collection-card.partial-deletion {
+  border-color: #fde68a;
+  background: #fefce8;
+}
+
+.letter-card.marked-for-deletion {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.image-thumb.marked-for-deletion {
+  border-color: #fca5a5;
+}
+
+.letter-image-item {
+  position: relative;
+}
+
+.letter-image-item.marked-for-deletion {
+  outline: 2px solid #fca5a5;
+  outline-offset: -2px;
+  border-radius: var(--radius-md);
+}
+
+.letter-card.partial-deletion {
+  border-color: #fde68a;
+  background: #fefce8;
 }
 
 /* Delete confirmation dialog */
@@ -1606,37 +1610,44 @@
 }
 
 .duplicate-dialog-btn.skip {
-  background: var(--bg-light);
-  color: var(--text);
-  border-color: var(--border);
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
 }
 
 .duplicate-dialog-btn.skip:hover {
-  border-color: var(--text-muted);
-  background: var(--bg);
+  opacity: 0.9;
+}
+
+.duplicate-dialog-btn.skip .btn-desc {
+  color: var(--bg);
+  opacity: 0.6;
 }
 
 .duplicate-dialog-btn.replace {
-  background: var(--bg-light);
+  background: var(--bg);
   color: var(--text);
   border-color: var(--border);
 }
 
 .duplicate-dialog-btn.replace:hover {
   border-color: var(--text-muted);
-  background: var(--bg);
 }
 
 .duplicate-dialog-cancel {
-  margin-top: var(--spacing-sm);
-  background: none;
-  border: none;
+  margin-top: var(--spacing-xs);
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   font-size: var(--font-sm);
+  font-weight: 500;
   cursor: pointer;
-  padding: 0.5rem;
+  padding: 0.6rem 1rem;
+  transition: all 0.15s ease;
 }
 
 .duplicate-dialog-cancel:hover {
   color: var(--text);
+  border-color: var(--text-muted);
 }

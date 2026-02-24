@@ -6,18 +6,22 @@ interface ImageThumbnailProps {
   image: UploadedImage;
   isSelected: boolean;
   editMode: boolean;
+  deletionMode: boolean;
+  isMarkedForDeletion: boolean;
   onSelect: () => void;
   onView: () => void;
-  onDelete?: () => void;
+  onToggleDeletion: () => void;
 }
 
 export default function ImageThumbnail({
   image,
   isSelected,
   editMode,
+  deletionMode,
+  isMarkedForDeletion,
   onSelect,
   onView,
-  onDelete,
+  onToggleDeletion,
 }: ImageThumbnailProps) {
   const lastTapRef = useRef<number>(0);
 
@@ -35,9 +39,9 @@ export default function ImageThumbnail({
     }
   };
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleToggleDeletion = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onDelete?.();
+    onToggleDeletion();
   };
 
   const typeName = image.parsed ? getTypeName(image.parsed.type) : null;
@@ -46,6 +50,7 @@ export default function ImageThumbnail({
     "image-thumb",
     isSelected ? "selected" : "",
     image.isDuplicate ? "is-duplicate" : "",
+    isMarkedForDeletion ? "marked-for-deletion" : "",
   ].filter(Boolean).join(" ");
 
   return (
@@ -53,12 +58,11 @@ export default function ImageThumbnail({
       className={classNames}
       onClick={handleClick}
     >
-      {!editMode && onDelete && (
-        <button className="delete-thumb-btn" onClick={handleDelete} title="Delete image">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
-          </svg>
-        </button>
+      {deletionMode && (
+        <div
+          className={`deletion-tab ${isMarkedForDeletion ? "marked" : ""}`}
+          onClick={handleToggleDeletion}
+        />
       )}
       {typeName && <div className="type-badge">{typeName}</div>}
       <img src={image.url} alt={image.originalFilename} />

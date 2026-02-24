@@ -7,6 +7,9 @@ export interface ToastItem {
   type: 'success' | 'error' | 'info';
 }
 
+const MAX_TOASTS = 6;
+const DISMISS_MS = 5000;
+
 interface ToastContextValue {
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -18,12 +21,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
     const id = Date.now().toString();
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev) => {
+      const next = [{ id, message, type }, ...prev];
+      return next.slice(0, MAX_TOASTS);
+    });
 
-    // Auto-dismiss after 3 seconds
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3000);
+    }, DISMISS_MS);
   }, []);
 
   const dismissToast = useCallback((id: string) => {

@@ -1365,49 +1365,6 @@
 }
 
 /* ============================================================================
-   Import Toast
-   ============================================================================ */
-
-.import-toast {
-  position: fixed;
-  top: 70px;
-  right: var(--spacing-lg);
-  display: flex;
-  align-items: center;
-  background: var(--text);
-  border-radius: var(--radius-md);
-  font-size: var(--font-sm);
-  font-weight: 600;
-  box-shadow: 0 6px 20px hsla(0, 0%, 0%, 0.25);
-  z-index: 500;
-  animation: toastIn 0.25s ease-out;
-  overflow: hidden;
-}
-
-.toast-imported {
-  padding: 0.5rem 0.85rem;
-  color: var(--bg);
-}
-
-.toast-skipped {
-  padding: 0.5rem 0.85rem;
-  color: var(--bg);
-  opacity: 0.55;
-  border-left: 1px solid hsla(255, 255%, 255%, 0.15);
-}
-
-@keyframes toastIn {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* ============================================================================
    Delete Button on Cards
    ============================================================================ */
 

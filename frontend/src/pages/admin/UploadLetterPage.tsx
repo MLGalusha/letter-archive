@@ -5,6 +5,7 @@ import {
   parseFilename,
 } from "../../utils/filename-parser";
 import { Button, ConfirmDialog } from "../../components/common";
+import { useToast } from "../../contexts/ToastContext";
 import AdminLayout from "../../components/AdminLayout/AdminLayout";
 import CollectionCard from "./UploadLetter/CollectionCard";
 import CollectionModal from "./UploadLetter/CollectionModal";
@@ -31,6 +32,7 @@ import "./UploadLetterPage.css";
 
 export default function UploadLetterPage() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
@@ -72,7 +74,6 @@ export default function UploadLetterPage() {
     itemName: '',
   });
   const [duplicateCheckLoading, setDuplicateCheckLoading] = useState(false);
-  const [importToast, setImportToast] = useState<{ imported: number; skipped: number } | null>(null);
 
   // Auth check
   useEffect(() => {
@@ -175,9 +176,10 @@ export default function UploadLetterPage() {
     }
 
     // Show import toast
-    if (newImages.length > 0 || skippedFilenames.length > 0) {
-      setImportToast({ imported: newImages.length, skipped: skippedFilenames.length });
-      setTimeout(() => setImportToast(null), 4000);
+    if (skippedFilenames.length > 0) {
+      showToast(`${newImages.length} imported, ${skippedFilenames.length} skipped`);
+    } else if (newImages.length > 0) {
+      showToast(`${newImages.length} file${newImages.length !== 1 ? 's' : ''} imported`);
     }
 
     if (newImages.length === 0) return;
@@ -1013,15 +1015,6 @@ export default function UploadLetterPage() {
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
       />
-      {/* Import Toast */}
-      {importToast && (
-        <div className="import-toast">
-          <span className="toast-imported">{importToast.imported} imported</span>
-          {importToast.skipped > 0 && (
-            <span className="toast-skipped">{importToast.skipped} skipped</span>
-          )}
-        </div>
-      )}
     </div>
     </AdminLayout>
   );

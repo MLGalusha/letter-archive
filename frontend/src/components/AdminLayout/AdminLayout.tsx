@@ -10,7 +10,7 @@ interface AdminLayoutProps {
   fullHeight?: boolean;
 }
 
-export default function AdminLayout({ children, title, headerActions, fullHeight }: AdminLayoutProps) {
+export default function AdminLayout({ children, headerActions, fullHeight }: AdminLayoutProps) {
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const stored = localStorage.getItem('adminSidebarCollapsed');

@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import CollectionCard from "../CollectionCard";
@@ -57,7 +57,10 @@ describe("CollectionCard", () => {
         hasDuplicates={false}
         onSelect={onSelect}
         onClick={onClick}
-        onDelete={vi.fn()}
+        deletionMode={false}
+        isMarkedForDeletion={false}
+        isPartialDeletion={false}
+        onToggleDeletion={vi.fn()}
       />,
     );
 
@@ -72,7 +75,10 @@ describe("CollectionCard", () => {
         hasDuplicates={false}
         onSelect={onSelect}
         onClick={onClick}
-        onDelete={vi.fn()}
+        deletionMode={false}
+        isMarkedForDeletion={false}
+        isPartialDeletion={false}
+        onToggleDeletion={vi.fn()}
       />,
     );
 
@@ -89,9 +95,11 @@ describe("UncategorizedCarousel", () => {
 
     const editState: EditState = {
       active: true,
+      mode: "organize",
       selectedCollection: null,
       selectedImageIds: new Set(),
       newCollectionCode: "001",
+      deletionImageIds: new Set(),
     };
 
     render(
@@ -100,7 +108,7 @@ describe("UncategorizedCarousel", () => {
         editState={editState}
         onImageSelect={onImageSelect}
         onViewImage={vi.fn()}
-        onDeleteImage={vi.fn()}
+        onToggleDeletionImage={vi.fn()}
       />,
     );
 
@@ -135,7 +143,10 @@ describe("CollectionCard duplicate styling", () => {
         hasDuplicates={true}
         onSelect={vi.fn()}
         onClick={vi.fn()}
-        onDelete={vi.fn()}
+        deletionMode={false}
+        isMarkedForDeletion={false}
+        isPartialDeletion={false}
+        onToggleDeletion={vi.fn()}
       />,
     );
 
@@ -152,7 +163,10 @@ describe("CollectionCard duplicate styling", () => {
         hasDuplicates={false}
         onSelect={vi.fn()}
         onClick={vi.fn()}
-        onDelete={vi.fn()}
+        deletionMode={false}
+        isMarkedForDeletion={false}
+        isPartialDeletion={false}
+        onToggleDeletion={vi.fn()}
       />,
     );
 
@@ -222,9 +236,12 @@ describe("CollectionModal", () => {
     render(
       <CollectionModal
         collection={collection}
+        deletionMode={false}
+        deletionImageIds={new Set()}
         onClose={vi.fn()}
         onViewImage={vi.fn()}
-        onDeleteLetter={vi.fn()}
+        onToggleDeletionLetter={vi.fn()}
+        onToggleDeletionImage={vi.fn()}
       />,
     );
 
@@ -250,9 +267,12 @@ describe("CollectionModal", () => {
     const { container } = render(
       <CollectionModal
         collection={collection}
+        deletionMode={false}
+        deletionImageIds={new Set()}
         onClose={vi.fn()}
         onViewImage={vi.fn()}
-        onDeleteLetter={vi.fn()}
+        onToggleDeletionLetter={vi.fn()}
+        onToggleDeletionImage={vi.fn()}
       />,
     );
 
@@ -292,9 +312,12 @@ describe("CollectionModal", () => {
     const { container } = render(
       <CollectionModal
         collection={collection}
+        deletionMode={false}
+        deletionImageIds={new Set()}
         onClose={vi.fn()}
         onViewImage={vi.fn()}
-        onDeleteLetter={vi.fn()}
+        onToggleDeletionLetter={vi.fn()}
+        onToggleDeletionImage={vi.fn()}
       />,
     );
 

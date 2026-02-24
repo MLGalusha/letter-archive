@@ -108,7 +108,7 @@ export default function UncategorizedCarousel({
                   image={image}
                   isSelected={editState.selectedImageIds.has(image.id)}
                   editMode={editState.active}
-                  deletionMode={editState.deletionMode}
+                  deletionMode={editState.active && editState.mode === "delete"}
                   onSelect={() => onImageSelect(image.id)}
                   onView={() => onViewImage(image, images)}
                   isMarkedForDeletion={editState.deletionImageIds.has(image.id)}

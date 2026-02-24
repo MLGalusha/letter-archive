@@ -18,7 +18,6 @@ function makeImage(filename: string, overrides?: Partial<UploadedImage>): Upload
     originalFilename: filename,
     parsed: parseFilename(filename),
     isDuplicate: false,
-    replaceSelected: true,
     ...overrides,
   };
 }
@@ -69,10 +68,10 @@ describe("upload utils", () => {
     expect(id).toMatch(/^[a-z0-9]+$/);
   });
 
-  it("preserves isDuplicate and replaceSelected in grouped images", () => {
+  it("preserves isDuplicate in grouped images", () => {
     const grouped = groupImagesByCollection([
-      makeImage("001-18860314-L01-01.jpg", { isDuplicate: true, replaceSelected: false }),
-      makeImage("001-18860314-L01-02.jpg", { isDuplicate: true, replaceSelected: true }),
+      makeImage("001-18860314-L01-01.jpg", { isDuplicate: true }),
+      makeImage("001-18860314-L01-02.jpg", { isDuplicate: true }),
       makeImage("001-18860315-L01-01.jpg", { isDuplicate: false }),
     ]);
 
@@ -84,27 +83,12 @@ describe("upload utils", () => {
     const letter1 = letters.find(l => l.dateRaw.startsWith("18860314"));
     expect(letter1!.images).toHaveLength(2);
     expect(letter1!.images[0].isDuplicate).toBe(true);
-    expect(letter1!.images[0].replaceSelected).toBe(false);
     expect(letter1!.images[1].isDuplicate).toBe(true);
-    expect(letter1!.images[1].replaceSelected).toBe(true);
 
     // Second letter (18860315) has 1 non-duplicate image
     const letter2 = letters.find(l => l.dateRaw.startsWith("18860315"));
     expect(letter2!.images).toHaveLength(1);
     expect(letter2!.images[0].isDuplicate).toBe(false);
-  });
-
-  it("computes willUpload stat correctly", () => {
-    // Simulates the stats.willUpload computation from UploadLetterPage
-    const images = [
-      makeImage("001-18860314-L01-01.jpg", { isDuplicate: false }),          // new → uploads
-      makeImage("001-18860314-L01-02.jpg", { isDuplicate: true, replaceSelected: true }),  // dup, replace → uploads
-      makeImage("001-18860315-L01-01.jpg", { isDuplicate: true, replaceSelected: false }), // dup, skip → no upload
-      makeImage("uncategorized.jpg"),                                         // no parsed → no upload
-    ];
-
-    const willUpload = images.filter(img => img.parsed && (!img.isDuplicate || img.replaceSelected)).length;
-    expect(willUpload).toBe(2);
   });
 
   it("detects all-duplicate collection correctly", () => {

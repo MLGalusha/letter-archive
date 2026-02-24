@@ -3,7 +3,6 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Letter } from "../../../../types/Letter";
-import DashboardFilterBar from "../DashboardFilterBar";
 import RecentActivityTable from "../RecentActivityTable";
 
 function makeLetter(): Letter {
@@ -25,78 +24,6 @@ function makeLetter(): Letter {
     extrasCount: 0,
   };
 }
-
-describe("DashboardFilterBar", () => {
-  it("fires filter callbacks", async () => {
-    const user = userEvent.setup();
-    const onToggleVisibilityFilter = vi.fn();
-    const onToggleDateDropdown = vi.fn();
-    const onClearAllFilters = vi.fn();
-
-    render(
-      <DashboardFilterBar
-        visibilityFilter="ALL"
-        onToggleVisibilityFilter={onToggleVisibilityFilter}
-        contentFilterView="transcript"
-        onContentFilterViewChange={vi.fn()}
-        transcriptStatusFilters={[]}
-        metadataStatusFilters={[]}
-        onToggleTranscriptFilter={vi.fn()}
-        onToggleMetadataFilter={vi.fn()}
-        collectionInput=""
-        onCollectionInputChange={vi.fn()}
-        dateDropdownRef={createRef<HTMLDivElement>()}
-        showDateDropdown={false}
-        hasDateFilter={false}
-        dateButtonText="Date"
-        onToggleDateDropdown={onToggleDateDropdown}
-        dateMode="specific"
-        onDateModeChange={vi.fn()}
-        yearFilter={null}
-        monthFilter={null}
-        dayFilter={null}
-        onYearFilterChange={vi.fn()}
-        onMonthFilterChange={vi.fn()}
-        onDayFilterChange={vi.fn()}
-        yearOptions={[1880]}
-        monthOptions={[{ value: 1, label: "Jan" }]}
-        dayOptions={[1]}
-        dateFromFilter={null}
-        dateToFilter={null}
-        dateRawToDisplay={() => ""}
-        displayToDateRaw={() => null}
-        onDateFromChange={vi.fn()}
-        onDateToChange={vi.fn()}
-        onClearDateFilters={vi.fn()}
-        searchInput=""
-        onSearchInputChange={vi.fn()}
-        activeFilterCount={1}
-        onClearAllFilters={onClearAllFilters}
-        processingStatus={null}
-        pagination={{ page: 1, limit: 50, total: 1 }}
-        stats={{
-          published: 2,
-          hidden: 3,
-          transcriptAiDraft: 1,
-          transcriptEdited: 0,
-          transcriptVerified: 0,
-          metadataAiDraft: 0,
-          metadataEdited: 0,
-          metadataVerified: 0,
-        }}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "2 Pub" }));
-    expect(onToggleVisibilityFilter).toHaveBeenCalledWith("PUBLISHED");
-
-    await user.click(screen.getByRole("button", { name: /Date/ }));
-    expect(onToggleDateDropdown).toHaveBeenCalled();
-
-    await user.click(screen.getByRole("button", { name: "Clear All" }));
-    expect(onClearAllFilters).toHaveBeenCalled();
-  });
-});
 
 describe("RecentActivityTable", () => {
   it("renders rows and forwards table interactions", async () => {
@@ -139,6 +66,15 @@ describe("RecentActivityTable", () => {
         pagination={{ page: 1, totalPages: 1 }}
         loading={false}
         onPageChange={vi.fn()}
+        allColumns={[
+          { id: "sender", label: "Sender" },
+          { id: "recipient", label: "Recipient" },
+          { id: "date", label: "Date" },
+        ]}
+        showColumnMenu={false}
+        onToggleColumnMenu={vi.fn()}
+        onToggleColumn={vi.fn()}
+        columnMenuRef={createRef<HTMLDivElement>()}
       />,
     );
 

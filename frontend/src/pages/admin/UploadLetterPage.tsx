@@ -21,7 +21,6 @@ import type {
   DeleteDialogState,
 } from "./UploadLetter/types";
 import {
-  formatDate,
   formatFileSize,
   generateId,
   generateNewFilename,

@@ -72,6 +72,7 @@ export default function UploadLetterPage() {
     itemName: '',
   });
   const [duplicateCheckLoading, setDuplicateCheckLoading] = useState(false);
+  const [importToast, setImportToast] = useState<{ imported: number; skipped: number } | null>(null);
 
   // Auth check
   useEffect(() => {
@@ -149,9 +150,18 @@ export default function UploadLetterPage() {
   const handleFilesSelected = useCallback(async (files: FileList | null) => {
     if (!files) return;
 
+    // Get existing filenames to detect client-side duplicates
+    const existingFilenames = new Set(images.map(img => img.originalFilename));
+    const skippedFilenames: string[] = [];
+
     const newImages: UploadedImage[] = [];
     for (const file of Array.from(files)) {
       if (!file.type.startsWith("image/")) continue;
+
+      if (existingFilenames.has(file.name)) {
+        skippedFilenames.push(file.name);
+        continue;
+      }
 
       const parsed = parseFilename(file.name);
       newImages.push({
@@ -163,6 +173,14 @@ export default function UploadLetterPage() {
         isDuplicate: false,
       });
     }
+
+    // Show import toast
+    if (newImages.length > 0 || skippedFilenames.length > 0) {
+      setImportToast({ imported: newImages.length, skipped: skippedFilenames.length });
+      setTimeout(() => setImportToast(null), 4000);
+    }
+
+    if (newImages.length === 0) return;
 
     setImages((prev) => [...prev, ...newImages]);
     setMessage("");
@@ -191,7 +209,7 @@ export default function UploadLetterPage() {
         setDuplicateCheckLoading(false);
       }
     }
-  }, []);
+  }, [images]);
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     handleFilesSelected(e.target.files);
@@ -995,6 +1013,15 @@ export default function UploadLetterPage() {
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
       />
+      {/* Import Toast */}
+      {importToast && (
+        <div className="import-toast">
+          <span className="toast-imported">{importToast.imported} imported</span>
+          {importToast.skipped > 0 && (
+            <span className="toast-skipped">{importToast.skipped} skipped</span>
+          )}
+        </div>
+      )}
     </div>
     </AdminLayout>
   );

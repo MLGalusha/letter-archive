@@ -4,7 +4,7 @@ interface CollectionCardProps {
   collection: CollectionGroup;
   isSelected: boolean;
   editMode: boolean;
-  duplicateAction: 'none' | 'replace' | 'skip';
+  hasDuplicates: boolean;
   onSelect: () => void;
   onClick: () => void;
   onDelete: () => void;
@@ -14,7 +14,7 @@ export default function CollectionCard({
   collection,
   isSelected,
   editMode,
-  duplicateAction,
+  hasDuplicates,
   onSelect,
   onClick,
   onDelete,
@@ -37,7 +37,7 @@ export default function CollectionCard({
 
   return (
     <div
-      className={`collection-card ${isSelected ? "selected" : ""} ${duplicateAction !== 'none' ? `dup-${duplicateAction}` : ""}`}
+      className={`collection-card ${isSelected ? "selected" : ""} ${hasDuplicates ? "has-duplicates" : ""}`}
       onClick={handleClick}
     >
       {!editMode && (

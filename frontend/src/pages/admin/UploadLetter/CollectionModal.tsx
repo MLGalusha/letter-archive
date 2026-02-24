@@ -7,7 +7,6 @@ interface CollectionModalProps {
   onClose: () => void;
   onViewImage: (image: UploadedImage, allImages: UploadedImage[]) => void;
   onDeleteLetter: (letterKey: string, letterDate: string | null) => void;
-  onToggleDuplicateReplace: (imageId: string) => void;
 }
 
 function formatDate(isoDate: string): string {
@@ -25,7 +24,6 @@ export default function CollectionModal({
   onClose,
   onViewImage,
   onDeleteLetter,
-  onToggleDuplicateReplace,
 }: CollectionModalProps) {
   const [selectedLetter, setSelectedLetter] = useState<LetterGroup | null>(null);
 
@@ -42,11 +40,6 @@ export default function CollectionModal({
   const handleDeleteLetter = (e: React.MouseEvent, letter: LetterGroup) => {
     e.stopPropagation();
     onDeleteLetter(letter.letterKey, letter.letterDate);
-  };
-
-  const handleDuplicateToggle = (e: React.MouseEvent, imageId: string) => {
-    e.stopPropagation();
-    onToggleDuplicateReplace(imageId);
   };
 
   // Sort letters: letters with any non-duplicate first, all-duplicate letters after
@@ -85,22 +78,13 @@ export default function CollectionModal({
             {selectedLetter.images.map((img) => (
               <div
                 key={img.id}
-                className={`letter-image-item ${img.isDuplicate ? "is-duplicate" : ""} ${img.isDuplicate && img.replaceSelected ? "replace-selected" : ""}`}
+                className={`letter-image-item ${img.isDuplicate ? "is-duplicate" : ""}`}
                 onClick={() => onViewImage(img, selectedLetter.images)}
               >
                 <div className="image-type-badge">
                   {getTypeName(img.parsed?.type || "L")}
                 </div>
                 <div className="image-page-badge">{img.parsed?.pageNumber || 1}</div>
-                {img.isDuplicate && (
-                  <button
-                    className={`duplicate-badge ${img.replaceSelected ? "replace" : "skip"}`}
-                    onClick={(e) => handleDuplicateToggle(e, img.id)}
-                    title={img.replaceSelected ? "Will replace — click to skip" : "Will skip — click to replace"}
-                  >
-                    {img.replaceSelected ? "↻" : "⊘"}
-                  </button>
-                )}
                 <img src={img.url} alt={img.originalFilename} />
               </div>
             ))}
@@ -109,12 +93,11 @@ export default function CollectionModal({
           <div className="letter-grid">
             {sortedLetters.map((letter) => {
               const allDup = letter.images.length > 0 && letter.images.every(img => img.isDuplicate);
-              const dupAction = !allDup ? 'none' : letter.images.every(img => img.replaceSelected) ? 'replace' : 'skip';
 
               return (
                 <div
                   key={letter.letterKey}
-                  className={`letter-card ${dupAction !== 'none' ? `dup-${dupAction}` : ""}`}
+                  className={`letter-card ${allDup ? "is-duplicate" : ""}`}
                   onClick={() => setSelectedLetter(letter)}
                 >
                   <button

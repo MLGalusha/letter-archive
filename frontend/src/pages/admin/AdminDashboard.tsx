@@ -1020,7 +1020,7 @@ export default function AdminDashboard() {
 
   if (loading && isInitialLoad) {
     return (
-      <AdminLayout title="Dashboard" fullHeight>
+      <AdminLayout fullHeight>
         <div className="admin-dashboard">
           <div className="admin-content loading-content">
             <p>Loading letters...</p>
@@ -1032,7 +1032,7 @@ export default function AdminDashboard() {
 
   if (error) {
     return (
-      <AdminLayout title="Dashboard" fullHeight>
+      <AdminLayout fullHeight>
         <div className="admin-dashboard">
           <div className="admin-content error-content">
             <p className="error-message">{error}</p>
@@ -1168,7 +1168,7 @@ export default function AdminDashboard() {
   );
 
   return (
-    <AdminLayout title="Dashboard" headerActions={headerActions} fullHeight>
+    <AdminLayout headerActions={headerActions} fullHeight showRecent>
     <div className="admin-dashboard">
       <DashboardFilterBar
         visibilityFilter={visibilityFilter}

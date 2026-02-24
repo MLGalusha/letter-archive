@@ -23,7 +23,6 @@ function makeImage(id: string, overrides?: Partial<UploadedImage>): UploadedImag
       dateConfidence: "exact",
     },
     isDuplicate: false,
-    replaceSelected: true,
     ...overrides,
   };
 }
@@ -55,7 +54,7 @@ describe("CollectionCard", () => {
         collection={collection}
         isSelected={false}
         editMode={false}
-        duplicateAction="none"
+        hasDuplicates={false}
         onSelect={onSelect}
         onClick={onClick}
         onDelete={vi.fn()}
@@ -70,7 +69,7 @@ describe("CollectionCard", () => {
         collection={collection}
         isSelected={false}
         editMode
-        duplicateAction="none"
+        hasDuplicates={false}
         onSelect={onSelect}
         onClick={onClick}
         onDelete={vi.fn()}
@@ -110,7 +109,7 @@ describe("UncategorizedCarousel", () => {
   });
 });
 
-describe("CollectionCard duplicate action borders", () => {
+describe("CollectionCard duplicate styling", () => {
   const collection: CollectionGroup = {
     collectionCode: "002",
     letters: [
@@ -127,13 +126,13 @@ describe("CollectionCard duplicate action borders", () => {
     dateRange: "1886-03-14",
   };
 
-  it("applies dup-replace class when duplicateAction is replace", () => {
+  it("applies has-duplicates class when hasDuplicates is true", () => {
     const { container } = render(
       <CollectionCard
         collection={collection}
         isSelected={false}
         editMode={false}
-        duplicateAction="replace"
+        hasDuplicates={true}
         onSelect={vi.fn()}
         onClick={vi.fn()}
         onDelete={vi.fn()}
@@ -141,16 +140,16 @@ describe("CollectionCard duplicate action borders", () => {
     );
 
     const card = container.querySelector(".collection-card");
-    expect(card).toHaveClass("dup-replace");
+    expect(card).toHaveClass("has-duplicates");
   });
 
-  it("applies dup-skip class when duplicateAction is skip", () => {
+  it("does not apply has-duplicates class when hasDuplicates is false", () => {
     const { container } = render(
       <CollectionCard
         collection={collection}
         isSelected={false}
         editMode={false}
-        duplicateAction="skip"
+        hasDuplicates={false}
         onSelect={vi.fn()}
         onClick={vi.fn()}
         onDelete={vi.fn()}
@@ -158,25 +157,7 @@ describe("CollectionCard duplicate action borders", () => {
     );
 
     const card = container.querySelector(".collection-card");
-    expect(card).toHaveClass("dup-skip");
-  });
-
-  it("applies no duplicate class when duplicateAction is none", () => {
-    const { container } = render(
-      <CollectionCard
-        collection={collection}
-        isSelected={false}
-        editMode={false}
-        duplicateAction="none"
-        onSelect={vi.fn()}
-        onClick={vi.fn()}
-        onDelete={vi.fn()}
-      />,
-    );
-
-    const card = container.querySelector(".collection-card");
-    expect(card).not.toHaveClass("dup-replace");
-    expect(card).not.toHaveClass("dup-skip");
+    expect(card).not.toHaveClass("has-duplicates");
   });
 });
 
@@ -212,7 +193,6 @@ describe("CollectionModal", () => {
       images: [
         makeImage(`${dateRaw}-img`, {
           isDuplicate: allDuplicate,
-          replaceSelected: true,
           parsed: {
             collectionCode: "001",
             dateRaw,
@@ -245,7 +225,6 @@ describe("CollectionModal", () => {
         onClose={vi.fn()}
         onViewImage={vi.fn()}
         onDeleteLetter={vi.fn()}
-        onToggleDuplicateReplace={vi.fn()}
       />,
     );
 
@@ -257,7 +236,7 @@ describe("CollectionModal", () => {
     expect(cards[2].textContent).toContain("16");
   });
 
-  it("applies dup-replace class to all-duplicate letter cards with replaceSelected", () => {
+  it("applies is-duplicate class to all-duplicate letter cards", () => {
     const collection: CollectionGroup = {
       collectionCode: "001",
       letters: [
@@ -274,16 +253,14 @@ describe("CollectionModal", () => {
         onClose={vi.fn()}
         onViewImage={vi.fn()}
         onDeleteLetter={vi.fn()}
-        onToggleDuplicateReplace={vi.fn()}
       />,
     );
 
     const letterCards = container.querySelectorAll(".letter-card");
     // First card is the non-duplicate (sorted first)
-    expect(letterCards[0]).not.toHaveClass("dup-replace");
-    expect(letterCards[0]).not.toHaveClass("dup-skip");
-    // Second card is all-duplicate with replaceSelected=true → blue
-    expect(letterCards[1]).toHaveClass("dup-replace");
+    expect(letterCards[0]).not.toHaveClass("is-duplicate");
+    // Second card is all-duplicate → muted
+    expect(letterCards[1]).toHaveClass("is-duplicate");
   });
 
   it("does not apply duplicate class when letter has mixed images", () => {
@@ -318,12 +295,10 @@ describe("CollectionModal", () => {
         onClose={vi.fn()}
         onViewImage={vi.fn()}
         onDeleteLetter={vi.fn()}
-        onToggleDuplicateReplace={vi.fn()}
       />,
     );
 
     const letterCard = container.querySelector(".letter-card");
-    expect(letterCard).not.toHaveClass("dup-replace");
-    expect(letterCard).not.toHaveClass("dup-skip");
+    expect(letterCard).not.toHaveClass("is-duplicate");
   });
 });

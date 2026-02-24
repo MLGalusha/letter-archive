@@ -33,12 +33,12 @@ function App() {
         {/* Admin routes - with sidebar layout */}
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/upload" element={<UploadLetterPage />} />
-        <Route path="/admin/processing" element={<AdminLayout title="Processing Queue"><ProcessingQueuePage /></AdminLayout>} />
+        <Route path="/admin/processing" element={<AdminLayout><ProcessingQueuePage /></AdminLayout>} />
         <Route path="/admin/letters/:letterId" element={<LetterReviewPage />} />
-        <Route path="/admin/entities/review" element={<AdminLayout title="Entity Review"><EntityReviewPage /></AdminLayout>} />
-        <Route path="/admin/entities/people" element={<AdminLayout title="People"><PeoplePage /></AdminLayout>} />
-        <Route path="/admin/entities/places" element={<AdminLayout title="Places"><PlacesPage /></AdminLayout>} />
-        <Route path="/admin/entities/relationships" element={<AdminLayout title="Relationships"><RelationshipsPage /></AdminLayout>} />
+        <Route path="/admin/entities/review" element={<AdminLayout><EntityReviewPage /></AdminLayout>} />
+        <Route path="/admin/entities/people" element={<AdminLayout><PeoplePage /></AdminLayout>} />
+        <Route path="/admin/entities/places" element={<AdminLayout><PlacesPage /></AdminLayout>} />
+        <Route path="/admin/entities/relationships" element={<AdminLayout><RelationshipsPage /></AdminLayout>} />
 
         {/* Letter detail - no main header (has its own header) */}
         <Route path="/letter/:letterId" element={<LetterDetailPage />} />

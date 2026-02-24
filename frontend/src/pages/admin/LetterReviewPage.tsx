@@ -1366,7 +1366,7 @@ export default function LetterReviewPage() {
 
   if (loading || !letter) {
     return (
-      <AdminLayout title="Letter Review" fullHeight>
+      <AdminLayout fullHeight>
         <div className="letter-review-page">
           <div className="review-content loading-content">
             <p>{message || (loading ? "Loading..." : "Letter not found")}</p>
@@ -1437,7 +1437,6 @@ export default function LetterReviewPage() {
 
   return (
     <AdminLayout
-      title={letter.title || "Letter Review"}
       headerActions={headerActions}
       fullHeight
     >

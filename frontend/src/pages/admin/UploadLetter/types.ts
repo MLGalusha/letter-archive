@@ -7,7 +7,6 @@ export interface UploadedImage {
   originalFilename: string;
   parsed: ParsedFilename | null;
   isDuplicate: boolean;
-  replaceSelected: boolean;
 }
 
 export interface LetterGroup {

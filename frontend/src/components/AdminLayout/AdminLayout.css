@@ -69,13 +69,13 @@
   gap: var(--spacing-sm);
   flex: 1;
   justify-content: flex-end;
-  margin-right: var(--spacing-md);
 }
 
 .header-right {
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
+  margin-left: var(--spacing-md);
 }
 
 /* Recent Edits Dropdown */

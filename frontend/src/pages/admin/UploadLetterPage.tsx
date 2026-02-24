@@ -103,22 +103,17 @@ export default function UploadLetterPage() {
   );
 
   const stats = useMemo(() => {
-    const totalLetters = collections.reduce((sum, c) => sum + c.letters.length, 0);
     const totalImages = collections.reduce((sum, c) => sum + c.totalImages, 0);
     const duplicates = images.filter(img => img.isDuplicate).length;
-    const duplicatesToReplace = images.filter(img => img.isDuplicate && img.replaceSelected).length;
     const totalImported = images.length;
-    // Will upload = categorized non-duplicates + duplicates set to replace
-    const willUpload = images.filter(img => img.parsed && (!img.isDuplicate || img.replaceSelected)).length;
+    const newFiles = images.filter(img => img.parsed && !img.isDuplicate).length;
     return {
       collections: collections.length,
-      letters: totalLetters,
       images: totalImages,
       uncategorized: uncategorizedImages.length,
       duplicates,
-      duplicatesToReplace,
       totalImported,
-      willUpload,
+      newFiles,
     };
   }, [collections, uncategorizedImages, images]);
 
@@ -139,7 +134,6 @@ export default function UploadLetterPage() {
           return {
             ...img,
             isDuplicate: response.duplicates[img.originalFilename],
-            replaceSelected: !response.duplicates[img.originalFilename],
           };
         }
         return img;
@@ -167,7 +161,6 @@ export default function UploadLetterPage() {
         originalFilename: file.name,
         parsed,
         isDuplicate: false,
-        replaceSelected: true,
       });
     }
 
@@ -188,7 +181,6 @@ export default function UploadLetterPage() {
             return {
               ...img,
               isDuplicate: response.duplicates[img.originalFilename],
-              replaceSelected: !response.duplicates[img.originalFilename],
             };
           }
           return img;
@@ -320,7 +312,6 @@ export default function UploadLetterPage() {
           originalFilename: newFilename,
           parsed: newParsed,
           isDuplicate: false, // Reset until recheck
-          replaceSelected: true,
         };
       }),
     );
@@ -338,26 +329,28 @@ export default function UploadLetterPage() {
     }
   };
 
-  // Duplicate toggle handlers
-  const handleToggleDuplicateReplace = useCallback((imageId: string) => {
-    setImages(prev => prev.map(img =>
-      img.id === imageId ? { ...img, replaceSelected: !img.replaceSelected } : img
-    ));
-  }, []);
+  // Upload with duplicate decision
+  const [duplicateDialog, setDuplicateDialog] = useState<{ show: boolean; duplicateCount: number }>({ show: false, duplicateCount: 0 });
 
-  const handleToggleAllDuplicates = useCallback((selected: boolean) => {
-    setImages(prev => prev.map(img =>
-      img.isDuplicate ? { ...img, replaceSelected: selected } : img
-    ));
-  }, []);
-
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     // Only upload categorized files - uncategorized stay in the carousel
     if (collections.length === 0) {
       setMessage("No categorized images to upload. Use Edit mode to organize images first.");
       return;
     }
 
+    // If duplicates exist, ask what to do
+    if (stats.duplicates > 0) {
+      setDuplicateDialog({ show: true, duplicateCount: stats.duplicates });
+      return;
+    }
+
+    // No duplicates — upload directly (skip only new files)
+    doUpload("skip");
+  };
+
+  const doUpload = async (duplicateStrategy: "skip" | "replace") => {
+    setDuplicateDialog({ show: false, duplicateCount: 0 });
     setUploading(true);
     setMessage("");
     setUploadBanner(prev => ({ ...prev, show: false }));
@@ -377,7 +370,6 @@ export default function UploadLetterPage() {
         collectionCode: collection.collectionCode,
       });
 
-      // Split files into buckets
       const newFiles: File[] = [];
       const replaceFiles: File[] = [];
 
@@ -387,11 +379,12 @@ export default function UploadLetterPage() {
             ? new File([img.file], img.originalFilename, { type: img.file.type })
             : img.file;
 
-          if (img.isDuplicate && !img.replaceSelected) {
-            // Skip this file
-            skippedCount++;
-          } else if (img.isDuplicate && img.replaceSelected) {
-            replaceFiles.push(file);
+          if (img.isDuplicate) {
+            if (duplicateStrategy === "replace") {
+              replaceFiles.push(file);
+            } else {
+              skippedCount++;
+            }
           } else {
             newFiles.push(file);
           }
@@ -436,16 +429,15 @@ export default function UploadLetterPage() {
     setUploadProgress(null);
     setUploading(false);
 
-    // Remove all categorized images from state (uploaded + replaced + skipped)
+    // Remove all categorized images from state
     const uploadedFilenames = new Set([
       ...allUploaded.map(r => r.filename),
       ...allReplaced.map(r => r.filename),
     ]);
-    // Also remove skipped duplicates
     setImages(prev => prev.filter(img => {
       if (!img.parsed) return true; // Keep uncategorized
       if (uploadedFilenames.has(img.originalFilename)) return false;
-      if (img.isDuplicate && !img.replaceSelected) return false; // Skipped
+      if (img.isDuplicate) return false; // Remove skipped duplicates too
       return true;
     }));
 
@@ -573,19 +565,12 @@ export default function UploadLetterPage() {
       (editState.selectedCollection === "new" &&
         editState.newCollectionCode.length > 0));
 
-  // Compute per-collection duplicate action: 'none' | 'replace' | 'skip'
-  const collectionDupAction = useMemo(() => {
-    const result: Record<string, 'none' | 'replace' | 'skip'> = {};
+  // Track which collections have all-duplicate content
+  const collectionHasDuplicates = useMemo(() => {
+    const result: Record<string, boolean> = {};
     for (const collection of collections) {
       const allImages = collection.letters.flatMap(l => l.images);
-      const allDup = allImages.length > 0 && allImages.every(img => img.isDuplicate);
-      if (!allDup) {
-        result[collection.collectionCode] = 'none';
-      } else if (allImages.every(img => img.replaceSelected)) {
-        result[collection.collectionCode] = 'replace';
-      } else {
-        result[collection.collectionCode] = 'skip';
-      }
+      result[collection.collectionCode] = allImages.length > 0 && allImages.every(img => img.isDuplicate);
     }
     return result;
   }, [collections]);
@@ -593,47 +578,121 @@ export default function UploadLetterPage() {
   // Sort collections: non-duplicate first, then by collection code
   const sortedCollections = useMemo(() => {
     return [...collections].sort((a, b) => {
-      const aAllDup = collectionDupAction[a.collectionCode] !== 'none';
-      const bAllDup = collectionDupAction[b.collectionCode] !== 'none';
+      const aAllDup = collectionHasDuplicates[a.collectionCode];
+      const bAllDup = collectionHasDuplicates[b.collectionCode];
       if (aAllDup !== bAllDup) return aAllDup ? 1 : -1;
       return a.collectionCode.localeCompare(b.collectionCode);
     });
-  }, [collections, collectionDupAction]);
+  }, [collections, collectionHasDuplicates]);
 
-  const importDropdown = (
-    <div className="upload-dropdown">
-      <Button
-        icon="plus"
-        active={uploadMenuOpen}
-        onClick={() => setUploadMenuOpen(!uploadMenuOpen)}
-      >
-        Import
-      </Button>
-      {uploadMenuOpen && (
-        <div className="upload-menu">
-          <button
-            onClick={() => {
-              handleSelectFiles();
-              setUploadMenuOpen(false);
-            }}
-          >
-            Files
-          </button>
-          <button
-            onClick={() => {
-              handleSelectFolder();
-              setUploadMenuOpen(false);
-            }}
-          >
-            Folder
-          </button>
+  const headerActions = (
+    <>
+      {images.length > 0 && (
+        <div className="header-stats">
+          <span>{stats.totalImported} imported</span>
+          {stats.newFiles > 0 && (
+            <>
+              <span className="stat-divider">·</span>
+              <span className="stat-new">{stats.newFiles} original</span>
+            </>
+          )}
+          {stats.duplicates > 0 && (
+            <>
+              <span className="stat-divider">·</span>
+              <span className="stat-duplicate">{stats.duplicates} duplicate{stats.duplicates !== 1 ? 's' : ''}</span>
+            </>
+          )}
+          {duplicateCheckLoading && (
+            <>
+              <span className="stat-divider">·</span>
+              <span className="checking-stat">checking...</span>
+            </>
+          )}
         </div>
       )}
-    </div>
+
+      <div className="header-actions">
+        {editState.active && (
+          <span className="selected-count">{editState.selectedImageIds.size} selected</span>
+        )}
+
+        {editState.active && editState.selectedCollection === "new" && (
+          <>
+            <span className="collection-label">Collection #:</span>
+            <input
+              type="text"
+              className="collection-input"
+              value={editState.newCollectionCode}
+              onChange={(e) => handleNewCollectionCodeChange(e.target.value)}
+              placeholder="001"
+              maxLength={3}
+            />
+          </>
+        )}
+
+        {editState.active && (
+          <Button variant="primary" disabled={!canAdd} onClick={handleAddToCollection}>
+            Add
+          </Button>
+        )}
+
+        {uncategorizedImages.length > 0 && (
+          <Button
+            icon={editState.active ? "check" : "edit"}
+            onClick={toggleEditMode}
+            active={editState.active}
+          >
+            {editState.active ? "Done" : "Organize"}
+          </Button>
+        )}
+
+        <div className="upload-dropdown">
+          <Button
+            icon="plus"
+            active={uploadMenuOpen}
+            onClick={() => setUploadMenuOpen(!uploadMenuOpen)}
+          >
+            Import
+          </Button>
+          {uploadMenuOpen && (
+            <div className="upload-menu">
+              <button
+                onClick={() => {
+                  handleSelectFiles();
+                  setUploadMenuOpen(false);
+                }}
+              >
+                Files
+              </button>
+              <button
+                onClick={() => {
+                  handleSelectFolder();
+                  setUploadMenuOpen(false);
+                }}
+              >
+                Folder
+              </button>
+            </div>
+          )}
+        </div>
+
+        {images.length > 0 && (
+          <Button
+            icon="upload"
+            disabled={uploading}
+            onClick={handleSubmit}
+          >
+            {uploadProgress
+              ? `${uploadProgress.current}/${uploadProgress.total}`
+              : "Upload"}
+          </Button>
+        )}
+      </div>
+    </>
   );
 
   return (
-    <AdminLayout title="Upload Letters" headerActions={importDropdown}>
+    <AdminLayout headerActions={headerActions}>
     <div
       className={`upload-letter-page ${editState.active ? "edit-mode" : ""}`}
     >
@@ -656,96 +715,6 @@ export default function UploadLetterPage() {
         onChange={handleFileInputChange}
         className="hidden-input"
       />
-
-      {/* Content toolbar */}
-      {images.length > 0 && (
-        <div className="upload-toolbar">
-          <div className="header-stats">
-            <span>{stats.totalImported} imported</span>
-            <span className="stat-divider">·</span>
-            <span>{stats.collections} collection{stats.collections !== 1 ? 's' : ''}</span>
-            <span className="stat-divider">·</span>
-            <span>{stats.images} categorized</span>
-            {stats.duplicates > 0 && (
-              <>
-                <span className="stat-divider">·</span>
-                <span className="duplicate-stat">{stats.duplicatesToReplace} duplicate{stats.duplicatesToReplace !== 1 ? 's' : ''} to replace</span>
-              </>
-            )}
-            {stats.uncategorized > 0 && (
-              <>
-                <span className="stat-divider">·</span>
-                <span className="uncategorized-stat">{stats.uncategorized} uncategorized</span>
-              </>
-            )}
-            {duplicateCheckLoading && (
-              <>
-                <span className="stat-divider">·</span>
-                <span className="checking-stat">checking...</span>
-              </>
-            )}
-          </div>
-
-          <div className="header-actions">
-            {editState.active && (
-              <span className="selected-count">{editState.selectedImageIds.size} selected</span>
-            )}
-
-            {editState.active && editState.selectedCollection === "new" && (
-              <>
-                <span className="collection-label">Collection #:</span>
-                <input
-                  type="text"
-                  className="collection-input"
-                  value={editState.newCollectionCode}
-                  onChange={(e) => handleNewCollectionCodeChange(e.target.value)}
-                  placeholder="001"
-                  maxLength={3}
-                />
-              </>
-            )}
-
-            {editState.active && (
-              <Button variant="primary" disabled={!canAdd} onClick={handleAddToCollection}>
-                Add
-              </Button>
-            )}
-
-            {uncategorizedImages.length > 0 && (
-              <Button
-                icon={editState.active ? "check" : "edit"}
-                onClick={toggleEditMode}
-                active={editState.active}
-              >
-                {editState.active ? "Done" : "Organize"}
-              </Button>
-            )}
-
-            <Button
-              icon="upload"
-              disabled={uploading}
-              onClick={handleSubmit}
-            >
-              {uploadProgress
-                ? `${uploadProgress.current}/${uploadProgress.total}`
-                : `Upload (${stats.willUpload})`}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Duplicate controls bar */}
-      {stats.duplicates > 0 && !editState.active && (
-        <div className="duplicate-controls-bar">
-          <span>{stats.duplicates} duplicate{stats.duplicates !== 1 ? 's' : ''} found</span>
-          <button
-            className={`duplicate-control-btn ${stats.duplicatesToReplace > 0 ? 'replace' : 'skip'}`}
-            onClick={() => handleToggleAllDuplicates(stats.duplicatesToReplace === 0)}
-          >
-            {stats.duplicatesToReplace > 0 ? 'Skip All' : 'Replace All'}
-          </button>
-        </div>
-      )}
 
       <div className="upload-content">
         {/* Upload Success Banner */}
@@ -787,7 +756,7 @@ export default function UploadLetterPage() {
                     collection.collectionCode
                   }
                   editMode={editState.active}
-                  duplicateAction={collectionDupAction[collection.collectionCode] || 'none'}
+                  hasDuplicates={collectionHasDuplicates[collection.collectionCode] || false}
                   onSelect={() =>
                     handleCollectionSelect(collection.collectionCode)
                   }
@@ -900,7 +869,6 @@ export default function UploadLetterPage() {
           onClose={() => setOpenCollectionCode(null)}
           onViewImage={handleViewImage}
           onDeleteLetter={(letterKey, letterDate) => handleDeleteLetter(openCollection.collectionCode, letterKey, letterDate)}
-          onToggleDuplicateReplace={handleToggleDuplicateReplace}
         />
       )}
 
@@ -974,6 +942,40 @@ export default function UploadLetterPage() {
                 Go to Dashboard
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Duplicate Decision Dialog */}
+      {duplicateDialog.show && (
+        <div className="modal-overlay" onClick={() => setDuplicateDialog({ show: false, duplicateCount: 0 })}>
+          <div className="duplicate-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3>Duplicates Found</h3>
+            <p>
+              <strong>{duplicateDialog.duplicateCount}</strong> of {stats.images} files already exist in the archive.
+            </p>
+            <div className="duplicate-dialog-actions">
+              <button
+                className="duplicate-dialog-btn skip"
+                onClick={() => doUpload("skip")}
+              >
+                Skip Duplicates
+                <span className="btn-desc">Only upload {stats.newFiles} new file{stats.newFiles !== 1 ? 's' : ''}</span>
+              </button>
+              <button
+                className="duplicate-dialog-btn replace"
+                onClick={() => doUpload("replace")}
+              >
+                Replace Duplicates
+                <span className="btn-desc">Overwrite {duplicateDialog.duplicateCount} existing file{duplicateDialog.duplicateCount !== 1 ? 's' : ''}</span>
+              </button>
+            </div>
+            <button
+              className="duplicate-dialog-cancel"
+              onClick={() => setDuplicateDialog({ show: false, duplicateCount: 0 })}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

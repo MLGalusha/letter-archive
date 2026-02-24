@@ -1305,10 +1305,9 @@
 
 .letters-table {
   width: 100%;
-  min-width: 900px; /* Minimum width to trigger horizontal scroll instead of shrinking */
   border-collapse: collapse;
   font-size: 0.75rem; /* Smaller font for compact display */
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 .letters-table thead {
@@ -1395,8 +1394,6 @@
 
 /* Date column headers (Year/Month/Day) - sortable */
 .date-header {
-  width: 50px;
-  min-width: 50px;
   text-align: center;
   font-weight: 600;
   cursor: pointer;
@@ -1819,26 +1816,34 @@
   color: var(--text);
 }
 
-/* Column toggle floating in table container */
+/* Table container */
 .letters-table-container {
   position: relative;
 }
 
+/* Column toggle floating in table header */
 .column-toggle-in-table {
   position: sticky;
   top: 0;
   left: 0;
-  height: 28.8px;
-  margin-bottom: -28.8px;
+  width: fit-content;
   padding-left: 4px;
+  padding-right: 6px;
   display: flex;
   align-items: center;
-  z-index: 11;
+  z-index: 12;
   pointer-events: none;
+  background: var(--bg);
 }
 
 .column-toggle-in-table > * {
   pointer-events: auto;
+}
+
+/* First th/td always has left padding to make room for the column toggle */
+.letters-table th:first-child,
+.letters-table td:first-child {
+  padding-left: 30px;
 }
 
 .column-toggle-btn {

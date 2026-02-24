@@ -1,5 +1,5 @@
 import type React from "react";
-import { type RefObject } from "react";
+import { type RefObject, useRef, useState, useEffect } from "react";
 import { VisibilityBadge } from "../../../components/common";
 import { Icon } from "../../../components/common/Icon";
 import type { Letter, ContentStatus } from "../../../types/Letter";
@@ -86,6 +86,18 @@ export default function RecentActivityTable({
   onToggleColumn,
   columnMenuRef,
 }: RecentActivityTableProps) {
+  const theadRef = useRef<HTMLTableSectionElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
+
+  useEffect(() => {
+    if (!theadRef.current) return;
+    const measure = () => setHeaderHeight(theadRef.current?.offsetHeight ?? 0);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(theadRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <>
       <div
@@ -94,7 +106,11 @@ export default function RecentActivityTable({
         role="region"
         aria-label="Letters table"
       >
-        <div className="column-toggle-in-table" ref={columnMenuRef}>
+        <div
+          className="column-toggle-in-table"
+          ref={columnMenuRef}
+          style={headerHeight ? { height: headerHeight, marginBottom: -headerHeight } : undefined}
+        >
           <button
             className={`column-toggle-btn ${showColumnMenu ? 'active' : ''}`}
             onClick={onToggleColumnMenu}
@@ -118,20 +134,7 @@ export default function RecentActivityTable({
           )}
         </div>
         <table className="letters-table">
-          <colgroup>
-            {visibleColumns.has("sender") && <col style={{ width: "12%" }} />}
-            {visibleColumns.has("recipient") && <col style={{ width: "12%" }} />}
-            {visibleColumns.has("date") && <col style={{ width: "100px" }} />}
-            {visibleColumns.has("collection") && <col style={{ width: "80px" }} />}
-            {visibleColumns.has("letters") && <col style={{ width: "55px" }} />}
-            {visibleColumns.has("extras") && <col style={{ width: "50px" }} />}
-            {visibleColumns.has("transcript") && <col style={{ width: "70px" }} />}
-            {visibleColumns.has("metadata") && <col style={{ width: "70px" }} />}
-            {visibleColumns.has("sync") && <col style={{ width: "50px" }} />}
-            {visibleColumns.has("visibility") && <col style={{ width: "70px" }} />}
-            {visibleColumns.has("created") && <col style={{ width: "80px" }} />}
-          </colgroup>
-          <thead>
+          <thead ref={theadRef}>
             <tr>
               {visibleColumns.has("sender") && (
                 <th

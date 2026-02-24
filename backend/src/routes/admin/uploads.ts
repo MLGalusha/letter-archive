@@ -4,6 +4,8 @@ import { unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { processUploadedFile } from '../../services/upload.js';
+import { parseFilename } from '../../services/filename-parser.js';
+import { buildStoragePath, fileExists } from '../../services/storage.js';
 
 const router = Router();
 
@@ -25,6 +27,43 @@ const upload = multer({
       cb(new Error(`Invalid file type: ${file.mimetype}. Only images are allowed.`));
     }
   },
+});
+
+/**
+ * POST /admin/uploads/check-duplicates - Check which filenames already exist in storage
+ *
+ * Accepts JSON body: { filenames: string[] }
+ * Returns: { duplicates: Record<string, boolean> }
+ */
+router.post('/uploads/check-duplicates', async (req, res) => {
+  const { filenames } = req.body as { filenames?: string[] };
+
+  if (!filenames || !Array.isArray(filenames)) {
+    res.status(400).json({ error: 'filenames must be an array of strings' });
+    return;
+  }
+
+  const duplicates: Record<string, boolean> = {};
+
+  for (const filename of filenames) {
+    const parsed = parseFilename(filename);
+    if (!parsed) {
+      duplicates[filename] = false;
+      continue;
+    }
+
+    const storagePath = buildStoragePath(
+      parsed.collectionCode,
+      parsed.dateRaw,
+      parsed.type,
+      parsed.typeSequence,
+      filename
+    );
+
+    duplicates[filename] = await fileExists(storagePath);
+  }
+
+  res.json({ duplicates });
 });
 
 /**

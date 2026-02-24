@@ -3,7 +3,7 @@ import { getLetterWithPages, updateTranscriptionStatus, updateLetterWorkflow, in
 import { getAbsoluteStoragePath } from '../services/storage.js';
 import { createLogger } from '../utils/logger.js';
 import { db, letters } from '../db/index.js';
-import { eq, and, inArray, isNull } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 
 const log = createLogger({ module: 'transcription-pipeline' });
 const MAX_ATTEMPTS = 3;
@@ -151,8 +151,7 @@ export async function runTranscription(letterId: string): Promise<void> {
           eq(letters.collectionId, letter.collectionId),
           eq(letters.dateRaw, letter.dateRaw),
           eq(letters.typeSequence, letter.typeSequence),
-          inArray(letters.type, ['T', 'C', 'E']),
-          isNull(letters.deletedAt)
+          inArray(letters.type, ['T', 'C', 'E'])
         ),
         with: {
           pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },

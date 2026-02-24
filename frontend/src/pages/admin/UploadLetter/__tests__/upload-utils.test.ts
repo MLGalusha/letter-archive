@@ -10,13 +10,16 @@ import {
   groupImagesByCollection,
 } from "../utils";
 
-function makeImage(filename: string): UploadedImage {
+function makeImage(filename: string, overrides?: Partial<UploadedImage>): UploadedImage {
   return {
     id: filename,
     file: new File(["x"], filename, { type: "image/jpeg" }),
     url: `blob:${filename}`,
     originalFilename: filename,
     parsed: parseFilename(filename),
+    isDuplicate: false,
+    replaceSelected: true,
+    ...overrides,
   };
 }
 
@@ -64,5 +67,86 @@ describe("upload utils", () => {
     const id = generateId();
     expect(id).toHaveLength(9);
     expect(id).toMatch(/^[a-z0-9]+$/);
+  });
+
+  it("preserves isDuplicate and replaceSelected in grouped images", () => {
+    const grouped = groupImagesByCollection([
+      makeImage("001-18860314-L01-01.jpg", { isDuplicate: true, replaceSelected: false }),
+      makeImage("001-18860314-L01-02.jpg", { isDuplicate: true, replaceSelected: true }),
+      makeImage("001-18860315-L01-01.jpg", { isDuplicate: false }),
+    ]);
+
+    expect(grouped).toHaveLength(1);
+    const letters = grouped[0].letters;
+    expect(letters).toHaveLength(2);
+
+    // First letter (18860314) has 2 duplicate images
+    const letter1 = letters.find(l => l.dateRaw.startsWith("18860314"));
+    expect(letter1!.images).toHaveLength(2);
+    expect(letter1!.images[0].isDuplicate).toBe(true);
+    expect(letter1!.images[0].replaceSelected).toBe(false);
+    expect(letter1!.images[1].isDuplicate).toBe(true);
+    expect(letter1!.images[1].replaceSelected).toBe(true);
+
+    // Second letter (18860315) has 1 non-duplicate image
+    const letter2 = letters.find(l => l.dateRaw.startsWith("18860315"));
+    expect(letter2!.images).toHaveLength(1);
+    expect(letter2!.images[0].isDuplicate).toBe(false);
+  });
+
+  it("computes willUpload stat correctly", () => {
+    // Simulates the stats.willUpload computation from UploadLetterPage
+    const images = [
+      makeImage("001-18860314-L01-01.jpg", { isDuplicate: false }),          // new → uploads
+      makeImage("001-18860314-L01-02.jpg", { isDuplicate: true, replaceSelected: true }),  // dup, replace → uploads
+      makeImage("001-18860315-L01-01.jpg", { isDuplicate: true, replaceSelected: false }), // dup, skip → no upload
+      makeImage("uncategorized.jpg"),                                         // no parsed → no upload
+    ];
+
+    const willUpload = images.filter(img => img.parsed && (!img.isDuplicate || img.replaceSelected)).length;
+    expect(willUpload).toBe(2);
+  });
+
+  it("detects all-duplicate collection correctly", () => {
+    const allDupImages = [
+      makeImage("001-18860314-L01-01.jpg", { isDuplicate: true }),
+      makeImage("001-18860315-L01-01.jpg", { isDuplicate: true }),
+    ];
+
+    const mixedImages = [
+      makeImage("001-18860314-L01-01.jpg", { isDuplicate: true }),
+      makeImage("001-18860315-L01-01.jpg", { isDuplicate: false }),
+    ];
+
+    const allDupCollections = groupImagesByCollection(allDupImages);
+    const allImages1 = allDupCollections[0].letters.flatMap(l => l.images);
+    expect(allImages1.every(img => img.isDuplicate)).toBe(true);
+
+    const mixedCollections = groupImagesByCollection(mixedImages);
+    const allImages2 = mixedCollections[0].letters.flatMap(l => l.images);
+    expect(allImages2.every(img => img.isDuplicate)).toBe(false);
+  });
+
+  it("detects all-duplicate letter correctly", () => {
+    const images = [
+      makeImage("001-18860314-L01-01.jpg", { isDuplicate: true }),
+      makeImage("001-18860314-L01-02.jpg", { isDuplicate: true }),
+      makeImage("001-18860314-C01-01.jpg", { isDuplicate: true }),
+    ];
+
+    const groups = groupImagesByCollection(images);
+    const letter = groups[0].letters[0];
+    expect(letter.images.every(img => img.isDuplicate)).toBe(true);
+  });
+
+  it("one non-duplicate means letter is not all-duplicate", () => {
+    const images = [
+      makeImage("001-18860314-L01-01.jpg", { isDuplicate: true }),
+      makeImage("001-18860314-L01-02.jpg", { isDuplicate: false }),
+    ];
+
+    const groups = groupImagesByCollection(images);
+    const letter = groups[0].letters[0];
+    expect(letter.images.every(img => img.isDuplicate)).toBe(false);
   });
 });

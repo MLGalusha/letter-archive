@@ -1,4 +1,4 @@
-import { eq, and, isNull, isNotNull, inArray, sql, or, ilike } from 'drizzle-orm';
+import { eq, and, isNotNull, inArray, sql, or, ilike } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, letters, collections } from '../db/index.js';
 import { processLetter, processMetadata } from '../pipeline/processor.js';
@@ -228,7 +228,6 @@ export async function getQueueStatus() {
   // Active jobs: any status = RUNNING
   const activeLetters = await db.query.letters.findMany({
     where: and(
-      isNull(letters.deletedAt),
       or(
         eq(letters.transcriptionStatus, 'RUNNING'),
         eq(letters.metadataStatus, 'RUNNING'),
@@ -289,8 +288,7 @@ export async function getQueueStatus() {
     where: and(
       eq(letters.type, 'L'),
       eq(letters.workflow, 'UPLOADED'),
-      eq(letters.transcriptionStatus, 'PENDING'),
-      isNull(letters.deletedAt)
+      eq(letters.transcriptionStatus, 'PENDING')
     ),
     with: { collection: true },
     orderBy: (l, { asc }) => [asc(l.createdAt)],
@@ -303,8 +301,7 @@ export async function getQueueStatus() {
       eq(letters.type, 'L'),
       eq(letters.workflow, 'TRANSCRIBED'),
       eq(letters.metadataStatus, 'PENDING'),
-      isNotNull(letters.transcriptConfirmedAt),
-      isNull(letters.deletedAt)
+      isNotNull(letters.transcriptConfirmedAt)
     ),
     with: { collection: true },
     orderBy: (l, { asc }) => [asc(l.createdAt)],
@@ -315,8 +312,7 @@ export async function getQueueStatus() {
   const queuedEntityExtraction = await db.query.letters.findMany({
     where: and(
       eq(letters.type, 'L'),
-      eq(letters.entityExtractionStatus, 'PENDING'),
-      isNull(letters.deletedAt)
+      eq(letters.entityExtractionStatus, 'PENDING')
     ),
     with: { collection: true },
     orderBy: (l, { asc }) => [asc(l.createdAt)],
@@ -326,7 +322,6 @@ export async function getQueueStatus() {
   // Recent completions/failures (last hour, limit 20)
   const recentLetters = await db.query.letters.findMany({
     where: and(
-      isNull(letters.deletedAt),
       sql`${letters.updatedAt} >= ${oneHourAgo.toISOString()}`,
       or(
         eq(letters.transcriptionStatus, 'SUCCESS'),
@@ -443,8 +438,7 @@ export async function startTranscriptionProcessing(options: ProcessingFilterOpti
   // Base conditions for transcription: type L, workflow UPLOADED, not deleted
   const baseConditions: ReturnType<typeof eq>[] = [
     eq(letters.type, 'L'),
-    eq(letters.workflow, 'UPLOADED'),
-    isNull(letters.deletedAt)
+    eq(letters.workflow, 'UPLOADED')
   ];
 
   const { conditions, collectionNotFound } = await buildProcessingConditions(options, baseConditions);
@@ -496,8 +490,7 @@ export async function startMetadataProcessing(options: ProcessingFilterOptions):
   const baseConditions: ReturnType<typeof eq>[] = [
     eq(letters.type, 'L'),
     eq(letters.workflow, 'TRANSCRIBED'),
-    isNotNull(letters.transcriptConfirmedAt),
-    isNull(letters.deletedAt)
+    isNotNull(letters.transcriptConfirmedAt)
   ];
 
   const { conditions, collectionNotFound } = await buildProcessingConditions(options, baseConditions);
@@ -652,8 +645,7 @@ export async function clearQueue(type: QueueJobType): Promise<{ message: string;
       where: and(
         eq(letters.type, 'L'),
         eq(letters.workflow, 'UPLOADED'),
-        eq(letters.transcriptionStatus, 'PENDING'),
-        isNull(letters.deletedAt)
+        eq(letters.transcriptionStatus, 'PENDING')
       ),
       columns: { id: true },
     });
@@ -671,8 +663,7 @@ export async function clearQueue(type: QueueJobType): Promise<{ message: string;
         eq(letters.type, 'L'),
         eq(letters.workflow, 'TRANSCRIBED'),
         eq(letters.metadataStatus, 'PENDING'),
-        isNotNull(letters.transcriptConfirmedAt),
-        isNull(letters.deletedAt)
+        isNotNull(letters.transcriptConfirmedAt)
       ),
       columns: { id: true },
     });
@@ -688,8 +679,7 @@ export async function clearQueue(type: QueueJobType): Promise<{ message: string;
     const queued = await db.query.letters.findMany({
       where: and(
         eq(letters.type, 'L'),
-        eq(letters.entityExtractionStatus, 'PENDING'),
-        isNull(letters.deletedAt)
+        eq(letters.entityExtractionStatus, 'PENDING')
       ),
       columns: { id: true },
     });

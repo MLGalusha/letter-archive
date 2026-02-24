@@ -85,6 +85,13 @@
       "when": 1770840000000,
       "tag": "0009_add_extra_content_and_ai_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1771905780110,
+      "tag": "0012_rich_imperial_guard",
+      "breakpoints": true
     }
   ]
 }

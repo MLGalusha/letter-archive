@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, asc, eq, ne, or, sql } from 'drizzle-orm';
 import {
   db,
   letters,
@@ -165,7 +165,6 @@ export async function backfillRelationshipsFromLetters(): Promise<BackfillRelati
     )
     .where(
       and(
-        isNull(letters.deletedAt),
         sql`${letters.senderRecipientRelationship} IS NOT NULL`,
         ne(letters.senderRecipientRelationship, 'unknown'),
       ),

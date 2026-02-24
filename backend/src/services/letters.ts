@@ -1,4 +1,4 @@
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import {
   db,
   letters,
@@ -35,7 +35,6 @@ export async function findOrCreateLetter(params: CreateLetterParams): Promise<Le
       eq(letters.dateRaw, params.dateRaw),
       eq(letters.type, params.type),
       eq(letters.typeSequence, params.typeSequence),
-      isNull(letters.deletedAt)
     ),
   });
 
@@ -63,7 +62,7 @@ export async function findOrCreateLetter(params: CreateLetterParams): Promise<Le
  */
 export async function getLetterWithPages(letterId: string) {
   return db.query.letters.findFirst({
-    where: and(eq(letters.id, letterId), isNull(letters.deletedAt)),
+    where: eq(letters.id, letterId),
     with: {
       collection: true,
       pages: {
@@ -78,7 +77,7 @@ export async function getLetterWithPages(letterId: string) {
  */
 export async function getLetterById(letterId: string): Promise<Letter | undefined> {
   return db.query.letters.findFirst({
-    where: and(eq(letters.id, letterId), isNull(letters.deletedAt)),
+    where: eq(letters.id, letterId),
   });
 }
 

@@ -27,3 +27,11 @@ export async function uploadFiles(files: File[], force = false): Promise<UploadR
   const url = force ? "/admin/uploads?force=true" : "/admin/uploads";
   return apiPost<UploadResponse>(url, formData);
 }
+
+export interface CheckDuplicatesResponse {
+  duplicates: Record<string, boolean>;
+}
+
+export async function checkDuplicates(filenames: string[]): Promise<CheckDuplicatesResponse> {
+  return apiPost<CheckDuplicatesResponse>("/admin/uploads/check-duplicates", { filenames });
+}

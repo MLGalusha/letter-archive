@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, and, isNull, sql, asc } from 'drizzle-orm';
+import { eq, and, sql, asc } from 'drizzle-orm';
 import { db, letters, collections } from '../db/index.js';
 import { listCollections, getCollectionByCode } from '../services/collections.js';
 import { transformLettersToDTO, type LetterWithRelations } from '../dto/index.js';
@@ -25,7 +25,7 @@ router.get('/collections', async (req, res, next) => {
           .where(
             and(
               eq(letters.collectionId, collection.id),
-              isNull(letters.deletedAt),
+
               eq(letters.visibility, 'PUBLISHED')
             )
           );
@@ -81,7 +81,7 @@ router.get('/collections/:code', async (req, res, next) => {
     const collectionLetters = await db.query.letters.findMany({
       where: and(
         eq(letters.collectionId, collection.id),
-        isNull(letters.deletedAt),
+
         eq(letters.visibility, 'PUBLISHED')
       ),
       with: {

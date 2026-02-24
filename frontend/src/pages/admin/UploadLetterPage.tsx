@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { uploadFiles, type UploadResult, type UploadError } from "../../api/admin";
+import { uploadFiles, checkDuplicates, type UploadResult, type UploadError } from "../../api/admin";
 import {
   parseFilename,
 } from "../../utils/filename-parser";
@@ -12,12 +12,10 @@ import Lightbox from "./UploadLetter/Lightbox";
 import UncategorizedCarousel from "./UploadLetter/UncategorizedCarousel";
 import type {
   UploadedImage,
-  CollectionGroup,
   EditState,
   LightboxState,
   UploadProgress,
   UploadResultsState,
-  ConfirmDialogState,
   UploadBannerState,
   DeleteDialogState,
 } from "./UploadLetter/types";
@@ -47,25 +45,16 @@ export default function UploadLetterPage() {
     selectedImageIds: new Set(),
     newCollectionCode: "001",
   });
-  const [openCollection, setOpenCollection] = useState<CollectionGroup | null>(
-    null,
-  );
+  const [openCollectionCode, setOpenCollectionCode] = useState<string | null>(null);
   const [lightboxState, setLightboxState] = useState<LightboxState | null>(
     null,
   );
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
   const [uploadResults, setUploadResults] = useState<UploadResultsState>({
     uploaded: [],
-    existing: [],
     replaced: [],
-    skipped: [],
     failed: [],
     show: false,
-  });
-  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
-    show: false,
-    files: [],
-    filenames: [],
   });
   const [uploadBanner, setUploadBanner] = useState<UploadBannerState>({
     show: false,
@@ -74,6 +63,7 @@ export default function UploadLetterPage() {
     collectionCount: 0,
     replacedCount: 0,
     skippedCount: 0,
+    excludedCount: 0,
   });
   const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState>({
     show: false,
@@ -81,11 +71,7 @@ export default function UploadLetterPage() {
     collectionCode: '',
     itemName: '',
   });
-  const [pendingUploadStats, setPendingUploadStats] = useState<{
-    fileCount: number;
-    totalSize: number;
-    collectionCount: number;
-  } | null>(null);
+  const [duplicateCheckLoading, setDuplicateCheckLoading] = useState(false);
 
   // Auth check
   useEffect(() => {
@@ -105,6 +91,12 @@ export default function UploadLetterPage() {
   // Computed values
   const collections = useMemo(() => groupImagesByCollection(images), [images]);
 
+  // Derive openCollection from openCollectionCode — always fresh
+  const openCollection = useMemo(() => {
+    if (!openCollectionCode) return null;
+    return collections.find(c => c.collectionCode === openCollectionCode) || null;
+  }, [openCollectionCode, collections]);
+
   const uncategorizedImages = useMemo(
     () => images.filter((img) => !img.parsed),
     [images],
@@ -113,13 +105,22 @@ export default function UploadLetterPage() {
   const stats = useMemo(() => {
     const totalLetters = collections.reduce((sum, c) => sum + c.letters.length, 0);
     const totalImages = collections.reduce((sum, c) => sum + c.totalImages, 0);
+    const duplicates = images.filter(img => img.isDuplicate).length;
+    const duplicatesToReplace = images.filter(img => img.isDuplicate && img.replaceSelected).length;
+    const totalImported = images.length;
+    // Will upload = categorized non-duplicates + duplicates set to replace
+    const willUpload = images.filter(img => img.parsed && (!img.isDuplicate || img.replaceSelected)).length;
     return {
       collections: collections.length,
       letters: totalLetters,
       images: totalImages,
       uncategorized: uncategorizedImages.length,
+      duplicates,
+      duplicatesToReplace,
+      totalImported,
+      willUpload,
     };
-  }, [collections, uncategorizedImages]);
+  }, [collections, uncategorizedImages, images]);
 
   // Update next collection code when collections change
   useEffect(() => {
@@ -127,8 +128,31 @@ export default function UploadLetterPage() {
     setEditState((prev) => ({ ...prev, newCollectionCode: nextCode }));
   }, [collections]);
 
+  // Duplicate check helper
+  const recheckDuplicates = useCallback(async (filenames: string[]) => {
+    if (filenames.length === 0) return;
+    setDuplicateCheckLoading(true);
+    try {
+      const response = await checkDuplicates(filenames);
+      setImages(prev => prev.map(img => {
+        if (filenames.includes(img.originalFilename) && img.originalFilename in response.duplicates) {
+          return {
+            ...img,
+            isDuplicate: response.duplicates[img.originalFilename],
+            replaceSelected: response.duplicates[img.originalFilename] ? img.replaceSelected : true,
+          };
+        }
+        return img;
+      }));
+    } catch {
+      // Silently fail — duplicates just won't be flagged
+    } finally {
+      setDuplicateCheckLoading(false);
+    }
+  }, []);
+
   // Handlers
-  const handleFilesSelected = useCallback((files: FileList | null) => {
+  const handleFilesSelected = useCallback(async (files: FileList | null) => {
     if (!files) return;
 
     const newImages: UploadedImage[] = [];
@@ -142,11 +166,39 @@ export default function UploadLetterPage() {
         url: URL.createObjectURL(file),
         originalFilename: file.name,
         parsed,
+        isDuplicate: false,
+        replaceSelected: true,
       });
     }
 
     setImages((prev) => [...prev, ...newImages]);
     setMessage("");
+
+    // Check duplicates for categorized files
+    const categorizedFilenames = newImages
+      .filter(img => img.parsed)
+      .map(img => img.originalFilename);
+
+    if (categorizedFilenames.length > 0) {
+      setDuplicateCheckLoading(true);
+      try {
+        const response = await checkDuplicates(categorizedFilenames);
+        setImages(prev => prev.map(img => {
+          if (img.originalFilename in response.duplicates) {
+            return {
+              ...img,
+              isDuplicate: response.duplicates[img.originalFilename],
+              replaceSelected: true,
+            };
+          }
+          return img;
+        }));
+      } catch {
+        // Silently fail
+      } finally {
+        setDuplicateCheckLoading(false);
+      }
+    }
   }, []);
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -244,6 +296,9 @@ export default function UploadLetterPage() {
       }
     }
 
+    // Collect new filenames for duplicate recheck
+    const newFilenames: string[] = [];
+
     // Update images with new filenames and parsed data
     setImages((prev) =>
       prev.map((img) => {
@@ -258,11 +313,14 @@ export default function UploadLetterPage() {
         );
 
         const newParsed = parseFilename(newFilename);
+        newFilenames.push(newFilename);
 
         return {
           ...img,
           originalFilename: newFilename,
           parsed: newParsed,
+          isDuplicate: false, // Reset until recheck
+          replaceSelected: true,
         };
       }),
     );
@@ -273,9 +331,27 @@ export default function UploadLetterPage() {
       selectedCollection: null,
       selectedImageIds: new Set(),
     }));
+
+    // Recheck duplicates for new filenames
+    if (newFilenames.length > 0) {
+      recheckDuplicates(newFilenames);
+    }
   };
 
-  const handleSubmit = async (force = false) => {
+  // Duplicate toggle handlers
+  const handleToggleDuplicateReplace = useCallback((imageId: string) => {
+    setImages(prev => prev.map(img =>
+      img.id === imageId ? { ...img, replaceSelected: !img.replaceSelected } : img
+    ));
+  }, []);
+
+  const handleToggleAllDuplicates = useCallback((selected: boolean) => {
+    setImages(prev => prev.map(img =>
+      img.isDuplicate ? { ...img, replaceSelected: selected } : img
+    ));
+  }, []);
+
+  const handleSubmit = async () => {
     // Only upload categorized files - uncategorized stay in the carousel
     if (collections.length === 0) {
       setMessage("No categorized images to upload. Use Edit mode to organize images first.");
@@ -287,9 +363,9 @@ export default function UploadLetterPage() {
     setUploadBanner(prev => ({ ...prev, show: false }));
 
     const allUploaded: UploadResult[] = [];
-    const allExisting: UploadResult[] = [];
+    const allReplaced: UploadResult[] = [];
     const allFailed: UploadError[] = [];
-    const filesToReupload: File[] = [];
+    let skippedCount = 0;
     let totalBytes = 0;
 
     // Upload each collection as a batch
@@ -301,156 +377,109 @@ export default function UploadLetterPage() {
         collectionCode: collection.collectionCode,
       });
 
-      // Get files for this collection
-      const collectionFiles = collection.letters.flatMap((letter) =>
-        letter.images.map((img) => {
-          if (img.originalFilename !== img.file.name) {
-            return new File([img.file], img.originalFilename, {
-              type: img.file.type,
-            });
-          }
-          return img.file;
-        }),
-      );
+      // Split files into buckets
+      const newFiles: File[] = [];
+      const replaceFiles: File[] = [];
 
-      // Track total size
-      collectionFiles.forEach(f => totalBytes += f.size);
+      for (const letter of collection.letters) {
+        for (const img of letter.images) {
+          const file = img.originalFilename !== img.file.name
+            ? new File([img.file], img.originalFilename, { type: img.file.type })
+            : img.file;
 
-      try {
-        const response = await uploadFiles(collectionFiles, force);
-
-        // Categorize results
-        for (const result of response.results) {
-          if (result.alreadyExists && !force) {
-            allExisting.push(result);
-            // Find the file to potentially re-upload
-            const file = collectionFiles.find(f => f.name === result.filename);
-            if (file) filesToReupload.push(file);
+          if (img.isDuplicate && !img.replaceSelected) {
+            // Skip this file
+            skippedCount++;
+          } else if (img.isDuplicate && img.replaceSelected) {
+            replaceFiles.push(file);
           } else {
-            allUploaded.push(result);
+            newFiles.push(file);
           }
         }
+      }
 
-        if (response.errors) {
-          allFailed.push(...response.errors);
-        }
-      } catch (err) {
-        // Add all files as failed if batch upload fails
-        collectionFiles.forEach(f => {
-          allFailed.push({
-            filename: f.name,
-            error: err instanceof Error ? err.message : "Upload failed",
+      // Upload new files (force=false)
+      if (newFiles.length > 0) {
+        newFiles.forEach(f => totalBytes += f.size);
+        try {
+          const response = await uploadFiles(newFiles, false);
+          allUploaded.push(...response.results);
+          if (response.errors) allFailed.push(...response.errors);
+        } catch (err) {
+          newFiles.forEach(f => {
+            allFailed.push({
+              filename: f.name,
+              error: err instanceof Error ? err.message : "Upload failed",
+            });
           });
-        });
+        }
+      }
+
+      // Upload replace files (force=true)
+      if (replaceFiles.length > 0) {
+        replaceFiles.forEach(f => totalBytes += f.size);
+        try {
+          const response = await uploadFiles(replaceFiles, true);
+          allReplaced.push(...response.results);
+          if (response.errors) allFailed.push(...response.errors);
+        } catch (err) {
+          replaceFiles.forEach(f => {
+            allFailed.push({
+              filename: f.name,
+              error: err instanceof Error ? err.message : "Upload failed",
+            });
+          });
+        }
       }
     }
 
     setUploadProgress(null);
     setUploading(false);
 
-    // If there are existing files and not forcing, show confirmation dialog ONLY
-    if (allExisting.length > 0 && !force) {
-      // Store pending stats for after user decision
-      setPendingUploadStats({
-        fileCount: allUploaded.length,
-        totalSize: totalBytes,
-        collectionCount: collections.length,
-      });
-
-      setConfirmDialog({
-        show: true,
-        files: filesToReupload,
-        filenames: allExisting.map(r => r.filename),
-      });
-
-      // Store results but DON'T show the panel yet
-      setUploadResults(prev => ({
-        ...prev,
-        uploaded: allUploaded,
-        existing: allExisting,
-        failed: allFailed,
-        show: false, // Don't show until user decides
-      }));
-    } else {
-      // No duplicates or forcing - show success banner immediately
-      const finalUploadCount = force ? uploadResults.uploaded.length + allUploaded.length : allUploaded.length;
-      const replacedCount = force ? allUploaded.length : 0;
-
-      setUploadBanner({
-        show: true,
-        fileCount: finalUploadCount,
-        totalSize: formatFileSize(totalBytes),
-        collectionCount: collections.length,
-        replacedCount,
-        skippedCount: 0,
-      });
-
-      // Auto-dismiss banner after 5 seconds
-      setTimeout(() => {
-        setUploadBanner(prev => ({ ...prev, show: false }));
-      }, 5000);
-
-      // Update results (force uploads go to "replaced" category)
-      setUploadResults({
-        uploaded: force ? [] : allUploaded,
-        existing: [],
-        replaced: force ? allUploaded : [],
-        skipped: [],
-        failed: allFailed,
-        show: false, // Use banner instead
-      });
-    }
-
-    // Remove successfully uploaded categorized images from state
-    // Keep uncategorized images
-    const uploadedFilenames = new Set(allUploaded.map(r => r.filename));
-    setImages(prev => prev.filter(img =>
-      !img.parsed || !uploadedFilenames.has(img.originalFilename)
-    ));
-  };
-
-  const handleConfirmReplace = async () => {
-    setConfirmDialog({ show: false, files: [], filenames: [] });
-    // Re-upload with force=true
-    await handleSubmit(true);
-  };
-
-  const handleSkipExisting = () => {
-    // Mark existing as skipped and close dialog
-    const skippedCount = uploadResults.existing.length;
-    setUploadResults(prev => ({
-      ...prev,
-      skipped: prev.existing,
-      existing: [],
-      show: false,
+    // Remove all categorized images from state (uploaded + replaced + skipped)
+    const uploadedFilenames = new Set([
+      ...allUploaded.map(r => r.filename),
+      ...allReplaced.map(r => r.filename),
+    ]);
+    // Also remove skipped duplicates
+    setImages(prev => prev.filter(img => {
+      if (!img.parsed) return true; // Keep uncategorized
+      if (uploadedFilenames.has(img.originalFilename)) return false;
+      if (img.isDuplicate && !img.replaceSelected) return false; // Skipped
+      return true;
     }));
-    setConfirmDialog({ show: false, files: [], filenames: [] });
 
-    // Show success banner with final stats
-    if (pendingUploadStats) {
-      setUploadBanner({
-        show: true,
-        fileCount: pendingUploadStats.fileCount,
-        totalSize: formatFileSize(pendingUploadStats.totalSize),
-        collectionCount: pendingUploadStats.collectionCount,
-        replacedCount: 0,
-        skippedCount,
-      });
-      setPendingUploadStats(null);
+    const excludedCount = uncategorizedImages.length;
 
-      // Auto-dismiss banner after 5 seconds
-      setTimeout(() => {
-        setUploadBanner(prev => ({ ...prev, show: false }));
-      }, 5000);
-    }
+    // Show success banner
+    setUploadBanner({
+      show: true,
+      fileCount: allUploaded.length,
+      totalSize: formatFileSize(totalBytes),
+      collectionCount: collections.length,
+      replacedCount: allReplaced.length,
+      skippedCount,
+      excludedCount,
+    });
+
+    // Auto-dismiss banner after 8 seconds
+    setTimeout(() => {
+      setUploadBanner(prev => ({ ...prev, show: false }));
+    }, 8000);
+
+    // Update results - only show panel if there are failures
+    setUploadResults({
+      uploaded: allUploaded,
+      replaced: allReplaced,
+      failed: allFailed,
+      show: allFailed.length > 0,
+    });
   };
 
   const handleClearResults = () => {
     setUploadResults({
       uploaded: [],
-      existing: [],
       replaced: [],
-      skipped: [],
       failed: [],
       show: false,
     });
@@ -482,12 +511,10 @@ export default function UploadLetterPage() {
 
   const handleConfirmDelete = () => {
     if (deleteDialog.type === 'collection') {
-      // Remove all images from this collection
       setImages(prev => prev.filter(img =>
         !img.parsed || img.parsed.collectionCode !== deleteDialog.collectionCode
       ));
     } else if (deleteDialog.type === 'letter' && deleteDialog.letterKey) {
-      // Remove images for this specific letter
       setImages(prev => prev.filter(img => {
         if (!img.parsed || img.parsed.collectionCode !== deleteDialog.collectionCode) {
           return true;
@@ -496,22 +523,21 @@ export default function UploadLetterPage() {
         return imgLetterKey !== deleteDialog.letterKey;
       }));
     } else if (deleteDialog.type === 'image' && deleteDialog.imageId) {
-      // Remove single uncategorized image
       setImages(prev => prev.filter(img => img.id !== deleteDialog.imageId));
     }
 
-    setDeleteDialog({ show: false, type: 'collection', collectionCode: '', itemName: '' });
     // Close collection modal if we deleted the current collection or its last letter
-    if (openCollection && deleteDialog.collectionCode === openCollection.collectionCode) {
-      // Check if collection will be empty after delete
+    if (openCollectionCode && deleteDialog.collectionCode === openCollectionCode) {
       const remainingInCollection = images.filter(img =>
         img.parsed?.collectionCode === deleteDialog.collectionCode
       );
-      // If we're deleting the collection or it will be empty, close the modal
-      if (deleteDialog.type === 'collection' || remainingInCollection.length <= (openCollection.letters.find(l => l.letterKey === deleteDialog.letterKey)?.images.length || 0)) {
-        setOpenCollection(null);
+      const currentCollection = collections.find(c => c.collectionCode === openCollectionCode);
+      if (deleteDialog.type === 'collection' || remainingInCollection.length <= (currentCollection?.letters.find(l => l.letterKey === deleteDialog.letterKey)?.images.length || 0)) {
+        setOpenCollectionCode(null);
       }
     }
+
+    setDeleteDialog({ show: false, type: 'collection', collectionCode: '', itemName: '' });
   };
 
   const handleCancelDelete = () => {
@@ -546,6 +572,16 @@ export default function UploadLetterPage() {
     (editState.selectedCollection !== null ||
       (editState.selectedCollection === "new" &&
         editState.newCollectionCode.length > 0));
+
+  // Compute per-collection: whether ALL images are duplicates (for border)
+  const collectionAllDuplicate = useMemo(() => {
+    const result: Record<string, boolean> = {};
+    for (const collection of collections) {
+      const allImages = collection.letters.flatMap(l => l.images);
+      result[collection.collectionCode] = allImages.length > 0 && allImages.every(img => img.isDuplicate);
+    }
+    return result;
+  }, [collections]);
 
   const importDropdown = (
     <div className="upload-dropdown">
@@ -608,15 +644,29 @@ export default function UploadLetterPage() {
       {images.length > 0 && (
         <div className="upload-toolbar">
           <div className="header-stats">
+            <span className="will-upload-stat">{stats.willUpload} to upload</span>
+            <span className="stat-divider">·</span>
+            <span>{stats.totalImported} imported</span>
+            <span className="stat-divider">·</span>
             <span>{stats.collections} collection{stats.collections !== 1 ? 's' : ''}</span>
             <span className="stat-divider">·</span>
-            <span>{stats.letters} letter{stats.letters !== 1 ? 's' : ''}</span>
-            <span className="stat-divider">·</span>
-            <span>{stats.images} image{stats.images !== 1 ? 's' : ''}</span>
+            <span>{stats.images} categorized</span>
+            {stats.duplicates > 0 && (
+              <>
+                <span className="stat-divider">·</span>
+                <span className="duplicate-stat">{stats.duplicatesToReplace} duplicate{stats.duplicatesToReplace !== 1 ? 's' : ''} to replace</span>
+              </>
+            )}
             {stats.uncategorized > 0 && (
               <>
                 <span className="stat-divider">·</span>
                 <span className="uncategorized-stat">{stats.uncategorized} uncategorized</span>
+              </>
+            )}
+            {duplicateCheckLoading && (
+              <>
+                <span className="stat-divider">·</span>
+                <span className="checking-stat">checking...</span>
               </>
             )}
           </div>
@@ -659,12 +709,27 @@ export default function UploadLetterPage() {
             <Button
               icon="upload"
               disabled={uploading}
-              onClick={() => handleSubmit()}
+              onClick={handleSubmit}
             >
               {uploadProgress
                 ? `${uploadProgress.current}/${uploadProgress.total}`
                 : "Upload All"}
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Duplicate controls bar */}
+      {stats.duplicates > 0 && !editState.active && (
+        <div className="duplicate-controls-bar">
+          <span>{stats.duplicates} duplicate{stats.duplicates !== 1 ? 's' : ''} found</span>
+          <div className="duplicate-controls-actions">
+            <button className="duplicate-control-btn replace" onClick={() => handleToggleAllDuplicates(true)}>
+              Replace All
+            </button>
+            <button className="duplicate-control-btn skip" onClick={() => handleToggleAllDuplicates(false)}>
+              Skip All
+            </button>
           </div>
         </div>
       )}
@@ -686,6 +751,9 @@ export default function UploadLetterPage() {
                 {uploadBanner.skippedCount > 0 && (
                   <span className="banner-stat"><strong>{uploadBanner.skippedCount}</strong> skipped</span>
                 )}
+                {uploadBanner.excludedCount > 0 && (
+                  <span className="banner-stat"><strong>{uploadBanner.excludedCount}</strong> uncategorized excluded</span>
+                )}
               </div>
             </div>
             <button className="banner-dismiss" onClick={handleDismissBanner} title="Dismiss">×</button>
@@ -706,10 +774,11 @@ export default function UploadLetterPage() {
                     collection.collectionCode
                   }
                   editMode={editState.active}
+                  allDuplicate={collectionAllDuplicate[collection.collectionCode] || false}
                   onSelect={() =>
                     handleCollectionSelect(collection.collectionCode)
                   }
-                  onClick={() => setOpenCollection(collection)}
+                  onClick={() => setOpenCollectionCode(collection.collectionCode)}
                   onDelete={() => handleDeleteCollection(collection.collectionCode)}
                 />
               ))}
@@ -815,9 +884,10 @@ export default function UploadLetterPage() {
       {openCollection && (
         <CollectionModal
           collection={openCollection}
-          onClose={() => setOpenCollection(null)}
+          onClose={() => setOpenCollectionCode(null)}
           onViewImage={handleViewImage}
           onDeleteLetter={(letterKey, letterDate) => handleDeleteLetter(openCollection.collectionCode, letterKey, letterDate)}
+          onToggleDuplicateReplace={handleToggleDuplicateReplace}
         />
       )}
 
@@ -831,34 +901,7 @@ export default function UploadLetterPage() {
         />
       )}
 
-      {/* Confirm Replace Dialog */}
-      {confirmDialog.show && (
-        <div className="modal-overlay" onClick={() => setConfirmDialog({ show: false, files: [], filenames: [] })}>
-          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <h3>Files Already Exist</h3>
-            <p>{confirmDialog.filenames.length} file(s) already exist in storage:</p>
-            <div className="existing-files-list">
-              {confirmDialog.filenames.slice(0, 5).map((name) => (
-                <code key={name}>{name}</code>
-              ))}
-              {confirmDialog.filenames.length > 5 && (
-                <span className="more-files">...and {confirmDialog.filenames.length - 5} more</span>
-              )}
-            </div>
-            <p>Do you want to replace them with the new files?</p>
-            <div className="confirm-actions">
-              <button className="confirm-btn replace" onClick={handleConfirmReplace}>
-                Replace All
-              </button>
-              <button className="confirm-btn skip" onClick={handleSkipExisting}>
-                Skip Existing
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Upload Results Panel */}
+      {/* Upload Results Panel (only shown for failures) */}
       {uploadResults.show && (
         <div className="modal-overlay" onClick={handleClearResults}>
           <div className="upload-results-panel" onClick={(e) => e.stopPropagation()}>
@@ -889,19 +932,6 @@ export default function UploadLetterPage() {
                     ))}
                     {uploadResults.replaced.length > 10 && (
                       <li className="more">...and {uploadResults.replaced.length - 10} more</li>
-                    )}
-                  </ul>
-                </div>
-              )}
-              {uploadResults.skipped.length > 0 && (
-                <div className="result-section skipped">
-                  <h4>Skipped ({uploadResults.skipped.length})</h4>
-                  <ul>
-                    {uploadResults.skipped.slice(0, 10).map((r) => (
-                      <li key={r.pageId}>{r.filename}</li>
-                    ))}
-                    {uploadResults.skipped.length > 10 && (
-                      <li className="more">...and {uploadResults.skipped.length - 10} more</li>
                     )}
                   </ul>
                 </div>

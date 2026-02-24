@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, and, isNull, inArray, sql, asc } from 'drizzle-orm';
+import { eq, and, inArray, sql, asc } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   db,
@@ -70,8 +70,7 @@ router.get('/relationships', async (_req, res, next) => {
       .innerJoin(letters, eq(letterPersons.letterId, letters.id))
       .where(
         and(
-          eq(letters.visibility, 'PUBLISHED'),
-          isNull(letters.deletedAt)
+          eq(letters.visibility, 'PUBLISHED')
         )
       )
       .groupBy(letterPersons.personId);
@@ -139,8 +138,7 @@ router.get('/relationships/collection/:collectionId', async (req, res, next) => 
       .where(
         and(
           eq(letters.collectionId, collectionId),
-          eq(letters.visibility, 'PUBLISHED'),
-          isNull(letters.deletedAt)
+          eq(letters.visibility, 'PUBLISHED')
         )
       )
       .groupBy(letterPersons.personId, canonicalPersons.canonicalName);

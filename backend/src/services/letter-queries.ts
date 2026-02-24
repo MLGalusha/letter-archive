@@ -1,4 +1,4 @@
-import { eq, and, isNull, inArray, sql, or, ilike, count } from 'drizzle-orm';
+import { eq, and, inArray, sql, or, ilike, count } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, letters, letterPages, collections } from '../db/index.js';
 import { transformLetterToDTO, transformLetterWithRelatedToDTO, type LetterWithRelations } from '../dto/index.js';
@@ -29,7 +29,7 @@ export async function fetchLetterWithRelatedAndTransform(
   includeEntities = true
 ): Promise<ReturnType<typeof transformLetterWithRelatedToDTO> | null> {
   const letter = await db.query.letters.findFirst({
-    where: and(eq(letters.id, letterId), isNull(letters.deletedAt)),
+    where: eq(letters.id, letterId),
     with: {
       collection: true,
       pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
@@ -49,8 +49,7 @@ export async function fetchLetterWithRelatedAndTransform(
       eq(letters.collectionId, letter.collectionId),
       eq(letters.dateRaw, letter.dateRaw),
       eq(letters.typeSequence, letter.typeSequence),
-      sql`${letters.type} != ${letter.type}`,
-      isNull(letters.deletedAt)
+      sql`${letters.type} != ${letter.type}`
     ),
     with: {
       collection: true,
@@ -171,7 +170,6 @@ export async function queryAdminLetters(
 ): Promise<AdminLettersResponse> {
   // Build base conditions
   const conditions: ReturnType<typeof eq>[] = [
-    isNull(letters.deletedAt),
   ];
 
   // Collection filter - supports partial matching (e.g., "7" matches "007", "017", "107")
@@ -270,7 +268,7 @@ export async function queryAdminLetters(
       SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
         workflow, visibility, transcript_status, metadata_content_status, extra_content_status
       FROM letters
-      WHERE deleted_at IS NULL ${collectionFilter}
+      WHERE TRUE ${collectionFilter}
       ORDER BY collection_id, date_raw, type_sequence,
         CASE WHEN type = 'L' THEN 0 ELSE 1 END, type
     )
@@ -328,7 +326,7 @@ export async function queryAdminLetters(
   // Build WHERE clause fragments for the raw SQL queries
   // We need to convert Drizzle conditions to raw SQL for DISTINCT ON
   const buildWhereClause = () => {
-    const clauses: ReturnType<typeof sql>[] = [sql`deleted_at IS NULL`];
+    const clauses: ReturnType<typeof sql>[] = [sql`TRUE`];
 
     if (collectionIds.length > 0) {
       clauses.push(sql`collection_id = ANY(ARRAY[${sql.join(collectionIds.map(id => sql`${id}`), sql`, `)}]::uuid[])`);
@@ -461,8 +459,7 @@ export async function queryAdminLetters(
       and(
         eq(letters.collectionId, letter.collectionId),
         eq(letters.dateRaw, letter.dateRaw),
-        eq(letters.typeSequence, letter.typeSequence),
-        isNull(letters.deletedAt)
+        eq(letters.typeSequence, letter.typeSequence)
       )
     );
 

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, and, isNull, inArray, ilike, asc, desc, sql } from 'drizzle-orm';
+import { eq, and, inArray, ilike, asc, desc, sql } from 'drizzle-orm';
 import { db, letters, collections } from '../db/index.js';
 import { letterQuerySchema } from '../schemas/letter.js';
 import {
@@ -31,7 +31,7 @@ router.get('/letters', async (req, res, next) => {
     );
 
     // Build conditions WITHOUT workflow filter (applied after grouping)
-    const conditions = [isNull(letters.deletedAt)];
+    const conditions = [];
 
     // Filter by collection code - supports partial matching (e.g., "7" matches "007")
     if (query.collection) {
@@ -132,7 +132,7 @@ router.get('/letters', async (req, res, next) => {
             eq(letters.dateRaw, letter.dateRaw),
             eq(letters.typeSequence, letter.typeSequence),
             sql`${letters.type} != ${letter.type}`, // Exclude the primary itself
-            isNull(letters.deletedAt)
+
           ),
           with: {
             collection: true,
@@ -178,7 +178,7 @@ router.get('/letters/:letterId', async (req, res, next) => {
     const letter = await db.query.letters.findFirst({
       where: and(
         eq(letters.id, letterId),
-        isNull(letters.deletedAt),
+
         eq(letters.visibility, 'PUBLISHED')
       ),
       with: {
@@ -202,7 +202,7 @@ router.get('/letters/:letterId', async (req, res, next) => {
         eq(letters.dateRaw, letter.dateRaw),
         eq(letters.typeSequence, letter.typeSequence),
         sql`${letters.type} != ${letter.type}`, // Exclude the current letter's type
-        isNull(letters.deletedAt)
+
       ),
       with: {
         collection: true,
@@ -233,7 +233,7 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
     const letter = await db.query.letters.findFirst({
       where: and(
         eq(letters.id, letterId),
-        isNull(letters.deletedAt),
+
         eq(letters.visibility, 'PUBLISHED')
       ),
       columns: {
@@ -255,7 +255,7 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
         eq(letters.collectionId, letter.collectionId),
         eq(letters.type, 'L'),
         eq(letters.visibility, 'PUBLISHED'),
-        isNull(letters.deletedAt)
+
       ),
       columns: {
         id: true,

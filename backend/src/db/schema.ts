@@ -214,10 +214,6 @@ export const letters = pgTable(
     reviewedBy: text('reviewed_by'),
     notes: text('notes'),
 
-    // Soft delete
-    deletedAt: timestamp('deleted_at', { withTimezone: true }),
-    deletedBy: text('deleted_by'),
-
     // Timestamps
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { eq, and, isNull, asc } from 'drizzle-orm';
+import { eq, asc } from 'drizzle-orm';
 import { env, hasOpenAI } from '../config/env.js';
 import { COLLECTION_ANALYSIS_SYSTEM_PROMPT, buildCollectionAnalysisPrompt } from './prompts.js';
 import { db, letters, collections } from '../db/index.js';
@@ -107,7 +107,7 @@ export async function analyzeCollection(collectionId: string): Promise<AnalyzeCo
 
   // Get letters with summaries
   const collectionLetters = await db.query.letters.findMany({
-    where: and(eq(letters.collectionId, collectionId), isNull(letters.deletedAt)),
+    where: eq(letters.collectionId, collectionId),
     orderBy: [asc(letters.letterDate), asc(letters.dateRaw)],
   });
 

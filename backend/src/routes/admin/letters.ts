@@ -1,8 +1,10 @@
 import { Router } from 'express';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
+import { unlink } from 'node:fs/promises';
 import { z } from 'zod';
-import { db, letters } from '../../db/index.js';
+import { db, letters, letterPages } from '../../db/index.js';
 import { getLetterById, resetLetterForProcessing } from '../../services/letters.js';
+import { getAbsoluteStoragePath } from '../../services/storage.js';
 import { runMetadataExtractionV2, runEntityExtractionOnly } from '../../pipeline/metadataV2.js';
 
 // Service imports
@@ -982,7 +984,7 @@ router.post('/letters/:letterId/resync', async (req, res, next) => {
 });
 
 // ============================================================================
-// SOFT DELETE
+// DELETE
 // ============================================================================
 
 router.delete('/letters/:letterId', async (req, res, next) => {
@@ -993,14 +995,39 @@ router.delete('/letters/:letterId', async (req, res, next) => {
       res.status(404).json({ error: 'Letter not found' });
       return;
     }
-    await db.update(letters).set({
-      deletedAt: new Date(),
-      deletedBy: 'admin',
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
 
-    req.log.info({ letterId }, 'Letter soft deleted');
-    res.json({ message: 'Letter deleted successfully', letterId });
+    // Find all records in this letter group (same collection, date, sequence
+    // but any type — L, T, C, E, P, etc.) so we delete the whole group
+    const group = await db.select({ id: letters.id }).from(letters).where(
+      and(
+        eq(letters.collectionId, letter.collectionId),
+        eq(letters.dateRaw, letter.dateRaw),
+        eq(letters.typeSequence, letter.typeSequence),
+      )
+    );
+    const groupIds = group.map(r => r.id);
+
+    // Get all page records for file cleanup
+    let totalFiles = 0;
+    for (const id of groupIds) {
+      const pages = await db.select({
+        storagePath: letterPages.storagePath,
+      }).from(letterPages).where(eq(letterPages.letterId, id));
+
+      for (const page of pages) {
+        const absPath = getAbsoluteStoragePath(page.storagePath);
+        await unlink(absPath).catch(() => {
+          // File may already be missing — that's fine
+        });
+        totalFiles++;
+      }
+
+      // Hard delete the letter record (cascades to pages, versions, persons, places)
+      await db.delete(letters).where(eq(letters.id, id));
+    }
+
+    req.log.info({ letterId, groupSize: groupIds.length, filesDeleted: totalFiles }, 'Letter group deleted');
+    res.json({ message: 'Letter deleted successfully', letterId, deletedCount: groupIds.length });
   } catch (error) {
     next(error);
   }

@@ -7,6 +7,7 @@ interface CollectionModalProps {
   onClose: () => void;
   onViewImage: (image: UploadedImage, allImages: UploadedImage[]) => void;
   onDeleteLetter: (letterKey: string, letterDate: string | null) => void;
+  onToggleDuplicateReplace: (imageId: string) => void;
 }
 
 function formatDate(isoDate: string): string {
@@ -24,6 +25,7 @@ export default function CollectionModal({
   onClose,
   onViewImage,
   onDeleteLetter,
+  onToggleDuplicateReplace,
 }: CollectionModalProps) {
   const [selectedLetter, setSelectedLetter] = useState<LetterGroup | null>(null);
 
@@ -41,6 +43,20 @@ export default function CollectionModal({
     e.stopPropagation();
     onDeleteLetter(letter.letterKey, letter.letterDate);
   };
+
+  const handleDuplicateToggle = (e: React.MouseEvent, imageId: string) => {
+    e.stopPropagation();
+    onToggleDuplicateReplace(imageId);
+  };
+
+  // Sort letters: letters with any non-duplicate first, all-duplicate letters after
+  const sortedLetters = [...collection.letters].sort((a, b) => {
+    const aAllDup = a.images.length > 0 && a.images.every(img => img.isDuplicate);
+    const bAllDup = b.images.length > 0 && b.images.every(img => img.isDuplicate);
+    if (!aAllDup && bAllDup) return -1;
+    if (aAllDup && !bAllDup) return 1;
+    return 0;
+  });
 
   return (
     <div className="modal-overlay" onClick={handleBackdropClick}>
@@ -69,53 +85,66 @@ export default function CollectionModal({
             {selectedLetter.images.map((img) => (
               <div
                 key={img.id}
-                className="letter-image-item"
+                className={`letter-image-item ${img.isDuplicate ? "is-duplicate" : ""} ${img.isDuplicate && img.replaceSelected ? "replace-selected" : ""}`}
                 onClick={() => onViewImage(img, selectedLetter.images)}
               >
                 <div className="image-type-badge">
                   {getTypeName(img.parsed?.type || "L")}
                 </div>
                 <div className="image-page-badge">{img.parsed?.pageNumber || 1}</div>
+                {img.isDuplicate && (
+                  <button
+                    className={`duplicate-badge ${img.replaceSelected ? "replace" : "skip"}`}
+                    onClick={(e) => handleDuplicateToggle(e, img.id)}
+                    title={img.replaceSelected ? "Will replace — click to skip" : "Will skip — click to replace"}
+                  >
+                    {img.replaceSelected ? "↻" : "⊘"}
+                  </button>
+                )}
                 <img src={img.url} alt={img.originalFilename} />
               </div>
             ))}
           </div>
         ) : (
           <div className="letter-grid">
-            {collection.letters.map((letter) => (
-              <div
-                key={letter.letterKey}
-                className="letter-card"
-                onClick={() => setSelectedLetter(letter)}
-              >
-                <button
-                  className="delete-letter-btn"
-                  onClick={(e) => handleDeleteLetter(e, letter)}
-                  title="Delete letter"
+            {sortedLetters.map((letter) => {
+              const allDuplicate = letter.images.length > 0 && letter.images.every(img => img.isDuplicate);
+
+              return (
+                <div
+                  key={letter.letterKey}
+                  className={`letter-card ${allDuplicate ? "all-duplicate" : ""}`}
+                  onClick={() => setSelectedLetter(letter)}
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
-                  </svg>
-                </button>
-                <div className="letter-card-date">
-                  {letter.letterDate ? formatDate(letter.letterDate) : "Unknown Date"}
+                  <button
+                    className="delete-letter-btn"
+                    onClick={(e) => handleDeleteLetter(e, letter)}
+                    title="Delete letter"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
+                    </svg>
+                  </button>
+                  <div className="letter-card-date">
+                    {letter.letterDate ? formatDate(letter.letterDate) : "Unknown Date"}
+                  </div>
+                  <div className="letter-card-counts">
+                    {letter.letterPageCount > 0 && (
+                      <span>
+                        {letter.letterPageCount} letter
+                        {letter.letterPageCount !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                    {letter.extraCount > 0 && (
+                      <span>
+                        {letter.extraCount} extra
+                        {letter.extraCount !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="letter-card-counts">
-                  {letter.letterPageCount > 0 && (
-                    <span>
-                      {letter.letterPageCount} letter
-                      {letter.letterPageCount !== 1 ? "s" : ""}
-                    </span>
-                  )}
-                  {letter.extraCount > 0 && (
-                    <span>
-                      {letter.extraCount} extra
-                      {letter.extraCount !== 1 ? "s" : ""}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

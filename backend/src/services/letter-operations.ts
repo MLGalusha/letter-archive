@@ -7,7 +7,7 @@
  * and metadata resync.
  */
 
-import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import {
   db,
   letters,
@@ -245,8 +245,7 @@ export async function bulkTranscribe(letterIds: string[]): Promise<BulkResult> {
   // Fetch ALL requested letters with pages so we can report skip reasons
   const allRequested = await db.query.letters.findMany({
     where: and(
-      inArray(letters.id, letterIds),
-      isNull(letters.deletedAt),
+      inArray(letters.id, letterIds)
     ),
     with: { pages: true },
   });
@@ -324,8 +323,7 @@ export async function bulkExtractMetadata(
   // Fetch ALL requested letters so we can report skip reasons
   const allRequested = await db.query.letters.findMany({
     where: and(
-      inArray(letters.id, letterIds),
-      isNull(letters.deletedAt),
+      inArray(letters.id, letterIds)
     ),
   });
 
@@ -471,8 +469,7 @@ export async function bulkClearTranscriptions(letterIds: string[]): Promise<Bulk
     updatedAt: new Date(),
   }).where(
     and(
-      inArray(letters.id, letterIds),
-      isNull(letters.deletedAt),
+      inArray(letters.id, letterIds)
     ),
   );
 
@@ -512,8 +509,7 @@ export async function bulkUpdateFields(updates: BulkUpdateFieldEntry[]): Promise
     if (Object.keys(dbUpdates).length > 1) {
       await db.update(letters).set(dbUpdates).where(
         and(
-          eq(letters.id, update.letterId),
-          isNull(letters.deletedAt),
+          eq(letters.id, update.letterId)
         ),
       );
 
@@ -579,8 +575,7 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearR
     updatedAt: new Date(),
   }).where(
     and(
-      inArray(letters.id, letterIds),
-      isNull(letters.deletedAt),
+      inArray(letters.id, letterIds)
     ),
   );
 
@@ -996,7 +991,7 @@ export async function regenerateTranscription(
 ): Promise<TranscriptionRegenerateResult | null> {
   // Fetch the letter
   const letter = await db.query.letters.findFirst({
-    where: and(eq(letters.id, letterId), isNull(letters.deletedAt)),
+    where: eq(letters.id, letterId),
     with: {
       collection: true,
       pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
@@ -1044,8 +1039,7 @@ export async function regenerateTranscription(
         eq(letters.collectionId, letter.collectionId),
         eq(letters.dateRaw, letter.dateRaw),
         eq(letters.typeSequence, letter.typeSequence),
-        inArray(letters.type, ['T', 'C', 'E']),
-        isNull(letters.deletedAt),
+        inArray(letters.type, ['T', 'C', 'E'])
       ),
       with: {
         pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
@@ -1134,7 +1128,7 @@ export async function transcribeLetterOnly(
 ): Promise<TranscribeLetterOnlyResult | null> {
   // Fetch the letter
   const letter = await db.query.letters.findFirst({
-    where: and(eq(letters.id, letterId), isNull(letters.deletedAt)),
+    where: eq(letters.id, letterId),
     with: {
       collection: true,
       pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
@@ -1231,7 +1225,7 @@ export async function transcribeLetterOnly(
 export async function transcribeExtras(letterId: string): Promise<TranscribeExtrasResult | null> {
   // Fetch the letter
   const letter = await db.query.letters.findFirst({
-    where: and(eq(letters.id, letterId), isNull(letters.deletedAt)),
+    where: eq(letters.id, letterId),
     with: {
       collection: true,
       pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
@@ -1246,8 +1240,7 @@ export async function transcribeExtras(letterId: string): Promise<TranscribeExtr
       eq(letters.collectionId, letter.collectionId),
       eq(letters.dateRaw, letter.dateRaw),
       eq(letters.typeSequence, letter.typeSequence),
-      inArray(letters.type, ['T', 'C', 'E']),
-      isNull(letters.deletedAt),
+      inArray(letters.type, ['T', 'C', 'E'])
     ),
     with: {
       pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },

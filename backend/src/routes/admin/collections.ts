@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, and, isNull, sql, asc } from 'drizzle-orm';
+import { eq, sql, asc } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, letters, collections, letterPages } from '../../db/index.js';
 import { getCollectionByCode } from '../../services/collections.js';
@@ -44,7 +44,7 @@ router.get('/', async (_req, res, next) => {
           })
           .from(letters)
           .where(
-            and(eq(letters.collectionId, collection.id), isNull(letters.deletedAt))
+            eq(letters.collectionId, collection.id)
           );
 
         // Count letter pages and extra content pages
@@ -56,7 +56,7 @@ router.get('/', async (_req, res, next) => {
           .from(letterPages)
           .innerJoin(letters, eq(letterPages.letterId, letters.id))
           .where(
-            and(eq(letters.collectionId, collection.id), isNull(letters.deletedAt))
+            eq(letters.collectionId, collection.id)
           );
 
         return {
@@ -98,10 +98,7 @@ router.get('/:code', async (req, res, next) => {
     }
 
     const collectionLetters = await db.query.letters.findMany({
-      where: and(
-        eq(letters.collectionId, collection.id),
-        isNull(letters.deletedAt)
-      ),
+      where: eq(letters.collectionId, collection.id),
       with: {
         collection: true,
         pages: {

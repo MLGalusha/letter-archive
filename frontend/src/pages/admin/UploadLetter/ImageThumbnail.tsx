@@ -9,6 +9,7 @@ interface ImageThumbnailProps {
   onSelect: () => void;
   onView: () => void;
   onDelete?: () => void;
+  onToggleDuplicateReplace?: () => void;
 }
 
 export default function ImageThumbnail({
@@ -18,6 +19,7 @@ export default function ImageThumbnail({
   onSelect,
   onView,
   onDelete,
+  onToggleDuplicateReplace,
 }: ImageThumbnailProps) {
   const lastTapRef = useRef<number>(0);
 
@@ -40,11 +42,23 @@ export default function ImageThumbnail({
     onDelete?.();
   };
 
+  const handleDuplicateToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleDuplicateReplace?.();
+  };
+
   const typeName = image.parsed ? getTypeName(image.parsed.type) : null;
+
+  const classNames = [
+    "image-thumb",
+    isSelected ? "selected" : "",
+    image.isDuplicate ? "is-duplicate" : "",
+    image.isDuplicate && image.replaceSelected ? "replace-selected" : "",
+  ].filter(Boolean).join(" ");
 
   return (
     <div
-      className={`image-thumb ${isSelected ? "selected" : ""}`}
+      className={classNames}
       onClick={handleClick}
     >
       {!editMode && onDelete && (
@@ -52,6 +66,15 @@ export default function ImageThumbnail({
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
           </svg>
+        </button>
+      )}
+      {image.isDuplicate && !editMode && (
+        <button
+          className={`duplicate-badge ${image.replaceSelected ? "replace" : "skip"}`}
+          onClick={handleDuplicateToggle}
+          title={image.replaceSelected ? "Will replace — click to skip" : "Will skip — click to replace"}
+        >
+          {image.replaceSelected ? "↻" : "⊘"}
         </button>
       )}
       {typeName && <div className="type-badge">{typeName}</div>}

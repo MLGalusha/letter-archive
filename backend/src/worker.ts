@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { eq, and, isNull, isNotNull } from 'drizzle-orm';
+import { eq, and, isNotNull } from 'drizzle-orm';
 import { db, letters } from './db/index.js';
 import { processLetter, processMetadata } from './pipeline/processor.js';
 import { createLogger } from './utils/logger.js';
@@ -18,7 +18,6 @@ async function findLettersNeedingTranscription() {
       eq(letters.type, 'L'),
       eq(letters.transcriptionStatus, 'PENDING'),
       eq(letters.workflow, 'UPLOADED'),
-      isNull(letters.deletedAt)
     ),
     limit: BATCH_SIZE,
     orderBy: (l, { asc }) => [asc(l.createdAt)],
@@ -36,7 +35,6 @@ async function findLettersNeedingMetadata() {
       eq(letters.workflow, 'TRANSCRIBED'),
       eq(letters.metadataStatus, 'PENDING'),
       isNotNull(letters.transcriptConfirmedAt),
-      isNull(letters.deletedAt)
     ),
     limit: BATCH_SIZE,
     orderBy: (l, { asc }) => [asc(l.createdAt)],

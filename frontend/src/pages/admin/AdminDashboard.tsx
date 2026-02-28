@@ -1106,18 +1106,18 @@ export default function AdminDashboard() {
             {contentFilterView === "transcript" ? (
               <>
                 <button
+                  className={`filter-pill filter-content-none ${transcriptStatusFilters.includes("EMPTY") ? "active" : ""}`}
+                  onClick={() => toggleTranscriptFilter("EMPTY")}
+                  title="No transcript data"
+                >
+                  {stats.transcriptEmpty} None
+                </button>
+                <button
                   className={`filter-pill filter-content-draft ${transcriptStatusFilters.includes("AI_DRAFT") ? "active" : ""}`}
                   onClick={() => toggleTranscriptFilter("AI_DRAFT")}
                   title="AI Draft transcripts"
                 >
                   {stats.transcriptAiDraft} Draft
-                </button>
-                <button
-                  className={`filter-pill filter-content-edited ${transcriptStatusFilters.includes("EDITED") ? "active" : ""}`}
-                  onClick={() => toggleTranscriptFilter("EDITED")}
-                  title="Edited transcripts"
-                >
-                  {stats.transcriptEdited} Edit
                 </button>
                 <button
                   className={`filter-pill filter-content-verified ${transcriptStatusFilters.includes("VERIFIED") ? "active" : ""}`}
@@ -1130,18 +1130,18 @@ export default function AdminDashboard() {
             ) : (
               <>
                 <button
+                  className={`filter-pill filter-content-none ${metadataStatusFilters.includes("EMPTY") ? "active" : ""}`}
+                  onClick={() => toggleMetadataFilter("EMPTY")}
+                  title="No metadata"
+                >
+                  {stats.metadataEmpty} None
+                </button>
+                <button
                   className={`filter-pill filter-content-draft ${metadataStatusFilters.includes("AI_DRAFT") ? "active" : ""}`}
                   onClick={() => toggleMetadataFilter("AI_DRAFT")}
                   title="AI Draft metadata"
                 >
                   {stats.metadataAiDraft} Draft
-                </button>
-                <button
-                  className={`filter-pill filter-content-edited ${metadataStatusFilters.includes("EDITED") ? "active" : ""}`}
-                  onClick={() => toggleMetadataFilter("EDITED")}
-                  title="Edited metadata"
-                >
-                  {stats.metadataEdited} Edit
                 </button>
                 <button
                   className={`filter-pill filter-content-verified ${metadataStatusFilters.includes("VERIFIED") ? "active" : ""}`}

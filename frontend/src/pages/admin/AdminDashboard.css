@@ -993,13 +993,13 @@
 }
 
 /* Unified content filter pill colors (used for both transcript and metadata) */
-.filter-pill.filter-content-draft {
+.filter-pill.filter-content-none {
   background: #f0f0f0;
   color: #495057;
   border-color: #d6d8db;
 }
 
-.filter-pill.filter-content-edited {
+.filter-pill.filter-content-draft {
   background: #fff3e0;
   color: #9a3412;
   border-color: #ffcc80;
@@ -1011,12 +1011,12 @@
   border-color: #93c5fd;
 }
 
-.filter-pill.filter-content-draft.active {
+.filter-pill.filter-content-none.active {
   box-shadow: 0 0 0 3px rgba(108, 117, 125, 0.5), 0 2px 8px rgba(108, 117, 125, 0.2);
   background: #d6d8db;
 }
 
-.filter-pill.filter-content-edited.active {
+.filter-pill.filter-content-draft.active {
   box-shadow: 0 0 0 3px rgba(230, 81, 0, 0.5), 0 2px 8px rgba(230, 81, 0, 0.2);
   background: #ffe0b2;
 }
@@ -1695,14 +1695,14 @@
   padding: 0;
 }
 
-/* Draft - grey like HIDDEN badge */
+/* Draft - orange like the Draft filter pill */
 .status-icon.status-draft {
   min-width: 50px;
   padding: 0.2rem 0.5rem;
   border-radius: var(--radius-sm);
-  background: #e9ecef;
-  color: #374151;
-  border: solid 1px #dee2e6;
+  background: #fff3e0;
+  color: #9a3412;
+  border: solid 1px #ffcc80;
 }
 
 /* Edited - orange/warning color */

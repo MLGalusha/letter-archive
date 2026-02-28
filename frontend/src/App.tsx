@@ -33,7 +33,7 @@ function App() {
         {/* Admin routes - with sidebar layout */}
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/upload" element={<UploadLetterPage />} />
-        <Route path="/admin/processing" element={<AdminLayout><ProcessingQueuePage /></AdminLayout>} />
+        <Route path="/admin/processing" element={<ProcessingQueuePage />} />
         <Route path="/admin/letters/:letterId" element={<LetterReviewPage />} />
         <Route path="/admin/entities/review" element={<AdminLayout><EntityReviewPage /></AdminLayout>} />
         <Route path="/admin/entities/people" element={<AdminLayout><PeoplePage /></AdminLayout>} />

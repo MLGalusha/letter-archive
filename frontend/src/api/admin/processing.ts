@@ -42,6 +42,12 @@ export async function startMetadataExtraction(
   return apiPost<{ message: string; total: number }>("/admin/processing/start-metadata", options || {});
 }
 
+export async function startEntityExtraction(
+  options?: StartProcessingOptions,
+): Promise<{ message: string; total: number }> {
+  return apiPost<{ message: string; total: number }>("/admin/processing/start-entities", options || {});
+}
+
 export async function pauseProcessing(): Promise<{ message: string }> {
   return apiPost<{ message: string }>("/admin/processing/pause");
 }

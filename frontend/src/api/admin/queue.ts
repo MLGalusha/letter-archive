@@ -3,6 +3,12 @@ import type { ProcessingStatus } from "./processing";
 
 export type QueueJobType = "transcription" | "metadata" | "entity_extraction";
 
+export interface JobProgress {
+  step: number;
+  totalSteps: number;
+  stepLabel: string;
+}
+
 export interface QueueActiveJob {
   letterId: string;
   letterTitle: string;
@@ -11,6 +17,7 @@ export interface QueueActiveJob {
   recipient: string | null;
   type: QueueJobType;
   startedAt: string;
+  progress: JobProgress | null;
 }
 
 export interface QueuedItem {
@@ -71,4 +78,11 @@ export async function retryFailed(
   type: QueueJobType,
 ): Promise<{ message: string }> {
   return apiPost<{ message: string }>("/admin/processing/queue/retry", { letterId, type });
+}
+
+export async function cancelActiveJob(
+  letterId: string,
+  type: QueueJobType,
+): Promise<{ message: string }> {
+  return apiPost<{ message: string }>("/admin/processing/cancel", { letterId, type });
 }

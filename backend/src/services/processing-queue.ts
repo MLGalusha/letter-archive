@@ -2,6 +2,7 @@ import { eq, and, isNotNull, inArray, sql, or, ilike } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, letters, collections } from '../db/index.js';
 import { processLetter, processMetadata } from '../pipeline/processor.js';
+import { runEntityExtractionOnly } from '../pipeline/metadataV2.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger({ module: 'processing-queue' });
@@ -14,7 +15,7 @@ export interface ProcessingState {
   isRunning: boolean;
   isPaused: boolean;
   shouldAbort: boolean;
-  currentJob: { letterId: string; type: 'transcription' | 'metadata' } | null;
+  currentJob: { letterId: string; type: 'transcription' | 'metadata' | 'entity_extraction' } | null;
   completed: number;
   failed: number;
   total: number;
@@ -33,6 +34,33 @@ let processingState: ProcessingState = {
   errors: [],
   lastCompletedAt: null,
 };
+
+// ============================================================================
+// JOB PROGRESS TRACKING
+// ============================================================================
+
+export interface JobProgress {
+  letterId: string;
+  type: string;
+  step: number;
+  totalSteps: number;
+  stepLabel: string;
+}
+
+// In-memory map of active job progress, keyed by `${letterId}-${type}`
+const jobProgressMap = new Map<string, JobProgress>();
+
+export function updateJobProgress(letterId: string, type: string, step: number, totalSteps: number, stepLabel: string): void {
+  jobProgressMap.set(`${letterId}-${type}`, { letterId, type, step, totalSteps, stepLabel });
+}
+
+export function clearJobProgress(letterId: string, type: string): void {
+  jobProgressMap.delete(`${letterId}-${type}`);
+}
+
+export function getJobProgress(letterId: string, type: string): JobProgress | undefined {
+  return jobProgressMap.get(`${letterId}-${type}`);
+}
 
 /**
  * Reset processing state for a new batch.
@@ -140,7 +168,7 @@ export async function buildProcessingConditions(
 /**
  * Async processing function that runs in the background.
  */
-export async function processLettersAsync(letterIds: string[], type: 'transcription' | 'metadata') {
+export async function processLettersAsync(letterIds: string[], type: 'transcription' | 'metadata' | 'entity_extraction') {
   log.info({ type, letterCount: letterIds.length }, 'Starting async processing batch');
   const batchStart = Date.now();
 
@@ -175,8 +203,10 @@ export async function processLettersAsync(letterIds: string[], type: 'transcript
     try {
       if (type === 'transcription') {
         await processLetter(letterId);
-      } else {
+      } else if (type === 'metadata') {
         await processMetadata(letterId);
+      } else if (type === 'entity_extraction') {
+        await runEntityExtractionOnly(letterId);
       }
       processingState.completed++;
       processingState.lastCompletedAt = Date.now();
@@ -219,6 +249,48 @@ export function getProcessingStatus(): ProcessingState {
 }
 
 /**
+ * Recover orphaned jobs stuck in RUNNING status (e.g., after server restart).
+ * Resets them back to PENDING so they can be reprocessed.
+ */
+export async function recoverOrphanedJobs(): Promise<void> {
+  const orphanedLetters = await db.query.letters.findMany({
+    where: or(
+      eq(letters.transcriptionStatus, 'RUNNING'),
+      eq(letters.metadataStatus, 'RUNNING'),
+      eq(letters.entityExtractionStatus, 'RUNNING')
+    ),
+    columns: { id: true, dateRaw: true, transcriptionStatus: true, metadataStatus: true, entityExtractionStatus: true, workflow: true },
+  });
+
+  if (orphanedLetters.length === 0) return;
+
+  log.warn({ count: orphanedLetters.length }, 'Found orphaned jobs in RUNNING status — resetting to PENDING');
+
+  for (const letter of orphanedLetters) {
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+
+    if (letter.transcriptionStatus === 'RUNNING') {
+      updates.transcriptionStatus = 'PENDING';
+      updates.workflow = 'UPLOADED';
+      log.info({ letterId: letter.id, dateRaw: letter.dateRaw }, 'Resetting orphaned transcription job');
+    }
+    if (letter.metadataStatus === 'RUNNING') {
+      updates.metadataStatus = 'PENDING';
+      updates.workflow = 'TRANSCRIBED';
+      log.info({ letterId: letter.id, dateRaw: letter.dateRaw }, 'Resetting orphaned metadata job');
+    }
+    if (letter.entityExtractionStatus === 'RUNNING') {
+      updates.entityExtractionStatus = 'PENDING';
+      log.info({ letterId: letter.id, dateRaw: letter.dateRaw }, 'Resetting orphaned entity extraction job');
+    }
+
+    await db.update(letters).set(updates).where(eq(letters.id, letter.id));
+  }
+
+  log.info({ count: orphanedLetters.length }, 'Orphaned job recovery complete');
+}
+
+/**
  * Get full queue status with active, queued, and recent jobs.
  */
 export async function getQueueStatus() {
@@ -246,8 +318,10 @@ export async function getQueueStatus() {
       recipient: string | null;
       type: string;
       startedAt: string;
+      progress: { step: number; totalSteps: number; stepLabel: string } | null;
     }> = [];
     if (l.transcriptionStatus === 'RUNNING') {
+      const prog = getJobProgress(l.id, 'transcription');
       jobs.push({
         letterId: l.id,
         letterTitle: l.dateRaw,
@@ -256,9 +330,11 @@ export async function getQueueStatus() {
         recipient: l.recipient,
         type: 'transcription',
         startedAt: l.updatedAt?.toISOString() ?? now.toISOString(),
+        progress: prog ? { step: prog.step, totalSteps: prog.totalSteps, stepLabel: prog.stepLabel } : null,
       });
     }
     if (l.metadataStatus === 'RUNNING') {
+      const prog = getJobProgress(l.id, 'metadata');
       jobs.push({
         letterId: l.id,
         letterTitle: l.dateRaw,
@@ -267,9 +343,11 @@ export async function getQueueStatus() {
         recipient: l.recipient,
         type: 'metadata',
         startedAt: l.updatedAt?.toISOString() ?? now.toISOString(),
+        progress: prog ? { step: prog.step, totalSteps: prog.totalSteps, stepLabel: prog.stepLabel } : null,
       });
     }
     if (l.entityExtractionStatus === 'RUNNING') {
+      const prog = getJobProgress(l.id, 'entity_extraction');
       jobs.push({
         letterId: l.id,
         letterTitle: l.dateRaw,
@@ -278,6 +356,7 @@ export async function getQueueStatus() {
         recipient: l.recipient,
         type: 'entity_extraction',
         startedAt: l.updatedAt?.toISOString() ?? now.toISOString(),
+        progress: prog ? { step: prog.step, totalSteps: prog.totalSteps, stepLabel: prog.stepLabel } : null,
       });
     }
     return jobs;
@@ -308,10 +387,11 @@ export async function getQueueStatus() {
     limit: 50,
   });
 
-  // Queued entity extraction jobs
+  // Queued entity extraction jobs (only after metadata has succeeded)
   const queuedEntityExtraction = await db.query.letters.findMany({
     where: and(
       eq(letters.type, 'L'),
+      eq(letters.metadataStatus, 'SUCCESS'),
       eq(letters.entityExtractionStatus, 'PENDING')
     ),
     with: { collection: true },
@@ -397,22 +477,31 @@ export async function getQueueStatus() {
   recent.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
   recent.splice(20);
 
-  const mapQueued = (items: typeof queuedTranscription) =>
-    items.map(l => ({
-      letterId: l.id,
-      letterTitle: l.dateRaw,
-      collectionCode: l.collection.collectionCode,
-      sender: l.sender,
-      recipient: l.recipient,
-      queuedAt: l.updatedAt?.toISOString() ?? l.createdAt.toISOString(),
-    }));
+  const mapQueued = (items: typeof queuedTranscription, queuedAtField?: 'createdAt' | 'transcriptConfirmedAt') =>
+    items.map(l => {
+      // Use the specified field, falling back to createdAt
+      let queuedAt: string;
+      if (queuedAtField === 'transcriptConfirmedAt' && l.transcriptConfirmedAt) {
+        queuedAt = l.transcriptConfirmedAt.toISOString();
+      } else {
+        queuedAt = l.createdAt.toISOString();
+      }
+      return {
+        letterId: l.id,
+        letterTitle: l.dateRaw,
+        collectionCode: l.collection.collectionCode,
+        sender: l.sender,
+        recipient: l.recipient,
+        queuedAt,
+      };
+    });
 
   return {
     active,
     queued: {
-      transcription: mapQueued(queuedTranscription),
-      metadata: mapQueued(queuedMetadata),
-      entityExtraction: mapQueued(queuedEntityExtraction),
+      transcription: mapQueued(queuedTranscription, 'createdAt'),
+      metadata: mapQueued(queuedMetadata, 'transcriptConfirmedAt'),
+      entityExtraction: mapQueued(queuedEntityExtraction, 'createdAt'),
     },
     recent,
     counts: {
@@ -523,6 +612,52 @@ export async function startMetadataProcessing(options: ProcessingFilterOptions):
 
   // Start async processing (don't await - runs in background)
   processLettersAsync(eligible.map(l => l.id), 'metadata');
+
+  return { message: 'Processing started', total: eligible.length };
+}
+
+/**
+ * Start entity extraction processing for eligible letters (metadata succeeded, entities pending).
+ */
+export async function startEntityExtractionProcessing(options: ProcessingFilterOptions): Promise<{ message: string; total: number }> {
+  if (processingState.isRunning) {
+    throw new ProcessingError('Processing already in progress', 400);
+  }
+
+  // Base conditions: type L, metadata succeeded, entity extraction pending
+  const baseConditions: ReturnType<typeof eq>[] = [
+    eq(letters.type, 'L'),
+    eq(letters.metadataStatus, 'SUCCESS'),
+    eq(letters.entityExtractionStatus, 'PENDING')
+  ];
+
+  const { conditions, collectionNotFound } = await buildProcessingConditions(options, baseConditions);
+
+  if (collectionNotFound) {
+    return { message: 'Collection not found', total: 0 };
+  }
+
+  const eligible = await db.query.letters.findMany({
+    where: and(...conditions),
+  });
+
+  if (eligible.length === 0) {
+    return { message: 'No letters to process', total: 0 };
+  }
+
+  processingState = {
+    isRunning: true,
+    isPaused: false,
+    shouldAbort: false,
+    currentJob: null,
+    completed: 0,
+    failed: 0,
+    total: eligible.length,
+    errors: [],
+    lastCompletedAt: null,
+  };
+
+  processLettersAsync(eligible.map(l => l.id), 'entity_extraction');
 
   return { message: 'Processing started', total: eligible.length };
 }
@@ -679,6 +814,7 @@ export async function clearQueue(type: QueueJobType): Promise<{ message: string;
     const queued = await db.query.letters.findMany({
       where: and(
         eq(letters.type, 'L'),
+        eq(letters.metadataStatus, 'SUCCESS'),
         eq(letters.entityExtractionStatus, 'PENDING')
       ),
       columns: { id: true },
@@ -738,6 +874,52 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
   }
 
   return { message: `Retrying ${type} for letter ${letterId}` };
+}
+
+/**
+ * Cancel an active (RUNNING) job by resetting its status back to PENDING.
+ */
+export async function cancelActiveJob(letterId: string, type: QueueJobType): Promise<{ message: string }> {
+  const letter = await db.query.letters.findFirst({
+    where: eq(letters.id, letterId),
+  });
+
+  if (!letter) {
+    throw new ProcessingError('Letter not found', 404);
+  }
+
+  if (type === 'transcription') {
+    if (letter.transcriptionStatus !== 'RUNNING') {
+      throw new ProcessingError(`Cannot cancel: transcription status is ${letter.transcriptionStatus}`, 400);
+    }
+    await db.update(letters).set({
+      transcriptionStatus: 'PENDING',
+      workflow: 'UPLOADED',
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+  } else if (type === 'metadata') {
+    if (letter.metadataStatus !== 'RUNNING') {
+      throw new ProcessingError(`Cannot cancel: metadata status is ${letter.metadataStatus}`, 400);
+    }
+    await db.update(letters).set({
+      metadataStatus: 'PENDING',
+      workflow: 'TRANSCRIBED',
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+  } else if (type === 'entity_extraction') {
+    if (letter.entityExtractionStatus !== 'RUNNING') {
+      throw new ProcessingError(`Cannot cancel: entity extraction status is ${letter.entityExtractionStatus}`, 400);
+    }
+    await db.update(letters).set({
+      entityExtractionStatus: 'PENDING',
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
+  }
+
+  clearJobProgress(letterId, type);
+  log.info({ letterId, type }, 'Active job cancelled by admin');
+
+  return { message: 'Job cancelled' };
 }
 
 // ============================================================================

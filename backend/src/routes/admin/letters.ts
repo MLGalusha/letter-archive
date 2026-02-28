@@ -24,6 +24,8 @@ import {
   removeFromQueue,
   clearQueue,
   retryJob,
+  cancelActiveJob,
+  startEntityExtractionProcessing,
   processingFilterSchema,
   queueJobTypeSchema,
 } from '../../services/processing-queue.js';
@@ -188,6 +190,16 @@ router.post('/processing/start-metadata', async (req, res, next) => {
   }
 });
 
+router.post('/processing/start-entities', async (req, res, next) => {
+  try {
+    const options = processingFilterSchema.parse(req.body || {});
+    const result = await startEntityExtractionProcessing(options);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/processing/pause', (_req, res) => {
   try {
     res.json(pauseProcessing());
@@ -216,6 +228,21 @@ router.post('/processing/abort', async (req, res, next) => {
 // ============================================================================
 // QUEUE MANAGEMENT
 // ============================================================================
+
+router.post('/processing/cancel', async (req, res, next) => {
+  try {
+    const { letterId, type } = req.body;
+    const jobType = queueJobTypeSchema.parse(type);
+    if (!letterId || typeof letterId !== 'string') {
+      res.status(400).json({ error: 'letterId required' });
+      return;
+    }
+    const result = await cancelActiveJob(letterId, jobType);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
 
 router.post('/processing/queue/remove', async (req, res, next) => {
   try {

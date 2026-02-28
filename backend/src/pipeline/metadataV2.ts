@@ -7,6 +7,7 @@ import {
   incrementMetadataAttempts,
 } from '../services/letters.js';
 import { processEntityExtraction } from '../services/entities.js';
+import { updateJobProgress, clearJobProgress } from '../services/processing-queue.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger({ module: 'metadata-v2-pipeline' });
@@ -86,6 +87,8 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
   // PHASE 1: Basic Metadata Extraction
   // ========================================================================
 
+  updateJobProgress(letterId, 'metadata', 0, 2, 'Extracting metadata');
+
   let metadataResult;
   try {
     metadataResult = await extractMetadataV2({
@@ -115,6 +118,8 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
       'Phase 1 (basic metadata) completed successfully'
     );
   } catch (error) {
+    clearJobProgress(letterId, 'metadata');
+
     const duration = Date.now() - start;
     const message = error instanceof Error ? error.message : 'Unknown error';
 
@@ -136,6 +141,8 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
   // PHASE 2: Entity Extraction (non-fatal)
   // ========================================================================
 
+  updateJobProgress(letterId, 'metadata', 1, 2, 'Extracting entities');
+
   try {
     await updateEntityExtraction(letterId, 'RUNNING');
 
@@ -155,6 +162,8 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
 
     // Process entities: auto-populate canonical entities, link to letter, create relationships
     const processingResult = await processEntityExtraction(entityResult.entities, letterId);
+
+    clearJobProgress(letterId, 'metadata');
 
     const totalDuration = Date.now() - start;
     letterLog.info(
@@ -176,6 +185,8 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
       'Phase 2 (entity extraction) completed successfully'
     );
   } catch (error) {
+    clearJobProgress(letterId, 'metadata');
+
     const message = error instanceof Error ? error.message : 'Unknown error';
 
     letterLog.warn(
@@ -221,6 +232,7 @@ export async function runEntityExtractionOnly(letterId: string): Promise<void> {
   };
 
   await updateEntityExtraction(letterId, 'RUNNING');
+  updateJobProgress(letterId, 'entity_extraction', 0, 1, 'Extracting entities');
 
   try {
     const entityResult = await extractEntities({
@@ -238,6 +250,8 @@ export async function runEntityExtractionOnly(letterId: string): Promise<void> {
 
     const processingResult = await processEntityExtraction(entityResult.entities, letterId);
 
+    clearJobProgress(letterId, 'entity_extraction');
+
     const duration = Date.now() - start;
     letterLog.info(
       {
@@ -254,6 +268,8 @@ export async function runEntityExtractionOnly(letterId: string): Promise<void> {
       'Entity-only extraction completed'
     );
   } catch (error) {
+    clearJobProgress(letterId, 'entity_extraction');
+
     const message = error instanceof Error ? error.message : 'Unknown error';
     letterLog.error({ letterId, err: error }, 'Entity-only extraction failed');
     await updateEntityExtraction(letterId, 'FAILED', undefined, message);

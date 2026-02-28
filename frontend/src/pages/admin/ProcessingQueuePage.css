@@ -218,44 +218,48 @@ body.dark .pq-status.success {
   font-size: var(--font-sm);
 }
 
-/* Batch Controls */
-.pq-batch-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-sm);
-}
-
-.pq-batch-header h3 {
-  margin: 0;
-}
-
-.pq-current-job {
+/* Header batch progress */
+.pq-header-batch {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background: var(--bg);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--spacing-sm);
-  font-size: var(--font-sm);
 }
 
-.pq-progress {
-  margin-bottom: var(--spacing-sm);
-}
-
-.pq-batch-buttons {
+.pq-header-progress {
   display: flex;
+  align-items: center;
   gap: var(--spacing-xs);
-  flex-wrap: wrap;
+}
+
+.pq-header-progress-bar {
+  width: 120px;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.pq-header-progress-fill {
+  height: 100%;
+  background: #1976d2;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.pq-header-progress-text {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* Batch Errors */
 .pq-batch-errors {
-  margin-top: var(--spacing-sm);
-  padding-top: var(--spacing-sm);
-  border-top: 1px solid var(--border);
+  background: var(--bg-light);
+  border: 1px solid #ef9a9a;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-md);
 }
 
 .pq-batch-errors h4 {
@@ -279,48 +283,23 @@ body.dark .pq-status.success {
   color: #c62828;
 }
 
-/* Reuse status badge styles */
-.pq-page .status-badge {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border-radius: var(--radius-md);
-  font-size: var(--font-sm);
-  font-weight: 500;
+
+/* Active job progress bar */
+.pq-progress-cell {
+  min-width: 120px;
 }
 
-.pq-page .status-badge.idle {
-  background: #f5f5f5;
-  color: #757575;
-}
-
-.pq-page .status-badge.running {
-  background: #e3f2fd;
-  color: #1565c0;
-}
-
-.pq-page .status-badge.paused {
-  background: #fff3e0;
-  color: #e65100;
-}
-
-/* Progress bar */
-.pq-page .progress-bar {
-  height: 8px;
+.pq-job-progress-bar {
+  height: 6px;
   background: var(--border);
-  border-radius: 4px;
+  border-radius: 3px;
   overflow: hidden;
-  margin-bottom: var(--spacing-xs);
+  margin-bottom: 4px;
 }
 
-.pq-page .progress-fill {
+.pq-job-progress-fill {
   height: 100%;
   background: #1976d2;
-  border-radius: 4px;
-  transition: width 0.3s ease;
-}
-
-.pq-page .progress-stats {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--font-sm);
-  color: var(--text-muted);
+  border-radius: 3px;
+  transition: width 0.5s ease;
 }

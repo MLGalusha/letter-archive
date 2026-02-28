@@ -6,6 +6,7 @@ import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { env, hasOpenAI } from './config/env.js';
 import { logger } from './utils/logger.js';
+import { recoverOrphanedJobs } from './services/processing-queue.js';
 
 const app = express();
 
@@ -48,4 +49,9 @@ app.listen(env.PORT, () => {
     },
     'Server started'
   );
+
+  // Recover any jobs left in RUNNING state from a previous crash/restart
+  recoverOrphanedJobs().catch(err => {
+    logger.error({ err }, 'Failed to recover orphaned jobs');
+  });
 });

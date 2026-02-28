@@ -2,6 +2,7 @@ import { transcribeImage, checkExtraContentForText, transcribeExtraContent } fro
 import { getLetterWithPages, updateTranscriptionStatus, updateLetterWorkflow, incrementTranscriptionAttempts } from '../services/letters.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
 import { createLogger } from '../utils/logger.js';
+import { updateJobProgress, clearJobProgress } from '../services/processing-queue.js';
 import { db, letters } from '../db/index.js';
 import { eq, and, inArray } from 'drizzle-orm';
 
@@ -91,6 +92,7 @@ export async function runTranscription(letterId: string): Promise<void> {
     // Transcribe each page
     for (const page of pages) {
       const pageStart = Date.now();
+      updateJobProgress(letterId, 'transcription', page.pageNumber - 1, pages.length, `Page ${page.pageNumber} of ${pages.length}`);
       letterLog.debug(
         { pageNumber: page.pageNumber, totalPages: pages.length },
         'Transcribing page'
@@ -110,6 +112,8 @@ export async function runTranscription(letterId: string): Promise<void> {
 
       pageTranscriptions.push(result.text);
       stubMode = result.isStub;
+
+      updateJobProgress(letterId, 'transcription', page.pageNumber, pages.length, `Page ${page.pageNumber} of ${pages.length}`);
 
       const pageDuration = Date.now() - pageStart;
       letterLog.debug(
@@ -230,6 +234,8 @@ export async function runTranscription(letterId: string): Promise<void> {
       letterLog.warn({ err: extrasError }, 'Failed to transcribe extra content - continuing');
     }
 
+    clearJobProgress(letterId, 'transcription');
+
     const duration = Date.now() - start;
     letterLog.info(
       {
@@ -244,6 +250,7 @@ export async function runTranscription(letterId: string): Promise<void> {
       'Transcription pipeline completed successfully'
     );
   } catch (error) {
+    clearJobProgress(letterId, 'transcription');
     const duration = Date.now() - start;
     const message = error instanceof Error ? error.message : 'Unknown error';
 

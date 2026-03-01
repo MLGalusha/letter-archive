@@ -105,12 +105,20 @@ export type LetterImageType =
   | 'card'
   | 'telegram';
 
+export interface LineSegment {
+  line: number;
+  baseline: number[][];
+  bbox: [number, number, number, number];
+  ocrText: string;
+}
+
 export interface LetterImage {
   id: string;
   type: LetterImageType;
   pageNumber?: number; // only for letter pages
   imageUrl: string;
   originalFilename?: string;
+  lineSegments?: LineSegment[];
 }
 
 export interface LetterMetadata {

@@ -5,6 +5,8 @@ import { createLogger } from '../utils/logger.js';
 import { updateJobProgress, clearJobProgress } from '../services/processing-queue.js';
 import { db, letters } from '../db/index.js';
 import { eq, and, inArray } from 'drizzle-orm';
+import { runKrakenSegmentation } from '../services/kraken.js';
+import { storeLineSegments } from '../services/line-segments.js';
 
 const log = createLogger({ module: 'transcription-pipeline' });
 const MAX_ATTEMPTS = 3;
@@ -125,6 +127,18 @@ export async function runTranscription(letterId: string): Promise<void> {
         },
         'Page transcription completed'
       );
+
+      // Run Kraken line segmentation (non-fatal)
+      try {
+        updateJobProgress(letterId, 'transcription', page.pageNumber, pages.length, `Line segmentation: page ${page.pageNumber}`);
+        const segments = await runKrakenSegmentation(absolutePath);
+        if (segments) {
+          await storeLineSegments(page.id, segments);
+          letterLog.debug({ pageNumber: page.pageNumber, lineCount: segments.length }, 'Line segments stored');
+        }
+      } catch (segErr) {
+        letterLog.warn({ pageNumber: page.pageNumber, err: segErr }, 'Kraken segmentation failed (non-fatal)');
+      }
     }
 
     // Combine transcriptions with page separators

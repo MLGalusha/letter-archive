@@ -1,0 +1,144 @@
+.line-review-mode {
+  position: relative;
+  background: #1a1a1a;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.2) transparent;
+}
+
+.line-review-mode::-webkit-scrollbar {
+  width: 6px;
+}
+
+.line-review-mode::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.line-review-mode::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+}
+
+.line-review-image-container {
+  position: relative;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.line-review-image-container img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Dimmer overlays */
+.line-review-dimmer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  will-change: transform;
+  transition: top 0.15s ease, height 0.15s ease;
+}
+
+.line-review-dimmer-top {
+  top: 0;
+}
+
+.line-review-dimmer-bottom {
+  bottom: 0;
+}
+
+/* Transcript input overlay */
+.line-review-input-overlay {
+  position: absolute;
+  z-index: 10;
+}
+
+.line-review-input-overlay input {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.88);
+  border: 2px solid #1976d2;
+  border-radius: 3px;
+  padding: 0 4px;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  color: #1a1a1a;
+  outline: none;
+  line-height: 1;
+}
+
+.line-review-input-overlay input:focus {
+  border-color: #1565c0;
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.3);
+}
+
+/* Progress indicator */
+.line-review-progress {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  background: rgba(13, 18, 26, 0.88);
+  color: #e0e0e0;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--font-mono, monospace);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  backdrop-filter: blur(8px);
+  user-select: none;
+}
+
+.line-review-progress .progress-line {
+  white-space: nowrap;
+}
+
+.line-review-progress .progress-line strong {
+  color: #fff;
+}
+
+/* Analyzing indicator */
+.line-review-analyzing {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(13, 18, 26, 0.85);
+  color: #e0e0e0;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 20;
+  backdrop-filter: blur(4px);
+}
+
+/* Exit hint */
+.line-review-exit-hint {
+  position: fixed;
+  top: 60px;
+  right: 16px;
+  background: rgba(13, 18, 26, 0.75);
+  color: #999;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  z-index: 100;
+  user-select: none;
+  backdrop-filter: blur(4px);
+}
+
+.line-review-exit-hint kbd {
+  background: rgba(255,255,255,0.12);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+}

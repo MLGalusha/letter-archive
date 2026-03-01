@@ -8,6 +8,7 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-5.2'),
   CORS_ORIGINS: z.string().optional(),
+  PYTHON_VENV_PATH: z.string().default('./python/venv'),
 });
 
 export const env = envSchema.parse(process.env);

@@ -255,6 +255,7 @@ export const letterPages = pgTable(
     storagePath: text('storage_path').notNull(),
     originalFilename: text('original_filename').notNull(),
     checksumSha256: text('checksum_sha256'),
+    lineSegments: jsonb('line_segments'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

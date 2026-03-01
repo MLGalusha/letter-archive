@@ -245,15 +245,6 @@
     flex-direction: column;
   }
 
-  .review-line-overlay {
-    left: var(--spacing-sm);
-    right: var(--spacing-sm);
-    bottom: var(--spacing-sm);
-  }
-
-  .review-metadata-snapshot {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Left panel - ResizableSplitPane applies this class */
@@ -276,31 +267,6 @@
   position: relative;
 }
 
-.review-line-overlay {
-  position: absolute;
-  left: var(--spacing-md);
-  right: var(--spacing-md);
-  bottom: var(--spacing-md);
-  background: rgba(13, 18, 26, 0.85);
-  color: #f4f6fb;
-  border-radius: var(--radius-md);
-  padding: var(--spacing-sm) var(--spacing-md);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  pointer-events: none;
-}
-
-.overlay-line-label {
-  font-size: var(--font-xs);
-  opacity: 0.85;
-  text-transform: uppercase;
-}
-
-.overlay-line-text {
-  font-size: var(--font-sm);
-  line-height: 1.4;
-}
 
 .images-panel h2 {
   margin: 0;
@@ -337,70 +303,6 @@
   margin-bottom: calc(var(--spacing-xl) * 2);
 }
 
-.review-mode-panel {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-light);
-  padding: var(--spacing-sm);
-}
-
-.review-mode-header h3 {
-  margin: 0;
-  font-size: 0.95rem;
-}
-
-.review-mode-header p {
-  margin: 4px 0 0;
-  font-size: var(--font-xs);
-  color: var(--text-muted);
-}
-
-.review-lines-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: var(--spacing-sm);
-  max-height: 220px;
-  overflow-y: auto;
-}
-
-.review-line-item {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--text);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  text-align: left;
-  cursor: pointer;
-}
-
-.review-line-item.active {
-  border-color: #1976d2;
-  background: #e3f2fd;
-}
-
-.line-number {
-  min-width: 24px;
-  font-size: var(--font-xs);
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-.line-text {
-  font-size: var(--font-sm);
-  line-height: 1.35;
-}
-
-.review-metadata-snapshot {
-  margin-top: var(--spacing-sm);
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-xs);
-  font-size: var(--font-xs);
-}
 
 /* Filename row: outer container with space-between for label+value vs more button */
 .filename-row {

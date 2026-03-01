@@ -49,6 +49,7 @@ import TranscriptionSection from "./LetterReview/TranscriptionSection";
 import { ExtraContentSection } from "./LetterReview/ExtraContentSection";
 import MetadataSection from "./LetterReview/MetadataSection";
 import AddEntityModal from "./LetterReview/AddEntityModal";
+import LineReviewMode from "../../components/LineReviewMode/LineReviewMode";
 import "./LetterReviewPage.css";
 
 export default function LetterReviewPage() {
@@ -182,15 +183,10 @@ export default function LetterReviewPage() {
     null,
   );
   const [reviewMode, setReviewMode] = useState(false);
-  const [selectedReviewLineIndex, setSelectedReviewLineIndex] = useState(0);
 
   const hookRef = useRef<HTMLTextAreaElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
-  const reviewLines = transcript
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
 
   useEffect(() => {
     const isAuth = sessionStorage.getItem("adminAuth");
@@ -1357,13 +1353,6 @@ export default function LetterReviewPage() {
       document.removeEventListener("selectionchange", handleSelectionChange);
   }, [letter?.transcriptStatus, isTranscriptEditing]);
 
-  useEffect(() => {
-    setSelectedReviewLineIndex((current) => {
-      if (reviewLines.length === 0) return 0;
-      return Math.min(current, reviewLines.length - 1);
-    });
-  }, [reviewLines.length]);
-
   if (loading || !letter) {
     return (
       <AdminLayout fullHeight>
@@ -1442,6 +1431,15 @@ export default function LetterReviewPage() {
     >
     <div className="letter-review-page">
       <div className="review-body">
+        {reviewMode ? (
+          <LineReviewMode
+            letter={letter}
+            transcript={transcript}
+            onTranscriptChange={(newText) => setTranscript(newText)}
+            onExit={() => setReviewMode(false)}
+            onAutoSave={triggerAutoSave}
+          />
+        ) : (
         <ResizableSplitPane
           letterId={letterId}
           className="review-layout"
@@ -1449,59 +1447,17 @@ export default function LetterReviewPage() {
           secondPanelClassName="edit-panel"
         >
           {/* Left side: Letter viewer */}
-          <div className={`image-review-shell ${reviewMode ? "review-mode" : ""}`}>
+          <div className="image-review-shell">
             <LetterViewer
               images={letter.images}
               letterId={letterId}
               showOnlyLetterPages={false}
               onPageChange={handlePageChange}
             />
-            {reviewMode && reviewLines[selectedReviewLineIndex] && (
-              <div className="review-line-overlay">
-                <span className="overlay-line-label">
-                  Line {selectedReviewLineIndex + 1}
-                </span>
-                <span className="overlay-line-text">
-                  {reviewLines[selectedReviewLineIndex]}
-                </span>
-              </div>
-            )}
           </div>
 
           {/* Right side: Editable content */}
           <div className="edit-panel-content">
-            {reviewMode && (
-              <div className="review-mode-panel">
-                <div className="review-mode-header">
-                  <h3>Transcript Review</h3>
-                  <p>Select a line to keep image and transcript comparison tight.</p>
-                </div>
-                <div className="review-lines-list">
-                  {reviewLines.length === 0 ? (
-                    <div className="empty-state">No transcript lines yet</div>
-                  ) : (
-                    reviewLines.map((line, index) => (
-                      <button
-                        key={`${index}-${line.slice(0, 24)}`}
-                        type="button"
-                        className={`review-line-item ${selectedReviewLineIndex === index ? "active" : ""}`}
-                        onClick={() => setSelectedReviewLineIndex(index)}
-                      >
-                        <span className="line-number">{index + 1}</span>
-                        <span className="line-text">{line}</span>
-                      </button>
-                    ))
-                  )}
-                </div>
-                <div className="review-metadata-snapshot">
-                  <div><strong>Sender:</strong> {sender || "Unknown"}</div>
-                  <div><strong>Recipient:</strong> {recipient || "Unknown"}</div>
-                  <div><strong>Date:</strong> {date || "Unknown"}</div>
-                  <div><strong>Location:</strong> {location || "Unknown"}</div>
-                </div>
-              </div>
-            )}
-
             {/* Status Panel */}
             <div className="status-panel">
               {/* Filename Display - shows current page's filename */}
@@ -1728,6 +1684,7 @@ export default function LetterReviewPage() {
             )}
           </div>
         </ResizableSplitPane>
+        )}
       </div>
 
       {/* Confirmation dialog for letter transcription */}

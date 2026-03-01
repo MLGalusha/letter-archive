@@ -1,0 +1,1 @@
+ALTER TABLE "letter_pages" ADD COLUMN "line_segments" jsonb;

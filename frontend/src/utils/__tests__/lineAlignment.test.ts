@@ -33,7 +33,7 @@ describe('alignTranscriptToVisualLines', () => {
     expect(result[0].bbox).toEqual(segments[0].bbox);
   });
 
-  it('1:1 mapping when transcript and segment counts match', () => {
+  it('1:1 mapping preserves transcript order', () => {
     const segments = [makeSegment(1, 'Hello'), makeSegment(2, 'World')];
     const result = alignTranscriptToVisualLines('Hello\nWorld', segments);
     expect(result).toHaveLength(2);
@@ -43,48 +43,36 @@ describe('alignTranscriptToVisualLines', () => {
     expect(result[1].visualLineIndex).toBe(1);
   });
 
-  it('handles more segments than transcript lines via fuzzy matching', () => {
+  it('never reorders transcript lines regardless of OCR text', () => {
+    // OCR text is in different order than transcript — transcript order must win
     const segments = [
-      makeSegment(1, 'Dear friend'),
-      makeSegment(2, 'I hope you'),
-      makeSegment(3, 'are well'),
+      makeSegment(1, 'World'),  // OCR says "World" but transcript line 1 is "Hello"
+      makeSegment(2, 'Hello'),  // OCR says "Hello" but transcript line 2 is "World"
     ];
-    const result = alignTranscriptToVisualLines('Dear friend\nI hope you are well', segments);
-    expect(result).toHaveLength(3);
-    // First should match "Dear friend"
-    expect(result[0].transcriptText).toBe('Dear friend');
-    // Second should match the other transcript line
-    expect(result[1].transcriptText).toBe('I hope you are well');
-  });
-
-  it('handles more transcript lines than segments', () => {
-    const segments = [makeSegment(1, 'Hello World')];
-    const result = alignTranscriptToVisualLines('Hello\nWorld\nFoo', segments);
-    expect(result).toHaveLength(1);
-    // Best match + leftover appended
-    expect(result[0].transcriptText).toContain('Hello');
-  });
-
-  it('assigns proportionally when OCR text is empty', () => {
-    const segments = [makeSegment(1), makeSegment(2), makeSegment(3)];
-    const result = alignTranscriptToVisualLines('Line A\nLine B\nLine C', segments);
-    expect(result).toHaveLength(3);
-    // Each should get one transcript line
-    const texts = result.map(r => r.transcriptText);
-    expect(texts).toContain('Line A');
-    expect(texts).toContain('Line B');
-    expect(texts).toContain('Line C');
-  });
-
-  it('fuzzy matches despite minor OCR differences', () => {
-    const segments = [
-      makeSegment(1, 'Dcar Molly'),  // OCR misread "Dear" as "Dcar"
-      makeSegment(2, 'I miss you'),
-    ];
-    const result = alignTranscriptToVisualLines('Dear Molly\nI miss you', segments);
+    const result = alignTranscriptToVisualLines('Hello\nWorld', segments);
     expect(result).toHaveLength(2);
-    expect(result[0].transcriptText).toBe('Dear Molly');
-    expect(result[1].transcriptText).toBe('I miss you');
+    // Must preserve original transcript order, NOT match by OCR similarity
+    expect(result[0].transcriptText).toBe('Hello');
+    expect(result[1].transcriptText).toBe('World');
+  });
+
+  it('more segments than transcript — distributes in order, extras empty', () => {
+    const segments = [makeSegment(1), makeSegment(2), makeSegment(3)];
+    const result = alignTranscriptToVisualLines('Line A\nLine B', segments);
+    expect(result).toHaveLength(3);
+    // Transcript lines assigned in order to proportional positions
+    const texts = result.map(r => r.transcriptText);
+    expect(texts.filter(t => t !== '')).toEqual(['Line A', 'Line B']);
+  });
+
+  it('fewer segments than transcript — subdivides segments in order', () => {
+    const segments = [makeSegment(1)];
+    const result = alignTranscriptToVisualLines('Hello\nWorld\nFoo', segments);
+    // Should subdivide the single segment into 3 lines
+    expect(result).toHaveLength(3);
+    expect(result[0].transcriptText).toBe('Hello');
+    expect(result[1].transcriptText).toBe('World');
+    expect(result[2].transcriptText).toBe('Foo');
   });
 
   it('preserves bbox from segments', () => {

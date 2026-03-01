@@ -8,49 +8,19 @@ export interface AlignedLine {
 }
 
 /**
- * Computes Levenshtein distance between two strings.
- */
-function levenshteinDistance(a: string, b: string): number {
-  const la = a.length;
-  const lb = b.length;
-  const dp: number[][] = Array.from({ length: la + 1 }, () => Array(lb + 1).fill(0));
-
-  for (let i = 0; i <= la; i++) dp[i][0] = i;
-  for (let j = 0; j <= lb; j++) dp[0][j] = j;
-
-  for (let i = 1; i <= la; i++) {
-    for (let j = 1; j <= lb; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
-    }
-  }
-  return dp[la][lb];
-}
-
-/**
- * Computes similarity ratio between two strings (0 to 1).
- */
-function similarity(a: string, b: string): number {
-  if (a.length === 0 && b.length === 0) return 1;
-  const maxLen = Math.max(a.length, b.length);
-  if (maxLen === 0) return 1;
-  return 1 - levenshteinDistance(a.toLowerCase(), b.toLowerCase()) / maxLen;
-}
-
-/**
- * Aligns transcript lines to Kraken visual line segments using greedy fuzzy matching.
- * Kraken line count is the source of truth — transcript lines are split/merged to match.
+ * Aligns transcript lines to Kraken visual line segments in order.
+ * Transcript lines are never reordered — they stay exactly as the AI output them.
+ * If counts differ, lines are distributed proportionally across positions.
  */
 export function alignTranscriptToVisualLines(
   pageText: string,
   lineSegments: LineSegment[],
 ): AlignedLine[] {
   const transcriptLines = pageText.split('\n').filter(l => l.trim().length > 0);
-  const krakenLineCount = lineSegments.length;
+  const segCount = lineSegments.length;
 
-  if (krakenLineCount === 0) return [];
+  if (segCount === 0) return [];
   if (transcriptLines.length === 0) {
-    // No transcript text — return empty lines for each visual line
     return lineSegments.map((seg, i) => ({
       visualLineIndex: i,
       transcriptText: '',
@@ -59,8 +29,8 @@ export function alignTranscriptToVisualLines(
     }));
   }
 
-  // If counts match, do 1:1 assignment
-  if (transcriptLines.length === krakenLineCount) {
+  // 1:1 — assign in order
+  if (transcriptLines.length === segCount) {
     return lineSegments.map((seg, i) => ({
       visualLineIndex: i,
       transcriptText: transcriptLines[i],
@@ -69,78 +39,48 @@ export function alignTranscriptToVisualLines(
     }));
   }
 
-  // Greedy fuzzy matching: match each Kraken line to the best transcript line(s)
+  // More segments than transcript lines — assign each transcript line to the
+  // proportionally closest segment, leaving extra segments empty
+  if (segCount > transcriptLines.length) {
+    return lineSegments.map((seg, i) => {
+      const tIdx = Math.round((i / segCount) * transcriptLines.length);
+      // Only assign if this is the closest segment for that transcript line
+      const closestSeg = Math.round((tIdx / transcriptLines.length) * segCount);
+      return {
+        visualLineIndex: i,
+        transcriptText: closestSeg === i && tIdx < transcriptLines.length ? transcriptLines[tIdx] : '',
+        bbox: seg.bbox,
+        baseline: seg.baseline,
+      };
+    });
+  }
+
+  // Fewer segments than transcript lines — evenly subdivide each segment
   const result: AlignedLine[] = [];
-  const usedTranscript = new Set<number>();
-
-  for (let k = 0; k < krakenLineCount; k++) {
-    const seg = lineSegments[k];
-    const ocrText = seg.ocrText || '';
-
-    if (!ocrText) {
-      // No OCR text to match — assign proportionally
-      const proportionalIdx = Math.round((k / krakenLineCount) * transcriptLines.length);
-      const idx = Math.min(proportionalIdx, transcriptLines.length - 1);
-      // Find nearest unused
-      let bestIdx = idx;
-      for (let offset = 0; offset < transcriptLines.length; offset++) {
-        if (!usedTranscript.has(idx + offset) && idx + offset < transcriptLines.length) {
-          bestIdx = idx + offset;
-          break;
-        }
-        if (!usedTranscript.has(idx - offset) && idx - offset >= 0) {
-          bestIdx = idx - offset;
-          break;
-        }
-      }
-      usedTranscript.add(bestIdx);
+  let tIdx = 0;
+  for (let s = 0; s < segCount; s++) {
+    const seg = lineSegments[s];
+    const tStart = tIdx;
+    const tEnd = s < segCount - 1
+      ? Math.round(((s + 1) / segCount) * transcriptLines.length)
+      : transcriptLines.length;
+    const subCount = tEnd - tStart;
+    const subHeight = (seg.bbox[3] - seg.bbox[1]) / subCount;
+    for (let sub = 0; sub < subCount; sub++) {
+      const sy1 = Math.round(seg.bbox[1] + sub * subHeight);
+      const sy2 = Math.round(seg.bbox[1] + (sub + 1) * subHeight);
       result.push({
-        visualLineIndex: k,
-        transcriptText: transcriptLines[bestIdx] || '',
-        bbox: seg.bbox,
-        baseline: seg.baseline,
-      });
-      continue;
-    }
-
-    // Find best matching transcript line by similarity
-    let bestScore = -1;
-    let bestIdx = -1;
-    for (let t = 0; t < transcriptLines.length; t++) {
-      if (usedTranscript.has(t)) continue;
-      const score = similarity(ocrText, transcriptLines[t]);
-      if (score > bestScore) {
-        bestScore = score;
-        bestIdx = t;
-      }
-    }
-
-    if (bestIdx >= 0) {
-      usedTranscript.add(bestIdx);
-      result.push({
-        visualLineIndex: k,
-        transcriptText: transcriptLines[bestIdx],
-        bbox: seg.bbox,
-        baseline: seg.baseline,
-      });
-    } else {
-      // All transcript lines used — assign empty
-      result.push({
-        visualLineIndex: k,
-        transcriptText: '',
-        bbox: seg.bbox,
-        baseline: seg.baseline,
+        visualLineIndex: result.length,
+        transcriptText: transcriptLines[tStart + sub],
+        bbox: [seg.bbox[0], sy1, seg.bbox[2], sy2],
+        baseline: [
+          [seg.bbox[0], sy2 - Math.round(subHeight * 0.2)],
+          [seg.bbox[2], sy2 - Math.round(subHeight * 0.2)],
+        ],
       });
     }
+    tIdx = tEnd;
   }
-
-  // If there are leftover transcript lines not assigned, append them to the last Kraken line
-  const unassigned = transcriptLines.filter((_, i) => !usedTranscript.has(i));
-  if (unassigned.length > 0 && result.length > 0) {
-    const lastLine = result[result.length - 1];
-    lastLine.transcriptText += '\n' + unassigned.join('\n');
-  }
-
   return result;
 }
 

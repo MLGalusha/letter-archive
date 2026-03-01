@@ -155,9 +155,12 @@ export interface DetectedLine {
 }
 
 /**
- * Analyzes an image element's pixel data to detect text line boundaries.
- * Uses horizontal projection profile (sum of dark pixels per row) to find
- * line regions, then measures left/right extent per line.
+ * Analyzes an image element's pixel data to detect the overall text bounding box.
+ * Uses horizontal projection profile (sum of dark pixels per row) to find the
+ * top/bottom extent of text, plus leftmost/rightmost dark pixel columns.
+ *
+ * Returns a single DetectedLine representing the entire text region.
+ * The caller divides this region evenly by transcript line count.
  *
  * Works on a downsampled version for performance.
  */
@@ -189,7 +192,6 @@ export function detectImageLines(img: HTMLImageElement): DetectedLine[] {
   const data = imageData.data;
 
   // Compute horizontal projection: count dark pixels per row
-  // A pixel is "dark" if its luminance is below a threshold
   const darkThreshold = 140;
   const rowDarkCount = new Uint32Array(h);
 
@@ -203,86 +205,51 @@ export function detectImageLines(img: HTMLImageElement): DetectedLine[] {
     rowDarkCount[y] = count;
   }
 
-  // Determine a "text row" threshold: a row has text if its dark pixel
-  // count exceeds a fraction of the width. Use adaptive threshold based
-  // on the median of nonzero rows.
+  // Determine threshold for "text rows" using adaptive median-based approach
   const nonzero = Array.from(rowDarkCount).filter(c => c > 0).sort((a, b) => a - b);
   const medianDark = nonzero.length > 0 ? nonzero[Math.floor(nonzero.length / 2)] : 0;
-  // Rows with at least 15% of the median count are considered text rows,
-  // but at minimum 0.5% of image width (to avoid noise)
   const minTextPixels = Math.max(w * 0.005, medianDark * 0.15);
 
-  const isTextRow = new Uint8Array(h);
+  // Find the overall text region: first and last rows with enough dark pixels
+  let topY = -1;
+  let bottomY = -1;
   for (let y = 0; y < h; y++) {
-    isTextRow[y] = rowDarkCount[y] >= minTextPixels ? 1 : 0;
-  }
-
-  // Smooth out small gaps within text lines (merge gaps < gapTolerance rows)
-  const gapTolerance = Math.max(2, Math.round(h * 0.004));
-  for (let y = 0; y < h; y++) {
-    if (isTextRow[y] === 0) {
-      // Check if this gap is small enough to bridge
-      let gapEnd = y;
-      while (gapEnd < h && isTextRow[gapEnd] === 0) gapEnd++;
-      const gapSize = gapEnd - y;
-      if (gapSize <= gapTolerance && y > 0 && gapEnd < h && isTextRow[y - 1] === 1 && isTextRow[gapEnd] === 1) {
-        for (let fill = y; fill < gapEnd; fill++) isTextRow[fill] = 1;
-      }
-      y = gapEnd - 1;
+    if (rowDarkCount[y] >= minTextPixels) {
+      if (topY === -1) topY = y;
+      bottomY = y;
     }
   }
 
-  // Extract contiguous text-row runs as raw line bands
-  const rawBands: { y1: number; y2: number }[] = [];
-  let inBand = false;
-  let bandStart = 0;
-  for (let y = 0; y < h; y++) {
-    if (isTextRow[y] && !inBand) {
-      bandStart = y;
-      inBand = true;
-    } else if (!isTextRow[y] && inBand) {
-      rawBands.push({ y1: bandStart, y2: y });
-      inBand = false;
-    }
-  }
-  if (inBand) rawBands.push({ y1: bandStart, y2: h });
+  if (topY === -1) return [];
 
-  // Filter out tiny noise bands (less than 0.8% of image height)
-  const minBandHeight = Math.max(3, h * 0.008);
-  const bands = rawBands.filter(b => (b.y2 - b.y1) >= minBandHeight);
-
-  if (bands.length === 0) return [];
-
-  // For each band, find leftmost and rightmost dark pixel columns
-  const lines: DetectedLine[] = bands.map(band => {
-    let xMin = w;
-    let xMax = 0;
-    for (let y = band.y1; y < band.y2; y++) {
-      for (let x = 0; x < w; x++) {
-        const i = (y * w + x) * 4;
-        const lum = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-        if (lum < darkThreshold) {
-          if (x < xMin) xMin = x;
-          if (x > xMax) xMax = x;
-        }
+  // Find leftmost and rightmost dark pixels across the entire text region
+  let xMin = w;
+  let xMax = 0;
+  for (let y = topY; y <= bottomY; y++) {
+    if (rowDarkCount[y] < minTextPixels) continue;
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const lum = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+      if (lum < darkThreshold) {
+        if (x < xMin) xMin = x;
+        if (x > xMax) xMax = x;
       }
     }
-    // Scale back to natural image coordinates
-    return {
-      y1: Math.round(band.y1 / scale),
-      y2: Math.round(band.y2 / scale),
-      x1: Math.round(Math.max(0, xMin) / scale),
-      x2: Math.round(Math.min(w, xMax + 1) / scale),
-    };
-  });
+  }
 
-  return lines;
+  // Return a single bounding box for the entire text region
+  return [{
+    y1: Math.round(topY / scale),
+    y2: Math.round((bottomY + 1) / scale),
+    x1: Math.round(Math.max(0, xMin) / scale),
+    x2: Math.round(Math.min(w, xMax + 1) / scale),
+  }];
 }
 
 /**
- * Builds AlignedLine[] from detected pixel lines matched to transcript lines.
- * If there are more detected lines than transcript lines, merges adjacent detected
- * lines to match the transcript count. If fewer, splits transcript lines evenly.
+ * Builds AlignedLine[] by dividing the detected text region evenly among transcript lines.
+ * detectImageLines returns a single bounding box for the entire text region;
+ * this function splits that region into uniform line slots.
  */
 export function buildAlignedLinesFromDetected(
   transcriptLines: string[],
@@ -290,65 +257,26 @@ export function buildAlignedLinesFromDetected(
 ): AlignedLine[] {
   if (transcriptLines.length === 0 || detected.length === 0) return [];
 
+  // Compute overall bounding box from all detected regions
+  const y1 = Math.min(...detected.map(d => d.y1));
+  const y2 = Math.max(...detected.map(d => d.y2));
+  const x1 = Math.min(...detected.map(d => d.x1));
+  const x2 = Math.max(...detected.map(d => d.x2));
+
   const tCount = transcriptLines.length;
-  const dCount = detected.length;
+  const lineHeight = (y2 - y1) / tCount;
 
-  // 1:1 — counts match
-  if (tCount === dCount) {
-    return detected.map((d, i) => ({
+  return transcriptLines.map((text, i) => {
+    const ly1 = Math.round(y1 + i * lineHeight);
+    const ly2 = Math.round(y1 + (i + 1) * lineHeight);
+    return {
       visualLineIndex: i,
-      transcriptText: transcriptLines[i],
-      bbox: [d.x1, d.y1, d.x2, d.y2] as [number, number, number, number],
-      baseline: [[d.x1, d.y2 - Math.round((d.y2 - d.y1) * 0.2)], [d.x2, d.y2 - Math.round((d.y2 - d.y1) * 0.2)]],
-    }));
-  }
-
-  // More detected lines than transcript lines — merge groups of detected lines
-  if (dCount > tCount) {
-    const result: AlignedLine[] = [];
-    for (let t = 0; t < tCount; t++) {
-      // Map transcript line t to a range of detected lines
-      const dStart = Math.round((t / tCount) * dCount);
-      const dEnd = Math.round(((t + 1) / tCount) * dCount);
-      // Merge the detected range into one bbox
-      const group = detected.slice(dStart, Math.max(dStart + 1, dEnd));
-      const y1 = Math.min(...group.map(g => g.y1));
-      const y2 = Math.max(...group.map(g => g.y2));
-      const x1 = Math.min(...group.map(g => g.x1));
-      const x2 = Math.max(...group.map(g => g.x2));
-      result.push({
-        visualLineIndex: t,
-        transcriptText: transcriptLines[t],
-        bbox: [x1, y1, x2, y2],
-        baseline: [[x1, y2 - Math.round((y2 - y1) * 0.2)], [x2, y2 - Math.round((y2 - y1) * 0.2)]],
-      });
-    }
-    return result;
-  }
-
-  // Fewer detected lines than transcript lines — assign multiple transcript lines per detected
-  const result: AlignedLine[] = [];
-  let tIdx = 0;
-  for (let d = 0; d < dCount; d++) {
-    const tStart = tIdx;
-    const tEnd = d < dCount - 1
-      ? Math.round(((d + 1) / dCount) * tCount)
-      : tCount;
-    // Split this detected line evenly among the transcript lines assigned to it
-    const det = detected[d];
-    const subCount = tEnd - tStart;
-    const subHeight = (det.y2 - det.y1) / subCount;
-    for (let s = 0; s < subCount; s++) {
-      const sy1 = Math.round(det.y1 + s * subHeight);
-      const sy2 = Math.round(det.y1 + (s + 1) * subHeight);
-      result.push({
-        visualLineIndex: result.length,
-        transcriptText: transcriptLines[tStart + s],
-        bbox: [det.x1, sy1, det.x2, sy2],
-        baseline: [[det.x1, sy2 - Math.round(subHeight * 0.2)], [det.x2, sy2 - Math.round(subHeight * 0.2)]],
-      });
-    }
-    tIdx = tEnd;
-  }
-  return result;
+      transcriptText: text,
+      bbox: [x1, ly1, x2, ly2] as [number, number, number, number],
+      baseline: [
+        [x1, ly2 - Math.round(lineHeight * 0.2)],
+        [x2, ly2 - Math.round(lineHeight * 0.2)],
+      ],
+    };
+  });
 }

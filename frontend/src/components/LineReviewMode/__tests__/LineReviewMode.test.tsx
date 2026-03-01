@@ -13,11 +13,9 @@ vi.mock('../../../utils/lineAlignment', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../utils/lineAlignment')>();
   return {
     ...actual,
-    // Override detectImageLines to return canned results
+    // Override detectImageLines to return a single text region bounding box
     detectImageLines: vi.fn().mockReturnValue([
-      { y1: 100, y2: 130, x1: 50, x2: 450 },
-      { y1: 140, y2: 170, x1: 60, x2: 440 },
-      { y1: 180, y2: 210, x1: 55, x2: 445 },
+      { y1: 100, y2: 210, x1: 50, x2: 450 },
     ]),
   };
 });

@@ -139,35 +139,23 @@ export default function LineReviewMode({
 
     const detectionResult = detectedLinesMap[currentPageIndex];
 
-    // Use pixel-detected lines if available and non-empty
+    // Use pixel-detected text region if available and non-empty
     if (detectionResult && detectionResult.length > 0) {
       return buildAlignedLinesFromDetected(transcriptLines, detectionResult);
     }
 
     // Detection was attempted but returned empty (CORS error, blank image, etc.)
-    // Fall back to simple even division of the estimated text region
+    // Fall back to even division of an estimated text region with margins
     if (detectionResult !== undefined && detectionResult !== null) {
       const w = imageNaturalSize.width || 1000;
       const h = imageNaturalSize.height || 1400;
-      const topMargin = h * 0.15;
-      const bottomMargin = h * 0.10;
-      const sideMargin = w * 0.08;
-      const textH = h - topMargin - bottomMargin;
-      const lineH = textH / transcriptLines.length;
-      return transcriptLines.map((text, i): AlignedLine => ({
-        visualLineIndex: i,
-        transcriptText: text,
-        bbox: [
-          Math.round(sideMargin),
-          Math.round(topMargin + i * lineH),
-          Math.round(w - sideMargin),
-          Math.round(topMargin + (i + 1) * lineH),
-        ],
-        baseline: [
-          [Math.round(sideMargin), Math.round(topMargin + (i + 1) * lineH - lineH * 0.2)],
-          [Math.round(w - sideMargin), Math.round(topMargin + (i + 1) * lineH - lineH * 0.2)],
-        ],
-      }));
+      const estimatedRegion = [{
+        y1: Math.round(h * 0.15),
+        y2: Math.round(h * 0.90),
+        x1: Math.round(w * 0.08),
+        x2: Math.round(w * 0.92),
+      }];
+      return buildAlignedLinesFromDetected(transcriptLines, estimatedRegion);
     }
 
     // Not yet attempted — return empty until pixel analysis runs

@@ -1,11 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import LineReviewMode from '../LineReviewMode';
 import type { Letter } from '../../../types/Letter';
 
 // Mock the client module
 vi.mock('../../../api/client', () => ({
   getImageUrl: (url: string) => `http://test${url}`,
+}));
+
+// Mock the detect-lines API call to resolve immediately with empty (triggers pixel fallback)
+vi.mock('../../../api/admin/letters', () => ({
+  detectPageLines: vi.fn().mockResolvedValue({ lineSegments: [] }),
 }));
 
 // Mock detectImageLines since jsdom can't do real pixel analysis
@@ -88,15 +93,19 @@ function makeMultiPageLetter(): Letter {
   });
 }
 
-// Simulate image load
-function simulateImageLoad(container: HTMLElement) {
+// Simulate image load and flush async (API promise + rAF)
+async function simulateImageLoadAsync(container: HTMLElement) {
   const img = container.querySelector('img');
   if (img) {
     Object.defineProperty(img, 'naturalWidth', { value: 500, configurable: true });
     Object.defineProperty(img, 'naturalHeight', { value: 700, configurable: true });
     Object.defineProperty(img, 'clientWidth', { value: 500, configurable: true });
     Object.defineProperty(img, 'clientHeight', { value: 700, configurable: true });
-    fireEvent.load(img);
+    await act(async () => {
+      fireEvent.load(img);
+      // Flush the detectPageLines promise (microtask) + rAF pixel detection fallback
+      await new Promise(r => setTimeout(r, 0));
+    });
   }
 }
 
@@ -125,9 +134,9 @@ describe('LineReviewMode', () => {
     expect(img?.getAttribute('src')).toContain('http://test/images/page-1');
   });
 
-  it('shows progress indicator', () => {
+  it('shows progress indicator', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
-    act(() => simulateImageLoad(container));
+    await simulateImageLoadAsync(container);
     expect(screen.getByText(/Line/)).toBeTruthy();
   });
 
@@ -136,9 +145,9 @@ describe('LineReviewMode', () => {
     expect(screen.getByText('to exit')).toBeTruthy();
   });
 
-  it('calls onExit when Escape is pressed', () => {
+  it('calls onExit when Escape is pressed', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
-    act(() => simulateImageLoad(container));
+    await simulateImageLoadAsync(container);
 
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(defaultProps.onExit).toHaveBeenCalled();
@@ -154,18 +163,18 @@ describe('LineReviewMode', () => {
     expect(analyzing).toBeNull();
   });
 
-  it('renders input overlay after pixel detection', () => {
+  it('renders input overlay after pixel detection', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
-    act(() => simulateImageLoad(container));
+    await simulateImageLoadAsync(container);
 
     const input = container.querySelector('.line-review-input-overlay input');
     expect(input).toBeTruthy();
     expect((input as HTMLInputElement)?.value).toBe('Line one');
   });
 
-  it('advances to next line on ArrowDown', () => {
+  it('advances to next line on ArrowDown', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
-    act(() => simulateImageLoad(container));
+    await simulateImageLoadAsync(container);
 
     // Initially on first line
     let input = container.querySelector('.line-review-input-overlay input') as HTMLInputElement;
@@ -180,9 +189,9 @@ describe('LineReviewMode', () => {
     expect(input?.value).toBe('Line two');
   });
 
-  it('advances to next line on Enter', () => {
+  it('advances to next line on Enter', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
-    act(() => simulateImageLoad(container));
+    await simulateImageLoadAsync(container);
 
     act(() => {
       fireEvent.keyDown(window, { key: 'Enter' });
@@ -192,9 +201,9 @@ describe('LineReviewMode', () => {
     expect(input?.value).toBe('Line two');
   });
 
-  it('goes to previous line on ArrowUp', () => {
+  it('goes to previous line on ArrowUp', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
-    act(() => simulateImageLoad(container));
+    await simulateImageLoadAsync(container);
 
     // Go to line 2 first
     act(() => {
@@ -209,9 +218,9 @@ describe('LineReviewMode', () => {
     expect(input?.value).toBe('Line one');
   });
 
-  it('does not go before first line', () => {
+  it('does not go before first line', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
-    act(() => simulateImageLoad(container));
+    await simulateImageLoadAsync(container);
 
     // Press ArrowUp on first line — should stay on first line
     act(() => {
@@ -222,33 +231,32 @@ describe('LineReviewMode', () => {
     expect(input?.value).toBe('Line one');
   });
 
-  it('triggers onAutoSave when navigating between lines', () => {
+  it('does not trigger auto-save when navigating without edits', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
-    act(() => simulateImageLoad(container));
+    await simulateImageLoadAsync(container);
 
     act(() => {
       fireEvent.keyDown(window, { key: 'ArrowDown' });
     });
 
-    expect(defaultProps.onAutoSave).toHaveBeenCalledWith(
-      expect.objectContaining({ transcriptionText: expect.any(String) }),
-    );
+    // No edits were made — save should NOT fire
+    expect(defaultProps.onAutoSave).not.toHaveBeenCalled();
   });
 
-  it('triggers onTranscriptChange when navigating', () => {
+  it('does not trigger onTranscriptChange when navigating without edits', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
-    act(() => simulateImageLoad(container));
+    await simulateImageLoadAsync(container);
 
     act(() => {
       fireEvent.keyDown(window, { key: 'ArrowDown' });
     });
 
-    expect(defaultProps.onTranscriptChange).toHaveBeenCalled();
+    expect(defaultProps.onTranscriptChange).not.toHaveBeenCalled();
   });
 
-  it('saves edited text when navigating away', () => {
+  it('saves edited text when navigating away', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
-    act(() => simulateImageLoad(container));
+    await simulateImageLoadAsync(container);
 
     // Edit the current input
     const input = container.querySelector('.line-review-input-overlay input') as HTMLInputElement;
@@ -267,9 +275,9 @@ describe('LineReviewMode', () => {
     );
   });
 
-  it('renders dimmer divs for highlighting', () => {
+  it('renders dimmer divs for highlighting', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
-    act(() => simulateImageLoad(container));
+    await simulateImageLoadAsync(container);
 
     const dimmers = container.querySelectorAll('.line-review-dimmer');
     // Should have top and bottom dimmers
@@ -295,7 +303,7 @@ describe('LineReviewMode', () => {
   });
 
   describe('multi-page navigation', () => {
-    it('shows page count for multi-page letters', () => {
+    it('shows page count for multi-page letters', async () => {
       const { container } = render(
         <LineReviewMode
           {...defaultProps}
@@ -303,14 +311,14 @@ describe('LineReviewMode', () => {
           transcript="--- Page 1 ---\n\nPage 1 line A\nPage 1 line B\n\n--- Page 2 ---\n\nPage 2 line C\nPage 2 line D"
         />,
       );
-      act(() => simulateImageLoad(container));
+      await simulateImageLoadAsync(container);
 
       expect(screen.getByText(/Page 1 \/ 2/)).toBeTruthy();
     });
 
-    it('does not show page count for single-page letters', () => {
+    it('does not show page count for single-page letters', async () => {
       const { container } = render(<LineReviewMode {...defaultProps} />);
-      act(() => simulateImageLoad(container));
+      await simulateImageLoadAsync(container);
 
       expect(screen.queryByText(/Page.*\//)).toBeNull();
     });

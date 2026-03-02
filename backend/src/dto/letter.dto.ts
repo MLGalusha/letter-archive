@@ -31,20 +31,12 @@ export type FrontendLetterStatus =
 
 export type FrontendLetterImageType = 'letter' | 'photo' | 'ephemera' | 'voice' | 'article' | 'diary' | 'cover' | 'card' | 'telegram';
 
-export interface FrontendLineSegment {
-  line: number;
-  baseline: number[][];
-  bbox: [number, number, number, number];
-  ocrText: string;
-}
-
 export interface FrontendLetterImage {
   id: string;
   type: FrontendLetterImageType;
   pageNumber?: number;
   imageUrl: string;
   originalFilename?: string;
-  lineSegments?: FrontendLineSegment[];
 }
 
 // V2 Metadata types
@@ -387,7 +379,6 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
       pageNumber: page.pageNumber,
       imageUrl: `/images/${page.id}${page.checksumSha256 ? `?v=${page.checksumSha256.slice(0, 8)}` : ''}`,
       originalFilename: page.originalFilename,
-      lineSegments: (page.lineSegments as FrontendLineSegment[] | null) ?? undefined,
     })),
     transcript: {
       pages: letter.transcriptionText
@@ -549,7 +540,6 @@ export function transformLetterWithRelatedToDTO(
         pageNumber: page.pageNumber,
         imageUrl: `/images/${page.id}${page.checksumSha256 ? `?v=${page.checksumSha256.slice(0, 8)}` : ''}`,
         originalFilename: page.originalFilename,
-        lineSegments: (page.lineSegments as FrontendLineSegment[] | null) ?? undefined,
       });
     }
   }
@@ -564,7 +554,6 @@ export function transformLetterWithRelatedToDTO(
         pageNumber: page.pageNumber,
         imageUrl: `/images/${page.id}${page.checksumSha256 ? `?v=${page.checksumSha256.slice(0, 8)}` : ''}`,
         originalFilename: page.originalFilename,
-        lineSegments: (page.lineSegments as FrontendLineSegment[] | null) ?? undefined,
       });
     }
   }

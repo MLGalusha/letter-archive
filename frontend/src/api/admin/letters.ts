@@ -1,5 +1,5 @@
 import { apiPost, apiPut } from "../client";
-import type { Letter } from "../../types/Letter";
+import type { Letter, LineSegment } from "../../types/Letter";
 
 export interface UpdateLetterData {
   transcriptionText?: string;
@@ -57,4 +57,8 @@ export async function verifyMetadata(letterId: string): Promise<Letter> {
 
 export async function unverifyMetadata(letterId: string): Promise<Letter> {
   return apiPost<Letter>(`/admin/letters/${letterId}/unverify-metadata`);
+}
+
+export async function detectPageLines(pageId: string): Promise<{ lineSegments: LineSegment[] }> {
+  return apiPost<{ lineSegments: LineSegment[] }>(`/admin/letters/pages/${pageId}/detect-lines`);
 }

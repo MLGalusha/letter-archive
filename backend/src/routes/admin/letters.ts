@@ -6,6 +6,7 @@ import { db, letters, letterPages } from '../../db/index.js';
 import { getLetterById, resetLetterForProcessing } from '../../services/letters.js';
 import { getAbsoluteStoragePath } from '../../services/storage.js';
 import { runMetadataExtractionV2, runEntityExtractionOnly } from '../../pipeline/metadataV2.js';
+import { runLineFinder } from '../../services/line-finder.js';
 
 // Service imports
 import {
@@ -1055,6 +1056,33 @@ router.delete('/letters/:letterId', async (req, res, next) => {
 
     req.log.info({ letterId, groupSize: groupIds.length, filesDeleted: totalFiles }, 'Letter group deleted');
     res.json({ message: 'Letter deleted successfully', letterId, deletedCount: groupIds.length });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
+// PAGE-LEVEL OPERATIONS
+// ============================================================================
+
+router.post('/letters/pages/:pageId/detect-lines', async (req, res, next) => {
+  try {
+    const { pageId } = req.params;
+
+    // Look up the page
+    const page = await db.query.letterPages.findFirst({
+      where: eq(letterPages.id, pageId),
+    });
+
+    if (!page) {
+      res.status(404).json({ error: 'Page not found' });
+      return;
+    }
+
+    const absolutePath = getAbsoluteStoragePath(page.storagePath);
+    const segments = await runLineFinder(absolutePath);
+
+    res.json({ lineSegments: segments ?? [] });
   } catch (error) {
     next(error);
   }

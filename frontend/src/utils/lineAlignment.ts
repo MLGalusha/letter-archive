@@ -3,6 +3,8 @@ import type { LineSegment } from '../types/Letter';
 export interface AlignedLine {
   visualLineIndex: number;
   transcriptText: string;
+  /** Index into the non-blank transcript lines array, or -1 if no transcript line is assigned */
+  transcriptLineIndex: number;
   bbox: [number, number, number, number];
   baseline: number[][];
 }
@@ -24,6 +26,7 @@ export function alignTranscriptToVisualLines(
     return lineSegments.map((seg, i) => ({
       visualLineIndex: i,
       transcriptText: '',
+      transcriptLineIndex: -1,
       bbox: seg.bbox,
       baseline: seg.baseline,
     }));
@@ -34,6 +37,7 @@ export function alignTranscriptToVisualLines(
     return lineSegments.map((seg, i) => ({
       visualLineIndex: i,
       transcriptText: transcriptLines[i],
+      transcriptLineIndex: i,
       bbox: seg.bbox,
       baseline: seg.baseline,
     }));
@@ -46,9 +50,11 @@ export function alignTranscriptToVisualLines(
       const tIdx = Math.round((i / segCount) * transcriptLines.length);
       // Only assign if this is the closest segment for that transcript line
       const closestSeg = Math.round((tIdx / transcriptLines.length) * segCount);
+      const hasText = closestSeg === i && tIdx < transcriptLines.length;
       return {
         visualLineIndex: i,
-        transcriptText: closestSeg === i && tIdx < transcriptLines.length ? transcriptLines[tIdx] : '',
+        transcriptText: hasText ? transcriptLines[tIdx] : '',
+        transcriptLineIndex: hasText ? tIdx : -1,
         bbox: seg.bbox,
         baseline: seg.baseline,
       };
@@ -72,6 +78,7 @@ export function alignTranscriptToVisualLines(
       result.push({
         visualLineIndex: result.length,
         transcriptText: transcriptLines[tStart + sub],
+        transcriptLineIndex: tStart + sub,
         bbox: [seg.bbox[0], sy1, seg.bbox[2], sy2],
         baseline: [
           [seg.bbox[0], sy2 - Math.round(subHeight * 0.2)],
@@ -296,9 +303,17 @@ export function detectImageLines(img: HTMLImageElement): DetectedLine[] {
 }
 
 /**
- * Builds AlignedLine[] from detected lines matched to transcript lines in order.
- * If counts differ, transcript lines are distributed proportionally across positions.
- * Transcript order is always preserved.
+ * Builds AlignedLine[] from detected paragraph bands matched to transcript lines.
+ *
+ * Valley detection produces paragraph-level bands (contiguous text regions).
+ * This function:
+ * 1. Groups detected lines into paragraph bands (merging close neighbors)
+ * 2. Computes constant width (min x1 to max x2 across all bands)
+ * 3. Distributes transcript lines across bands proportionally by height
+ * 4. Evenly divides each band by its assigned line count
+ *
+ * Lines jump over paragraph gaps naturally. Width is constant; height varies
+ * slightly per band to fit evenly, but the variation is small.
  */
 export function buildAlignedLinesFromDetected(
   transcriptLines: string[],
@@ -307,64 +322,77 @@ export function buildAlignedLinesFromDetected(
   if (transcriptLines.length === 0 || detected.length === 0) return [];
 
   const tCount = transcriptLines.length;
-  const dCount = detected.length;
 
-  // 1:1 — counts match
-  if (tCount === dCount) {
-    return detected.map((d, i) => ({
-      visualLineIndex: i,
-      transcriptText: transcriptLines[i],
-      bbox: [d.x1, d.y1, d.x2, d.y2] as [number, number, number, number],
-      baseline: [
-        [d.x1, d.y2 - Math.round((d.y2 - d.y1) * 0.2)],
-        [d.x2, d.y2 - Math.round((d.y2 - d.y1) * 0.2)],
-      ],
-    }));
+  // Sort detected lines by vertical position
+  const sorted = [...detected].sort((a, b) => a.y1 - b.y1);
+
+  // Step 1: Group into paragraph bands.
+  // Lines with small gaps between them belong to the same band.
+  const avgDetectedHeight = sorted.reduce((s, d) => s + (d.y2 - d.y1), 0) / sorted.length;
+  const gapThreshold = avgDetectedHeight * 1.5;
+
+  interface Band { y1: number; y2: number }
+  const bands: Band[] = [];
+  let currentBand: Band = { y1: sorted[0].y1, y2: sorted[0].y2 };
+
+  for (let i = 1; i < sorted.length; i++) {
+    const gap = sorted[i].y1 - currentBand.y2;
+    if (gap < gapThreshold) {
+      // Extend the current band
+      currentBand.y2 = Math.max(currentBand.y2, sorted[i].y2);
+    } else {
+      bands.push(currentBand);
+      currentBand = { y1: sorted[i].y1, y2: sorted[i].y2 };
+    }
+  }
+  bands.push(currentBand);
+
+  // Step 2: Compute constant width across all detected lines
+  const constantLeft = Math.min(...sorted.map(d => d.x1));
+  const constantRight = Math.max(...sorted.map(d => d.x2));
+
+  // Step 3: Distribute transcript lines across bands proportionally by height
+  const totalTextHeight = bands.reduce((s, b) => s + (b.y2 - b.y1), 0);
+  const bandLineCounts: number[] = [];
+  let assignedTotal = 0;
+
+  for (let i = 0; i < bands.length; i++) {
+    const bandHeight = bands[i].y2 - bands[i].y1;
+    if (i < bands.length - 1) {
+      const count = Math.max(1, Math.round((bandHeight / totalTextHeight) * tCount));
+      bandLineCounts.push(count);
+      assignedTotal += count;
+    } else {
+      // Last band gets the remainder to ensure total matches
+      bandLineCounts.push(Math.max(1, tCount - assignedTotal));
+    }
   }
 
-  // More detected lines than transcript lines — assign transcript lines to
-  // proportionally spaced detected positions, extras get empty text
-  if (dCount > tCount) {
-    return detected.map((d, i) => {
-      const tIdx = Math.round((i / dCount) * tCount);
-      const closestDet = Math.round((tIdx / tCount) * dCount);
-      return {
-        visualLineIndex: i,
-        transcriptText: closestDet === i && tIdx < tCount ? transcriptLines[tIdx] : '',
-        bbox: [d.x1, d.y1, d.x2, d.y2] as [number, number, number, number],
-        baseline: [
-          [d.x1, d.y2 - Math.round((d.y2 - d.y1) * 0.2)],
-          [d.x2, d.y2 - Math.round((d.y2 - d.y1) * 0.2)],
-        ],
-      };
-    });
-  }
-
-  // Fewer detected lines than transcript lines — subdivide each detected line
+  // Step 4: Build AlignedLine[] by evenly dividing each band
   const result: AlignedLine[] = [];
   let tIdx = 0;
-  for (let d = 0; d < dCount; d++) {
-    const det = detected[d];
-    const tStart = tIdx;
-    const tEnd = d < dCount - 1
-      ? Math.round(((d + 1) / dCount) * tCount)
-      : tCount;
-    const subCount = tEnd - tStart;
-    const subHeight = (det.y2 - det.y1) / subCount;
-    for (let s = 0; s < subCount; s++) {
-      const sy1 = Math.round(det.y1 + s * subHeight);
-      const sy2 = Math.round(det.y1 + (s + 1) * subHeight);
+
+  for (let b = 0; b < bands.length; b++) {
+    const band = bands[b];
+    const lineCount = bandLineCounts[b];
+    const bandLineHeight = (band.y2 - band.y1) / lineCount;
+
+    for (let i = 0; i < lineCount && tIdx < tCount; i++) {
+      const lineY = Math.round(band.y1 + i * bandLineHeight);
+      const lineY2 = Math.round(band.y1 + (i + 1) * bandLineHeight);
       result.push({
         visualLineIndex: result.length,
-        transcriptText: transcriptLines[tStart + s],
-        bbox: [det.x1, sy1, det.x2, sy2] as [number, number, number, number],
+        transcriptText: transcriptLines[tIdx],
+        transcriptLineIndex: tIdx,
+        bbox: [constantLeft, lineY, constantRight, lineY2] as [number, number, number, number],
         baseline: [
-          [det.x1, sy2 - Math.round(subHeight * 0.2)],
-          [det.x2, sy2 - Math.round(subHeight * 0.2)],
+          [constantLeft, lineY2 - Math.round(bandLineHeight * 0.2)],
+          [constantRight, lineY2 - Math.round(bandLineHeight * 0.2)],
         ],
       });
+      tIdx++;
     }
-    tIdx = tEnd;
   }
+
   return result;
 }

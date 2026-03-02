@@ -103,7 +103,7 @@ describe('buildAlignedLinesFromDetected', () => {
     expect(result).toEqual([]);
   });
 
-  it('1:1 mapping when counts match', () => {
+  it('1:1 mapping uses constant width across all lines', () => {
     const detected: DetectedLine[] = [
       { y1: 100, y2: 130, x1: 50, x2: 450 },
       { y1: 140, y2: 170, x1: 60, x2: 440 },
@@ -114,27 +114,33 @@ describe('buildAlignedLinesFromDetected', () => {
 
     expect(result).toHaveLength(3);
     expect(result[0].transcriptText).toBe('First line');
-    expect(result[0].bbox).toEqual([50, 100, 450, 130]);
     expect(result[1].transcriptText).toBe('Second line');
-    expect(result[1].bbox).toEqual([60, 140, 440, 170]);
     expect(result[2].transcriptText).toBe('Third line');
-    expect(result[2].bbox).toEqual([55, 180, 445, 210]);
+    // All lines should use constant x extents (min x1=50, max x2=450)
+    for (const line of result) {
+      expect(line.bbox[0]).toBe(50);
+      expect(line.bbox[2]).toBe(450);
+    }
   });
 
-  it('more detected than transcript — distributes proportionally', () => {
+  it('more detected than transcript — all lines within single band', () => {
+    // Three close-together detected lines form one band, 1 transcript line
     const detected: DetectedLine[] = [
       { y1: 100, y2: 130, x1: 50, x2: 400 },
       { y1: 140, y2: 170, x1: 50, x2: 400 },
       { y1: 180, y2: 210, x1: 50, x2: 400 },
     ];
     const result = buildAlignedLinesFromDetected(['Only line'], detected);
-    expect(result).toHaveLength(3);
-    const nonEmpty = result.filter(r => r.transcriptText !== '');
-    expect(nonEmpty).toHaveLength(1);
-    expect(nonEmpty[0].transcriptText).toBe('Only line');
+    // Single transcript line gets the whole band
+    expect(result).toHaveLength(1);
+    expect(result[0].transcriptText).toBe('Only line');
+    expect(result[0].bbox[0]).toBe(50);
+    expect(result[0].bbox[2]).toBe(400);
+    expect(result[0].bbox[1]).toBe(100);
+    expect(result[0].bbox[3]).toBe(210);
   });
 
-  it('fewer detected than transcript — subdivides evenly', () => {
+  it('fewer detected than transcript — subdivides band evenly', () => {
     const detected: DetectedLine[] = [
       { y1: 100, y2: 200, x1: 50, x2: 400 },
     ];
@@ -147,6 +153,11 @@ describe('buildAlignedLinesFromDetected', () => {
     expect(result[0].bbox[1]).toBe(100);
     expect(result[0].bbox[3]).toBe(133);
     expect(result[2].bbox[3]).toBe(200);
+    // Constant width
+    for (const line of result) {
+      expect(line.bbox[0]).toBe(50);
+      expect(line.bbox[2]).toBe(400);
+    }
   });
 
   it('sets correct visualLineIndex', () => {
@@ -165,19 +176,49 @@ describe('buildAlignedLinesFromDetected', () => {
     ];
     const result = buildAlignedLinesFromDetected(['Test'], detected);
     expect(result[0].baseline).toHaveLength(2);
+    // Uses constant width extents
     expect(result[0].baseline[0][0]).toBe(50);
     expect(result[0].baseline[1][0]).toBe(400);
     const expectedBaselineY = 140 - Math.round(40 * 0.2);
     expect(result[0].baseline[0][1]).toBe(expectedBaselineY);
   });
 
-  it('preserves per-line x extents in 1:1 case', () => {
+  it('uses constant x extents (min x1, max x2) across all lines', () => {
     const detected: DetectedLine[] = [
       { y1: 10, y2: 30, x1: 120, x2: 380 },
     ];
     const result = buildAlignedLinesFromDetected(['Only line'], detected);
     expect(result[0].bbox[0]).toBe(120);
     expect(result[0].bbox[2]).toBe(380);
+  });
+
+  it('handles paragraph gaps — lines skip over gaps between bands', () => {
+    // Two bands separated by a large gap
+    const detected: DetectedLine[] = [
+      { y1: 100, y2: 200, x1: 50, x2: 400 },  // Band 1 (100px tall)
+      // Gap from 200-400
+      { y1: 400, y2: 500, x1: 60, x2: 390 },  // Band 2 (100px tall)
+    ];
+    const lines = ['Line 1', 'Line 2', 'Line 3', 'Line 4'];
+    const result = buildAlignedLinesFromDetected(lines, detected);
+
+    expect(result).toHaveLength(4);
+    // Lines should be split between the two bands (2 each since equal height)
+    // Band 1 lines should be within y 100-200
+    expect(result[0].bbox[1]).toBeGreaterThanOrEqual(100);
+    expect(result[0].bbox[3]).toBeLessThanOrEqual(200);
+    expect(result[1].bbox[1]).toBeGreaterThanOrEqual(100);
+    expect(result[1].bbox[3]).toBeLessThanOrEqual(200);
+    // Band 2 lines should be within y 400-500
+    expect(result[2].bbox[1]).toBeGreaterThanOrEqual(400);
+    expect(result[2].bbox[3]).toBeLessThanOrEqual(500);
+    expect(result[3].bbox[1]).toBeGreaterThanOrEqual(400);
+    expect(result[3].bbox[3]).toBeLessThanOrEqual(500);
+    // Constant width (min x1=50, max x2=400)
+    for (const line of result) {
+      expect(line.bbox[0]).toBe(50);
+      expect(line.bbox[2]).toBe(400);
+    }
   });
 });
 

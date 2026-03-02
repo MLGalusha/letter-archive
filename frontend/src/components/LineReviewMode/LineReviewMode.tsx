@@ -137,6 +137,13 @@ export default function LineReviewMode({
 
   const currentPage = letterPages[currentPageIndex];
 
+  // Reset image sizes when switching pages so overlay doesn't render
+  // at stale positions from the previous page's dimensions
+  useEffect(() => {
+    setImageNaturalSize({ width: 0, height: 0 });
+    setImageDisplaySize({ width: 0, height: 0 });
+  }, [currentPageIndex]);
+
   // Run line detection via backend API when a page loads
   useEffect(() => {
     if (!currentPage) return;
@@ -183,24 +190,29 @@ export default function LineReviewMode({
     const pageText = pageLineTexts[currentPageIndex]?.join('\n') || '';
 
     // 1. Use AI-detected segments (from on-demand detection)
+    let lines: AlignedLine[] = [];
     const aiResult = aiSegmentsMap[currentPageIndex];
     if (aiResult && aiResult.length > 0) {
-      return alignTranscriptToVisualLines(pageText, aiResult);
+      lines = alignTranscriptToVisualLines(pageText, aiResult);
+    } else {
+      // 2. Fall back to client-side pixel detection
+      const transcriptLines = pageText.split('\n').filter((l) => l.trim().length > 0);
+      if (transcriptLines.length === 0) return [];
+
+      const detectionResult = detectedLinesMap[currentPageIndex];
+      if (detectionResult && detectionResult.length > 0) {
+        lines = buildAlignedLinesFromDetected(transcriptLines, detectionResult);
+      }
     }
 
-    // 2. Fall back to client-side pixel detection
-    const transcriptLines = pageText.split('\n').filter((l) => l.trim().length > 0);
-    if (transcriptLines.length === 0) return [];
-
-    const detectionResult = detectedLinesMap[currentPageIndex];
-    if (detectionResult && detectionResult.length > 0) {
-      return buildAlignedLinesFromDetected(transcriptLines, detectionResult);
-    }
-
-    return [];
+    // Skip empty lines (extra detected segments with no transcript text)
+    return lines.filter(l => l.transcriptLineIndex >= 0);
   }, [currentPage, currentPageIndex, pageLineTexts, aiSegmentsMap, detectedLinesMap, isDetecting]);
 
-  const currentLine = alignedLines[currentLineIndex];
+  // Only expose currentLine when the image for this page has loaded,
+  // so overlays never render at positions scaled from a previous page's dimensions
+  const imageReady = imageNaturalSize.width > 0;
+  const currentLine = imageReady ? alignedLines[currentLineIndex] : undefined;
   const totalLines = useMemo(
     () => letterPages.reduce((sum, _page, idx) => {
       const text = pageLineTexts[idx]?.join('\n') || '';
@@ -513,47 +525,65 @@ export default function LineReviewMode({
           draggable={false}
         />
 
-        {/* Top dimmer — from image top to highlight */}
+        {/* Left side dimmer — full height, left of text bounds */}
+        {currentLine && textLeft > 0 && (
+          <div
+            className="line-review-dimmer line-review-dimmer-solid"
+            style={{ top: 0, left: 0, width: textLeft, height: displayedImageHeight }}
+          />
+        )}
+
+        {/* Right side dimmer — full height, right of text bounds */}
+        {currentLine && (
+          <div
+            className="line-review-dimmer line-review-dimmer-solid"
+            style={{ top: 0, right: 0, width: Math.max(0, imageDisplaySize.width - textRight), height: displayedImageHeight }}
+          />
+        )}
+
+        {/* Top solid — within text bounds, above the fade */}
+        {currentLine && topDimmerHeight > 10 && (
+          <div
+            className="line-review-dimmer line-review-dimmer-solid"
+            style={{ top: 0, left: textLeft, width: textWidth, height: Math.max(0, topDimmerHeight - 10) }}
+          />
+        )}
+
+        {/* Top fade — gradient within text bounds */}
         {currentLine && topDimmerHeight > 0 && (
           <div
             className="line-review-dimmer line-review-dimmer-top"
-            style={{ height: topDimmerHeight }}
-          />
-        )}
-
-        {/* Left side dimmer — within the highlight strip, left of text */}
-        {currentLine && textLeft > 0 && (
-          <div
-            className="line-review-dimmer line-review-dimmer-side"
             style={{
-              top: topDimmerHeight,
-              left: 0,
-              width: textLeft,
-              height: highlightHeight,
+              top: Math.max(0, topDimmerHeight - 10),
+              left: textLeft,
+              width: textWidth,
+              height: 10,
             }}
           />
         )}
 
-        {/* Right side dimmer — within the highlight strip, right of text */}
-        {currentLine && (
-          <div
-            className="line-review-dimmer line-review-dimmer-side"
-            style={{
-              top: topDimmerHeight,
-              right: 0,
-              width: Math.max(0, imageDisplaySize.width - textRight),
-              height: highlightHeight,
-            }}
-          />
-        )}
-
-        {/* Bottom dimmer — fades in from line bottom, through input, to solid dim below */}
+        {/* Bottom fade — gradient within text bounds */}
         {currentLine && (
           <div
             className="line-review-dimmer line-review-dimmer-bottom"
             style={{
               top: bottomDimmerTop,
-              height: Math.max(0, displayedImageHeight - bottomDimmerTop),
+              left: textLeft,
+              width: textWidth,
+              height: 10,
+            }}
+          />
+        )}
+
+        {/* Bottom solid — within text bounds, below the fade */}
+        {currentLine && (
+          <div
+            className="line-review-dimmer line-review-dimmer-solid"
+            style={{
+              top: bottomDimmerTop + 10,
+              left: textLeft,
+              width: textWidth,
+              height: Math.max(0, displayedImageHeight - bottomDimmerTop - 10),
             }}
           />
         )}

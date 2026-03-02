@@ -139,28 +139,14 @@ export default function LineReviewMode({
 
     const detectionResult = detectedLinesMap[currentPageIndex];
 
-    // Use pixel-detected text region if available and non-empty
+    // Use valley-detected lines if available and non-empty
     if (detectionResult && detectionResult.length > 0) {
       return buildAlignedLinesFromDetected(transcriptLines, detectionResult);
     }
 
-    // Detection was attempted but returned empty (CORS error, blank image, etc.)
-    // Fall back to even division of an estimated text region with margins
-    if (detectionResult !== undefined && detectionResult !== null) {
-      const w = imageNaturalSize.width || 1000;
-      const h = imageNaturalSize.height || 1400;
-      const estimatedRegion = [{
-        y1: Math.round(h * 0.15),
-        y2: Math.round(h * 0.90),
-        x1: Math.round(w * 0.08),
-        x2: Math.round(w * 0.92),
-      }];
-      return buildAlignedLinesFromDetected(transcriptLines, estimatedRegion);
-    }
-
-    // Not yet attempted — return empty until pixel analysis runs
+    // Detection not yet attempted or returned empty — return empty
     return [];
-  }, [currentPage, currentPageIndex, pageLineTexts, detectedLinesMap, imageNaturalSize]);
+  }, [currentPage, currentPageIndex, pageLineTexts, detectedLinesMap]);
 
   const currentLine = alignedLines[currentLineIndex];
   const totalLines = useMemo(
@@ -420,10 +406,19 @@ export default function LineReviewMode({
           </div>
         )}
 
-        {/* Analyzing indicator — only while detection hasn't been attempted yet */}
+        {/* Analyzing indicator — while detection hasn't been attempted yet */}
         {alignedLines.length === 0 && imageNaturalSize.width > 0 && !(currentPageIndex in detectedLinesMap) && (
           <div className="line-review-analyzing">
             Detecting lines...
+          </div>
+        )}
+
+        {/* Not available — detection attempted but found no lines */}
+        {alignedLines.length === 0 && imageNaturalSize.width > 0 && currentPageIndex in detectedLinesMap && (
+          <div className="line-review-analyzing">
+            Could not detect line positions for this page.
+            <br />
+            <small>Press <kbd>Esc</kbd> to return to the editor.</small>
           </div>
         )}
       </div>

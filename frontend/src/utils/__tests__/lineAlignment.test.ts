@@ -44,14 +44,12 @@ describe('alignTranscriptToVisualLines', () => {
   });
 
   it('never reorders transcript lines regardless of OCR text', () => {
-    // OCR text is in different order than transcript — transcript order must win
     const segments = [
-      makeSegment(1, 'World'),  // OCR says "World" but transcript line 1 is "Hello"
-      makeSegment(2, 'Hello'),  // OCR says "Hello" but transcript line 2 is "World"
+      makeSegment(1, 'World'),
+      makeSegment(2, 'Hello'),
     ];
     const result = alignTranscriptToVisualLines('Hello\nWorld', segments);
     expect(result).toHaveLength(2);
-    // Must preserve original transcript order, NOT match by OCR similarity
     expect(result[0].transcriptText).toBe('Hello');
     expect(result[1].transcriptText).toBe('World');
   });
@@ -60,7 +58,6 @@ describe('alignTranscriptToVisualLines', () => {
     const segments = [makeSegment(1), makeSegment(2), makeSegment(3)];
     const result = alignTranscriptToVisualLines('Line A\nLine B', segments);
     expect(result).toHaveLength(3);
-    // Transcript lines assigned in order to proportional positions
     const texts = result.map(r => r.transcriptText);
     expect(texts.filter(t => t !== '')).toEqual(['Line A', 'Line B']);
   });
@@ -68,7 +65,6 @@ describe('alignTranscriptToVisualLines', () => {
   it('fewer segments than transcript — subdivides segments in order', () => {
     const segments = [makeSegment(1)];
     const result = alignTranscriptToVisualLines('Hello\nWorld\nFoo', segments);
-    // Should subdivide the single segment into 3 lines
     expect(result).toHaveLength(3);
     expect(result[0].transcriptText).toBe('Hello');
     expect(result[1].transcriptText).toBe('World');
@@ -107,76 +103,60 @@ describe('buildAlignedLinesFromDetected', () => {
     expect(result).toEqual([]);
   });
 
-  it('evenly divides single bounding box among transcript lines', () => {
-    // Single detected region (typical output from detectImageLines)
+  it('1:1 mapping when counts match', () => {
     const detected: DetectedLine[] = [
-      { y1: 100, y2: 400, x1: 50, x2: 450 },
+      { y1: 100, y2: 130, x1: 50, x2: 450 },
+      { y1: 140, y2: 170, x1: 60, x2: 440 },
+      { y1: 180, y2: 210, x1: 55, x2: 445 },
     ];
     const lines = ['First line', 'Second line', 'Third line'];
     const result = buildAlignedLinesFromDetected(lines, detected);
 
     expect(result).toHaveLength(3);
     expect(result[0].transcriptText).toBe('First line');
+    expect(result[0].bbox).toEqual([50, 100, 450, 130]);
     expect(result[1].transcriptText).toBe('Second line');
+    expect(result[1].bbox).toEqual([60, 140, 440, 170]);
     expect(result[2].transcriptText).toBe('Third line');
-
-    // Each line should get 100px height (300 / 3)
-    expect(result[0].bbox).toEqual([50, 100, 450, 200]);
-    expect(result[1].bbox).toEqual([50, 200, 450, 300]);
-    expect(result[2].bbox).toEqual([50, 300, 450, 400]);
+    expect(result[2].bbox).toEqual([55, 180, 445, 210]);
   });
 
-  it('merges multiple detected regions into one bounding box', () => {
-    // If somehow multiple regions are passed, they get merged
+  it('more detected than transcript — distributes proportionally', () => {
     const detected: DetectedLine[] = [
-      { y1: 10, y2: 30, x1: 5, x2: 100 },
-      { y1: 35, y2: 55, x1: 10, x2: 95 },
-      { y1: 60, y2: 80, x1: 8, x2: 98 },
+      { y1: 100, y2: 130, x1: 50, x2: 400 },
+      { y1: 140, y2: 170, x1: 50, x2: 400 },
+      { y1: 180, y2: 210, x1: 50, x2: 400 },
     ];
-    const result = buildAlignedLinesFromDetected(['All text'], detected);
-    expect(result).toHaveLength(1);
-    expect(result[0].bbox[0]).toBe(5);   // min x1
-    expect(result[0].bbox[1]).toBe(10);  // min y1
-    expect(result[0].bbox[2]).toBe(100); // max x2
-    expect(result[0].bbox[3]).toBe(80);  // max y2
+    const result = buildAlignedLinesFromDetected(['Only line'], detected);
+    expect(result).toHaveLength(3);
+    const nonEmpty = result.filter(r => r.transcriptText !== '');
+    expect(nonEmpty).toHaveLength(1);
+    expect(nonEmpty[0].transcriptText).toBe('Only line');
   });
 
-  it('splits single region evenly for multiple transcript lines', () => {
+  it('fewer detected than transcript — subdivides evenly', () => {
     const detected: DetectedLine[] = [
-      { y1: 100, y2: 190, x1: 20, x2: 400 },
+      { y1: 100, y2: 200, x1: 50, x2: 400 },
     ];
     const result = buildAlignedLinesFromDetected(['A', 'B', 'C'], detected);
     expect(result).toHaveLength(3);
     expect(result[0].transcriptText).toBe('A');
     expect(result[1].transcriptText).toBe('B');
     expect(result[2].transcriptText).toBe('C');
-    // Heights should be 30px each (90px total / 3)
+    // Each line ~33px height in the 100px region
     expect(result[0].bbox[1]).toBe(100);
-    expect(result[0].bbox[3]).toBe(130);
-    expect(result[1].bbox[1]).toBe(130);
-    expect(result[1].bbox[3]).toBe(160);
-    expect(result[2].bbox[1]).toBe(160);
-    expect(result[2].bbox[3]).toBe(190);
+    expect(result[0].bbox[3]).toBe(133);
+    expect(result[2].bbox[3]).toBe(200);
   });
 
   it('sets correct visualLineIndex', () => {
     const detected: DetectedLine[] = [
-      { y1: 10, y2: 70, x1: 5, x2: 100 },
+      { y1: 10, y2: 30, x1: 5, x2: 100 },
+      { y1: 35, y2: 55, x1: 5, x2: 100 },
     ];
     const result = buildAlignedLinesFromDetected(['A', 'B'], detected);
     expect(result[0].visualLineIndex).toBe(0);
     expect(result[1].visualLineIndex).toBe(1);
-  });
-
-  it('all lines share same x extents', () => {
-    const detected: DetectedLine[] = [
-      { y1: 0, y2: 60, x1: 42, x2: 358 },
-    ];
-    const result = buildAlignedLinesFromDetected(['X', 'Y'], detected);
-    expect(result[0].bbox[0]).toBe(42);
-    expect(result[0].bbox[2]).toBe(358);
-    expect(result[1].bbox[0]).toBe(42);
-    expect(result[1].bbox[2]).toBe(358);
   });
 
   it('generates baseline coordinates near bottom of each line', () => {
@@ -185,28 +165,27 @@ describe('buildAlignedLinesFromDetected', () => {
     ];
     const result = buildAlignedLinesFromDetected(['Test'], detected);
     expect(result[0].baseline).toHaveLength(2);
-    expect(result[0].baseline[0][0]).toBe(50); // x1
-    expect(result[0].baseline[1][0]).toBe(400); // x2
-    // Baseline Y should be near bottom of bbox (80% of height)
-    const expectedBaselineY = 140 - Math.round(40 * 0.2); // y2 - 20% of height
+    expect(result[0].baseline[0][0]).toBe(50);
+    expect(result[0].baseline[1][0]).toBe(400);
+    const expectedBaselineY = 140 - Math.round(40 * 0.2);
     expect(result[0].baseline[0][1]).toBe(expectedBaselineY);
   });
 
-  it('single transcript line with single detected region maps directly', () => {
-    const detected: DetectedLine[] = [{ y1: 50, y2: 80, x1: 10, x2: 400 }];
-    const result = buildAlignedLinesFromDetected(['Only text'], detected);
-    expect(result).toHaveLength(1);
-    expect(result[0].transcriptText).toBe('Only text');
-    expect(result[0].bbox).toEqual([10, 50, 400, 80]);
+  it('preserves per-line x extents in 1:1 case', () => {
+    const detected: DetectedLine[] = [
+      { y1: 10, y2: 30, x1: 120, x2: 380 },
+    ];
+    const result = buildAlignedLinesFromDetected(['Only line'], detected);
+    expect(result[0].bbox[0]).toBe(120);
+    expect(result[0].bbox[2]).toBe(380);
   });
 });
 
 // ============================================================================
-// detectImageLines (with canvas mock)
+// detectImageLines — valley detection (with canvas mock)
 // ============================================================================
 
 describe('detectImageLines', () => {
-  // Helper to create a mock image element with pixel data
   function createMockImageWithPixels(
     width: number,
     height: number,
@@ -240,8 +219,8 @@ describe('detectImageLines', () => {
   }
 
   /**
-   * Generate RGBA pixel data for a simple test image.
-   * White background (255,255,255) with dark rows (30,30,30) for text lines.
+   * Generate RGBA pixel data for a test image.
+   * White background with dark rows for text lines.
    */
   function generateTestPixels(
     width: number,
@@ -249,23 +228,21 @@ describe('detectImageLines', () => {
     darkRows: { y1: number; y2: number; x1?: number; x2?: number }[],
   ): Uint8ClampedArray {
     const data = new Uint8ClampedArray(width * height * 4);
-    // Fill with white
     for (let i = 0; i < data.length; i += 4) {
-      data[i] = 255;     // R
-      data[i + 1] = 255; // G
-      data[i + 2] = 255; // B
-      data[i + 3] = 255; // A
+      data[i] = 255;
+      data[i + 1] = 255;
+      data[i + 2] = 255;
+      data[i + 3] = 255;
     }
-    // Paint dark rows
     for (const row of darkRows) {
       const x1 = row.x1 ?? 0;
       const x2 = row.x2 ?? width;
       for (let y = row.y1; y < Math.min(row.y2, height); y++) {
         for (let x = x1; x < Math.min(x2, width); x++) {
           const i = (y * width + x) * 4;
-          data[i] = 30;     // R
-          data[i + 1] = 30; // G
-          data[i + 2] = 30; // B
+          data[i] = 30;
+          data[i + 1] = 30;
+          data[i + 2] = 30;
           data[i + 3] = 255;
         }
       }
@@ -280,7 +257,7 @@ describe('detectImageLines', () => {
     expect(detectImageLines(img)).toEqual([]);
   });
 
-  it('returns single bounding box for text region', () => {
+  it('detects a single text line', () => {
     const w = 200, h = 100;
     const pixels = generateTestPixels(w, h, [
       { y1: 40, y2: 60, x1: 20, x2: 180 },
@@ -289,7 +266,7 @@ describe('detectImageLines', () => {
     try {
       const lines = detectImageLines(img);
       expect(lines.length).toBe(1);
-      expect(lines[0].y1).toBeLessThanOrEqual(40);
+      expect(lines[0].y1).toBeLessThanOrEqual(41);
       expect(lines[0].y2).toBeGreaterThanOrEqual(59);
       expect(lines[0].x1).toBeLessThanOrEqual(21);
       expect(lines[0].x2).toBeGreaterThanOrEqual(179);
@@ -298,40 +275,42 @@ describe('detectImageLines', () => {
     }
   });
 
-  it('returns single bounding box spanning all text regions', () => {
+  it('detects multiple lines separated by clear gaps', () => {
     const w = 200, h = 300;
+    // Three lines with clear whitespace gaps between them
     const pixels = generateTestPixels(w, h, [
-      { y1: 30, y2: 50, x1: 10, x2: 190 },   // line 1
-      { y1: 80, y2: 100, x1: 15, x2: 185 },  // line 2
-      { y1: 130, y2: 150, x1: 20, x2: 170 },  // line 3
+      { y1: 30, y2: 50, x1: 10, x2: 190 },
+      { y1: 100, y2: 120, x1: 15, x2: 185 },
+      { y1: 170, y2: 190, x1: 20, x2: 170 },
     ]);
     const img = createMockImageWithPixels(w, h, pixels);
     try {
       const lines = detectImageLines(img);
-      // Should return a single bounding box covering all text
-      expect(lines.length).toBe(1);
-      expect(lines[0].y1).toBeLessThanOrEqual(30);  // top of first text
-      expect(lines[0].y2).toBeGreaterThanOrEqual(149); // bottom of last text
-      expect(lines[0].x1).toBeLessThanOrEqual(11);  // leftmost text
-      expect(lines[0].x2).toBeGreaterThanOrEqual(189); // rightmost text
+      expect(lines.length).toBe(3);
+      // Lines should be in top-to-bottom order
+      expect(lines[0].y1).toBeLessThan(lines[1].y1);
+      expect(lines[1].y1).toBeLessThan(lines[2].y1);
     } finally {
       cleanup(img);
     }
   });
 
-  it('measures overall left/right extent across all text', () => {
+  it('measures per-line x extents', () => {
     const w = 400, h = 200;
     const pixels = generateTestPixels(w, h, [
       { y1: 30, y2: 60, x1: 100, x2: 300 },
-      { y1: 80, y2: 110, x1: 80, x2: 350 },
+      { y1: 100, y2: 130, x1: 50, x2: 350 },
     ]);
     const img = createMockImageWithPixels(w, h, pixels);
     try {
       const lines = detectImageLines(img);
-      expect(lines.length).toBe(1);
-      // x1 should be near 80 (leftmost across both), x2 near 350 (rightmost)
-      expect(lines[0].x1).toBeLessThanOrEqual(81);
-      expect(lines[0].x2).toBeGreaterThanOrEqual(349);
+      expect(lines.length).toBe(2);
+      // First line: narrower
+      expect(lines[0].x1).toBeLessThanOrEqual(101);
+      expect(lines[0].x2).toBeGreaterThanOrEqual(299);
+      // Second line: wider
+      expect(lines[1].x1).toBeLessThanOrEqual(51);
+      expect(lines[1].x2).toBeGreaterThanOrEqual(349);
     } finally {
       cleanup(img);
     }
@@ -339,11 +318,10 @@ describe('detectImageLines', () => {
 
   it('returns empty for image with no dark pixels', () => {
     const w = 200, h = 100;
-    const pixels = generateTestPixels(w, h, []); // All white
+    const pixels = generateTestPixels(w, h, []);
     const img = createMockImageWithPixels(w, h, pixels);
     try {
-      const lines = detectImageLines(img);
-      expect(lines.length).toBe(0);
+      expect(detectImageLines(img).length).toBe(0);
     } finally {
       cleanup(img);
     }
@@ -364,10 +342,36 @@ describe('detectImageLines', () => {
     HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue(mockCtx) as any;
 
     try {
-      const lines = detectImageLines(img);
-      expect(lines).toEqual([]); // Should not throw, returns empty
+      expect(detectImageLines(img)).toEqual([]);
     } finally {
       HTMLCanvasElement.prototype.getContext = origGetContext;
+    }
+  });
+
+  it('handles paragraph gaps — lines on either side detected separately', () => {
+    const w = 200, h = 600;
+    // Two lines with clear gap between them, then a big paragraph gap, then two more
+    const pixels = generateTestPixels(w, h, [
+      { y1: 30, y2: 60, x1: 10, x2: 190 },
+      { y1: 100, y2: 130, x1: 10, x2: 190 },
+      // Big paragraph gap (130-400)
+      { y1: 400, y2: 430, x1: 10, x2: 190 },
+      { y1: 470, y2: 500, x1: 10, x2: 190 },
+    ]);
+    const img = createMockImageWithPixels(w, h, pixels);
+    try {
+      const lines = detectImageLines(img);
+      expect(lines.length).toBe(4);
+      // Lines should be in order, and the gap between line 2 and 3 means
+      // there's a significant Y distance between their centers
+      const center2 = (lines[1].y1 + lines[1].y2) / 2;
+      const center3 = (lines[2].y1 + lines[2].y2) / 2;
+      const center1 = (lines[0].y1 + lines[0].y2) / 2;
+      const normalSpacing = center2 - center1;
+      // The paragraph gap should create a larger spacing than between adjacent lines
+      expect(center3 - center2).toBeGreaterThan(normalSpacing * 2);
+    } finally {
+      cleanup(img);
     }
   });
 });

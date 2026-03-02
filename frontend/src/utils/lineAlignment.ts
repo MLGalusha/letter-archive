@@ -32,61 +32,59 @@ export function alignTranscriptToVisualLines(
     }));
   }
 
-  // 1:1 — assign in order
-  if (transcriptLines.length === segCount) {
+  // Assign transcript lines to segments 1:1 from the top.
+  // If counts differ, extras go at the end — never create gaps in the middle.
+  //
+  // More segments than lines: first N segments get text, rest are empty at bottom.
+  // More lines than segments: first N lines get their own segment, remaining
+  //   lines are subdivided into the last segment.
+  // This is correct because both detection and transcript are in reading order.
+  if (segCount >= transcriptLines.length) {
+    // Each transcript line gets one segment; extra segments at bottom are empty
     return lineSegments.map((seg, i) => ({
       visualLineIndex: i,
-      transcriptText: transcriptLines[i],
-      transcriptLineIndex: i,
+      transcriptText: i < transcriptLines.length ? transcriptLines[i] : '',
+      transcriptLineIndex: i < transcriptLines.length ? i : -1,
       bbox: seg.bbox,
       baseline: seg.baseline,
     }));
   }
 
-  // More segments than transcript lines — assign each transcript line to the
-  // proportionally closest segment, leaving extra segments empty
-  if (segCount > transcriptLines.length) {
-    return lineSegments.map((seg, i) => {
-      const tIdx = Math.round((i / segCount) * transcriptLines.length);
-      // Only assign if this is the closest segment for that transcript line
-      const closestSeg = Math.round((tIdx / transcriptLines.length) * segCount);
-      const hasText = closestSeg === i && tIdx < transcriptLines.length;
-      return {
-        visualLineIndex: i,
-        transcriptText: hasText ? transcriptLines[tIdx] : '',
-        transcriptLineIndex: hasText ? tIdx : -1,
-        bbox: seg.bbox,
-        baseline: seg.baseline,
-      };
-    });
-  }
-
-  // Fewer segments than transcript lines — evenly subdivide each segment
+  // Fewer segments than transcript lines — assign 1:1 for all segments except
+  // the last, which absorbs the remaining transcript lines as subdivisions.
   const result: AlignedLine[] = [];
-  let tIdx = 0;
   for (let s = 0; s < segCount; s++) {
     const seg = lineSegments[s];
-    const tStart = tIdx;
-    const tEnd = s < segCount - 1
-      ? Math.round(((s + 1) / segCount) * transcriptLines.length)
-      : transcriptLines.length;
-    const subCount = tEnd - tStart;
-    const subHeight = (seg.bbox[3] - seg.bbox[1]) / subCount;
-    for (let sub = 0; sub < subCount; sub++) {
-      const sy1 = Math.round(seg.bbox[1] + sub * subHeight);
-      const sy2 = Math.round(seg.bbox[1] + (sub + 1) * subHeight);
+
+    if (s < segCount - 1) {
+      // One transcript line per segment
       result.push({
         visualLineIndex: result.length,
-        transcriptText: transcriptLines[tStart + sub],
-        transcriptLineIndex: tStart + sub,
-        bbox: [seg.bbox[0], sy1, seg.bbox[2], sy2],
-        baseline: [
-          [seg.bbox[0], sy2 - Math.round(subHeight * 0.2)],
-          [seg.bbox[2], sy2 - Math.round(subHeight * 0.2)],
-        ],
+        transcriptText: s < transcriptLines.length ? transcriptLines[s] : '',
+        transcriptLineIndex: s < transcriptLines.length ? s : -1,
+        bbox: seg.bbox,
+        baseline: seg.baseline,
       });
+    } else {
+      // Last segment: absorb all remaining transcript lines
+      const remaining = transcriptLines.length - s;
+      const subHeight = (seg.bbox[3] - seg.bbox[1]) / remaining;
+      for (let sub = 0; sub < remaining; sub++) {
+        const tIdx = s + sub;
+        const sy1 = Math.round(seg.bbox[1] + sub * subHeight);
+        const sy2 = Math.round(seg.bbox[1] + (sub + 1) * subHeight);
+        result.push({
+          visualLineIndex: result.length,
+          transcriptText: transcriptLines[tIdx],
+          transcriptLineIndex: tIdx,
+          bbox: [seg.bbox[0], sy1, seg.bbox[2], sy2],
+          baseline: [
+            [seg.bbox[0], sy2 - Math.round(subHeight * 0.2)],
+            [seg.bbox[2], sy2 - Math.round(subHeight * 0.2)],
+          ],
+        });
+      }
     }
-    tIdx = tEnd;
   }
   return result;
 }

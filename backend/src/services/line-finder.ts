@@ -11,12 +11,21 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const log = createLogger({ module: 'line-finder' });
 
+interface LineFinderWord {
+  text: string;
+  left_x: number;
+  right_x: number;
+  top_y: number;
+  bottom_y: number;
+}
+
 interface LineFinderResult {
   line: number;
   top_y: number;
   bottom_y: number;
   left_x: number;
   right_x: number;
+  words?: LineFinderWord[];
 }
 
 /**
@@ -54,6 +63,10 @@ export async function runLineFinder(imagePath: string): Promise<LineSegment[] | 
       baseline: [[r.left_x, r.bottom_y], [r.right_x, r.bottom_y]],
       bbox: [r.left_x, r.top_y, r.right_x, r.bottom_y] as [number, number, number, number],
       ocrText: '',
+      words: r.words?.map((w) => ({
+        text: w.text,
+        bbox: [w.left_x, w.top_y, w.right_x, w.bottom_y] as [number, number, number, number],
+      })),
     }));
 
     log.info({ imagePath, lineCount: segments.length }, 'Line finder completed');

@@ -1,4 +1,4 @@
-import type { LineSegment } from '../types/Letter';
+import type { LineSegment, LineSegmentWord } from '../types/Letter';
 
 export interface AlignedLine {
   visualLineIndex: number;
@@ -7,6 +7,7 @@ export interface AlignedLine {
   transcriptLineIndex: number;
   bbox: [number, number, number, number];
   baseline: number[][];
+  words?: LineSegmentWord[];
 }
 
 /**
@@ -29,6 +30,7 @@ export function alignTranscriptToVisualLines(
       transcriptLineIndex: -1,
       bbox: seg.bbox,
       baseline: seg.baseline,
+      words: seg.words,
     }));
   }
 
@@ -47,6 +49,7 @@ export function alignTranscriptToVisualLines(
       transcriptLineIndex: i < transcriptLines.length ? i : -1,
       bbox: seg.bbox,
       baseline: seg.baseline,
+      words: seg.words,
     }));
   }
 
@@ -64,6 +67,7 @@ export function alignTranscriptToVisualLines(
         transcriptLineIndex: s < transcriptLines.length ? s : -1,
         bbox: seg.bbox,
         baseline: seg.baseline,
+        words: seg.words,
       });
     } else {
       // Last segment: absorb all remaining transcript lines

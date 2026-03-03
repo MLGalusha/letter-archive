@@ -105,11 +105,17 @@ export type LetterImageType =
   | 'card'
   | 'telegram';
 
+export interface LineSegmentWord {
+  text: string;
+  bbox: [number, number, number, number];
+}
+
 export interface LineSegment {
   line: number;
   baseline: number[][];
   bbox: [number, number, number, number];
   ocrText: string;
+  words?: LineSegmentWord[];
 }
 
 export interface LetterImage {

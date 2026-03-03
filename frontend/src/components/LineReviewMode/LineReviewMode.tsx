@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { getImageUrl } from '../../api/client';
 import { detectPageLines } from '../../api/admin/letters';
-import type { Letter, LineSegment } from '../../types/Letter';
+import type { Letter, LineSegment, LineSegmentWord } from '../../types/Letter';
 import {
   alignTranscriptToVisualLines,
   detectImageLines,
@@ -30,7 +30,7 @@ function splitTranscriptByPage(fullText: string, pageCount: number): string[] {
   // parts[0] is before first separator (empty), actual pages start at index 1
   const pages: string[] = [];
   for (let i = 1; i < parts.length; i++) {
-    pages.push(parts[i]?.trim() || '');
+    pages.push(parts[i] || '');
   }
   // Pad if needed
   while (pages.length < pageCount) {
@@ -51,29 +51,138 @@ function reconstructTranscript(pageTexts: string[]): string {
     .join('\n\n');
 }
 
+const FONT_FAMILY = "Georgia, 'Times New Roman', serif";
+const CSS_BORDER_PADDING = 6; // border (2px) + padding (4px) on each side
+
+function measureRenderedTextWidth(
+  text: string,
+  fontSize: number,
+  wordSpacing = 0,
+): number {
+  const measureNode = document.createElement('span');
+  measureNode.textContent = text;
+  measureNode.style.position = 'absolute';
+  measureNode.style.left = '-99999px';
+  measureNode.style.top = '0';
+  measureNode.style.visibility = 'hidden';
+  measureNode.style.whiteSpace = 'pre';
+  measureNode.style.margin = '0';
+  measureNode.style.padding = '0';
+  measureNode.style.border = '0';
+  measureNode.style.lineHeight = '1';
+  measureNode.style.fontFamily = FONT_FAMILY;
+  measureNode.style.fontSize = `${fontSize}px`;
+  measureNode.style.wordSpacing = `${wordSpacing}px`;
+  measureNode.style.fontKerning = 'none';
+  measureNode.style.fontVariantLigatures = 'none';
+
+  document.body.appendChild(measureNode);
+  const width = measureNode.getBoundingClientRect().width;
+  measureNode.remove();
+
+  return width;
+}
+
 /**
- * Measures ideal font size that makes text fill a given width.
+ * Computes a representative font size for the page (used for input overlay height).
+ * Compares OCR line widths to rendered text widths at a reference size.
  */
-function measureFontSize(text: string, targetWidth: number, fontFamily: string): number {
+function computePageFontSize(
+  alignedLines: AlignedLine[],
+  scaleFactor: number,
+): number {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-  if (!ctx || !text || targetWidth <= 0) return 14;
+  if (!ctx) return 14;
 
-  let lo = 10;
-  let hi = 28;
+  const REF_SIZE = 16;
+  ctx.font = `${REF_SIZE}px ${FONT_FAMILY}`;
 
-  while (hi - lo > 0.5) {
-    const mid = (lo + hi) / 2;
-    ctx.font = `${mid}px ${fontFamily}`;
-    const measured = ctx.measureText(text).width;
-    if (measured < targetWidth) {
-      lo = mid;
-    } else {
-      hi = mid;
-    }
+  let totalOcrWidth = 0;
+  let totalRenderedWidth = 0;
+
+  for (const line of alignedLines) {
+    if (!line.words || line.words.length === 0) continue;
+    const text = line.transcriptText.trim();
+    if (!text) continue;
+
+    const lineLeft = Math.min(...line.words.map(w => w.bbox[0]));
+    const lineRight = Math.max(...line.words.map(w => w.bbox[2]));
+    totalOcrWidth += (lineRight - lineLeft) * scaleFactor;
+    totalRenderedWidth += ctx.measureText(text).width;
   }
 
-  return Math.max(10, Math.min(28, Math.round(lo)));
+  if (totalRenderedWidth <= 0 || totalOcrWidth <= 0) return 14;
+  const fontSize = Math.round(REF_SIZE * totalOcrWidth / totalRenderedWidth);
+  return Math.max(8, Math.min(36, fontSize));
+}
+
+/**
+ * Fills a contentEditable div with transcript text, sized and spaced to match
+ * the OCR line's horizontal span. Uses per-line font-size and word-spacing
+ * so the text fills from the leftmost to rightmost OCR word coordinate.
+ * Falls back to plain text when no OCR words are available.
+ */
+function buildWordPositionedContent(
+  div: HTMLDivElement,
+  text: string,
+  ocrWords: LineSegmentWord[] | undefined,
+  contentAreaLeftDisplay: number,
+  scaleFactor: number,
+): void {
+  div.innerHTML = '';
+  div.style.fontSize = '';
+  div.style.wordSpacing = '';
+  div.style.textIndent = '';
+
+  if (!text) return;
+
+  const words = text.split(/\s+/).filter(w => w.length > 0);
+  if (words.length === 0) return;
+  const joined = words.join(' ');
+
+  // No OCR data — plain text, inherit page font size from style prop
+  if (!ocrWords || ocrWords.length === 0) {
+    div.textContent = joined;
+    return;
+  }
+
+  // Line text bounds from OCR words
+  const lineLeftX = Math.min(...ocrWords.map(w => w.bbox[0]));
+  const lineRightX = Math.max(...ocrWords.map(w => w.bbox[2]));
+  const targetWidth = (lineRightX - lineLeftX) * scaleFactor;
+
+  if (targetWidth <= 0) {
+    div.textContent = joined;
+    return;
+  }
+
+  // Left offset: where the text should start inside the content area
+  const leftOffset = lineLeftX * scaleFactor - contentAreaLeftDisplay;
+
+  const REF_SIZE = 16;
+  const refWidth = measureRenderedTextWidth(joined, REF_SIZE);
+  if (refWidth <= 0) { div.textContent = joined; return; }
+
+  const fontSize = Math.max(8, Math.min(36, REF_SIZE * targetWidth / refWidth));
+
+  // Fine-tune with word-spacing using real DOM-rendered widths.
+  let wordSpacing = 0;
+  if (words.length > 1) {
+    const actualWidth = measureRenderedTextWidth(joined, fontSize);
+    wordSpacing = (targetWidth - actualWidth) / (words.length - 1);
+  }
+
+  // Apply per-line styles
+  div.style.fontSize = `${fontSize}px`;
+  if (Math.abs(wordSpacing) > 0.1) {
+    div.style.wordSpacing = `${wordSpacing}px`;
+  }
+  if (leftOffset > 0.5) {
+    div.style.textIndent = `${leftOffset}px`;
+  }
+
+  div.textContent = joined;
 }
 
 export default function LineReviewMode({
@@ -133,7 +242,7 @@ export default function LineReviewMode({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLDivElement>(null);
 
   const currentPage = letterPages[currentPageIndex];
 
@@ -143,6 +252,19 @@ export default function LineReviewMode({
     setImageNaturalSize({ width: 0, height: 0 });
     setImageDisplaySize({ width: 0, height: 0 });
   }, [currentPageIndex]);
+
+  // Derive text bounds from AI segments instead of hardcoded percentages
+  useEffect(() => {
+    const segs = aiSegmentsMap[currentPageIndex];
+    if (!segs || segs.length === 0 || imageNaturalSize.width === 0) return;
+
+    const globalLeft = Math.min(...segs.map(s => s.bbox[0]));
+    const globalRight = Math.max(...segs.map(s => s.bbox[2]));
+    const pad = imageNaturalSize.width * 0.01; // 1% breathing room
+
+    setTextLeftPct(Math.max(0.02, (globalLeft - pad) / imageNaturalSize.width));
+    setTextRightPct(Math.min(0.98, (globalRight + pad) / imageNaturalSize.width));
+  }, [aiSegmentsMap, currentPageIndex, imageNaturalSize.width]);
 
   // Run line detection via backend API when a page loads
   useEffect(() => {
@@ -242,6 +364,12 @@ export default function LineReviewMode({
     ? imageDisplaySize.width / imageNaturalSize.width
     : 1;
 
+  // Page-global font size: one consistent size derived from OCR word widths across all lines
+  const pageFontSize = useMemo(
+    () => computePageFontSize(alignedLines, scaleFactor),
+    [alignedLines, scaleFactor],
+  );
+
   // Track image natural size and run pixel detection fallback
   const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
@@ -306,7 +434,8 @@ export default function LineReviewMode({
     const currentAligned = alignedLines[currentLineIndex];
     if (!currentAligned) return;
 
-    const newText = inputRef.current.value;
+    const rawText = inputRef.current.textContent || '';
+    const newText = rawText.replace(/\s+/g, ' ').trim();
     const originalText = currentAligned.transcriptText;
 
     // Skip save if text hasn't changed
@@ -393,13 +522,30 @@ export default function LineReviewMode({
     }
   }, [currentLine, currentLineIndex, scaleFactor]);
 
-  // Focus input when line changes
+  // Build word-positioned content and focus when line changes
   useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.setSelectionRange(0, 0);
+    if (!inputRef.current) return;
+    const line = alignedLines[currentLineIndex];
+    if (!line) return;
+
+    // Content area left = overlay left + border + padding
+    const overlayLeft = textLeftPct * imageDisplaySize.width;
+    const contentAreaLeft = overlayLeft + CSS_BORDER_PADDING;
+
+    buildWordPositionedContent(
+      inputRef.current,
+      line.transcriptText,
+      line.words,
+      contentAreaLeft,
+      scaleFactor,
+    );
+
+    inputRef.current.focus();
+    const sel = window.getSelection();
+    if (sel && inputRef.current.firstChild) {
+      sel.collapse(inputRef.current.firstChild, 0);
     }
-  }, [currentLineIndex, currentPageIndex]);
+  }, [currentLineIndex, currentPageIndex, alignedLines, scaleFactor, textLeftPct, imageDisplaySize.width]);
 
   // Re-run line detection for the current page
   const redetectLines = useCallback(() => {
@@ -471,8 +617,10 @@ export default function LineReviewMode({
 
   if (!currentPage) return null;
 
-  // Fixed height for the editable input strip below the highlight
-  const INPUT_DISPLAY_HEIGHT = 30;
+  // Dynamic height for the editable strip — scales with page-global font size
+  const INPUT_DISPLAY_HEIGHT = pageFontSize > 14
+    ? Math.max(24, pageFontSize + 10)
+    : 30;
 
   // Compute overlay positions
   const topDimmerHeight = currentLine ? currentLine.bbox[1] * scaleFactor : 0;
@@ -497,16 +645,8 @@ export default function LineReviewMode({
   // The input overlay sits on top at z-index 10.
   const bottomDimmerTop = inputTop;
 
-  // Font size auto-scaling
-  const fontSize = currentLine
-    ? measureFontSize(
-        alignedLines[currentLineIndex]?.transcriptText || '',
-        inputWidth - 12, // account for padding
-        "Georgia, 'Times New Roman', serif",
-      )
-    : 14;
-
-  const currentText = alignedLines[currentLineIndex]?.transcriptText || '';
+  // Use the page-global font size for the editable div
+  const fontSize = pageFontSize;
 
   return (
     <div className={`line-review-mode${dragging ? ' line-review-dragging' : ''}`} ref={containerRef}>
@@ -599,12 +739,15 @@ export default function LineReviewMode({
               height: INPUT_DISPLAY_HEIGHT,
             }}
           >
-            <input
+            <div
               ref={inputRef}
-              type="text"
-              defaultValue={currentText}
-              key={`${currentPageIndex}-${currentLineIndex}`}
+              contentEditable
+              suppressContentEditableWarning
+              className="line-review-editable"
               style={{ fontSize }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.preventDefault();
+              }}
             />
           </div>
         )}

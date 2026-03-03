@@ -10,11 +10,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const log = createLogger({ module: 'kraken' });
 
+export interface LineSegmentWord {
+  text: string;
+  bbox: [number, number, number, number]; // [left, top, right, bottom]
+}
+
 export interface LineSegment {
   line: number;
   baseline: number[][];
   bbox: [number, number, number, number];
   ocrText: string;
+  words?: LineSegmentWord[];
 }
 
 /**

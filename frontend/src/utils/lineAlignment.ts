@@ -10,6 +10,353 @@ export interface AlignedLine {
   words?: LineSegmentWord[];
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeToken(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function tokenizeComparable(text: string): string[] {
+  return text
+    .split(/\s+/)
+    .map(normalizeToken)
+    .filter(Boolean);
+}
+
+function levenshteinDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a) return b.length;
+  if (!b) return a.length;
+
+  const prev = new Array<number>(b.length + 1);
+  const curr = new Array<number>(b.length + 1);
+
+  for (let j = 0; j <= b.length; j++) {
+    prev[j] = j;
+  }
+
+  for (let i = 1; i <= a.length; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const substitutionCost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(
+        prev[j] + 1,
+        curr[j - 1] + 1,
+        prev[j - 1] + substitutionCost,
+      );
+    }
+    for (let j = 0; j <= b.length; j++) {
+      prev[j] = curr[j];
+    }
+  }
+
+  return prev[b.length];
+}
+
+function tokenSimilarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+
+  if (a.includes(b) || b.includes(a)) {
+    return Math.min(a.length, b.length) / Math.max(a.length, b.length);
+  }
+
+  const distance = levenshteinDistance(a, b);
+  return clamp(1 - distance / Math.max(a.length, b.length), 0, 1);
+}
+
+function computeMedian(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+  return sorted[middle];
+}
+
+function sortWordsLeftToRight(words: LineSegmentWord[] | undefined): LineSegmentWord[] {
+  if (!words || words.length === 0) return [];
+  return [...words].sort((a, b) => {
+    if (a.bbox[0] !== b.bbox[0]) return a.bbox[0] - b.bbox[0];
+    return a.bbox[1] - b.bbox[1];
+  });
+}
+
+function computeRunStructureScore(words: LineSegmentWord[]): number {
+  if (words.length === 0) return 0;
+  if (words.length === 1) return 0.35;
+
+  const heights = words.map((word) => word.bbox[3] - word.bbox[1]);
+  const centers = words.map((word) => (word.bbox[1] + word.bbox[3]) / 2);
+  const medianHeight = Math.max(1, computeMedian(heights));
+
+  let connectedPairs = 0;
+  let heightFit = 0;
+
+  for (let i = 0; i < words.length; i++) {
+    const heightDelta = Math.abs(heights[i] - medianHeight) / medianHeight;
+    heightFit += clamp(1 - heightDelta, 0, 1);
+
+    if (i === 0) continue;
+
+    const gap = words[i].bbox[0] - words[i - 1].bbox[2];
+    const centerDelta = Math.abs(centers[i] - centers[i - 1]);
+    const gapOkay = gap <= Math.max(medianHeight * 2.2, 28);
+    const centerOkay = centerDelta <= medianHeight * 0.75;
+
+    if (gapOkay && centerOkay) {
+      connectedPairs++;
+    }
+  }
+
+  const densityScore = connectedPairs / Math.max(1, words.length - 1);
+  const heightScore = heightFit / words.length;
+
+  return clamp((densityScore * 0.65) + (heightScore * 0.35), 0, 1);
+}
+
+function clusterWordsIntoRuns(words: LineSegmentWord[]): LineSegmentWord[][] {
+  if (words.length === 0) return [];
+
+  const heights = words.map((word) => word.bbox[3] - word.bbox[1]);
+  const medianHeight = Math.max(1, computeMedian(heights));
+  const runs: LineSegmentWord[][] = [[words[0]]];
+
+  for (let i = 1; i < words.length; i++) {
+    const prev = words[i - 1];
+    const current = words[i];
+    const gap = current.bbox[0] - prev.bbox[2];
+    const prevCenter = (prev.bbox[1] + prev.bbox[3]) / 2;
+    const currentCenter = (current.bbox[1] + current.bbox[3]) / 2;
+    const centerDelta = Math.abs(currentCenter - prevCenter);
+
+    const sameRun = gap <= Math.max(medianHeight * 2.4, 32)
+      && centerDelta <= medianHeight * 0.8;
+
+    if (sameRun) {
+      runs[runs.length - 1].push(current);
+    } else {
+      runs.push([current]);
+    }
+  }
+
+  return runs;
+}
+
+function computeSequenceScore(
+  detectedTokens: string[],
+  transcriptTokens: string[],
+): number {
+  if (detectedTokens.length === 0 || transcriptTokens.length === 0) return 0;
+
+  const dp: number[][] = Array.from(
+    { length: detectedTokens.length + 1 },
+    () => new Array<number>(transcriptTokens.length + 1).fill(0),
+  );
+
+  for (let i = 1; i <= detectedTokens.length; i++) {
+    for (let j = 1; j <= transcriptTokens.length; j++) {
+      const similarity = tokenSimilarity(
+        detectedTokens[i - 1],
+        transcriptTokens[j - 1],
+      );
+      const matchScore = similarity >= 0.72
+        ? dp[i - 1][j - 1] + similarity
+        : Number.NEGATIVE_INFINITY;
+
+      dp[i][j] = Math.max(
+        dp[i - 1][j],
+        dp[i][j - 1],
+        matchScore,
+      );
+    }
+  }
+
+  return clamp(
+    dp[detectedTokens.length][transcriptTokens.length]
+      / Math.max(detectedTokens.length, transcriptTokens.length),
+    0,
+    1,
+  );
+}
+
+function scoreRunAgainstTranscript(
+  run: LineSegmentWord[],
+  transcriptText: string,
+): number {
+  const runTokens = run.map((word) => normalizeToken(word.text)).filter(Boolean);
+  const transcriptTokens = tokenizeComparable(transcriptText);
+  const structureScore = computeRunStructureScore(run);
+  const sequenceScore = computeSequenceScore(runTokens, transcriptTokens);
+
+  return clamp((structureScore * 0.7) + (sequenceScore * 0.3), 0, 1);
+}
+
+function filterWordsForTranscript(
+  words: LineSegmentWord[] | undefined,
+  transcriptText: string,
+): LineSegmentWord[] {
+  const sortedWords = sortWordsLeftToRight(words);
+  if (sortedWords.length === 0) return [];
+
+  const runs = clusterWordsIntoRuns(sortedWords);
+  if (runs.length === 1) {
+    const score = scoreRunAgainstTranscript(runs[0], transcriptText);
+    return score >= 0.4 ? runs[0] : [];
+  }
+
+  const scoredRuns = runs.map((run) => ({
+    run,
+    score: scoreRunAgainstTranscript(run, transcriptText),
+  }));
+
+  const bestScore = Math.max(...scoredRuns.map((entry) => entry.score));
+  const acceptedRuns = scoredRuns
+    .filter((entry) => entry.score >= 0.45 && entry.score >= bestScore - 0.18)
+    .flatMap((entry) => entry.run);
+
+  return acceptedRuns;
+}
+
+function buildFilteredSegment(
+  segment: LineSegment,
+  transcriptText: string,
+): LineSegment {
+  const filteredWords = filterWordsForTranscript(segment.words, transcriptText);
+  if (filteredWords.length === 0) {
+    return {
+      ...segment,
+      words: [],
+    };
+  }
+
+  const left = Math.min(...filteredWords.map((word) => word.bbox[0]));
+  const top = Math.min(...filteredWords.map((word) => word.bbox[1]));
+  const right = Math.max(...filteredWords.map((word) => word.bbox[2]));
+  const bottom = Math.max(...filteredWords.map((word) => word.bbox[3]));
+
+  return {
+    ...segment,
+    bbox: [left, top, right, bottom],
+    baseline: [[left, bottom], [right, bottom]],
+    words: filteredWords,
+  };
+}
+
+function scoreSegmentAgainstTranscript(
+  segment: LineSegment,
+  transcriptText: string,
+): number {
+  const filteredSegment = buildFilteredSegment(segment, transcriptText);
+  const filteredWords = filteredSegment.words ?? [];
+
+  if (filteredWords.length === 0) return 0;
+
+  const structureScore = computeRunStructureScore(filteredWords);
+  const sequenceScore = computeSequenceScore(
+    filteredWords.map((word) => normalizeToken(word.text)).filter(Boolean),
+    tokenizeComparable(transcriptText),
+  );
+
+  return clamp((structureScore * 0.6) + (sequenceScore * 0.4), 0, 1);
+}
+
+function scoreSegmentSkipPenalty(segment: LineSegment): number {
+  const structureScore = computeRunStructureScore(sortWordsLeftToRight(segment.words));
+  return 0.08 + (structureScore * 0.12);
+}
+
+function selectBestSegmentsForTranscript(
+  transcriptLines: string[],
+  lineSegments: LineSegment[],
+): LineSegment[] {
+  const lineCount = transcriptLines.length;
+  const segmentCount = lineSegments.length;
+
+  if (lineCount === 0 || segmentCount === 0) return [];
+  if (segmentCount <= lineCount) return lineSegments;
+
+  const pairScores = transcriptLines.map((lineText) =>
+    lineSegments.map((segment) => scoreSegmentAgainstTranscript(segment, lineText)),
+  );
+
+  const dp: number[][] = Array.from(
+    { length: lineCount + 1 },
+    () => new Array<number>(segmentCount + 1).fill(Number.NEGATIVE_INFINITY),
+  );
+  const decision: ('skip' | 'match' | null)[][] = Array.from(
+    { length: lineCount + 1 },
+    () => new Array<'skip' | 'match' | null>(segmentCount + 1).fill(null),
+  );
+
+  dp[0][0] = 0;
+  for (let segmentIndex = 1; segmentIndex <= segmentCount; segmentIndex++) {
+    dp[0][segmentIndex] = dp[0][segmentIndex - 1] - scoreSegmentSkipPenalty(lineSegments[segmentIndex - 1]);
+    decision[0][segmentIndex] = 'skip';
+  }
+
+  for (let lineIndex = 1; lineIndex <= lineCount; lineIndex++) {
+    for (let segmentIndex = lineIndex; segmentIndex <= segmentCount; segmentIndex++) {
+      const skipScore = dp[lineIndex][segmentIndex - 1]
+        - scoreSegmentSkipPenalty(lineSegments[segmentIndex - 1]);
+      const matchScore = dp[lineIndex - 1][segmentIndex - 1]
+        + pairScores[lineIndex - 1][segmentIndex - 1];
+
+      if (matchScore >= skipScore) {
+        dp[lineIndex][segmentIndex] = matchScore;
+        decision[lineIndex][segmentIndex] = 'match';
+      } else {
+        dp[lineIndex][segmentIndex] = skipScore;
+        decision[lineIndex][segmentIndex] = 'skip';
+      }
+    }
+  }
+
+  const selectedIndices: number[] = [];
+  let lineIndex = lineCount;
+  let segmentIndex = segmentCount;
+
+  while (lineIndex > 0 && segmentIndex > 0) {
+    const choice = decision[lineIndex][segmentIndex];
+    if (choice === 'match') {
+      selectedIndices.push(segmentIndex - 1);
+      lineIndex--;
+      segmentIndex--;
+    } else {
+      segmentIndex--;
+    }
+  }
+
+  selectedIndices.reverse();
+
+  if (selectedIndices.length !== lineCount) {
+    return lineSegments.slice(0, lineCount);
+  }
+
+  return selectedIndices.map((index) => lineSegments[index]);
+}
+
+function createAlignedLine(
+  segment: LineSegment,
+  transcriptText: string,
+  transcriptLineIndex: number,
+  visualLineIndex: number,
+): AlignedLine {
+  const filteredSegment = buildFilteredSegment(segment, transcriptText);
+
+  return {
+    visualLineIndex,
+    transcriptText,
+    transcriptLineIndex,
+    bbox: filteredSegment.bbox,
+    baseline: filteredSegment.baseline,
+    words: filteredSegment.words,
+  };
+}
+
 /**
  * Aligns transcript lines to Kraken visual line segments in order.
  * Transcript lines are never reordered — they stay exactly as the AI output them.
@@ -42,15 +389,14 @@ export function alignTranscriptToVisualLines(
   //   lines are subdivided into the last segment.
   // This is correct because both detection and transcript are in reading order.
   if (segCount >= transcriptLines.length) {
-    // Each transcript line gets one segment; extra segments at bottom are empty
-    return lineSegments.map((seg, i) => ({
-      visualLineIndex: i,
-      transcriptText: i < transcriptLines.length ? transcriptLines[i] : '',
-      transcriptLineIndex: i < transcriptLines.length ? i : -1,
-      bbox: seg.bbox,
-      baseline: seg.baseline,
-      words: seg.words,
-    }));
+    const selectedSegments = selectBestSegmentsForTranscript(
+      transcriptLines,
+      lineSegments,
+    );
+
+    return selectedSegments.map((seg, i) =>
+      createAlignedLine(seg, transcriptLines[i], i, i),
+    );
   }
 
   // Fewer segments than transcript lines — assign 1:1 for all segments except
@@ -61,14 +407,14 @@ export function alignTranscriptToVisualLines(
 
     if (s < segCount - 1) {
       // One transcript line per segment
-      result.push({
-        visualLineIndex: result.length,
-        transcriptText: s < transcriptLines.length ? transcriptLines[s] : '',
-        transcriptLineIndex: s < transcriptLines.length ? s : -1,
-        bbox: seg.bbox,
-        baseline: seg.baseline,
-        words: seg.words,
-      });
+      result.push(
+        createAlignedLine(
+          seg,
+          s < transcriptLines.length ? transcriptLines[s] : '',
+          s < transcriptLines.length ? s : -1,
+          result.length,
+        ),
+      );
     } else {
       // Last segment: absorb all remaining transcript lines
       const remaining = transcriptLines.length - s;

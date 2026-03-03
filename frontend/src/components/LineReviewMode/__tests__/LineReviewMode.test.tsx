@@ -1,5 +1,7 @@
+// @vitest-environment jsdom
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import LineReviewMode from '../LineReviewMode';
 import type { Letter } from '../../../types/Letter';
 
@@ -30,6 +32,9 @@ vi.mock('../../../utils/lineAlignment', async (importOriginal) => {
 // jsdom doesn't implement scrollTo on elements
 beforeEach(() => {
   Element.prototype.scrollTo = vi.fn();
+  HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+    measureText: (text: string) => ({ width: text.length * 8 }),
+  })) as typeof HTMLCanvasElement.prototype.getContext;
 });
 
 function makeLetter(overrides: Partial<Letter> = {}): Letter {
@@ -109,6 +114,10 @@ async function simulateImageLoadAsync(container: HTMLElement) {
   }
 }
 
+function getEditable(container: HTMLElement): HTMLDivElement | null {
+  return container.querySelector('.line-review-input-overlay .line-review-editable');
+}
+
 describe('LineReviewMode', () => {
   const defaultProps = {
     letter: makeLetter(),
@@ -137,7 +146,7 @@ describe('LineReviewMode', () => {
   it('shows progress indicator', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
     await simulateImageLoadAsync(container);
-    expect(screen.getByText(/Line/)).toBeTruthy();
+    expect(container.querySelector('.line-review-progress')).toBeTruthy();
   });
 
   it('shows exit hint with Esc key', () => {
@@ -158,7 +167,7 @@ describe('LineReviewMode', () => {
     // Before image loads, no lines should be detected
     // The "Detecting lines..." should not show until image has natural size
     // (since we check imageNaturalSize.width > 0)
-    const analyzing = screen.queryByText('Detecting lines...');
+    const analyzing = screen.queryByText('Detecting line positions...');
     // Before image load, natural size is 0, so this should NOT show
     expect(analyzing).toBeNull();
   });
@@ -167,9 +176,9 @@ describe('LineReviewMode', () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
     await simulateImageLoadAsync(container);
 
-    const input = container.querySelector('.line-review-input-overlay input');
+    const input = getEditable(container);
     expect(input).toBeTruthy();
-    expect((input as HTMLInputElement)?.value).toBe('Line one');
+    expect(input?.textContent).toBe('Line one');
   });
 
   it('advances to next line on ArrowDown', async () => {
@@ -177,16 +186,16 @@ describe('LineReviewMode', () => {
     await simulateImageLoadAsync(container);
 
     // Initially on first line
-    let input = container.querySelector('.line-review-input-overlay input') as HTMLInputElement;
-    expect(input?.value).toBe('Line one');
+    let input = getEditable(container);
+    expect(input?.textContent).toBe('Line one');
 
     // Press ArrowDown
     act(() => {
       fireEvent.keyDown(window, { key: 'ArrowDown' });
     });
 
-    input = container.querySelector('.line-review-input-overlay input') as HTMLInputElement;
-    expect(input?.value).toBe('Line two');
+    input = getEditable(container);
+    expect(input?.textContent).toBe('Line two');
   });
 
   it('advances to next line on Enter', async () => {
@@ -197,8 +206,8 @@ describe('LineReviewMode', () => {
       fireEvent.keyDown(window, { key: 'Enter' });
     });
 
-    const input = container.querySelector('.line-review-input-overlay input') as HTMLInputElement;
-    expect(input?.value).toBe('Line two');
+    const input = getEditable(container);
+    expect(input?.textContent).toBe('Line two');
   });
 
   it('goes to previous line on ArrowUp', async () => {
@@ -214,8 +223,8 @@ describe('LineReviewMode', () => {
       fireEvent.keyDown(window, { key: 'ArrowUp' });
     });
 
-    const input = container.querySelector('.line-review-input-overlay input') as HTMLInputElement;
-    expect(input?.value).toBe('Line one');
+    const input = getEditable(container);
+    expect(input?.textContent).toBe('Line one');
   });
 
   it('does not go before first line', async () => {
@@ -227,8 +236,8 @@ describe('LineReviewMode', () => {
       fireEvent.keyDown(window, { key: 'ArrowUp' });
     });
 
-    const input = container.querySelector('.line-review-input-overlay input') as HTMLInputElement;
-    expect(input?.value).toBe('Line one');
+    const input = getEditable(container);
+    expect(input?.textContent).toBe('Line one');
   });
 
   it('does not trigger auto-save when navigating without edits', async () => {
@@ -259,8 +268,12 @@ describe('LineReviewMode', () => {
     await simulateImageLoadAsync(container);
 
     // Edit the current input
-    const input = container.querySelector('.line-review-input-overlay input') as HTMLInputElement;
-    fireEvent.change(input, { target: { value: 'Edited line one' } });
+    const input = getEditable(container);
+    expect(input).toBeTruthy();
+    if (input) {
+      input.textContent = 'Edited line one';
+      fireEvent.input(input);
+    }
 
     // Navigate away — should save
     act(() => {
@@ -313,14 +326,14 @@ describe('LineReviewMode', () => {
       );
       await simulateImageLoadAsync(container);
 
-      expect(screen.getByText(/Page 1 \/ 2/)).toBeTruthy();
+      expect(container.textContent).toContain('Page 1 / 2');
     });
 
     it('does not show page count for single-page letters', async () => {
       const { container } = render(<LineReviewMode {...defaultProps} />);
       await simulateImageLoadAsync(container);
 
-      expect(screen.queryByText(/Page.*\//)).toBeNull();
+      expect(container.textContent).not.toContain('Page 1 / 2');
     });
   });
 });

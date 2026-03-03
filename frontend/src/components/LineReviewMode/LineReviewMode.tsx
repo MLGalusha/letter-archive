@@ -253,19 +253,6 @@ export default function LineReviewMode({
     setImageDisplaySize({ width: 0, height: 0 });
   }, [currentPageIndex]);
 
-  // Derive text bounds from AI segments instead of hardcoded percentages
-  useEffect(() => {
-    const segs = aiSegmentsMap[currentPageIndex];
-    if (!segs || segs.length === 0 || imageNaturalSize.width === 0) return;
-
-    const globalLeft = Math.min(...segs.map(s => s.bbox[0]));
-    const globalRight = Math.max(...segs.map(s => s.bbox[2]));
-    const pad = imageNaturalSize.width * 0.01; // 1% breathing room
-
-    setTextLeftPct(Math.max(0.02, (globalLeft - pad) / imageNaturalSize.width));
-    setTextRightPct(Math.min(0.98, (globalRight + pad) / imageNaturalSize.width));
-  }, [aiSegmentsMap, currentPageIndex, imageNaturalSize.width]);
-
   // Run line detection via backend API when a page loads
   useEffect(() => {
     if (!currentPage) return;
@@ -331,33 +318,64 @@ export default function LineReviewMode({
     return lines.filter(l => l.transcriptLineIndex >= 0);
   }, [currentPage, currentPageIndex, pageLineTexts, aiSegmentsMap, detectedLinesMap, isDetecting]);
 
+  // Derive text bounds from the active aligned lines when available.
+  useEffect(() => {
+    if (imageNaturalSize.width === 0) return;
+
+    const activeLines = alignedLines.length > 0
+      ? alignedLines
+      : (aiSegmentsMap[currentPageIndex] ?? []);
+    if (activeLines.length === 0) return;
+
+    const globalLeft = Math.min(...activeLines.map((line) => line.bbox[0]));
+    const globalRight = Math.max(...activeLines.map((line) => line.bbox[2]));
+    const pad = imageNaturalSize.width * 0.01; // 1% breathing room
+
+    setTextLeftPct(Math.max(0.02, (globalLeft - pad) / imageNaturalSize.width));
+    setTextRightPct(Math.min(0.98, (globalRight + pad) / imageNaturalSize.width));
+  }, [alignedLines, aiSegmentsMap, currentPageIndex, imageNaturalSize.width]);
+
   // Only expose currentLine when the image for this page has loaded,
   // so overlays never render at positions scaled from a previous page's dimensions
   const imageReady = imageNaturalSize.width > 0;
   const currentLine = imageReady ? alignedLines[currentLineIndex] : undefined;
-  const totalLines = useMemo(
-    () => letterPages.reduce((sum, _page, idx) => {
-      const text = pageLineTexts[idx]?.join('\n') || '';
+  const pageLineCounts = useMemo(
+    () => letterPages.map((_page, idx) => {
+      const pageText = pageLineTexts[idx]?.join('\n') || '';
+      const transcriptLineCount = pageText.split('\n').filter((l) => l.trim().length > 0).length;
       const aiSegs = aiSegmentsMap[idx];
-      if (aiSegs && aiSegs.length > 0) return sum + aiSegs.length;
-      return sum + text.split('\n').filter((l) => l.trim().length > 0).length;
-    }, 0),
-    [letterPages, pageLineTexts, aiSegmentsMap],
+
+      if (aiSegs && aiSegs.length > 0) {
+        return alignTranscriptToVisualLines(pageText, aiSegs)
+          .filter((line) => line.transcriptLineIndex >= 0)
+          .length;
+      }
+
+      const detectionResult = detectedLinesMap[idx];
+      if (detectionResult && detectionResult.length > 0) {
+        return buildAlignedLinesFromDetected(
+          pageText.split('\n').filter((l) => l.trim().length > 0),
+          detectionResult,
+        ).filter((line) => line.transcriptLineIndex >= 0).length;
+      }
+
+      return transcriptLineCount;
+    }),
+    [letterPages, pageLineTexts, aiSegmentsMap, detectedLinesMap],
+  );
+
+  const totalLines = useMemo(
+    () => pageLineCounts.reduce((sum, count) => sum + count, 0),
+    [pageLineCounts],
   );
 
   const globalLineIndex = useMemo(() => {
     let sum = 0;
     for (let i = 0; i < currentPageIndex; i++) {
-      const text = pageLineTexts[i]?.join('\n') || '';
-      const aiSegs = aiSegmentsMap[i];
-      if (aiSegs && aiSegs.length > 0) {
-        sum += aiSegs.length;
-      } else {
-        sum += text.split('\n').filter((l) => l.trim().length > 0).length;
-      }
+      sum += pageLineCounts[i] || 0;
     }
     return sum + currentLineIndex + 1;
-  }, [currentPageIndex, currentLineIndex, pageLineTexts, aiSegmentsMap]);
+  }, [currentPageIndex, currentLineIndex, pageLineCounts]);
 
   // Scale factor: displayed size vs natural image size
   const scaleFactor = imageNaturalSize.width > 0

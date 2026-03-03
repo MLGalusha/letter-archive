@@ -139,6 +139,78 @@ function mergeEditedTextWithOriginalSpacing(
   return `${leadingWhitespace}${newTokens.join(' ')}${trailingWhitespace}`;
 }
 
+export function computeAutoScrollTop(params: {
+  currentLineIndex: number;
+  movementDirection: 'up' | 'down' | 'none';
+  currentScrollTop: number;
+  viewportHeight: number;
+  contentHeight: number;
+  regionTop: number;
+  regionBottom: number;
+}): number | null {
+  const {
+    currentLineIndex,
+    movementDirection,
+    currentScrollTop,
+    viewportHeight,
+    contentHeight,
+    regionTop,
+    regionBottom,
+  } = params;
+
+  if (viewportHeight <= 0) return null;
+
+  const maxScroll = Math.max(0, contentHeight - viewportHeight);
+
+  // Returning to the first line should snap back to the top, but only if
+  // we've actually scrolled away from it.
+  if (currentLineIndex === 0) {
+    return currentScrollTop > 0.5 ? 0 : null;
+  }
+
+  if (maxScroll <= currentScrollTop + 0.5) {
+    return null;
+  }
+
+  const visibleRegionTop = regionTop - currentScrollTop;
+  const visibleRegionBottom = regionBottom - currentScrollTop;
+  const regionHeight = Math.max(1, visibleRegionBottom - visibleRegionTop);
+  const holdBuffer = Math.max(40, regionHeight * 1.75);
+
+  const topTriggerLine = viewportHeight * 0.42;
+  const bottomTriggerLine = viewportHeight * 0.58;
+
+  // When moving back up through the page, use a matching top threshold so
+  // the viewport recenters in reverse instead of only ever scrolling down.
+  if (movementDirection === 'up' && visibleRegionTop < topTriggerLine) {
+    const nextScrollTop = Math.max(
+      0,
+      currentScrollTop - ((topTriggerLine - visibleRegionTop) + holdBuffer),
+    );
+
+    return nextScrollTop < currentScrollTop - 0.5 ? nextScrollTop : null;
+  }
+
+  if (movementDirection !== 'down') {
+    return null;
+  }
+
+  // Let the active line move slightly past the midpoint before we scroll
+  // downward.
+  if (visibleRegionBottom <= bottomTriggerLine) {
+    return null;
+  }
+
+  // Scroll a bit more than one line so adjacent up/down navigation doesn't
+  // constantly retrigger auto-scroll.
+  const nextScrollTop = Math.min(
+    maxScroll,
+    currentScrollTop + (visibleRegionBottom - bottomTriggerLine) + holdBuffer,
+  );
+
+  return nextScrollTop > currentScrollTop + 0.5 ? nextScrollTop : null;
+}
+
 /**
  * Computes a representative font size for the page (used for input overlay height).
  * Compares OCR line widths to rendered text widths at a reference size.
@@ -307,6 +379,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const inputRef = useRef<HTMLDivElement>(null);
+  const lastGlobalLineIndexRef = useRef<number | null>(null);
 
   const currentPage = letterPages[currentPageIndex];
 
@@ -597,21 +670,42 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const INPUT_H = 30;
     const regionTop = currentLine.bbox[1] * scaleFactor;
     const regionBottom = currentLine.bbox[3] * scaleFactor + INPUT_H;
-    const regionCenter = (regionTop + regionBottom) / 2;
     const container = containerRef.current;
-    const viewportMid = container.clientHeight / 2;
+    const previousGlobalLineIndex = lastGlobalLineIndexRef.current;
+    let movementDirection: 'up' | 'down' | 'none' = 'none';
 
-    if (regionCenter > viewportMid) {
-      const scrollTarget = regionCenter - viewportMid + container.scrollTop;
-      const maxScroll = container.scrollHeight - container.clientHeight;
-      container.scrollTo({
-        top: Math.min(scrollTarget, maxScroll),
-        behavior: 'smooth',
-      });
-    } else if (currentLineIndex === 0) {
-      container.scrollTo({ top: 0, behavior: 'smooth' });
+    if (previousGlobalLineIndex !== null) {
+      if (globalLineIndex > previousGlobalLineIndex) {
+        movementDirection = 'down';
+      } else if (globalLineIndex < previousGlobalLineIndex) {
+        movementDirection = 'up';
+      }
     }
-  }, [currentLine, currentLineIndex, scaleFactor]);
+
+    lastGlobalLineIndexRef.current = globalLineIndex;
+
+    const nextScrollTop = computeAutoScrollTop({
+      currentLineIndex,
+      movementDirection,
+      currentScrollTop: container.scrollTop,
+      viewportHeight: container.clientHeight,
+      contentHeight: container.scrollHeight,
+      regionTop,
+      regionBottom,
+    });
+
+    if (nextScrollTop === null) return;
+
+    if (nextScrollTop === 0) {
+      container.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    container.scrollTo({
+      top: nextScrollTop,
+      behavior: 'smooth',
+    });
+  }, [currentLine, currentLineIndex, globalLineIndex, scaleFactor]);
 
   // Build word-positioned content and focus when line changes
   useEffect(() => {

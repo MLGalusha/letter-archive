@@ -2,7 +2,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import LineReviewMode from '../LineReviewMode';
+import LineReviewMode, { computeAutoScrollTop } from '../LineReviewMode';
 import { detectPageLines } from '../../../api/admin/letters';
 import type { Letter } from '../../../types/Letter';
 
@@ -452,6 +452,92 @@ describe('LineReviewMode', () => {
       await simulateImageLoadAsync(container);
 
       expect(container.textContent).not.toContain('Page 1 / 2');
+    });
+  });
+
+  describe('computeAutoScrollTop', () => {
+    it('waits until the active line moves past the scroll threshold', () => {
+      expect(
+        computeAutoScrollTop({
+          currentLineIndex: 3,
+          movementDirection: 'down',
+          currentScrollTop: 0,
+          viewportHeight: 600,
+          contentHeight: 1400,
+          regionTop: 250,
+          regionBottom: 340,
+        }),
+      ).toBeNull();
+    });
+
+    it('scrolls with a buffer once the active line passes the threshold', () => {
+      expect(
+        computeAutoScrollTop({
+          currentLineIndex: 3,
+          movementDirection: 'down',
+          currentScrollTop: 0,
+          viewportHeight: 600,
+          contentHeight: 1400,
+          regionTop: 320,
+          regionBottom: 420,
+        }),
+      ).toBe(247);
+    });
+
+    it('stops scrolling once the container is already at the bottom', () => {
+      expect(
+        computeAutoScrollTop({
+          currentLineIndex: 15,
+          movementDirection: 'down',
+          currentScrollTop: 800,
+          viewportHeight: 600,
+          contentHeight: 1400,
+          regionTop: 1100,
+          regionBottom: 1220,
+        }),
+      ).toBeNull();
+    });
+
+    it('scrolls back up when the active line moves above the top threshold', () => {
+      expect(
+        computeAutoScrollTop({
+          currentLineIndex: 8,
+          movementDirection: 'up',
+          currentScrollTop: 500,
+          viewportHeight: 600,
+          contentHeight: 1600,
+          regionTop: 650,
+          regionBottom: 750,
+        }),
+      ).toBe(223);
+    });
+
+    it('returns to the top when navigating back to the first line', () => {
+      expect(
+        computeAutoScrollTop({
+          currentLineIndex: 0,
+          movementDirection: 'up',
+          currentScrollTop: 120,
+          viewportHeight: 600,
+          contentHeight: 1400,
+          regionTop: 30,
+          regionBottom: 80,
+        }),
+      ).toBe(0);
+    });
+
+    it('does not trigger upward correction while moving down', () => {
+      expect(
+        computeAutoScrollTop({
+          currentLineIndex: 8,
+          movementDirection: 'down',
+          currentScrollTop: 500,
+          viewportHeight: 600,
+          contentHeight: 1600,
+          regionTop: 650,
+          regionBottom: 750,
+        }),
+      ).toBeNull();
     });
   });
 });

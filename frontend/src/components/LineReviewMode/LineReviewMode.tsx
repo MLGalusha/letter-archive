@@ -66,6 +66,28 @@ function reconstructTranscript(pageTexts: string[]): string {
 const FONT_FAMILY = "Georgia, 'Times New Roman', serif";
 const CSS_BORDER_PADDING = 6; // border (2px) + padding (4px) on each side
 
+/**
+ * Computes the input overlay height for a line based on the average height
+ * of its OCR word bounding boxes. Falls back to a reasonable default when
+ * no OCR words are available.
+ */
+function computeLineInputHeight(
+  words: LineSegmentWord[] | undefined,
+  scaleFactor: number,
+): number {
+  if (!words || words.length === 0) return 30;
+
+  let totalHeight = 0;
+  for (const w of words) {
+    totalHeight += (w.bbox[3] - w.bbox[1]);
+  }
+  const avgWordHeight = totalHeight / words.length;
+  // Scale to display coordinates and add padding for border + padding on both sides
+  const scaled = avgWordHeight * scaleFactor + CSS_BORDER_PADDING * 2;
+  // Clamp to reasonable bounds
+  return Math.max(20, Math.min(60, scaled));
+}
+
 function measureRenderedTextWidth(
   text: string,
   fontSize: number,
@@ -666,10 +688,10 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   useEffect(() => {
     if (!currentLine || !containerRef.current) return;
 
-    // Visible region: from highlight top (bbox[1]) to bottom of input (bbox[3] + INPUT_DISPLAY_HEIGHT)
-    const INPUT_H = 30;
+    // Visible region: from highlight top (bbox[1]) to bottom of input
+    const lineInputH = computeLineInputHeight(currentLine.words, scaleFactor);
     const regionTop = currentLine.bbox[1] * scaleFactor;
-    const regionBottom = currentLine.bbox[3] * scaleFactor + INPUT_H;
+    const regionBottom = currentLine.bbox[3] * scaleFactor + lineInputH;
     const container = containerRef.current;
     const previousGlobalLineIndex = lastGlobalLineIndexRef.current;
     let movementDirection: 'up' | 'down' | 'none' = 'none';
@@ -802,10 +824,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   if (!currentPage) return null;
 
-  // Dynamic height for the editable strip — scales with page-global font size
-  const INPUT_DISPLAY_HEIGHT = pageFontSize > 14
-    ? Math.max(24, pageFontSize + 10)
-    : 30;
+  // Dynamic height for the editable strip — based on current line's word heights
+  const INPUT_DISPLAY_HEIGHT = computeLineInputHeight(currentLine?.words, scaleFactor);
 
   // Compute overlay positions
   const topDimmerHeight = currentLine ? currentLine.bbox[1] * scaleFactor : 0;

@@ -6,7 +6,7 @@ import { db, letters, letterPages } from '../../db/index.js';
 import { getLetterById, resetLetterForProcessing } from '../../services/letters.js';
 import { getAbsoluteStoragePath } from '../../services/storage.js';
 import { runMetadataExtractionV2, runEntityExtractionOnly } from '../../pipeline/metadataV2.js';
-import { runLineFinder } from '../../services/line-finder.js';
+import { detectAndStorePageLines } from '../../services/line-finder.js';
 
 // Service imports
 import {
@@ -1080,9 +1080,11 @@ router.post('/letters/pages/:pageId/detect-lines', async (req, res, next) => {
     }
 
     const absolutePath = getAbsoluteStoragePath(page.storagePath);
-    const segments = await runLineFinder(absolutePath);
+    const segments = await detectAndStorePageLines(pageId, absolutePath);
 
-    res.json({ lineSegments: segments ?? [] });
+    res.json({
+      lineSegments: segments ?? (Array.isArray(page.lineSegments) ? page.lineSegments : []),
+    });
   } catch (error) {
     next(error);
   }

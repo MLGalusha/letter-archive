@@ -25,6 +25,7 @@ import { runMetadataExtractionV2, runEntityExtractionOnly } from '../pipeline/me
 import { resyncMetadata, auditMetadata, type MetadataAuditContext, type LinkedPersonInfo } from '../ai/resync.js';
 import { checkExtraContentForText, transcribeExtraContent, transcribeImage } from '../ai/openai.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
+import { detectAndStoreLinesForPages } from '../services/line-finder.js';
 import { createLogger } from '../utils/logger.js';
 import {
   getProcessingStatus,
@@ -1201,6 +1202,12 @@ export async function transcribeLetterOnly(
     transcriptStatus: 'AI_DRAFT',
     updatedAt: new Date(),
   }).where(eq(letters.id, letterId));
+
+  try {
+    await detectAndStoreLinesForPages(pages, getAbsoluteStoragePath);
+  } catch (lineError) {
+    log.warn({ letterId, err: lineError }, 'Failed to store line detection results after letter-only transcription');
+  }
 
   log.info({ letterId, pageCount: pages.length }, 'Letter-only transcription completed');
 

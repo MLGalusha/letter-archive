@@ -1,4 +1,12 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+  forwardRef,
+  useImperativeHandle,
+} from 'react';
 import { getImageUrl } from '../../api/client';
 import { detectPageLines } from '../../api/admin/letters';
 import type { Letter, LineSegment, LineSegmentWord } from '../../types/Letter';
@@ -17,6 +25,10 @@ interface LineReviewModeProps {
   onTranscriptChange: (newFullTranscript: string) => void;
   onExit: () => void;
   onAutoSave: (data: { transcriptionText: string }) => void;
+}
+
+export interface LineReviewModeHandle {
+  saveCurrentLine: () => void;
 }
 
 const PAGE_SEPARATOR_REGEX = /\n*---\s*Page\s*\d+\s*---\n*/i;
@@ -81,6 +93,50 @@ function measureRenderedTextWidth(
   measureNode.remove();
 
   return width;
+}
+
+function normalizeReviewLineText(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function mergeEditedTextWithOriginalSpacing(
+  originalText: string,
+  normalizedEditedText: string,
+): string {
+  if (!normalizedEditedText) return '';
+
+  const leadingWhitespace = originalText.match(/^\s*/)?.[0] ?? '';
+  const trailingWhitespace = originalText.match(/\s*$/)?.[0] ?? '';
+  const trimmedOriginal = originalText.trim();
+
+  if (!trimmedOriginal) {
+    return normalizedEditedText;
+  }
+
+  const originalTokens = trimmedOriginal.split(/\s+/).filter(Boolean);
+  const newTokens = normalizedEditedText.split(' ').filter(Boolean);
+
+  if (originalTokens.length === newTokens.length && newTokens.length > 0) {
+    const chunks = trimmedOriginal.match(/\S+|\s+/g) ?? [];
+    let tokenIndex = 0;
+
+    const rebuilt = chunks
+      .map((chunk) => {
+        if (/^\s+$/.test(chunk)) {
+          return chunk;
+        }
+        const replacement = newTokens[tokenIndex];
+        tokenIndex += 1;
+        return replacement ?? chunk;
+      })
+      .join('');
+
+    if (tokenIndex === newTokens.length) {
+      return `${leadingWhitespace}${rebuilt}${trailingWhitespace}`;
+    }
+  }
+
+  return `${leadingWhitespace}${newTokens.join(' ')}${trailingWhitespace}`;
 }
 
 /**
@@ -185,13 +241,13 @@ function buildWordPositionedContent(
   div.textContent = joined;
 }
 
-export default function LineReviewMode({
+const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(function LineReviewMode({
   letter,
   transcript,
   onTranscriptChange,
   onExit,
   onAutoSave,
-}: LineReviewModeProps) {
+}: LineReviewModeProps, ref) {
   // Filter to letter-type pages only
   const letterPages = useMemo(
     () => letter.images.filter((img) => img.type === 'letter'),
@@ -206,7 +262,15 @@ export default function LineReviewMode({
 
   // AI-detected line segments per page (cached across page switches)
   // undefined = not attempted, null = in progress, LineSegment[] = done
-  const [aiSegmentsMap, setAiSegmentsMap] = useState<Record<number, LineSegment[] | null | undefined>>({});
+  const [aiSegmentsMap, setAiSegmentsMap] = useState<Record<number, LineSegment[] | null | undefined>>(() => {
+    const initial: Record<number, LineSegment[] | null | undefined> = {};
+    letterPages.forEach((page, index) => {
+      if (Array.isArray(page.lineSegments)) {
+        initial[index] = page.lineSegments;
+      }
+    });
+    return initial;
+  });
 
   // Client-side pixel-detected line boundaries (fallback)
   const [detectedLinesMap, setDetectedLinesMap] = useState<Record<number, DetectedLine[] | null>>({});
@@ -258,6 +322,8 @@ export default function LineReviewMode({
     if (!currentPage) return;
     // Already attempted or in progress for this page
     if (aiSegmentsMap[currentPageIndex] !== undefined) return;
+    const pageText = pageLineTexts[currentPageIndex]?.join('\n') || '';
+    if (!pageText.trim()) return;
 
     // Mark as in progress
     setAiSegmentsMap(prev => ({ ...prev, [currentPageIndex]: null }));
@@ -273,7 +339,7 @@ export default function LineReviewMode({
         // Detection failed — mark as empty so we fall back to pixel detection
         setAiSegmentsMap(prev => ({ ...prev, [idx]: [] }));
       });
-  }, [currentPage, currentPageIndex, aiSegmentsMap]);
+  }, [currentPage, currentPageIndex, aiSegmentsMap, pageLineTexts]);
 
   // Fall back to client-side pixel detection if AI returned nothing
   const runPixelDetection = useCallback(() => {
@@ -317,6 +383,7 @@ export default function LineReviewMode({
     // Skip empty lines (extra detected segments with no transcript text)
     return lines.filter(l => l.transcriptLineIndex >= 0);
   }, [currentPage, currentPageIndex, pageLineTexts, aiSegmentsMap, detectedLinesMap, isDetecting]);
+  const hasTranscriptLinesOnPage = (pageLineTexts[currentPageIndex]?.length ?? 0) > 0;
 
   // Derive text bounds from the active aligned lines when available.
   useEffect(() => {
@@ -453,11 +520,13 @@ export default function LineReviewMode({
     if (!currentAligned) return;
 
     const rawText = inputRef.current.textContent || '';
-    const newText = rawText.replace(/\s+/g, ' ').trim();
+    const newText = normalizeReviewLineText(rawText);
     const originalText = currentAligned.transcriptText;
+    const originalNormalized = normalizeReviewLineText(originalText);
 
-    // Skip save if text hasn't changed
-    if (newText === originalText) return;
+    // Skip save if the word content hasn't changed. Line review spacing is
+    // intentionally independent from transcript spacing.
+    if (newText === originalNormalized) return;
 
     // Use the tracked transcript line index (not the visual line index)
     const transcriptIdx = currentAligned.transcriptLineIndex;
@@ -469,7 +538,7 @@ export default function LineReviewMode({
     setPageRawTexts((prev) => {
       const updated = [...prev];
       const rawLines = updated[currentPageIndex].split('\n');
-      rawLines[rawLineIndex] = newText;
+      rawLines[rawLineIndex] = mergeEditedTextWithOriginalSpacing(originalText, newText);
       updated[currentPageIndex] = rawLines.join('\n');
 
       // Reconstruct and auto-save
@@ -480,6 +549,10 @@ export default function LineReviewMode({
       return updated;
     });
   }, [currentPageIndex, currentLineIndex, alignedLines, pageNonBlankMap, onTranscriptChange, onAutoSave]);
+
+  useImperativeHandle(ref, () => ({
+    saveCurrentLine,
+  }), [saveCurrentLine]);
 
   // Navigate to next line
   const goToNextLine = useCallback(() => {
@@ -817,7 +890,7 @@ export default function LineReviewMode({
         )}
 
         {/* Not available — all detection methods exhausted */}
-        {!isDetecting && alignedLines.length === 0 && imageNaturalSize.width > 0 && (
+        {!isDetecting && hasTranscriptLinesOnPage && alignedLines.length === 0 && imageNaturalSize.width > 0 && (
           <div className="line-review-analyzing">
             Could not detect line positions for this page.
             <br />
@@ -827,16 +900,18 @@ export default function LineReviewMode({
       </div>
 
       {/* Progress indicator */}
-      <div className="line-review-progress">
-        <span className="progress-line">
-          <strong>Line {globalLineIndex}</strong> / {totalLines}
-        </span>
-        {letterPages.length > 1 && (
+      {totalLines > 0 && (
+        <div className="line-review-progress">
           <span className="progress-line">
-            Page {currentPageIndex + 1} / {letterPages.length}
+            <strong>Line {globalLineIndex}</strong> / {totalLines}
           </span>
-        )}
-      </div>
+          {letterPages.length > 1 && (
+            <span className="progress-line">
+              Page {currentPageIndex + 1} / {letterPages.length}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Exit hint */}
       <div className="line-review-exit-hint">
@@ -852,4 +927,6 @@ export default function LineReviewMode({
       </div>
     </div>
   );
-}
+});
+
+export default LineReviewMode;

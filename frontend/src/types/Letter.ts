@@ -124,6 +124,7 @@ export interface LetterImage {
   pageNumber?: number; // only for letter pages
   imageUrl: string;
   originalFilename?: string;
+  lineSegments?: LineSegment[];
 }
 
 export interface LetterMetadata {

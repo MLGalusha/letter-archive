@@ -3,6 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import LineReviewMode from '../LineReviewMode';
+import { detectPageLines } from '../../../api/admin/letters';
 import type { Letter } from '../../../types/Letter';
 
 // Mock the client module
@@ -119,6 +120,7 @@ function getEditable(container: HTMLElement): HTMLDivElement | null {
 }
 
 describe('LineReviewMode', () => {
+  const detectPageLinesMock = vi.mocked(detectPageLines);
   const defaultProps = {
     letter: makeLetter(),
     transcript: 'Line one\nLine two\nLine three',
@@ -134,6 +136,62 @@ describe('LineReviewMode', () => {
       cb(0);
       return 0;
     });
+  });
+
+  it('does not auto-detect when the page has no transcript yet', async () => {
+    render(
+      <LineReviewMode
+        {...defaultProps}
+        letter={makeLetter({
+          transcript: {
+            pages: [],
+            fullText: '',
+            verified: false,
+          },
+        })}
+        transcript=""
+      />,
+    );
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(detectPageLinesMock).not.toHaveBeenCalled();
+  });
+
+  it('uses stored line segments without auto-detecting again', async () => {
+    render(
+      <LineReviewMode
+        {...defaultProps}
+        letter={makeLetter({
+          images: [
+            {
+              id: 'page-1',
+              type: 'letter',
+              pageNumber: 1,
+              imageUrl: '/images/page-1',
+              originalFilename: 'page1.jpg',
+              lineSegments: [
+                {
+                  line: 1,
+                  baseline: [[50, 135], [450, 135]],
+                  bbox: [50, 100, 450, 135],
+                  ocrText: '',
+                  words: [],
+                },
+              ],
+            },
+          ],
+        })}
+      />,
+    );
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(detectPageLinesMock).not.toHaveBeenCalled();
   });
 
   it('renders the image', () => {
@@ -263,6 +321,31 @@ describe('LineReviewMode', () => {
     expect(defaultProps.onTranscriptChange).not.toHaveBeenCalled();
   });
 
+  it('does not treat original transcript spacing as a review edit', async () => {
+    const spacedTranscript = 'Line   one\nLine two\nLine three';
+    const { container } = render(
+      <LineReviewMode
+        {...defaultProps}
+        letter={makeLetter({
+          transcript: {
+            pages: [{ pageNumber: 1, text: spacedTranscript }],
+            fullText: spacedTranscript,
+            verified: false,
+          },
+        })}
+        transcript={spacedTranscript}
+      />,
+    );
+    await simulateImageLoadAsync(container);
+
+    act(() => {
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+    });
+
+    expect(defaultProps.onAutoSave).not.toHaveBeenCalled();
+    expect(defaultProps.onTranscriptChange).not.toHaveBeenCalled();
+  });
+
   it('saves edited text when navigating away', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
     await simulateImageLoadAsync(container);
@@ -284,6 +367,41 @@ describe('LineReviewMode', () => {
     expect(defaultProps.onAutoSave).toHaveBeenCalledWith(
       expect.objectContaining({
         transcriptionText: expect.stringContaining('Edited line one'),
+      }),
+    );
+  });
+
+  it('preserves original transcript spacing when saving a word edit', async () => {
+    const spacedTranscript = 'Line   one\nLine two\nLine three';
+    const { container } = render(
+      <LineReviewMode
+        {...defaultProps}
+        letter={makeLetter({
+          transcript: {
+            pages: [{ pageNumber: 1, text: spacedTranscript }],
+            fullText: spacedTranscript,
+            verified: false,
+          },
+        })}
+        transcript={spacedTranscript}
+      />,
+    );
+    await simulateImageLoadAsync(container);
+
+    const input = getEditable(container);
+    expect(input).toBeTruthy();
+    if (input) {
+      input.textContent = 'Line revised';
+      fireEvent.input(input);
+    }
+
+    act(() => {
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+    });
+
+    expect(defaultProps.onAutoSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transcriptionText: expect.stringContaining('Line   revised'),
       }),
     );
   });

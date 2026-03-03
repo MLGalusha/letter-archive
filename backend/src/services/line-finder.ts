@@ -2,6 +2,8 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { eq } from 'drizzle-orm';
+import { db, letterPages } from '../db/index.js';
 import { createLogger } from '../utils/logger.js';
 import { env } from '../config/env.js';
 import type { LineSegment } from './kraken.js';
@@ -75,5 +77,40 @@ export async function runLineFinder(imagePath: string): Promise<LineSegment[] | 
     const message = error instanceof Error ? error.message : 'Unknown error';
     log.warn({ imagePath, err: message }, 'Line finder failed (non-fatal)');
     return null;
+  }
+}
+
+export async function savePageLineSegments(
+  pageId: string,
+  segments: LineSegment[],
+): Promise<void> {
+  await db.update(letterPages).set({
+    lineSegments: segments,
+    updatedAt: new Date(),
+  }).where(eq(letterPages.id, pageId));
+}
+
+export async function detectAndStorePageLines(
+  pageId: string,
+  imagePath: string,
+): Promise<LineSegment[] | null> {
+  const segments = await runLineFinder(imagePath);
+  if (segments) {
+    await savePageLineSegments(pageId, segments);
+  }
+  return segments;
+}
+
+export async function detectAndStoreLinesForPages(
+  pages: Array<{ id: string; storagePath: string; pageNumber: number }>,
+  getAbsoluteStoragePath: (storagePath: string) => string,
+): Promise<void> {
+  for (const page of pages) {
+    const absolutePath = getAbsoluteStoragePath(page.storagePath);
+    const segments = await detectAndStorePageLines(page.id, absolutePath);
+    log.info(
+      { pageId: page.id, pageNumber: page.pageNumber, lineCount: segments?.length ?? 0 },
+      'Stored line detection results for page',
+    );
   }
 }

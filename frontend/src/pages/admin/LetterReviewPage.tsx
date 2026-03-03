@@ -49,7 +49,9 @@ import TranscriptionSection from "./LetterReview/TranscriptionSection";
 import { ExtraContentSection } from "./LetterReview/ExtraContentSection";
 import MetadataSection from "./LetterReview/MetadataSection";
 import AddEntityModal from "./LetterReview/AddEntityModal";
-import LineReviewMode from "../../components/LineReviewMode/LineReviewMode";
+import LineReviewMode, {
+  type LineReviewModeHandle,
+} from "../../components/LineReviewMode/LineReviewMode";
 import "./LetterReviewPage.css";
 
 export default function LetterReviewPage() {
@@ -146,6 +148,7 @@ export default function LetterReviewPage() {
     undefined,
   );
   const editorRef = useRef<HTMLDivElement>(null);
+  const lineReviewRef = useRef<LineReviewModeHandle>(null);
 
   // Verified transcript editing flow state
   const [isTranscriptEditing, setIsTranscriptEditing] = useState(false);
@@ -301,18 +304,21 @@ export default function LetterReviewPage() {
     return () => window.removeEventListener("resize", calculateFontSize);
   }, [calculateFontSize]);
 
-  // Set initial content in contenteditable when letter loads
-  // IMPORTANT: Only depend on letter.id, not the whole letter object or calculateFontSize
-  // Otherwise this effect runs on every edit and overwrites the DOM
+  // Keep the contenteditable DOM in sync when the editor mounts or when
+  // transcript state changes outside direct typing (for example after exiting
+  // line review). We only write when the DOM is actually out of sync to avoid
+  // cursor jumps during normal editing.
   useEffect(() => {
     const editor = editorRef.current;
-    if (editor && letter) {
-      editor.innerText = letter.transcript.fullText || "";
+    if (editor) {
+      const currentContent = editor.innerText;
+      if (currentContent !== transcript) {
+        editor.innerText = transcript;
+      }
       // Recalculate font size after content is set
       calculateFontSize();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [letter?.id]);
+  }, [transcript, reviewMode, calculateFontSize]);
 
   // Auto-resize textareas to fit content
   const autoResizeTextarea = (textarea: HTMLTextAreaElement | null, minHeight = 80) => {
@@ -1312,6 +1318,14 @@ export default function LetterReviewPage() {
     [navigate],
   );
 
+  const handleToggleReviewMode = useCallback(() => {
+    if (reviewMode) {
+      lineReviewRef.current?.saveCurrentLine();
+    }
+
+    setReviewMode((prev) => !prev);
+  }, [reviewMode]);
+
   // Line highlighting - update on cursor move
   useEffect(() => {
     const isEditing =
@@ -1414,7 +1428,7 @@ export default function LetterReviewPage() {
 
         <button
           className={`header-action review ${reviewMode ? "active" : ""}`}
-          onClick={() => setReviewMode((prev) => !prev)}
+          onClick={handleToggleReviewMode}
           data-tooltip={reviewMode ? "Switch to Edit Mode" : "Switch to Review Mode"}
         >
           <Icon name={reviewMode ? "edit" : "eye"} size={18} />
@@ -1433,6 +1447,7 @@ export default function LetterReviewPage() {
       <div className="review-body">
         {reviewMode ? (
           <LineReviewMode
+            ref={lineReviewRef}
             letter={letter}
             transcript={transcript}
             onTranscriptChange={(newText) => setTranscript(newText)}

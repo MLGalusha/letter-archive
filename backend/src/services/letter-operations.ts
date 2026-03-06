@@ -771,53 +771,50 @@ export async function createVersion(
   letterId: string,
   input: VersionInput,
 ): Promise<VersionResult | null> {
-  // Verify letter exists
   const letter = await getLetterById(letterId);
   if (!letter) return null;
 
   const { fieldType, content, source } = input;
 
-  // Get the next version number
-  const existingVersions = await db.query.letterVersions.findMany({
-    where: and(
-      eq(letterVersions.letterId, letterId),
-      eq(letterVersions.fieldType, fieldType),
-    ),
-    orderBy: (v, { desc }) => [desc(v.versionNumber)],
-    limit: 1,
+  return db.transaction(async (tx) => {
+    const existingVersions = await tx.query.letterVersions.findMany({
+      where: and(
+        eq(letterVersions.letterId, letterId),
+        eq(letterVersions.fieldType, fieldType),
+      ),
+      orderBy: (v, { desc }) => [desc(v.versionNumber)],
+      limit: 1,
+    });
+
+    const nextVersionNumber = existingVersions.length > 0
+      ? existingVersions[0].versionNumber + 1
+      : 1;
+
+    const [newVersion] = await tx.insert(letterVersions).values({
+      letterId,
+      fieldType,
+      versionNumber: nextVersionNumber,
+      content: typeof content === 'string' ? { text: content } : content,
+      source,
+    }).returning();
+
+    log.debug({ letterId, fieldType, versionNumber: nextVersionNumber }, 'Version created');
+
+    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    await tx.delete(letterVersions).where(
+      and(
+        eq(letterVersions.letterId, letterId),
+        eq(letterVersions.fieldType, fieldType),
+        sql`${letterVersions.createdAt} < ${cutoff}`,
+        sql`${letterVersions.versionNumber} > 1`,
+      ),
+    );
+
+    return {
+      versionNumber: newVersion.versionNumber,
+      createdAt: newVersion.createdAt.toISOString(),
+    };
   });
-
-  const nextVersionNumber = existingVersions.length > 0
-    ? existingVersions[0].versionNumber + 1
-    : 1;
-
-  // Create the version
-  const [newVersion] = await db.insert(letterVersions).values({
-    letterId,
-    fieldType,
-    versionNumber: nextVersionNumber,
-    content: typeof content === 'string' ? { text: content } : content,
-    source,
-  }).returning();
-
-  log.debug({ letterId, fieldType, versionNumber: nextVersionNumber }, 'Version created');
-
-  // Cleanup old versions (keep last 48 hours)
-  const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-  await db.delete(letterVersions).where(
-    and(
-      eq(letterVersions.letterId, letterId),
-      eq(letterVersions.fieldType, fieldType),
-      sql`${letterVersions.createdAt} < ${cutoff}`,
-      // Always keep at least version 1 (AI original)
-      sql`${letterVersions.versionNumber} > 1`,
-    ),
-  );
-
-  return {
-    versionNumber: newVersion.versionNumber,
-    createdAt: newVersion.createdAt.toISOString(),
-  };
 }
 
 /**

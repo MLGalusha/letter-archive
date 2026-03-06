@@ -15,6 +15,11 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
     statusCode = 400;
     errorType = 'validation_error';
     userMessage = 'Validation error';
+  } else if ('statusCode' in err && typeof err.statusCode === 'number') {
+    // Support typed errors like ProcessingError that carry their own status code
+    statusCode = err.statusCode;
+    errorType = err.name || 'application_error';
+    userMessage = err.message;
   } else if (err.message?.includes('Invalid filename')) {
     statusCode = 400;
     errorType = 'invalid_filename';

@@ -1,6 +1,6 @@
 import { mkdir, copyFile, access, readFile, stat, unlink } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { env } from '../config/env.js';
 import { createLogger } from '../utils/logger.js';
@@ -140,10 +140,20 @@ export async function storeFile(
 /**
  * Gets the full absolute path for a storage path.
  * Resolves relative paths against the backend project root (not process.cwd()).
+ * Validates the resolved path is within the expected storage directory to prevent path traversal.
  */
 export function getAbsoluteStoragePath(storagePath: string): string {
-  if (storagePath.startsWith('/')) {
-    return storagePath;
+  const absolutePath = storagePath.startsWith('/')
+    ? storagePath
+    : join(PROJECT_ROOT, storagePath);
+
+  // Resolve to canonical path (eliminates ../ sequences)
+  const resolved = resolve(absolutePath);
+  const allowedRoot = resolve(PROJECT_ROOT, env.STORAGE_DIR);
+
+  if (!resolved.startsWith(allowedRoot + '/') && resolved !== allowedRoot) {
+    throw new Error('Path traversal detected: resolved path is outside storage directory');
   }
-  return join(PROJECT_ROOT, storagePath);
+
+  return resolved;
 }

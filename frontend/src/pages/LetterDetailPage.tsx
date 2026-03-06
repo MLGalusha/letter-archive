@@ -107,7 +107,9 @@ export default function LetterDetailPage() {
           {adjacent && (
             <div className="adjacent-controls">
               <span>
-                Letter {adjacent.position} of {adjacent.total} in this collection
+                {adjacent.position != null
+                  ? `Letter ${adjacent.position} of ${adjacent.total} in this collection`
+                  : `${adjacent.total} letters in this collection`}
               </span>
               <div className="adjacent-buttons">
                 <button

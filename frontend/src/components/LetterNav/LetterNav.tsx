@@ -87,7 +87,9 @@ export default function LetterNav({ letterId }: LetterNavProps) {
       </button>
 
       <span className="letter-nav-position">
-        Letter {adjacent.position} of {adjacent.total}
+        {adjacent.position != null
+          ? `Letter ${adjacent.position} of ${adjacent.total}`
+          : `${adjacent.total} in collection`}
       </span>
 
       <button

@@ -178,36 +178,69 @@ export async function updateCanonicalPersonWithUndo(
     notes: existing.notes,
   };
 
-  await updateCanonicalPerson(id, data);
+  return db.transaction(async (tx) => {
+    await tx.update(canonicalPersons).set({ ...data, updatedAt: new Date() }).where(eq(canonicalPersons.id, id));
 
-  if (data.canonicalName && data.canonicalName !== existing.canonicalName) {
-    await rewritePersonNameReferences(id, data.canonicalName);
-  }
+    if (data.canonicalName && data.canonicalName !== existing.canonicalName) {
+      await tx.update(letterPersons).set({ nameAsWritten: data.canonicalName }).where(eq(letterPersons.personId, id));
 
-  const updated = await getCanonicalPersonById(id);
-  if (!updated) {
-    throw new Error('Person disappeared after update');
-  }
+      const senderLetterRows = await tx
+        .select({ letterId: letterPersons.letterId })
+        .from(letterPersons)
+        .where(and(eq(letterPersons.personId, id), eq(letterPersons.role, 'sender')));
 
-  if (before.canonicalName === updated.canonicalName) {
-    return { undoActionId: null };
-  }
+      if (senderLetterRows.length > 0) {
+        await tx.update(letters).set({
+          sender: data.canonicalName,
+          updatedAt: new Date(),
+        }).where(
+          inArray(letters.id, [...new Set(senderLetterRows.map((row) => row.letterId))]),
+        );
+      }
 
-  const undoActionId = await createPersonAuditEntry({
-    action: 'person.rename',
-    entityId: id,
-    actor,
-    changes: {
-      before,
-      after: {
-        canonicalName: updated.canonicalName,
-        aliases: updated.aliases || [],
-        notes: updated.notes,
+      const recipientLetterRows = await tx
+        .select({ letterId: letterPersons.letterId })
+        .from(letterPersons)
+        .where(and(eq(letterPersons.personId, id), eq(letterPersons.role, 'recipient')));
+
+      if (recipientLetterRows.length > 0) {
+        await tx.update(letters).set({
+          recipient: data.canonicalName,
+          updatedAt: new Date(),
+        }).where(
+          inArray(letters.id, [...new Set(recipientLetterRows.map((row) => row.letterId))]),
+        );
+      }
+    }
+
+    const updated = await tx.query.canonicalPersons.findFirst({
+      where: eq(canonicalPersons.id, id),
+    });
+    if (!updated) {
+      throw new Error('Person disappeared after update');
+    }
+
+    if (before.canonicalName === updated.canonicalName) {
+      return { undoActionId: null };
+    }
+
+    const [auditEntry] = await tx.insert(auditLog).values({
+      action: 'person.rename',
+      entityType: 'person',
+      entityId: id,
+      userId: actor,
+      changes: {
+        before,
+        after: {
+          canonicalName: updated.canonicalName,
+          aliases: updated.aliases || [],
+          notes: updated.notes,
+        },
       },
-    },
-  });
+    }).returning({ id: auditLog.id });
 
-  return { undoActionId };
+    return { undoActionId: auditEntry.id };
+  });
 }
 
 export async function mergePersons(keepId: string, mergeId: string): Promise<void> {
@@ -253,11 +286,12 @@ export async function mergePersonsWithUndo(
     updatedAt: mergePerson.updatedAt.toISOString(),
   };
 
-  const mergeLinks = await db.query.letterPersons.findMany({
+  return db.transaction(async (tx) => {
+  const mergeLinks = await tx.query.letterPersons.findMany({
     where: eq(letterPersons.personId, mergeId),
   });
 
-  const mergeRelationships = await db.query.personRelationships.findMany({
+  const mergeRelationships = await tx.query.personRelationships.findMany({
     where: or(
       eq(personRelationships.personAId, mergeId),
       eq(personRelationships.personBId, mergeId),
@@ -270,13 +304,13 @@ export async function mergePersonsWithUndo(
     ...(mergePerson.aliases || []),
   ];
 
-  await updateCanonicalPerson(keepId, { aliases: uniqueStrings(combinedAliases) });
+  await tx.update(canonicalPersons).set({ aliases: uniqueStrings(combinedAliases), updatedAt: new Date() }).where(eq(canonicalPersons.id, keepId));
 
   const movedLinkIds: string[] = [];
   const deletedDuplicateLinks = [];
 
   for (const link of mergeLinks) {
-    const existingTarget = await db.query.letterPersons.findFirst({
+    const existingTarget = await tx.query.letterPersons.findFirst({
       where: and(
         eq(letterPersons.letterId, link.letterId),
         eq(letterPersons.personId, keepId),
@@ -290,14 +324,14 @@ export async function mergePersonsWithUndo(
         link.context,
       ]).join(' | ') || null;
 
-      await db.update(letterPersons).set({
+      await tx.update(letterPersons).set({
         confidence: Math.max(existingTarget.confidence, link.confidence),
         context: mergedContext,
         relationshipToSender: existingTarget.relationshipToSender || link.relationshipToSender,
         nameAsWritten: existingTarget.nameAsWritten || link.nameAsWritten,
       }).where(eq(letterPersons.id, existingTarget.id));
 
-      await db.delete(letterPersons).where(eq(letterPersons.id, link.id));
+      await tx.delete(letterPersons).where(eq(letterPersons.id, link.id));
 
       deletedDuplicateLinks.push({
         ...link,
@@ -306,7 +340,7 @@ export async function mergePersonsWithUndo(
       continue;
     }
 
-    await db.update(letterPersons).set({
+    await tx.update(letterPersons).set({
       personId: keepId,
     }).where(eq(letterPersons.id, link.id));
     movedLinkIds.push(link.id);
@@ -324,12 +358,12 @@ export async function mergePersonsWithUndo(
 
     if (otherPersonId === keepId) {
       deletedRelationships.push(serializeRelationship(rel));
-      await db.delete(personRelationships).where(eq(personRelationships.id, rel.id));
+      await tx.delete(personRelationships).where(eq(personRelationships.id, rel.id));
       continue;
     }
 
     const [newA, newB] = [keepId, otherPersonId].sort();
-    const existing = await db.query.personRelationships.findFirst({
+    const existing = await tx.query.personRelationships.findFirst({
       where: and(
         eq(personRelationships.personAId, newA),
         eq(personRelationships.personBId, newB),
@@ -343,7 +377,7 @@ export async function mergePersonsWithUndo(
           before: serializeRelationship(existing),
         });
 
-        await db.update(personRelationships).set({
+        await tx.update(personRelationships).set({
           relationshipType: rel.relationshipType,
           notes: rel.notes || existing.notes,
           discoveredInLetterId: rel.discoveredInLetterId || existing.discoveredInLetterId,
@@ -355,28 +389,29 @@ export async function mergePersonsWithUndo(
       }
 
       deletedRelationships.push(serializeRelationship(rel));
-      await db.delete(personRelationships).where(eq(personRelationships.id, rel.id));
+      await tx.delete(personRelationships).where(eq(personRelationships.id, rel.id));
       continue;
     }
 
     movedRelationships.push(serializeRelationship(rel));
-    await db.update(personRelationships).set({
+    await tx.update(personRelationships).set({
       personAId: newA,
       personBId: newB,
       updatedAt: new Date(),
     }).where(eq(personRelationships.id, rel.id));
   }
 
-  await db.delete(canonicalPersons).where(eq(canonicalPersons.id, mergeId));
+  await tx.delete(canonicalPersons).where(eq(canonicalPersons.id, mergeId));
 
   if (!trackUndo) {
     return { undoActionId: null };
   }
 
-  const undoActionId = await createPersonAuditEntry({
+  const [auditEntry] = await tx.insert(auditLog).values({
     action: 'person.merge',
+    entityType: 'person',
     entityId: keepId,
-    actor,
+    userId: actor,
     changes: {
       keepId,
       mergeId,
@@ -388,9 +423,10 @@ export async function mergePersonsWithUndo(
       deletedRelationships,
       mutatedExistingRelationships,
     },
-  });
+  }).returning({ id: auditLog.id });
 
-  return { undoActionId };
+  return { undoActionId: auditEntry.id };
+  });
 }
 
 async function getPersonAuditEntryForUndo(
@@ -442,23 +478,57 @@ export async function undoPersonRename(actionId: string, actor: string = 'admin'
     throw new Error('Undo payload is missing required rename data');
   }
 
-  await db.update(canonicalPersons).set({
-    canonicalName: changes.before.canonicalName,
-    aliases: changes.before.aliases || [],
-    notes: changes.before.notes ?? null,
-    updatedAt: new Date(),
-  }).where(eq(canonicalPersons.id, entry.entityId));
+  const entityId = entry.entityId;
+  const beforeData = changes.before;
 
-  await rewritePersonNameReferences(entry.entityId, changes.before.canonicalName);
+  await db.transaction(async (tx) => {
+    await tx.update(canonicalPersons).set({
+      canonicalName: beforeData.canonicalName!,
+      aliases: beforeData.aliases || [],
+      notes: beforeData.notes ?? null,
+      updatedAt: new Date(),
+    }).where(eq(canonicalPersons.id, entityId));
 
-  await createPersonAuditEntry({
-    action: 'undo',
-    entityId: entry.entityId,
-    actor,
-    changes: {
-      targetActionId: actionId,
-      targetAction: 'person.rename',
-    },
+    await tx.update(letterPersons).set({ nameAsWritten: beforeData.canonicalName! }).where(eq(letterPersons.personId, entityId));
+
+    const senderLetterRows = await tx
+      .select({ letterId: letterPersons.letterId })
+      .from(letterPersons)
+      .where(and(eq(letterPersons.personId, entityId), eq(letterPersons.role, 'sender')));
+
+    if (senderLetterRows.length > 0) {
+      await tx.update(letters).set({
+        sender: beforeData.canonicalName!,
+        updatedAt: new Date(),
+      }).where(
+        inArray(letters.id, [...new Set(senderLetterRows.map((row) => row.letterId))]),
+      );
+    }
+
+    const recipientLetterRows = await tx
+      .select({ letterId: letterPersons.letterId })
+      .from(letterPersons)
+      .where(and(eq(letterPersons.personId, entityId), eq(letterPersons.role, 'recipient')));
+
+    if (recipientLetterRows.length > 0) {
+      await tx.update(letters).set({
+        recipient: beforeData.canonicalName!,
+        updatedAt: new Date(),
+      }).where(
+        inArray(letters.id, [...new Set(recipientLetterRows.map((row) => row.letterId))]),
+      );
+    }
+
+    await tx.insert(auditLog).values({
+      action: 'undo',
+      entityType: 'person',
+      entityId,
+      userId: actor,
+      changes: {
+        targetActionId: actionId,
+        targetAction: 'person.rename',
+      },
+    });
   });
 }
 
@@ -519,50 +589,58 @@ export async function undoPersonMerge(actionId: string, actor: string = 'admin')
     throw new Error('Undo payload is missing required merge data');
   }
 
-  const mergePersonExists = await getCanonicalPersonById(changes.mergeBefore.id);
+  // Extract narrowed values so TypeScript preserves types inside transaction callback
+  const keepId = changes.keepId;
+  const mergeBefore = changes.mergeBefore;
+  const keepBefore = changes.keepBefore;
+
+  await db.transaction(async (tx) => {
+  const mergePersonExists = await tx.query.canonicalPersons.findFirst({
+    where: eq(canonicalPersons.id, mergeBefore.id!),
+  });
   if (!mergePersonExists) {
-    await db.insert(canonicalPersons).values({
-      id: changes.mergeBefore.id,
-      canonicalName: changes.mergeBefore.canonicalName,
-      aliases: changes.mergeBefore.aliases || [],
-      notes: changes.mergeBefore.notes ?? null,
-      biography: changes.mergeBefore.biography ?? null,
-      biographyStatus: (changes.mergeBefore.biographyStatus as CanonicalPerson['biographyStatus']) ?? 'EMPTY',
-      biographyVerifiedAt: changes.mergeBefore.biographyVerifiedAt
-        ? new Date(changes.mergeBefore.biographyVerifiedAt)
+    await tx.insert(canonicalPersons).values({
+      id: mergeBefore.id!,
+      canonicalName: mergeBefore.canonicalName!,
+      aliases: mergeBefore.aliases || [],
+      notes: mergeBefore.notes ?? null,
+      biography: mergeBefore.biography ?? null,
+      biographyStatus: (mergeBefore.biographyStatus as CanonicalPerson['biographyStatus']) ?? 'EMPTY',
+      biographyVerifiedAt: mergeBefore.biographyVerifiedAt
+        ? new Date(mergeBefore.biographyVerifiedAt)
         : null,
-      biographyVerifiedBy: changes.mergeBefore.biographyVerifiedBy ?? null,
-      createdAt: changes.mergeBefore.createdAt
-        ? new Date(changes.mergeBefore.createdAt)
+      biographyVerifiedBy: mergeBefore.biographyVerifiedBy ?? null,
+      createdAt: mergeBefore.createdAt
+        ? new Date(mergeBefore.createdAt)
         : new Date(),
-      updatedAt: changes.mergeBefore.updatedAt
-        ? new Date(changes.mergeBefore.updatedAt)
+      updatedAt: mergeBefore.updatedAt
+        ? new Date(mergeBefore.updatedAt)
         : new Date(),
     });
   }
 
-  await db.update(canonicalPersons).set({
-    canonicalName: changes.keepBefore.canonicalName,
-    aliases: changes.keepBefore.aliases || [],
-    notes: changes.keepBefore.notes ?? null,
-    biography: changes.keepBefore.biography ?? null,
-    biographyStatus: (changes.keepBefore.biographyStatus as CanonicalPerson['biographyStatus']) ?? 'EMPTY',
-    biographyVerifiedAt: changes.keepBefore.biographyVerifiedAt
-      ? new Date(changes.keepBefore.biographyVerifiedAt)
+  await tx.update(canonicalPersons).set({
+    canonicalName: keepBefore.canonicalName,
+    aliases: keepBefore.aliases || [],
+    notes: keepBefore.notes ?? null,
+    biography: keepBefore.biography ?? null,
+    biographyStatus: (keepBefore.biographyStatus as CanonicalPerson['biographyStatus']) ?? 'EMPTY',
+    biographyVerifiedAt: keepBefore.biographyVerifiedAt
+      ? new Date(keepBefore.biographyVerifiedAt)
       : null,
-    biographyVerifiedBy: changes.keepBefore.biographyVerifiedBy ?? null,
+    biographyVerifiedBy: keepBefore.biographyVerifiedBy ?? null,
     updatedAt: new Date(),
-  }).where(eq(canonicalPersons.id, changes.keepId));
+  }).where(eq(canonicalPersons.id, keepId));
 
   const movedLinkIds = changes.movedLinkIds || [];
   if (movedLinkIds.length > 0) {
-    await db.update(letterPersons).set({
-      personId: changes.mergeBefore.id,
+    await tx.update(letterPersons).set({
+      personId: mergeBefore.id!,
     }).where(inArray(letterPersons.id, movedLinkIds));
   }
 
   for (const dupLink of changes.deletedDuplicateLinks || []) {
-    await db.insert(letterPersons).values({
+    await tx.insert(letterPersons).values({
       id: dupLink.id,
       letterId: dupLink.letterId,
       personId: dupLink.personId,
@@ -578,7 +656,7 @@ export async function undoPersonMerge(actionId: string, actor: string = 'admin')
   }
 
   for (const rel of changes.movedRelationships || []) {
-    await db.update(personRelationships).set({
+    await tx.update(personRelationships).set({
       personAId: rel.personAId,
       personBId: rel.personBId,
       relationshipType: rel.relationshipType as PersonRelationshipType,
@@ -592,7 +670,7 @@ export async function undoPersonMerge(actionId: string, actor: string = 'admin')
   }
 
   for (const rel of changes.mutatedExistingRelationships || []) {
-    await db.update(personRelationships).set({
+    await tx.update(personRelationships).set({
       personAId: rel.before.personAId,
       personBId: rel.before.personBId,
       relationshipType: rel.before.relationshipType as PersonRelationshipType,
@@ -606,7 +684,7 @@ export async function undoPersonMerge(actionId: string, actor: string = 'admin')
   }
 
   for (const rel of changes.deletedRelationships || []) {
-    await db.insert(personRelationships).values({
+    await tx.insert(personRelationships).values({
       id: rel.id,
       personAId: rel.personAId,
       personBId: rel.personBId,
@@ -621,14 +699,16 @@ export async function undoPersonMerge(actionId: string, actor: string = 'admin')
     }).onConflictDoNothing();
   }
 
-  await createPersonAuditEntry({
+  await tx.insert(auditLog).values({
     action: 'undo',
-    entityId: changes.keepId,
-    actor,
+    entityType: 'person',
+    entityId: keepId,
+    userId: actor,
     changes: {
       targetActionId: actionId,
       targetAction: 'person.merge',
     },
+  });
   });
 }
 

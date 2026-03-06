@@ -177,7 +177,7 @@ export async function deleteLetter(id: string): Promise<void> {
 export interface AdjacentLettersResponse {
   prev: string | null;
   next: string | null;
-  position: number;
+  position: number | null;
   total: number;
 }
 

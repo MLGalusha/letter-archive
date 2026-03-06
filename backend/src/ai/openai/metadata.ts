@@ -83,14 +83,14 @@ export async function extractMetadata(
     }
 
     const metadata: ExtractedMetadata = {
-      sender: (parsed.sender as string) ?? null,
-      recipient: (parsed.recipient as string) ?? null,
-      locationWritten: (parsed.location_written as string) ?? null,
-      hook: (parsed.hook as string) ?? null,
-      summary: (parsed.summary as string) ?? null,
-      tags: Array.isArray(parsed.tags) ? (parsed.tags as string[]) : [],
-      extractedDate: (parsed.extracted_date as string) ?? null,
-      extractedDateConfidence: (parsed.extracted_date_confidence as DateConfidence) ?? null,
+      sender: typeof parsed.sender === 'string' ? parsed.sender : null,
+      recipient: typeof parsed.recipient === 'string' ? parsed.recipient : null,
+      locationWritten: typeof parsed.location_written === 'string' ? parsed.location_written : null,
+      hook: typeof parsed.hook === 'string' ? parsed.hook : null,
+      summary: typeof parsed.summary === 'string' ? parsed.summary : null,
+      tags: Array.isArray(parsed.tags) ? parsed.tags.filter((t: unknown) => typeof t === 'string') : [],
+      extractedDate: typeof parsed.extracted_date === 'string' ? parsed.extracted_date : null,
+      extractedDateConfidence: typeof parsed.extracted_date_confidence === 'string' ? (parsed.extracted_date_confidence as DateConfidence) : null,
     };
 
     log.info(

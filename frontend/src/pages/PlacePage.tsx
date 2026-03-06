@@ -150,9 +150,11 @@ export default function PlacePage() {
                     <span className="letter-date">
                       {letter.letterDate || letter.dateRaw}
                     </span>
-                    <span className={`letter-role role-${letter.role.replace('_', '-')}`}>
-                      {letter.role.replace('_', ' ')}
-                    </span>
+                    {letter.role && (
+                      <span className={`letter-role role-${letter.role.replace('_', '-')}`}>
+                        {letter.role.replace('_', ' ')}
+                      </span>
+                    )}
                   </div>
                   <div className="letter-parties">
                     {letter.sender && <span>From: {letter.sender}</span>}

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button, Modal } from '../common';
 import './BulkMergeModal.css';
 
@@ -37,7 +37,7 @@ export default function BulkMergeModal({
   const [masterId, setMasterId] = useState<string>(defaultMasterId);
 
   // Reset master when entities change
-  useMemo(() => {
+  useEffect(() => {
     setMasterId(defaultMasterId);
   }, [defaultMasterId]);
 

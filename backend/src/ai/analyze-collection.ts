@@ -208,13 +208,18 @@ async function callOpenAIForAnalysis(
       throw new Error('Invalid JSON response from OpenAI for collection analysis');
     }
 
-    // Validate and normalize the response
-    parsed = {
-      people: Array.isArray(parsed.people) ? parsed.people : [],
-      places: Array.isArray(parsed.places) ? parsed.places : [],
-      relationships: Array.isArray(parsed.relationships) ? parsed.relationships : [],
-      potentialDuplicates: Array.isArray(parsed.potentialDuplicates) ? parsed.potentialDuplicates : [],
-    };
+    // Validate and normalize the response - guard against non-object responses
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      log.warn({ ...context, parsedType: typeof parsed }, 'Collection analysis returned non-object, defaulting to empty');
+      parsed = { people: [], places: [], relationships: [], potentialDuplicates: [] };
+    } else {
+      parsed = {
+        people: Array.isArray(parsed.people) ? parsed.people : [],
+        places: Array.isArray(parsed.places) ? parsed.places : [],
+        relationships: Array.isArray(parsed.relationships) ? parsed.relationships : [],
+        potentialDuplicates: Array.isArray(parsed.potentialDuplicates) ? parsed.potentialDuplicates : [],
+      };
+    }
 
     log.info(
       {

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db, letters, collections, letterPages } from '../../db/index.js';
 import { getCollectionByCode } from '../../services/collections.js';
 import { transformLettersToDTO, type LetterWithRelations } from '../../dto/index.js';
+import { getRows } from '../../services/letter-queries.js';
 import { analyzeCollection } from '../../ai/analyze-collection.js';
 
 const router = Router();
@@ -25,27 +26,33 @@ router.get('/', async (_req, res, next) => {
 
     const collectionsWithStats = await Promise.all(
       allCollections.map(async (collection) => {
-        const [stats] = await db
-          .select({
-            total: sql<number>`count(*)::int`,
-            // Visibility counts
-            published: sql<number>`count(*) filter (where ${letters.visibility} = 'PUBLISHED')::int`,
-            hidden: sql<number>`count(*) filter (where ${letters.visibility} = 'HIDDEN')::int`,
-            // Workflow state counts
-            uploaded: sql<number>`count(*) filter (where ${letters.workflow} = 'UPLOADED')::int`,
-            transcribed: sql<number>`count(*) filter (where ${letters.workflow} = 'TRANSCRIBED')::int`,
-            metadataReady: sql<number>`count(*) filter (where ${letters.workflow} = 'METADATA_DRAFTED')::int`,
-            reviewed: sql<number>`count(*) filter (where ${letters.workflow} = 'REVIEWED')::int`,
-            // Fully verified count (both transcript AND metadata verified)
-            verified: sql<number>`count(*) filter (where ${letters.transcriptStatus} = 'VERIFIED' AND ${letters.metadataContentStatus} = 'VERIFIED')::int`,
-            // Date range
-            minDate: sql<string | null>`min(${letters.dateRaw})`,
-            maxDate: sql<string | null>`max(${letters.dateRaw})`,
-          })
-          .from(letters)
-          .where(
-            eq(letters.collectionId, collection.id)
-          );
+        // Use DISTINCT ON to count unique letter groups, not individual type rows
+        // Each group is identified by (collection_id, date_raw, type_sequence)
+        // We pick the L-type representative if available
+        const statsResult = await db.execute(sql`
+          WITH unique_groups AS (
+            SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
+              workflow, visibility, transcript_status, metadata_content_status, date_raw
+            FROM letters
+            WHERE collection_id = ${collection.id}
+            ORDER BY collection_id, date_raw, type_sequence,
+              CASE WHEN type = 'L' THEN 0 ELSE 1 END, type
+          )
+          SELECT
+            count(*)::int as total,
+            count(*) filter (where visibility = 'PUBLISHED')::int as published,
+            count(*) filter (where visibility = 'HIDDEN')::int as hidden,
+            count(*) filter (where workflow = 'UPLOADED')::int as uploaded,
+            count(*) filter (where workflow = 'TRANSCRIBED')::int as transcribed,
+            count(*) filter (where workflow = 'METADATA_DRAFTED')::int as metadata_ready,
+            count(*) filter (where workflow = 'REVIEWED')::int as reviewed,
+            count(*) filter (where transcript_status = 'VERIFIED' AND metadata_content_status = 'VERIFIED')::int as verified,
+            min(date_raw) as min_date,
+            max(date_raw) as max_date
+          FROM unique_groups
+        `);
+        const statsRows = getRows<Record<string, number | string | bigint | null>>(statsResult);
+        const stats = statsRows[0] || {};
 
         // Count letter pages and extra content pages
         const [pageCounts] = await db
@@ -61,16 +68,16 @@ router.get('/', async (_req, res, next) => {
 
         return {
           ...collection,
-          letterCount: stats?.total || 0,
-          publishedCount: stats?.published || 0,
-          hiddenCount: stats?.hidden || 0,
-          uploadedCount: stats?.uploaded || 0,
-          transcribedCount: stats?.transcribed || 0,
-          metadataReadyCount: stats?.metadataReady || 0,
-          reviewedCount: stats?.reviewed || 0,
-          verifiedCount: stats?.verified || 0,
-          minDate: stats?.minDate || null,
-          maxDate: stats?.maxDate || null,
+          letterCount: Number(stats?.total || 0),
+          publishedCount: Number(stats?.published || 0),
+          hiddenCount: Number(stats?.hidden || 0),
+          uploadedCount: Number(stats?.uploaded || 0),
+          transcribedCount: Number(stats?.transcribed || 0),
+          metadataReadyCount: Number(stats?.metadata_ready || 0),
+          reviewedCount: Number(stats?.reviewed || 0),
+          verifiedCount: Number(stats?.verified || 0),
+          minDate: stats?.min_date || null,
+          maxDate: stats?.max_date || null,
           letterPageCount: pageCounts?.letterPageCount || 0,
           extraContentCount: pageCounts?.extraContentCount || 0,
         };

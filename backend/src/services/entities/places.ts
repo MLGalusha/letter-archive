@@ -199,72 +199,75 @@ export async function mergePlacesWithUndo(
     updatedAt: mergePlace.updatedAt.toISOString(),
   };
 
-  const mergeLinks = await db.query.letterPlaces.findMany({
-    where: eq(letterPlaces.placeId, mergeId),
-  });
-
-  const combinedAliases = [
-    ...(keepPlace.aliases || []),
-    mergePlace.canonicalName,
-    ...(mergePlace.aliases || []),
-  ];
-
-  await updateCanonicalPlace(keepId, { aliases: uniqueStrings(combinedAliases) });
-
-  const movedLinkIds: string[] = [];
-  const deletedDuplicateLinks = [];
-
-  for (const link of mergeLinks) {
-    const existingTarget = await db.query.letterPlaces.findFirst({
-      where: and(
-        eq(letterPlaces.letterId, link.letterId),
-        eq(letterPlaces.placeId, keepId),
-        eq(letterPlaces.role, link.role),
-      ),
+  return db.transaction(async (tx) => {
+    const mergeLinks = await tx.query.letterPlaces.findMany({
+      where: eq(letterPlaces.placeId, mergeId),
     });
 
-    if (existingTarget) {
-      await db.update(letterPlaces).set({
-        confidence: Math.max(existingTarget.confidence, link.confidence),
-        context: uniqueStrings([existingTarget.context, link.context]).join(' | ') || null,
-        nameAsWritten: existingTarget.nameAsWritten || link.nameAsWritten,
-      }).where(eq(letterPlaces.id, existingTarget.id));
+    const combinedAliases = [
+      ...(keepPlace.aliases || []),
+      mergePlace.canonicalName,
+      ...(mergePlace.aliases || []),
+    ];
 
-      await db.delete(letterPlaces).where(eq(letterPlaces.id, link.id));
-      deletedDuplicateLinks.push({
-        ...link,
-        createdAt: link.createdAt.toISOString(),
+    await tx.update(canonicalPlaces).set({ aliases: uniqueStrings(combinedAliases), updatedAt: new Date() }).where(eq(canonicalPlaces.id, keepId));
+
+    const movedLinkIds: string[] = [];
+    const deletedDuplicateLinks = [];
+
+    for (const link of mergeLinks) {
+      const existingTarget = await tx.query.letterPlaces.findFirst({
+        where: and(
+          eq(letterPlaces.letterId, link.letterId),
+          eq(letterPlaces.placeId, keepId),
+          eq(letterPlaces.role, link.role),
+        ),
       });
-      continue;
+
+      if (existingTarget) {
+        await tx.update(letterPlaces).set({
+          confidence: Math.max(existingTarget.confidence, link.confidence),
+          context: uniqueStrings([existingTarget.context, link.context]).join(' | ') || null,
+          nameAsWritten: existingTarget.nameAsWritten || link.nameAsWritten,
+        }).where(eq(letterPlaces.id, existingTarget.id));
+
+        await tx.delete(letterPlaces).where(eq(letterPlaces.id, link.id));
+        deletedDuplicateLinks.push({
+          ...link,
+          createdAt: link.createdAt.toISOString(),
+        });
+        continue;
+      }
+
+      await tx.update(letterPlaces).set({
+        placeId: keepId,
+      }).where(eq(letterPlaces.id, link.id));
+      movedLinkIds.push(link.id);
     }
 
-    await db.update(letterPlaces).set({
-      placeId: keepId,
-    }).where(eq(letterPlaces.id, link.id));
-    movedLinkIds.push(link.id);
-  }
+    await tx.delete(canonicalPlaces).where(eq(canonicalPlaces.id, mergeId));
 
-  await db.delete(canonicalPlaces).where(eq(canonicalPlaces.id, mergeId));
+    if (!trackUndo) {
+      return { undoActionId: null };
+    }
 
-  if (!trackUndo) {
-    return { undoActionId: null };
-  }
+    const [auditEntry] = await tx.insert(auditLog).values({
+      action: 'place.merge',
+      entityType: 'place',
+      entityId: keepId,
+      userId: actor,
+      changes: {
+        keepId,
+        mergeId,
+        keepBefore,
+        mergeBefore,
+        movedLinkIds,
+        deletedDuplicateLinks,
+      },
+    }).returning({ id: auditLog.id });
 
-  const undoActionId = await createPlaceAuditEntry({
-    action: 'place.merge',
-    entityId: keepId,
-    actor,
-    changes: {
-      keepId,
-      mergeId,
-      keepBefore,
-      mergeBefore,
-      movedLinkIds,
-      deletedDuplicateLinks,
-    },
+    return { undoActionId: auditEntry.id };
   });
-
-  return { undoActionId };
 }
 
 async function getPlaceAuditEntryForUndo(

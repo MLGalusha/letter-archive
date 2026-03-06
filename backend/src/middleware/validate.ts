@@ -14,6 +14,7 @@ export function validateBody(schema: ZodSchema) {
         res.status(400).json({
           error: 'Validation error',
           details: error.errors,
+          requestId: (req as unknown as Record<string, unknown>).requestId,
         });
         return;
       }
@@ -35,6 +36,7 @@ export function validateQuery(schema: ZodSchema) {
         res.status(400).json({
           error: 'Validation error',
           details: error.errors,
+          requestId: (req as unknown as Record<string, unknown>).requestId,
         });
         return;
       }

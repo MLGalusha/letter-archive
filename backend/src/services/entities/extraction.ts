@@ -268,9 +268,10 @@ async function processExtractedPlace(
   const bestMatch = matches[0];
   const aiConfidence = Math.round(place.confidence * 100);
 
-  const contextParts: string[] = [place.why_mentioned];
+  const contextParts: string[] = [];
+  if (place.why_mentioned) contextParts.push(place.why_mentioned);
   if (place.descriptive_details) contextParts.push(place.descriptive_details);
-  const richContext = contextParts.join('; ');
+  const richContext = contextParts.join('; ') || undefined;
 
   if (bestMatch && bestMatch.similarity >= 85) {
     await createLetterPlace({

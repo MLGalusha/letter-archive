@@ -147,6 +147,7 @@ export interface AdminLettersResponse {
     uploaded: number;
     transcribed: number;
     metadataReady: number;
+    reviewed: number;
     published: number;
     hidden: number;
     transcript: { empty: number; aiDraft: number; edited: number; verified: number };
@@ -172,8 +173,10 @@ export async function queryAdminLetters(
   let collectionIds: string[] = [];
   if (query.collection && query.collection !== 'all') {
     // Find all collections whose code ends with the input (for partial matching)
+    // Escape SQL LIKE wildcards to prevent unintended pattern matching
+    const escapedCollection = query.collection.replace(/%/g, '\\%').replace(/_/g, '\\_');
     const matchingCollections = await db.query.collections.findMany({
-      where: ilike(collections.collectionCode, `%${query.collection}`),
+      where: ilike(collections.collectionCode, `%${escapedCollection}`),
     });
     if (matchingCollections.length > 0) {
       collectionIds = matchingCollections.map(c => c.id);
@@ -183,7 +186,7 @@ export async function queryAdminLetters(
         letters: [],
         pagination: { page: query.page, limit: query.limit, total: 0, totalPages: 0 },
         stats: {
-          total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, published: 0, hidden: 0,
+          total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0,
           transcript: { empty: 0, aiDraft: 0, edited: 0, verified: 0 },
           metadata: { empty: 0, aiDraft: 0, edited: 0, verified: 0 },
           extraContent: { empty: 0, aiDraft: 0, edited: 0, verified: 0 },
@@ -460,6 +463,7 @@ export async function queryAdminLetters(
       uploaded: Number(rawStats.uploaded) + Number(rawStats.transcribing),
       transcribed: Number(rawStats.transcribed) + Number(rawStats.metadataExtracting),
       metadataReady: Number(rawStats.metadataReady),
+      reviewed: Number(rawStats.reviewed),
       // Visibility stats
       published: Number(rawStats.published),
       hidden: Number(rawStats.hidden),

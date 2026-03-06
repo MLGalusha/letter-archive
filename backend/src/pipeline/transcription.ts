@@ -139,12 +139,14 @@ export async function runTranscription(letterId: string): Promise<void> {
         .join('\n\n');
     }
 
-    // Update letter with transcription
-    await updateTranscriptionStatus(letterId, 'SUCCESS', combinedTranscription, null);
-    await updateLetterWorkflow(letterId, 'TRANSCRIBED');
-
-    // Also set transcriptStatus to AI_DRAFT since we just generated it
+    // Update letter with transcription - all status updates in one operation
+    // to avoid inconsistent state if the process crashes between updates
     await db.update(letters).set({
+      transcriptionText: combinedTranscription,
+      transcriptionStatus: 'SUCCESS',
+      transcriptionError: null,
+      transcribedAt: new Date(),
+      workflow: 'TRANSCRIBED',
       transcriptStatus: 'AI_DRAFT',
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));

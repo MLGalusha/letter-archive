@@ -539,8 +539,8 @@ router.get('/letters/:letterId/versions', async (req, res, next) => {
       res.status(404).json({ error: 'Letter not found' });
       return;
     }
-    const result = await getVersions(letterId, fieldType as 'transcript' | 'metadata');
-    res.json(result);
+    const versions = await getVersions(letterId, fieldType as 'transcript' | 'metadata');
+    res.json({ versions: versions || [] });
   } catch (error) {
     next(error);
   }
@@ -689,7 +689,14 @@ router.post('/letters/:letterId/regenerate-transcription', async (req, res, next
       res.status(500).json({ error: 'Failed to fetch updated letter' });
       return;
     }
-    res.json({ ...letterDTO, regeneration: result });
+    res.json({
+      letter: letterDTO,
+      regenerated: {
+        mainTranscript: result.mainTranscript,
+        extras: result.extras,
+        extrasCount: result.extrasCount,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -708,7 +715,13 @@ router.post('/letters/:letterId/transcribe-letter', async (req, res, next) => {
       res.status(500).json({ error: 'Failed to fetch updated letter' });
       return;
     }
-    res.json(letterDTO);
+    res.json({
+      letter: letterDTO,
+      transcribed: {
+        pageCount: result.pageCount,
+        textLength: result.textLength,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -727,7 +740,11 @@ router.post('/letters/:letterId/transcribe-extras', async (req, res, next) => {
       res.status(500).json({ error: 'Failed to fetch updated letter' });
       return;
     }
-    res.json(letterDTO);
+    res.json({
+      letter: letterDTO,
+      transcribedCount: result.transcribedCount,
+      extraContentStatus: result.extraContentStatus,
+    });
   } catch (error) {
     next(error);
   }

@@ -17,6 +17,7 @@ import {
   type AlignedLine,
   type DetectedLine,
 } from '../../utils/lineAlignment';
+import { analyzePageWords, type PageAnalysis, type WordBoxMetrics } from '../../utils/wordBoxAnalysis';
 import './LineReviewMode.css';
 
 interface LineReviewModeProps {
@@ -25,6 +26,8 @@ interface LineReviewModeProps {
   onTranscriptChange: (newFullTranscript: string) => void;
   onExit: () => void;
   onAutoSave: (data: { transcriptionText: string }) => void;
+  debugMode?: boolean;
+  onDebugModeChange?: (debugMode: boolean) => void;
 }
 
 export interface LineReviewModeHandle {
@@ -335,12 +338,128 @@ function buildWordPositionedContent(
   div.textContent = joined;
 }
 
+// ---------------------------------------------------------------------------
+// Debug stats panel
+// ---------------------------------------------------------------------------
+
+function outlierClass(
+  value: number,
+  medianVal: number,
+  iqrVal: number,
+): string {
+  if (iqrVal < 0.0001) return '';
+  const dev = Math.abs(value - medianVal) / iqrVal;
+  if (dev > 3) return 'debug-stats-outlier-strong';
+  if (dev > 1.5) return 'debug-stats-outlier-mild';
+  return '';
+}
+
+function StatRow({
+  label,
+  value,
+  median,
+  iqrVal,
+}: {
+  label: string;
+  value: string;
+  median?: number;
+  iqrVal?: number;
+}) {
+  const numVal = parseFloat(value);
+  const cls = median !== undefined && iqrVal !== undefined && !isNaN(numVal)
+    ? outlierClass(numVal, median, iqrVal)
+    : '';
+  return (
+    <div className="debug-stats-row">
+      <span className="debug-stats-label">{label}</span>
+      <span className={`debug-stats-value ${cls}`}>{value}</span>
+    </div>
+  );
+}
+
+function DebugStatsPanel({
+  metrics: m,
+  pageAnalysis: pa,
+  onClose,
+}: {
+  metrics: WordBoxMetrics;
+  pageAnalysis: PageAnalysis;
+  onClose: () => void;
+}) {
+  const med = pa.medians;
+  const iq = pa.iqrs;
+
+  return (
+    <div className="debug-stats-panel">
+      <div className="debug-stats-header">
+        <span>&ldquo;{m.word.text}&rdquo;</span>
+        <button className="debug-stats-close" onClick={onClose}>&times;</button>
+      </div>
+
+      <div className="debug-stats-group">
+        <div className="debug-stats-group-title">Ink</div>
+        <StatRow label="density" value={(m.inkDensity * 100).toFixed(1) + '%'} median={med.inkDensity} iqrVal={iq.inkDensity} />
+        <StatRow label="contrast" value={m.inkContrast.toFixed(0)} median={med.inkContrast} iqrVal={iq.inkContrast} />
+        <StatRow label="minLum" value={m.minLuminance.toFixed(0)} median={med.minLuminance} iqrVal={iq.minLuminance} />
+        <StatRow label="lumStdDev" value={m.luminanceStdDev.toFixed(1)} />
+        <StatRow label="peakRowDensity" value={(m.peakRowDensity * 100).toFixed(1) + '%'} />
+        <StatRow label="coveragePerChar" value={m.inkCoveragePerChar.toFixed(0)} median={med.inkCoveragePerChar} iqrVal={iq.inkCoveragePerChar} />
+      </div>
+
+      <div className="debug-stats-group">
+        <div className="debug-stats-group-title">Geometry</div>
+        <StatRow label="rotation" value={m.rotationDegrees.toFixed(2) + '\u00b0'} median={med.rotationDegrees} iqrVal={iq.rotationDegrees} />
+        <StatRow label="aspectRatio" value={m.aspectRatio.toFixed(2)} />
+        <StatRow label="vInkRatio" value={(m.verticalInkRatio * 100).toFixed(1) + '%'} />
+        <StatRow label="hInkRatio" value={(m.horizontalInkRatio * 100).toFixed(1) + '%'} />
+        <StatRow label="vCoM" value={m.verticalCenterOfMass.toFixed(3)} median={med.verticalCenterOfMass} iqrVal={iq.verticalCenterOfMass} />
+        <StatRow label="hCoM" value={m.horizontalCenterOfMass.toFixed(3)} />
+      </div>
+
+      <div className="debug-stats-group">
+        <div className="debug-stats-group-title">Stroke</div>
+        <StatRow label="hStrokeW" value={m.estimatedStrokeWidth.toFixed(1) + 'px'} median={med.strokeWidth} iqrVal={iq.strokeWidth} />
+        <StatRow label="vStrokeW" value={m.verticalStrokeWidth.toFixed(1) + 'px'} median={med.verticalStrokeWidth} iqrVal={iq.verticalStrokeWidth} />
+        <StatRow label="strokeVar" value={m.strokeWidthVariance.toFixed(1)} />
+        <StatRow label="edgeRatio" value={(m.edgePixelRatio * 100).toFixed(1) + '%'} median={med.edgePixelRatio} iqrVal={iq.edgePixelRatio} />
+        <StatRow label="hConnect" value={m.horizontalConnectivity.toFixed(1) + 'px'} />
+      </div>
+
+      <div className="debug-stats-group">
+        <div className="debug-stats-group-title">Character</div>
+        <StatRow label="avgCharW" value={m.avgCharWidth.toFixed(1) + 'px'} median={med.avgCharWidth} iqrVal={iq.avgCharWidth} />
+        <StatRow label="charDensity" value={m.charDensity.toFixed(3)} median={med.charDensity} iqrVal={iq.charDensity} />
+        <StatRow label="xHeight" value={m.xHeight.toFixed(0) + 'px'} median={med.xHeight} iqrVal={iq.xHeight} />
+        <StatRow label="ascender" value={m.hasAscender ? 'yes' : 'no'} />
+        <StatRow label="descender" value={m.hasDescender ? 'yes' : 'no'} />
+      </div>
+
+      <div className="debug-stats-group">
+        <div className="debug-stats-group-title">Padding</div>
+        <StatRow label="top" value={(m.paddingTop * 100).toFixed(1) + '%'} />
+        <StatRow label="bottom" value={(m.paddingBottom * 100).toFixed(1) + '%'} />
+        <StatRow label="left" value={(m.paddingLeft * 100).toFixed(1) + '%'} />
+        <StatRow label="right" value={(m.paddingRight * 100).toFixed(1) + '%'} />
+      </div>
+
+      <div className="debug-stats-group">
+        <div className="debug-stats-group-title">Score</div>
+        <StatRow label="outlier" value={m.outlierScore.toFixed(3)} />
+        <StatRow label="baselineY" value={m.baselineY.toFixed(0) + 'px'} />
+        <StatRow label="inkHeight" value={(m.actualInkBottom - m.actualInkTop).toFixed(0) + 'px'} median={med.inkHeight} iqrVal={iq.inkHeight} />
+      </div>
+    </div>
+  );
+}
+
 const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(function LineReviewMode({
   letter,
   transcript,
   onTranscriptChange,
   onExit,
   onAutoSave,
+  debugMode: debugLines = false,
+  onDebugModeChange,
 }: LineReviewModeProps, ref) {
   // Filter to letter-type pages only
   const letterPages = useMemo(
@@ -350,7 +469,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
-  const [debugLines, setDebugLines] = useState(false);
   const [imageNaturalSize, setImageNaturalSize] = useState({ width: 0, height: 0 });
   const [imageDisplaySize, setImageDisplaySize] = useState({ width: 0, height: 0 });
 
@@ -368,6 +486,10 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   // Client-side pixel-detected line boundaries (fallback)
   const [detectedLinesMap, setDetectedLinesMap] = useState<Record<number, DetectedLine[] | null>>({});
+
+  // Per-page box analysis cache (lazy — only computed when debug mode is on)
+  const [analysisMap, setAnalysisMap] = useState<Record<number, PageAnalysis | null>>({});
+  const [selectedDebugWord, setSelectedDebugWord] = useState<WordBoxMetrics | null>(null);
 
   // Per-page raw text (preserves all whitespace including blank lines)
   const [pageRawTexts, setPageRawTexts] = useState<string[]>(() => {
@@ -543,6 +665,72 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const scaleFactor = imageNaturalSize.width > 0
     ? imageDisplaySize.width / imageNaturalSize.width
     : 1;
+
+  // Debug: compute kept vs dropped words for overlay
+  const debugWordData = useMemo(() => {
+    if (!debugLines) return { kept: [] as LineSegmentWord[], dropped: [] as LineSegmentWord[] };
+
+    const rawSegments = aiSegmentsMap[currentPageIndex];
+    if (!rawSegments || rawSegments.length === 0) return { kept: [] as LineSegmentWord[], dropped: [] as LineSegmentWord[] };
+
+    // Collect all kept word bboxes for O(1) lookup
+    const keptBboxKeys = new Set<string>();
+    for (const line of alignedLines) {
+      if (line.words) {
+        for (const w of line.words) {
+          keptBboxKeys.add(w.bbox.join(','));
+        }
+      }
+    }
+
+    const kept: LineSegmentWord[] = [];
+    const dropped: LineSegmentWord[] = [];
+
+    for (const seg of rawSegments) {
+      if (!seg.words) continue;
+      for (const w of seg.words) {
+        if (keptBboxKeys.has(w.bbox.join(','))) {
+          kept.push(w);
+        } else {
+          dropped.push(w);
+        }
+      }
+    }
+
+    return { kept, dropped };
+  }, [debugLines, aiSegmentsMap, currentPageIndex, alignedLines]);
+
+  // Run per-box analysis lazily when debug mode is toggled on
+  useEffect(() => {
+    if (!debugLines) {
+      setSelectedDebugWord(null);
+      return;
+    }
+    // Already cached for this page
+    if (currentPageIndex in analysisMap) return;
+    if (!imageRef.current) return;
+
+    // Collect all raw words from AI segments
+    const rawSegments = aiSegmentsMap[currentPageIndex];
+    if (!rawSegments || rawSegments.length === 0) return;
+
+    const allWords: LineSegmentWord[] = [];
+    for (const seg of rawSegments) {
+      if (seg.words) allWords.push(...seg.words);
+    }
+    if (allWords.length === 0) return;
+
+    const result = analyzePageWords(imageRef.current, allWords);
+    setAnalysisMap(prev => ({ ...prev, [currentPageIndex]: result }));
+  }, [debugLines, currentPageIndex, aiSegmentsMap, analysisMap]);
+
+  // Clear selected word when switching pages
+  useEffect(() => {
+    setSelectedDebugWord(null);
+  }, [currentPageIndex]);
+
+  // Current page analysis (if available)
+  const pageAnalysis = analysisMap[currentPageIndex] ?? null;
 
   // Page-global font size: one consistent size derived from OCR word widths across all lines
   const pageFontSize = useMemo(
@@ -786,6 +974,10 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       // Only handle when our input is focused or the container is active
       if (e.key === 'Escape') {
         e.preventDefault();
+        if (selectedDebugWord) {
+          setSelectedDebugWord(null);
+          return;
+        }
         saveCurrentLine();
         onExit();
         return;
@@ -793,7 +985,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
       if (e.key === 'D' && e.ctrlKey && e.shiftKey) {
         e.preventDefault();
-        setDebugLines(prev => !prev);
+        onDebugModeChange?.(!debugLines);
         return;
       }
 
@@ -820,7 +1012,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [saveCurrentLine, onExit, goToNextLine, goToPrevLine, redetectLines]);
+  }, [saveCurrentLine, onExit, goToNextLine, goToPrevLine, redetectLines, debugLines, onDebugModeChange, selectedDebugWord]);
 
   if (!currentPage) return null;
 
@@ -981,10 +1173,10 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           </>
         )}
 
-        {/* Debug overlay — magenta lines at detected boundaries */}
+        {/* Debug overlay — line boundaries + word-level bounding boxes */}
         {debugLines && alignedLines.map((line, i) => (
           <div
-            key={i}
+            key={`line-${i}`}
             className="line-review-debug-line"
             style={{
               top: line.bbox[1] * scaleFactor,
@@ -994,6 +1186,46 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             }}
           />
         ))}
+        {debugLines && debugWordData.kept.map((word, i) => {
+          const bboxKey = word.bbox.join(',');
+          const isSelected = selectedDebugWord?.word.bbox.join(',') === bboxKey;
+          return (
+            <div
+              key={`wk-${i}`}
+              className={`line-review-debug-word line-review-debug-word-kept line-review-debug-word-clickable${isSelected ? ' line-review-debug-word-selected' : ''}`}
+              style={{
+                top: word.bbox[1] * scaleFactor,
+                left: word.bbox[0] * scaleFactor,
+                width: (word.bbox[2] - word.bbox[0]) * scaleFactor,
+                height: (word.bbox[3] - word.bbox[1]) * scaleFactor,
+              }}
+              onClick={() => {
+                const metrics = pageAnalysis?.metrics.find(m => m.word.bbox.join(',') === bboxKey);
+                setSelectedDebugWord(metrics ?? null);
+              }}
+            />
+          );
+        })}
+        {debugLines && debugWordData.dropped.map((word, i) => {
+          const bboxKey = word.bbox.join(',');
+          const isSelected = selectedDebugWord?.word.bbox.join(',') === bboxKey;
+          return (
+            <div
+              key={`wd-${i}`}
+              className={`line-review-debug-word line-review-debug-word-dropped line-review-debug-word-clickable${isSelected ? ' line-review-debug-word-selected' : ''}`}
+              style={{
+                top: word.bbox[1] * scaleFactor,
+                left: word.bbox[0] * scaleFactor,
+                width: (word.bbox[2] - word.bbox[0]) * scaleFactor,
+                height: (word.bbox[3] - word.bbox[1]) * scaleFactor,
+              }}
+              onClick={() => {
+                const metrics = pageAnalysis?.metrics.find(m => m.word.bbox.join(',') === bboxKey);
+                setSelectedDebugWord(metrics ?? null);
+              }}
+            />
+          );
+        })}
 
         {/* Detecting lines — detection in progress */}
         {isDetecting && imageNaturalSize.width > 0 && (
@@ -1025,6 +1257,46 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             </span>
           )}
         </div>
+      )}
+
+      {/* Debug legend + page stats */}
+      {debugLines && (
+        <div className="line-review-debug-legend">
+          <span className="debug-legend-item">
+            <span className="debug-legend-swatch debug-legend-kept" />
+            Kept ({debugWordData.kept.length})
+          </span>
+          <span className="debug-legend-item">
+            <span className="debug-legend-swatch debug-legend-dropped" />
+            Dropped ({debugWordData.dropped.length})
+          </span>
+          {pageAnalysis && (
+            <>
+              <span className="debug-legend-separator" />
+              <span className="debug-legend-stat">
+                rot: <span className="debug-legend-stat-value">{pageAnalysis.pageRotation.toFixed(1)}&deg;</span>
+              </span>
+              <span className="debug-legend-stat">
+                charW: <span className="debug-legend-stat-value">{pageAnalysis.avgPageCharWidth.toFixed(1)}px</span>
+              </span>
+              <span className="debug-legend-stat">
+                stroke: <span className="debug-legend-stat-value">{pageAnalysis.medians.strokeWidth.toFixed(1)}px</span>
+              </span>
+              <span className="debug-legend-stat">
+                density: <span className="debug-legend-stat-value">{(pageAnalysis.medians.inkDensity * 100).toFixed(0)}%</span>
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Debug stats panel for selected word */}
+      {debugLines && selectedDebugWord && pageAnalysis && (
+        <DebugStatsPanel
+          metrics={selectedDebugWord}
+          pageAnalysis={pageAnalysis}
+          onClose={() => setSelectedDebugWord(null)}
+        />
       )}
 
       {/* Exit hint */}

@@ -1005,10 +1005,21 @@
   border-color: #ffcc80;
 }
 
+.filter-pill.filter-content-edited {
+  background: #ede9fe;
+  color: #6d28d9;
+  border-color: #c4b5fd;
+}
+
 .filter-pill.filter-content-verified {
   background: #dbeafe;
   color: #1d4ed8;
   border-color: #93c5fd;
+}
+
+.filter-pill.filter-content-edited.active {
+  box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.5), 0 2px 8px rgba(109, 40, 217, 0.2);
+  background: #ddd6fe;
 }
 
 .filter-pill.filter-content-none.active {

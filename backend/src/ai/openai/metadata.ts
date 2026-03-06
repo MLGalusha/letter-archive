@@ -88,9 +88,9 @@ export async function extractMetadata(
       locationWritten: typeof parsed.location_written === 'string' ? parsed.location_written : null,
       hook: typeof parsed.hook === 'string' ? parsed.hook : null,
       summary: typeof parsed.summary === 'string' ? parsed.summary : null,
-      tags: Array.isArray(parsed.tags) ? parsed.tags.filter((t: unknown) => typeof t === 'string') : [],
+      tags: Array.isArray(parsed.tags) ? parsed.tags.filter((t: unknown): t is string => typeof t === 'string') : [],
       extractedDate: typeof parsed.extracted_date === 'string' ? parsed.extracted_date : null,
-      extractedDateConfidence: typeof parsed.extracted_date_confidence === 'string' ? (parsed.extracted_date_confidence as DateConfidence) : null,
+      extractedDateConfidence: typeof parsed.extracted_date_confidence === 'string' && ['exact', 'unknown', 'inferred'].includes(parsed.extracted_date_confidence) ? (parsed.extracted_date_confidence as DateConfidence) : null,
     };
 
     log.info(

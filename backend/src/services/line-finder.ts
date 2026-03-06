@@ -6,10 +6,16 @@ import { eq } from 'drizzle-orm';
 import { db, letterPages } from '../db/index.js';
 import { createLogger } from '../utils/logger.js';
 import { env } from '../config/env.js';
-import type { LineSegment } from './kraken.js';
-
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+export interface LineSegment {
+  line: number;
+  baseline: number[][];
+  bbox: [number, number, number, number];
+  ocrText: string;
+  words?: { text: string; bbox: [number, number, number, number] }[];
+}
 
 const log = createLogger({ module: 'line-finder' });
 

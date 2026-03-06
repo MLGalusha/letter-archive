@@ -64,6 +64,7 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
           type="text"
           className="search-input"
           placeholder="Search by names, places, or keywords..."
+          aria-label="Search the archive"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -76,6 +77,8 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
       <div className="search-controls">
         <button
           className="filter-toggle"
+          aria-label="Toggle search filters"
+          aria-expanded={showFilters}
           onClick={() => setShowFilters(!showFilters)}
         >
           {showFilters ? "Hide Filters" : "Show Filters"}

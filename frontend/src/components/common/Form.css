@@ -11,7 +11,7 @@
 .form-group-error .form-input,
 .form-group-error .form-textarea,
 .form-group-error .form-select {
-  border-color: #dc2626;
+  border-color: var(--danger);
 }
 
 /* ============================================================================
@@ -25,7 +25,7 @@
 }
 
 .form-required {
-  color: #dc2626;
+  color: var(--danger);
   margin-left: 0.25rem;
 }
 
@@ -130,7 +130,7 @@
 
 .form-error {
   font-size: var(--font-xs);
-  color: #dc2626;
+  color: var(--danger);
 }
 
 /* ============================================================================

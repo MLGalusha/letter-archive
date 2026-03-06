@@ -40,7 +40,7 @@ export default function CollectionDetailPage() {
   const dateRange = useMemo(() => {
     const values = collectionLetters
       .map((letter) => letter.metadata.date || letter.metadata.dateRaw)
-      .filter(Boolean) as string[];
+      .filter((v): v is string => typeof v === 'string' && v.length > 0);
 
     if (values.length === 0) return null;
 

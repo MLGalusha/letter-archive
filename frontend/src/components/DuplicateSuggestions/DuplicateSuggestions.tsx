@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button, Icon } from '../common';
 import { getDuplicateSuggestions, type DuplicateSuggestion } from '../../api/entities';
 import './DuplicateSuggestions.css';
@@ -49,14 +49,13 @@ export default function DuplicateSuggestions({
     fetchSuggestions();
   }, [entityType, onRefresh]);
 
-  // Get pair key for dismissal tracking
-  const getPairKey = (a: string, b: string) => {
+  const getPairKey = useCallback((a: string, b: string) => {
     return [a, b].sort().join('|');
-  };
+  }, []);
 
-  // Filter out dismissed suggestions
-  const visibleSuggestions = suggestions.filter(
-    (s) => !dismissedPairs.has(getPairKey(s.entityAId, s.entityBId))
+  const visibleSuggestions = useMemo(
+    () => suggestions.filter((s) => !dismissedPairs.has(getPairKey(s.entityAId, s.entityBId))),
+    [suggestions, dismissedPairs, getPairKey]
   );
 
   // Handle dismiss
@@ -92,6 +91,7 @@ export default function DuplicateSuggestions({
         onClick={() => setExpanded(!expanded)}
         role="button"
         tabIndex={0}
+        aria-expanded={expanded}
         onKeyDown={(e) => e.key === 'Enter' && setExpanded(!expanded)}
       >
         <div className="suggestions-title">

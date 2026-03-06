@@ -56,26 +56,6 @@ export const createLogger = (context: Record<string, unknown>) => {
   return logger.child(context);
 };
 
-// Helper to measure operation duration
-export const withTiming = async <T>(
-  log: pino.Logger,
-  operation: string,
-  fn: () => Promise<T>,
-  context: Record<string, unknown> = {}
-): Promise<T> => {
-  const start = Date.now();
-  try {
-    const result = await fn();
-    const duration = Date.now() - start;
-    log.debug({ ...context, operation, duration, success: true }, `${operation} completed`);
-    return result;
-  } catch (error) {
-    const duration = Date.now() - start;
-    log.error({ ...context, operation, duration, success: false, err: error }, `${operation} failed`);
-    throw error;
-  }
-};
-
 // Timing thresholds for warnings (in ms)
 export const TIMING_THRESHOLDS = {
   DB_QUERY: 500,

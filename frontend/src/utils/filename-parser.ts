@@ -100,23 +100,6 @@ export function getFileExtension(filename: string): string {
 }
 
 /**
- * Generate a valid filename for an invalid file.
- */
-export function generateFilename(
-  originalFilename: string,
-  collectionCode: string,
-  type: LetterType,
-  typeSequence: number,
-  pageNumber: number
-): string {
-  const ext = getFileExtension(originalFilename);
-  const dateRaw = 'XXXXXXXX'; // Unknown date
-  const typeSeqStr = String(typeSequence).padStart(2, '0');
-  const pageStr = String(pageNumber).padStart(2, '0');
-  return `${collectionCode}-${dateRaw}-${type}${typeSeqStr}-${pageStr}.${ext}`;
-}
-
-/**
  * Update the type in a filename when moving between categories.
  */
 export function updateFilenameType(filename: string, newType: LetterType): string {
@@ -133,18 +116,6 @@ export function updateFilenameType(filename: string, newType: LetterType): strin
 }
 
 /**
- * Calculate sort order for a parsed filename.
- * Sort by: collection, date, type sequence, page number
- */
-export function calculateSortOrder(parsed: ParsedFilename): number {
-  const collectionWeight = parseInt(parsed.collectionCode, 10) * 1_000_000_000;
-  const dateWeight = parseInt(parsed.dateRaw.replace(/X/g, '0'), 10) * 1000;
-  const typeSeqWeight = parsed.typeSequence * 100;
-  const pageWeight = parsed.pageNumber;
-  return collectionWeight + dateWeight + typeSeqWeight + pageWeight;
-}
-
-/**
  * Map letter type to category name.
  */
 export function typeToCategory(type: LetterType): 'letters' | 'covers' | 'extras' {
@@ -152,17 +123,6 @@ export function typeToCategory(type: LetterType): 'letters' | 'covers' | 'extras
     case 'L': return 'letters';
     case 'C': return 'covers';
     default: return 'extras';
-  }
-}
-
-/**
- * Map category name to letter type.
- */
-export function categoryToType(category: 'letters' | 'covers' | 'extras'): LetterType {
-  switch (category) {
-    case 'letters': return 'L';
-    case 'covers': return 'C';
-    case 'extras': return 'E';
   }
 }
 

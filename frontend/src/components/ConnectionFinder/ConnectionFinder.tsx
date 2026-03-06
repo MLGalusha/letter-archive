@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { findConnectionPath, type PathNode, type PathEdge } from '../../api/entities';
 import './ConnectionFinder.css';
 
@@ -38,12 +38,13 @@ export function ConnectionFinder({ persons, onPathFound }: ConnectionFinderProps
   const [result, setResult] = useState<{ path: PathNode[]; edges: PathEdge[]; message?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Filter persons based on search
-  const filteredPersonsA = persons.filter(
-    (p) => p.name.toLowerCase().includes(searchA.toLowerCase()) && p.id !== personB
+  const filteredPersonsA = useMemo(
+    () => persons.filter((p) => p.name.toLowerCase().includes(searchA.toLowerCase()) && p.id !== personB),
+    [persons, searchA, personB]
   );
-  const filteredPersonsB = persons.filter(
-    (p) => p.name.toLowerCase().includes(searchB.toLowerCase()) && p.id !== personA
+  const filteredPersonsB = useMemo(
+    () => persons.filter((p) => p.name.toLowerCase().includes(searchB.toLowerCase()) && p.id !== personA),
+    [persons, searchB, personA]
   );
 
   const handleFindConnection = useCallback(async () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button, Icon, Modal } from '../common';
 import {
   getPersonMergeDetails,
@@ -86,8 +86,7 @@ export default function MergeComparison({
     onConfirm(keepId, mergeId);
   };
 
-  // Calculate merged result preview
-  const getMergedPreview = () => {
+  const preview = useMemo(() => {
     if (!entityADetails || !entityBDetails) return null;
 
     const keepDetails = keepId === entityAId ? entityADetails : entityBDetails;
@@ -105,9 +104,7 @@ export default function MergeComparison({
       aliases: Array.from(combinedAliases),
       letterCount: keepDetails.letterCount + mergeDetails.letterCount,
     };
-  };
-
-  const preview = getMergedPreview();
+  }, [entityADetails, entityBDetails, keepId, entityAId]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Merge Comparison" size="lg">

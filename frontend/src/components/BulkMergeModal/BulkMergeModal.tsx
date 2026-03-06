@@ -42,7 +42,10 @@ export default function BulkMergeModal({
   }, [defaultMasterId]);
 
   const masterEntity = selectedEntities.find((e) => e.id === masterId);
-  const mergeEntities = selectedEntities.filter((e) => e.id !== masterId);
+  const mergeEntities = useMemo(
+    () => selectedEntities.filter((e) => e.id !== masterId),
+    [selectedEntities, masterId]
+  );
 
   // Calculate preview
   const preview = useMemo(() => {

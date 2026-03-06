@@ -128,6 +128,11 @@ export default function ExplorePage() {
     [navigate],
   );
 
+  const connectionFinderPersons = useMemo(
+    () => graphData.nodes.map((n) => ({ id: n.id, name: n.name })),
+    [graphData.nodes]
+  );
+
   const handlePathFound = useCallback((path: string[]) => {
     setHighlightedPath(path);
   }, []);
@@ -276,7 +281,7 @@ export default function ExplorePage() {
 
         {showConnectionFinder && (
           <ConnectionFinder
-            persons={graphData.nodes.map((n) => ({ id: n.id, name: n.name }))}
+            persons={connectionFinderPersons}
             onPathFound={handlePathFound}
           />
         )}

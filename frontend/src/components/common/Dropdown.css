@@ -95,20 +95,20 @@
 
 /* Danger variant */
 .dropdown-item-danger .dropdown-item-title {
-  color: #dc2626;
+  color: var(--danger);
 }
 
 .dropdown-item-danger:hover:not(:disabled) {
-  background: #fef2f2;
+  background: var(--danger-bg);
 }
 
 /* Active variant */
 .dropdown-item-active {
-  background: #e3f2fd;
+  background: var(--info-bg);
 }
 
 .dropdown-item-active .dropdown-item-title {
-  color: #1565c0;
+  color: var(--info-text);
 }
 
 /* ============================================================================

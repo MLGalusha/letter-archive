@@ -151,9 +151,9 @@
 
 .finder-error {
   padding: 12px;
-  background-color: #ffebee;
+  background-color: var(--danger-bg);
   border-radius: 4px;
-  color: #c62828;
+  color: var(--danger);
   font-size: 14px;
 }
 
@@ -191,7 +191,7 @@
 
 .path-person {
   font-weight: 500;
-  color: #1976d2;
+  color: var(--info-text);
 }
 
 .path-relation {

@@ -95,8 +95,8 @@
   border-radius: 4px;
   font-size: var(--font-xs);
   font-weight: 500;
-  background-color: #e8f5e9;
-  color: #1b5e20;
+  background-color: var(--success-bg);
+  color: var(--success-text);
 }
 
 /* Section content */

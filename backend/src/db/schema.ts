@@ -262,8 +262,9 @@ export const letterPages = pgTable(
   (table) => [
     // Idempotency: no duplicate page numbers within a letter
     uniqueIndex('letter_pages_unique').on(table.letterId, table.pageNumber),
-    // Query index
+    // Query indexes
     index('idx_pages_letter').on(table.letterId),
+    index('idx_pages_checksum').on(table.checksumSha256),
     // Check constraint: page_number >= 1
     check('page_number_positive', sql`page_number >= 1`),
   ]
@@ -375,6 +376,7 @@ export const letterPersons = pgTable(
     // Query indexes
     index('idx_letter_persons_letter').on(table.letterId),
     index('idx_letter_persons_person').on(table.personId),
+    index('idx_letter_persons_person_role').on(table.personId, table.role),
     // Check constraint for confidence range
     check('confidence_range', sql`confidence >= 0 AND confidence <= 100`),
   ]
@@ -407,6 +409,7 @@ export const letterPlaces = pgTable(
     // Query indexes
     index('idx_letter_places_letter').on(table.letterId),
     index('idx_letter_places_place').on(table.placeId),
+    index('idx_letter_places_place_role').on(table.placeId, table.role),
     // Check constraint for confidence range
     check('confidence_range_place', sql`confidence >= 0 AND confidence <= 100`),
   ]
@@ -445,6 +448,7 @@ export const personRelationships = pgTable(
     // Query indexes
     index('idx_person_rel_a').on(table.personAId),
     index('idx_person_rel_b').on(table.personBId),
+    index('idx_person_rel_discovered').on(table.discoveredInLetterId),
     // Confidence check
     check('confidence_range_rel', sql`confidence >= 0 AND confidence <= 100`),
     // Ensure personAId != personBId

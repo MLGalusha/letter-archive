@@ -12,6 +12,16 @@
     --border-card: solid 1px var(--bg);
     --shadow: 0px 2px 2px hsla(0, 0%, 0%, 0.07), 0px 4px 4px hsla(0, 0%, 0%, 0.15);
 
+    /* Semantic colors */
+    --danger: #dc2626;
+    --danger-hover: #b91c1c;
+    --danger-bg: #fef2f2;
+    --danger-text: #dc2626;
+    --success-bg: #e8f5e9;
+    --success-text: #1b5e20;
+    --info-bg: #e3f2fd;
+    --info-text: #1565c0;
+
     /* Spacing */
     --spacing-xs: 0.5rem;
     --spacing-sm: 1rem;
@@ -37,6 +47,15 @@ body.dark {
     --gradient-hover: linear-gradient(0deg, var(--bg), var(--bg-light));
     --highlight: hsl(0 0% 60%);
     --border-card: solid 1px var(--border);
+
+    --danger: #ef4444;
+    --danger-hover: #dc2626;
+    --danger-bg: hsl(0 50% 12%);
+    --danger-text: #fca5a5;
+    --success-bg: hsl(120 30% 12%);
+    --success-text: #86efac;
+    --info-bg: hsl(210 40% 15%);
+    --info-text: #93c5fd;
 }
 
 /* Dark mode placeholder text - ensure readable contrast (WCAG AA requires 4.5:1) */

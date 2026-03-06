@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import {
   db,
   letters,
@@ -132,13 +132,10 @@ export async function updateTranscriptionStatus(
  * Increments transcription attempt count.
  */
 export async function incrementTranscriptionAttempts(letterId: string): Promise<void> {
-  const letter = await getLetterById(letterId);
-  if (!letter) return;
-
   await db
     .update(letters)
     .set({
-      transcriptionAttemptCount: letter.transcriptionAttemptCount + 1,
+      transcriptionAttemptCount: sql`${letters.transcriptionAttemptCount} + 1`,
       updatedAt: new Date(),
     })
     .where(eq(letters.id, letterId));
@@ -197,13 +194,10 @@ export async function updateMetadataStatus(
  * Increments metadata attempt count.
  */
 export async function incrementMetadataAttempts(letterId: string): Promise<void> {
-  const letter = await getLetterById(letterId);
-  if (!letter) return;
-
   await db
     .update(letters)
     .set({
-      metadataAttemptCount: letter.metadataAttemptCount + 1,
+      metadataAttemptCount: sql`${letters.metadataAttemptCount} + 1`,
       updatedAt: new Date(),
     })
     .where(eq(letters.id, letterId));

@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import "../ArchiveList/ArchiveList.css";
 
 interface LetterCardProps {
@@ -10,7 +11,7 @@ interface LetterCardProps {
   onClick: (id: string) => void;
 }
 
-export default function LetterCard({
+function LetterCard({
   id,
   date,
   location,
@@ -19,29 +20,36 @@ export default function LetterCard({
   hook,
   onClick,
 }: LetterCardProps) {
-  // Extract tags from hook or location for display
-  const getTags = () => {
-    const tags: string[] = [];
+  const tags = useMemo(() => {
+    const result: string[] = [];
+    const lower = hook?.toLowerCase();
+    if (!lower) return result;
 
-    // You can customize this logic to derive tags from the letter content
-    if (hook?.toLowerCase().includes("farm")) tags.push("Farming");
-    if (hook?.toLowerCase().includes("family")) tags.push("Family");
-    if (hook?.toLowerCase().includes("mine") || hook?.toLowerCase().includes("work")) tags.push("Labor");
-    if (hook?.toLowerCase().includes("injury") || hook?.toLowerCase().includes("health")) tags.push("Health");
-    if (hook?.toLowerCase().includes("cost") || hook?.toLowerCase().includes("expense")) tags.push("Economy");
-    if (hook?.toLowerCase().includes("household") || hook?.toLowerCase().includes("domestic")) tags.push("Domestic Life");
-    if (hook?.toLowerCase().includes("employment") || hook?.toLowerCase().includes("job")) tags.push("Employment");
-    if (hook?.toLowerCase().includes("moving") || hook?.toLowerCase().includes("travel")) tags.push("Migration");
-    if (hook?.toLowerCase().includes("bank") || hook?.toLowerCase().includes("savings")) tags.push("Great Depression");
-    if (hook?.toLowerCase().includes("ration") || hook?.toLowerCase().includes("war")) tags.push("Wartime");
+    if (lower.includes("farm")) result.push("Farming");
+    if (lower.includes("family")) result.push("Family");
+    if (lower.includes("mine") || lower.includes("work")) result.push("Labor");
+    if (lower.includes("injury") || lower.includes("health")) result.push("Health");
+    if (lower.includes("cost") || lower.includes("expense")) result.push("Economy");
+    if (lower.includes("household") || lower.includes("domestic")) result.push("Domestic Life");
+    if (lower.includes("employment") || lower.includes("job")) result.push("Employment");
+    if (lower.includes("moving") || lower.includes("travel")) result.push("Migration");
+    if (lower.includes("bank") || lower.includes("savings")) result.push("Great Depression");
+    if (lower.includes("ration") || lower.includes("war")) result.push("Wartime");
 
-    return tags.slice(0, 3); // Limit to 3 tags
-  };
+    return result.slice(0, 3);
+  }, [hook]);
 
-  const tags = getTags();
+  const label = [sender, recipient].filter(Boolean).join(" to ") || "Unknown";
 
   return (
-    <div className="letter-card" onClick={() => onClick(id)}>
+    <div
+      className="letter-card"
+      onClick={() => onClick(id)}
+      role="button"
+      tabIndex={0}
+      aria-label={`Letter from ${label}, ${date || "unknown date"}`}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(id); } }}
+    >
       <div className="letter-date">{date || "Unknown Date"}</div>
       <div className="letter-location">{location || "Unknown Location"}</div>
       <div className="letter-people">
@@ -58,3 +66,5 @@ export default function LetterCard({
     </div>
   );
 }
+
+export default memo(LetterCard);

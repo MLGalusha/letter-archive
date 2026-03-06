@@ -123,29 +123,13 @@ router.get('/letters', async (req, res, next) => {
       query.page * query.limit
     );
 
-    // Enrich primary letters with their related content
-    const enrichedResults = await Promise.all(
-      paginatedResults.map(async (letter) => {
-        // Fetch related items (all other types in the same group)
-        const related = await db.query.letters.findMany({
-          where: and(
-            eq(letters.collectionId, letter.collectionId),
-            eq(letters.dateRaw, letter.dateRaw),
-            eq(letters.typeSequence, letter.typeSequence),
-            sql`${letters.type} != ${letter.type}`, // Exclude the primary itself
-
-          ),
-          with: {
-            collection: true,
-            pages: {
-              orderBy: (p, { asc: pageAsc }) => [pageAsc(p.pageNumber)],
-            },
-          },
-        });
-
-        return { letter, relatedItems: related as LetterWithRelations[] };
-      })
-    );
+    // Enrich primary letters with related content from the already-loaded groupMap
+    const enrichedResults = paginatedResults.map((letter) => {
+      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
+      const group = groupMap.get(key) || [];
+      const relatedItems = group.filter((l) => l.id !== letter.id);
+      return { letter, relatedItems };
+    });
 
     // Transform to frontend-compatible format with related items
     const transformedLetters = transformLettersWithRelatedToDTO(enrichedResults);

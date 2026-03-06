@@ -20,7 +20,7 @@ export interface ParsedName {
  * parseName('Jimmie') // { fullName: 'Jimmie', firstName: 'Jimmie', lastName: null }
  * parseName('Mary Jane Watson') // { fullName: 'Mary Jane Watson', firstName: 'Mary', lastName: 'Watson' }
  */
-export function parseName(fullName: string | null): ParsedName | null {
+function parseName(fullName: string | null): ParsedName | null {
   if (!fullName || !fullName.trim()) {
     return null;
   }

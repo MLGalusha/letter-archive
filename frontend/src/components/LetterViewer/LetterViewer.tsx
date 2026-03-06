@@ -325,7 +325,7 @@ export default function LetterViewer({
     document.addEventListener("wheel", handleGlobalWheel, { passive: false });
 
     return () => {
-      document.removeEventListener("wheel", handleGlobalWheel);
+      document.removeEventListener("wheel", handleGlobalWheel, { passive: false } as EventListenerOptions);
     };
   }, [applyZoom]);
 

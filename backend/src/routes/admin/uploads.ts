@@ -35,35 +35,39 @@ const upload = multer({
  * Accepts JSON body: { filenames: string[] }
  * Returns: { duplicates: Record<string, boolean> }
  */
-router.post('/uploads/check-duplicates', async (req, res) => {
-  const { filenames } = req.body as { filenames?: string[] };
+router.post('/uploads/check-duplicates', async (req, res, next) => {
+  try {
+    const { filenames } = req.body as { filenames?: string[] };
 
-  if (!filenames || !Array.isArray(filenames)) {
-    res.status(400).json({ error: 'filenames must be an array of strings' });
-    return;
-  }
-
-  const duplicates: Record<string, boolean> = {};
-
-  for (const filename of filenames) {
-    const parsed = parseFilename(filename);
-    if (!parsed) {
-      duplicates[filename] = false;
-      continue;
+    if (!filenames || !Array.isArray(filenames)) {
+      res.status(400).json({ error: 'filenames must be an array of strings' });
+      return;
     }
 
-    const storagePath = buildStoragePath(
-      parsed.collectionCode,
-      parsed.dateRaw,
-      parsed.type,
-      parsed.typeSequence,
-      filename
-    );
+    const duplicates: Record<string, boolean> = {};
 
-    duplicates[filename] = await fileExists(storagePath);
+    for (const filename of filenames) {
+      const parsed = parseFilename(filename);
+      if (!parsed) {
+        duplicates[filename] = false;
+        continue;
+      }
+
+      const storagePath = buildStoragePath(
+        parsed.collectionCode,
+        parsed.dateRaw,
+        parsed.type,
+        parsed.typeSequence,
+        filename
+      );
+
+      duplicates[filename] = await fileExists(storagePath);
+    }
+
+    res.json({ duplicates });
+  } catch (error) {
+    next(error);
   }
-
-  res.json({ duplicates });
 });
 
 /**

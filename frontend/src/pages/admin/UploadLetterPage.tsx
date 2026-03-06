@@ -85,9 +85,11 @@ export default function UploadLetterPage() {
   }, [navigate]);
 
   // Cleanup URLs on unmount
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
   useEffect(() => {
     return () => {
-      images.forEach((img) => URL.revokeObjectURL(img.url));
+      imagesRef.current.forEach((img) => URL.revokeObjectURL(img.url));
     };
   }, []);
 

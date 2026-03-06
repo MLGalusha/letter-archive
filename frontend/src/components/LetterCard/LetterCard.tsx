@@ -50,8 +50,8 @@ export default function LetterCard({
       {hook && <div className="letter-summary">{hook}</div>}
       {tags.length > 0 && (
         <div className="letter-tags">
-          {tags.map((tag, index) => (
-            <span key={index}>{tag}</span>
+          {tags.map((tag) => (
+            <span key={tag}>{tag}</span>
           ))}
         </div>
       )}

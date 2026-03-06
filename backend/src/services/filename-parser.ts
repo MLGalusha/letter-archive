@@ -42,9 +42,13 @@ export function parseFilename(filename: string): ParsedFilename | null {
     const month = parseInt(dateRaw.slice(4, 6), 10);
     const day = parseInt(dateRaw.slice(6, 8), 10);
 
-    // Basic validation
-    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-      // Format as ISO date string
+    // Validate using Date constructor to reject invalid dates like Feb 31
+    const testDate = new Date(year, month - 1, day);
+    if (
+      testDate.getFullYear() === year &&
+      testDate.getMonth() === month - 1 &&
+      testDate.getDate() === day
+    ) {
       letterDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       dateConfidence = 'exact';
     }

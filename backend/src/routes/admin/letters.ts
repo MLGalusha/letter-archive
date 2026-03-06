@@ -574,7 +574,12 @@ router.post('/letters/:letterId/versions/:versionNumber/restore', async (req, re
       res.status(400).json({ error: 'fieldType query param required (transcript or metadata)' });
       return;
     }
-    const result = await restoreVersion(letterId, parseInt(versionNumber, 10), fieldType as 'transcript' | 'metadata');
+    const vn = parseInt(versionNumber, 10);
+    if (isNaN(vn) || vn < 1) {
+      res.status(400).json({ error: 'Invalid version number' });
+      return;
+    }
+    const result = await restoreVersion(letterId, vn, fieldType as 'transcript' | 'metadata');
     if (!result) {
       res.status(404).json({ error: 'Letter or version not found' });
       return;

@@ -108,8 +108,9 @@ export async function buildProcessingConditions(
 
   // Collection filter (partial matching like GET endpoint)
   if (options.collectionCode) {
+    const escapedCode = options.collectionCode.replace(/%/g, '\\%').replace(/_/g, '\\_');
     const matchingCollections = await db.query.collections.findMany({
-      where: ilike(collections.collectionCode, `%${options.collectionCode}`),
+      where: ilike(collections.collectionCode, `%${escapedCode}`),
     });
     if (matchingCollections.length > 0) {
       const collectionIds = matchingCollections.map(c => c.id);
@@ -126,7 +127,8 @@ export async function buildProcessingConditions(
 
   // Search filter (ILIKE on sender, recipient, summary, hook)
   if (options.search && options.search.trim()) {
-    const searchTerm = `%${options.search.trim()}%`;
+    const escaped = options.search.trim().replace(/%/g, '\\%').replace(/_/g, '\\_');
+    const searchTerm = `%${escaped}%`;
     conditions.push(
       or(
         ilike(letters.sender, searchTerm),
@@ -708,6 +710,11 @@ export async function abortProcessing(): Promise<{ message: string }> {
       await db.update(letters).set({
         transcriptionStatus: 'PENDING',
         workflow: 'UPLOADED',
+        updatedAt: new Date(),
+      }).where(eq(letters.id, letterId));
+    } else if (type === 'entity_extraction') {
+      await db.update(letters).set({
+        entityExtractionStatus: 'PENDING',
         updatedAt: new Date(),
       }).where(eq(letters.id, letterId));
     } else {

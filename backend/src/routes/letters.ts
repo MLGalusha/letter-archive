@@ -35,8 +35,9 @@ router.get('/letters', async (req, res, next) => {
 
     // Filter by collection code - supports partial matching (e.g., "7" matches "007")
     if (query.collection) {
+      const escapedCollection = query.collection.replace(/%/g, '\\%').replace(/_/g, '\\_');
       const matchingCollections = await db.query.collections.findMany({
-        where: ilike(collections.collectionCode, `%${query.collection}`),
+        where: ilike(collections.collectionCode, `%${escapedCollection}`),
       });
       if (matchingCollections.length > 0) {
         conditions.push(inArray(letters.collectionId, matchingCollections.map(c => c.id)));
@@ -160,6 +161,7 @@ router.get('/letters', async (req, res, next) => {
       letters: transformedLetters,
       page: query.page,
       limit: query.limit,
+      total: filteredResults.length,
     });
   } catch (error) {
     next(error);
@@ -273,8 +275,8 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
       res.json({
         prev: null,
         next: null,
-        position: 0,
-        total: 0,
+        position: null,
+        total: collectionLetters.length,
       });
       return;
     }

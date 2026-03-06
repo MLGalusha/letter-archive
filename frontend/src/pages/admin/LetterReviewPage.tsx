@@ -143,6 +143,8 @@ export default function LetterReviewPage() {
     "idle" | "saving" | "saved" | "error"
   >("idle");
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref to track transient status-reset timeouts for cleanup on unmount
+  const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [transcriptFontSize, setTranscriptFontSize] = useState("1.1rem");
   const [currentFilename, setCurrentFilename] = useState<string | undefined>(
     undefined,
@@ -186,10 +188,18 @@ export default function LetterReviewPage() {
     null,
   );
   const [reviewMode, setReviewMode] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
 
   const hookRef = useRef<HTMLTextAreaElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
+
+  // Cleanup transient status timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const isAuth = sessionStorage.getItem("adminAuth");
@@ -386,7 +396,7 @@ export default function LetterReviewPage() {
         setSyncState("done");
         setSyncMessage("Already up to date");
         showToast("Metadata is already in sync", "success");
-        setTimeout(() => {
+        statusTimeoutRef.current = setTimeout(() => {
           setSyncState("idle");
           setSyncMessage(null);
         }, 2000);
@@ -446,7 +456,7 @@ export default function LetterReviewPage() {
       });
 
       // Clear done state after a moment
-      setTimeout(() => {
+      statusTimeoutRef.current = setTimeout(() => {
         setSyncState("idle");
         setSyncMessage(null);
       }, 3000);
@@ -499,7 +509,7 @@ export default function LetterReviewPage() {
         );
 
         // Clear done state after a moment
-        setTimeout(() => {
+        statusTimeoutRef.current = setTimeout(() => {
           setLetterTranscribeState("idle");
           setLetterTranscribeMessage(null);
         }, 3000);
@@ -656,7 +666,7 @@ export default function LetterReviewPage() {
       showToast("Metadata regenerated", "success");
 
       // Reset state after a moment
-      setTimeout(() => {
+      statusTimeoutRef.current = setTimeout(() => {
         setRegenerateState("idle");
       }, 2000);
     } catch (err) {
@@ -1434,6 +1444,16 @@ export default function LetterReviewPage() {
           <Icon name={reviewMode ? "edit" : "eye"} size={18} />
         </button>
 
+        {reviewMode && (
+          <button
+            className={`header-action debug ${debugMode ? "active" : ""}`}
+            onClick={() => setDebugMode(prev => !prev)}
+            data-tooltip={debugMode ? "Hide Debug Overlay" : "Show Debug Overlay"}
+          >
+            <Icon name="code" size={18} />
+          </button>
+        )}
+
       </div>
     </>
   );
@@ -1453,6 +1473,8 @@ export default function LetterReviewPage() {
             onTranscriptChange={(newText) => setTranscript(newText)}
             onExit={() => setReviewMode(false)}
             onAutoSave={triggerAutoSave}
+            debugMode={debugMode}
+            onDebugModeChange={setDebugMode}
           />
         ) : (
         <ResizableSplitPane

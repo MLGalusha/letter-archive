@@ -17,7 +17,7 @@ export default function Breadcrumb({ items }: BreadcrumbProps) {
     <nav className="breadcrumb" aria-label="Breadcrumb">
       <ol className="breadcrumb-list">
         {items.map((item, index) => (
-          <li key={index} className="breadcrumb-item">
+          <li key={item.href ?? item.label} className="breadcrumb-item">
             {index > 0 && <span className="breadcrumb-separator">&gt;</span>}
             {item.href ? (
               <Link to={item.href} className="breadcrumb-link">

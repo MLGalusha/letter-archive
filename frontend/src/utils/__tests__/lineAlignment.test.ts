@@ -4,8 +4,9 @@ import {
   buildAlignedLinesFromDetected,
   detectImageLines,
   type DetectedLine,
+  type WordMetricsMap,
 } from '../lineAlignment';
-import type { LineSegment } from '../../types/Letter';
+import type { LineSegment, LineSegmentWord } from '../../types/Letter';
 
 // ============================================================================
 // alignTranscriptToVisualLines
@@ -414,5 +415,109 @@ describe('detectImageLines', () => {
     } finally {
       cleanup(img);
     }
+  });
+});
+
+// ============================================================================
+// Metrics-aware filtering in alignTranscriptToVisualLines
+// ============================================================================
+
+describe('metrics-aware filtering', () => {
+  function makeWord(text: string, x0: number, x1: number, y0 = 10, y1 = 30): LineSegmentWord {
+    return { text, bbox: [x0, y0, x1, y1] as [number, number, number, number] };
+  }
+
+  function makeSegmentWithWords(words: LineSegmentWord[]): LineSegment {
+    const x0 = Math.min(...words.map(w => w.bbox[0]));
+    const y0 = Math.min(...words.map(w => w.bbox[1]));
+    const x1 = Math.max(...words.map(w => w.bbox[2]));
+    const y1 = Math.max(...words.map(w => w.bbox[3]));
+    return {
+      line: 0,
+      baseline: [[x0, y1], [x1, y1]],
+      bbox: [x0, y0, x1, y1] as [number, number, number, number],
+      ocrText: words.map(w => w.text).join(' '),
+      words,
+    };
+  }
+
+  function buildMetrics(entries: { word: LineSegmentWord; outlierScore: number }[]): WordMetricsMap {
+    const map: WordMetricsMap = new Map();
+    for (const e of entries) {
+      map.set(e.word.bbox.join(','), { outlierScore: e.outlierScore });
+    }
+    return map;
+  }
+
+  it('pre-filter: excludes strong outlier words (outlierScore > 0.75)', () => {
+    const w1 = makeWord('Dear', 10, 60);
+    const w2 = makeWord('John', 70, 120);
+    const w3 = makeWord('how', 130, 170);
+    const noise = makeWord('STAMP', 180, 240);
+    const segment = makeSegmentWithWords([w1, w2, w3, noise]);
+    const metrics = buildMetrics([
+      { word: w1, outlierScore: 0.1 },
+      { word: w2, outlierScore: 0.2 },
+      { word: w3, outlierScore: 0.15 },
+      { word: noise, outlierScore: 0.9 },
+    ]);
+
+    const result = alignTranscriptToVisualLines('Dear John how', [segment], metrics);
+    expect(result).toHaveLength(1);
+    // The noise word should be excluded from the aligned line's words
+    const resultWords = result[0].words ?? [];
+    const resultTexts = resultWords.map(w => w.text);
+    expect(resultTexts).not.toContain('STAMP');
+    expect(resultTexts).toContain('Dear');
+  });
+
+  it('word-count guard softened: does not short-circuit when a word has outlierScore > 0.5', () => {
+    const w1 = makeWord('Hello', 10, 60);
+    const w2 = makeWord('World', 70, 120);
+    const w3 = makeWord('bleed', 130, 180);
+    const segment = makeSegmentWithWords([w1, w2, w3]);
+    const metrics = buildMetrics([
+      { word: w1, outlierScore: 0.1 },
+      { word: w2, outlierScore: 0.15 },
+      { word: w3, outlierScore: 0.6 },
+    ]);
+
+    // 3 words, 3 transcript words — guard would normally short-circuit
+    // But w3 has outlierScore 0.6 > 0.5, so guard should NOT trust the match
+    const result = alignTranscriptToVisualLines('Hello World bleed', [segment], metrics);
+    expect(result).toHaveLength(1);
+    // Result should still contain words (filtered through run scoring),
+    // but the guard was bypassed (no blind 1:1 acceptance)
+    expect(result[0].words).toBeDefined();
+  });
+
+  it('graceful degradation: undefined metrics behaves identically to no metrics', () => {
+    const w1 = makeWord('Hello', 10, 60);
+    const w2 = makeWord('World', 70, 120);
+    const segment = makeSegmentWithWords([w1, w2]);
+
+    const withoutMetrics = alignTranscriptToVisualLines('Hello World', [segment]);
+    const withUndefined = alignTranscriptToVisualLines('Hello World', [segment], undefined);
+    const withEmpty = alignTranscriptToVisualLines('Hello World', [segment], new Map());
+
+    expect(withoutMetrics).toEqual(withUndefined);
+    expect(withoutMetrics).toEqual(withEmpty);
+  });
+
+  it('pre-filter safety: skips pre-filter when all words have outlierScore > 0.75', () => {
+    const w1 = makeWord('Dear', 10, 60);
+    const w2 = makeWord('John', 70, 120);
+    const segment = makeSegmentWithWords([w1, w2]);
+    const metrics = buildMetrics([
+      { word: w1, outlierScore: 0.9 },
+      { word: w2, outlierScore: 0.85 },
+    ]);
+
+    // All words are strong outliers — pre-filter would remove ALL, so it should skip
+    const result = alignTranscriptToVisualLines('Dear John', [segment], metrics);
+    expect(result).toHaveLength(1);
+    // Words should still be present (pre-filter was skipped)
+    const resultWords = result[0].words ?? [];
+    expect(resultWords.length).toBeGreaterThan(0);
   });
 });

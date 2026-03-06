@@ -16,6 +16,7 @@ import {
   buildAlignedLinesFromDetected,
   type AlignedLine,
   type DetectedLine,
+  type WordMetricsMap,
 } from '../../utils/lineAlignment';
 import { analyzePageWords, type PageAnalysis, type WordBoxMetrics } from '../../utils/wordBoxAnalysis';
 import './LineReviewMode.css';
@@ -74,10 +75,24 @@ const CSS_BORDER_PADDING = 6; // border (2px) + padding (4px) on each side
  * of its OCR word bounding boxes. Falls back to a reasonable default when
  * no OCR words are available.
  */
+interface TightLineBounds {
+  inkLeftDisplay: number;
+  inkRightDisplay: number;
+  inkTopDisplay: number;
+  inkBottomDisplay: number;
+}
+
 function computeLineInputHeight(
   words: LineSegmentWord[] | undefined,
   scaleFactor: number,
+  tightBounds?: { inkTopDisplay: number; inkBottomDisplay: number },
 ): number {
+  if (tightBounds) {
+    const inkHeight = tightBounds.inkBottomDisplay - tightBounds.inkTopDisplay;
+    const scaled = inkHeight + CSS_BORDER_PADDING * 2;
+    return Math.max(20, Math.min(60, scaled));
+  }
+
   if (!words || words.length === 0) return 30;
 
   let totalHeight = 0;
@@ -243,6 +258,7 @@ export function computeAutoScrollTop(params: {
 function computePageFontSize(
   alignedLines: AlignedLine[],
   scaleFactor: number,
+  tightBoundsMap?: Map<number, TightLineBounds>,
 ): number {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
@@ -254,14 +270,20 @@ function computePageFontSize(
   let totalOcrWidth = 0;
   let totalRenderedWidth = 0;
 
-  for (const line of alignedLines) {
+  for (let i = 0; i < alignedLines.length; i++) {
+    const line = alignedLines[i];
     if (!line.words || line.words.length === 0) continue;
     const text = line.transcriptText.trim();
     if (!text) continue;
 
-    const lineLeft = Math.min(...line.words.map(w => w.bbox[0]));
-    const lineRight = Math.max(...line.words.map(w => w.bbox[2]));
-    totalOcrWidth += (lineRight - lineLeft) * scaleFactor;
+    const tight = tightBoundsMap?.get(i);
+    if (tight) {
+      totalOcrWidth += tight.inkRightDisplay - tight.inkLeftDisplay;
+    } else {
+      const lineLeft = Math.min(...line.words.map(w => w.bbox[0]));
+      const lineRight = Math.max(...line.words.map(w => w.bbox[2]));
+      totalOcrWidth += (lineRight - lineLeft) * scaleFactor;
+    }
     totalRenderedWidth += ctx.measureText(text).width;
   }
 
@@ -282,6 +304,7 @@ function buildWordPositionedContent(
   ocrWords: LineSegmentWord[] | undefined,
   contentAreaLeftDisplay: number,
   scaleFactor: number,
+  tightBounds?: { inkLeftDisplay: number; inkRightDisplay: number },
 ): void {
   div.innerHTML = '';
   div.style.fontSize = '';
@@ -300,10 +323,19 @@ function buildWordPositionedContent(
     return;
   }
 
-  // Line text bounds from OCR words
-  const lineLeftX = Math.min(...ocrWords.map(w => w.bbox[0]));
-  const lineRightX = Math.max(...ocrWords.map(w => w.bbox[2]));
-  const targetWidth = (lineRightX - lineLeftX) * scaleFactor;
+  // Line text bounds — prefer ink bounds when available
+  let lineLeftDisplay: number;
+  let lineRightDisplay: number;
+  if (tightBounds) {
+    lineLeftDisplay = tightBounds.inkLeftDisplay;
+    lineRightDisplay = tightBounds.inkRightDisplay;
+  } else {
+    const lineLeftX = Math.min(...ocrWords.map(w => w.bbox[0]));
+    const lineRightX = Math.max(...ocrWords.map(w => w.bbox[2]));
+    lineLeftDisplay = lineLeftX * scaleFactor;
+    lineRightDisplay = lineRightX * scaleFactor;
+  }
+  const targetWidth = lineRightDisplay - lineLeftDisplay;
 
   if (targetWidth <= 0) {
     div.textContent = joined;
@@ -311,7 +343,7 @@ function buildWordPositionedContent(
   }
 
   // Left offset: where the text should start inside the content area
-  const leftOffset = lineLeftX * scaleFactor - contentAreaLeftDisplay;
+  const leftOffset = lineLeftDisplay - contentAreaLeftDisplay;
 
   const REF_SIZE = 16;
   const refWidth = measureRenderedTextWidth(joined, REF_SIZE);
@@ -575,6 +607,17 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   // Whether we're still waiting for AI detection for the current page
   const isDetecting = aiSegmentsMap[currentPageIndex] === null;
 
+  // Build WordMetricsMap from analysis data for the current page
+  const wordMetricsMap = useMemo((): WordMetricsMap | undefined => {
+    const analysis = analysisMap[currentPageIndex];
+    if (!analysis) return undefined;
+    const map: WordMetricsMap = new Map();
+    for (const m of analysis.metrics) {
+      map.set(m.word.bbox.join(','), { outlierScore: m.outlierScore });
+    }
+    return map;
+  }, [analysisMap, currentPageIndex]);
+
   // Compute aligned lines for current page
   const alignedLines: AlignedLine[] = useMemo(() => {
     if (!currentPage) return [];
@@ -585,7 +628,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     let lines: AlignedLine[] = [];
     const aiResult = aiSegmentsMap[currentPageIndex];
     if (aiResult && aiResult.length > 0) {
-      lines = alignTranscriptToVisualLines(pageText, aiResult);
+      lines = alignTranscriptToVisualLines(pageText, aiResult, wordMetricsMap);
     } else {
       // 2. Fall back to client-side pixel detection
       const transcriptLines = pageText.split('\n').filter((l) => l.trim().length > 0);
@@ -599,13 +642,24 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     // Skip empty lines (extra detected segments with no transcript text)
     return lines.filter(l => l.transcriptLineIndex >= 0);
-  }, [currentPage, currentPageIndex, pageLineTexts, aiSegmentsMap, detectedLinesMap, isDetecting]);
+  }, [currentPage, currentPageIndex, pageLineTexts, aiSegmentsMap, detectedLinesMap, isDetecting, wordMetricsMap]);
   const hasTranscriptLinesOnPage = (pageLineTexts[currentPageIndex]?.length ?? 0) > 0;
 
-  // Derive text bounds from the active aligned lines when available.
+  // Derive text bounds from the current line's bbox (per-line alignment).
+  // Each line gets its own horizontal extent so the highlight/input tracks where the
+  // actual text is — e.g. a right-aligned date doesn't stretch to the left margin.
   useEffect(() => {
     if (imageNaturalSize.width === 0) return;
 
+    const currentAligned = alignedLines[currentLineIndex];
+    if (currentAligned) {
+      const pad = imageNaturalSize.width * 0.01;
+      setTextLeftPct(Math.max(0.02, (currentAligned.bbox[0] - pad) / imageNaturalSize.width));
+      setTextRightPct(Math.min(0.98, (currentAligned.bbox[2] + pad) / imageNaturalSize.width));
+      return;
+    }
+
+    // Fallback: use global bounds from all lines when no current line
     const activeLines = alignedLines.length > 0
       ? alignedLines
       : (aiSegmentsMap[currentPageIndex] ?? []);
@@ -613,11 +667,11 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     const globalLeft = Math.min(...activeLines.map((line) => line.bbox[0]));
     const globalRight = Math.max(...activeLines.map((line) => line.bbox[2]));
-    const pad = imageNaturalSize.width * 0.01; // 1% breathing room
+    const pad = imageNaturalSize.width * 0.01;
 
     setTextLeftPct(Math.max(0.02, (globalLeft - pad) / imageNaturalSize.width));
     setTextRightPct(Math.min(0.98, (globalRight + pad) / imageNaturalSize.width));
-  }, [alignedLines, aiSegmentsMap, currentPageIndex, imageNaturalSize.width]);
+  }, [alignedLines, aiSegmentsMap, currentPageIndex, imageNaturalSize.width, currentLineIndex]);
 
   // Only expose currentLine when the image for this page has loaded,
   // so overlays never render at positions scaled from a previous page's dimensions
@@ -630,7 +684,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       const aiSegs = aiSegmentsMap[idx];
 
       if (aiSegs && aiSegs.length > 0) {
-        return alignTranscriptToVisualLines(pageText, aiSegs)
+        const metricsForPage = idx === currentPageIndex ? wordMetricsMap : undefined;
+        return alignTranscriptToVisualLines(pageText, aiSegs, metricsForPage)
           .filter((line) => line.transcriptLineIndex >= 0)
           .length;
       }
@@ -645,7 +700,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
       return transcriptLineCount;
     }),
-    [letterPages, pageLineTexts, aiSegmentsMap, detectedLinesMap],
+    [letterPages, pageLineTexts, aiSegmentsMap, detectedLinesMap, currentPageIndex, wordMetricsMap],
   );
 
   const totalLines = useMemo(
@@ -700,17 +755,11 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     return { kept, dropped };
   }, [debugLines, aiSegmentsMap, currentPageIndex, alignedLines]);
 
-  // Run per-box analysis lazily when debug mode is toggled on
+  // Run per-box analysis eagerly when image is loaded and AI segments are available
   useEffect(() => {
-    if (!debugLines) {
-      setSelectedDebugWord(null);
-      return;
-    }
-    // Already cached for this page
     if (currentPageIndex in analysisMap) return;
-    if (!imageRef.current) return;
+    if (!imageRef.current || imageNaturalSize.width === 0) return;
 
-    // Collect all raw words from AI segments
     const rawSegments = aiSegmentsMap[currentPageIndex];
     if (!rawSegments || rawSegments.length === 0) return;
 
@@ -722,7 +771,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     const result = analyzePageWords(imageRef.current, allWords);
     setAnalysisMap(prev => ({ ...prev, [currentPageIndex]: result }));
-  }, [debugLines, currentPageIndex, aiSegmentsMap, analysisMap]);
+  }, [currentPageIndex, aiSegmentsMap, analysisMap, imageNaturalSize.width]);
+
+  // Clear selected debug word when debug mode is off or page changes
+  useEffect(() => {
+    if (!debugLines) setSelectedDebugWord(null);
+  }, [debugLines, currentPageIndex]);
 
   // Clear selected word when switching pages
   useEffect(() => {
@@ -732,10 +786,56 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   // Current page analysis (if available)
   const pageAnalysis = analysisMap[currentPageIndex] ?? null;
 
+  // Tight ink bounds per aligned line (when pixel metrics exist for all words in the line)
+  const tightBoundsMap = useMemo(() => {
+    const analysis = analysisMap[currentPageIndex];
+    if (!analysis) return undefined;
+    const metricsLookup = new Map<string, typeof analysis.metrics[number]>();
+    for (const m of analysis.metrics) {
+      metricsLookup.set(m.word.bbox.join(','), m);
+    }
+
+    const map = new Map<number, TightLineBounds>();
+    for (let i = 0; i < alignedLines.length; i++) {
+      const line = alignedLines[i];
+      if (!line.words || line.words.length === 0) continue;
+
+      let allHaveMetrics = true;
+      let inkLeft = Infinity;
+      let inkRight = -Infinity;
+      let inkTop = Infinity;
+      let inkBottom = -Infinity;
+
+      for (const w of line.words) {
+        const m = metricsLookup.get(w.bbox.join(','));
+        if (!m) { allHaveMetrics = false; break; }
+        if (m.actualInkLeft < inkLeft) inkLeft = m.actualInkLeft;
+        if (m.actualInkRight > inkRight) inkRight = m.actualInkRight;
+        if (m.actualInkTop < inkTop) inkTop = m.actualInkTop;
+        if (m.actualInkBottom > inkBottom) inkBottom = m.actualInkBottom;
+      }
+
+      if (!allHaveMetrics) continue;
+
+      // Add 5% height padding for descender tolerance
+      const inkHeight = inkBottom - inkTop;
+      const vPad = inkHeight * 0.05;
+
+      map.set(i, {
+        inkLeftDisplay: inkLeft * scaleFactor,
+        inkRightDisplay: inkRight * scaleFactor,
+        inkTopDisplay: (inkTop - vPad) * scaleFactor,
+        inkBottomDisplay: (inkBottom + vPad) * scaleFactor,
+      });
+    }
+
+    return map.size > 0 ? map : undefined;
+  }, [analysisMap, currentPageIndex, alignedLines, scaleFactor]);
+
   // Page-global font size: one consistent size derived from OCR word widths across all lines
   const pageFontSize = useMemo(
-    () => computePageFontSize(alignedLines, scaleFactor),
-    [alignedLines, scaleFactor],
+    () => computePageFontSize(alignedLines, scaleFactor, tightBoundsMap),
+    [alignedLines, scaleFactor, tightBoundsMap],
   );
 
   // Track image natural size and run pixel detection fallback
@@ -877,7 +977,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (!currentLine || !containerRef.current) return;
 
     // Visible region: from highlight top (bbox[1]) to bottom of input
-    const lineInputH = computeLineInputHeight(currentLine.words, scaleFactor);
+    const currentTight = tightBoundsMap?.get(currentLineIndex);
+    const lineInputH = computeLineInputHeight(currentLine.words, scaleFactor, currentTight);
     const regionTop = currentLine.bbox[1] * scaleFactor;
     const regionBottom = currentLine.bbox[3] * scaleFactor + lineInputH;
     const container = containerRef.current;
@@ -927,12 +1028,14 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const overlayLeft = textLeftPct * imageDisplaySize.width;
     const contentAreaLeft = overlayLeft + CSS_BORDER_PADDING;
 
+    const lineTight = tightBoundsMap?.get(currentLineIndex);
     buildWordPositionedContent(
       inputRef.current,
       line.transcriptText,
       line.words,
       contentAreaLeft,
       scaleFactor,
+      lineTight,
     );
 
     inputRef.current.focus();
@@ -940,7 +1043,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (sel && inputRef.current.firstChild) {
       sel.collapse(inputRef.current.firstChild, 0);
     }
-  }, [currentLineIndex, currentPageIndex, alignedLines, scaleFactor, textLeftPct, imageDisplaySize.width]);
+  }, [currentLineIndex, currentPageIndex, alignedLines, scaleFactor, textLeftPct, imageDisplaySize.width, tightBoundsMap]);
 
   // Re-run line detection for the current page
   const redetectLines = useCallback(() => {
@@ -1017,7 +1120,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   if (!currentPage) return null;
 
   // Dynamic height for the editable strip — based on current line's word heights
-  const INPUT_DISPLAY_HEIGHT = computeLineInputHeight(currentLine?.words, scaleFactor);
+  const currentLineTight = tightBoundsMap?.get(currentLineIndex);
+  const INPUT_DISPLAY_HEIGHT = computeLineInputHeight(currentLine?.words, scaleFactor, currentLineTight);
 
   // Compute overlay positions
   const topDimmerHeight = currentLine ? currentLine.bbox[1] * scaleFactor : 0;
@@ -1134,6 +1238,10 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
               left: inputLeft,
               width: inputWidth,
               height: INPUT_DISPLAY_HEIGHT,
+              ...(pageAnalysis && Math.abs(pageAnalysis.pageRotation) > 0.3 ? {
+                transform: `rotate(${-pageAnalysis.pageRotation}deg)`,
+                transformOrigin: 'center center',
+              } : {}),
             }}
           >
             <div

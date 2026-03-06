@@ -10,6 +10,9 @@ export interface AlignedLine {
   words?: LineSegmentWord[];
 }
 
+/** Per-word pixel metrics keyed by bbox string ("x0,y0,x1,y1"). */
+export type WordMetricsMap = Map<string, { outlierScore: number }>;
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -198,9 +201,42 @@ function scoreRunAgainstTranscript(
 function filterWordsForTranscript(
   words: LineSegmentWord[] | undefined,
   transcriptText: string,
+  wordMetrics?: WordMetricsMap,
 ): LineSegmentWord[] {
-  const sortedWords = sortWordsLeftToRight(words);
+  let sortedWords = sortWordsLeftToRight(words);
   if (sortedWords.length === 0) return [];
+
+  // Pre-filter: remove strong outliers (outlierScore > 0.75) when metrics are available.
+  // Safety: if pre-filter would remove ALL words, skip it and use original set.
+  if (wordMetrics && wordMetrics.size > 0) {
+    const preFiltered = sortedWords.filter(w => {
+      const m = wordMetrics.get(w.bbox.join(','));
+      return !m || m.outlierScore <= 0.75;
+    });
+    if (preFiltered.length > 0) {
+      sortedWords = preFiltered;
+    }
+  }
+
+  // Word-count guard: if OCR word count exactly matches transcript word count,
+  // they correspond 1:1 — skip filtering entirely.
+  // With metrics: if any word has outlierScore > 0.5, don't trust the guard.
+  const transcriptWordCount = transcriptText.split(/\s+/).filter(w => w.length > 0).length;
+  if (transcriptWordCount > 0 && sortedWords.length === transcriptWordCount) {
+    let trustGuard = true;
+    if (wordMetrics && wordMetrics.size > 0) {
+      for (const w of sortedWords) {
+        const m = wordMetrics.get(w.bbox.join(','));
+        if (m && m.outlierScore > 0.5) {
+          trustGuard = false;
+          break;
+        }
+      }
+    }
+    if (trustGuard) {
+      return sortedWords;
+    }
+  }
 
   const runs = clusterWordsIntoRuns(sortedWords);
   if (runs.length === 1) {
@@ -224,8 +260,9 @@ function filterWordsForTranscript(
 function buildFilteredSegment(
   segment: LineSegment,
   transcriptText: string,
+  wordMetrics?: WordMetricsMap,
 ): LineSegment {
-  const filteredWords = filterWordsForTranscript(segment.words, transcriptText);
+  const filteredWords = filterWordsForTranscript(segment.words, transcriptText, wordMetrics);
   if (filteredWords.length === 0) {
     return {
       ...segment,
@@ -249,8 +286,9 @@ function buildFilteredSegment(
 function scoreSegmentAgainstTranscript(
   segment: LineSegment,
   transcriptText: string,
+  wordMetrics?: WordMetricsMap,
 ): number {
-  const filteredSegment = buildFilteredSegment(segment, transcriptText);
+  const filteredSegment = buildFilteredSegment(segment, transcriptText, wordMetrics);
   const filteredWords = filteredSegment.words ?? [];
 
   if (filteredWords.length === 0) return 0;
@@ -272,6 +310,7 @@ function scoreSegmentSkipPenalty(segment: LineSegment): number {
 function selectBestSegmentsForTranscript(
   transcriptLines: string[],
   lineSegments: LineSegment[],
+  wordMetrics?: WordMetricsMap,
 ): LineSegment[] {
   const lineCount = transcriptLines.length;
   const segmentCount = lineSegments.length;
@@ -280,7 +319,7 @@ function selectBestSegmentsForTranscript(
   if (segmentCount <= lineCount) return lineSegments;
 
   const pairScores = transcriptLines.map((lineText) =>
-    lineSegments.map((segment) => scoreSegmentAgainstTranscript(segment, lineText)),
+    lineSegments.map((segment) => scoreSegmentAgainstTranscript(segment, lineText, wordMetrics)),
   );
 
   const dp: number[][] = Array.from(
@@ -344,8 +383,9 @@ function createAlignedLine(
   transcriptText: string,
   transcriptLineIndex: number,
   visualLineIndex: number,
+  wordMetrics?: WordMetricsMap,
 ): AlignedLine {
-  const filteredSegment = buildFilteredSegment(segment, transcriptText);
+  const filteredSegment = buildFilteredSegment(segment, transcriptText, wordMetrics);
 
   return {
     visualLineIndex,
@@ -365,6 +405,7 @@ function createAlignedLine(
 export function alignTranscriptToVisualLines(
   pageText: string,
   lineSegments: LineSegment[],
+  wordMetrics?: WordMetricsMap,
 ): AlignedLine[] {
   const transcriptLines = pageText.split('\n').filter(l => l.trim().length > 0);
   const segCount = lineSegments.length;
@@ -392,10 +433,11 @@ export function alignTranscriptToVisualLines(
     const selectedSegments = selectBestSegmentsForTranscript(
       transcriptLines,
       lineSegments,
+      wordMetrics,
     );
 
     return selectedSegments.map((seg, i) =>
-      createAlignedLine(seg, transcriptLines[i], i, i),
+      createAlignedLine(seg, transcriptLines[i], i, i, wordMetrics),
     );
   }
 
@@ -413,6 +455,7 @@ export function alignTranscriptToVisualLines(
           s < transcriptLines.length ? transcriptLines[s] : '',
           s < transcriptLines.length ? s : -1,
           result.length,
+          wordMetrics,
         ),
       );
     } else {

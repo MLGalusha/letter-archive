@@ -94,9 +94,13 @@ export default function AdminDashboard() {
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>(
     persistedState.current.visibilityFilter ?? 'ALL'
   );
-  // Content status filters - not persisted since they're not yet implemented server-side
-  const [transcriptStatusFilters, setTranscriptStatusFilters] = useState<ContentStatus[]>([]);
-  const [metadataStatusFilters, setMetadataStatusFilters] = useState<ContentStatus[]>([]);
+  // Content status filters (persisted to localStorage)
+  const [transcriptStatusFilters, setTranscriptStatusFilters] = useState<ContentStatus[]>(
+    (persistedState.current.transcriptStatusFilters as ContentStatus[]) ?? []
+  );
+  const [metadataStatusFilters, setMetadataStatusFilters] = useState<ContentStatus[]>(
+    (persistedState.current.metadataStatusFilters as ContentStatus[]) ?? []
+  );
   const [collectionFilter, setCollectionFilter] = useState<string>(
     persistedState.current.collectionFilter ?? "all"
   );
@@ -232,8 +236,10 @@ export default function AdminDashboard() {
       day: dayFilter,
       dateFrom: dateFromFilter,
       dateTo: dateToFilter,
+      transcriptStatusFilters,
+      metadataStatusFilters,
     });
-  }, [visibilityFilter, collectionFilter, searchQuery, sortColumns, dateMode, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter]);
+  }, [visibilityFilter, collectionFilter, searchQuery, sortColumns, dateMode, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
   // Edit mode
   const [editMode, setEditMode] = useState(false);
@@ -329,19 +335,21 @@ export default function AdminDashboard() {
     }
   }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, pagination.page, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
-  // Re-fetch when filters change (reset to page 1)
-  useEffect(() => {
-    fetchLetters(true, 1);
-  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
-
+  // Auth check — runs once on mount
   useEffect(() => {
     const isAuth = sessionStorage.getItem("adminAuth");
     if (!isAuth) {
       navigate("/admin-login");
-      return;
     }
-    fetchLetters(isInitialLoad);
-  }, [navigate, fetchLetters, isInitialLoad]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigate]);
+
+  // Fetch when filters change (reset to page 1) — also handles initial load
+  useEffect(() => {
+    const isAuth = sessionStorage.getItem("adminAuth");
+    if (!isAuth) return; // Don't fetch if not authenticated
+    fetchLetters(true, 1);
+  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
   const handleRowClick = (letterId: string, index: number, e: React.MouseEvent) => {
     if (editMode) {
@@ -904,7 +912,7 @@ export default function AdminDashboard() {
   const handleCollectionInputChange = (value: string) => {
     const cleaned = value.replace(/\D/g, '').slice(0, 3);
     setCollectionInput(cleaned);
-    if (cleaned === '' || cleaned === '0' || cleaned === '00') {
+    if (cleaned === '' || Number(cleaned) === 0) {
       setCollectionFilter('all');
     } else {
       setCollectionFilter(cleaned);
@@ -918,6 +926,8 @@ export default function AdminDashboard() {
     setMetadataStatusFilters([]);
     setCollectionFilter('all');
     setCollectionInput('');
+    setSearchInput('');
+    setSearchQuery('');
     setYearFilter(null);
     setMonthFilter(null);
     setDayFilter(null);
@@ -943,7 +953,10 @@ export default function AdminDashboard() {
     const parts = display.split('/');
     if (parts.length !== 3) return null;
     const [month, day, year] = parts;
-    if (year.length !== 4) return null;
+    if (year.length !== 4 || !/^\d+$/.test(year)) return null;
+    const m = Number(month);
+    const d = Number(day);
+    if (isNaN(m) || isNaN(d) || m < 1 || m > 12 || d < 1 || d > 31) return null;
     return `${year}${month.padStart(2, '0')}${day.padStart(2, '0')}`;
   };
 
@@ -977,6 +990,7 @@ export default function AdminDashboard() {
     let count = 0;
     if (collectionFilter !== 'all') count++;
     if (visibilityFilter !== 'ALL') count++;
+    if (searchQuery) count++;
     if (transcriptStatusFilters.length > 0) count += transcriptStatusFilters.length;
     if (metadataStatusFilters.length > 0) count += metadataStatusFilters.length;
     if (yearFilter !== null) count++;
@@ -985,7 +999,7 @@ export default function AdminDashboard() {
     if (dateFromFilter !== null) count++;
     if (dateToFilter !== null) count++;
     return count;
-  }, [collectionFilter, visibilityFilter, transcriptStatusFilters, metadataStatusFilters, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter]);
+  }, [collectionFilter, visibilityFilter, searchQuery, transcriptStatusFilters, metadataStatusFilters, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter]);
 
   // Poll for processing status
   useEffect(() => {
@@ -1120,6 +1134,13 @@ export default function AdminDashboard() {
                   {stats.transcriptAiDraft} Draft
                 </button>
                 <button
+                  className={`filter-pill filter-content-edited ${transcriptStatusFilters.includes("EDITED") ? "active" : ""}`}
+                  onClick={() => toggleTranscriptFilter("EDITED")}
+                  title="Edited transcripts"
+                >
+                  {stats.transcriptEdited} Edited
+                </button>
+                <button
                   className={`filter-pill filter-content-verified ${transcriptStatusFilters.includes("VERIFIED") ? "active" : ""}`}
                   onClick={() => toggleTranscriptFilter("VERIFIED")}
                   title="Verified transcripts"
@@ -1142,6 +1163,13 @@ export default function AdminDashboard() {
                   title="AI Draft metadata"
                 >
                   {stats.metadataAiDraft} Draft
+                </button>
+                <button
+                  className={`filter-pill filter-content-edited ${metadataStatusFilters.includes("EDITED") ? "active" : ""}`}
+                  onClick={() => toggleMetadataFilter("EDITED")}
+                  title="Edited metadata"
+                >
+                  {stats.metadataEdited} Edited
                 </button>
                 <button
                   className={`filter-pill filter-content-verified ${metadataStatusFilters.includes("VERIFIED") ? "active" : ""}`}
@@ -1180,13 +1208,24 @@ export default function AdminDashboard() {
                   <div className="date-mode-toggle">
                     <button
                       className={`mode-btn ${dateMode === "specific" ? "active" : ""}`}
-                      onClick={() => setDateMode("specific")}
+                      onClick={() => {
+                        setDateMode("specific");
+                        // Clear range values so they don't silently persist
+                        setDateFromFilter(null);
+                        setDateToFilter(null);
+                      }}
                     >
                       Specific
                     </button>
                     <button
                       className={`mode-btn ${dateMode === "range" ? "active" : ""}`}
-                      onClick={() => setDateMode("range")}
+                      onClick={() => {
+                        setDateMode("range");
+                        // Clear specific values so they don't silently persist
+                        setYearFilter(null);
+                        setMonthFilter(null);
+                        setDayFilter(null);
+                      }}
                     >
                       Range
                     </button>

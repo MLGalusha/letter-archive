@@ -54,6 +54,8 @@ export interface PersistedState {
   day: number | null;
   dateFrom: string | null;
   dateTo: string | null;
+  transcriptStatusFilters: string[];
+  metadataStatusFilters: string[];
 }
 
 export interface PendingChange {

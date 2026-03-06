@@ -168,10 +168,6 @@ export interface AdminLettersResponse {
 export async function queryAdminLetters(
   query: z.infer<typeof adminLettersQuerySchema>
 ): Promise<AdminLettersResponse> {
-  // Build base conditions
-  const conditions: ReturnType<typeof eq>[] = [
-  ];
-
   // Collection filter - supports partial matching (e.g., "7" matches "007", "017", "107")
   let collectionIds: string[] = [];
   if (query.collection && query.collection !== 'all') {
@@ -181,7 +177,6 @@ export async function queryAdminLetters(
     });
     if (matchingCollections.length > 0) {
       collectionIds = matchingCollections.map(c => c.id);
-      conditions.push(inArray(letters.collectionId, collectionIds));
     } else {
       // No collections found, return empty
       return {
@@ -197,64 +192,10 @@ export async function queryAdminLetters(
     }
   }
 
-  // Visibility filter ('all' means no filter)
-  if (query.visibility && query.visibility !== 'all') {
-    conditions.push(eq(letters.visibility, query.visibility));
-  }
-
-  // Workflow filter (supports array)
+  // Pre-compute workflow values for buildWhereClause
   const workflowValues = query.workflow
     ? Array.isArray(query.workflow) ? query.workflow : [query.workflow]
     : null;
-  if (workflowValues && workflowValues.length > 0) {
-    conditions.push(inArray(letters.workflow, workflowValues));
-  }
-
-  // Search filter (ILIKE on sender, recipient, summary, hook)
-  if (query.search && query.search.trim()) {
-    const searchTerm = `%${query.search.trim()}%`;
-    conditions.push(
-      or(
-        ilike(letters.sender, searchTerm),
-        ilike(letters.recipient, searchTerm),
-        ilike(letters.summary, searchTerm),
-        ilike(letters.hook, searchTerm)
-      )!
-    );
-  }
-
-  // Date filters - individual components (year, month, day)
-  // dateRaw format: "18860314" or "1886XXXX" (8 characters)
-  if (query.year) {
-    conditions.push(sql`SUBSTRING(${letters.dateRaw}, 1, 4) = ${query.year.toString()}`);
-  }
-  if (query.month) {
-    const monthStr = query.month.toString().padStart(2, '0');
-    conditions.push(sql`SUBSTRING(${letters.dateRaw}, 5, 2) = ${monthStr}`);
-  }
-  if (query.day) {
-    const dayStr = query.day.toString().padStart(2, '0');
-    conditions.push(sql`SUBSTRING(${letters.dateRaw}, 7, 2) = ${dayStr}`);
-  }
-
-  // Date range filters (only apply if individual year/month/day not set to avoid conflicts)
-  if (query.dateFrom && !query.year && !query.month && !query.day) {
-    conditions.push(sql`REPLACE(${letters.dateRaw}, 'X', '0') >= ${query.dateFrom}`);
-  }
-  if (query.dateTo && !query.year && !query.month && !query.day) {
-    conditions.push(sql`REPLACE(${letters.dateRaw}, 'X', '9') <= ${query.dateTo}`);
-  }
-
-  // Content status filters
-  if (query.transcriptStatus && query.transcriptStatus.length > 0) {
-    conditions.push(inArray(letters.transcriptStatus, query.transcriptStatus));
-  }
-  if (query.metadataStatus && query.metadataStatus.length > 0) {
-    conditions.push(inArray(letters.metadataContentStatus, query.metadataStatus));
-  }
-  if (query.extraContentStatus && query.extraContentStatus.length > 0) {
-    conditions.push(inArray(letters.extraContentStatus, query.extraContentStatus));
-  }
 
   // Calculate stats for the collection (unfiltered by visibility/workflow/search)
   // This lets filter pills show accurate counts
@@ -324,14 +265,14 @@ export async function queryAdminLetters(
   };
 
   // Build WHERE clause fragments for the raw SQL queries
-  // We need to convert Drizzle conditions to raw SQL for DISTINCT ON
+  // Build WHERE clause in raw SQL for use with DISTINCT ON queries
   const buildWhereClause = () => {
     const clauses: ReturnType<typeof sql>[] = [sql`TRUE`];
 
     if (collectionIds.length > 0) {
       clauses.push(sql`collection_id = ANY(ARRAY[${sql.join(collectionIds.map(id => sql`${id}`), sql`, `)}]::uuid[])`);
     }
-    if (query.visibility) {
+    if (query.visibility && query.visibility !== 'all') {
       clauses.push(sql`visibility = ${query.visibility}`);
     }
     if (workflowValues && workflowValues.length > 0) {

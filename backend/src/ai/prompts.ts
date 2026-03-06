@@ -260,7 +260,7 @@ export function buildMetadataUserPrompt(
 }
 
 // ============================================================================
-// V2 METADATA EXTRACTION (GPT-5.2 with Structured Outputs)
+// V2 METADATA EXTRACTION (GPT-5.4 with Structured Outputs)
 // ============================================================================
 
 import { PRIMARY_TOPICS } from './schemas/metadataV2.js';
@@ -419,7 +419,7 @@ function buildEmotionalToneDocs(): string {
 /**
  * V2 Metadata System Prompt
  *
- * Uses XML-style section tags per GPT-5.2 best practices.
+ * Uses XML-style section tags per GPT-5.4 best practices.
  * Includes one-shot example for more precise extraction.
  * Controlled vocabularies with definitions following OpenAI Cookbook patterns.
  */

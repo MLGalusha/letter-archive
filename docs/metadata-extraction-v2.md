@@ -473,13 +473,13 @@ Given the September 1947 letter, new extraction would produce:
 
 ## Research: OpenAI Best Practices (Updated Feb 2026)
 
-Based on latest research from OpenAI's documentation, cookbook, and GPT-5.2 guides.
+Based on latest research from OpenAI's documentation, cookbook, and GPT-5.4 guides.
 
-### GPT-5.2 Specifications
+### GPT-5.4 Specifications
 
 | Spec | Value |
 |------|-------|
-| Model ID | `gpt-5.2` |
+| Model ID | `gpt-5.4` |
 | Context Window | 400,000 tokens |
 | Max Output | 128,000 tokens |
 | Input Cost | $1.75 / 1M tokens |
@@ -502,7 +502,7 @@ The [Responses API](https://platform.openai.com/docs/guides/responses-vs-chat-co
 ```typescript
 // ✅ Use Responses API (recommended)
 const response = await client.responses.create({
-  model: 'gpt-5.2',
+  model: 'gpt-5.4',
   input: messages,
   text: {
     format: {
@@ -524,7 +524,7 @@ if (response.output.refusal) {
 
 ### Key Best Practices for Extraction
 
-From [GPT-5.2 Prompting Guide](https://cookbook.openai.com/examples/gpt-5/gpt-5-2_prompting_guide):
+From [GPT-5.4 Prompting Guide](https://cookbook.openai.com/examples/gpt-5/gpt-5-2_prompting_guide):
 
 1. **Temperature 0** for deterministic extraction
 2. **Use XML-style section tags** for prompt structure (`<guidelines>`, `<example>`)
@@ -1434,7 +1434,7 @@ Based on detailed requirements gathering and OpenAI best practices research.
 | Curation level | Light | Admin features letters, rest searchable |
 | Mobile priority | Equal | Both desktop and mobile polished |
 | User memory | localStorage first | DB accounts deferred to Phase 5 |
-| Model | GPT-5.2 | Accuracy first ($1.75/1M in, $14/1M out) |
+| Model | GPT-5.4 | Accuracy first ($1.75/1M in, $14/1M out) |
 | API | Responses API | 40-80% better cache, built-in state management |
 | Error handling | Auto-retry once | Then flag for manual review |
 | Temperature | 0 | Deterministic extraction per OpenAI best practices |
@@ -1750,7 +1750,7 @@ Add to existing admin dashboard or new page:
 ### Revised Phase Breakdown (Final)
 
 #### Phase 1a: Schema & Extraction Pipeline
-**Goal:** V2 extraction working with GPT-5.2 and Responses API
+**Goal:** V2 extraction working with GPT-5.4 and Responses API
 
 **Tasks:**
 1. Create Zod schema (`backend/src/ai/schemas/metadataV2.ts`)
@@ -1766,7 +1766,7 @@ Add to existing admin dashboard or new page:
 7. Test on 3-5 letters manually
 
 **Technical Details:**
-- Model: `gpt-5.2`
+- Model: `gpt-5.4`
 - API: Responses API (not Chat Completions)
 - Temperature: 0
 - `strict: true` for JSON schema
@@ -1904,7 +1904,7 @@ Add to existing admin dashboard or new page:
 ### Success Criteria
 
 **Phase 1 Complete When:**
-- [ ] V2 extraction pipeline uses GPT-5.2 with Responses API
+- [ ] V2 extraction pipeline uses GPT-5.4 with Responses API
 - [ ] All 23 transcribed letters have V2 metadata
 - [ ] Extraction includes: tone, topics, relationship, quotes, entities
 - [ ] Failed extractions retry once, then flag for review
@@ -1944,7 +1944,7 @@ Add to existing admin dashboard or new page:
 - [OpenAI Structured Outputs Documentation](https://platform.openai.com/docs/guides/structured-outputs)
 - [Introduction to Structured Outputs | OpenAI Cookbook](https://cookbook.openai.com/examples/structured_outputs_intro)
 - [Named Entity Recognition | OpenAI Cookbook](https://cookbook.openai.com/examples/named_entity_recognition_to_enrich_text)
-- [GPT-5.2 Prompting Guide | OpenAI Cookbook](https://cookbook.openai.com/examples/gpt-5/gpt-5-2_prompting_guide)
+- [GPT-5.4 Prompting Guide | OpenAI Cookbook](https://cookbook.openai.com/examples/gpt-5/gpt-5-2_prompting_guide)
 - [Responses API vs Chat Completions](https://platform.openai.com/docs/guides/responses-vs-chat-completions)
 - [Temporal Agents with Knowledge Graphs | OpenAI Cookbook](https://cookbook.openai.com/examples/partners/temporal_agents_with_knowledge_graphs/temporal_agents)
 - [Entity Extraction for Long Documents | OpenAI Cookbook](https://cookbook.openai.com/examples/entity_extraction_for_long_documents)

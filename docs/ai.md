@@ -23,12 +23,12 @@ backend/src/ai/
 
 | Task | Model | Notes |
 |------|-------|-------|
-| Transcription | GPT-5.2 | Vision model, base64 images |
-| Metadata V1 | GPT-5.2 | JSON mode (legacy) |
-| Metadata V2 (Prompt 1) | GPT-5.2 | Basic metadata - structured outputs |
-| Entity Extraction (Prompt 2) | GPT-5.2 | Rich people/places - structured outputs |
+| Transcription | GPT-5.4 | Vision model, base64 images |
+| Metadata V1 | GPT-5.4 | JSON mode (legacy) |
+| Metadata V2 (Prompt 1) | GPT-5.4 | Basic metadata - structured outputs |
+| Entity Extraction (Prompt 2) | GPT-5.4 | Rich people/places - structured outputs |
 | Resync audit | GPT-4o-mini | Fast, cheap decision model |
-| Resync regen | GPT-5.2 | Quality regeneration |
+| Resync regen | GPT-5.4 | Quality regeneration |
 
 ## Transcription
 
@@ -165,7 +165,7 @@ const decision = await auditMetadata({
 // decision.issues = ['Summary uses generic terms...']
 ```
 
-### 2. Regenerate (GPT-5.2)
+### 2. Regenerate (GPT-5.4)
 Fixes identified issues with quality output:
 
 ```typescript

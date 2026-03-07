@@ -1454,6 +1454,17 @@ export default function LetterReviewPage() {
           </button>
         )}
 
+        {reviewMode && (
+          <button
+            className="header-action redetect"
+            onClick={() => lineReviewRef.current?.redetectLines()}
+            disabled={lineReviewRef.current?.isDetecting}
+            data-tooltip="Re-detect Lines"
+          >
+            <Icon name="refresh" size={18} />
+          </button>
+        )}
+
       </div>
     </>
   );

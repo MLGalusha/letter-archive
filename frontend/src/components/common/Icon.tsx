@@ -36,7 +36,8 @@ export type IconName =
   | 'place'
   | 'relationships'
   | 'columns'
-  | 'more';
+  | 'more'
+  | 'code';
 
 interface IconProps {
   name: IconName;
@@ -230,6 +231,12 @@ const iconPaths: Record<IconName, React.ReactNode> = {
       <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none" />
       <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
       <circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none" />
+    </>
+  ),
+  code: (
+    <>
+      <polyline points="16,18 22,12 16,6" />
+      <polyline points="8,6 2,12 8,18" />
     </>
   ),
 };

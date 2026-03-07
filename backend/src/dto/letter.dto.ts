@@ -42,6 +42,7 @@ export interface FrontendLineSegment {
   bbox: [number, number, number, number];
   ocrText: string;
   words?: FrontendLineSegmentWord[];
+  boundary?: { x: number; y: number }[];
 }
 
 export interface FrontendLetterImage {

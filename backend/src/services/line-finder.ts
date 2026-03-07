@@ -15,6 +15,7 @@ export interface LineSegment {
   bbox: [number, number, number, number];
   ocrText: string;
   words?: { text: string; bbox: [number, number, number, number] }[];
+  boundary?: { x: number; y: number }[];
 }
 
 const log = createLogger({ module: 'line-finder' });
@@ -34,6 +35,7 @@ interface LineFinderResult {
   left_x: number;
   right_x: number;
   words?: LineFinderWord[];
+  boundary?: { x: number; y: number }[];
 }
 
 /**
@@ -50,7 +52,7 @@ export async function runLineFinder(imagePath: string): Promise<LineSegment[] | 
 
   try {
     const { stdout, stderr } = await execFileAsync(pythonBin, [scriptPath, imagePath, '--json'], {
-      timeout: 60_000,
+      timeout: 120_000,
       maxBuffer: 10 * 1024 * 1024, // 10MB
     });
 
@@ -75,6 +77,7 @@ export async function runLineFinder(imagePath: string): Promise<LineSegment[] | 
         text: w.text,
         bbox: [w.left_x, w.top_y, w.right_x, w.bottom_y] as [number, number, number, number],
       })),
+      boundary: r.boundary,
     }));
 
     log.info({ imagePath, lineCount: segments.length }, 'Line finder completed');

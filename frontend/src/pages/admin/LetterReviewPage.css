@@ -50,8 +50,7 @@
   content: attr(data-tooltip);
   position: absolute;
   top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
+  right: 0;
   margin-top: 0.5rem;
   padding: 0.25rem 0.5rem;
   background: var(--text);
@@ -97,6 +96,22 @@
   background: #e3f2fd;
   border-color: #1565c0;
   color: #1565c0;
+}
+
+/* Debug button - magenta color scheme */
+.header-action.debug {
+  border-color: #9c27b0;
+  color: #9c27b0;
+}
+
+.header-action.debug:hover:not(:disabled) {
+  background: #f3e5f5;
+}
+
+.header-action.debug.active {
+  background: #f3e5f5;
+  border-color: #7b1fa2;
+  color: #7b1fa2;
 }
 
 /* AI Sync button - orange color scheme */
@@ -155,6 +170,15 @@
   border-color: #4caf50;
   color: #4caf50;
   background: #e8f5e9;
+}
+
+.header-action.redetect {
+  border-color: #1976d2;
+  color: #1976d2;
+}
+
+.header-action.redetect:hover:not(:disabled) {
+  background: #e3f2fd;
 }
 
 .header-action.revert {

@@ -1,2 +1,2 @@
-google-cloud-vision>=3.5.0
+kraken
 Pillow>=10.0.0

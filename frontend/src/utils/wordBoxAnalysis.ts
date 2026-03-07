@@ -57,6 +57,9 @@ export interface WordBoxMetrics {
   xHeight: number;               // height of densest contiguous row band (px)
   hasAscender: boolean;          // significant ink above x-height zone
   hasDescender: boolean;         // significant ink below x-height zone
+  descenderLeft: number;         // leftmost dark pixel x below baseline (natural coords), -1 if none
+  descenderRight: number;        // rightmost dark pixel x below baseline (natural coords), -1 if none
+  descenderBoxes: { left: number; right: number; bottom: number }[]; // vertical sub-boxes below baseline
 
   // Vision bbox padding ratios (0-1)
   paddingTop: number;            // (actualInkTop - bbox top) / box height
@@ -213,6 +216,7 @@ function analyzeWordBox(
 
   // Edge detection: dark pixel with at least one light 4-neighbour.
   // Build a boolean grid first (avoids re-reading pixels).
+  // isDark is always UNCLIPPED so that density/contrast/outlier metrics stay accurate.
   const isDark = new Uint8Array(totalPixels);
   idx = 0;
   for (let y = by0; y < by1; y++) {
@@ -412,6 +416,66 @@ function analyzeWordBox(
   const hasAscender = inkAbove > darkCount * 0.05;
   const hasDescender = inkBelow > darkCount * 0.05;
 
+  // --- Descender sub-boxes (vertical rectangles below baseline) -----------
+  // Scan columns below the baseline for dark-pixel runs and group adjacent
+  // columns into sub-boxes. Each box represents one descender stroke.
+  let descenderLeft = -1;
+  let descenderRight = -1;
+  const descenderBoxes: { left: number; right: number; bottom: number }[] = [];
+
+  if (hasDescender) {
+    const startRow = Math.max(0, baselineRow + 1);
+
+    // Per-column: find the deepest dark pixel below baseline
+    let groupLeft = -1;
+    let groupRight = -1;
+    let groupBottom = 0;
+
+    for (let c = 0; c < boxW; c++) {
+      let colBottom = -1;
+      for (let r = startRow; r < boxH; r++) {
+        if (isDark[r * boxW + c]) {
+          colBottom = r;
+        }
+      }
+
+      if (colBottom >= 0) {
+        // This column has descender ink
+        if (groupLeft < 0) {
+          groupLeft = c;
+        }
+        groupRight = c;
+        groupBottom = Math.max(groupBottom, colBottom);
+      } else if (groupLeft >= 0) {
+        // Gap — flush current group (min 2px wide to filter noise)
+        if (groupRight - groupLeft >= 1) {
+          descenderBoxes.push({
+            left: bx0 + groupLeft,
+            right: bx0 + groupRight + 1,
+            bottom: by0 + groupBottom + 1,
+          });
+        }
+        groupLeft = -1;
+        groupRight = -1;
+        groupBottom = 0;
+      }
+    }
+    // Flush final group
+    if (groupLeft >= 0 && groupRight - groupLeft >= 1) {
+      descenderBoxes.push({
+        left: bx0 + groupLeft,
+        right: bx0 + groupRight + 1,
+        bottom: by0 + groupBottom + 1,
+      });
+    }
+
+    // Overall descender extent (for backwards compat)
+    if (descenderBoxes.length > 0) {
+      descenderLeft = Math.min(...descenderBoxes.map(b => b.left));
+      descenderRight = Math.max(...descenderBoxes.map(b => b.right));
+    }
+  }
+
   // --- Padding ratios ------------------------------------------------------
   const paddingTop = (inkTop - by0) / boxH;
   const paddingBottom = (by1 - inkBottom) / boxH;
@@ -449,6 +513,9 @@ function analyzeWordBox(
     xHeight,
     hasAscender,
     hasDescender,
+    descenderLeft,
+    descenderRight,
+    descenderBoxes,
     paddingTop,
     paddingBottom,
     paddingLeft,
@@ -489,6 +556,9 @@ function emptyMetrics(word: LineSegmentWord, boxW: number, boxH: number): WordBo
     xHeight: 0,
     hasAscender: false,
     hasDescender: false,
+    descenderLeft: -1,
+    descenderRight: -1,
+    descenderBoxes: [],
     paddingTop: 0,
     paddingBottom: 0,
     paddingLeft: 0,

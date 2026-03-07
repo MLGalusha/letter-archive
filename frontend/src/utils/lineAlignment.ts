@@ -88,6 +88,59 @@ function sortWordsLeftToRight(words: LineSegmentWord[] | undefined): LineSegment
   });
 }
 
+/**
+ * Merges punctuation-only OCR boxes with their nearest neighbor word.
+ * Vision OCR sometimes creates separate bounding boxes for punctuation
+ * (e.g. "Darling" + ",") which inflates word count vs transcript.
+ * Punctuation boxes are merged with the preceding word, or the following
+ * word if no preceding word exists.
+ */
+function mergePunctuationWords(words: LineSegmentWord[]): LineSegmentWord[] {
+  if (words.length <= 1) return words;
+
+  const result: LineSegmentWord[] = [];
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    const isPunctOnly = !/[a-z0-9]/i.test(w.text);
+
+    if (!isPunctOnly) {
+      result.push(w);
+      continue;
+    }
+
+    // Merge with preceding word in result, or following word
+    if (result.length > 0) {
+      const prev = result[result.length - 1];
+      result[result.length - 1] = {
+        text: prev.text + w.text,
+        bbox: [
+          Math.min(prev.bbox[0], w.bbox[0]),
+          Math.min(prev.bbox[1], w.bbox[1]),
+          Math.max(prev.bbox[2], w.bbox[2]),
+          Math.max(prev.bbox[3], w.bbox[3]),
+        ],
+      };
+    } else if (i + 1 < words.length) {
+      const next = words[i + 1];
+      // Merge with next and push combined, skip next
+      result.push({
+        text: w.text + next.text,
+        bbox: [
+          Math.min(w.bbox[0], next.bbox[0]),
+          Math.min(w.bbox[1], next.bbox[1]),
+          Math.max(w.bbox[2], next.bbox[2]),
+          Math.max(w.bbox[3], next.bbox[3]),
+        ],
+      });
+      i++; // skip next
+    } else {
+      // Lone punctuation, keep as-is
+      result.push(w);
+    }
+  }
+  return result;
+}
+
 function computeRunStructureScore(words: LineSegmentWord[]): number {
   if (words.length === 0) return 0;
   if (words.length === 1) return 0.35;
@@ -204,6 +257,7 @@ function filterWordsForTranscript(
   wordMetrics?: WordMetricsMap,
 ): LineSegmentWord[] {
   let sortedWords = sortWordsLeftToRight(words);
+  sortedWords = mergePunctuationWords(sortedWords);
   if (sortedWords.length === 0) return [];
 
   // Pre-filter: remove strong outliers (outlierScore > 0.75) when metrics are available.

@@ -16,9 +16,7 @@ import {
   buildAlignedLinesFromDetected,
   type AlignedLine,
   type DetectedLine,
-  type WordMetricsMap,
 } from '../../utils/lineAlignment';
-import { analyzePageWords, type PageAnalysis, type WordBoxMetrics } from '../../utils/wordBoxAnalysis';
 import './LineReviewMode.css';
 
 interface LineReviewModeProps {
@@ -33,6 +31,8 @@ interface LineReviewModeProps {
 
 export interface LineReviewModeHandle {
   saveCurrentLine: () => void;
+  redetectLines: () => void;
+  isDetecting: boolean;
 }
 
 const PAGE_SEPARATOR_REGEX = /\n*---\s*Page\s*\d+\s*---\n*/i;
@@ -75,24 +75,10 @@ const CSS_BORDER_PADDING = 6; // border (2px) + padding (4px) on each side
  * of its OCR word bounding boxes. Falls back to a reasonable default when
  * no OCR words are available.
  */
-interface TightLineBounds {
-  inkLeftDisplay: number;
-  inkRightDisplay: number;
-  inkTopDisplay: number;
-  inkBottomDisplay: number;
-}
-
 function computeLineInputHeight(
   words: LineSegmentWord[] | undefined,
   scaleFactor: number,
-  tightBounds?: { inkTopDisplay: number; inkBottomDisplay: number },
 ): number {
-  if (tightBounds) {
-    const inkHeight = tightBounds.inkBottomDisplay - tightBounds.inkTopDisplay;
-    const scaled = inkHeight + CSS_BORDER_PADDING * 2;
-    return Math.max(20, Math.min(60, scaled));
-  }
-
   if (!words || words.length === 0) return 30;
 
   let totalHeight = 0;
@@ -258,7 +244,6 @@ export function computeAutoScrollTop(params: {
 function computePageFontSize(
   alignedLines: AlignedLine[],
   scaleFactor: number,
-  tightBoundsMap?: Map<number, TightLineBounds>,
 ): number {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
@@ -276,14 +261,9 @@ function computePageFontSize(
     const text = line.transcriptText.trim();
     if (!text) continue;
 
-    const tight = tightBoundsMap?.get(i);
-    if (tight) {
-      totalOcrWidth += tight.inkRightDisplay - tight.inkLeftDisplay;
-    } else {
-      const lineLeft = Math.min(...line.words.map(w => w.bbox[0]));
-      const lineRight = Math.max(...line.words.map(w => w.bbox[2]));
-      totalOcrWidth += (lineRight - lineLeft) * scaleFactor;
-    }
+    const lineLeft = Math.min(...line.words.map(w => w.bbox[0]));
+    const lineRight = Math.max(...line.words.map(w => w.bbox[2]));
+    totalOcrWidth += (lineRight - lineLeft) * scaleFactor;
     totalRenderedWidth += ctx.measureText(text).width;
   }
 
@@ -304,7 +284,6 @@ function buildWordPositionedContent(
   ocrWords: LineSegmentWord[] | undefined,
   contentAreaLeftDisplay: number,
   scaleFactor: number,
-  tightBounds?: { inkLeftDisplay: number; inkRightDisplay: number },
 ): void {
   div.innerHTML = '';
   div.style.fontSize = '';
@@ -323,18 +302,11 @@ function buildWordPositionedContent(
     return;
   }
 
-  // Line text bounds — prefer ink bounds when available
-  let lineLeftDisplay: number;
-  let lineRightDisplay: number;
-  if (tightBounds) {
-    lineLeftDisplay = tightBounds.inkLeftDisplay;
-    lineRightDisplay = tightBounds.inkRightDisplay;
-  } else {
-    const lineLeftX = Math.min(...ocrWords.map(w => w.bbox[0]));
-    const lineRightX = Math.max(...ocrWords.map(w => w.bbox[2]));
-    lineLeftDisplay = lineLeftX * scaleFactor;
-    lineRightDisplay = lineRightX * scaleFactor;
-  }
+  // Line text bounds from OCR word bboxes
+  const lineLeftX = Math.min(...ocrWords.map(w => w.bbox[0]));
+  const lineRightX = Math.max(...ocrWords.map(w => w.bbox[2]));
+  const lineLeftDisplay = lineLeftX * scaleFactor;
+  const lineRightDisplay = lineRightX * scaleFactor;
   const targetWidth = lineRightDisplay - lineLeftDisplay;
 
   if (targetWidth <= 0) {
@@ -368,120 +340,6 @@ function buildWordPositionedContent(
   }
 
   div.textContent = joined;
-}
-
-// ---------------------------------------------------------------------------
-// Debug stats panel
-// ---------------------------------------------------------------------------
-
-function outlierClass(
-  value: number,
-  medianVal: number,
-  iqrVal: number,
-): string {
-  if (iqrVal < 0.0001) return '';
-  const dev = Math.abs(value - medianVal) / iqrVal;
-  if (dev > 3) return 'debug-stats-outlier-strong';
-  if (dev > 1.5) return 'debug-stats-outlier-mild';
-  return '';
-}
-
-function StatRow({
-  label,
-  value,
-  median,
-  iqrVal,
-}: {
-  label: string;
-  value: string;
-  median?: number;
-  iqrVal?: number;
-}) {
-  const numVal = parseFloat(value);
-  const cls = median !== undefined && iqrVal !== undefined && !isNaN(numVal)
-    ? outlierClass(numVal, median, iqrVal)
-    : '';
-  return (
-    <div className="debug-stats-row">
-      <span className="debug-stats-label">{label}</span>
-      <span className={`debug-stats-value ${cls}`}>{value}</span>
-    </div>
-  );
-}
-
-function DebugStatsPanel({
-  metrics: m,
-  pageAnalysis: pa,
-  onClose,
-}: {
-  metrics: WordBoxMetrics;
-  pageAnalysis: PageAnalysis;
-  onClose: () => void;
-}) {
-  const med = pa.medians;
-  const iq = pa.iqrs;
-
-  return (
-    <div className="debug-stats-panel">
-      <div className="debug-stats-header">
-        <span>&ldquo;{m.word.text}&rdquo;</span>
-        <button className="debug-stats-close" onClick={onClose}>&times;</button>
-      </div>
-
-      <div className="debug-stats-group">
-        <div className="debug-stats-group-title">Ink</div>
-        <StatRow label="density" value={(m.inkDensity * 100).toFixed(1) + '%'} median={med.inkDensity} iqrVal={iq.inkDensity} />
-        <StatRow label="contrast" value={m.inkContrast.toFixed(0)} median={med.inkContrast} iqrVal={iq.inkContrast} />
-        <StatRow label="minLum" value={m.minLuminance.toFixed(0)} median={med.minLuminance} iqrVal={iq.minLuminance} />
-        <StatRow label="lumStdDev" value={m.luminanceStdDev.toFixed(1)} />
-        <StatRow label="peakRowDensity" value={(m.peakRowDensity * 100).toFixed(1) + '%'} />
-        <StatRow label="coveragePerChar" value={m.inkCoveragePerChar.toFixed(0)} median={med.inkCoveragePerChar} iqrVal={iq.inkCoveragePerChar} />
-      </div>
-
-      <div className="debug-stats-group">
-        <div className="debug-stats-group-title">Geometry</div>
-        <StatRow label="rotation" value={m.rotationDegrees.toFixed(2) + '\u00b0'} median={med.rotationDegrees} iqrVal={iq.rotationDegrees} />
-        <StatRow label="aspectRatio" value={m.aspectRatio.toFixed(2)} />
-        <StatRow label="vInkRatio" value={(m.verticalInkRatio * 100).toFixed(1) + '%'} />
-        <StatRow label="hInkRatio" value={(m.horizontalInkRatio * 100).toFixed(1) + '%'} />
-        <StatRow label="vCoM" value={m.verticalCenterOfMass.toFixed(3)} median={med.verticalCenterOfMass} iqrVal={iq.verticalCenterOfMass} />
-        <StatRow label="hCoM" value={m.horizontalCenterOfMass.toFixed(3)} />
-      </div>
-
-      <div className="debug-stats-group">
-        <div className="debug-stats-group-title">Stroke</div>
-        <StatRow label="hStrokeW" value={m.estimatedStrokeWidth.toFixed(1) + 'px'} median={med.strokeWidth} iqrVal={iq.strokeWidth} />
-        <StatRow label="vStrokeW" value={m.verticalStrokeWidth.toFixed(1) + 'px'} median={med.verticalStrokeWidth} iqrVal={iq.verticalStrokeWidth} />
-        <StatRow label="strokeVar" value={m.strokeWidthVariance.toFixed(1)} />
-        <StatRow label="edgeRatio" value={(m.edgePixelRatio * 100).toFixed(1) + '%'} median={med.edgePixelRatio} iqrVal={iq.edgePixelRatio} />
-        <StatRow label="hConnect" value={m.horizontalConnectivity.toFixed(1) + 'px'} />
-      </div>
-
-      <div className="debug-stats-group">
-        <div className="debug-stats-group-title">Character</div>
-        <StatRow label="avgCharW" value={m.avgCharWidth.toFixed(1) + 'px'} median={med.avgCharWidth} iqrVal={iq.avgCharWidth} />
-        <StatRow label="charDensity" value={m.charDensity.toFixed(3)} median={med.charDensity} iqrVal={iq.charDensity} />
-        <StatRow label="xHeight" value={m.xHeight.toFixed(0) + 'px'} median={med.xHeight} iqrVal={iq.xHeight} />
-        <StatRow label="ascender" value={m.hasAscender ? 'yes' : 'no'} />
-        <StatRow label="descender" value={m.hasDescender ? 'yes' : 'no'} />
-      </div>
-
-      <div className="debug-stats-group">
-        <div className="debug-stats-group-title">Padding</div>
-        <StatRow label="top" value={(m.paddingTop * 100).toFixed(1) + '%'} />
-        <StatRow label="bottom" value={(m.paddingBottom * 100).toFixed(1) + '%'} />
-        <StatRow label="left" value={(m.paddingLeft * 100).toFixed(1) + '%'} />
-        <StatRow label="right" value={(m.paddingRight * 100).toFixed(1) + '%'} />
-      </div>
-
-      <div className="debug-stats-group">
-        <div className="debug-stats-group-title">Score</div>
-        <StatRow label="outlier" value={m.outlierScore.toFixed(3)} />
-        <StatRow label="baselineY" value={m.baselineY.toFixed(0) + 'px'} />
-        <StatRow label="inkHeight" value={(m.actualInkBottom - m.actualInkTop).toFixed(0) + 'px'} median={med.inkHeight} iqrVal={iq.inkHeight} />
-      </div>
-    </div>
-  );
 }
 
 const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(function LineReviewMode({
@@ -519,9 +377,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   // Client-side pixel-detected line boundaries (fallback)
   const [detectedLinesMap, setDetectedLinesMap] = useState<Record<number, DetectedLine[] | null>>({});
 
-  // Per-page box analysis cache (lazy — only computed when debug mode is on)
-  const [analysisMap, setAnalysisMap] = useState<Record<number, PageAnalysis | null>>({});
-  const [selectedDebugWord, setSelectedDebugWord] = useState<WordBoxMetrics | null>(null);
+  // Debug overlay layer toggle
+  const [showDebugLines, setShowDebugLines] = useState(true);
 
   // Per-page raw text (preserves all whitespace including blank lines)
   const [pageRawTexts, setPageRawTexts] = useState<string[]>(() => {
@@ -607,17 +464,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   // Whether we're still waiting for AI detection for the current page
   const isDetecting = aiSegmentsMap[currentPageIndex] === null;
 
-  // Build WordMetricsMap from analysis data for the current page
-  const wordMetricsMap = useMemo((): WordMetricsMap | undefined => {
-    const analysis = analysisMap[currentPageIndex];
-    if (!analysis) return undefined;
-    const map: WordMetricsMap = new Map();
-    for (const m of analysis.metrics) {
-      map.set(m.word.bbox.join(','), { outlierScore: m.outlierScore });
-    }
-    return map;
-  }, [analysisMap, currentPageIndex]);
-
   // Compute aligned lines for current page
   const alignedLines: AlignedLine[] = useMemo(() => {
     if (!currentPage) return [];
@@ -628,7 +474,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     let lines: AlignedLine[] = [];
     const aiResult = aiSegmentsMap[currentPageIndex];
     if (aiResult && aiResult.length > 0) {
-      lines = alignTranscriptToVisualLines(pageText, aiResult, wordMetricsMap);
+      lines = alignTranscriptToVisualLines(pageText, aiResult);
     } else {
       // 2. Fall back to client-side pixel detection
       const transcriptLines = pageText.split('\n').filter((l) => l.trim().length > 0);
@@ -642,7 +488,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     // Skip empty lines (extra detected segments with no transcript text)
     return lines.filter(l => l.transcriptLineIndex >= 0);
-  }, [currentPage, currentPageIndex, pageLineTexts, aiSegmentsMap, detectedLinesMap, isDetecting, wordMetricsMap]);
+  }, [currentPage, currentPageIndex, pageLineTexts, aiSegmentsMap, detectedLinesMap, isDetecting]);
   const hasTranscriptLinesOnPage = (pageLineTexts[currentPageIndex]?.length ?? 0) > 0;
 
   // Derive text bounds from the current line's bbox (per-line alignment).
@@ -684,8 +530,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       const aiSegs = aiSegmentsMap[idx];
 
       if (aiSegs && aiSegs.length > 0) {
-        const metricsForPage = idx === currentPageIndex ? wordMetricsMap : undefined;
-        return alignTranscriptToVisualLines(pageText, aiSegs, metricsForPage)
+        return alignTranscriptToVisualLines(pageText, aiSegs)
           .filter((line) => line.transcriptLineIndex >= 0)
           .length;
       }
@@ -700,7 +545,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
       return transcriptLineCount;
     }),
-    [letterPages, pageLineTexts, aiSegmentsMap, detectedLinesMap, currentPageIndex, wordMetricsMap],
+    [letterPages, pageLineTexts, aiSegmentsMap, detectedLinesMap, currentPageIndex],
   );
 
   const totalLines = useMemo(
@@ -721,121 +566,10 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     ? imageDisplaySize.width / imageNaturalSize.width
     : 1;
 
-  // Debug: compute kept vs dropped words for overlay
-  const debugWordData = useMemo(() => {
-    if (!debugLines) return { kept: [] as LineSegmentWord[], dropped: [] as LineSegmentWord[] };
-
-    const rawSegments = aiSegmentsMap[currentPageIndex];
-    if (!rawSegments || rawSegments.length === 0) return { kept: [] as LineSegmentWord[], dropped: [] as LineSegmentWord[] };
-
-    // Collect all kept word bboxes for O(1) lookup
-    const keptBboxKeys = new Set<string>();
-    for (const line of alignedLines) {
-      if (line.words) {
-        for (const w of line.words) {
-          keptBboxKeys.add(w.bbox.join(','));
-        }
-      }
-    }
-
-    const kept: LineSegmentWord[] = [];
-    const dropped: LineSegmentWord[] = [];
-
-    for (const seg of rawSegments) {
-      if (!seg.words) continue;
-      for (const w of seg.words) {
-        if (keptBboxKeys.has(w.bbox.join(','))) {
-          kept.push(w);
-        } else {
-          dropped.push(w);
-        }
-      }
-    }
-
-    return { kept, dropped };
-  }, [debugLines, aiSegmentsMap, currentPageIndex, alignedLines]);
-
-  // Run per-box analysis eagerly when image is loaded and AI segments are available
-  useEffect(() => {
-    if (currentPageIndex in analysisMap) return;
-    if (!imageRef.current || imageNaturalSize.width === 0) return;
-
-    const rawSegments = aiSegmentsMap[currentPageIndex];
-    if (!rawSegments || rawSegments.length === 0) return;
-
-    const allWords: LineSegmentWord[] = [];
-    for (const seg of rawSegments) {
-      if (seg.words) allWords.push(...seg.words);
-    }
-    if (allWords.length === 0) return;
-
-    const result = analyzePageWords(imageRef.current, allWords);
-    setAnalysisMap(prev => ({ ...prev, [currentPageIndex]: result }));
-  }, [currentPageIndex, aiSegmentsMap, analysisMap, imageNaturalSize.width]);
-
-  // Clear selected debug word when debug mode is off or page changes
-  useEffect(() => {
-    if (!debugLines) setSelectedDebugWord(null);
-  }, [debugLines, currentPageIndex]);
-
-  // Clear selected word when switching pages
-  useEffect(() => {
-    setSelectedDebugWord(null);
-  }, [currentPageIndex]);
-
-  // Current page analysis (if available)
-  const pageAnalysis = analysisMap[currentPageIndex] ?? null;
-
-  // Tight ink bounds per aligned line (when pixel metrics exist for all words in the line)
-  const tightBoundsMap = useMemo(() => {
-    const analysis = analysisMap[currentPageIndex];
-    if (!analysis) return undefined;
-    const metricsLookup = new Map<string, typeof analysis.metrics[number]>();
-    for (const m of analysis.metrics) {
-      metricsLookup.set(m.word.bbox.join(','), m);
-    }
-
-    const map = new Map<number, TightLineBounds>();
-    for (let i = 0; i < alignedLines.length; i++) {
-      const line = alignedLines[i];
-      if (!line.words || line.words.length === 0) continue;
-
-      let allHaveMetrics = true;
-      let inkLeft = Infinity;
-      let inkRight = -Infinity;
-      let inkTop = Infinity;
-      let inkBottom = -Infinity;
-
-      for (const w of line.words) {
-        const m = metricsLookup.get(w.bbox.join(','));
-        if (!m) { allHaveMetrics = false; break; }
-        if (m.actualInkLeft < inkLeft) inkLeft = m.actualInkLeft;
-        if (m.actualInkRight > inkRight) inkRight = m.actualInkRight;
-        if (m.actualInkTop < inkTop) inkTop = m.actualInkTop;
-        if (m.actualInkBottom > inkBottom) inkBottom = m.actualInkBottom;
-      }
-
-      if (!allHaveMetrics) continue;
-
-      // Add 5% height padding for descender tolerance
-      const inkHeight = inkBottom - inkTop;
-      const vPad = inkHeight * 0.05;
-
-      map.set(i, {
-        inkLeftDisplay: inkLeft * scaleFactor,
-        inkRightDisplay: inkRight * scaleFactor,
-        inkTopDisplay: (inkTop - vPad) * scaleFactor,
-        inkBottomDisplay: (inkBottom + vPad) * scaleFactor,
-      });
-    }
-
-    return map.size > 0 ? map : undefined;
-  }, [analysisMap, currentPageIndex, alignedLines, scaleFactor]);
-
   // Page-global font size: one consistent size derived from OCR word widths across all lines
   const pageFontSize = useMemo(
-    () => computePageFontSize(alignedLines, scaleFactor, tightBoundsMap),
-    [alignedLines, scaleFactor, tightBoundsMap],
+    () => computePageFontSize(alignedLines, scaleFactor),
+    [alignedLines, scaleFactor],
   );
 
   // Track image natural size and run pixel detection fallback
@@ -855,19 +589,21 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     }
   }, [aiSegmentsMap, currentPageIndex, runPixelDetection]);
 
-  // Update display size on resize
+  // Update display size on resize (ResizeObserver catches sidebar toggles too)
   useEffect(() => {
-    const handleResize = () => {
-      if (imageRef.current) {
-        setImageDisplaySize({
-          width: imageRef.current.clientWidth,
-          height: imageRef.current.clientHeight,
-        });
+    const img = imageRef.current;
+    if (!img) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          setImageDisplaySize({ width, height });
+        }
       }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    });
+    observer.observe(img);
+    return () => observer.disconnect();
+  }, [currentPageIndex]);
 
   // Drag handle effect — resize highlight/input width
   useEffect(() => {
@@ -933,10 +669,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     });
   }, [currentPageIndex, currentLineIndex, alignedLines, pageNonBlankMap, onTranscriptChange, onAutoSave]);
 
-  useImperativeHandle(ref, () => ({
-    saveCurrentLine,
-  }), [saveCurrentLine]);
-
   // Navigate to next line
   const goToNextLine = useCallback(() => {
     saveCurrentLine();
@@ -977,8 +709,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (!currentLine || !containerRef.current) return;
 
     // Visible region: from highlight top (bbox[1]) to bottom of input
-    const currentTight = tightBoundsMap?.get(currentLineIndex);
-    const lineInputH = computeLineInputHeight(currentLine.words, scaleFactor, currentTight);
+    const lineInputH = computeLineInputHeight(currentLine.words, scaleFactor);
     const regionTop = currentLine.bbox[1] * scaleFactor;
     const regionBottom = currentLine.bbox[3] * scaleFactor + lineInputH;
     const container = containerRef.current;
@@ -1028,14 +759,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const overlayLeft = textLeftPct * imageDisplaySize.width;
     const contentAreaLeft = overlayLeft + CSS_BORDER_PADDING;
 
-    const lineTight = tightBoundsMap?.get(currentLineIndex);
     buildWordPositionedContent(
       inputRef.current,
       line.transcriptText,
       line.words,
       contentAreaLeft,
       scaleFactor,
-      lineTight,
     );
 
     inputRef.current.focus();
@@ -1043,7 +772,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (sel && inputRef.current.firstChild) {
       sel.collapse(inputRef.current.firstChild, 0);
     }
-  }, [currentLineIndex, currentPageIndex, alignedLines, scaleFactor, textLeftPct, imageDisplaySize.width, tightBoundsMap]);
+  }, [currentLineIndex, currentPageIndex, alignedLines, scaleFactor, textLeftPct, imageDisplaySize.width]);
 
   // Re-run line detection for the current page
   const redetectLines = useCallback(() => {
@@ -1071,16 +800,18 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       });
   }, [currentPage, currentPageIndex, isDetecting]);
 
+  useImperativeHandle(ref, () => ({
+    saveCurrentLine,
+    redetectLines,
+    isDetecting,
+  }), [saveCurrentLine, redetectLines, isDetecting]);
+
   // Keyboard handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Only handle when our input is focused or the container is active
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (selectedDebugWord) {
-          setSelectedDebugWord(null);
-          return;
-        }
         saveCurrentLine();
         onExit();
         return;
@@ -1115,13 +846,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [saveCurrentLine, onExit, goToNextLine, goToPrevLine, redetectLines, debugLines, onDebugModeChange, selectedDebugWord]);
+  }, [saveCurrentLine, onExit, goToNextLine, goToPrevLine, redetectLines, debugLines, onDebugModeChange]);
 
   if (!currentPage) return null;
 
   // Dynamic height for the editable strip — based on current line's word heights
-  const currentLineTight = tightBoundsMap?.get(currentLineIndex);
-  const INPUT_DISPLAY_HEIGHT = computeLineInputHeight(currentLine?.words, scaleFactor, currentLineTight);
+  const INPUT_DISPLAY_HEIGHT = computeLineInputHeight(currentLine?.words, scaleFactor);
 
   // Compute overlay positions
   const topDimmerHeight = currentLine ? currentLine.bbox[1] * scaleFactor : 0;
@@ -1238,10 +968,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
               left: inputLeft,
               width: inputWidth,
               height: INPUT_DISPLAY_HEIGHT,
-              ...(pageAnalysis && Math.abs(pageAnalysis.pageRotation) > 0.3 ? {
-                transform: `rotate(${-pageAnalysis.pageRotation}deg)`,
-                transformOrigin: 'center center',
-              } : {}),
             }}
           >
             <div
@@ -1281,59 +1007,41 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           </>
         )}
 
-        {/* Debug overlay — line boundaries + word-level bounding boxes */}
-        {debugLines && alignedLines.map((line, i) => (
-          <div
-            key={`line-${i}`}
-            className="line-review-debug-line"
+        {/* Debug overlay — Kraken polygon boundaries */}
+        {debugLines && showDebugLines && imageDisplaySize.width > 0 && (
+          <svg
             style={{
-              top: line.bbox[1] * scaleFactor,
-              left: line.bbox[0] * scaleFactor,
-              width: (line.bbox[2] - line.bbox[0]) * scaleFactor,
-              height: (line.bbox[3] - line.bbox[1]) * scaleFactor,
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: imageDisplaySize.width,
+              height: displayedImageHeight,
+              pointerEvents: 'none',
+              zIndex: 5,
             }}
-          />
-        ))}
-        {debugLines && debugWordData.kept.map((word, i) => {
-          const bboxKey = word.bbox.join(',');
-          const isSelected = selectedDebugWord?.word.bbox.join(',') === bboxKey;
-          return (
-            <div
-              key={`wk-${i}`}
-              className={`line-review-debug-word line-review-debug-word-kept line-review-debug-word-clickable${isSelected ? ' line-review-debug-word-selected' : ''}`}
-              style={{
-                top: word.bbox[1] * scaleFactor,
-                left: word.bbox[0] * scaleFactor,
-                width: (word.bbox[2] - word.bbox[0]) * scaleFactor,
-                height: (word.bbox[3] - word.bbox[1]) * scaleFactor,
-              }}
-              onClick={() => {
-                const metrics = pageAnalysis?.metrics.find(m => m.word.bbox.join(',') === bboxKey);
-                setSelectedDebugWord(metrics ?? null);
-              }}
-            />
-          );
-        })}
-        {debugLines && debugWordData.dropped.map((word, i) => {
-          const bboxKey = word.bbox.join(',');
-          const isSelected = selectedDebugWord?.word.bbox.join(',') === bboxKey;
-          return (
-            <div
-              key={`wd-${i}`}
-              className={`line-review-debug-word line-review-debug-word-dropped line-review-debug-word-clickable${isSelected ? ' line-review-debug-word-selected' : ''}`}
-              style={{
-                top: word.bbox[1] * scaleFactor,
-                left: word.bbox[0] * scaleFactor,
-                width: (word.bbox[2] - word.bbox[0]) * scaleFactor,
-                height: (word.bbox[3] - word.bbox[1]) * scaleFactor,
-              }}
-              onClick={() => {
-                const metrics = pageAnalysis?.metrics.find(m => m.word.bbox.join(',') === bboxKey);
-                setSelectedDebugWord(metrics ?? null);
-              }}
-            />
-          );
-        })}
+          >
+            {(aiSegmentsMap[currentPageIndex] ?? []).map((seg, i) =>
+              seg.boundary && seg.boundary.length > 2 ? (
+                <polygon
+                  key={`poly-${i}`}
+                  className="line-review-debug-polygon"
+                  points={seg.boundary
+                    .map(p => `${p.x * scaleFactor},${p.y * scaleFactor}`)
+                    .join(' ')}
+                />
+              ) : (
+                <rect
+                  key={`rect-${i}`}
+                  className="line-review-debug-polygon"
+                  x={seg.bbox[0] * scaleFactor}
+                  y={seg.bbox[1] * scaleFactor}
+                  width={(seg.bbox[2] - seg.bbox[0]) * scaleFactor}
+                  height={(seg.bbox[3] - seg.bbox[1]) * scaleFactor}
+                />
+              ),
+            )}
+          </svg>
+        )}
 
         {/* Detecting lines — detection in progress */}
         {isDetecting && imageNaturalSize.width > 0 && (
@@ -1367,57 +1075,22 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         </div>
       )}
 
-      {/* Debug legend + page stats */}
+      {/* Debug legend */}
       {debugLines && (
         <div className="line-review-debug-legend">
-          <span className="debug-legend-item">
-            <span className="debug-legend-swatch debug-legend-kept" />
-            Kept ({debugWordData.kept.length})
-          </span>
-          <span className="debug-legend-item">
-            <span className="debug-legend-swatch debug-legend-dropped" />
-            Dropped ({debugWordData.dropped.length})
-          </span>
-          {pageAnalysis && (
-            <>
-              <span className="debug-legend-separator" />
-              <span className="debug-legend-stat">
-                rot: <span className="debug-legend-stat-value">{pageAnalysis.pageRotation.toFixed(1)}&deg;</span>
-              </span>
-              <span className="debug-legend-stat">
-                charW: <span className="debug-legend-stat-value">{pageAnalysis.avgPageCharWidth.toFixed(1)}px</span>
-              </span>
-              <span className="debug-legend-stat">
-                stroke: <span className="debug-legend-stat-value">{pageAnalysis.medians.strokeWidth.toFixed(1)}px</span>
-              </span>
-              <span className="debug-legend-stat">
-                density: <span className="debug-legend-stat-value">{(pageAnalysis.medians.inkDensity * 100).toFixed(0)}%</span>
-              </span>
-            </>
-          )}
+          <button
+            className={`debug-legend-toggle${showDebugLines ? ' debug-legend-toggle-active' : ''}`}
+            onClick={() => setShowDebugLines(v => !v)}
+          >
+            <span className="debug-legend-swatch debug-legend-lines" />
+            Lines
+          </button>
         </div>
-      )}
-
-      {/* Debug stats panel for selected word */}
-      {debugLines && selectedDebugWord && pageAnalysis && (
-        <DebugStatsPanel
-          metrics={selectedDebugWord}
-          pageAnalysis={pageAnalysis}
-          onClose={() => setSelectedDebugWord(null)}
-        />
       )}
 
       {/* Exit hint */}
       <div className="line-review-exit-hint">
         <kbd>Esc</kbd> to exit
-        {!isDetecting && (
-          <>
-            {' · '}
-            <button className="line-review-redetect-btn" onClick={redetectLines}>
-              Re-detect lines
-            </button>
-          </>
-        )}
       </div>
     </div>
   );

@@ -116,6 +116,7 @@ export interface LineSegment {
   bbox: [number, number, number, number];
   ocrText: string;
   words?: LineSegmentWord[];
+  boundary?: { x: number; y: number }[];
 }
 
 export interface LetterImage {

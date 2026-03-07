@@ -179,10 +179,10 @@
   to { transform: rotate(360deg); }
 }
 
-/* Exit hint */
+/* Exit hint — sits just above the progress indicator */
 .line-review-exit-hint {
   position: fixed;
-  top: 60px;
+  bottom: 76px;
   right: 16px;
   background: rgba(13, 18, 26, 0.75);
   color: #999;
@@ -198,7 +198,7 @@
 .line-review-debug-legend {
   position: fixed;
   top: 60px;
-  left: 16px;
+  left: 228px;
   background: rgba(13, 18, 26, 0.85);
   color: #ccc;
   padding: 4px 10px;
@@ -206,10 +206,15 @@
   font-size: 11px;
   font-family: var(--font-mono, monospace);
   z-index: 100;
+  transition: left 0.2s ease;
   display: flex;
   gap: 12px;
   backdrop-filter: blur(4px);
   user-select: none;
+}
+
+.sidebar-collapsed .line-review-debug-legend {
+  left: 68px;
 }
 
 .debug-legend-item {
@@ -225,42 +230,42 @@
   border-radius: 2px;
 }
 
-.debug-legend-kept {
-  background: rgba(0, 220, 120, 0.5);
-  border: 1px solid rgba(0, 220, 120, 0.8);
+.debug-legend-lines {
+  background: rgba(230, 70, 100, 0.5);
+  border: 1px solid rgba(230, 70, 100, 0.8);
 }
 
-.debug-legend-dropped {
-  background: rgba(255, 70, 70, 0.5);
-  border: 1px solid rgba(255, 70, 70, 0.8);
+.debug-legend-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: #666;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  padding: 2px 6px;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
 }
 
-/* Debug line overlay */
-.line-review-debug-line {
-  position: absolute;
-  border-top: 2px solid #ff00ff;
-  border-bottom: 2px solid #ff00ff;
-  background: rgba(255, 0, 255, 0.08);
-  pointer-events: none;
-  z-index: 5;
+.debug-legend-toggle:hover {
+  opacity: 0.8;
 }
 
-/* Debug word bounding boxes */
-.line-review-debug-word {
-  position: absolute;
-  pointer-events: none;
-  z-index: 6;
-  box-sizing: border-box;
+.debug-legend-toggle-active {
+  opacity: 1;
+  color: #ccc;
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
-.line-review-debug-word-kept {
-  border: 1px solid rgba(0, 220, 120, 0.7);
-  background: rgba(0, 220, 120, 0.08);
-}
-
-.line-review-debug-word-dropped {
-  border: 1px solid rgba(255, 70, 70, 0.8);
-  background: rgba(255, 70, 70, 0.12);
+/* Debug polygon overlay — Kraken line boundaries */
+.line-review-debug-polygon {
+  fill: rgba(230, 70, 100, 0.1);
+  stroke: rgba(230, 70, 100, 0.7);
+  stroke-width: 2;
 }
 
 .line-review-exit-hint kbd {
@@ -287,119 +292,3 @@
   color: #ccc;
 }
 
-/* Clickable debug word boxes */
-.line-review-debug-word-clickable {
-  pointer-events: auto;
-  cursor: pointer;
-}
-
-.line-review-debug-word-clickable:hover {
-  outline: 2px solid #fff;
-  outline-offset: -1px;
-}
-
-.line-review-debug-word-selected {
-  outline: 2px solid #ffd740;
-  outline-offset: -1px;
-}
-
-/* Debug stats panel — fixed bottom-right */
-.debug-stats-panel {
-  position: fixed;
-  bottom: 60px;
-  right: 16px;
-  width: 280px;
-  max-height: 50vh;
-  overflow-y: auto;
-  background: rgba(13, 18, 26, 0.94);
-  color: #ccc;
-  border-radius: 8px;
-  font-size: 11px;
-  font-family: var(--font-mono, monospace);
-  z-index: 110;
-  backdrop-filter: blur(8px);
-  user-select: text;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.15) transparent;
-}
-
-.debug-stats-header {
-  padding: 8px 10px 4px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #fff;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.debug-stats-close {
-  background: none;
-  border: none;
-  color: #999;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 0 2px;
-  line-height: 1;
-}
-
-.debug-stats-close:hover {
-  color: #fff;
-}
-
-.debug-stats-group {
-  padding: 4px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-}
-
-.debug-stats-group:last-child {
-  border-bottom: none;
-  padding-bottom: 8px;
-}
-
-.debug-stats-group-title {
-  color: #888;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 2px;
-}
-
-.debug-stats-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 1px 0;
-}
-
-.debug-stats-label {
-  color: #999;
-}
-
-.debug-stats-value {
-  color: #e0e0e0;
-}
-
-.debug-stats-outlier-mild {
-  color: #ffa726;
-}
-
-.debug-stats-outlier-strong {
-  color: #ef5350;
-}
-
-/* Page stats in legend bar */
-.debug-legend-separator {
-  width: 1px;
-  height: 14px;
-  background: rgba(255,255,255,0.2);
-  margin: 0 2px;
-}
-
-.debug-legend-stat {
-  color: #999;
-}
-
-.debug-legend-stat-value {
-  color: #ccc;
-}

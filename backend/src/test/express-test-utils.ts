@@ -93,10 +93,16 @@ export async function invokeRouter(
 
   return await new Promise<InvokeResult>((resolve, reject) => {
     let settled = false;
+    const timeout = setTimeout(() => {
+      if (!settled && !res.headersSent) {
+        reject(new Error(`Request did not complete for ${options.method} ${options.url}`));
+      }
+    }, 50);
 
     const finalize = () => {
       if (settled) return;
       settled = true;
+      clearTimeout(timeout);
       resolve({
         statusCode: res.statusCode,
         body: res.body,
@@ -126,12 +132,6 @@ export async function invokeRouter(
           }
         }) as NextFunction,
       );
-    });
-
-    setImmediate(() => {
-      if (!settled && !res.headersSent) {
-        reject(new Error(`Request did not complete for ${options.method} ${options.url}`));
-      }
     });
   });
 }

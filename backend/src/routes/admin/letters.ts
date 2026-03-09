@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { unlink } from 'node:fs/promises';
 import { z } from 'zod';
 import { db, letters, letterPages } from '../../db/index.js';
@@ -362,6 +362,47 @@ router.post('/letters/bulk/clear-metadata', async (req, res, next) => {
 });
 
 // ============================================================================
+// FLAG TOGGLE
+// ============================================================================
+
+const toggleFlagSchema = z.object({
+  flagged: z.boolean(),
+});
+
+router.patch('/letters/:letterId/flag', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+    const parseResult = toggleFlagSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
+      return;
+    }
+    const { flagged } = parseResult.data;
+    const letter = await getLetterById(letterId);
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+    await db.update(letters).set({
+      flagged,
+      flaggedAt: flagged ? new Date() : null,
+      flaggedBy: flagged ? 'admin' : null,
+    }).where(eq(letters.id, letterId));
+
+    req.log.info({ letterId, flagged }, 'Letter flag toggled');
+
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
 // SINGLE LETTER OPERATIONS
 // ============================================================================
 
@@ -372,6 +413,13 @@ router.get('/letters/:letterId', async (req, res, next) => {
       res.status(404).json({ error: 'Letter not found' });
       return;
     }
+
+    // Fire-and-forget: track that this letter was opened
+    db.execute(sql`
+      INSERT INTO letter_views (letter_id, last_opened_at) VALUES (${req.params.letterId}, now())
+      ON CONFLICT (letter_id) DO UPDATE SET last_opened_at = now()
+    `).catch(err => req.log.warn({ letterId: req.params.letterId, err }, 'Failed to update lastOpenedAt'));
+
     res.json(letterDTO);
   } catch (error) {
     next(error);
@@ -1102,14 +1150,16 @@ router.post('/letters/pages/:pageId/detect-lines', async (req, res, next) => {
     }
 
     const absolutePath = getAbsoluteStoragePath(page.storagePath);
-    const segments = await detectAndStorePageLines(pageId, absolutePath);
+    const result = await detectAndStorePageLines(pageId, absolutePath);
 
     res.json({
-      lineSegments: segments ?? (Array.isArray(page.lineSegments) ? page.lineSegments : []),
+      lineSegments: result.lineSegments ?? (Array.isArray(page.lineSegments) ? page.lineSegments : []),
+      ocrWordBoxes: result.ocrWordBoxes ?? (Array.isArray(page.ocrWordBoxes) ? page.ocrWordBoxes : null),
     });
   } catch (error) {
     next(error);
   }
 });
+
 
 export default router;

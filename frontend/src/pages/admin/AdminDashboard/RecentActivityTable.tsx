@@ -55,6 +55,7 @@ interface RecentActivityTableProps {
   onToggleColumnMenu: () => void;
   onToggleColumn: (id: ColumnId) => void;
   columnMenuRef: RefObject<HTMLDivElement | null>;
+  onToggleFlag: (letterId: string, flagged: boolean) => void;
 }
 
 export default function RecentActivityTable({
@@ -85,6 +86,7 @@ export default function RecentActivityTable({
   onToggleColumnMenu,
   onToggleColumn,
   columnMenuRef,
+  onToggleFlag,
 }: RecentActivityTableProps) {
   const theadRef = useRef<HTMLTableSectionElement>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
@@ -284,6 +286,51 @@ export default function RecentActivityTable({
                   </span>
                 </th>
               )}
+              {visibleColumns.has("updated") && (
+                <th
+                  className={`sortable-header ${getSortInfo("updatedAt") ? "sorted" : ""}`}
+                  onClick={() => onSort("updatedAt")}
+                >
+                  <span className="header-content">
+                    Updated
+                    {getSortInfo("updatedAt") && (
+                      <span className="sort-indicator">
+                        <span className="sort-arrow">
+                          {getSortInfo("updatedAt")?.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                        {getSortInfo("updatedAt")!.total > 1 && (
+                          <span className="sort-priority">{getSortInfo("updatedAt")?.priority}</span>
+                        )}
+                      </span>
+                    )}
+                  </span>
+                </th>
+              )}
+              {visibleColumns.has("lastOpened") && (
+                <th
+                  className={`sortable-header ${getSortInfo("lastOpenedAt") ? "sorted" : ""}`}
+                  onClick={() => onSort("lastOpenedAt")}
+                >
+                  <span className="header-content">
+                    Last Opened
+                    {getSortInfo("lastOpenedAt") && (
+                      <span className="sort-indicator">
+                        <span className="sort-arrow">
+                          {getSortInfo("lastOpenedAt")?.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                        {getSortInfo("lastOpenedAt")!.total > 1 && (
+                          <span className="sort-priority">{getSortInfo("lastOpenedAt")?.priority}</span>
+                        )}
+                      </span>
+                    )}
+                  </span>
+                </th>
+              )}
+              {visibleColumns.has("flag") && (
+                <th className="flag-header">
+                  <Icon name="flag" size={14} />
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -404,6 +451,26 @@ export default function RecentActivityTable({
 
                   {visibleColumns.has("created") && (
                     <td className="date-cell">{formatDate(letter.createdAt)}</td>
+                  )}
+                  {visibleColumns.has("updated") && (
+                    <td className="date-cell">{letter.updatedAt ? formatDate(letter.updatedAt) : "—"}</td>
+                  )}
+                  {visibleColumns.has("lastOpened") && (
+                    <td className="date-cell">{letter.lastOpenedAt ? formatDate(letter.lastOpenedAt) : "—"}</td>
+                  )}
+                  {visibleColumns.has("flag") && (
+                    <td className="flag-cell">
+                      <button
+                        className={`flag-btn ${letter.flagged ? "flagged" : ""}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleFlag(letter.id, !letter.flagged);
+                        }}
+                        aria-label={letter.flagged ? "Unflag letter" : "Flag letter"}
+                      >
+                        <Icon name={letter.flagged ? "flag-filled" : "flag"} size={16} />
+                      </button>
+                    </td>
                   )}
                 </tr>
               );

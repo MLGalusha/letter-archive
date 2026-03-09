@@ -7,6 +7,7 @@ import {
   integer,
   date,
   jsonb,
+  boolean,
   uniqueIndex,
   index,
   check,
@@ -217,6 +218,11 @@ export const letters = pgTable(
     // Timestamps
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+
+    // Flag for follow-up
+    flagged: boolean('flagged').notNull().default(false),
+    flaggedAt: timestamp('flagged_at', { withTimezone: true }),
+    flaggedBy: text('flagged_by'),
   },
   (table) => [
     // Idempotency: prevents duplicate conceptual letters
@@ -232,6 +238,8 @@ export const letters = pgTable(
     index('idx_letters_workflow').on(table.workflow),
     index('idx_letters_letter_date').on(table.letterDate),
     index('idx_letters_extracted_date').on(table.extractedDate),
+    // Flag index (partial: only flagged=true rows)
+    index('idx_letters_flagged').on(table.flagged),
     // V2 indexes
     index('idx_letters_emotional_tone').on(table.emotionalTone),
     index('idx_letters_primary_topics').using('gin', table.primaryTopics),
@@ -256,6 +264,7 @@ export const letterPages = pgTable(
     originalFilename: text('original_filename').notNull(),
     checksumSha256: text('checksum_sha256'),
     lineSegments: jsonb('line_segments'),
+    ocrWordBoxes: jsonb('ocr_word_boxes'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -479,6 +488,15 @@ export const auditLog = pgTable(
 );
 
 /**
+ * Tracks when letters were last opened in the admin UI (separate from letters table
+ * to avoid bumping updated_at via the trigger)
+ */
+export const letterViews = pgTable('letter_views', {
+  letterId: uuid('letter_id').primaryKey().references(() => letters.id, { onDelete: 'cascade' }),
+  lastOpenedAt: timestamp('last_opened_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
  * Review queue for pending entity matches needing admin confirmation
  */
 export const entityReviewQueue = pgTable(
@@ -522,6 +540,13 @@ export const lettersRelations = relations(letters, ({ one, many }) => ({
   versions: many(letterVersions),
   persons: many(letterPersons),
   places: many(letterPlaces),
+}));
+
+export const letterViewsRelations = relations(letterViews, ({ one }) => ({
+  letter: one(letters, {
+    fields: [letterViews.letterId],
+    references: [letters.id],
+  }),
 }));
 
 export const letterPagesRelations = relations(letterPages, ({ one }) => ({

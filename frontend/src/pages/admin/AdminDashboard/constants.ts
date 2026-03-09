@@ -21,6 +21,8 @@ export const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
 
 export const SERVER_SORT_FIELDS = [
   "createdAt",
+  "updatedAt",
+  "lastOpenedAt",
   "letterDate",
   "sender",
   "recipient",
@@ -41,6 +43,9 @@ export const ALL_COLUMNS: ColumnDef[] = [
   { id: "sync", label: "Sync", defaultVisible: true },
   { id: "visibility", label: "Visibility", defaultVisible: true },
   { id: "created", label: "Created", defaultVisible: true },
+  { id: "updated", label: "Updated", defaultVisible: false },
+  { id: "lastOpened", label: "Last Opened", defaultVisible: false },
+  { id: "flag", label: "Flag", defaultVisible: true },
 ];
 
 export const DEFAULT_VISIBLE_COLUMNS = new Set<ColumnId>(

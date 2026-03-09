@@ -45,6 +45,21 @@ export interface FrontendLineSegment {
   boundary?: { x: number; y: number }[];
 }
 
+export interface FrontendBoxPixelStats {
+  inkDensity: number;
+  variance: number;
+  minValue: number;
+  meanValue: number;
+}
+
+export interface FrontendOcrWordBox {
+  text: string;
+  bbox: [number, number, number, number];
+  confidence: number;
+  pixelStats?: FrontendBoxPixelStats;
+  hasContent?: boolean;
+}
+
 export interface FrontendLetterImage {
   id: string;
   type: FrontendLetterImageType;
@@ -52,6 +67,7 @@ export interface FrontendLetterImage {
   imageUrl: string;
   originalFilename?: string;
   lineSegments?: FrontendLineSegment[];
+  ocrWordBoxes?: FrontendOcrWordBox[];
 }
 
 // V2 Metadata types
@@ -143,6 +159,9 @@ export interface FrontendLetter {
   aiNotes?: string;
   // Legacy field kept for backward compat
   transcriptConfirmedAt?: string;
+  flagged: boolean;
+  flaggedAt?: string;
+  flaggedBy?: string;
   createdAt: string;
   updatedAt?: string;
   // Entity extraction (Prompt 2)
@@ -397,6 +416,9 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
       lineSegments: Array.isArray(page.lineSegments)
         ? page.lineSegments as FrontendLineSegment[]
         : undefined,
+      ocrWordBoxes: Array.isArray(page.ocrWordBoxes)
+        ? page.ocrWordBoxes as FrontendOcrWordBox[]
+        : undefined,
     })),
     transcript: {
       pages: letter.transcriptionText
@@ -452,6 +474,10 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
     entityExtractionStatus: letter.entityExtractionStatus || undefined,
     entityExtractionJson: letter.entityExtractionJson || undefined,
     entityExtractionError: letter.entityExtractionError || undefined,
+    // Flag fields
+    flagged: letter.flagged,
+    flaggedAt: letter.flaggedAt?.toISOString(),
+    flaggedBy: letter.flaggedBy || undefined,
     // Legacy field
     transcriptConfirmedAt: letter.transcriptConfirmedAt?.toISOString(),
     createdAt: letter.createdAt.toISOString(),
@@ -561,6 +587,9 @@ export function transformLetterWithRelatedToDTO(
         lineSegments: Array.isArray(page.lineSegments)
           ? page.lineSegments as FrontendLineSegment[]
           : undefined,
+        ocrWordBoxes: Array.isArray(page.ocrWordBoxes)
+          ? page.ocrWordBoxes as FrontendOcrWordBox[]
+          : undefined,
       });
     }
   }
@@ -577,6 +606,9 @@ export function transformLetterWithRelatedToDTO(
         originalFilename: page.originalFilename,
         lineSegments: Array.isArray(page.lineSegments)
           ? page.lineSegments as FrontendLineSegment[]
+          : undefined,
+        ocrWordBoxes: Array.isArray(page.ocrWordBoxes)
+          ? page.ocrWordBoxes as FrontendOcrWordBox[]
           : undefined,
       });
     }

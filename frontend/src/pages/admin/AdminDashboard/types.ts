@@ -6,6 +6,8 @@ export type ContentFilterView = "transcript" | "metadata";
 
 export type ServerSortField =
   | "createdAt"
+  | "updatedAt"
+  | "lastOpenedAt"
   | "letterDate"
   | "sender"
   | "recipient"
@@ -25,6 +27,7 @@ export interface SortColumn {
 }
 
 export type ColumnId =
+  | "flag"
   | "sender"
   | "recipient"
   | "date"
@@ -35,6 +38,8 @@ export type ColumnId =
   | "metadata"
   | "visibility"
   | "created"
+  | "updated"
+  | "lastOpened"
   | "sync";
 
 export interface ColumnDef {

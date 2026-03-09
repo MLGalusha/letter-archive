@@ -119,6 +119,21 @@ export interface LineSegment {
   boundary?: { x: number; y: number }[];
 }
 
+export interface BoxPixelStats {
+  inkDensity: number;
+  variance: number;
+  minValue: number;
+  meanValue: number;
+}
+
+export interface OcrWordBox {
+  text: string;
+  bbox: [number, number, number, number];
+  confidence: number;
+  pixelStats?: BoxPixelStats;
+  hasContent?: boolean;
+}
+
 export interface LetterImage {
   id: string;
   type: LetterImageType;
@@ -126,6 +141,7 @@ export interface LetterImage {
   imageUrl: string;
   originalFilename?: string;
   lineSegments?: LineSegment[];
+  ocrWordBoxes?: OcrWordBox[];
 }
 
 export interface LetterMetadata {
@@ -194,6 +210,9 @@ export interface Letter {
   transcriptConfirmedAt?: string;
   createdAt: string;
   updatedAt?: string;
+  flagged: boolean;
+  flaggedAt?: string;
+  flaggedBy?: string;
   // Linked entities (populated when fetching letter detail)
   linkedPersons?: LinkedPerson[];
   linkedPlaces?: LinkedPlace[];
@@ -201,4 +220,5 @@ export interface Letter {
   lettersCount?: number;
   // Count of related items (envelopes, photos, etc.) - only in list responses
   extrasCount?: number;
+  lastOpenedAt?: string;
 }

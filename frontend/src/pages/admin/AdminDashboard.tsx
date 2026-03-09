@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAdminLetters, getFilteredLetterIds, deleteLetter } from "../../api/letters";
+import { toggleLetterFlag } from "../../api/admin/letters";
 import {
   getProcessingStatus,
   startTranscription,
@@ -66,7 +67,7 @@ export default function AdminDashboard() {
   // Server response data (pagination and stats)
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
   const [stats, setStats] = useState({
-    total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0,
+    total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0, flagged: 0,
     // Two-track content status stats
     transcriptEmpty: 0, transcriptAiDraft: 0, transcriptEdited: 0, transcriptVerified: 0,
     metadataEmpty: 0, metadataAiDraft: 0, metadataEdited: 0, metadataVerified: 0,
@@ -94,6 +95,7 @@ export default function AdminDashboard() {
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>(
     persistedState.current.visibilityFilter ?? 'ALL'
   );
+  const [flaggedFilter, setFlaggedFilter] = useState<'all' | 'true' | 'false'>('all');
   // Content status filters (persisted to localStorage)
   const [transcriptStatusFilters, setTranscriptStatusFilters] = useState<ContentStatus[]>(
     (persistedState.current.transcriptStatusFilters as ContentStatus[]) ?? []
@@ -151,8 +153,27 @@ export default function AdminDashboard() {
     try {
       const saved = localStorage.getItem(COLUMN_STORAGE_KEY);
       if (saved) {
-        const parsed = JSON.parse(saved) as ColumnId[];
-        return new Set(parsed);
+        const parsed = JSON.parse(saved);
+        // Support both legacy (ColumnId[]) and new ({ visible, known }) formats
+        let visible: ColumnId[];
+        let known: ColumnId[];
+        if (Array.isArray(parsed)) {
+          // Legacy format: just the visible list, no known tracking
+          visible = parsed;
+          known = parsed;
+        } else {
+          visible = parsed.visible ?? [];
+          known = parsed.known ?? [];
+        }
+        const savedSet = new Set(visible);
+        const knownSet = new Set(known);
+        // Auto-show new defaultVisible columns the user has never seen
+        for (const col of ALL_COLUMNS) {
+          if (col.defaultVisible && !knownSet.has(col.id)) {
+            savedSet.add(col.id);
+          }
+        }
+        return savedSet;
       }
     } catch (e) {
       console.warn('Failed to load column visibility:', e);
@@ -189,10 +210,13 @@ export default function AdminDashboard() {
     navigate(`/admin/letters/${id}`);
   };
 
-  // Save column visibility changes
+  // Save column visibility changes (with known columns to distinguish "removed" from "new")
   useEffect(() => {
     try {
-      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(Array.from(visibleColumns)));
+      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify({
+        visible: Array.from(visibleColumns),
+        known: ALL_COLUMNS.map(c => c.id),
+      }));
     } catch (e) {
       console.warn('Failed to save column visibility:', e);
     }
@@ -305,6 +329,7 @@ export default function AdminDashboard() {
         // Content status filters (join arrays to comma-separated strings)
         transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(',') : undefined,
         metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(',') : undefined,
+        flagged: flaggedFilter !== 'all' ? flaggedFilter : undefined,
       });
       setLetters(response.letters);
       setPagination(response.pagination);
@@ -316,6 +341,7 @@ export default function AdminDashboard() {
         reviewed: response.stats.reviewed ?? 0,
         published: response.stats.published ?? 0,
         hidden: response.stats.hidden ?? 0,
+        flagged: response.stats.flagged ?? 0,
         // Two-track content status stats (nested in API response)
         transcriptEmpty: response.stats.transcript?.empty ?? 0,
         transcriptAiDraft: response.stats.transcript?.aiDraft ?? 0,
@@ -333,7 +359,7 @@ export default function AdminDashboard() {
       setLoading(false);
       setIsInitialLoad(false);
     }
-  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, pagination.page, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
+  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, pagination.page, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters, flaggedFilter]);
 
   // Auth check — runs once on mount
   useEffect(() => {
@@ -349,7 +375,7 @@ export default function AdminDashboard() {
     const isAuth = sessionStorage.getItem("adminAuth");
     if (!isAuth) return; // Don't fetch if not authenticated
     fetchLetters(true, 1);
-  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
+  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters, flaggedFilter]);
 
   const handleRowClick = (letterId: string, index: number, e: React.MouseEvent) => {
     if (editMode) {
@@ -511,7 +537,21 @@ export default function AdminDashboard() {
   }, [letters, sortColumns]);
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
+    return new Date(dateString).toLocaleDateString(undefined, {
+      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
+  };
+
+  const handleToggleFlag = async (letterId: string, flagged: boolean) => {
+    // Optimistic update
+    setLetters(prev => prev.map(l => l.id === letterId ? { ...l, flagged, flaggedAt: flagged ? new Date().toISOString() : undefined, flaggedBy: flagged ? 'admin' : undefined } : l));
+    try {
+      await toggleLetterFlag(letterId, flagged);
+    } catch (err) {
+      // Revert optimistic update
+      setLetters(prev => prev.map(l => l.id === letterId ? { ...l, flagged: !flagged, flaggedAt: !flagged ? new Date().toISOString() : undefined, flaggedBy: !flagged ? 'admin' : undefined } : l));
+      showToast(`Failed to ${flagged ? 'flag' : 'unflag'} letter`, 'error');
+    }
   };
 
   // Edit mode functions
@@ -575,6 +615,7 @@ export default function AdminDashboard() {
         dateTo: dateToFilter ?? undefined,
         transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(',') : undefined,
         metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(',') : undefined,
+        flagged: flaggedFilter !== 'all' ? flaggedFilter : undefined,
       });
       setSelectedIds(new Set(allIds));
       setAllFilteredSelected(true);
@@ -1086,6 +1127,15 @@ export default function AdminDashboard() {
               {stats.hidden} Hidden
             </button>
           </div>
+          <div className="filter-buttons filter-buttons-vertical">
+            <button
+              className={`filter-pill filter-flagged ${flaggedFilter === 'true' ? 'active' : ''}`}
+              onClick={() => setFlaggedFilter(flaggedFilter === 'true' ? 'all' : 'true')}
+              title="Flagged letters"
+            >
+              {stats.flagged > 0 ? stats.flagged : ''} Flagged
+            </button>
+          </div>
         </div>
 
         {/* Content filter group: toggle + status pills */}
@@ -1406,6 +1456,7 @@ export default function AdminDashboard() {
           onToggleColumnMenu={() => setShowColumnMenu(!showColumnMenu)}
           onToggleColumn={toggleColumnVisibility}
           columnMenuRef={columnMenuRef}
+          onToggleFlag={handleToggleFlag}
         />
       </div>
 

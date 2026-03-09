@@ -37,7 +37,9 @@ export type IconName =
   | 'relationships'
   | 'columns'
   | 'more'
-  | 'code';
+  | 'code'
+  | 'flag'
+  | 'flag-filled';
 
 interface IconProps {
   name: IconName;
@@ -237,6 +239,15 @@ const iconPaths: Record<IconName, React.ReactNode> = {
     <>
       <polyline points="16,18 22,12 16,6" />
       <polyline points="8,6 2,12 8,18" />
+    </>
+  ),
+  flag: (
+    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7" />
+  ),
+  'flag-filled': (
+    <>
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" fill="currentColor" />
+      <line x1="4" y1="22" x2="4" y2="15" />
     </>
   ),
 };

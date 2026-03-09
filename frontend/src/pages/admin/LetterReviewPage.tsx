@@ -26,6 +26,7 @@ import {
   removeLinkedPerson,
   removeLinkedPlace,
 } from "../../api/admin";
+import { toggleLetterFlag } from "../../api/admin/letters";
 import LetterViewer from "../../components/LetterViewer/LetterViewer";
 import AdminLayout from "../../components/AdminLayout";
 import { useToast } from "../../contexts/ToastContext";
@@ -1411,6 +1412,21 @@ export default function LetterReviewPage() {
         )}
       </div>
       <div className="header-actions">
+        <button
+          className={`header-action flag ${letter.flagged ? "active" : ""}`}
+          onClick={async () => {
+            const newFlagged = !letter.flagged;
+            try {
+              const updated = await toggleLetterFlag(letter.id, newFlagged);
+              setLetter(updated);
+            } catch (err) {
+              showToast(`Failed to ${newFlagged ? 'flag' : 'unflag'} letter`, 'error');
+            }
+          }}
+          data-tooltip={letter.flagged ? "Unflag" : "Flag for follow-up"}
+        >
+          <Icon name={letter.flagged ? "flag-filled" : "flag"} size={18} />
+        </button>
         {/* Confirm button - only for TRANSCRIBED without confirmation */}
         {letter.workflowState === "TRANSCRIBED" &&
           !letter.transcriptConfirmedAt && (

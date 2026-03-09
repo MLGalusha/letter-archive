@@ -1,5 +1,5 @@
-import { apiPost, apiPut } from "../client";
-import type { Letter, LineSegment } from "../../types/Letter";
+import { apiPost, apiPut, apiPatch } from "../client";
+import type { Letter, LineSegment, OcrWordBox } from "../../types/Letter";
 
 export interface UpdateLetterData {
   transcriptionText?: string;
@@ -59,6 +59,10 @@ export async function unverifyMetadata(letterId: string): Promise<Letter> {
   return apiPost<Letter>(`/admin/letters/${letterId}/unverify-metadata`);
 }
 
-export async function detectPageLines(pageId: string): Promise<{ lineSegments: LineSegment[] }> {
-  return apiPost<{ lineSegments: LineSegment[] }>(`/admin/letters/pages/${pageId}/detect-lines`);
+export async function detectPageLines(pageId: string): Promise<{ lineSegments: LineSegment[]; ocrWordBoxes: OcrWordBox[] | null }> {
+  return apiPost<{ lineSegments: LineSegment[]; ocrWordBoxes: OcrWordBox[] | null }>(`/admin/letters/pages/${pageId}/detect-lines`);
+}
+
+export async function toggleLetterFlag(letterId: string, flagged: boolean): Promise<Letter> {
+  return apiPatch<Letter>(`/admin/letters/${letterId}/flag`, { flagged });
 }

@@ -27,6 +27,7 @@ export interface AdminLettersResponse {
     reviewed: number;
     published: number;
     hidden: number;
+    flagged: number;
     // Two-track content status stats (nested objects)
     transcript: {
       empty: number;
@@ -43,7 +44,7 @@ export interface AdminLettersResponse {
   };
 }
 
-export type SortField = 'createdAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection';
+export type SortField = 'createdAt' | 'updatedAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection' | 'lastOpenedAt';
 export type SortOrder = 'asc' | 'desc';
 
 export interface LetterQueryParams {
@@ -73,6 +74,7 @@ export interface AdminLetterQueryParams {
   // Content status filters (comma-separated if multiple)
   transcriptStatus?: string;
   metadataStatus?: string;
+  flagged?: string;
 }
 
 /**
@@ -134,6 +136,7 @@ export async function getAdminLetters(params: AdminLetterQueryParams = {}): Prom
     // Content status filters
     transcriptStatus: params.transcriptStatus,
     metadataStatus: params.metadataStatus,
+    flagged: params.flagged,
   });
 }
 

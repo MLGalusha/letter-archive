@@ -113,6 +113,27 @@
       "when": 1772704800000,
       "tag": "0015_add_performance_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1772791200000,
+      "tag": "0016_add_ocr_word_boxes",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1772877600000,
+      "tag": "0017_add_letter_views",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1772964000000,
+      "tag": "0018_add_flag_columns",
+      "breakpoints": true
     }
   ]
 }

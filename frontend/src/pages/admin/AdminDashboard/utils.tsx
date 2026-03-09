@@ -67,7 +67,17 @@ export function formatDateRaw(dateRaw: string | undefined): string {
 export function loadPersistedState(): Partial<PersistedState> {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved) as Partial<PersistedState>;
+    if (saved) {
+      const parsed = JSON.parse(saved) as Partial<PersistedState>;
+      // Filter out any unknown sort fields that may be stale in localStorage
+      if (parsed.sortColumns) {
+        const validFields = new Set([...SERVER_SORT_FIELDS, 'letters', 'extras']);
+        parsed.sortColumns = parsed.sortColumns.filter(
+          sc => validFields.has(sc.field)
+        );
+      }
+      return parsed;
+    }
   } catch (error) {
     console.warn("Failed to load persisted state:", error);
   }

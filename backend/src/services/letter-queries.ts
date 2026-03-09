@@ -88,8 +88,9 @@ export const adminLettersQuerySchema = z.object({
   ),
   collection: z.string().optional(),
   search: z.string().optional(),
-  sort: z.enum(['createdAt', 'letterDate', 'sender', 'recipient', 'workflow', 'visibility', 'collection']).default('createdAt'),
+  sort: z.enum(['createdAt', 'updatedAt', 'letterDate', 'sender', 'recipient', 'workflow', 'visibility', 'collection', 'lastOpenedAt']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  flagged: z.enum(['all', 'true', 'false']).optional(),
   // Date filters - individual components
   year: z.coerce.number().min(1800).max(2100).optional(),
   month: z.coerce.number().min(1).max(12).optional(),
@@ -135,6 +136,7 @@ export interface AdminLettersResponse {
   letters: Array<ReturnType<typeof transformLetterToDTO> & {
     lettersCount: number;
     extrasCount: number;
+    lastOpenedAt?: string;
   }>;
   pagination: {
     page: number;
@@ -150,6 +152,7 @@ export interface AdminLettersResponse {
     reviewed: number;
     published: number;
     hidden: number;
+    flagged: number;
     transcript: { empty: number; aiDraft: number; edited: number; verified: number };
     metadata: { empty: number; aiDraft: number; edited: number; verified: number };
     extraContent: { empty: number; aiDraft: number; edited: number; verified: number };
@@ -186,7 +189,7 @@ export async function queryAdminLetters(
         letters: [],
         pagination: { page: query.page, limit: query.limit, total: 0, totalPages: 0 },
         stats: {
-          total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0,
+          total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0, flagged: 0,
           transcript: { empty: 0, aiDraft: 0, edited: 0, verified: 0 },
           metadata: { empty: 0, aiDraft: 0, edited: 0, verified: 0 },
           extraContent: { empty: 0, aiDraft: 0, edited: 0, verified: 0 },
@@ -210,7 +213,7 @@ export async function queryAdminLetters(
   const statsResult = await db.execute(sql`
     WITH unique_groups AS (
       SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
-        workflow, visibility, transcript_status, metadata_content_status, extra_content_status
+        workflow, visibility, transcript_status, metadata_content_status, extra_content_status, flagged
       FROM letters
       WHERE TRUE ${collectionFilter}
       ORDER BY collection_id, date_raw, type_sequence,
@@ -237,7 +240,8 @@ export async function queryAdminLetters(
       COUNT(*) FILTER (WHERE extra_content_status = 'EMPTY') as extra_content_empty,
       COUNT(*) FILTER (WHERE extra_content_status = 'AI_DRAFT') as extra_content_ai_draft,
       COUNT(*) FILTER (WHERE extra_content_status = 'EDITED') as extra_content_edited,
-      COUNT(*) FILTER (WHERE extra_content_status = 'VERIFIED') as extra_content_verified
+      COUNT(*) FILTER (WHERE extra_content_status = 'VERIFIED') as extra_content_verified,
+      COUNT(*) FILTER (WHERE flagged = true) as flagged_count
     FROM unique_groups
   `);
 
@@ -265,6 +269,7 @@ export async function queryAdminLetters(
     extraContentAiDraft: Number(statsRow.extra_content_ai_draft || 0),
     extraContentEdited: Number(statsRow.extra_content_edited || 0),
     extraContentVerified: Number(statsRow.extra_content_verified || 0),
+    flaggedCount: Number(statsRow.flagged_count || 0),
   };
 
   // Build WHERE clause fragments for the raw SQL queries
@@ -311,6 +316,8 @@ export async function queryAdminLetters(
     if (query.extraContentStatus && query.extraContentStatus.length > 0) {
       clauses.push(sql`extra_content_status = ANY(ARRAY[${sql.join(query.extraContentStatus.map(s => sql`${s}`), sql`, `)}]::content_status[])`);
     }
+    if (query.flagged === 'true') clauses.push(sql`flagged = true`);
+    else if (query.flagged === 'false') clauses.push(sql`flagged = false`);
 
     return sql.join(clauses, sql` AND `);
   };
@@ -347,7 +354,11 @@ export async function queryAdminLetters(
       case 'visibility':
         return sql`visibility`;
       case 'collection':
-        return sql`collection_id`;
+        return sql`(SELECT collection_code FROM collections WHERE id = collection_id)`;
+      case 'updatedAt':
+        return sql`updated_at`;
+      case 'lastOpenedAt':
+        return sql`COALESCE((SELECT last_opened_at FROM letter_views WHERE letter_id = id), '1970-01-01'::timestamptz)`;
       case 'createdAt':
       default:
         return sql`created_at`;
@@ -391,6 +402,20 @@ export async function queryAdminLetters(
     // Re-sort results to match the SQL order (Drizzle doesn't preserve inArray order)
     const idOrder = new Map(representativeIds.map((id: string, idx: number) => [id, idx]));
     results.sort((a, b) => (idOrder.get(a.id) ?? 0) - (idOrder.get(b.id) ?? 0));
+  }
+
+  // Batch-fetch lastOpenedAt from letter_views (separate table)
+  const viewMap = new Map<string, string>();
+  if (representativeIds.length > 0) {
+    const viewRows = getRows<{ letter_id: string; last_opened_at: Date }>(
+      await db.execute(sql`
+        SELECT letter_id, last_opened_at FROM letter_views
+        WHERE letter_id IN (${sql.join(representativeIds.map(id => sql`${id}`), sql`, `)})
+      `)
+    );
+    for (const v of viewRows) {
+      viewMap.set(v.letter_id, v.last_opened_at instanceof Date ? v.last_opened_at.toISOString() : String(v.last_opened_at));
+    }
   }
 
   // Count pages for each letter group - both L-type (letters) and non-L-type (extras)
@@ -445,6 +470,7 @@ export async function queryAdminLetters(
       ...dto,
       lettersCount: lettersCountMap.get(key) || 0,
       extrasCount: extrasCountMap.get(key) || 0,
+      lastOpenedAt: viewMap.get(letter.id),
     };
   });
 
@@ -467,6 +493,8 @@ export async function queryAdminLetters(
       // Visibility stats
       published: Number(rawStats.published),
       hidden: Number(rawStats.hidden),
+      // Flagged count
+      flagged: Number(rawStats.flaggedCount),
       // Two-track transcript stats
       transcript: {
         empty: Number(rawStats.transcriptEmpty),

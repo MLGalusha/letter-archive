@@ -15,6 +15,10 @@ const {
   fetchLetterWithRelatedAndTransformMock,
   buildLetterUpdatesMock,
   createVersionMock,
+  verifyTranscriptMock,
+  unverifyTranscriptMock,
+  verifyMetadataMock,
+  unverifyMetadataMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   dbInsertMock: vi.fn(),
@@ -29,6 +33,10 @@ const {
   fetchLetterWithRelatedAndTransformMock: vi.fn(),
   buildLetterUpdatesMock: vi.fn(),
   createVersionMock: vi.fn(),
+  verifyTranscriptMock: vi.fn(),
+  unverifyTranscriptMock: vi.fn(),
+  verifyMetadataMock: vi.fn(),
+  unverifyMetadataMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -130,10 +138,10 @@ vi.mock('../../../services/letter-operations.js', () => ({
   getVersions: vi.fn(),
   createVersion: createVersionMock,
   restoreVersion: vi.fn(),
-  verifyTranscript: vi.fn(),
-  unverifyTranscript: vi.fn(),
-  verifyMetadata: vi.fn(),
-  unverifyMetadata: vi.fn(),
+  verifyTranscript: verifyTranscriptMock,
+  unverifyTranscript: unverifyTranscriptMock,
+  verifyMetadata: verifyMetadataMock,
+  unverifyMetadata: unverifyMetadataMock,
   regenerateTranscription: vi.fn(),
   transcribeLetterOnly: vi.fn(),
   transcribeExtras: vi.fn(),
@@ -240,6 +248,16 @@ function createLetterDto(overrides: Record<string, unknown> = {}) {
     workflow: 'TRANSCRIBED',
     ...overrides,
   };
+}
+
+function createVerifiedLetterDto(overrides: Record<string, unknown> = {}) {
+  return createLetterDto({
+    transcriptVerifiedBy: 'admin',
+    transcriptVerifiedAt: '2026-03-09T12:00:00.000Z',
+    metadataVerifiedBy: 'admin',
+    metadataVerifiedAt: '2026-03-09T12:05:00.000Z',
+    ...overrides,
+  });
 }
 
 describe('admin letters line review route integration', () => {
@@ -479,5 +497,83 @@ describe('admin letters line review route integration', () => {
       fieldType: 'transcript',
       source: 'human',
     });
+  });
+
+  it.each([
+    {
+      name: 'verifies transcript through the admin letters route',
+      path: `/letters/${LETTER_ID}/verify-transcript`,
+      serviceMock: verifyTranscriptMock,
+      dto: createVerifiedLetterDto({ metadataVerifiedAt: null, metadataVerifiedBy: null }),
+    },
+    {
+      name: 'removes transcript verification through the admin letters route',
+      path: `/letters/${LETTER_ID}/unverify-transcript`,
+      serviceMock: unverifyTranscriptMock,
+      dto: createLetterDto({ transcriptVerifiedAt: null, transcriptVerifiedBy: null }),
+    },
+    {
+      name: 'verifies metadata through the admin letters route',
+      path: `/letters/${LETTER_ID}/verify-metadata`,
+      serviceMock: verifyMetadataMock,
+      dto: createVerifiedLetterDto({ transcriptVerifiedAt: null, transcriptVerifiedBy: null }),
+    },
+    {
+      name: 'removes metadata verification through the admin letters route',
+      path: `/letters/${LETTER_ID}/unverify-metadata`,
+      serviceMock: unverifyMetadataMock,
+      dto: createLetterDto({ metadataVerifiedAt: null, metadataVerifiedBy: null }),
+    },
+  ])('$name', async ({ path, serviceMock, dto }) => {
+    serviceMock.mockResolvedValueOnce(true);
+    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(dto);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: path,
+      path,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(serviceMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(response.body).toEqual(dto);
+  });
+
+  it('toggles the follow-up flag and returns the refreshed letter DTO', async () => {
+    getLetterByIdMock.mockResolvedValueOnce({ id: LETTER_ID });
+    updateWhereMock.mockResolvedValueOnce(undefined);
+    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(
+      createLetterDto({
+        flagged: true,
+        flaggedBy: 'admin',
+        flaggedAt: '2026-03-09T12:10:00.000Z',
+      }),
+    );
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/${LETTER_ID}/flag`,
+      path: `/letters/${LETTER_ID}/flag`,
+      body: { flagged: true },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(getLetterByIdMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(updateSetMock).toHaveBeenCalledWith({
+      flagged: true,
+      flaggedAt: expect.any(Date),
+      flaggedBy: 'admin',
+    });
+    expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(response.body).toEqual(
+      createLetterDto({
+        flagged: true,
+        flaggedBy: 'admin',
+        flaggedAt: '2026-03-09T12:10:00.000Z',
+      }),
+    );
   });
 });

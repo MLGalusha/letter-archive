@@ -188,6 +188,17 @@ const defaultDetectLinesByPageId = {
   },
 } as const;
 
+export function createMockDetectLinesByPageId() {
+  return clone(defaultDetectLinesByPageId) as Record<
+    string,
+    {
+      lineSegments: unknown[];
+      ocrWordBoxes: unknown[];
+      reconciledLines: Array<ReturnType<typeof createReconciledLine>>;
+    }
+  >;
+}
+
 const baseLetter: MockLetterReviewLetter = {
   id: 'letter-review-1',
   title: 'Review Letter One',
@@ -315,16 +326,9 @@ export async function installMockLetterReviewApi(
   const updateLetterRequests: MockUpdateLetterRequest[] = [];
   const versionRequests: MockVersionRequest[] = [];
   const letterPath = `${API_BASE_URL}/admin/letters/${letter.id}`;
-  const detectLinesByPageId = clone(
-    options.detectLinesByPageId ?? defaultDetectLinesByPageId,
-  ) as Record<
-    string,
-    {
-      lineSegments: unknown[];
-      ocrWordBoxes: unknown[];
-      reconciledLines: Array<ReturnType<typeof createReconciledLine>>;
-    }
-  >;
+  const detectLinesByPageId = options.detectLinesByPageId
+    ? clone(options.detectLinesByPageId)
+    : createMockDetectLinesByPageId();
 
   await page.addInitScript(() => {
     sessionStorage.setItem('adminAuth', 'true');

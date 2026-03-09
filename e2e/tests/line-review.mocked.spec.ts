@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
+  createMockDetectLinesByPageId,
   createMockLetterReviewLetter,
   installMockLetterReviewApi,
 } from './utils/mock-letter-review-api';
@@ -8,8 +9,12 @@ import { API_BASE_URL } from './utils/test-helpers';
 async function openLineReview(
   page: Page,
   initialLetter = createMockLetterReviewLetter(),
+  detectLinesByPageId?: Parameters<typeof installMockLetterReviewApi>[1]['detectLinesByPageId'],
 ) {
-  const mockedApi = await installMockLetterReviewApi(page, { initialLetter });
+  const mockedApi = await installMockLetterReviewApi(page, {
+    initialLetter,
+    detectLinesByPageId,
+  });
   await page.goto(`/admin/letters/${initialLetter.id}`);
   await page.locator('.letter-review-page').waitFor({ state: 'visible' });
   await page.locator('.header-action.review').click();
@@ -58,6 +63,59 @@ test.describe('@mocked Line Review', () => {
     await expect
       .poll(() => mockedApi.detectLineRequests.length)
       .toBeGreaterThan(initialDetectCount);
+  });
+
+  test('submits a resize correction when the line handle is dragged', async ({
+    page,
+  }) => {
+    const mockedApi = await openLineReview(page);
+    const handle = page.locator('.line-review-resize-right');
+    const box = await handle.boundingBox();
+
+    expect(box).toBeTruthy();
+    if (!box) {
+      return;
+    }
+
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2);
+    await page.mouse.up();
+
+    await expect
+      .poll(() => mockedApi.lineCorrectionRequests.length)
+      .toBe(1);
+    expect(mockedApi.lineCorrectionRequests[0]).toEqual({
+      url: `${API_BASE_URL}/admin/letters/pages/collection-009-page-1/line-corrections`,
+      body: expect.objectContaining({
+        correctionType: 'resize',
+        sourceSegmentIds: [101],
+        correctedBbox: expect.any(Array),
+      }),
+    });
+  });
+
+  test('lets reviewers reject a phantom classification', async ({ page }) => {
+    const detectLinesByPageId = createMockDetectLinesByPageId();
+    detectLinesByPageId['collection-009-page-1'].reconciledLines[0].isPhantom = true;
+
+    const mockedApi = await openLineReview(
+      page,
+      createMockLetterReviewLetter(),
+      detectLinesByPageId,
+    );
+
+    await expect(page.locator('.line-review-input-overlay')).toHaveClass(
+      /line-review-input-phantom/,
+    );
+    await page.locator('.phantom-reject-btn').click();
+    expect(mockedApi.lineCorrectionRequests[0]).toEqual({
+      url: `${API_BASE_URL}/admin/letters/pages/collection-009-page-1/line-corrections`,
+      body: expect.objectContaining({
+        correctionType: 'reject_phantom',
+        sourceSegmentIds: [101],
+      }),
+    });
   });
 
   test('saves edited transcript text and records a transcript version on exit', async ({

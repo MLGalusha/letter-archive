@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 
+import { createRef } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import LineReviewMode, { computeAutoScrollTop } from '../LineReviewMode';
+import LineReviewMode, {
+  computeAutoScrollTop,
+  type LineReviewModeHandle,
+} from '../LineReviewMode';
 import { detectPageLines } from '../../../api/admin/letters';
 import type { Letter } from '../../../types/Letter';
 
@@ -418,6 +422,42 @@ describe('LineReviewMode', () => {
     expect(defaultProps.onAutoSave).toHaveBeenCalledWith(
       expect.objectContaining({
         transcriptionText: expect.stringContaining('Edited line one'),
+      }),
+    );
+  });
+
+  it('flushes the edited line before unmount when saveCurrentLine is called', async () => {
+    const onTranscriptChange = vi.fn();
+    const onAutoSave = vi.fn();
+    const ref = createRef<LineReviewModeHandle>();
+    const { container, unmount } = render(
+      <LineReviewMode
+        {...defaultProps}
+        ref={ref}
+        onTranscriptChange={onTranscriptChange}
+        onAutoSave={onAutoSave}
+      />,
+    );
+    await simulateImageLoadAsync(container);
+
+    const input = getEditable(container);
+    expect(input).toBeTruthy();
+    if (input) {
+      input.textContent = 'Exit save line';
+      fireEvent.input(input);
+    }
+
+    act(() => {
+      ref.current?.saveCurrentLine();
+      unmount();
+    });
+
+    expect(onTranscriptChange).toHaveBeenCalledWith(
+      expect.stringContaining('Exit save line'),
+    );
+    expect(onAutoSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transcriptionText: expect.stringContaining('Exit save line'),
       }),
     );
   });

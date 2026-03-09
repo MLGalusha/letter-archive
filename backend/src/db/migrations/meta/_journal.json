@@ -134,6 +134,13 @@
       "when": 1772964000000,
       "tag": "0018_add_flag_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1773050400000,
+      "tag": "0019_add_reconciled_lines_and_corrections",
+      "breakpoints": true
     }
   ]
 }

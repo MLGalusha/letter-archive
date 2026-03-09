@@ -2,11 +2,12 @@ import { Router } from 'express';
 import { eq, and, sql } from 'drizzle-orm';
 import { unlink } from 'node:fs/promises';
 import { z } from 'zod';
-import { db, letters, letterPages } from '../../db/index.js';
+import { db, letters, letterPages, lineCorrections } from '../../db/index.js';
 import { getLetterById, resetLetterForProcessing } from '../../services/letters.js';
 import { getAbsoluteStoragePath } from '../../services/storage.js';
 import { runMetadataExtractionV2, runEntityExtractionOnly } from '../../pipeline/metadataV2.js';
 import { detectAndStorePageLines } from '../../services/line-finder.js';
+import { calibrateThresholds, type LineCorrection as ReconciliationLineCorrection } from '../../services/line-reconciliation.js';
 
 // Service imports
 import {
@@ -128,6 +129,36 @@ const resyncSchema = z.object({
   newSender: z.string().nullable(),
   oldRecipient: z.string().nullable(),
   newRecipient: z.string().nullable(),
+});
+
+const lineCorrectionSchema = z.object({
+  letterId: z.string().uuid(),
+  collectionCode: z.string().optional(),
+  correctionType: z.enum(['delete', 'undelete', 'resize', 'merge', 'split', 'reject_phantom', 'confirm_phantom']),
+  algorithmOutput: z.object({
+    bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+    confidence: z.number(),
+    isPhantom: z.boolean(),
+    wasMerged: z.boolean(),
+    mergeGapPx: z.number().optional(),
+    pixelStats: z.record(z.number()).optional(),
+    hppOverlap: z.number(),
+    visionWordCount: z.number(),
+    transcriptMatchScore: z.number().optional(),
+  }),
+  correctedBbox: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional(),
+  correctedIsDeleted: z.boolean().optional(),
+  sourceSegmentIds: z.array(z.number()),
+  pageContext: z.object({
+    medianRmsContrast: z.number(),
+    medianVariance: z.number(),
+    medianDensity: z.number(),
+    medianMinValue: z.number(),
+    totalSegments: z.number(),
+    totalVisionBoxes: z.number(),
+    imageWidth: z.number(),
+    imageHeight: z.number(),
+  }),
 });
 
 // ============================================================================
@@ -1082,6 +1113,63 @@ router.post('/letters/:letterId/resync', async (req, res, next) => {
 });
 
 // ============================================================================
+// THRESHOLD CALIBRATION
+// ============================================================================
+
+router.post('/calibrate-thresholds', async (req, res, next) => {
+  try {
+    const { collectionCode } = req.body || {};
+
+    // Query corrections — optionally filtered by collection
+    let corrections;
+    if (collectionCode) {
+      corrections = await db.select().from(lineCorrections)
+        .where(eq(lineCorrections.collectionCode, collectionCode));
+    } else {
+      corrections = await db.select().from(lineCorrections);
+    }
+
+    if (corrections.length < 20) {
+      res.json({
+        message: 'Not enough corrections for calibration',
+        correctionCount: corrections.length,
+        minimumRequired: 20,
+        calibrated: false,
+      });
+      return;
+    }
+
+    // Map DB records to the LineCorrection type expected by calibrateThresholds
+    const mapped: ReconciliationLineCorrection[] = corrections.map(c => ({
+      id: c.id,
+      pageId: c.pageId,
+      letterId: c.letterId,
+      collectionCode: c.collectionCode ?? undefined,
+      correctionType: c.correctionType as ReconciliationLineCorrection['correctionType'],
+      timestamp: c.timestamp.toISOString(),
+      algorithmOutput: c.algorithmOutput as ReconciliationLineCorrection['algorithmOutput'],
+      correctedBbox: c.correctedBbox as ReconciliationLineCorrection['correctedBbox'],
+      correctedIsDeleted: c.correctedIsDeleted ?? undefined,
+      sourceSegmentIds: c.sourceSegmentIds as number[],
+      errorRegionPixelStats: c.errorRegionPixelStats as ReconciliationLineCorrection['errorRegionPixelStats'],
+      pageContext: c.pageContext as ReconciliationLineCorrection['pageContext'],
+    }));
+
+    const thresholds = await calibrateThresholds(mapped, collectionCode);
+
+    req.log.info({ collectionCode, correctionCount: corrections.length }, 'Thresholds calibrated');
+
+    res.json({
+      calibrated: true,
+      correctionCount: corrections.length,
+      thresholds,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
 // DELETE
 // ============================================================================
 
@@ -1132,6 +1220,90 @@ router.delete('/letters/:letterId', async (req, res, next) => {
 });
 
 // ============================================================================
+// LINE CORRECTIONS
+// ============================================================================
+
+router.post('/letters/pages/:pageId/line-corrections', async (req, res, next) => {
+  try {
+    const { pageId } = req.params;
+    const parseResult = lineCorrectionSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
+      return;
+    }
+
+    const page = await db.query.letterPages.findFirst({
+      where: eq(letterPages.id, pageId),
+    });
+    if (!page) {
+      res.status(404).json({ error: 'Page not found' });
+      return;
+    }
+
+    const correction = parseResult.data;
+
+    // Insert correction record
+    const [inserted] = await db.insert(lineCorrections).values({
+      pageId,
+      letterId: correction.letterId,
+      collectionCode: correction.collectionCode,
+      correctionType: correction.correctionType,
+      algorithmOutput: correction.algorithmOutput,
+      correctedBbox: correction.correctedBbox,
+      correctedIsDeleted: correction.correctedIsDeleted,
+      sourceSegmentIds: correction.sourceSegmentIds,
+      pageContext: correction.pageContext,
+    }).returning();
+
+    // Update reconciled_lines in the page to reflect the correction
+    const reconciledLines = Array.isArray(page.reconciledLines)
+      ? (page.reconciledLines as any[])
+      : [];
+
+    // Apply the correction to the reconciled lines
+    const updatedLines = reconciledLines.map((line: any) => {
+      // Match by sourceSegmentIds overlap
+      const lineSegIds = line.sourceSegmentIds || [];
+      const corrSegIds = correction.sourceSegmentIds;
+      const hasOverlap = lineSegIds.some((id: number) => corrSegIds.includes(id));
+
+      if (!hasOverlap) return line;
+
+      if (correction.correctionType === 'delete') {
+        return { ...line, isDeleted: true };
+      }
+      if (correction.correctionType === 'undelete') {
+        return { ...line, isDeleted: false };
+      }
+      if (correction.correctionType === 'confirm_phantom') {
+        return { ...line, isDeleted: true, isPhantom: true };
+      }
+      if (correction.correctionType === 'reject_phantom') {
+        return { ...line, isPhantom: false };
+      }
+      if (correction.correctionType === 'resize' && correction.correctedBbox) {
+        return { ...line, adminBboxOverride: correction.correctedBbox, bbox: correction.correctedBbox };
+      }
+      return line;
+    });
+
+    await db.update(letterPages).set({
+      reconciledLines: updatedLines,
+      updatedAt: new Date(),
+    }).where(eq(letterPages.id, pageId));
+
+    req.log.info({ pageId, correctionType: correction.correctionType, correctionId: inserted.id }, 'Line correction recorded');
+
+    res.json({
+      correction: inserted,
+      reconciledLines: updatedLines,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
 // PAGE-LEVEL OPERATIONS
 // ============================================================================
 
@@ -1155,6 +1327,7 @@ router.post('/letters/pages/:pageId/detect-lines', async (req, res, next) => {
     res.json({
       lineSegments: result.lineSegments ?? (Array.isArray(page.lineSegments) ? page.lineSegments : []),
       ocrWordBoxes: result.ocrWordBoxes ?? (Array.isArray(page.ocrWordBoxes) ? page.ocrWordBoxes : null),
+      reconciledLines: result.reconciledLines ?? (Array.isArray(page.reconciledLines) ? page.reconciledLines : null),
     });
   } catch (error) {
     next(error);

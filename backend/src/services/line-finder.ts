@@ -2,10 +2,12 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import sharp from 'sharp';
 import { eq } from 'drizzle-orm';
 import { db, letterPages } from '../db/index.js';
 import { createLogger } from '../utils/logger.js';
 import { env } from '../config/env.js';
+import { reconcileLines, type ReconciledLine } from './line-reconciliation.js';
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -102,7 +104,8 @@ export async function savePageLineSegments(
 export async function detectAndStorePageLines(
   pageId: string,
   imagePath: string,
-): Promise<{ lineSegments: LineSegment[] | null; ocrWordBoxes: import('./vision-ocr.js').OcrWordBox[] | null }> {
+  transcriptLines?: string[],
+): Promise<{ lineSegments: LineSegment[] | null; ocrWordBoxes: import('./vision-ocr.js').OcrWordBox[] | null; reconciledLines: ReconciledLine[] | null }> {
   // Run Kraken line detection and Vision OCR word detection in parallel
   const visionPromise = import('./vision-ocr.js')
     .then(({ detectAndStorePageOcrWords }) => detectAndStorePageOcrWords(pageId, imagePath))
@@ -117,7 +120,36 @@ export async function detectAndStorePageLines(
     await savePageLineSegments(pageId, segments);
   }
 
-  return { lineSegments: segments, ocrWordBoxes };
+  // Run reconciliation if we have segments
+  let reconciledLines: ReconciledLine[] | null = null;
+  if (segments && segments.length > 0) {
+    try {
+      const [imageBuffer, metadata] = await Promise.all([
+        sharp(imagePath).toBuffer(),
+        sharp(imagePath).metadata(),
+      ]);
+
+      reconciledLines = await reconcileLines({
+        segments,
+        ocrWordBoxes: ocrWordBoxes ?? [],
+        imageBuffer,
+        imageWidth: metadata.width ?? 0,
+        imageHeight: metadata.height ?? 0,
+        transcriptLines,
+      });
+
+      // Store reconciled lines
+      await db.update(letterPages).set({
+        reconciledLines: reconciledLines,
+        updatedAt: new Date(),
+      }).where(eq(letterPages.id, pageId));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      log.warn({ pageId, err: message }, 'Line reconciliation failed (non-fatal)');
+    }
+  }
+
+  return { lineSegments: segments, ocrWordBoxes, reconciledLines };
 }
 
 export async function detectAndStoreLinesForPages(

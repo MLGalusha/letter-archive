@@ -51,6 +51,37 @@ interface MockLetterReviewLetter {
   entityExtractionJson?: unknown;
 }
 
+interface MockLineCorrectionRequest {
+  url: string;
+  body: {
+    correctionType?: string;
+    correctedBbox?: [number, number, number, number];
+    sourceSegmentIds?: number[];
+  };
+}
+
+interface MockUpdateLetterRequest {
+  url: string;
+  body: {
+    transcriptionText?: string;
+    sender?: string | null;
+    recipient?: string | null;
+    locationWritten?: string | null;
+    hook?: string | null;
+    summary?: string | null;
+    notes?: string | null;
+  };
+}
+
+interface MockVersionRequest {
+  url: string;
+  body: {
+    fieldType?: string;
+    content?: unknown;
+    source?: string;
+  };
+}
+
 type MockLetterReviewOverrides = Partial<MockLetterReviewLetter> & {
   transcript?: Partial<MockLetterReviewLetter['transcript']>;
   metadata?: Partial<MockLetterReviewLetter['metadata']>;
@@ -88,6 +119,75 @@ const collection009ImageFixtures = [
   },
 ] as const;
 
+const PAGE_SEPARATOR_REGEX = /\n*---\s*Page\s*\d+\s*---\n*/i;
+
+function buildFullTranscript(pageLines: string[][]): string {
+  if (pageLines.length === 1) {
+    return pageLines[0].join('\n');
+  }
+
+  return pageLines
+    .map((lines, index) => `--- Page ${index + 1} ---\n\n${lines.join('\n')}`)
+    .join('\n\n');
+}
+
+function splitTranscriptByPage(fullText: string, pageCount: number): string[] {
+  if (pageCount <= 1) return [fullText];
+
+  const parts = fullText.split(PAGE_SEPARATOR_REGEX);
+  const pages: string[] = [];
+  for (let i = 1; i < parts.length; i++) {
+    pages.push(parts[i] || '');
+  }
+  while (pages.length < pageCount) {
+    pages.push('');
+  }
+  return pages;
+}
+
+function createReconciledLine(
+  line: number,
+  bbox: [number, number, number, number],
+  sourceSegmentId: number,
+) {
+  return {
+    line,
+    bbox,
+    baseline: [
+      [bbox[0], bbox[3] - 6],
+      [bbox[2], bbox[3] - 6],
+    ],
+    sourceSegmentIds: [sourceSegmentId],
+    wasMerged: false,
+    wasExtended: false,
+    confidence: 0.94,
+    isPhantom: false,
+    isPrintedText: false,
+    isDeleted: false,
+    hppOverlap: 0.78,
+    visionWordCount: 0,
+  };
+}
+
+const defaultDetectLinesByPageId = {
+  'collection-009-page-1': {
+    lineSegments: [],
+    ocrWordBoxes: [],
+    reconciledLines: [
+      createReconciledLine(1, [170, 210, 1480, 280], 101),
+      createReconciledLine(2, [185, 320, 1495, 390], 102),
+    ],
+  },
+  'collection-009-page-2': {
+    lineSegments: [],
+    ocrWordBoxes: [],
+    reconciledLines: [
+      createReconciledLine(1, [175, 205, 1490, 275], 201),
+      createReconciledLine(2, [190, 315, 1505, 385], 202),
+    ],
+  },
+} as const;
+
 const baseLetter: MockLetterReviewLetter = {
   id: 'letter-review-1',
   title: 'Review Letter One',
@@ -97,10 +197,17 @@ const baseLetter: MockLetterReviewLetter = {
     pages: [
       {
         pageNumber: 1,
-        text: 'My dear mother,\nI arrived safely in Boston.\nLove, Alice',
+        text: 'My dear mother,\nI arrived safely in Boston.',
+      },
+      {
+        pageNumber: 2,
+        text: 'The weather has been kind.\nLove, Alice',
       },
     ],
-    fullText: 'My dear mother,\nI arrived safely in Boston.\nLove, Alice',
+    fullText: buildFullTranscript([
+      ['My dear mother,', 'I arrived safely in Boston.'],
+      ['The weather has been kind.', 'Love, Alice'],
+    ]),
     verified: false,
   },
   metadata: {
@@ -177,11 +284,25 @@ export interface MockLetterReviewContext {
   verifyMetadataRequests: string[];
   unverifyMetadataRequests: string[];
   flagRequests: Array<{ url: string; body: unknown }>;
+  detectLineRequests: string[];
+  lineCorrectionRequests: MockLineCorrectionRequest[];
+  updateLetterRequests: MockUpdateLetterRequest[];
+  versionRequests: MockVersionRequest[];
 }
 
 export async function installMockLetterReviewApi(
   page: Page,
-  options: { initialLetter?: MockLetterReviewLetter } = {},
+  options: {
+    initialLetter?: MockLetterReviewLetter;
+    detectLinesByPageId?: Record<
+      string,
+      {
+        lineSegments: unknown[];
+        ocrWordBoxes: unknown[];
+        reconciledLines: Array<ReturnType<typeof createReconciledLine>>;
+      }
+    >;
+  } = {},
 ): Promise<MockLetterReviewContext> {
   const letter = clone(options.initialLetter ?? baseLetter);
   const verifyTranscriptRequests: string[] = [];
@@ -189,7 +310,21 @@ export async function installMockLetterReviewApi(
   const verifyMetadataRequests: string[] = [];
   const unverifyMetadataRequests: string[] = [];
   const flagRequests: Array<{ url: string; body: unknown }> = [];
+  const detectLineRequests: string[] = [];
+  const lineCorrectionRequests: MockLineCorrectionRequest[] = [];
+  const updateLetterRequests: MockUpdateLetterRequest[] = [];
+  const versionRequests: MockVersionRequest[] = [];
   const letterPath = `${API_BASE_URL}/admin/letters/${letter.id}`;
+  const detectLinesByPageId = clone(
+    options.detectLinesByPageId ?? defaultDetectLinesByPageId,
+  ) as Record<
+    string,
+    {
+      lineSegments: unknown[];
+      ocrWordBoxes: unknown[];
+      reconciledLines: Array<ReturnType<typeof createReconciledLine>>;
+    }
+  >;
 
   await page.addInitScript(() => {
     sessionStorage.setItem('adminAuth', 'true');
@@ -227,10 +362,52 @@ export async function installMockLetterReviewApi(
   });
 
   await page.route(new RegExp(`${escapeRegex(letterPath)}$`), async (route) => {
+    if (route.request().method() === 'PUT') {
+      const body = route.request().postDataJSON() as MockUpdateLetterRequest['body'];
+      updateLetterRequests.push({ url: route.request().url(), body });
+
+      if (typeof body.transcriptionText === 'string') {
+        letter.transcript.fullText = body.transcriptionText;
+        const pageTexts = splitTranscriptByPage(body.transcriptionText, letter.images.length);
+        letter.transcript.pages = pageTexts.map((text, index) => ({
+          pageNumber: index + 1,
+          text,
+        }));
+      }
+
+      if (body.sender !== undefined) letter.metadata.sender = body.sender ?? undefined;
+      if (body.recipient !== undefined) letter.metadata.recipient = body.recipient ?? undefined;
+      if (body.locationWritten !== undefined) letter.metadata.location = body.locationWritten ?? undefined;
+      if (body.hook !== undefined) letter.metadata.hook = body.hook ?? undefined;
+      if (body.summary !== undefined) letter.metadata.description = body.summary ?? undefined;
+      if (body.notes !== undefined) letter.metadata.notes = body.notes ?? undefined;
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(letter),
+      });
+      return;
+    }
+
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(letter),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/versions$`), async (route) => {
+    const body = route.request().postDataJSON() as MockVersionRequest['body'];
+    versionRequests.push({ url: route.request().url(), body });
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        versionNumber: versionRequests.length,
+        createdAt: '2025-03-03T00:00:00.000Z',
+      }),
     });
   });
 
@@ -301,11 +478,79 @@ export async function installMockLetterReviewApi(
     });
   });
 
+  await page.route(new RegExp(`${escapeRegex(API_BASE_URL)}/admin/letters/pages/[^/]+/detect-lines$`), async (route) => {
+    const pageId = route.request().url().split('/').slice(-2)[0];
+    detectLineRequests.push(route.request().url());
+
+    const result = detectLinesByPageId[pageId];
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        result ?? {
+          lineSegments: [],
+          ocrWordBoxes: [],
+          reconciledLines: [],
+        },
+      ),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(API_BASE_URL)}/admin/letters/pages/[^/]+/line-corrections$`), async (route) => {
+    const pageId = route.request().url().split('/').slice(-2)[0];
+    const body = route.request().postDataJSON() as MockLineCorrectionRequest['body'];
+    lineCorrectionRequests.push({ url: route.request().url(), body });
+
+    const current = detectLinesByPageId[pageId] ?? {
+      lineSegments: [],
+      ocrWordBoxes: [],
+      reconciledLines: [],
+    };
+
+    const targetIndex = current.reconciledLines.findIndex((line) => {
+      if (!Array.isArray(body.sourceSegmentIds) || body.sourceSegmentIds.length === 0) {
+        return false;
+      }
+
+      return line.sourceSegmentIds.join(',') === body.sourceSegmentIds.join(',');
+    });
+
+    if (targetIndex >= 0) {
+      const target = current.reconciledLines[targetIndex];
+      if (body.correctionType === 'delete' || body.correctionType === 'confirm_phantom') {
+        target.isDeleted = true;
+      }
+      if (body.correctionType === 'undelete' || body.correctionType === 'reject_phantom') {
+        target.isDeleted = false;
+      }
+      if (body.correctionType === 'resize' && body.correctedBbox) {
+        target.bbox = body.correctedBbox;
+        target.baseline = [
+          [body.correctedBbox[0], body.correctedBbox[3] - 6],
+          [body.correctedBbox[2], body.correctedBbox[3] - 6],
+        ];
+      }
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        correction: { ok: true },
+        reconciledLines: current.reconciledLines,
+      }),
+    });
+  });
+
   return {
     verifyTranscriptRequests,
     unverifyTranscriptRequests,
     verifyMetadataRequests,
     unverifyMetadataRequests,
     flagRequests,
+    detectLineRequests,
+    lineCorrectionRequests,
+    updateLetterRequests,
+    versionRequests,
   };
 }

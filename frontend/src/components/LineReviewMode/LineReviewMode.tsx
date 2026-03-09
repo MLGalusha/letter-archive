@@ -786,20 +786,19 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const rawLineIndex = pageNonBlankMap[currentPageIndex]?.[transcriptIdx];
     if (rawLineIndex === undefined) return;
 
-    setPageRawTexts((prev) => {
-      const updated = [...prev];
-      const rawLines = updated[currentPageIndex].split('\n');
-      rawLines[rawLineIndex] = mergeEditedTextWithOriginalSpacing(originalText, newText);
-      updated[currentPageIndex] = rawLines.join('\n');
+    const updated = [...pageRawTexts];
+    const rawLines = updated[currentPageIndex].split('\n');
+    rawLines[rawLineIndex] = mergeEditedTextWithOriginalSpacing(originalText, newText);
+    updated[currentPageIndex] = rawLines.join('\n');
 
-      // Reconstruct and auto-save
-      const fullText = reconstructTranscript(updated);
-      onTranscriptChange(fullText);
-      onAutoSave({ transcriptionText: fullText });
+    setPageRawTexts(updated);
 
-      return updated;
-    });
-  }, [currentPageIndex, currentLineIndex, alignedLines, pageNonBlankMap, onTranscriptChange, onAutoSave]);
+    // Flush parent updates synchronously so exiting review mode does not
+    // discard the line edit before the child unmounts.
+    const fullText = reconstructTranscript(updated);
+    onTranscriptChange(fullText);
+    onAutoSave({ transcriptionText: fullText });
+  }, [currentPageIndex, currentLineIndex, alignedLines, pageNonBlankMap, onTranscriptChange, onAutoSave, pageRawTexts]);
 
   // Navigate to next line
   const goToNextLine = useCallback(() => {

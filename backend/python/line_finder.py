@@ -54,6 +54,8 @@ def segment_image(img):
     Returns list of dicts with bounding box coords and boundary polygon,
     matching the format expected by the backend TypeScript parser:
       { line, top_y, bottom_y, left_x, right_x, boundary: [{x, y}] }
+
+    Returns raw Kraken segments sorted by position, no post-processing.
     """
     seg = blla.segment(img)
 
@@ -63,7 +65,7 @@ def segment_image(img):
         xs = [p[0] for p in boundary]
         ys = [p[1] for p in boundary]
         lines.append({
-            "line": len(lines) + 1,
+            "line": 0,
             "top_y": int(min(ys)),
             "bottom_y": int(max(ys)),
             "left_x": int(min(xs)),
@@ -71,8 +73,8 @@ def segment_image(img):
             "boundary": [{"x": int(p[0]), "y": int(p[1])} for p in boundary],
         })
 
-    # Sort by vertical position and re-number
-    lines.sort(key=lambda r: r["top_y"])
+    # Sort by vertical then horizontal position, number sequentially
+    lines.sort(key=lambda r: (r["top_y"], r["left_x"]))
     for i, r in enumerate(lines, start=1):
         r["line"] = i
 

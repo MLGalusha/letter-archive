@@ -9,13 +9,10 @@ import {
 } from 'react';
 import { getImageUrl } from '../../api/client';
 import { detectPageLines } from '../../api/admin/letters';
-import type { Letter, LineSegment, LineSegmentWord } from '../../types/Letter';
+import type { Letter, LineSegment, LineSegmentWord, OcrWordBox } from '../../types/Letter';
 import {
   alignTranscriptToVisualLines,
-  detectImageLines,
-  buildAlignedLinesFromDetected,
   type AlignedLine,
-  type DetectedLine,
 } from '../../utils/lineAlignment';
 import './LineReviewMode.css';
 
@@ -374,11 +371,21 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     return initial;
   });
 
-  // Client-side pixel-detected line boundaries (fallback)
-  const [detectedLinesMap, setDetectedLinesMap] = useState<Record<number, DetectedLine[] | null>>({});
+  // Debug overlay layer toggles
+  const [showKrakenLines, setShowKrakenLines] = useState(true);
+  const [showVisionWords, setShowVisionWords] = useState(false);
 
-  // Debug overlay layer toggle
-  const [showDebugLines, setShowDebugLines] = useState(true);
+  // Vision word boxes per page (cached across page switches)
+  // undefined = not attempted, null = in progress, OcrWordBox[] = done
+  const [visionBoxesMap, setVisionBoxesMap] = useState<Record<number, OcrWordBox[] | null | undefined>>(() => {
+    const initial: Record<number, OcrWordBox[] | null | undefined> = {};
+    letterPages.forEach((page, index) => {
+      if (Array.isArray(page.ocrWordBoxes)) {
+        initial[index] = page.ocrWordBoxes;
+      }
+    });
+    return initial;
+  });
 
   // Per-page raw text (preserves all whitespace including blank lines)
   const [pageRawTexts, setPageRawTexts] = useState<string[]>(() => {
@@ -404,11 +411,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     );
   }, [pageRawTexts]);
 
-  // Horizontal bounds for highlight/input (percentage of image width)
-  const [textLeftPct, setTextLeftPct] = useState(0.08);
-  const [textRightPct, setTextRightPct] = useState(0.92);
-  const [dragging, setDragging] = useState<'left' | 'right' | null>(null);
-
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const inputRef = useRef<HTMLDivElement>(null);
@@ -423,11 +425,19 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     setImageDisplaySize({ width: 0, height: 0 });
   }, [currentPageIndex]);
 
-  // Run line detection via backend API when a page loads
+  // Run line detection via backend API when a page loads.
+  // Triggers when: (a) no segments cached at all, or (b) segments cached
+  // from DB but Vision boxes haven't been fetched yet for this page.
   useEffect(() => {
     if (!currentPage) return;
-    // Already attempted or in progress for this page
-    if (aiSegmentsMap[currentPageIndex] !== undefined) return;
+
+    const hasSegments = aiSegmentsMap[currentPageIndex] !== undefined;
+    const hasVision = visionBoxesMap[currentPageIndex] !== undefined;
+
+    // Already have both, or detection is in progress (null)
+    if (hasSegments && hasVision) return;
+    if (aiSegmentsMap[currentPageIndex] === null) return;
+
     const pageText = pageLineTexts[currentPageIndex]?.join('\n') || '';
     if (!pageText.trim()) return;
 
@@ -440,26 +450,52 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     detectPageLines(pageId)
       .then(result => {
         setAiSegmentsMap(prev => ({ ...prev, [idx]: result.lineSegments }));
+        setVisionBoxesMap(prev => ({ ...prev, [idx]: result.ocrWordBoxes ?? [] }));
       })
       .catch(() => {
-        // Detection failed — mark as empty so we fall back to pixel detection
         setAiSegmentsMap(prev => ({ ...prev, [idx]: [] }));
       });
-  }, [currentPage, currentPageIndex, aiSegmentsMap, pageLineTexts]);
+  }, [currentPage, currentPageIndex, aiSegmentsMap, visionBoxesMap, pageLineTexts]);
 
-  // Fall back to client-side pixel detection if AI returned nothing
-  const runPixelDetection = useCallback(() => {
-    if (!imageRef.current || !currentPage) return;
-    // Skip if AI detection returned results
-    const aiResult = aiSegmentsMap[currentPageIndex];
-    if (aiResult === undefined || aiResult === null) return; // not done yet
-    if (aiResult.length > 0) return; // AI found lines
-    // Skip if pixel detection already attempted
-    if (currentPageIndex in detectedLinesMap) return;
 
-    const detected = detectImageLines(imageRef.current);
-    setDetectedLinesMap(prev => ({ ...prev, [currentPageIndex]: detected.length > 0 ? detected : [] }));
-  }, [currentPage, currentPageIndex, aiSegmentsMap, detectedLinesMap]);
+  // Background pre-fetch: after current page finishes detecting, start
+  // detecting the next page that hasn't been fetched yet.
+  useEffect(() => {
+    // Only pre-fetch once current page is done
+    if (aiSegmentsMap[currentPageIndex] === null || aiSegmentsMap[currentPageIndex] === undefined) return;
+
+    // Find next page that needs detection
+    for (let i = 0; i < letterPages.length; i++) {
+      // Prioritize pages after current, then wrap around
+      const idx = (currentPageIndex + 1 + i) % letterPages.length;
+      if (idx === currentPageIndex) continue;
+
+      const hasSegments = aiSegmentsMap[idx] !== undefined;
+      const hasVision = visionBoxesMap[idx] !== undefined;
+      const inProgress = aiSegmentsMap[idx] === null;
+
+      if (inProgress || (hasSegments && hasVision)) continue;
+
+      const pageText = pageLineTexts[idx]?.join('\n') || '';
+      if (!pageText.trim()) continue;
+
+      // Start background detection for this page
+      const page = letterPages[idx];
+      setAiSegmentsMap(prev => ({ ...prev, [idx]: null }));
+
+      detectPageLines(page.id)
+        .then(result => {
+          setAiSegmentsMap(prev => ({ ...prev, [idx]: result.lineSegments }));
+          setVisionBoxesMap(prev => ({ ...prev, [idx]: result.ocrWordBoxes ?? [] }));
+        })
+        .catch(() => {
+          setAiSegmentsMap(prev => ({ ...prev, [idx]: [] }));
+        });
+
+      // Only start one at a time to avoid overloading the backend
+      break;
+    }
+  }, [aiSegmentsMap, visionBoxesMap, currentPageIndex, letterPages, pageLineTexts]);
 
   // Whether we're still waiting for AI detection for the current page
   const isDetecting = aiSegmentsMap[currentPageIndex] === null;
@@ -470,54 +506,14 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (isDetecting) return []; // AI detection in progress — show spinner, no lines yet
     const pageText = pageLineTexts[currentPageIndex]?.join('\n') || '';
 
-    // 1. Use AI-detected segments (from on-demand detection)
-    let lines: AlignedLine[] = [];
     const aiResult = aiSegmentsMap[currentPageIndex];
-    if (aiResult && aiResult.length > 0) {
-      lines = alignTranscriptToVisualLines(pageText, aiResult);
-    } else {
-      // 2. Fall back to client-side pixel detection
-      const transcriptLines = pageText.split('\n').filter((l) => l.trim().length > 0);
-      if (transcriptLines.length === 0) return [];
+    if (!aiResult || aiResult.length === 0) return [];
 
-      const detectionResult = detectedLinesMap[currentPageIndex];
-      if (detectionResult && detectionResult.length > 0) {
-        lines = buildAlignedLinesFromDetected(transcriptLines, detectionResult);
-      }
-    }
-
+    const lines = alignTranscriptToVisualLines(pageText, aiResult);
     // Skip empty lines (extra detected segments with no transcript text)
     return lines.filter(l => l.transcriptLineIndex >= 0);
-  }, [currentPage, currentPageIndex, pageLineTexts, aiSegmentsMap, detectedLinesMap, isDetecting]);
+  }, [currentPage, currentPageIndex, pageLineTexts, aiSegmentsMap, isDetecting]);
   const hasTranscriptLinesOnPage = (pageLineTexts[currentPageIndex]?.length ?? 0) > 0;
-
-  // Derive text bounds from the current line's bbox (per-line alignment).
-  // Each line gets its own horizontal extent so the highlight/input tracks where the
-  // actual text is — e.g. a right-aligned date doesn't stretch to the left margin.
-  useEffect(() => {
-    if (imageNaturalSize.width === 0) return;
-
-    const currentAligned = alignedLines[currentLineIndex];
-    if (currentAligned) {
-      const pad = imageNaturalSize.width * 0.01;
-      setTextLeftPct(Math.max(0.02, (currentAligned.bbox[0] - pad) / imageNaturalSize.width));
-      setTextRightPct(Math.min(0.98, (currentAligned.bbox[2] + pad) / imageNaturalSize.width));
-      return;
-    }
-
-    // Fallback: use global bounds from all lines when no current line
-    const activeLines = alignedLines.length > 0
-      ? alignedLines
-      : (aiSegmentsMap[currentPageIndex] ?? []);
-    if (activeLines.length === 0) return;
-
-    const globalLeft = Math.min(...activeLines.map((line) => line.bbox[0]));
-    const globalRight = Math.max(...activeLines.map((line) => line.bbox[2]));
-    const pad = imageNaturalSize.width * 0.01;
-
-    setTextLeftPct(Math.max(0.02, (globalLeft - pad) / imageNaturalSize.width));
-    setTextRightPct(Math.min(0.98, (globalRight + pad) / imageNaturalSize.width));
-  }, [alignedLines, aiSegmentsMap, currentPageIndex, imageNaturalSize.width, currentLineIndex]);
 
   // Only expose currentLine when the image for this page has loaded,
   // so overlays never render at positions scaled from a previous page's dimensions
@@ -535,17 +531,9 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           .length;
       }
 
-      const detectionResult = detectedLinesMap[idx];
-      if (detectionResult && detectionResult.length > 0) {
-        return buildAlignedLinesFromDetected(
-          pageText.split('\n').filter((l) => l.trim().length > 0),
-          detectionResult,
-        ).filter((line) => line.transcriptLineIndex >= 0).length;
-      }
-
       return transcriptLineCount;
     }),
-    [letterPages, pageLineTexts, aiSegmentsMap, detectedLinesMap, currentPageIndex],
+    [letterPages, pageLineTexts, aiSegmentsMap, currentPageIndex],
   );
 
   const totalLines = useMemo(
@@ -572,22 +560,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     [alignedLines, scaleFactor],
   );
 
-  // Track image natural size and run pixel detection fallback
+  // Track image natural size
   const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
     setImageNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
     setImageDisplaySize({ width: img.clientWidth, height: img.clientHeight });
-    // Run pixel detection fallback after a microtask
-    requestAnimationFrame(() => runPixelDetection());
-  }, [runPixelDetection]);
-
-  // Also try pixel detection when AI detection completes with empty result
-  useEffect(() => {
-    const aiResult = aiSegmentsMap[currentPageIndex];
-    if (aiResult !== undefined && aiResult !== null && aiResult.length === 0 && imageRef.current) {
-      runPixelDetection();
-    }
-  }, [aiSegmentsMap, currentPageIndex, runPixelDetection]);
+  }, []);
 
   // Update display size on resize (ResizeObserver catches sidebar toggles too)
   useEffect(() => {
@@ -604,33 +582,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     observer.observe(img);
     return () => observer.disconnect();
   }, [currentPageIndex]);
-
-  // Drag handle effect — resize highlight/input width
-  useEffect(() => {
-    if (!dragging) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!imageRef.current) return;
-      const rect = imageRef.current.getBoundingClientRect();
-      const pct = (e.clientX - rect.left) / rect.width;
-      const clamped = Math.max(0.02, Math.min(0.98, pct));
-
-      if (dragging === 'left') {
-        setTextLeftPct(Math.min(clamped, textRightPct - 0.1));
-      } else {
-        setTextRightPct(Math.max(clamped, textLeftPct + 0.1));
-      }
-    };
-
-    const handleMouseUp = () => setDragging(null);
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [dragging, textLeftPct, textRightPct]);
 
   // Save current line text and trigger auto-save (only if user actually edited)
   const saveCurrentLine = useCallback(() => {
@@ -755,8 +706,9 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const line = alignedLines[currentLineIndex];
     if (!line) return;
 
-    // Content area left = overlay left + border + padding
-    const overlayLeft = textLeftPct * imageDisplaySize.width;
+    // Input left is derived from the line's bbox
+    const pad = imageNaturalSize.width * 0.01;
+    const overlayLeft = Math.max(0, (line.bbox[0] - pad) * scaleFactor);
     const contentAreaLeft = overlayLeft + CSS_BORDER_PADDING;
 
     buildWordPositionedContent(
@@ -772,28 +724,24 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (sel && inputRef.current.firstChild) {
       sel.collapse(inputRef.current.firstChild, 0);
     }
-  }, [currentLineIndex, currentPageIndex, alignedLines, scaleFactor, textLeftPct, imageDisplaySize.width]);
+  }, [currentLineIndex, currentPageIndex, alignedLines, scaleFactor, imageNaturalSize.width]);
 
-  // Re-run line detection for the current page
+  // Re-run line detection for the current page (Kraken + Vision in parallel)
   const redetectLines = useCallback(() => {
     if (!currentPage || isDetecting) return;
 
     const pageId = currentPage.id;
     const idx = currentPageIndex;
 
-    // Immediately show spinner
+    // Immediately show spinner and clear stale Vision data
     setAiSegmentsMap(prev => ({ ...prev, [idx]: null }));
-    // Clear pixel fallback cache
-    setDetectedLinesMap(prev => {
-      const next = { ...prev };
-      delete next[idx];
-      return next;
-    });
+    setVisionBoxesMap(prev => ({ ...prev, [idx]: undefined }));
     setCurrentLineIndex(0);
 
     detectPageLines(pageId)
       .then(result => {
         setAiSegmentsMap(prev => ({ ...prev, [idx]: result.lineSegments }));
+        setVisionBoxesMap(prev => ({ ...prev, [idx]: result.ocrWordBoxes ?? [] }));
       })
       .catch(() => {
         setAiSegmentsMap(prev => ({ ...prev, [idx]: [] }));
@@ -854,112 +802,78 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const INPUT_DISPLAY_HEIGHT = computeLineInputHeight(currentLine?.words, scaleFactor);
 
   // Compute overlay positions
-  const topDimmerHeight = currentLine ? currentLine.bbox[1] * scaleFactor : 0;
-  const highlightHeight = currentLine
-    ? (currentLine.bbox[3] - currentLine.bbox[1]) * scaleFactor
-    : 0;
   const displayedImageHeight = imageDisplaySize.height || (imageNaturalSize.height * scaleFactor);
+  const imgW = imageDisplaySize.width;
 
-  // Horizontal bounds from drag state (centered by default)
-  const textLeft = textLeftPct * imageDisplaySize.width;
-  const textRight = textRightPct * imageDisplaySize.width;
-  const textWidth = textRight - textLeft;
-
-  // Input position — below the clear strip with a small breathing gap
+  // Input position — derived from line bbox, below the clear strip
   const LINE_GAP = 4;
   const inputTop = currentLine ? currentLine.bbox[3] * scaleFactor + LINE_GAP : 0;
-  const inputLeft = textLeft;
-  const inputWidth = textWidth;
-
-  // Bottom dimmer starts at the line bottom (overlapping the input area),
-  // with a CSS gradient fade so it transitions softly into the editable area.
-  // The input overlay sits on top at z-index 10.
-  const bottomDimmerTop = inputTop;
+  const linePad = imageNaturalSize.width * 0.01;
+  const inputLeft = currentLine ? Math.max(0, (currentLine.bbox[0] - linePad) * scaleFactor) : 0;
+  const inputRight = currentLine ? Math.min(imgW, (currentLine.bbox[2] + linePad) * scaleFactor) : imgW;
+  const inputWidth = inputRight - inputLeft;
 
   // Use the page-global font size for the editable div
   const fontSize = pageFontSize;
 
+  // Build highlight polygon points from Kraken boundary (or bbox fallback).
+  const highlightPoints = useMemo(() => {
+    if (!currentLine) return '';
+
+    if (currentLine.boundary && currentLine.boundary.length > 2) {
+      return currentLine.boundary
+        .map(p => `${p.x * scaleFactor},${p.y * scaleFactor}`)
+        .join(' ');
+    }
+
+    // Fallback: bbox rectangle
+    const [x1, y1, x2, y2] = currentLine.bbox;
+    const sx1 = x1 * scaleFactor, sy1 = y1 * scaleFactor;
+    const sx2 = x2 * scaleFactor, sy2 = y2 * scaleFactor;
+    return `${sx1},${sy1} ${sx2},${sy1} ${sx2},${sy2} ${sx1},${sy2}`;
+  }, [currentLine, scaleFactor]);
+
   return (
-    <div className={`line-review-mode${dragging ? ' line-review-dragging' : ''}`} ref={containerRef}>
+    <div className="line-review-mode" ref={containerRef}>
       <div
         className="line-review-image-container"
         style={{ maxWidth: imageNaturalSize.width > 0 ? imageNaturalSize.width : undefined }}
       >
-        {/* crossOrigin="anonymous" required for canvas pixel reading.
-            &cors=1 busts cache to avoid reusing a non-CORS cached response. */}
         <img
           ref={imageRef}
-          src={`${getImageUrl(currentPage.imageUrl)}${currentPage.imageUrl.includes('?') ? '&' : '?'}cors=1`}
+          src={getImageUrl(currentPage.imageUrl)}
           alt={`Page ${currentPageIndex + 1}`}
           onLoad={handleImageLoad}
-          crossOrigin="anonymous"
           draggable={false}
         />
 
-        {/* Left side dimmer — full height, left of text bounds */}
-        {currentLine && textLeft > 0 && (
-          <div
-            className="line-review-dimmer line-review-dimmer-solid"
-            style={{ top: 0, left: 0, width: textLeft, height: displayedImageHeight }}
-          />
+        {/* Dimmer with polygon cutout — shadows everything except the active line */}
+        {currentLine && imgW > 0 && (
+          <svg
+            className="line-review-highlight-svg"
+            width={imgW}
+            height={displayedImageHeight}
+          >
+            <defs>
+              <filter id="lr-feather">
+                <feGaussianBlur stdDeviation="4" />
+              </filter>
+              <mask id="lr-highlight-mask">
+                <rect width={imgW} height={displayedImageHeight} fill="white" />
+                <polygon points={highlightPoints} fill="black" filter="url(#lr-feather)" />
+                <polygon points={highlightPoints} fill="black" />
+              </mask>
+            </defs>
+            <rect
+              width={imgW}
+              height={displayedImageHeight}
+              className="line-review-dimmer-fill"
+              mask="url(#lr-highlight-mask)"
+            />
+          </svg>
         )}
 
-        {/* Right side dimmer — full height, right of text bounds */}
-        {currentLine && (
-          <div
-            className="line-review-dimmer line-review-dimmer-solid"
-            style={{ top: 0, right: 0, width: Math.max(0, imageDisplaySize.width - textRight), height: displayedImageHeight }}
-          />
-        )}
-
-        {/* Top solid — within text bounds, above the fade */}
-        {currentLine && topDimmerHeight > 10 && (
-          <div
-            className="line-review-dimmer line-review-dimmer-solid"
-            style={{ top: 0, left: textLeft, width: textWidth, height: Math.max(0, topDimmerHeight - 10) }}
-          />
-        )}
-
-        {/* Top fade — gradient within text bounds */}
-        {currentLine && topDimmerHeight > 0 && (
-          <div
-            className="line-review-dimmer line-review-dimmer-top"
-            style={{
-              top: Math.max(0, topDimmerHeight - 10),
-              left: textLeft,
-              width: textWidth,
-              height: 10,
-            }}
-          />
-        )}
-
-        {/* Bottom fade — gradient within text bounds */}
-        {currentLine && (
-          <div
-            className="line-review-dimmer line-review-dimmer-bottom"
-            style={{
-              top: bottomDimmerTop,
-              left: textLeft,
-              width: textWidth,
-              height: 10,
-            }}
-          />
-        )}
-
-        {/* Bottom solid — within text bounds, below the fade */}
-        {currentLine && (
-          <div
-            className="line-review-dimmer line-review-dimmer-solid"
-            style={{
-              top: bottomDimmerTop + 10,
-              left: textLeft,
-              width: textWidth,
-              height: Math.max(0, displayedImageHeight - bottomDimmerTop - 10),
-            }}
-          />
-        )}
-
-        {/* Input overlay — positioned just below the clear highlight strip */}
+        {/* Input overlay — positioned below the clear strip, sized to the line */}
         {currentLine && (
           <div
             className="line-review-input-overlay"
@@ -983,32 +897,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           </div>
         )}
 
-        {/* Drag handles — resize highlight/input width */}
-        {currentLine && (
-          <>
-            <div
-              className="line-review-drag-handle"
-              style={{
-                top: topDimmerHeight,
-                left: textLeft - 6,
-                height: highlightHeight + LINE_GAP + INPUT_DISPLAY_HEIGHT,
-              }}
-              onMouseDown={(e) => { e.preventDefault(); setDragging('left'); }}
-            />
-            <div
-              className="line-review-drag-handle"
-              style={{
-                top: topDimmerHeight,
-                left: textRight - 6,
-                height: highlightHeight + LINE_GAP + INPUT_DISPLAY_HEIGHT,
-              }}
-              onMouseDown={(e) => { e.preventDefault(); setDragging('right'); }}
-            />
-          </>
-        )}
-
         {/* Debug overlay — Kraken polygon boundaries */}
-        {debugLines && showDebugLines && imageDisplaySize.width > 0 && (
+        {debugLines && showKrakenLines && imageDisplaySize.width > 0 && (
           <svg
             style={{
               position: 'absolute',
@@ -1040,6 +930,34 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                 />
               ),
             )}
+          </svg>
+        )}
+
+        {/* Debug overlay — Vision word bounding boxes */}
+        {debugLines && showVisionWords && imageDisplaySize.width > 0 && (
+          <svg
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: imageDisplaySize.width,
+              height: displayedImageHeight,
+              pointerEvents: 'none',
+              zIndex: 6,
+            }}
+          >
+            {(visionBoxesMap[currentPageIndex] ?? []).map((box, i) => (
+              <rect
+                key={`vision-${i}`}
+                className={box.hasContent === false
+                  ? 'line-review-debug-vision-empty'
+                  : 'line-review-debug-vision-word'}
+                x={box.bbox[0] * scaleFactor}
+                y={box.bbox[1] * scaleFactor}
+                width={(box.bbox[2] - box.bbox[0]) * scaleFactor}
+                height={(box.bbox[3] - box.bbox[1]) * scaleFactor}
+              />
+            ))}
           </svg>
         )}
 
@@ -1075,15 +993,23 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         </div>
       )}
 
-      {/* Debug legend */}
+      {/* Debug legend — Detection Layers panel */}
       {debugLines && (
         <div className="line-review-debug-legend">
+          <span className="debug-legend-title">Detection Layers</span>
           <button
-            className={`debug-legend-toggle${showDebugLines ? ' debug-legend-toggle-active' : ''}`}
-            onClick={() => setShowDebugLines(v => !v)}
+            className={`debug-legend-toggle${showKrakenLines ? ' debug-legend-toggle-active' : ''}`}
+            onClick={() => setShowKrakenLines(v => !v)}
           >
-            <span className="debug-legend-swatch debug-legend-lines" />
-            Lines
+            <span className="debug-legend-swatch debug-legend-kraken" />
+            Kraken Lines
+          </button>
+          <button
+            className={`debug-legend-toggle${showVisionWords ? ' debug-legend-toggle-active' : ''}`}
+            onClick={() => setShowVisionWords(v => !v)}
+          >
+            <span className="debug-legend-swatch debug-legend-vision" />
+            Vision Words
           </button>
         </div>
       )}

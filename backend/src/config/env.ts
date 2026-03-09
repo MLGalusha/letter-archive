@@ -9,8 +9,10 @@ const envSchema = z.object({
   OPENAI_MODEL: z.string().default('gpt-5.4'),
   CORS_ORIGINS: z.string().optional(),
   PYTHON_VENV_PATH: z.string().default('./python/venv'),
+  GOOGLE_APPLICATION_CREDENTIALS: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);
 
 export const hasOpenAI = Boolean(env.OPENAI_API_KEY);
+export const hasGoogleVision = Boolean(env.GOOGLE_APPLICATION_CREDENTIALS);

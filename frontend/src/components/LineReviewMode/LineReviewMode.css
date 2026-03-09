@@ -34,61 +34,17 @@
   height: auto;
 }
 
-/* Dimmer overlays */
-.line-review-dimmer {
-  position: absolute;
-  pointer-events: none;
-  will-change: transform;
-  transition: top 0.15s ease, height 0.15s ease;
-}
-
-.line-review-dimmer-top {
-  background: linear-gradient(to bottom,
-    rgba(0, 0, 0, 0.28) 0%,
-    transparent 100%
-  );
-}
-
-.line-review-dimmer-bottom {
-  background: linear-gradient(to bottom,
-    transparent 0%,
-    rgba(0, 0, 0, 0.28) 100%
-  );
-}
-
-.line-review-dimmer-solid {
-  background: rgba(0, 0, 0, 0.28);
-}
-
-/* Drag handles for resizing highlight/input width */
-.line-review-drag-handle {
-  position: absolute;
-  width: 12px;
-  cursor: ew-resize;
-  z-index: 20;
-}
-
-.line-review-drag-handle::after {
-  content: '';
+/* SVG highlight overlay */
+.line-review-highlight-svg {
   position: absolute;
   top: 0;
-  bottom: 0;
-  left: 5px;
-  width: 2px;
-  border-radius: 1px;
-  background: rgba(25, 118, 210, 0);
-  transition: background 0.15s ease;
+  left: 0;
+  pointer-events: none;
+  z-index: 2;
 }
 
-.line-review-drag-handle:hover::after,
-.line-review-dragging .line-review-drag-handle::after {
-  background: rgba(25, 118, 210, 0.5);
-}
-
-/* Prevent text selection while dragging */
-.line-review-dragging {
-  user-select: none;
-  cursor: ew-resize;
+.line-review-dimmer-fill {
+  fill: rgba(0, 0, 0, 0.3);
 }
 
 /* Transcript input overlay */
@@ -150,7 +106,7 @@
 
 /* Analyzing indicator */
 .line-review-analyzing {
-  position: absolute;
+  position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -230,9 +186,22 @@
   border-radius: 2px;
 }
 
-.debug-legend-lines {
-  background: rgba(230, 70, 100, 0.5);
-  border: 1px solid rgba(230, 70, 100, 0.8);
+.debug-legend-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #888;
+  margin-right: 4px;
+}
+
+.debug-legend-kraken {
+  background: rgba(0, 200, 80, 0.5);
+  border: 1px solid rgba(0, 200, 80, 0.8);
+}
+
+.debug-legend-vision {
+  background: rgba(60, 130, 240, 0.5);
+  border: 1px solid rgba(60, 130, 240, 0.8);
 }
 
 .debug-legend-toggle {
@@ -261,10 +230,34 @@
   border-color: rgba(255, 255, 255, 0.3);
 }
 
-/* Debug polygon overlay — Kraken line boundaries */
+.debug-legend-toggle-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+.debug-legend-toggle-disabled:hover {
+  opacity: 0.4;
+}
+
+/* Debug polygon overlay — Kraken line boundaries (green) */
 .line-review-debug-polygon {
-  fill: rgba(230, 70, 100, 0.1);
-  stroke: rgba(230, 70, 100, 0.7);
+  fill: rgba(0, 200, 80, 0.25);
+  stroke: rgba(0, 200, 80, 1);
+  stroke-width: 2;
+}
+
+/* Vision word-level bounding boxes — has content (blue) */
+.line-review-debug-vision-word {
+  fill: rgba(60, 130, 240, 0.2);
+  stroke: rgba(60, 130, 240, 1);
+  stroke-width: 2;
+}
+
+/* Vision word-level bounding boxes — empty/bleed (red) */
+.line-review-debug-vision-empty {
+  fill: rgba(220, 50, 50, 0.2);
+  stroke: rgba(220, 50, 50, 1);
   stroke-width: 2;
 }
 

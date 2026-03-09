@@ -8,6 +8,7 @@ export interface AlignedLine {
   bbox: [number, number, number, number];
   baseline: number[][];
   words?: LineSegmentWord[];
+  boundary?: { x: number; y: number }[];
 }
 
 /** Per-word pixel metrics keyed by bbox string ("x0,y0,x1,y1"). */
@@ -441,13 +442,16 @@ function createAlignedLine(
 ): AlignedLine {
   const filteredSegment = buildFilteredSegment(segment, transcriptText, wordMetrics);
 
+  // Use the original Kraken-detected bbox and boundary so the highlight
+  // spans the full line. Filtered words are still used for font sizing.
   return {
     visualLineIndex,
     transcriptText,
     transcriptLineIndex,
-    bbox: filteredSegment.bbox,
-    baseline: filteredSegment.baseline,
+    bbox: segment.bbox,
+    baseline: segment.baseline,
     words: filteredSegment.words,
+    boundary: segment.boundary,
   };
 }
 
@@ -484,11 +488,22 @@ export function alignTranscriptToVisualLines(
   //   lines are subdivided into the last segment.
   // This is correct because both detection and transcript are in reading order.
   if (segCount >= transcriptLines.length) {
-    const selectedSegments = selectBestSegmentsForTranscript(
-      transcriptLines,
-      lineSegments,
-      wordMetrics,
-    );
+    // Check if segments have OCR word data (Google Vision) or not (Kraken).
+    // Without words, the DP scoring has no signal and produces bad matches.
+    // Fall back to simple 1:1 positional assignment (first N segments).
+    const hasWords = lineSegments.some(seg => seg.words && seg.words.length > 0);
+
+    let selectedSegments: LineSegment[];
+    if (hasWords) {
+      selectedSegments = selectBestSegmentsForTranscript(
+        transcriptLines,
+        lineSegments,
+        wordMetrics,
+      );
+    } else {
+      // Positional: take the first N segments in reading order
+      selectedSegments = lineSegments.slice(0, transcriptLines.length);
+    }
 
     return selectedSegments.map((seg, i) =>
       createAlignedLine(seg, transcriptLines[i], i, i, wordMetrics),

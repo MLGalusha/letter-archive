@@ -102,12 +102,22 @@ export async function savePageLineSegments(
 export async function detectAndStorePageLines(
   pageId: string,
   imagePath: string,
-): Promise<LineSegment[] | null> {
-  const segments = await runLineFinder(imagePath);
+): Promise<{ lineSegments: LineSegment[] | null; ocrWordBoxes: import('./vision-ocr.js').OcrWordBox[] | null }> {
+  // Run Kraken line detection and Vision OCR word detection in parallel
+  const visionPromise = import('./vision-ocr.js')
+    .then(({ detectAndStorePageOcrWords }) => detectAndStorePageOcrWords(pageId, imagePath))
+    .catch(() => null as null);
+
+  const [segments, ocrWordBoxes] = await Promise.all([
+    runLineFinder(imagePath),
+    visionPromise,
+  ]);
+
   if (segments) {
     await savePageLineSegments(pageId, segments);
   }
-  return segments;
+
+  return { lineSegments: segments, ocrWordBoxes };
 }
 
 export async function detectAndStoreLinesForPages(
@@ -116,9 +126,9 @@ export async function detectAndStoreLinesForPages(
 ): Promise<void> {
   for (const page of pages) {
     const absolutePath = getAbsoluteStoragePath(page.storagePath);
-    const segments = await detectAndStorePageLines(page.id, absolutePath);
+    const result = await detectAndStorePageLines(page.id, absolutePath);
     log.info(
-      { pageId: page.id, pageNumber: page.pageNumber, lineCount: segments?.length ?? 0 },
+      { pageId: page.id, pageNumber: page.pageNumber, lineCount: result.lineSegments?.length ?? 0 },
       'Stored line detection results for page',
     );
   }

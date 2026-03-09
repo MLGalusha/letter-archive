@@ -1,21 +1,28 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { Writable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 import pino from 'pino';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = process.env.NODE_ENV !== 'production';
+const ONE_HOUR_MS = 60 * 60 * 1000;
+const PROCESS_LOGGING_FLAG = Symbol.for('letter-archive.process-logging-installed');
 
-// Log file path - backend/logs/app.log
-const logDir = path.join(__dirname, '../../logs');
-const logFile = path.join(logDir, 'app.log');
+export const LOG_FILE_PREFIX = 'app';
+export const LOG_FILE_EXTENSION = '.log';
+export const DEFAULT_LOG_RETENTION_HOURS = 24 * 7;
+export const LOG_DIR = process.env.LOG_DIR || path.join(__dirname, '../../logs');
 
-// Ensure logs directory exists
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir, { recursive: true });
+const LOG_FILENAME_PATTERN = /^app-(\d{4})-(\d{2})-(\d{2})-(\d{2})\.log$/;
+
+function ensureLogDir(logDir: string): void {
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
 }
 
-// Allow overriding log level via environment variable
+// Allow overriding log level via environment variable.
 // Levels: trace, debug, info, warn, error, fatal
 const getLogLevel = (): string => {
   if (process.env.LOG_LEVEL) {
@@ -24,17 +31,154 @@ const getLogLevel = (): string => {
   return isDev ? 'debug' : 'info';
 };
 
-// Create file stream for logging
-const fileStream = fs.createWriteStream(logFile, { flags: 'a' });
+export function getLogRetentionHours(): number {
+  const raw = Number(process.env.LOG_RETENTION_HOURS);
+  if (Number.isFinite(raw) && raw > 0) {
+    return Math.floor(raw);
+  }
+  return DEFAULT_LOG_RETENTION_HOURS;
+}
 
-// Multi-destination: both console (pretty) and file (JSON)
+export function formatLogFileHour(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  return `${year}-${month}-${day}-${hour}`;
+}
+
+export function getLogFilePath(logDir: string, date: Date): string {
+  return path.join(logDir, `${LOG_FILE_PREFIX}-${formatLogFileHour(date)}${LOG_FILE_EXTENSION}`);
+}
+
+function parseLogFilenameTimestamp(filename: string): number | null {
+  const match = filename.match(LOG_FILENAME_PATTERN);
+  if (!match) return null;
+
+  const [, year, month, day, hour] = match;
+  const parsed = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    0,
+    0,
+    0,
+  );
+
+  const timestamp = parsed.getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+export function purgeExpiredLogs(
+  logDir: string,
+  now: Date = new Date(),
+  retentionHours: number = getLogRetentionHours(),
+): string[] {
+  ensureLogDir(logDir);
+
+  const cutoff = now.getTime() - (retentionHours * ONE_HOUR_MS);
+  const removed: string[] = [];
+
+  for (const entry of fs.readdirSync(logDir)) {
+    const timestamp = parseLogFilenameTimestamp(entry);
+    if (timestamp === null || timestamp >= cutoff) {
+      continue;
+    }
+
+    const absolutePath = path.join(logDir, entry);
+    fs.rmSync(absolutePath, { force: true });
+    removed.push(absolutePath);
+  }
+
+  return removed;
+}
+
+class HourlyRotatingLogStream extends Writable {
+  private currentHourKey: string | null = null;
+  private currentStream: fs.WriteStream | null = null;
+  private nextCleanupAt = 0;
+
+  constructor(
+    private readonly logDir: string,
+    private readonly retentionHours: number,
+    private readonly now: () => Date = () => new Date(),
+  ) {
+    super();
+    ensureLogDir(logDir);
+    this.nextCleanupAt = this.now().getTime() + ONE_HOUR_MS;
+    this.runCleanup();
+  }
+
+  private ensureActiveStream(): fs.WriteStream {
+    const currentDate = this.now();
+    const nextHourKey = formatLogFileHour(currentDate);
+
+    if (this.currentStream && this.currentHourKey === nextHourKey) {
+      return this.currentStream;
+    }
+
+    this.currentStream?.end();
+    this.currentHourKey = nextHourKey;
+    this.currentStream = fs.createWriteStream(
+      getLogFilePath(this.logDir, currentDate),
+      { flags: 'a' },
+    );
+
+    return this.currentStream;
+  }
+
+  private runCleanup(): void {
+    try {
+      purgeExpiredLogs(this.logDir, this.now(), this.retentionHours);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[logger] failed to purge expired logs: ${message}`);
+    } finally {
+      this.nextCleanupAt = this.now().getTime() + ONE_HOUR_MS;
+    }
+  }
+
+  override _write(
+    chunk: string | Buffer,
+    encoding: BufferEncoding,
+    callback: (error?: Error | null) => void,
+  ): void {
+    try {
+      const stream = this.ensureActiveStream();
+      const shouldCleanup = this.now().getTime() >= this.nextCleanupAt;
+      stream.write(chunk, encoding, (error) => {
+        if (!error && shouldCleanup) {
+          this.runCleanup();
+        }
+        callback(error ?? null);
+      });
+    } catch (error) {
+      callback(error as Error);
+    }
+  }
+
+  override _final(callback: (error?: Error | null) => void): void {
+    if (!this.currentStream) {
+      callback();
+      return;
+    }
+
+    this.currentStream.end(() => callback());
+  }
+}
+
+const retentionHours = getLogRetentionHours();
+const fileStream = new HourlyRotatingLogStream(LOG_DIR, retentionHours);
+
+// Multi-destination: both console and hourly-rotated JSON log files.
 export const logger = pino({
   level: getLogLevel(),
   base: {
     env: process.env.NODE_ENV || 'development',
+    service: process.env.LOG_SERVICE || 'backend',
   },
 }, pino.multistream([
-  // Console output with pretty printing in dev
   {
     stream: isDev
       ? pino.transport({
@@ -47,14 +191,57 @@ export const logger = pino({
         })
       : process.stdout,
   },
-  // File output (JSON format for easy parsing)
   { stream: fileStream },
 ]));
 
-// Create child loggers for different areas of the application
+// Create child loggers for different areas of the application.
 export const createLogger = (context: Record<string, unknown>) => {
   return logger.child(context);
 };
+
+export function installProcessLogging(log: pino.Logger = logger): void {
+  const globalProcess = process as NodeJS.Process & {
+    [PROCESS_LOGGING_FLAG]?: boolean;
+  };
+
+  if (globalProcess[PROCESS_LOGGING_FLAG]) {
+    return;
+  }
+
+  globalProcess[PROCESS_LOGGING_FLAG] = true;
+
+  process.on('warning', (warning) => {
+    log.warn(
+      {
+        name: warning.name,
+        message: warning.message,
+        stack: warning.stack,
+      },
+      'Process warning',
+    );
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    log.error(
+      {
+        reason,
+      },
+      'Unhandled promise rejection',
+    );
+  });
+
+  process.on('uncaughtExceptionMonitor', (error, origin) => {
+    log.fatal(
+      {
+        err: error,
+        origin,
+      },
+      'Uncaught exception',
+    );
+  });
+}
+
+installProcessLogging(logger);
 
 // Timing thresholds for warnings (in ms)
 export const TIMING_THRESHOLDS = {
@@ -71,12 +258,12 @@ export const logIfSlow = (
   operation: string,
   duration: number,
   threshold: number,
-  context: Record<string, unknown> = {}
+  context: Record<string, unknown> = {},
 ) => {
   if (duration > threshold) {
     log.warn(
       { ...context, operation, duration, threshold, slow: true },
-      `Slow ${operation}: ${duration}ms exceeds threshold of ${threshold}ms`
+      `Slow ${operation}: ${duration}ms exceeds threshold of ${threshold}ms`,
     );
   }
 };

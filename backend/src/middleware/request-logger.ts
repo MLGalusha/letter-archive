@@ -41,6 +41,27 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
   // Attach to request for use in route handlers
   req.log = log;
   req.requestId = requestId;
+  res.setHeader('x-request-id', requestId);
+
+  if (typeof res.json === 'function') {
+    const originalJson = res.json.bind(res);
+    res.json = ((body: unknown) => {
+      if (
+        res.statusCode >= 400
+        && body
+        && typeof body === 'object'
+        && !Array.isArray(body)
+        && !('requestId' in (body as Record<string, unknown>))
+      ) {
+        return originalJson({
+          ...(body as Record<string, unknown>),
+          requestId,
+        });
+      }
+
+      return originalJson(body);
+    }) as Response['json'];
+  }
 
   // Skip logging entirely for skip paths
   if (isSkipPath) {
@@ -77,6 +98,7 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
         statusCode: res.statusCode,
         duration,
         contentLength: res.get('content-length'),
+        ip: req.ip,
       },
       'Request completed'
     );

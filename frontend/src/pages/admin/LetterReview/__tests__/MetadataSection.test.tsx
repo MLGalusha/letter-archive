@@ -17,6 +17,7 @@ const buildLetter = (overrides: Partial<Letter> = {}): Letter => ({
   transcriptStatus: "EDITED",
   metadataContentStatus: "EMPTY",
   extraContentStatus: "EMPTY",
+  flagged: false,
   createdAt: "2024-01-01T00:00:00.000Z",
   linkedPersons: [],
   linkedPlaces: [],

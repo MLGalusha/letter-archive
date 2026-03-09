@@ -2,9 +2,18 @@ import type { ErrorRequestHandler } from 'express';
 import { ZodError } from 'zod';
 import { logger } from '../utils/logger.js';
 
+function isErrorWithStatusCode(err: unknown): err is { statusCode: number; name?: string; message?: string } {
+  return typeof err === 'object' && err !== null && 'statusCode' in err && typeof err.statusCode === 'number';
+}
+
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   const requestId = req.requestId;
   const log = req.log || logger;
+  const errorMessage = err instanceof Error
+    ? err.message
+    : typeof err === 'string'
+      ? err
+      : 'Unknown error';
 
   // Determine error type and status code
   let statusCode = 500;
@@ -15,19 +24,23 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
     statusCode = 400;
     errorType = 'validation_error';
     userMessage = 'Validation error';
-  } else if ('statusCode' in err && typeof err.statusCode === 'number') {
+  } else if (isErrorWithStatusCode(err)) {
     // Support typed errors like ProcessingError that carry their own status code
     statusCode = err.statusCode;
     errorType = err.name || 'application_error';
-    userMessage = err.message;
-  } else if (err.message?.includes('Invalid filename')) {
+    userMessage = err.message || userMessage;
+  } else if (errorMessage.includes('Invalid filename')) {
     statusCode = 400;
     errorType = 'invalid_filename';
-    userMessage = err.message;
-  } else if (err.message?.includes('not found')) {
+    userMessage = errorMessage;
+  } else if (errorMessage.includes('not found')) {
     statusCode = 404;
     errorType = 'not_found';
-    userMessage = err.message;
+    userMessage = errorMessage;
+  }
+
+  if (requestId) {
+    res.setHeader('x-request-id', requestId);
   }
 
   // Log with full context
@@ -41,9 +54,9 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
       method: req.method,
       path: req.path,
       query: req.query,
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+      stack: process.env.NODE_ENV === 'development' && err instanceof Error ? err.stack : undefined,
     },
-    `Request failed: ${err.message}`
+    `Request failed: ${errorMessage}`
   );
 
   // Send response
@@ -58,7 +71,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
 
   res.status(statusCode).json({
     error: userMessage,
-    message: process.env.NODE_ENV === 'development' ? err.message : undefined,
+    message: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
     requestId,
   });
 };

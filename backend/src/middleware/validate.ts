@@ -11,6 +11,13 @@ export function validateBody(schema: ZodSchema) {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
+        req.log?.warn(
+          {
+            validationTarget: 'body',
+            details: error.errors,
+          },
+          'Request validation failed'
+        );
         res.status(400).json({
           error: 'Validation error',
           details: error.errors,
@@ -33,6 +40,13 @@ export function validateQuery(schema: ZodSchema) {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
+        req.log?.warn(
+          {
+            validationTarget: 'query',
+            details: error.errors,
+          },
+          'Request validation failed'
+        );
         res.status(400).json({
           error: 'Validation error',
           details: error.errors,

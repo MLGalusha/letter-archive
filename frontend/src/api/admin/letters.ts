@@ -1,5 +1,5 @@
 import { apiPost, apiPut, apiPatch } from "../client";
-import type { Letter, LineSegment, OcrWordBox } from "../../types/Letter";
+import type { Letter, LineSegment, OcrWordBox, ReconciledLine } from "../../types/Letter";
 
 export interface UpdateLetterData {
   transcriptionText?: string;
@@ -59,10 +59,50 @@ export async function unverifyMetadata(letterId: string): Promise<Letter> {
   return apiPost<Letter>(`/admin/letters/${letterId}/unverify-metadata`);
 }
 
-export async function detectPageLines(pageId: string): Promise<{ lineSegments: LineSegment[]; ocrWordBoxes: OcrWordBox[] | null }> {
-  return apiPost<{ lineSegments: LineSegment[]; ocrWordBoxes: OcrWordBox[] | null }>(`/admin/letters/pages/${pageId}/detect-lines`);
+export async function detectPageLines(pageId: string): Promise<{ lineSegments: LineSegment[]; ocrWordBoxes: OcrWordBox[] | null; reconciledLines: ReconciledLine[] | null }> {
+  return apiPost<{ lineSegments: LineSegment[]; ocrWordBoxes: OcrWordBox[] | null; reconciledLines: ReconciledLine[] | null }>(`/admin/letters/pages/${pageId}/detect-lines`);
 }
 
 export async function toggleLetterFlag(letterId: string, flagged: boolean): Promise<Letter> {
   return apiPatch<Letter>(`/admin/letters/${letterId}/flag`, { flagged });
+}
+
+export interface LineCorrectionPayload {
+  letterId: string;
+  collectionCode?: string;
+  correctionType: 'delete' | 'undelete' | 'resize' | 'merge' | 'split' | 'reject_phantom' | 'confirm_phantom';
+  algorithmOutput: {
+    bbox: [number, number, number, number];
+    confidence: number;
+    isPhantom: boolean;
+    wasMerged: boolean;
+    mergeGapPx?: number;
+    pixelStats?: Record<string, number>;
+    hppOverlap: number;
+    visionWordCount: number;
+    transcriptMatchScore?: number;
+  };
+  correctedBbox?: [number, number, number, number];
+  correctedIsDeleted?: boolean;
+  sourceSegmentIds: number[];
+  pageContext: {
+    medianRmsContrast: number;
+    medianVariance: number;
+    medianDensity: number;
+    medianMinValue: number;
+    totalSegments: number;
+    totalVisionBoxes: number;
+    imageWidth: number;
+    imageHeight: number;
+  };
+}
+
+export async function submitLineCorrection(
+  pageId: string,
+  correction: LineCorrectionPayload,
+): Promise<{ correction: unknown; reconciledLines: ReconciledLine[] }> {
+  return apiPost<{ correction: unknown; reconciledLines: ReconciledLine[] }>(
+    `/admin/letters/pages/${pageId}/line-corrections`,
+    correction,
+  );
 }

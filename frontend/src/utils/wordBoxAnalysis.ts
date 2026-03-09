@@ -527,7 +527,7 @@ function analyzeWordBox(
 
 /** Metrics for a box with no detectable dark pixels. */
 function emptyMetrics(word: LineSegmentWord, boxW: number, boxH: number): WordBoxMetrics {
-  const [bx0, by0, , by1] = word.bbox;
+  const [, by0, , by1] = word.bbox;
   return {
     word,
     inkDensity: 0,

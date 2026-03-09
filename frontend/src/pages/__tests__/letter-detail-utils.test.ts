@@ -15,6 +15,7 @@ function buildLetter(overrides: Partial<Letter> = {}): Letter {
     transcriptStatus: overrides.transcriptStatus || "VERIFIED",
     metadataContentStatus: overrides.metadataContentStatus || "VERIFIED",
     extraContentStatus: overrides.extraContentStatus || "EMPTY",
+    flagged: overrides.flagged ?? false,
     createdAt: overrides.createdAt || "2024-01-01T00:00:00.000Z",
     updatedAt: overrides.updatedAt || "2024-01-02T00:00:00.000Z",
     linkedPersons: overrides.linkedPersons,

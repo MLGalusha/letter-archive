@@ -13,7 +13,7 @@ vi.mock('../../../api/client', () => ({
 
 // Mock the detect-lines API call to resolve immediately with empty (triggers pixel fallback)
 vi.mock('../../../api/admin/letters', () => ({
-  detectPageLines: vi.fn().mockResolvedValue({ lineSegments: [] }),
+  detectPageLines: vi.fn().mockResolvedValue({ lineSegments: [], ocrWordBoxes: [], reconciledLines: [] }),
 }));
 
 // Mock detectImageLines since jsdom can't do real pixel analysis
@@ -35,7 +35,7 @@ beforeEach(() => {
   Element.prototype.scrollTo = vi.fn();
   HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
     measureText: (text: string) => ({ width: text.length * 8 }),
-  })) as typeof HTMLCanvasElement.prototype.getContext;
+  })) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 });
 
 function makeLetter(overrides: Partial<Letter> = {}): Letter {
@@ -65,6 +65,7 @@ function makeLetter(overrides: Partial<Letter> = {}): Letter {
     transcriptStatus: 'AI_DRAFT',
     metadataContentStatus: 'EMPTY',
     extraContentStatus: 'EMPTY',
+    flagged: false,
     createdAt: '2024-01-01T00:00:00Z',
     ...overrides,
   };
@@ -117,6 +118,12 @@ async function simulateImageLoadAsync(container: HTMLElement) {
 
 function getEditable(container: HTMLElement): HTMLDivElement | null {
   return container.querySelector('.line-review-input-overlay .line-review-editable');
+}
+
+async function flushEffects() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 }
 
 describe('LineReviewMode', () => {
@@ -194,8 +201,50 @@ describe('LineReviewMode', () => {
     expect(detectPageLinesMock).not.toHaveBeenCalled();
   });
 
-  it('renders the image', () => {
+  it('uses stored reconciled lines without auto-detecting again', async () => {
+    render(
+      <LineReviewMode
+        {...defaultProps}
+        letter={makeLetter({
+          images: [
+            {
+              id: 'page-1',
+              type: 'letter',
+              pageNumber: 1,
+              imageUrl: '/images/page-1',
+              originalFilename: 'page1.jpg',
+              reconciledLines: [
+                {
+                  line: 1,
+                  baseline: [[50, 135], [450, 135]],
+                  bbox: [50, 100, 450, 135],
+                  sourceSegmentIds: [1],
+                  wasMerged: false,
+                  wasExtended: false,
+                  confidence: 0.98,
+                  isPhantom: false,
+                  isPrintedText: false,
+                  isDeleted: false,
+                  hppOverlap: 0.8,
+                  visionWordCount: 3,
+                },
+              ],
+            },
+          ],
+        })}
+      />,
+    );
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(detectPageLinesMock).not.toHaveBeenCalled();
+  });
+
+  it('renders the image', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
+    await flushEffects();
     const img = container.querySelector('img');
     expect(img).toBeTruthy();
     expect(img?.getAttribute('src')).toContain('http://test/images/page-1');
@@ -207,8 +256,9 @@ describe('LineReviewMode', () => {
     expect(container.querySelector('.line-review-progress')).toBeTruthy();
   });
 
-  it('shows exit hint with Esc key', () => {
+  it('shows exit hint with Esc key', async () => {
     render(<LineReviewMode {...defaultProps} />);
+    await flushEffects();
     expect(screen.getByText('to exit')).toBeTruthy();
   });
 
@@ -220,8 +270,9 @@ describe('LineReviewMode', () => {
     expect(defaultProps.onExit).toHaveBeenCalled();
   });
 
-  it('shows detecting message before image loads', () => {
+  it('shows detecting message before image loads', async () => {
     render(<LineReviewMode {...defaultProps} />);
+    await flushEffects();
     // Before image loads, no lines should be detected
     // The "Detecting lines..." should not show until image has natural size
     // (since we check imageNaturalSize.width > 0)
@@ -410,12 +461,11 @@ describe('LineReviewMode', () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
     await simulateImageLoadAsync(container);
 
-    const dimmers = container.querySelectorAll('.line-review-dimmer');
-    // Should have top and bottom dimmers
-    expect(dimmers.length).toBeGreaterThanOrEqual(1);
+    expect(container.querySelector('.line-review-highlight-svg')).toBeTruthy();
+    expect(container.querySelector('.line-review-dimmer-fill')).toBeTruthy();
   });
 
-  it('filters to letter-type pages only', () => {
+  it('filters to letter-type pages only', async () => {
     const letterWithMixed = makeLetter({
       images: [
         { id: 'p1', type: 'letter', pageNumber: 1, imageUrl: '/images/p1' },
@@ -427,6 +477,7 @@ describe('LineReviewMode', () => {
     const { container } = render(
       <LineReviewMode {...defaultProps} letter={letterWithMixed} />,
     );
+    await flushEffects();
 
     // Should only show the letter-type image, not photo or cover
     const img = container.querySelector('img');

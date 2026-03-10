@@ -9,6 +9,8 @@ const {
   dbUpdateMock,
   updateSetMock,
   updateWhereMock,
+  getLetterByIdMock,
+  resetLetterForProcessingMock,
   getQueueStatusMock,
   getProcessingStatusMock,
   startTranscriptionProcessingMock,
@@ -31,6 +33,8 @@ const {
   dbUpdateMock: vi.fn(),
   updateSetMock: vi.fn(),
   updateWhereMock: vi.fn(),
+  getLetterByIdMock: vi.fn(),
+  resetLetterForProcessingMock: vi.fn(),
   getQueueStatusMock: vi.fn(),
   getProcessingStatusMock: vi.fn(),
   startTranscriptionProcessingMock: vi.fn(),
@@ -104,8 +108,8 @@ vi.mock('../../../services/line-finder.js', () => ({
 }));
 
 vi.mock('../../../services/letters.js', () => ({
-  getLetterById: vi.fn(),
-  resetLetterForProcessing: vi.fn(),
+  getLetterById: getLetterByIdMock,
+  resetLetterForProcessing: resetLetterForProcessingMock,
 }));
 
 vi.mock('../../../pipeline/metadataV2.js', () => ({
@@ -271,6 +275,73 @@ describe('admin letters processing queue integration', () => {
     );
   });
 
+  it('returns a request-correlated 400 when resume fails synchronously', async () => {
+    resumeProcessingMock.mockImplementation(() => {
+      throw new Error('Not paused');
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: '/processing/resume',
+      path: '/processing/resume',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toEqual({
+      error: 'Not paused',
+      requestId: expect.any(String),
+    });
+    expect(response.headers['x-request-id']).toBe(
+      (response.body as { requestId: string }).requestId,
+    );
+  });
+
+  it('starts entity extraction with validated filter options', async () => {
+    processingFilterParseMock.mockReturnValue({ collectionCode: '009', year: 1947 });
+    startEntityExtractionProcessingMock.mockResolvedValue({
+      message: 'Started entity extraction',
+      total: 3,
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: '/processing/start-entities',
+      path: '/processing/start-entities',
+      headers: { accept: 'application/json' },
+      body: { collectionCode: '009', year: 1947 },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({
+      message: 'Started entity extraction',
+      total: 3,
+    });
+    expect(processingFilterParseMock).toHaveBeenCalledWith({
+      collectionCode: '009',
+      year: 1947,
+    });
+    expect(startEntityExtractionProcessingMock).toHaveBeenCalledWith({
+      collectionCode: '009',
+      year: 1947,
+    });
+  });
+
+  it('aborts the running queue through the processing service', async () => {
+    abortProcessingMock.mockResolvedValue({ message: 'Processing aborted' });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: '/processing/abort',
+      path: '/processing/abort',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({ message: 'Processing aborted' });
+    expect(abortProcessingMock).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects cancel requests that do not include a letter id', async () => {
     queueJobTypeParseMock.mockReturnValue('transcription');
 
@@ -334,5 +405,68 @@ describe('admin letters processing queue integration', () => {
       cleared: 4,
     });
     expect(clearQueueMock).toHaveBeenCalledWith('entity_extraction');
+  });
+
+  it('retries a failed job after validating the job type', async () => {
+    queueJobTypeParseMock.mockReturnValue('transcription');
+    retryJobMock.mockResolvedValue({ message: 'Retrying transcription for letter letter-7' });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: '/processing/queue/retry',
+      path: '/processing/queue/retry',
+      headers: { accept: 'application/json' },
+      body: {
+        letterId: 'letter-7',
+        type: 'transcription',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({
+      message: 'Retrying transcription for letter letter-7',
+    });
+    expect(retryJobMock).toHaveBeenCalledWith('letter-7', 'transcription');
+  });
+
+  it('re-enqueues an existing letter for processing', async () => {
+    getLetterByIdMock.mockResolvedValue({ id: 'letter-8' });
+    resetLetterForProcessingMock.mockResolvedValue(undefined);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: '/letters/letter-8/process',
+      path: '/letters/letter-8/process',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({
+      message: 'Letter enqueued for processing',
+      letterId: 'letter-8',
+    });
+    expect(getLetterByIdMock).toHaveBeenCalledWith('letter-8');
+    expect(resetLetterForProcessingMock).toHaveBeenCalledWith('letter-8');
+  });
+
+  it('returns a request-correlated 404 when reprocessing a missing letter', async () => {
+    getLetterByIdMock.mockResolvedValue(undefined);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: '/letters/missing-letter/process',
+      path: '/letters/missing-letter/process',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body).toEqual({
+      error: 'Letter not found',
+      requestId: expect.any(String),
+    });
+    expect(response.headers['x-request-id']).toBe(
+      (response.body as { requestId: string }).requestId,
+    );
+    expect(resetLetterForProcessingMock).not.toHaveBeenCalled();
   });
 });

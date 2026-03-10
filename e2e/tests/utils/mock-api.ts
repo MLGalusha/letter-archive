@@ -193,6 +193,16 @@ export interface MockAdminDashboardContext {
 }
 
 interface MockAdminDashboardOptions {
+  lettersError?: {
+    message: string;
+    requestId?: string;
+    status?: number;
+  };
+  processingStatusError?: {
+    message: string;
+    requestId?: string;
+    status?: number;
+  };
   flagError?: {
     message: string;
     requestId?: string;
@@ -216,6 +226,21 @@ export async function installMockAdminDashboardApi(
   });
 
   await page.route(`${API_BASE_URL}/admin/processing/status`, async (route) => {
+    if (options.processingStatusError) {
+      await route.fulfill({
+        status: options.processingStatusError.status ?? 500,
+        contentType: 'application/json',
+        headers: options.processingStatusError.requestId
+          ? { 'x-request-id': options.processingStatusError.requestId }
+          : undefined,
+        body: JSON.stringify({
+          error: options.processingStatusError.message,
+          requestId: options.processingStatusError.requestId,
+        }),
+      });
+      return;
+    }
+
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -232,6 +257,21 @@ export async function installMockAdminDashboardApi(
   await page.route(new RegExp(`${escapeRegex(API_BASE_URL)}/admin/letters(?:\\?.*)?$`), async (route) => {
     const requestUrl = new URL(route.request().url());
     adminLettersRequests.push(requestUrl);
+
+    if (options.lettersError) {
+      await route.fulfill({
+        status: options.lettersError.status ?? 500,
+        contentType: 'application/json',
+        headers: options.lettersError.requestId
+          ? { 'x-request-id': options.lettersError.requestId }
+          : undefined,
+        body: JSON.stringify({
+          error: options.lettersError.message,
+          requestId: options.lettersError.requestId,
+        }),
+      });
+      return;
+    }
 
     const filteredLetters = filterLetters(letters, requestUrl);
 

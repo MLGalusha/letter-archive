@@ -10,6 +10,26 @@ async function openMockProcessingQueue(page: Page) {
 }
 
 test.describe('@mocked Processing Queue', () => {
+  test('shows the request id when the queue fails to load', async ({ page }) => {
+    await installMockProcessingQueueApi(page, {
+      queueError: {
+        message: 'Queue backend unavailable',
+        requestId: 'req-queue-load-503',
+      },
+    });
+
+    await page.goto('/admin/processing');
+    await page.locator('.pq-page').waitFor({ state: 'visible' });
+
+    await expect(page.locator('.pq-loading')).toContainText('Unable to load queue status');
+    await expect(page.locator('.toast-error')).toContainText(
+      'Queue backend unavailable',
+    );
+    await expect(page.locator('.toast-error')).toContainText(
+      'Request ID: req-queue-load-503',
+    );
+  });
+
   test('renders deterministic queue data and removes a queued metadata job', async ({
     page,
   }) => {
@@ -59,5 +79,25 @@ test.describe('@mocked Processing Queue', () => {
         type: 'transcription',
       },
     ]);
+  });
+
+  test('shows the request id when starting transcription fails', async ({ page }) => {
+    const mockedApi = await installMockProcessingQueueApi(page, {
+      startTranscriptionError: {
+        message: 'Processing start failed',
+        requestId: 'req-start-transcription-503',
+      },
+    });
+
+    await page.goto('/admin/processing');
+    await page.locator('.pq-page').waitFor({ state: 'visible' });
+
+    await page.getByRole('button', { name: 'Start Transcription' }).click();
+
+    await expect(page.locator('.toast-error')).toContainText('Processing start failed');
+    await expect(page.locator('.toast-error')).toContainText(
+      'Request ID: req-start-transcription-503',
+    );
+    expect(mockedApi.startTranscriptionRequests).toHaveLength(1);
   });
 });

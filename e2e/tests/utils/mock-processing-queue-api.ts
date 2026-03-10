@@ -135,7 +135,9 @@ function buildQueueResponse(state: ReturnType<typeof createMockQueueState>) {
 export async function installMockProcessingQueueApi(
   page: Page,
   options: {
+    queueError?: { message: string; requestId: string };
     cancelError?: { message: string; requestId: string };
+    startTranscriptionError?: { message: string; requestId: string };
   } = {},
 ) {
   await page.addInitScript(() => {
@@ -145,14 +147,58 @@ export async function installMockProcessingQueueApi(
   const state = createMockQueueState();
   const removeRequests: Array<{ letterId: string; type: QueueJobType }> = [];
   const cancelRequests: Array<{ letterId: string; type: QueueJobType }> = [];
+  const startTranscriptionRequests: Array<Record<string, never>> = [];
 
   await page.route(new RegExp(`${escapeRegex(API_BASE_URL)}/admin/processing/queue$`), async (route) => {
+    if (options.queueError) {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        headers: {
+          'x-request-id': options.queueError.requestId,
+        },
+        body: JSON.stringify({
+          error: options.queueError.message,
+          requestId: options.queueError.requestId,
+        }),
+      });
+      return;
+    }
+
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(buildQueueResponse(state)),
     });
   });
+
+  await page.route(
+    new RegExp(`${escapeRegex(API_BASE_URL)}/admin/processing/start-transcription$`),
+    async (route) => {
+      startTranscriptionRequests.push({});
+
+      if (options.startTranscriptionError) {
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          headers: {
+            'x-request-id': options.startTranscriptionError.requestId,
+          },
+          body: JSON.stringify({
+            error: options.startTranscriptionError.message,
+            requestId: options.startTranscriptionError.requestId,
+          }),
+        });
+        return;
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Started transcription', total: 2 }),
+      });
+    },
+  );
 
   await page.route(
     new RegExp(`${escapeRegex(API_BASE_URL)}/admin/processing/queue/remove$`),
@@ -209,5 +255,6 @@ export async function installMockProcessingQueueApi(
     state,
     removeRequests,
     cancelRequests,
+    startTranscriptionRequests,
   };
 }

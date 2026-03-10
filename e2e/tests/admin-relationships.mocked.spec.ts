@@ -39,6 +39,47 @@ test.describe('@mocked Admin Relationships', () => {
     await expect(page.locator('.add-relationship-form')).toContainText('Person B');
   });
 
+  test('creates a relationship through the real add modal workflow', async ({
+    page,
+  }) => {
+    const mockedApi = await openMockAdminRelationships(page);
+
+    await page.getByRole('button', { name: 'Add Relationship' }).click();
+    await expect(page.locator('.modal-overlay')).toBeVisible();
+
+    const personSelects = page.locator('.add-relationship-form .person-select');
+    const personASelect = personSelects.nth(0);
+    const personBSelect = personSelects.nth(1);
+
+    await personASelect.locator('input[placeholder="Search..."]').fill('Alice');
+    await personASelect.locator('.search-row button').click();
+    await page.locator('.search-results li', { hasText: 'Alice Smith' }).click();
+
+    await personBSelect.locator('input[placeholder="Search..."]').fill('David');
+    await personBSelect.locator('.search-row button').click();
+    await page.locator('.search-results li', { hasText: 'David Dunn' }).click();
+
+    await page.locator('.relationship-type-select select').selectOption('unknown');
+    await page.locator('.metadata-row input[type="number"]').fill('88');
+    await page.locator('.metadata-row input[placeholder="Optional context"]').fill('Archive note');
+
+    await page.getByRole('button', { name: 'Create Relationship' }).click();
+
+    await expect(page.locator('.modal-overlay')).not.toBeVisible();
+    await expect(page.locator('.relationships-table tbody tr')).toHaveCount(4);
+    await expect(page.locator('.relationships-table')).toContainText('David Dunn');
+    await expect
+      .poll(() => mockedApi.createRequests.length)
+      .toBe(1);
+    expect(mockedApi.createRequests[0]).toEqual({
+      personAId: 'person-a',
+      personBId: 'person-d',
+      relationshipType: 'unknown',
+      confidence: 88,
+      notes: 'Archive note',
+    });
+  });
+
   test('switches to graph view and finds a mocked connection path', async ({ page }) => {
     const mockedApi = await openMockAdminRelationships(page);
 

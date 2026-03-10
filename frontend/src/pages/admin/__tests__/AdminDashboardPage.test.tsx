@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
+import { ApiError } from "../../../api/client";
 import type { Letter } from "../../../types/Letter";
 
 const {
@@ -256,10 +257,7 @@ describe("AdminDashboard collection analysis", () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => {
-      expect(getAdminLettersMock).toHaveBeenCalled();
-    });
-
+    await screen.findByTitle("Filter by collection number");
     await user.type(screen.getByTitle("Filter by collection number"), "9");
     await user.click(screen.getByRole("button", { name: "Edit" }));
     await user.click(screen.getByRole("button", { name: "Analyze Collection" }));
@@ -301,6 +299,31 @@ describe("AdminDashboard collection analysis", () => {
 
     await waitFor(() => {
       expect(showToastMock).toHaveBeenCalledWith("analysis offline", "error");
+    });
+    expect(consoleErrorSpy).toHaveBeenCalled();
+  });
+
+  it("surfaces processing status poll failures through the toast layer", async () => {
+    getProcessingStatusMock.mockRejectedValueOnce(
+      new ApiError(
+        503,
+        "processing status offline",
+        undefined,
+        "req-dashboard-status-503",
+      ),
+    );
+
+    render(
+      <MemoryRouter>
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(showToastMock).toHaveBeenCalledWith(
+        "processing status offline (Request ID: req-dashboard-status-503)",
+        "error",
+      );
     });
     expect(consoleErrorSpy).toHaveBeenCalled();
   });

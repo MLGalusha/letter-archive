@@ -1065,13 +1065,14 @@ export default function AdminDashboard() {
         setWasRunning(status.isRunning);
       } catch (err) {
         console.error("Failed to fetch processing status:", err);
+        showToast(getErrorMessage(err, "Failed to fetch processing status"), "error");
       }
     };
 
     fetchStatus();
     const interval = setInterval(fetchStatus, 1000);
     return () => clearInterval(interval);
-  }, [wasRunning, lastCompletedAt, fetchLetters]);
+  }, [wasRunning, lastCompletedAt, fetchLetters, showToast]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {

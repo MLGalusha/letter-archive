@@ -22,10 +22,18 @@ export interface GroupedLine {
   region: 'body' | 'margin' | 'header' | 'footer';
 }
 
+/** A merge that Kraken approved but Vision rejected */
+export interface VisionRejectedMerge {
+  left: EnrichedSegment;
+  right: EnrichedSegment;
+}
+
 export interface GroupingResult {
   lines: GroupedLine[];
   /** Segments that were classified as marginal/non-body */
   marginalSegments: EnrichedSegment[];
+  /** Merges that Kraken wanted but Vision rejected (for debug) */
+  visionRejections: VisionRejectedMerge[];
 }
 
 function midY(seg: EnrichedSegment): number {
@@ -138,12 +146,19 @@ function identifyOutliers(
     const cx = (seg.bbox[0] + seg.bbox[2]) / 2;
     const inBodyColumn = cx >= bodyLeft && cx <= bodyRight;
 
-    // Check if directly adjacent to a core segment at similar Y.
+    // Check if directly adjacent to a core segment at similar Y AND height.
     // This catches body fragments like "9" next to "70" that are
     // outside the body column but clearly part of a body line.
+    // Requires height similarity to avoid classifying short margin annotations
+    // as body just because they're near a body line.
     let adjacentToCore = false;
+    const sh = segHeight(seg);
     for (const core of coreSegments) {
       if (Math.abs(midY(seg) - midY(core)) > medianHeight * 1.5) continue;
+      // Height compatibility: the narrow segment must have similar height
+      // to the core segment (at least 40% as tall)
+      const ch = segHeight(core);
+      if (sh / Math.max(ch, 1) < 0.4) continue;
       const xGap = Math.max(
         0,
         seg.bbox[0] - core.bbox[2],
@@ -170,13 +185,17 @@ function identifyOutliers(
  * using boundary polygon if available, otherwise falling back to bbox.
  */
 export function eastEdgeY(seg: EnrichedSegment): [number, number] {
-  if (seg.boundary && seg.boundary.length > 0) {
-    // Find boundary points near the right edge (within 10% of segment width)
-    const width = seg.bbox[2] - seg.bbox[0];
-    const threshold = seg.bbox[2] - width * 0.1;
-    const rightPoints = seg.boundary.filter((p) => p.x >= threshold);
-    if (rightPoints.length > 0) {
-      const ys = rightPoints.map((p) => p.y);
+  if (seg.boundary && seg.boundary.length >= 3) {
+    // Find boundary points closest to the right edge.
+    // Use the rightmost point's x as anchor, include points within a tight
+    // tolerance (3% of width or 3px) to avoid capturing midline contour points
+    // that would inflate the edge height beyond the actual segment edge.
+    const sorted = [...seg.boundary].sort((a, b) => b.x - a.x);
+    const edgeX = sorted[0].x;
+    const tolerance = Math.max(3, (seg.bbox[2] - seg.bbox[0]) * 0.03);
+    const edgePoints = sorted.filter((p) => edgeX - p.x <= tolerance);
+    if (edgePoints.length >= 2) {
+      const ys = edgePoints.map((p) => p.y);
       return [Math.min(...ys), Math.max(...ys)];
     }
   }
@@ -188,16 +207,92 @@ export function eastEdgeY(seg: EnrichedSegment): [number, number] {
  * using boundary polygon if available, otherwise falling back to bbox.
  */
 export function westEdgeY(seg: EnrichedSegment): [number, number] {
-  if (seg.boundary && seg.boundary.length > 0) {
-    const width = seg.bbox[2] - seg.bbox[0];
-    const threshold = seg.bbox[0] + width * 0.1;
-    const leftPoints = seg.boundary.filter((p) => p.x <= threshold);
-    if (leftPoints.length > 0) {
-      const ys = leftPoints.map((p) => p.y);
+  if (seg.boundary && seg.boundary.length >= 3) {
+    // Find boundary points closest to the left edge (same tight tolerance)
+    const sorted = [...seg.boundary].sort((a, b) => a.x - b.x);
+    const edgeX = sorted[0].x;
+    const tolerance = Math.max(3, (seg.bbox[2] - seg.bbox[0]) * 0.03);
+    const edgePoints = sorted.filter((p) => p.x - edgeX <= tolerance);
+    if (edgePoints.length >= 2) {
+      const ys = edgePoints.map((p) => p.y);
       return [Math.min(...ys), Math.max(...ys)];
     }
   }
   return [seg.bbox[1], seg.bbox[3]];
+}
+
+/**
+ * Vision-based edge alignment check for merge validation.
+ *
+ * Grabs the rightmost Vision word of the left segment and the leftmost
+ * Vision word of the right segment. Compares the right edge (top/bottom Y)
+ * of the left word against the left edge (top/bottom Y) of the right word —
+ * same logic as the Kraken edge-to-edge check but using Vision boxes as an
+ * independent second opinion.
+ *
+ * Returns `true` if Vision confirms the merge (edges align) or if there
+ * aren't enough Vision words to judge. Returns `false` if Vision says
+ * the edges clearly don't align (different lines).
+ */
+function visionConfirmsMerge(
+  left: EnrichedSegment,
+  right: EnrichedSegment,
+  medianLineHeight: number,
+): boolean {
+  // Quick win: if any Vision word literally spans the gap between the
+  // two segments, that's definitive proof they belong on the same line.
+  const gapStart = left.bbox[2];
+  const gapEnd = right.bbox[0];
+  const allWords = [...left.visionWords, ...right.visionWords];
+  for (const w of allWords) {
+    if (w.bbox[0] <= gapStart && w.bbox[2] >= gapEnd) {
+      return true; // a word bridges the gap
+    }
+  }
+
+  // If neither side has Vision words, allow (nothing to validate against).
+  // If one side has words and the other doesn't, only allow if the wordless
+  // segment is substantial (wide enough to be a real text fragment).
+  // Tiny segments with no words are likely edge artifacts.
+  const hasLeft = left.visionWords.length > 0;
+  const hasRight = right.visionWords.length > 0;
+  if (!hasLeft && !hasRight) return true;
+  if (!hasLeft) {
+    return segWidth(left) >= medianLineHeight * 1.5;
+  }
+  if (!hasRight) {
+    return segWidth(right) >= medianLineHeight * 1.5;
+  }
+
+  const leftWord = left.visionWords[left.visionWords.length - 1];
+  const rightWord = right.visionWords[0];
+
+  // Right edge of left word: top Y = bbox[1], bottom Y = bbox[3]
+  const leftTop = leftWord.bbox[1];
+  const leftBottom = leftWord.bbox[3];
+
+  // Left edge of right word: top Y = bbox[1], bottom Y = bbox[3]
+  const rightTop = rightWord.bbox[1];
+  const rightBottom = rightWord.bbox[3];
+
+  // Check top-top and bottom-bottom alignment
+  const topDelta = Math.abs(leftTop - rightTop);
+  const bottomDelta = Math.abs(leftBottom - rightBottom);
+
+  // Also check height similarity of the junction words themselves
+  const leftWordH = leftBottom - leftTop;
+  const rightWordH = rightBottom - rightTop;
+  const maxWordH = Math.max(leftWordH, rightWordH, 1);
+  const minWordH = Math.min(leftWordH, rightWordH);
+
+  // Vision boxes are less precise than Kraken but should still agree
+  // on which line they're on. Use moderate tolerance.
+  const maxDelta = medianLineHeight * 0.5;
+
+  if (topDelta > maxDelta || bottomDelta > maxDelta) return false;
+  if (minWordH / maxWordH < 0.5) return false;
+
+  return true;
 }
 
 /**
@@ -216,8 +311,8 @@ function chainSegments(
   medianLineHeight: number,
   maxGapRatio: number,
   maxEdgeRatio: number,
-): EnrichedSegment[][] {
-  if (segments.length === 0) return [];
+): { chains: EnrichedSegment[][]; visionRejections: VisionRejectedMerge[] } {
+  if (segments.length === 0) return { chains: [], visionRejections: [] };
 
   // Sort by left edge, then top edge as tiebreaker
   const sorted = [...segments].sort((a, b) => {
@@ -227,6 +322,7 @@ function chainSegments(
   });
 
   const chains: EnrichedSegment[][] = [];
+  const visionRejections: VisionRejectedMerge[] = [];
 
   for (const seg of sorted) {
     let bestChainIdx = -1;
@@ -245,7 +341,16 @@ function chainSegments(
       const effectiveMaxGap = continuityBoost ? baseMaxGap * 1.5 : baseMaxGap;
       if (gap > effectiveMaxGap) continue;
 
-      // 2. Edge matching: RIGHT side of tail → LEFT side of seg.
+      // 2. Overall height compatibility: segments with very different
+      //    heights are clearly from different lines (e.g., short margin
+      //    annotation vs. full body line). Reject early.
+      const segH = segHeight(seg);
+      const tailH = segHeight(tail);
+      const maxOverallH = Math.max(segH, tailH, 1);
+      const minOverallH = Math.min(segH, tailH);
+      if (minOverallH / maxOverallH < 0.35) continue;
+
+      // 3. Edge matching: RIGHT side of tail → LEFT side of seg.
       //    Get top/bottom Y at the meeting edges from boundary polygons.
       const tailRight = eastEdgeY(tail);   // [topY, bottomY]
       const segLeft = westEdgeY(seg);      // [topY, bottomY]
@@ -257,13 +362,22 @@ function chainSegments(
       const bottomDelta = Math.abs(segLeft[1] - tailRight[1]);
       if (topDelta > maxEdgeDelta || bottomDelta > maxEdgeDelta) continue;
 
-      // 3. Height check: the edge heights must be similar.
+      // 4. Edge height check: the heights at the meeting edges must be similar.
       //    Prevents merging a tall segment (different line) with a short one.
       const tailEdgeH = tailRight[1] - tailRight[0];
       const segEdgeH = segLeft[1] - segLeft[0];
       const maxH = Math.max(tailEdgeH, segEdgeH, 1);
       const minH = Math.min(tailEdgeH, segEdgeH);
       if (minH / maxH < 0.4) continue;
+
+      // 5. Vision word edge alignment: use Vision boxes as independent
+      //    confirmation. Grab the rightmost word of tail and leftmost word
+      //    of seg, compare their top-top / bottom-bottom Y alignment.
+      //    If Vision says the junction doesn't line up, reject the merge.
+      if (!visionConfirmsMerge(tail, seg, medianLineHeight)) {
+        visionRejections.push({ left: tail, right: seg });
+        continue;
+      }
 
       // Pick the chain with the smallest gap
       if (gap < bestGap) {
@@ -279,7 +393,7 @@ function chainSegments(
     }
   }
 
-  return chains;
+  return { chains, visionRejections };
 }
 
 /**
@@ -382,7 +496,7 @@ export function constrainedGrouping(
   },
 ): GroupingResult {
   if (!segments || segments.length === 0) {
-    return { lines: [], marginalSegments: [] };
+    return { lines: [], marginalSegments: [], visionRejections: [] };
   }
 
   const maxGapRatio = opts?.maxGapRatio ?? 2.0;
@@ -404,7 +518,7 @@ export function constrainedGrouping(
   // Step 2: Group candidate segments (excludes obvious margin).
   // This allows small body fragments (like "9" from "970") to merge with
   // adjacent body segments before region classification runs.
-  const allChains = chainSegments(
+  const { chains: allChains, visionRejections } = chainSegments(
     candidateSegments,
     medianLineHeight,
     maxGapRatio,
@@ -445,5 +559,6 @@ export function constrainedGrouping(
   return {
     lines: allLines,
     marginalSegments,
+    visionRejections,
   };
 }

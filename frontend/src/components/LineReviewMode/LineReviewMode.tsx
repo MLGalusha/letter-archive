@@ -11,7 +11,7 @@ import { getErrorMessage, getImageUrl } from '../../api/client';
 import { detectPageLines } from '../../api/admin/letters';
 import type { Letter, LineSegment, LineSegmentWord, OcrWordBox } from '../../types/Letter';
 import { attachWordsToSegments } from '../../utils/attachWordsToSegments';
-import { constrainedGrouping, eastEdgeY, westEdgeY, type GroupedLine } from '../../utils/constrainedGrouping';
+import { constrainedGrouping, eastEdgeY, westEdgeY, type GroupedLine, type VisionRejectedMerge } from '../../utils/constrainedGrouping';
 import { matchTranscriptToLines, type MatchedLine } from '../../utils/transcriptMatcher';
 import {
   alignTranscriptToVisualLines,
@@ -456,13 +456,13 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const { enriched, unassigned } = attachWordsToSegments(rawSegments, wordBoxes);
 
     // Phase 3: Constrained grouping
-    const { lines: groupedLines, marginalSegments } = constrainedGrouping(enriched);
+    const { lines: groupedLines, marginalSegments, visionRejections } = constrainedGrouping(enriched);
 
     // Phase 4-5: Match transcript to grouped lines
     const transcriptLines = pageLineTexts[currentPageIndex] ?? [];
     const matchResult = matchTranscriptToLines(transcriptLines, groupedLines, unassigned);
 
-    return { enriched, unassigned, groupedLines, marginalSegments, matchResult };
+    return { enriched, unassigned, groupedLines, marginalSegments, matchResult, visionRejections };
   }, [krakenSegmentsMap, currentPageIndex, letterPages, visionBoxesMap, pageLineTexts]);
 
   // Merged AI segments for alignment — use grouped lines from the pipeline
@@ -1219,6 +1219,109 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                   );
                 }),
               )}
+            {/* Vision junction debug: show the two Vision word boxes being compared
+                at each merge junction, with cyan connecting lines top-top / bottom-bottom */}
+            {pipelineResult?.groupedLines
+              .filter((gl) => gl.merged && gl.constituents.length > 1)
+              .flatMap((gl, gi) =>
+                gl.constituents.slice(0, -1).map((seg, si) => {
+                  const next = gl.constituents[si + 1];
+                  const leftWord = seg.visionWords.length > 0
+                    ? seg.visionWords[seg.visionWords.length - 1]
+                    : null;
+                  const rightWord = next.visionWords.length > 0
+                    ? next.visionWords[0]
+                    : null;
+                  if (!leftWord && !rightWord) return null;
+                  const s = scaleFactor;
+                  return (
+                    <g key={`vjunc-${gi}-${si}`}>
+                      {/* Left word box (rightmost word of left segment) */}
+                      {leftWord && (
+                        <rect
+                          className="line-review-debug-vision-junction"
+                          x={leftWord.bbox[0] * s}
+                          y={leftWord.bbox[1] * s}
+                          width={(leftWord.bbox[2] - leftWord.bbox[0]) * s}
+                          height={(leftWord.bbox[3] - leftWord.bbox[1]) * s}
+                        />
+                      )}
+                      {/* Right word box (leftmost word of right segment) */}
+                      {rightWord && (
+                        <rect
+                          className="line-review-debug-vision-junction"
+                          x={rightWord.bbox[0] * s}
+                          y={rightWord.bbox[1] * s}
+                          width={(rightWord.bbox[2] - rightWord.bbox[0]) * s}
+                          height={(rightWord.bbox[3] - rightWord.bbox[1]) * s}
+                        />
+                      )}
+                      {/* Connecting lines top-top and bottom-bottom */}
+                      {leftWord && rightWord && (
+                        <>
+                          <line className="line-review-debug-vision-connector"
+                            x1={leftWord.bbox[2] * s} y1={leftWord.bbox[1] * s}
+                            x2={rightWord.bbox[0] * s} y2={rightWord.bbox[1] * s} />
+                          <line className="line-review-debug-vision-connector"
+                            x1={leftWord.bbox[2] * s} y1={leftWord.bbox[3] * s}
+                            x2={rightWord.bbox[0] * s} y2={rightWord.bbox[3] * s} />
+                        </>
+                      )}
+                    </g>
+                  );
+                }).filter(Boolean),
+              )}
+            {/* Vision-rejected merges: Kraken wanted these but Vision said no.
+                Show with red boxes + red connectors so you can see what was rejected. */}
+            {(pipelineResult?.visionRejections ?? []).map((rej, ri) => {
+              const s = scaleFactor;
+              const leftWord = rej.left.visionWords.length > 0
+                ? rej.left.visionWords[rej.left.visionWords.length - 1]
+                : null;
+              const rightWord = rej.right.visionWords.length > 0
+                ? rej.right.visionWords[0]
+                : null;
+              // Also draw Kraken connectors (orange dashed) so you can see what Kraken wanted
+              const segEast = eastEdgeY(rej.left);
+              const nextWest = westEdgeY(rej.right);
+              const rx = rej.left.bbox[2] * s;
+              const lx = rej.right.bbox[0] * s;
+              return (
+                <g key={`vrej-${ri}`}>
+                  {/* Kraken's intended merge (orange dashed) */}
+                  <line className="line-review-debug-connector"
+                    x1={rx} y1={segEast[0] * s}
+                    x2={lx} y2={nextWest[0] * s} />
+                  <line className="line-review-debug-connector"
+                    x1={rx} y1={segEast[1] * s}
+                    x2={lx} y2={nextWest[1] * s} />
+                  {/* Vision boxes that caused the rejection (red) */}
+                  {leftWord && (
+                    <rect className="line-review-debug-vision-rejected"
+                      x={leftWord.bbox[0] * s} y={leftWord.bbox[1] * s}
+                      width={(leftWord.bbox[2] - leftWord.bbox[0]) * s}
+                      height={(leftWord.bbox[3] - leftWord.bbox[1]) * s} />
+                  )}
+                  {rightWord && (
+                    <rect className="line-review-debug-vision-rejected"
+                      x={rightWord.bbox[0] * s} y={rightWord.bbox[1] * s}
+                      width={(rightWord.bbox[2] - rightWord.bbox[0]) * s}
+                      height={(rightWord.bbox[3] - rightWord.bbox[1]) * s} />
+                  )}
+                  {/* Red connectors showing Vision mismatch */}
+                  {leftWord && rightWord && (
+                    <>
+                      <line className="line-review-debug-vision-rejected-connector"
+                        x1={leftWord.bbox[2] * s} y1={leftWord.bbox[1] * s}
+                        x2={rightWord.bbox[0] * s} y2={rightWord.bbox[1] * s} />
+                      <line className="line-review-debug-vision-rejected-connector"
+                        x1={leftWord.bbox[2] * s} y1={leftWord.bbox[3] * s}
+                        x2={rightWord.bbox[0] * s} y2={rightWord.bbox[3] * s} />
+                    </>
+                  )}
+                </g>
+              );
+            })}
           </svg>
         )}
 

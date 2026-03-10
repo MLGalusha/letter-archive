@@ -316,6 +316,34 @@
   stroke-width: 2;
 }
 
+/* Vision junction word boxes (cyan) */
+.line-review-debug-vision-junction {
+  fill: rgba(0, 220, 220, 0.15);
+  stroke: rgba(0, 220, 220, 0.9);
+  stroke-width: 2;
+}
+
+/* Vision junction connector lines (cyan dashed) */
+.line-review-debug-vision-connector {
+  stroke: rgba(0, 220, 220, 0.8);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+/* Vision-rejected junction word boxes (red) */
+.line-review-debug-vision-rejected {
+  fill: rgba(255, 40, 40, 0.2);
+  stroke: rgba(255, 40, 40, 0.9);
+  stroke-width: 2;
+}
+
+/* Vision-rejected connector lines (red dashed) */
+.line-review-debug-vision-rejected-connector {
+  stroke: rgba(255, 40, 40, 0.8);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
 /* Debug legend swatch for merged/grouped lines */
 .debug-legend-merged {
   background: rgba(255, 160, 0, 0.5);

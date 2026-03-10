@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getErrorMessage } from "../../api/client";
-import { Button, Modal } from "../../components/common";
+import { Button, Modal, Icon } from "../../components/common";
 import { useToast } from "../../contexts/ToastContext";
 import {
   getAllPlaces,
@@ -588,54 +588,63 @@ export default function PlacesPage() {
           {selectedPlace ? (
             <>
               <div className="detail-header">
-                <h2>{selectedPlace.canonicalName}</h2>
-                <div className="detail-actions">
-                  <Button variant="secondary" size="sm" onClick={openEditModal}>
-                    Edit
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShowMergeModal(true)}
-                  >
-                    Merge
-                  </Button>
-                </div>
-              </div>
-
-              <div className="detail-section">
                 {deepLinkedEntityId === selectedPlace.id && (
                   <div className="jump-context-banner">Opened from linked entity</div>
                 )}
-                <h3>Details</h3>
-                <div className="detail-field">
-                  <span className="field-label">Letters:</span>
-                  <span className="field-value">{selectedPlace.letterCount}</span>
+                <div className="detail-header-row">
+                  <h2>{selectedPlace.canonicalName}</h2>
+                  <div className="detail-actions">
+                    <Button variant="secondary" size="sm" onClick={openEditModal}>
+                      Edit
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowMergeModal(true)}
+                    >
+                      Merge
+                    </Button>
+                  </div>
                 </div>
-                {selectedPlace.placeType && (
-                  <div className="detail-field">
-                    <span className="field-label">Type:</span>
-                    <span className="field-value">
-                      {PLACE_TYPE_OPTIONS.find((t) => t.value === selectedPlace.placeType)?.label ||
-                        selectedPlace.placeType}
+                <div className="detail-stat-row">
+                  <span className="detail-stat">
+                    <span className="detail-stat-value">{selectedPlace.letterCount}</span>
+                    <span className="detail-stat-label">letter{selectedPlace.letterCount !== 1 ? "s" : ""}</span>
+                  </span>
+                  {selectedPlace.placeType && (
+                    <span className="detail-stat">
+                      <span className="detail-stat-value">
+                        {PLACE_TYPE_OPTIONS.find((t) => t.value === selectedPlace.placeType)?.label ||
+                          selectedPlace.placeType}
+                      </span>
                     </span>
-                  </div>
-                )}
-                {selectedPlace.aliases && selectedPlace.aliases.length > 0 && (
-                  <div className="detail-field">
-                    <span className="field-label">Aliases:</span>
-                    <span className="field-value">
-                      {selectedPlace.aliases.join(", ")}
+                  )}
+                  {selectedPlace.aliases && selectedPlace.aliases.length > 0 && (
+                    <span className="detail-stat">
+                      <span className="detail-stat-value">{selectedPlace.aliases.length}</span>
+                      <span className="detail-stat-label">alias{selectedPlace.aliases.length !== 1 ? "es" : ""}</span>
                     </span>
-                  </div>
-                )}
-                {selectedPlaceNotes && (
-                  <div className="detail-field">
-                    <span className="field-label">Notes:</span>
-                    <span className="field-value">{selectedPlaceNotes}</span>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
+
+              {selectedPlace.aliases && selectedPlace.aliases.length > 0 && (
+                <div className="detail-card">
+                  <h4>Aliases</h4>
+                  <div className="alias-chips">
+                    {selectedPlace.aliases.map((alias, i) => (
+                      <span key={i} className="alias-chip">{alias}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedPlaceNotes && (
+                <div className="detail-card">
+                  <h4>Notes</h4>
+                  <p className="detail-notes">{selectedPlaceNotes}</p>
+                </div>
+              )}
 
               <SameNameCandidatesCard
                 title="Same-Name Candidates"
@@ -647,9 +656,9 @@ export default function PlacesPage() {
                 onSelect={openCandidatePlace}
               />
 
-              <div className="detail-section">
+              <div className="detail-card">
                 <div className="section-header">
-                  <h3>Themes</h3>
+                  <h4>Themes</h4>
                   <Button
                     variant="secondary"
                     size="sm"
@@ -660,8 +669,8 @@ export default function PlacesPage() {
                   </Button>
                 </div>
                 {selectedPlaceThemes.length === 0 ? (
-                  <div className="empty-state">
-                    No themes yet. Generate once transcripted references are available.
+                  <div className="empty-state-inline">
+                    No themes yet. Generate once transcribed references are available.
                   </div>
                 ) : (
                   <ul className="themes-list">
@@ -672,14 +681,14 @@ export default function PlacesPage() {
                 )}
               </div>
 
-              <div className="detail-section">
+              <div className="detail-card">
                 <div className="section-header">
-                  <h3>Letter References</h3>
+                  <h4>Letter References</h4>
                 </div>
                 {loadingDetails ? (
                   <div className="loading-state">Loading references...</div>
                 ) : selectedLetters.length === 0 ? (
-                  <div className="empty-state">No linked letters yet</div>
+                  <div className="empty-state-inline">No linked letters yet</div>
                 ) : (
                   <div className="reference-list">
                     {selectedLetters.map((letter) => (
@@ -693,7 +702,7 @@ export default function PlacesPage() {
                           <span className="reference-date">
                             {letter.letterDate || letter.dateRaw}
                           </span>
-                          <span className="reference-role">{formatReferenceRole(letter.role)}</span>
+                          <span className={`reference-role-badge role-${letter.role}`}>{formatReferenceRole(letter.role)}</span>
                         </div>
                         {(letter.hook || letter.summary || letter.context) && (
                           <div className="reference-preview">
@@ -708,7 +717,9 @@ export default function PlacesPage() {
             </>
           ) : (
             <div className="no-selection">
+              <Icon name="place" size={48} />
               <p>Select a place to view details</p>
+              <span className="no-selection-hint">Choose from the list or search by name</span>
             </div>
           )}
         </div>

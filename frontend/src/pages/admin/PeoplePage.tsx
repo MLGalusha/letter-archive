@@ -689,45 +689,61 @@ export default function PeoplePage() {
           {selectedPerson ? (
             <>
               <div className="detail-header">
-                <h2>{selectedPerson.canonicalName}</h2>
-                <div className="detail-actions">
-                  <Button variant="secondary" size="sm" onClick={openEditModal}>
-                    Edit
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShowMergeModal(true)}
-                  >
-                    Merge
-                  </Button>
-                </div>
-              </div>
-
-              <div className="detail-section">
                 {deepLinkedEntityId === selectedPerson.id && (
                   <div className="jump-context-banner">Opened from linked entity</div>
                 )}
-                <h3>Details</h3>
-                <div className="detail-field">
-                  <span className="field-label">Letters:</span>
-                  <span className="field-value">{selectedPerson.letterCount}</span>
+                <div className="detail-header-row">
+                  <h2>{selectedPerson.canonicalName}</h2>
+                  <div className="detail-actions">
+                    <Button variant="secondary" size="sm" onClick={openEditModal}>
+                      Edit
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowMergeModal(true)}
+                    >
+                      Merge
+                    </Button>
+                  </div>
                 </div>
-                {selectedPerson.aliases && selectedPerson.aliases.length > 0 && (
-                  <div className="detail-field">
-                    <span className="field-label">Aliases:</span>
-                    <span className="field-value">
-                      {selectedPerson.aliases.join(", ")}
+                <div className="detail-stat-row">
+                  <span className="detail-stat">
+                    <span className="detail-stat-value">{selectedPerson.letterCount}</span>
+                    <span className="detail-stat-label">letter{selectedPerson.letterCount !== 1 ? "s" : ""}</span>
+                  </span>
+                  {selectedPerson.aliases && selectedPerson.aliases.length > 0 && (
+                    <span className="detail-stat">
+                      <span className="detail-stat-value">{selectedPerson.aliases.length}</span>
+                      <span className="detail-stat-label">alias{selectedPerson.aliases.length !== 1 ? "es" : ""}</span>
                     </span>
-                  </div>
-                )}
-                {selectedPerson.notes && (
-                  <div className="detail-field">
-                    <span className="field-label">Notes:</span>
-                    <span className="field-value">{selectedPerson.notes}</span>
-                  </div>
-                )}
+                  )}
+                  {selectedRelationships.length > 0 && (
+                    <span className="detail-stat">
+                      <span className="detail-stat-value">{selectedRelationships.length}</span>
+                      <span className="detail-stat-label">relationship{selectedRelationships.length !== 1 ? "s" : ""}</span>
+                    </span>
+                  )}
+                </div>
               </div>
+
+              {selectedPerson.aliases && selectedPerson.aliases.length > 0 && (
+                <div className="detail-card">
+                  <h4>Aliases</h4>
+                  <div className="alias-chips">
+                    {selectedPerson.aliases.map((alias, i) => (
+                      <span key={i} className="alias-chip">{alias}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedPerson.notes && (
+                <div className="detail-card">
+                  <h4>Notes</h4>
+                  <p className="detail-notes">{selectedPerson.notes}</p>
+                </div>
+              )}
 
               <SameNameCandidatesCard
                 title="Same-Name Candidates"
@@ -739,14 +755,14 @@ export default function PeoplePage() {
                 onSelect={openCandidatePerson}
               />
 
-              <div className="detail-section">
+              <div className="detail-card">
                 <div className="section-header">
-                  <h3>Letter References</h3>
+                  <h4>Letter References</h4>
                 </div>
                 {loadingRelationships ? (
                   <div className="loading-state">Loading references...</div>
                 ) : selectedLetters.length === 0 ? (
-                  <div className="empty-state">No linked letters yet</div>
+                  <div className="empty-state-inline">No linked letters yet</div>
                 ) : (
                   <div className="reference-list">
                     {selectedLetters.map((letter) => (
@@ -760,7 +776,7 @@ export default function PeoplePage() {
                           <span className="reference-date">
                             {letter.letterDate || letter.dateRaw}
                           </span>
-                          <span className="reference-role">{formatReferenceRole(letter.role)}</span>
+                          <span className={`reference-role-badge role-${letter.role}`}>{formatReferenceRole(letter.role)}</span>
                         </div>
                         {(letter.hook || letter.summary || letter.context) && (
                           <div className="reference-preview">
@@ -773,9 +789,9 @@ export default function PeoplePage() {
                 )}
               </div>
 
-              <div className="detail-section biography-section">
+              <div className="detail-card biography-section">
                 <div className="section-header">
-                  <h3>Biography</h3>
+                  <h4>Biography</h4>
                   <div className="biography-actions">
                     {biographyStatus === "VERIFIED" ? (
                       <Button
@@ -833,9 +849,9 @@ export default function PeoplePage() {
                 />
               </div>
 
-              <div className="detail-section">
+              <div className="detail-card">
                 <div className="section-header">
-                  <h3>Relationships</h3>
+                  <h4>Relationships</h4>
                   <Button
                     variant="secondary"
                     size="sm"
@@ -847,7 +863,7 @@ export default function PeoplePage() {
                 {loadingRelationships ? (
                   <div className="loading-state">Loading...</div>
                 ) : selectedRelationships.length === 0 ? (
-                  <div className="empty-state">No relationships</div>
+                  <div className="empty-state-inline">No relationships yet</div>
                 ) : (
                   <div className="relationships-list">
                     {selectedRelationships.map((rel) => (
@@ -880,7 +896,9 @@ export default function PeoplePage() {
             </>
           ) : (
             <div className="no-selection">
+              <Icon name="person" size={48} />
               <p>Select a person to view details</p>
+              <span className="no-selection-hint">Choose from the list or search by name</span>
             </div>
           )}
         </div>

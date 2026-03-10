@@ -1267,6 +1267,8 @@ export async function transcribeExtras(letterId: string): Promise<TranscribeExtr
     await db.update(letters).set({
       extraContentStatus: 'EMPTY',
       extraContentTranscript: null,
+      extraContentVerifiedAt: null,
+      extraContentVerifiedBy: null,
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
 
@@ -1356,6 +1358,8 @@ export async function transcribeExtras(letterId: string): Promise<TranscribeExtr
   await db.update(letters).set({
     extraContentTranscript: combinedTranscript || null,
     extraContentStatus: newStatus,
+    extraContentVerifiedAt: null,
+    extraContentVerifiedBy: null,
     updatedAt: new Date(),
   }).where(eq(letters.id, letterId));
 

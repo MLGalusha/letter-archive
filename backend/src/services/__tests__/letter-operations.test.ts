@@ -13,6 +13,9 @@ const {
   auditMetadataMock,
   resyncMetadataMock,
   syncLetterParticipantsFromMetadataMock,
+  checkExtraContentForTextMock,
+  transcribeExtraContentMock,
+  getAbsoluteStoragePathMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   findManyMock: vi.fn(),
@@ -26,6 +29,9 @@ const {
   auditMetadataMock: vi.fn(),
   resyncMetadataMock: vi.fn(),
   syncLetterParticipantsFromMetadataMock: vi.fn(),
+  checkExtraContentForTextMock: vi.fn(),
+  transcribeExtraContentMock: vi.fn(),
+  getAbsoluteStoragePathMock: vi.fn((value: string) => value),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -108,13 +114,13 @@ vi.mock('../../ai/resync.js', () => ({
 }));
 
 vi.mock('../../ai/openai.js', () => ({
-  checkExtraContentForText: vi.fn(),
-  transcribeExtraContent: vi.fn(),
+  checkExtraContentForText: checkExtraContentForTextMock,
+  transcribeExtraContent: transcribeExtraContentMock,
   transcribeImage: vi.fn(),
 }));
 
 vi.mock('../storage.js', () => ({
-  getAbsoluteStoragePath: vi.fn((value: string) => value),
+  getAbsoluteStoragePath: getAbsoluteStoragePathMock,
 }));
 
 vi.mock('../line-finder.js', () => ({
@@ -146,6 +152,7 @@ import {
   regenerateTranscription,
   resyncCheck,
   resyncLetterMetadata,
+  transcribeExtras,
   transcribeLetterOnly,
   updateExtraContent,
 } from '../letter-operations.js';
@@ -157,6 +164,7 @@ describe('letter operations service', () => {
     deleteWhereMock.mockResolvedValue(undefined);
     findManyMock.mockResolvedValue([]);
     getLetterByIdMock.mockResolvedValue(undefined);
+    getAbsoluteStoragePathMock.mockImplementation((value: string) => value);
   });
 
   it('normalizes common AI relationship variants', () => {
@@ -411,6 +419,92 @@ describe('letter operations service', () => {
         quoteContexts: false,
       },
       decision: expect.objectContaining({ reason: 'Recipient cleared' }),
+    });
+  });
+
+  it('clears extra-content verification metadata when no related items exist to transcribe', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-10',
+      collectionId: 'collection-1',
+      dateRaw: '19470810',
+      typeSequence: 1,
+      collection: { collectionCode: '009' },
+      pages: [],
+    });
+    findManyMock.mockResolvedValue([]);
+
+    const result = await transcribeExtras('letter-10');
+
+    expect(result).toEqual({
+      transcribedCount: 0,
+      extraContentStatus: 'EMPTY',
+      message: 'No extra content found to transcribe',
+    });
+    expect(updateSetMock).toHaveBeenCalledWith({
+      extraContentStatus: 'EMPTY',
+      extraContentTranscript: null,
+      extraContentVerifiedAt: null,
+      extraContentVerifiedBy: null,
+      updatedAt: expect.any(Date),
+    });
+  });
+
+  it('resets extra-content verification when new transcriptions are generated', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-11',
+      collectionId: 'collection-1',
+      dateRaw: '19470810',
+      typeSequence: 1,
+      collection: { collectionCode: '009' },
+      pages: [{ id: 'page-main' }],
+    });
+    findManyMock.mockResolvedValue([
+      {
+        id: 'cover-1',
+        type: 'C',
+        pages: [
+          {
+            id: 'page-cover-1',
+            storagePath: 'collections/009/19470810/C01/009-19470810-C01-01.jpg',
+          },
+        ],
+      },
+    ]);
+    checkExtraContentForTextMock.mockResolvedValue({
+      hasTranscribableText: true,
+      reason: null,
+    });
+    transcribeExtraContentMock.mockResolvedValue({
+      text: 'Envelope note',
+    });
+
+    const result = await transcribeExtras('letter-11');
+
+    expect(getAbsoluteStoragePathMock).toHaveBeenCalledWith(
+      'collections/009/19470810/C01/009-19470810-C01-01.jpg',
+    );
+    expect(checkExtraContentForTextMock).toHaveBeenCalledWith({
+      filePath: 'collections/009/19470810/C01/009-19470810-C01-01.jpg',
+      documentType: 'cover/envelope',
+    });
+    expect(transcribeExtraContentMock).toHaveBeenCalledWith({
+      filePath: 'collections/009/19470810/C01/009-19470810-C01-01.jpg',
+      documentType: 'cover/envelope',
+      context: {
+        collectionCode: '009',
+        dateRaw: '19470810',
+      },
+    });
+    expect(updateSetMock).toHaveBeenCalledWith({
+      extraContentTranscript: '--- Cover/envelope ---\n\nEnvelope note',
+      extraContentStatus: 'AI_DRAFT',
+      extraContentVerifiedAt: null,
+      extraContentVerifiedBy: null,
+      updatedAt: expect.any(Date),
+    });
+    expect(result).toEqual({
+      transcribedCount: 1,
+      extraContentStatus: 'AI_DRAFT',
     });
   });
 });

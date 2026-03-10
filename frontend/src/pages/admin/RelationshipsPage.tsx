@@ -251,9 +251,9 @@ export default function RelationshipsPage() {
     openPersonInAdmin(nodeId);
   };
 
-  const handlePathFound = (path: string[]) => {
+  const handlePathFound = useCallback((path: string[]) => {
     setHighlightedPath(path);
-  };
+  }, []);
 
   const getRelationshipLabel = (type: PersonRelationshipType) => {
     return PERSON_RELATIONSHIP_OPTIONS.find((t) => t.value === type)?.label || type;

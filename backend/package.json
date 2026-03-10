@@ -11,6 +11,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
+    "logs:query": "tsx scripts/query-logs.ts",
+    "logs:errors": "tsx scripts/query-logs.ts --level error --hours 24",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "drizzle:generate": "drizzle-kit generate",

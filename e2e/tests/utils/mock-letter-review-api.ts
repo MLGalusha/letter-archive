@@ -1,6 +1,6 @@
 import { access } from 'node:fs/promises';
 import path from 'node:path';
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 import { API_BASE_URL } from './test-helpers';
 
 interface MockLetterImage {
@@ -100,6 +100,12 @@ interface MockResyncRequest {
     oldRecipient?: string | null;
     newRecipient?: string | null;
   };
+}
+
+interface MockApiFailure {
+  status?: number;
+  error: string;
+  requestId?: string;
 }
 
 type MockLetterReviewOverrides = Partial<MockLetterReviewLetter> & {
@@ -347,6 +353,19 @@ export async function installMockLetterReviewApi(
       string,
       { status?: number; error: string; requestId?: string }
     >;
+    routeFailures?: Partial<
+      Record<
+        | 'verifyTranscript'
+        | 'verifyMetadata'
+        | 'extraContent'
+        | 'verifyExtraContent'
+        | 'unverifyExtraContent'
+        | 'resyncCheck'
+        | 'resync'
+        | 'flag',
+        MockApiFailure
+      >
+    >;
   } = {},
 ): Promise<MockLetterReviewContext> {
   const letter = clone(options.initialLetter ?? baseLetter);
@@ -370,6 +389,19 @@ export async function installMockLetterReviewApi(
     : createMockDetectLinesByPageId();
   const detectLinesFailuresByPageId = clone(options.detectLinesFailuresByPageId ?? {});
   const lineCorrectionFailuresByPageId = clone(options.lineCorrectionFailuresByPageId ?? {});
+  const routeFailures = clone(options.routeFailures ?? {});
+
+  const fulfillFailure = async (route: Route, failure: MockApiFailure) => {
+    await route.fulfill({
+      status: failure.status ?? 500,
+      contentType: 'application/json',
+      headers: failure.requestId ? { 'x-request-id': failure.requestId } : undefined,
+      body: JSON.stringify({
+        error: failure.error,
+        requestId: failure.requestId,
+      }),
+    });
+  };
 
   await page.addInitScript(() => {
     sessionStorage.setItem('adminAuth', 'true');
@@ -458,6 +490,10 @@ export async function installMockLetterReviewApi(
 
   await page.route(new RegExp(`${escapeRegex(letterPath)}/verify-transcript$`), async (route) => {
     verifyTranscriptRequests.push(route.request().url());
+    if (routeFailures.verifyTranscript) {
+      await fulfillFailure(route, routeFailures.verifyTranscript);
+      return;
+    }
     letter.transcriptStatus = 'VERIFIED';
     letter.transcript.verified = true;
     letter.transcriptVerifiedAt = TRANSCRIPT_VERIFIED_AT;
@@ -484,6 +520,10 @@ export async function installMockLetterReviewApi(
 
   await page.route(new RegExp(`${escapeRegex(letterPath)}/verify-metadata$`), async (route) => {
     verifyMetadataRequests.push(route.request().url());
+    if (routeFailures.verifyMetadata) {
+      await fulfillFailure(route, routeFailures.verifyMetadata);
+      return;
+    }
     letter.metadataContentStatus = 'VERIFIED';
     letter.metadata.verified = true;
     letter.metadataVerifiedAt = METADATA_VERIFIED_AT;
@@ -511,6 +551,10 @@ export async function installMockLetterReviewApi(
   await page.route(new RegExp(`${escapeRegex(letterPath)}/extra-content$`), async (route) => {
     const body = route.request().postDataJSON() as MockExtraContentRequest['body'];
     updateExtraContentRequests.push({ url: route.request().url(), body });
+    if (routeFailures.extraContent) {
+      await fulfillFailure(route, routeFailures.extraContent);
+      return;
+    }
 
     const nextExtraContent =
       body.extraContent !== undefined
@@ -542,6 +586,10 @@ export async function installMockLetterReviewApi(
 
   await page.route(new RegExp(`${escapeRegex(letterPath)}/verify-extra-content$`), async (route) => {
     verifyExtraContentRequests.push(route.request().url());
+    if (routeFailures.verifyExtraContent) {
+      await fulfillFailure(route, routeFailures.verifyExtraContent);
+      return;
+    }
     letter.extraContentStatus = 'VERIFIED';
     letter.extraContentVerifiedAt = EXTRA_CONTENT_VERIFIED_AT;
 
@@ -554,6 +602,10 @@ export async function installMockLetterReviewApi(
 
   await page.route(new RegExp(`${escapeRegex(letterPath)}/unverify-extra-content$`), async (route) => {
     unverifyExtraContentRequests.push(route.request().url());
+    if (routeFailures.unverifyExtraContent) {
+      await fulfillFailure(route, routeFailures.unverifyExtraContent);
+      return;
+    }
     letter.extraContentStatus = 'EDITED';
     delete letter.extraContentVerifiedAt;
 
@@ -567,6 +619,10 @@ export async function installMockLetterReviewApi(
   await page.route(new RegExp(`${escapeRegex(letterPath)}/resync-check$`), async (route) => {
     const body = route.request().postDataJSON() as MockResyncRequest['body'];
     resyncCheckRequests.push({ url: route.request().url(), body });
+    if (routeFailures.resyncCheck) {
+      await fulfillFailure(route, routeFailures.resyncCheck);
+      return;
+    }
 
     const needsResync =
       body.oldSender !== body.newSender || body.oldRecipient !== body.newRecipient;
@@ -595,6 +651,10 @@ export async function installMockLetterReviewApi(
   await page.route(new RegExp(`${escapeRegex(letterPath)}/resync$`), async (route) => {
     const body = route.request().postDataJSON() as MockResyncRequest['body'];
     resyncRequests.push({ url: route.request().url(), body });
+    if (routeFailures.resync) {
+      await fulfillFailure(route, routeFailures.resync);
+      return;
+    }
 
     letter.metadata.sender = body.newSender ?? undefined;
     letter.metadata.recipient = body.newRecipient ?? undefined;
@@ -638,6 +698,10 @@ export async function installMockLetterReviewApi(
   await page.route(new RegExp(`${escapeRegex(letterPath)}/flag$`), async (route) => {
     const body = route.request().postDataJSON() as { flagged?: boolean };
     flagRequests.push({ url: route.request().url(), body });
+    if (routeFailures.flag) {
+      await fulfillFailure(route, routeFailures.flag);
+      return;
+    }
 
     if (typeof body?.flagged === 'boolean') {
       letter.flagged = body.flagged;

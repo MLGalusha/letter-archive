@@ -16,6 +16,24 @@ async function openMockLetterReview(page: Page, initialLetter = createMockLetter
   return mockedApi;
 }
 
+async function openMockLetterReviewWithOptions(
+  page: Page,
+  initialLetter = createMockLetterReviewLetter(),
+  options: Omit<Parameters<typeof installMockLetterReviewApi>[1], 'initialLetter'> = {},
+) {
+  const mockedApi = await installMockLetterReviewApi(page, {
+    initialLetter,
+    ...options,
+  });
+  await page.goto(`/admin/letters/${initialLetter.id}`);
+  await page.locator('.letter-review-page').waitFor({ state: 'visible' });
+  await page.locator('.viewer-image').waitFor({ state: 'visible' });
+  await expect(page.locator('.transcript-editor').first()).toContainText(
+    'My dear mother,',
+  );
+  return mockedApi;
+}
+
 function createMockLetterWithExtras(
   overrides: Parameters<typeof createMockLetterReviewLetter>[0] = {},
 ) {
@@ -81,6 +99,33 @@ test.describe('@mocked Letter Review', () => {
       'contenteditable',
       'false',
     );
+    expect(mockedApi.verifyTranscriptRequests).toEqual([
+      `${API_BASE_URL}/admin/letters/letter-review-1/verify-transcript`,
+    ]);
+  });
+
+  test('shows the request id when transcript verification fails', async ({ page }) => {
+    const mockedApi = await openMockLetterReviewWithOptions(
+      page,
+      createMockLetterReviewLetter(),
+      {
+        routeFailures: {
+          verifyTranscript: {
+            status: 503,
+            error: 'Transcript verifier offline',
+            requestId: 'req-review-transcript-503',
+          },
+        },
+      },
+    );
+
+    const transcriptSection = page.locator('.editor-section').first();
+    await transcriptSection.locator('.verify-btn').click();
+
+    await expect(page.locator('.toast')).toContainText(
+      'Transcript verifier offline (Request ID: req-review-transcript-503)',
+    );
+    await expect(transcriptSection.locator('.verify-btn')).toBeVisible();
     expect(mockedApi.verifyTranscriptRequests).toEqual([
       `${API_BASE_URL}/admin/letters/letter-review-1/verify-transcript`,
     ]);
@@ -234,6 +279,35 @@ test.describe('@mocked Letter Review', () => {
     await expect(page.locator('#description')).toHaveValue(
       'Alicia Smith metadata synced for Bob Smith.',
     );
+  });
+
+  test('shows the request id when AI sync fails during the resync check', async ({
+    page,
+  }) => {
+    const mockedApi = await openMockLetterReviewWithOptions(
+      page,
+      createMockLetterReviewLetter(),
+      {
+        routeFailures: {
+          resyncCheck: {
+            status: 500,
+            error: 'Metadata sync check failed',
+            requestId: 'req-review-sync-500',
+          },
+        },
+      },
+    );
+
+    await page.locator('#sender').fill('Alicia Smith');
+    await page.locator('.metadata-section .sync-btn').click();
+
+    await expect(page.locator('.toast')).toContainText(
+      'Metadata sync check failed (Request ID: req-review-sync-500)',
+    );
+    await expect
+      .poll(() => mockedApi.resyncCheckRequests.length)
+      .toBe(1);
+    expect(mockedApi.resyncRequests).toHaveLength(0);
   });
 
   test('toggles follow-up flag from the review header', async ({ page }) => {

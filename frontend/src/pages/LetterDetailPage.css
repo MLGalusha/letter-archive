@@ -1,13 +1,33 @@
+/* Full-viewport layout like admin — no body-layout constraint */
 .letter-detail-page {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  height: 100vh;
+  text-align: left;
 }
 
 .letter-loading {
   text-align: center;
   color: var(--text-muted);
   padding: var(--spacing-lg);
+}
+
+.letter-detail-error {
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+}
+
+/* Compact header bar — actions + adjacent nav in one row */
+.letter-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-bottom: solid 1px var(--border);
+  background: var(--bg-light);
+  flex-shrink: 0;
 }
 
 .letter-top-actions {
@@ -19,7 +39,7 @@
 .detail-action-btn {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--bg-light);
+  background: var(--bg);
   color: var(--text);
   font-size: var(--font-sm);
   padding: 0.45rem 0.7rem;
@@ -36,55 +56,11 @@
   cursor: not-allowed;
 }
 
-.letter-discovery-panel {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background:
-    linear-gradient(135deg, rgba(15, 76, 129, 0.07), transparent 40%),
-    var(--bg-light);
-  padding: var(--spacing-sm);
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-}
-
-.discovery-summary h1 {
-  margin: 0;
-  font-size: 1.35rem;
-  color: var(--text);
-}
-
-.discovery-summary p {
-  margin: 0.35rem 0 0;
-  color: var(--text-muted);
-  font-size: var(--font-sm);
-  line-height: 1.45;
-}
-
-.summary-meta {
-  margin-top: 0.6rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.summary-meta span {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.25rem 0.5rem;
-  font-size: var(--font-xs);
-  color: var(--text-muted);
-  background: var(--bg);
-}
-
 .adjacent-controls {
   display: flex;
-  justify-content: space-between;
   gap: var(--spacing-sm);
   align-items: center;
   flex-wrap: wrap;
-  border-top: 1px solid var(--border);
-  padding-top: var(--spacing-xs);
 }
 
 .adjacent-controls span {
@@ -97,54 +73,4 @@
 .adjacent-buttons {
   display: flex;
   gap: var(--spacing-xs);
-}
-
-.discovery-links-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-sm);
-}
-
-.discovery-link-group h3 {
-  margin: 0 0 var(--spacing-xs);
-  font-size: var(--font-sm);
-  color: var(--text);
-}
-
-.discovery-link-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.discovery-link-btn {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  text-align: left;
-  padding: 0.45rem 0.55rem;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.discovery-link-btn strong {
-  color: var(--text);
-  font-size: var(--font-sm);
-}
-
-.discovery-link-btn small {
-  color: var(--text-muted);
-  font-size: var(--font-xs);
-}
-
-.discovery-link-btn:hover {
-  border-color: #0f4c81;
-}
-
-@media (max-width: 860px) {
-  .discovery-links-grid {
-    grid-template-columns: 1fr;
-  }
 }

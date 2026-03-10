@@ -18,10 +18,6 @@ vi.mock("../../components/LetterDisplay/LetterDisplay", () => ({
   default: ({ letter }: { letter: { id: string } }) => <div>LetterDisplay:{letter.id}</div>,
 }));
 
-vi.mock("../../components/Footer/Footer", () => ({
-  default: () => <footer>Footer</footer>,
-}));
-
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return {
@@ -117,24 +113,21 @@ describe("LetterDetailPage", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it("renders adjacent controls and discovery links for the current letter", async () => {
+  it("renders header controls, adjacent nav, and LetterDisplay", async () => {
     const user = userEvent.setup();
 
     renderLetterDetailPage();
 
-    expect(await screen.findByRole("heading", { name: "1947-08-10" })).toBeInTheDocument();
-    expect(screen.getByText("A bright dispatch from Vienna")).toBeInTheDocument();
+    // Wait for data to load — LetterDisplay renders once letter is fetched
+    expect(await screen.findByText("LetterDisplay:letter-1")).toBeInTheDocument();
+
+    // Adjacent controls in header
     expect(screen.getByText("Letter 2 of 3 in this collection")).toBeInTheDocument();
-    expect(screen.getByText("LetterDisplay:letter-1")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Previous Letter" }));
-    await user.click(screen.getByRole("button", { name: /Alice Smith/i }));
-    await user.click(screen.getByRole("button", { name: /Vienna/i }));
     await user.click(screen.getByRole("button", { name: "Collection 009" }));
 
     expect(mockNavigate).toHaveBeenCalledWith("/letter/letter-0");
-    expect(mockNavigate).toHaveBeenCalledWith("/people/person-1");
-    expect(mockNavigate).toHaveBeenCalledWith("/places/place-1");
     expect(mockNavigate).toHaveBeenCalledWith("/collections/009");
   });
 
@@ -143,7 +136,7 @@ describe("LetterDetailPage", () => {
 
     renderLetterDetailPage();
 
-    expect(await screen.findByRole("heading", { name: "1947-08-10" })).toBeInTheDocument();
+    expect(await screen.findByText("LetterDisplay:letter-1")).toBeInTheDocument();
     expect(screen.queryByText(/Letter 2 of 3/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Previous Letter" })).not.toBeInTheDocument();
   });

@@ -1,9 +1,12 @@
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState, useEffect, type CSSProperties } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Letter, LetterImage } from "../../types/Letter";
 import LetterViewer from "../LetterViewer/LetterViewer";
-import Breadcrumb from "../Breadcrumb";
-import LetterNav from "../LetterNav";
 import { ResizableSplitPane } from "../common";
+import {
+  EMOTIONAL_TONE_OPTIONS,
+  METADATA_RELATIONSHIP_OPTIONS,
+} from "../../constants/enums";
 import "./LetterDisplay.css";
 
 interface LetterDisplayProps {
@@ -11,24 +14,67 @@ interface LetterDisplayProps {
 }
 
 export default function LetterDisplay({ letter }: LetterDisplayProps) {
+  const navigate = useNavigate();
   const transcriptRef = useRef<HTMLDivElement>(null);
   const [isTranscriptVisible, setIsTranscriptVisible] = useState(true);
+  const [transcriptFontSize, setTranscriptFontSize] = useState("1.1rem");
 
   // Count letter pages for single-page header hiding
   const letterPageCount = letter.images.filter(img => img.type === 'letter').length;
 
-  // Build breadcrumb items
-  const breadcrumbItems = [
-    { label: 'Home', href: '/' },
-    { label: 'Collections', href: '/collections' },
-  ];
-  if (letter.collectionCode) {
-    breadcrumbItems.push({
-      label: letter.collectionCode,
-      href: `/collections/${letter.collectionCode}`,
-    });
-  }
-  breadcrumbItems.push({ label: letter.title, href: `/letter/${letter.id}` });
+  const fullText = letter.transcript.fullText;
+
+  // Calculate font size so the longest line fits the container width
+  const calculateFontSize = useCallback(() => {
+    const container = transcriptRef.current;
+    if (!container || !fullText) {
+      setTranscriptFontSize("1.1rem");
+      return;
+    }
+
+    const computedStyle = window.getComputedStyle(container);
+    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+    const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+    const containerWidth = container.clientWidth - paddingLeft - paddingRight;
+    const baseFontSize = 1.1; // rem
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Use the actual transcript text element's font for accurate measurement
+    const textEl = container.querySelector(".transcript-text");
+    const fontFamily = textEl
+      ? window.getComputedStyle(textEl).fontFamily
+      : "'Courier New', Courier, monospace";
+    ctx.font = `${baseFontSize * 16}px ${fontFamily}`;
+
+    let maxWidth = 0;
+    for (const line of fullText.split("\n")) {
+      if (line.trim()) {
+        const width = ctx.measureText(line).width;
+        if (width > maxWidth) maxWidth = width;
+      }
+    }
+
+    if (maxWidth > containerWidth) {
+      const scale = Math.max(0.4, containerWidth / maxWidth);
+      setTranscriptFontSize(`${baseFontSize * scale}rem`);
+    } else {
+      setTranscriptFontSize(`${baseFontSize}rem`);
+    }
+  }, [fullText]);
+
+  // Recalculate font size on mount, text change, and container resize
+  useEffect(() => {
+    calculateFontSize();
+    const container = transcriptRef.current;
+    if (!container) return;
+
+    const resizeObserver = new ResizeObserver(() => calculateFontSize());
+    resizeObserver.observe(container);
+    return () => resizeObserver.disconnect();
+  }, [calculateFontSize]);
 
   // Track transcript visibility with Intersection Observer
   useEffect(() => {
@@ -36,7 +82,6 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        // Consider visible if >10% is showing
         setIsTranscriptVisible(entry.intersectionRatio > 0.1);
       },
       { threshold: [0, 0.1, 0.5, 1] }
@@ -67,9 +112,6 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
 
   return (
     <div className="letter-display">
-      <Breadcrumb items={breadcrumbItems} />
-      <LetterNav letterId={letter.id} />
-
       <div className="display-body">
         <ResizableSplitPane
           letterId={letter.id}
@@ -93,10 +135,14 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
               <div className="section-header">
                 <h2>Transcript</h2>
                 {letter.transcript.verified && (
-                  <span className="verified-badge">✓ Verified</span>
+                  <span className="verified-badge">Verified</span>
                 )}
               </div>
-              <div className="section-content" ref={transcriptRef}>
+              <div
+                className="section-content"
+                ref={transcriptRef}
+                style={{ "--transcript-font-size": transcriptFontSize } as CSSProperties}
+              >
                 {letter.transcript.pages.length > 0 ? (
                   <div className="transcript-pages">
                     {letter.transcript.pages.map((page) => (
@@ -118,38 +164,170 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
             </div>
             )}
 
-            {/* Metadata Section */}
+            {/* Extra Content Section - shown for telegrams, covers, ephemera */}
+            {letter.extraContentTranscript && (
+              <div className="extra-content-section">
+                <div className="section-header">
+                  <h2>Extra Content</h2>
+                  {letter.extraContentStatus === "VERIFIED" && (
+                    <span className="verified-badge">Verified</span>
+                  )}
+                </div>
+                <div className="section-content">
+                  <p className="transcript-text">{letter.extraContentTranscript}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Metadata Section - mirrors admin layout */}
             <div className="metadata-section">
-              <h2>Details</h2>
-              <div className="metadata-grid">
-                {letter.metadata.sender && (
-                  <div className="metadata-item">
-                    <span className="metadata-label">From</span>
-                    <span className="metadata-value">{letter.metadata.sender}</span>
+              <div className="section-header">
+                <h2>Details</h2>
+              </div>
+              <div className="metadata-form-readonly">
+                {/* From / To row */}
+                {(letter.metadata.sender || letter.metadata.recipient) && (
+                  <div className="form-row-readonly">
+                    {letter.metadata.sender && (
+                      <div className="form-group-readonly">
+                        <span className="field-label">From</span>
+                        <span className="field-value">{letter.metadata.sender}</span>
+                      </div>
+                    )}
+                    {letter.metadata.recipient && (
+                      <div className="form-group-readonly">
+                        <span className="field-label">To</span>
+                        <span className="field-value">{letter.metadata.recipient}</span>
+                      </div>
+                    )}
                   </div>
                 )}
-                {letter.metadata.recipient && (
-                  <div className="metadata-item">
-                    <span className="metadata-label">To</span>
-                    <span className="metadata-value">{letter.metadata.recipient}</span>
+
+                {/* Date / Location row */}
+                {(letter.metadata.date || letter.metadata.location) && (
+                  <div className="form-row-readonly">
+                    {letter.metadata.date && (
+                      <div className="form-group-readonly">
+                        <span className="field-label">Date</span>
+                        <span className="field-value">
+                          {letter.metadata.date}
+                          {letter.metadata.dateConfidence && letter.metadata.dateConfidence !== "exact" && (
+                            <span className="confidence-inline"> ({letter.metadata.dateConfidence})</span>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                    {letter.metadata.location && (
+                      <div className="form-group-readonly">
+                        <span className="field-label">Location</span>
+                        <span className="field-value">{letter.metadata.location}</span>
+                      </div>
+                    )}
                   </div>
                 )}
-                {letter.metadata.date && (
-                  <div className="metadata-item">
-                    <span className="metadata-label">Date</span>
-                    <span className="metadata-value">{letter.metadata.date}</span>
+
+                {/* Hook */}
+                {letter.metadata.hook && (
+                  <div className="form-group-readonly">
+                    <span className="field-label">Hook</span>
+                    <span className="field-value">{letter.metadata.hook}</span>
                   </div>
                 )}
-                {letter.metadata.location && (
-                  <div className="metadata-item">
-                    <span className="metadata-label">Location</span>
-                    <span className="metadata-value">{letter.metadata.location}</span>
-                  </div>
-                )}
+
+                {/* Summary / Description */}
                 {letter.metadata.description && (
-                  <div className="metadata-item metadata-full-width">
-                    <span className="metadata-label">Description</span>
-                    <span className="metadata-value">{letter.metadata.description}</span>
+                  <div className="form-group-readonly">
+                    <span className="field-label">Summary</span>
+                    <span className="field-value description-value">{letter.metadata.description}</span>
+                  </div>
+                )}
+
+                {/* Emotional Tone / Relationship row */}
+                {(letter.metadata.emotionalTone || letter.metadata.senderRecipientRelationship) && (
+                  <div className="form-row-readonly">
+                    {letter.metadata.emotionalTone && (
+                      <div className="form-group-readonly">
+                        <span className="field-label">Emotional Tone</span>
+                        <span className="field-value">
+                          {EMOTIONAL_TONE_OPTIONS.find(o => o.value === letter.metadata.emotionalTone)?.label ?? letter.metadata.emotionalTone}
+                        </span>
+                      </div>
+                    )}
+                    {letter.metadata.senderRecipientRelationship && (
+                      <div className="form-group-readonly">
+                        <span className="field-label">Relationship</span>
+                        <span className="field-value">
+                          {METADATA_RELATIONSHIP_OPTIONS.find(o => o.value === letter.metadata.senderRecipientRelationship)?.label ?? letter.metadata.senderRecipientRelationship}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Primary Topics */}
+                {letter.metadata.primaryTopics && letter.metadata.primaryTopics.length > 0 && (
+                  <div className="form-group-readonly">
+                    <span className="field-label">Topics</span>
+                    <div className="topic-tags-readonly">
+                      {letter.metadata.primaryTopics.map((topic) => (
+                        <span key={topic} className="topic-tag">{topic.replace("/", " / ")}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Linked People */}
+                {letter.linkedPersons && letter.linkedPersons.length > 0 && (
+                  <div className="form-group-readonly">
+                    <span className="field-label">People</span>
+                    <div className="entity-list-readonly">
+                      {letter.linkedPersons.map((lp) => (
+                        <button
+                          key={lp.id}
+                          type="button"
+                          className="entity-item-readonly"
+                          onClick={() => navigate(`/people/${lp.personId}`)}
+                        >
+                          <span className="entity-name">{lp.canonicalName}</span>
+                          <span className={`entity-role role-${lp.role}`}>{lp.role}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Linked Places */}
+                {letter.linkedPlaces && letter.linkedPlaces.length > 0 && (
+                  <div className="form-group-readonly">
+                    <span className="field-label">Places</span>
+                    <div className="entity-list-readonly">
+                      {letter.linkedPlaces.map((lpl) => (
+                        <button
+                          key={lpl.id}
+                          type="button"
+                          className="entity-item-readonly"
+                          onClick={() => navigate(`/places/${lpl.placeId}`)}
+                        >
+                          <span className="entity-name">{lpl.canonicalName}</span>
+                          <span className={`entity-role role-${lpl.role}`}>{lpl.role}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Notable Quotes */}
+                {letter.metadata.notableQuotes && letter.metadata.notableQuotes.length > 0 && (
+                  <div className="form-group-readonly">
+                    <span className="field-label">Notable Quotes</span>
+                    <div className="notable-quotes-readonly">
+                      {letter.metadata.notableQuotes.map((quote, idx) => (
+                        <blockquote key={idx} className="notable-quote">
+                          <p>"{quote.text}"</p>
+                          {quote.context && <cite>— {quote.context}</cite>}
+                        </blockquote>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

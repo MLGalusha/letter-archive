@@ -16,6 +16,7 @@ interface MockResponse extends EventEmitter {
   statusCode: number;
   headersSent: boolean;
   body?: unknown;
+  sseChunks: string[];
   setHeader(name: string, value: string): void;
   getHeader(name: string): string | undefined;
   get(name: string): string | undefined;
@@ -23,6 +24,8 @@ interface MockResponse extends EventEmitter {
   json(body: unknown): MockResponse;
   send(body: unknown): MockResponse;
   end(body?: unknown): MockResponse;
+  writeHead(statusCode: number, headers?: Record<string, string>): MockResponse;
+  write(chunk: string): boolean;
 }
 
 export interface InvokeResult {
@@ -37,6 +40,7 @@ function createMockResponse(): { res: MockResponse; headers: Record<string, stri
 
   res.statusCode = 200;
   res.headersSent = false;
+  res.sseChunks = [];
   res.setHeader = (name: string, value: string) => {
     headers[name.toLowerCase()] = String(value);
   };
@@ -45,6 +49,20 @@ function createMockResponse(): { res: MockResponse; headers: Record<string, stri
   res.status = (code: number) => {
     res.statusCode = code;
     return res;
+  };
+  res.writeHead = (statusCode: number, hdrs?: Record<string, string>) => {
+    res.statusCode = statusCode;
+    res.headersSent = true;
+    if (hdrs) {
+      for (const [k, v] of Object.entries(hdrs)) {
+        headers[k.toLowerCase()] = v;
+      }
+    }
+    return res;
+  };
+  res.write = (chunk: string) => {
+    res.sseChunks.push(chunk);
+    return true;
   };
   res.json = (body: unknown) => {
     res.body = body;
@@ -61,6 +79,26 @@ function createMockResponse(): { res: MockResponse; headers: Record<string, stri
   res.end = (body?: unknown) => {
     if (body !== undefined) {
       res.body = body;
+    }
+    // For SSE responses, parse the last data event as the body.
+    // Result events strip the `type` wrapper; error events keep it.
+    if (!res.body && res.sseChunks.length > 0) {
+      for (let i = res.sseChunks.length - 1; i >= 0; i--) {
+        const match = res.sseChunks[i].match(/^data: (.+)\n\n$/);
+        if (match) {
+          try {
+            const parsed = JSON.parse(match[1]);
+            if (parsed.type === 'result') {
+              const { type: _type, ...rest } = parsed;
+              res.body = rest;
+              break;
+            } else if (parsed.type === 'error') {
+              res.body = parsed;
+              break;
+            }
+          } catch { /* not JSON */ }
+        }
+      }
     }
     res.headersSent = true;
     res.emit('finish');

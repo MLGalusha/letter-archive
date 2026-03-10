@@ -276,6 +276,72 @@
   stroke-width: 2;
 }
 
+/* Merged line boundary (orange) */
+.line-review-debug-merged {
+  fill: rgba(255, 160, 0, 0.15);
+  stroke: rgba(255, 160, 0, 0.9);
+  stroke-width: 2;
+}
+
+/* Merge connector (dashed orange) */
+.line-review-debug-connector {
+  stroke: rgba(255, 160, 0, 0.8);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+/* West pole (blue) */
+.line-review-pole-west {
+  fill: rgba(60, 130, 240, 0.8);
+  stroke: rgba(60, 130, 240, 1);
+  stroke-width: 1;
+}
+
+/* East pole (red) */
+.line-review-pole-east {
+  fill: rgba(240, 60, 60, 0.8);
+  stroke: rgba(240, 60, 60, 1);
+  stroke-width: 1;
+}
+
+/* Debug legend swatch for merged/grouped lines */
+.debug-legend-merged {
+  background: rgba(255, 160, 0, 0.5);
+  border: 1px solid rgba(255, 160, 0, 0.8);
+}
+
+/* Matched/unified line (gold) */
+.line-review-debug-unified {
+  fill: rgba(255, 215, 0, 0.15);
+  stroke: rgba(255, 215, 0, 0.9);
+  stroke-width: 2;
+}
+
+/* Excluded content (gray) */
+.line-review-debug-excluded {
+  fill: rgba(128, 128, 128, 0.1);
+  stroke: rgba(128, 128, 128, 0.5);
+  stroke-width: 1;
+  stroke-dasharray: 4 2;
+}
+
+/* Margin region segments */
+.line-review-debug-margin {
+  fill: rgba(180, 100, 255, 0.15);
+  stroke: rgba(180, 100, 255, 0.8);
+  stroke-width: 1;
+}
+
+/* Debug legend swatches — unified and excluded */
+.debug-legend-unified {
+  background: rgba(255, 215, 0, 0.5);
+  border: 1px solid rgba(255, 215, 0, 0.8);
+}
+.debug-legend-excluded {
+  background: rgba(128, 128, 128, 0.3);
+  border: 1px solid rgba(128, 128, 128, 0.6);
+}
+
 .line-review-exit-hint kbd {
   background: rgba(255,255,255,0.12);
   padding: 1px 5px;

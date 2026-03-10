@@ -232,6 +232,8 @@ describe('admin letters line review route integration', () => {
     expect(detectAndStorePageLinesMock).toHaveBeenCalledWith(
       PAGE_ID,
       '/tmp/collection-009-page-1.jpg',
+      undefined,
+      expect.any(Function),
     );
     expect(response.body).toEqual({
       lineSegments: [{ id: 999, bbox: [1, 2, 3, 4] }],
@@ -239,7 +241,7 @@ describe('admin letters line review route integration', () => {
     });
   });
 
-  it('propagates line-detection failures through the error handler with request id', async () => {
+  it('propagates line-detection failures as an SSE error event', async () => {
     findFirstMock.mockResolvedValueOnce(createStoredPage());
     getAbsoluteStoragePathMock.mockReturnValueOnce('/tmp/collection-009-page-1.jpg');
     detectAndStorePageLinesMock.mockRejectedValueOnce(new Error('opencv offline'));
@@ -251,14 +253,14 @@ describe('admin letters line review route integration', () => {
       headers: { 'content-type': 'application/json' },
     });
 
-    expect(response.statusCode).toBe(500);
+    // SSE route sends writeHead(200) before detection, so errors are
+    // streamed as SSE error events rather than passed to next()
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toBe('text/event-stream');
     expect(response.body).toEqual({
-      error: 'Internal server error',
-      requestId: expect.any(String),
+      type: 'error',
+      message: 'opencv offline',
     });
-    expect(response.headers['x-request-id']).toBe(
-      (response.body as { requestId: string }).requestId,
-    );
   });
 
   it('updates transcript text through the letter update route and returns the refreshed DTO', async () => {

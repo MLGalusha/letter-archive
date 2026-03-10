@@ -93,9 +93,6 @@ vi.mock('../../../db/index.js', () => {
     letterPages: {
       id: 'letterPages.id',
     },
-    lineCorrections: {
-      id: 'lineCorrections.id',
-    },
   };
 });
 
@@ -169,10 +166,6 @@ vi.mock('../../../services/letter-operations.js', () => ({
   removeLinkedPlace: vi.fn(),
   resyncCheck: vi.fn(),
   resyncLetterMetadata: vi.fn(),
-}));
-
-vi.mock('../../../services/line-reconciliation.js', () => ({
-  calibrateThresholds: vi.fn(),
 }));
 
 import lettersRouter from '../letters.js';

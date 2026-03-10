@@ -10,6 +10,9 @@ import {
 import { getErrorMessage, getImageUrl } from '../../api/client';
 import { detectPageLines } from '../../api/admin/letters';
 import type { Letter, LineSegment, LineSegmentWord, OcrWordBox } from '../../types/Letter';
+import { attachWordsToSegments } from '../../utils/attachWordsToSegments';
+import { constrainedGrouping, type GroupedLine } from '../../utils/constrainedGrouping';
+import { matchTranscriptToLines, type MatchedLine } from '../../utils/transcriptMatcher';
 import {
   alignTranscriptToVisualLines,
   buildAlignedLinesFromDetected,
@@ -386,6 +389,9 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   // Debug overlay layer toggles
   const [showKrakenLines, setShowKrakenLines] = useState(true);
   const [showVisionWords, setShowVisionWords] = useState(false);
+  const [showGroupedLines, setShowGroupedLines] = useState(true);
+  const [showUnifiedLines, setShowUnifiedLines] = useState(false);
+  const [showExcludedContent, setShowExcludedContent] = useState(false);
 
   // Raw Kraken line segments per page (for debug overlay, never reconciled)
   const [krakenSegmentsMap, setKrakenSegmentsMap] = useState<Record<number, LineSegment[] | undefined>>(() => {
@@ -436,6 +442,49 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       raw.split('\n').filter((l) => l.trim().length > 0),
     );
   }, [pageRawTexts]);
+
+  // Unified pipeline: attach words, constrained grouping, transcript matching
+  const pipelineResult = useMemo(() => {
+    const rawSegments = krakenSegmentsMap[currentPageIndex] ?? [];
+    const wordBoxes = letterPages[currentPageIndex]?.ocrWordBoxes
+      ?? visionBoxesMap[currentPageIndex]
+      ?? [];
+
+    if (rawSegments.length === 0) return null;
+
+    // Phase 2: Attach Vision words to Kraken segments
+    const { enriched, unassigned } = attachWordsToSegments(rawSegments, wordBoxes);
+
+    // Phase 3: Constrained grouping
+    const { lines: groupedLines, marginalSegments } = constrainedGrouping(enriched);
+
+    // Phase 4-5: Match transcript to grouped lines
+    const transcriptLines = pageLineTexts[currentPageIndex] ?? [];
+    const matchResult = matchTranscriptToLines(transcriptLines, groupedLines, unassigned);
+
+    return { enriched, unassigned, groupedLines, marginalSegments, matchResult };
+  }, [krakenSegmentsMap, currentPageIndex, letterPages, visionBoxesMap, pageLineTexts]);
+
+  // Merged AI segments for alignment — use grouped lines from the pipeline
+  const mergedAiSegments = useMemo(() => {
+    const raw = aiSegmentsMap[currentPageIndex];
+    if (!raw || raw.length === 0) return raw;
+
+    // If pipeline produced grouped lines, convert them to AlignmentInput format
+    if (pipelineResult && pipelineResult.groupedLines.length > 0) {
+      return pipelineResult.groupedLines.map((gl): AlignmentInput => ({
+        line: gl.line,
+        bbox: gl.bbox,
+        baseline: gl.baseline,
+        boundary: gl.boundary,
+        ocrText: gl.visionText,
+        words: gl.visionWords.map(w => ({ text: w.text, bbox: w.bbox })),
+      }));
+    }
+
+    // Fallback: raw segments as-is
+    return raw;
+  }, [aiSegmentsMap, currentPageIndex, pipelineResult]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -1011,6 +1060,165 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           </svg>
         )}
 
+        {/* Debug overlay — Grouped line boundaries (orange) */}
+        {debugLines && showGroupedLines && imageDisplaySize.width > 0 && pipelineResult && (
+          <svg
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: imageDisplaySize.width,
+              height: displayedImageHeight,
+              pointerEvents: 'none',
+              zIndex: 7,
+            }}
+          >
+            {pipelineResult.groupedLines
+              .filter((gl) => gl.merged)
+              .map((gl, i) =>
+                gl.boundary && gl.boundary.length > 2 ? (
+                  <polygon
+                    key={`grouped-poly-${i}`}
+                    className={gl.region === 'margin' ? 'line-review-debug-margin' : 'line-review-debug-merged'}
+                    points={gl.boundary
+                      .map(p => `${p.x * scaleFactor},${p.y * scaleFactor}`)
+                      .join(' ')}
+                  />
+                ) : (
+                  <rect
+                    key={`grouped-rect-${i}`}
+                    className={gl.region === 'margin' ? 'line-review-debug-margin' : 'line-review-debug-merged'}
+                    x={gl.bbox[0] * scaleFactor}
+                    y={gl.bbox[1] * scaleFactor}
+                    width={(gl.bbox[2] - gl.bbox[0]) * scaleFactor}
+                    height={(gl.bbox[3] - gl.bbox[1]) * scaleFactor}
+                  />
+                ),
+              )}
+            {/* Group connectors — dashed orange lines between constituents */}
+            {pipelineResult.groupedLines
+              .filter((gl) => gl.merged)
+              .flatMap((gl, si) =>
+                gl.constituents.slice(0, -1).map((c, ci) => {
+                  const next = gl.constituents[ci + 1];
+                  const eastX = c.bbox[2] * scaleFactor;
+                  const eastY = ((c.bbox[1] + c.bbox[3]) / 2) * scaleFactor;
+                  const westX = next.bbox[0] * scaleFactor;
+                  const westY = ((next.bbox[1] + next.bbox[3]) / 2) * scaleFactor;
+                  return (
+                    <line
+                      key={`connector-${si}-${ci}`}
+                      className="line-review-debug-connector"
+                      x1={eastX}
+                      y1={eastY}
+                      x2={westX}
+                      y2={westY}
+                    />
+                  );
+                }),
+              )}
+          </svg>
+        )}
+
+        {/* Debug overlay — Matched/unified transcript lines (gold) */}
+        {debugLines && showUnifiedLines && imageDisplaySize.width > 0 && pipelineResult && (
+          <svg
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: imageDisplaySize.width,
+              height: displayedImageHeight,
+              pointerEvents: 'none',
+              zIndex: 7,
+            }}
+          >
+            {pipelineResult.matchResult.matched
+              .filter((m): m is MatchedLine & { bbox: [number, number, number, number] } => m.bbox !== null)
+              .map((m, i) =>
+                m.boundary && m.boundary.length > 2 ? (
+                  <polygon
+                    key={`unified-poly-${i}`}
+                    className="line-review-debug-unified"
+                    points={m.boundary
+                      .map(p => `${p.x * scaleFactor},${p.y * scaleFactor}`)
+                      .join(' ')}
+                  />
+                ) : (
+                  <rect
+                    key={`unified-rect-${i}`}
+                    className="line-review-debug-unified"
+                    x={m.bbox[0] * scaleFactor}
+                    y={m.bbox[1] * scaleFactor}
+                    width={(m.bbox[2] - m.bbox[0]) * scaleFactor}
+                    height={(m.bbox[3] - m.bbox[1]) * scaleFactor}
+                  />
+                ),
+              )}
+          </svg>
+        )}
+
+        {/* Debug overlay — Excluded content (gray dashed) */}
+        {debugLines && showExcludedContent && imageDisplaySize.width > 0 && pipelineResult && (
+          <svg
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: imageDisplaySize.width,
+              height: displayedImageHeight,
+              pointerEvents: 'none',
+              zIndex: 7,
+            }}
+          >
+            {pipelineResult.matchResult.excludedContent.map((gl, i) => (
+              <rect
+                key={`excluded-${i}`}
+                className="line-review-debug-excluded"
+                x={gl.bbox[0] * scaleFactor}
+                y={gl.bbox[1] * scaleFactor}
+                width={(gl.bbox[2] - gl.bbox[0]) * scaleFactor}
+                height={(gl.bbox[3] - gl.bbox[1]) * scaleFactor}
+              />
+            ))}
+          </svg>
+        )}
+
+        {/* Debug overlay — Pole markers (west=blue, east=red) */}
+        {debugLines && showKrakenLines && imageDisplaySize.width > 0 && (
+          <svg
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: imageDisplaySize.width,
+              height: displayedImageHeight,
+              pointerEvents: 'none',
+              zIndex: 8,
+            }}
+          >
+            {(krakenSegmentsMap[currentPageIndex] ?? []).map((seg, i) => {
+              const my = ((seg.bbox[1] + seg.bbox[3]) / 2) * scaleFactor;
+              return (
+                <g key={`poles-${i}`}>
+                  <circle
+                    className="line-review-pole-west"
+                    cx={seg.bbox[0] * scaleFactor}
+                    cy={my}
+                    r={4}
+                  />
+                  <circle
+                    className="line-review-pole-east"
+                    cx={seg.bbox[2] * scaleFactor}
+                    cy={my}
+                    r={4}
+                  />
+                </g>
+              );
+            })}
+          </svg>
+        )}
+
         {/* Detecting lines — detection in progress */}
         {isDetecting && imageNaturalSize.width > 0 && (
           <div className="line-review-analyzing">
@@ -1064,6 +1272,27 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           >
             <span className="debug-legend-swatch debug-legend-vision" />
             Vision Words
+          </button>
+          <button
+            className={`debug-legend-toggle${showGroupedLines ? ' debug-legend-toggle-active' : ''}`}
+            onClick={() => setShowGroupedLines(v => !v)}
+          >
+            <span className="debug-legend-swatch debug-legend-merged" />
+            Grouped Lines
+          </button>
+          <button
+            className={`debug-legend-toggle${showUnifiedLines ? ' debug-legend-toggle-active' : ''}`}
+            onClick={() => setShowUnifiedLines(v => !v)}
+          >
+            <span className="debug-legend-swatch debug-legend-unified" />
+            Matched Lines
+          </button>
+          <button
+            className={`debug-legend-toggle${showExcludedContent ? ' debug-legend-toggle-active' : ''}`}
+            onClick={() => setShowExcludedContent(v => !v)}
+          >
+            <span className="debug-legend-swatch debug-legend-excluded" />
+            Excluded Content
           </button>
         </div>
       )}

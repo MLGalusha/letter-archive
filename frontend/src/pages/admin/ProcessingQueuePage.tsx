@@ -95,10 +95,11 @@ export default function ProcessingQueuePage() {
       setQueue(data);
     } catch (err) {
       console.error('Failed to fetch queue status:', err);
+      showToast(getErrorMessage(err, 'Failed to load queue status'), 'error');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   // Poll for queue updates
   useEffect(() => {

@@ -165,11 +165,17 @@ describe('ProcessingQueuePage', () => {
   });
 
   it('shows an unavailable state when the queue fetch fails', async () => {
-    getProcessingQueueMock.mockRejectedValueOnce(new Error('queue down'));
+    getProcessingQueueMock.mockRejectedValueOnce(
+      new ApiError(503, 'queue down', undefined, 'req-queue-load-503'),
+    );
 
     render(<ProcessingQueuePage />);
 
     expect(await screen.findByText('Unable to load queue status')).toBeInTheDocument();
+    expect(showToastMock).toHaveBeenCalledWith(
+      'queue down (Request ID: req-queue-load-503)',
+      'error',
+    );
   });
 
   it('includes request ids in operator toasts when queue actions fail', async () => {

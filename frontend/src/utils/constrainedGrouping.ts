@@ -90,68 +90,131 @@ function hasWordContinuity(
 type RegionLabel = 'body' | 'margin' | 'header' | 'footer';
 
 /**
- * Classifies each segment into a region based on its center-x position
- * relative to the IQR of all center-x values.
+ * Identifies outlier segments that don't belong to the main body text
+ * using contextual analysis rather than fixed aspect-ratio rules.
+ *
+ * Strategy:
+ * 1. Wide segments form the "core body" cluster — they define the body column.
+ * 2. Narrow segments are body fragments if they're inside the body column
+ *    OR directly adjacent to a core segment (like "9" next to "70").
+ * 3. Narrow segments outside the body column with no nearby core neighbors
+ *    are margin annotations.
  */
-function classifyRegions(
+function identifyOutliers(
   segments: EnrichedSegment[],
-  minAspectRatio: number,
-): Map<EnrichedSegment, RegionLabel> {
-  const regionMap = new Map<EnrichedSegment, RegionLabel>();
-
-  if (segments.length === 0) return regionMap;
-
-  const centerXs = segments.map((s) => (s.bbox[0] + s.bbox[2]) / 2);
-  const q25 = percentile(centerXs, 25);
-  const q75 = percentile(centerXs, 75);
-
-  // Compute overall page bounds from all segments
-  let pageLeft = Infinity;
-  let pageRight = -Infinity;
-  for (const s of segments) {
-    if (s.bbox[0] < pageLeft) pageLeft = s.bbox[0];
-    if (s.bbox[2] > pageRight) pageRight = s.bbox[2];
+  medianHeight: number,
+): { body: EnrichedSegment[]; margin: EnrichedSegment[] } {
+  if (segments.length === 0) {
+    return { body: [], margin: [] };
   }
-  const pageWidth = pageRight - pageLeft;
-  // Edge zone: segments whose center-x is in the outer 15% of the page
-  const edgeThreshold = pageWidth * 0.15;
+
+  const widths = segments.map((s) => segWidth(s));
+  const medianWidth = computeMedian(widths);
+
+  // Core body segments: width >= max(40% of median, 25th percentile)
+  // These reliably represent body text lines
+  const coreThreshold = Math.max(medianWidth * 0.4, percentile(widths, 25));
+  const coreSegments = segments.filter((s) => segWidth(s) >= coreThreshold);
+
+  if (coreSegments.length === 0) {
+    return { body: [...segments], margin: [] };
+  }
+
+  // Body column X bounds from core segments (generous percentiles)
+  const bodyLeft = percentile(coreSegments.map((s) => s.bbox[0]), 15);
+  const bodyRight = percentile(coreSegments.map((s) => s.bbox[2]), 85);
+
+  const body: EnrichedSegment[] = [];
+  const margin: EnrichedSegment[] = [];
 
   for (const seg of segments) {
+    // Core-width segments → always body
+    if (segWidth(seg) >= coreThreshold) {
+      body.push(seg);
+      continue;
+    }
+
+    // Narrow segment — check context
     const cx = (seg.bbox[0] + seg.bbox[2]) / 2;
-    const ar = segWidth(seg) / Math.max(1, segHeight(seg));
+    const inBodyColumn = cx >= bodyLeft && cx <= bodyRight;
 
-    // Low aspect ratio at the edges = margin annotation
-    const isAtEdge =
-      (cx - pageLeft) < edgeThreshold || (pageRight - cx) < edgeThreshold;
-    const isLowAspect = ar < minAspectRatio;
-
-    if (isAtEdge && isLowAspect) {
-      regionMap.set(seg, 'margin');
-    } else if (cx < q25 || cx > q75) {
-      // Outside the IQR but not necessarily a margin — use aspect ratio
-      // to decide. Normal text lines tend to have decent width.
-      if (isLowAspect) {
-        regionMap.set(seg, 'margin');
-      } else {
-        regionMap.set(seg, 'body');
+    // Check if directly adjacent to a core segment at similar Y.
+    // This catches body fragments like "9" next to "70" that are
+    // outside the body column but clearly part of a body line.
+    let adjacentToCore = false;
+    for (const core of coreSegments) {
+      if (Math.abs(midY(seg) - midY(core)) > medianHeight * 1.5) continue;
+      const xGap = Math.max(
+        0,
+        seg.bbox[0] - core.bbox[2],
+        core.bbox[0] - seg.bbox[2],
+      );
+      if (xGap < medianHeight * 2.0) {
+        adjacentToCore = true;
+        break;
       }
+    }
+
+    if (inBodyColumn || adjacentToCore) {
+      body.push(seg);
     } else {
-      regionMap.set(seg, 'body');
+      margin.push(seg);
     }
   }
 
-  return regionMap;
+  return { body, margin };
 }
 
 /**
- * Runs greedy left-to-right chaining within a set of segments,
- * using relative thresholds based on median line height.
+ * Gets the Y range (top, bottom) at the east (right) edge of a segment,
+ * using boundary polygon if available, otherwise falling back to bbox.
+ */
+export function eastEdgeY(seg: EnrichedSegment): [number, number] {
+  if (seg.boundary && seg.boundary.length > 0) {
+    // Find boundary points near the right edge (within 10% of segment width)
+    const width = seg.bbox[2] - seg.bbox[0];
+    const threshold = seg.bbox[2] - width * 0.1;
+    const rightPoints = seg.boundary.filter((p) => p.x >= threshold);
+    if (rightPoints.length > 0) {
+      const ys = rightPoints.map((p) => p.y);
+      return [Math.min(...ys), Math.max(...ys)];
+    }
+  }
+  return [seg.bbox[1], seg.bbox[3]];
+}
+
+/**
+ * Gets the Y range (top, bottom) at the west (left) edge of a segment,
+ * using boundary polygon if available, otherwise falling back to bbox.
+ */
+export function westEdgeY(seg: EnrichedSegment): [number, number] {
+  if (seg.boundary && seg.boundary.length > 0) {
+    const width = seg.bbox[2] - seg.bbox[0];
+    const threshold = seg.bbox[0] + width * 0.1;
+    const leftPoints = seg.boundary.filter((p) => p.x <= threshold);
+    if (leftPoints.length > 0) {
+      const ys = leftPoints.map((p) => p.y);
+      return [Math.min(...ys), Math.max(...ys)];
+    }
+  }
+  return [seg.bbox[1], seg.bbox[3]];
+}
+
+/**
+ * Runs greedy left-to-right chaining within a set of segments.
+ *
+ * Merge decision is based purely on edge-to-edge matching:
+ * the RIGHT side (east edge) of the tail connects to the LEFT side
+ * (west edge) of the candidate. Both the position (top/bottom Y)
+ * and the height at those edges must be compatible.
+ *
+ * This prevents merging segments from adjacent lines whose overall
+ * bboxes might overlap but whose actual meeting edges don't align.
  */
 function chainSegments(
   segments: EnrichedSegment[],
   medianLineHeight: number,
   maxGapRatio: number,
-  maxVerticalRatio: number,
   maxEdgeRatio: number,
 ): EnrichedSegment[][] {
   if (segments.length === 0) return [];
@@ -172,29 +235,35 @@ function chainSegments(
     for (let c = 0; c < chains.length; c++) {
       const tail = chains[c][chains[c].length - 1];
 
-      // Horizontal gap: seg's west pole minus tail's east pole
+      // 1. Horizontal gap: seg's left edge minus tail's right edge.
+      //    Only right→left connections allowed (no overlapping merges).
       const gap = seg.bbox[0] - tail.bbox[2];
       if (gap < 0) continue;
 
-      // Base thresholds (relative to median line height)
       const baseMaxGap = maxGapRatio * medianLineHeight;
-      const maxVertDelta = maxVerticalRatio * medianLineHeight;
-      const maxEdgeDelta = maxEdgeRatio * medianLineHeight;
-
-      // Word continuity boost: allow 1.5x gap when words bridge the gap
       const continuityBoost = hasWordContinuity(tail, seg, medianLineHeight);
       const effectiveMaxGap = continuityBoost ? baseMaxGap * 1.5 : baseMaxGap;
-
       if (gap > effectiveMaxGap) continue;
 
-      // Vertical center alignment
-      if (Math.abs(midY(seg) - midY(tail)) > maxVertDelta) continue;
+      // 2. Edge matching: RIGHT side of tail → LEFT side of seg.
+      //    Get top/bottom Y at the meeting edges from boundary polygons.
+      const tailRight = eastEdgeY(tail);   // [topY, bottomY]
+      const segLeft = westEdgeY(seg);      // [topY, bottomY]
 
-      // Top edge alignment
-      if (Math.abs(seg.bbox[1] - tail.bbox[1]) > maxEdgeDelta) continue;
+      const maxEdgeDelta = maxEdgeRatio * medianLineHeight;
 
-      // Bottom edge alignment
-      if (Math.abs(seg.bbox[3] - tail.bbox[3]) > maxEdgeDelta) continue;
+      // Position check: the top and bottom Y at meeting edges must be close
+      const topDelta = Math.abs(segLeft[0] - tailRight[0]);
+      const bottomDelta = Math.abs(segLeft[1] - tailRight[1]);
+      if (topDelta > maxEdgeDelta || bottomDelta > maxEdgeDelta) continue;
+
+      // 3. Height check: the edge heights must be similar.
+      //    Prevents merging a tall segment (different line) with a short one.
+      const tailEdgeH = tailRight[1] - tailRight[0];
+      const segEdgeH = segLeft[1] - segLeft[0];
+      const maxH = Math.max(tailEdgeH, segEdgeH, 1);
+      const minH = Math.min(tailEdgeH, segEdgeH);
+      if (minH / maxH < 0.4) continue;
 
       // Pick the chain with the smallest gap
       if (gap < bestGap) {
@@ -252,21 +321,20 @@ function chainToGroupedLine(
 
     allWords.push(...seg.visionWords);
 
-    if (seg.boundary && seg.boundary.length > 0) {
-      allBoundary = allBoundary.concat(seg.boundary);
-    } else {
+    if (!seg.boundary || seg.boundary.length === 0) {
       hasBoundary = false;
     }
   }
 
-  if (!hasBoundary || allBoundary.length === 0) {
-    allBoundary = [
-      { x: minX, y: minY },
-      { x: maxX, y: minY },
-      { x: maxX, y: maxY },
-      { x: minX, y: maxY },
-    ];
-  }
+  // Merged boundary: just use the union bbox rectangle.
+  // Individual constituent boundaries are preserved on each segment
+  // and rendered separately in the debug overlay.
+  allBoundary = [
+    { x: minX, y: minY },
+    { x: maxX, y: minY },
+    { x: maxX, y: maxY },
+    { x: minX, y: maxY },
+  ];
 
   // Sort words left-to-right
   allWords.sort((a, b) => a.bbox[0] - b.bbox[0]);
@@ -307,71 +375,54 @@ function chainToGroupedLine(
 export function constrainedGrouping(
   segments: EnrichedSegment[],
   opts?: {
-    /** Max horizontal gap as fraction of median line height. Default: 1.5 */
+    /** Max horizontal gap as fraction of median line height. Default: 2.0 */
     maxGapRatio?: number;
-    /** Max vertical center offset as fraction of line height. Default: 0.3 */
-    maxVerticalRatio?: number;
-    /** Max top/bottom edge offset as fraction of line height. Default: 0.4 */
+    /** Max top/bottom edge offset as fraction of line height. Default: 0.6 */
     maxEdgeRatio?: number;
-    /** Min aspect ratio (width/height) to be considered a text line. Default: 1.5 */
-    minAspectRatio?: number;
   },
 ): GroupingResult {
   if (!segments || segments.length === 0) {
     return { lines: [], marginalSegments: [] };
   }
 
-  const maxGapRatio = opts?.maxGapRatio ?? 1.5;
-  const maxVerticalRatio = opts?.maxVerticalRatio ?? 0.3;
-  const maxEdgeRatio = opts?.maxEdgeRatio ?? 0.4;
-  const minAspectRatio = opts?.minAspectRatio ?? 1.5;
+  const maxGapRatio = opts?.maxGapRatio ?? 2.0;
+  const maxEdgeRatio = opts?.maxEdgeRatio ?? 0.6;
 
   // Step 1: Compute median line height
   const heights = segments.map((s) => segHeight(s));
   const medianLineHeight = Math.max(1, computeMedian(heights));
 
-  // Step 2: Classify regions
-  const regionMap = classifyRegions(segments, minAspectRatio);
+  // Step 1.5: Contextual outlier detection.
+  // Instead of fixed aspect-ratio rules, analyze what's around each segment:
+  // wide segments form the body cluster, narrow segments are body fragments
+  // if they're in the body column or adjacent to core segments, otherwise margin.
+  const { body: candidateSegments, margin: definiteMargin } = identifyOutliers(
+    segments,
+    medianLineHeight,
+  );
 
-  // Step 3: Separate segments by region
-  const bodySegments: EnrichedSegment[] = [];
-  const marginalSegments: EnrichedSegment[] = [];
-
-  for (const seg of segments) {
-    const region = regionMap.get(seg) ?? 'body';
-    if (region === 'margin') {
-      marginalSegments.push(seg);
-    } else {
-      bodySegments.push(seg);
-    }
-  }
-
-  // Step 4: Chain within each region independently
-  const bodyChains = chainSegments(
-    bodySegments,
+  // Step 2: Group candidate segments (excludes obvious margin).
+  // This allows small body fragments (like "9" from "970") to merge with
+  // adjacent body segments before region classification runs.
+  const allChains = chainSegments(
+    candidateSegments,
     medianLineHeight,
     maxGapRatio,
-    maxVerticalRatio,
     maxEdgeRatio,
   );
 
-  const marginChains = chainSegments(
-    marginalSegments,
-    medianLineHeight,
-    maxGapRatio,
-    maxVerticalRatio,
-    maxEdgeRatio,
-  );
-
-  // Step 5: Convert chains to GroupedLines
+  // Step 3: Convert chains to GroupedLines. All candidate segments passed
+  // outlier detection, so they're body lines.
   const allLines: GroupedLine[] = [];
+  const marginalSegments: EnrichedSegment[] = [...definiteMargin];
 
-  for (const chain of bodyChains) {
+  for (const chain of allChains) {
     allLines.push(chainToGroupedLine(chain, 'body'));
   }
 
-  for (const chain of marginChains) {
-    allLines.push(chainToGroupedLine(chain, 'margin'));
+  // Add pre-filtered margin segments as their own grouped lines
+  for (const seg of definiteMargin) {
+    allLines.push(chainToGroupedLine([seg], 'margin'));
   }
 
   // Step 6: Sort by reading order (top-to-bottom, left-to-right)

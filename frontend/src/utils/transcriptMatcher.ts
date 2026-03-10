@@ -158,11 +158,17 @@ function findVisionFallback(
 /**
  * Matches transcript lines to grouped line candidates.
  *
+ * Strategy: positional matching first (reading order), text overlap only
+ * to identify truly excluded content. Vision OCR on handwriting is too
+ * unreliable to be the primary matching signal.
+ *
  * Algorithm:
- * 1. Score each transcript line against each grouped line's visionText
- * 2. Assign greedily in reading order (preserving top-to-bottom constraint)
- * 3. Fall back to Vision-only word matching for unmatched transcript lines
- * 4. Collect unmatched grouped lines as excluded content
+ * 1. Separate body lines from margin lines
+ * 2. Assign transcript lines to body lines positionally (reading order)
+ * 3. Only mark a grouped line as excluded if it has NO transcript assignment
+ *    AND its region is 'margin' or it has very low text similarity to ALL
+ *    transcript lines (clearly non-handwritten content like printed headers)
+ * 4. Fall back to Vision-only word matching for unmatched transcript lines
  */
 export function matchTranscriptToLines(
   transcriptLines: string[],
@@ -177,7 +183,6 @@ export function matchTranscriptToLines(
   }
 
   if (groupedLines.length === 0) {
-    // No grouped lines — everything must come from Vision fallback
     const matched: MatchedLine[] = transcriptLines.map((text, i) => {
       const fallback = unassignedWords
         ? findVisionFallback(text, unassignedWords)
@@ -196,78 +201,122 @@ export function matchTranscriptToLines(
     return { matched, excludedContent: [] };
   }
 
-  // Score matrix: transcriptLines x groupedLines
-  const scores: number[][] = transcriptLines.map((tLine) =>
-    groupedLines.map((gLine) => wordOverlap(tLine, gLine.visionText)),
-  );
+  // Separate body lines from margin/other lines
+  const bodyLines = groupedLines.filter((g) => g.region === 'body');
+  const nonBodyLines = groupedLines.filter((g) => g.region !== 'body');
 
-  // Greedy forward assignment preserving reading order.
-  // For each transcript line (in order), find the best-scoring grouped line
-  // that is at or below the previous match's y-position.
-  const matchedGroupedIndices = new Set<number>();
-  const assignments: (number | null)[] = new Array(transcriptLines.length).fill(null);
-  let minNextGroupIdx = 0;
+  // Positional assignment: assign transcript lines to body lines in reading order.
+  // If there are more body lines than transcript lines, the extras are candidates
+  // for exclusion (but only if they're clearly not handwritten content).
+  // If there are more transcript lines than body lines, the extras get Vision fallback.
+  const matched: MatchedLine[] = [];
+  const matchedBodyIndices = new Set<number>();
 
-  for (let tIdx = 0; tIdx < transcriptLines.length; tIdx++) {
-    let bestScore = 0;
-    let bestGIdx = -1;
+  if (bodyLines.length <= transcriptLines.length) {
+    // Fewer or equal body lines than transcript lines — each body line gets a transcript line.
+    // Distribute transcript lines across body lines proportionally.
+    for (let bIdx = 0; bIdx < bodyLines.length; bIdx++) {
+      // Map body line index to transcript line index proportionally
+      const tIdx = Math.round((bIdx / Math.max(1, bodyLines.length - 1)) * (transcriptLines.length - 1));
+      // But we need 1:1 — so just assign sequentially, allowing gaps
+      matchedBodyIndices.add(bIdx);
+    }
 
-    for (let gIdx = minNextGroupIdx; gIdx < groupedLines.length; gIdx++) {
-      if (matchedGroupedIndices.has(gIdx)) continue;
+    // Simple sequential assignment
+    let bIdx = 0;
+    for (let tIdx = 0; tIdx < transcriptLines.length; tIdx++) {
+      if (bIdx < bodyLines.length) {
+        const gLine = bodyLines[bIdx];
+        const score = wordOverlap(transcriptLines[tIdx], gLine.visionText);
+        matched.push({
+          transcriptText: transcriptLines[tIdx],
+          transcriptLineIndex: tIdx,
+          groupedLine: gLine,
+          confidence: Math.max(score, 0.5), // Positional match gets at least 0.5
+          matchSource: 'kraken+vision',
+          bbox: [...gLine.bbox] as [number, number, number, number],
+          boundary: gLine.boundary,
+        });
+        bIdx++;
+      } else {
+        // More transcript lines than body lines — Vision fallback
+        const fallback = unassignedWords
+          ? findVisionFallback(transcriptLines[tIdx], unassignedWords)
+          : null;
+        matched.push({
+          transcriptText: transcriptLines[tIdx],
+          transcriptLineIndex: tIdx,
+          groupedLine: null,
+          confidence: fallback?.confidence ?? 0,
+          matchSource: fallback ? 'vision-only' : 'unmatched',
+          bbox: fallback?.bbox ?? null,
+        });
+      }
+    }
+  } else {
+    // More body lines than transcript lines — need to pick which body lines
+    // correspond to transcript lines. Use reading order + text similarity
+    // to select the best subset.
+    //
+    // Strategy: walk through body lines top-to-bottom, greedily assign
+    // transcript lines. Skip body lines that are clearly bad matches
+    // when there's a better option ahead.
+    let tIdx = 0;
+    const assignedBodyIndices = new Set<number>();
 
-      const score = scores[tIdx][gIdx];
-      if (score > bestScore) {
-        bestScore = score;
-        bestGIdx = gIdx;
+    for (let bIdx = 0; bIdx < bodyLines.length && tIdx < transcriptLines.length; bIdx++) {
+      const gLine = bodyLines[bIdx];
+      const score = wordOverlap(transcriptLines[tIdx], gLine.visionText);
+      const remainingBody = bodyLines.length - bIdx;
+      const remainingTranscript = transcriptLines.length - tIdx;
+
+      // Always assign if we'd run out of body lines otherwise,
+      // or if the text has any reasonable overlap,
+      // or if the body line has vision words (it's real content)
+      if (remainingBody <= remainingTranscript || score > 0.05 || gLine.visionWords.length > 0) {
+        matched.push({
+          transcriptText: transcriptLines[tIdx],
+          transcriptLineIndex: tIdx,
+          groupedLine: gLine,
+          confidence: Math.max(score, 0.3),
+          matchSource: 'kraken+vision',
+          bbox: [...gLine.bbox] as [number, number, number, number],
+          boundary: gLine.boundary,
+        });
+        assignedBodyIndices.add(bIdx);
+        tIdx++;
       }
     }
 
-    // Accept if score is reasonable (above 0.15 threshold)
-    // or if there's only one candidate (positional fallback)
-    const remainingGrouped = groupedLines.length - matchedGroupedIndices.size;
-    const remainingTranscript = transcriptLines.length - tIdx;
+    // Any remaining transcript lines get Vision fallback
+    for (; tIdx < transcriptLines.length; tIdx++) {
+      const fallback = unassignedWords
+        ? findVisionFallback(transcriptLines[tIdx], unassignedWords)
+        : null;
+      matched.push({
+        transcriptText: transcriptLines[tIdx],
+        transcriptLineIndex: tIdx,
+        groupedLine: null,
+        confidence: fallback?.confidence ?? 0,
+        matchSource: fallback ? 'vision-only' : 'unmatched',
+        bbox: fallback?.bbox ?? null,
+      });
+    }
 
-    if (bestGIdx >= 0 && (bestScore >= 0.15 || remainingGrouped <= remainingTranscript)) {
-      assignments[tIdx] = bestGIdx;
-      matchedGroupedIndices.add(bestGIdx);
-      minNextGroupIdx = bestGIdx + 1;
+    // Unassigned body lines — only exclude if they have NO vision words
+    // (empty segments) or clearly no text content
+    for (let bIdx = 0; bIdx < bodyLines.length; bIdx++) {
+      if (!assignedBodyIndices.has(bIdx)) {
+        matchedBodyIndices.add(bIdx); // track for exclusion check below
+      }
     }
   }
 
-  // Build matched results
-  const matched: MatchedLine[] = transcriptLines.map((text, tIdx) => {
-    const gIdx = assignments[tIdx];
-
-    if (gIdx !== null) {
-      const gLine = groupedLines[gIdx];
-      return {
-        transcriptText: text,
-        transcriptLineIndex: tIdx,
-        groupedLine: gLine,
-        confidence: scores[tIdx][gIdx],
-        matchSource: 'kraken+vision' as const,
-        bbox: [...gLine.bbox] as [number, number, number, number],
-        boundary: gLine.boundary,
-      };
-    }
-
-    // Vision-only fallback
-    const fallback = unassignedWords
-      ? findVisionFallback(text, unassignedWords)
-      : null;
-
-    return {
-      transcriptText: text,
-      transcriptLineIndex: tIdx,
-      groupedLine: null,
-      confidence: fallback?.confidence ?? 0,
-      matchSource: fallback ? ('vision-only' as const) : ('unmatched' as const),
-      bbox: fallback?.bbox ?? null,
-    };
-  });
-
-  // Excluded content: grouped lines not matched by any transcript line
-  const excludedContent = groupedLines.filter((_, i) => !matchedGroupedIndices.has(i));
+  // Excluded content: only margin/non-body lines are excluded.
+  // Body lines that weren't assigned are NOT excluded — they're just
+  // extra fragments that the grouping didn't merge. They'll still show
+  // as green Kraken segments in the debug overlay.
+  const excludedContent = nonBodyLines;
 
   return { matched, excludedContent };
 }

@@ -114,12 +114,13 @@ describe('matchTranscriptToLines', () => {
     expect(result.excludedContent.length).toBeGreaterThanOrEqual(0);
   });
 
-  it('unmatched grouped line goes to excludedContent', () => {
+  it('margin-region lines go to excludedContent', () => {
     const grouped = [
       makeGroupedLine({
         line: 1,
         bbox: [100, 50, 500, 80],
         visionText: 'PRINTED HEADER',
+        region: 'margin',
       }),
       makeGroupedLine({
         line: 2,
@@ -135,7 +136,7 @@ describe('matchTranscriptToLines', () => {
 
     expect(result.matched).toHaveLength(1);
     expect(result.matched[0].transcriptText).toBe('Dear Mother');
-    // The printed header should be in excluded content
+    // The margin-region line should be in excluded content
     expect(result.excludedContent).toHaveLength(1);
     expect(result.excludedContent[0].visionText).toBe('PRINTED HEADER');
   });

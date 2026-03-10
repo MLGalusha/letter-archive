@@ -257,9 +257,9 @@
 
 /* Debug polygon overlay — Kraken line boundaries (green) */
 .line-review-debug-polygon {
-  fill: rgba(0, 200, 80, 0.25);
-  stroke: rgba(0, 200, 80, 1);
-  stroke-width: 2;
+  fill: rgba(0, 200, 80, 0.18);
+  stroke: rgba(0, 200, 80, 0.5);
+  stroke-width: 1;
 }
 
 /* Vision word-level bounding boxes — has content (blue) */
@@ -290,18 +290,30 @@
   stroke-dasharray: 4 3;
 }
 
-/* West pole (blue) */
+/* West edge points (blue) */
 .line-review-pole-west {
   fill: rgba(60, 130, 240, 0.8);
   stroke: rgba(60, 130, 240, 1);
   stroke-width: 1;
 }
 
-/* East pole (red) */
+/* West edge vertical line (blue) */
+.line-review-edge-west {
+  stroke: rgba(60, 130, 240, 0.6);
+  stroke-width: 2;
+}
+
+/* East edge points (red) */
 .line-review-pole-east {
   fill: rgba(240, 60, 60, 0.8);
   stroke: rgba(240, 60, 60, 1);
   stroke-width: 1;
+}
+
+/* East edge vertical line (red) */
+.line-review-edge-east {
+  stroke: rgba(240, 60, 60, 0.6);
+  stroke-width: 2;
 }
 
 /* Debug legend swatch for merged/grouped lines */
@@ -317,12 +329,12 @@
   stroke-width: 2;
 }
 
-/* Excluded content (gray) */
+/* Excluded content (bright red) */
 .line-review-debug-excluded {
-  fill: rgba(128, 128, 128, 0.1);
-  stroke: rgba(128, 128, 128, 0.5);
-  stroke-width: 1;
-  stroke-dasharray: 4 2;
+  fill: rgba(255, 40, 40, 0.15);
+  stroke: rgba(255, 40, 40, 0.9);
+  stroke-width: 2;
+  stroke-dasharray: 6 3;
 }
 
 /* Margin region segments */
@@ -338,8 +350,8 @@
   border: 1px solid rgba(255, 215, 0, 0.8);
 }
 .debug-legend-excluded {
-  background: rgba(128, 128, 128, 0.3);
-  border: 1px solid rgba(128, 128, 128, 0.6);
+  background: rgba(255, 40, 40, 0.4);
+  border: 1px solid rgba(255, 40, 40, 0.8);
 }
 
 .line-review-exit-hint kbd {

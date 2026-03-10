@@ -11,7 +11,7 @@ import { getErrorMessage, getImageUrl } from '../../api/client';
 import { detectPageLines } from '../../api/admin/letters';
 import type { Letter, LineSegment, LineSegmentWord, OcrWordBox } from '../../types/Letter';
 import { attachWordsToSegments } from '../../utils/attachWordsToSegments';
-import { constrainedGrouping, type GroupedLine } from '../../utils/constrainedGrouping';
+import { constrainedGrouping, eastEdgeY, westEdgeY, type GroupedLine } from '../../utils/constrainedGrouping';
 import { matchTranscriptToLines, type MatchedLine } from '../../utils/transcriptMatcher';
 import {
   alignTranscriptToVisualLines,
@@ -1075,48 +1075,30 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           >
             {pipelineResult.groupedLines
               .filter((gl) => gl.merged)
-              .map((gl, i) =>
-                gl.boundary && gl.boundary.length > 2 ? (
-                  <polygon
-                    key={`grouped-poly-${i}`}
-                    className={gl.region === 'margin' ? 'line-review-debug-margin' : 'line-review-debug-merged'}
-                    points={gl.boundary
-                      .map(p => `${p.x * scaleFactor},${p.y * scaleFactor}`)
-                      .join(' ')}
-                  />
-                ) : (
-                  <rect
-                    key={`grouped-rect-${i}`}
-                    className={gl.region === 'margin' ? 'line-review-debug-margin' : 'line-review-debug-merged'}
-                    x={gl.bbox[0] * scaleFactor}
-                    y={gl.bbox[1] * scaleFactor}
-                    width={(gl.bbox[2] - gl.bbox[0]) * scaleFactor}
-                    height={(gl.bbox[3] - gl.bbox[1]) * scaleFactor}
-                  />
-                ),
-              )}
-            {/* Group connectors — dashed orange lines between constituents */}
-            {pipelineResult.groupedLines
-              .filter((gl) => gl.merged)
-              .flatMap((gl, si) =>
-                gl.constituents.slice(0, -1).map((c, ci) => {
-                  const next = gl.constituents[ci + 1];
-                  const eastX = c.bbox[2] * scaleFactor;
-                  const eastY = ((c.bbox[1] + c.bbox[3]) / 2) * scaleFactor;
-                  const westX = next.bbox[0] * scaleFactor;
-                  const westY = ((next.bbox[1] + next.bbox[3]) / 2) * scaleFactor;
-                  return (
-                    <line
-                      key={`connector-${si}-${ci}`}
-                      className="line-review-debug-connector"
-                      x1={eastX}
-                      y1={eastY}
-                      x2={westX}
-                      y2={westY}
+              .flatMap((gl, i) =>
+                gl.constituents.map((seg, si) => {
+                  const cls = gl.region === 'margin' ? 'line-review-debug-margin' : 'line-review-debug-merged';
+                  return seg.boundary && seg.boundary.length > 2 ? (
+                    <polygon
+                      key={`grouped-poly-${i}-${si}`}
+                      className={cls}
+                      points={seg.boundary
+                        .map(p => `${p.x * scaleFactor},${p.y * scaleFactor}`)
+                        .join(' ')}
+                    />
+                  ) : (
+                    <rect
+                      key={`grouped-rect-${i}-${si}`}
+                      className={cls}
+                      x={seg.bbox[0] * scaleFactor}
+                      y={seg.bbox[1] * scaleFactor}
+                      width={(seg.bbox[2] - seg.bbox[0]) * scaleFactor}
+                      height={(seg.bbox[3] - seg.bbox[1]) * scaleFactor}
                     />
                   );
                 }),
               )}
+            {/* Merge connectors are drawn in the edge-points overlay below */}
           </svg>
         )}
 
@@ -1184,7 +1166,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           </svg>
         )}
 
-        {/* Debug overlay — Pole markers (west=blue, east=red) */}
+        {/* Debug overlay — Edge points (west=blue, east=red) and merge connectors */}
         {debugLines && showKrakenLines && imageDisplaySize.width > 0 && (
           <svg
             style={{
@@ -1198,24 +1180,45 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             }}
           >
             {(krakenSegmentsMap[currentPageIndex] ?? []).map((seg, i) => {
-              const my = ((seg.bbox[1] + seg.bbox[3]) / 2) * scaleFactor;
+              const west = westEdgeY(seg);
+              const east = eastEdgeY(seg);
+              const lx = seg.bbox[0] * scaleFactor;
+              const rx = seg.bbox[2] * scaleFactor;
               return (
                 <g key={`poles-${i}`}>
-                  <circle
-                    className="line-review-pole-west"
-                    cx={seg.bbox[0] * scaleFactor}
-                    cy={my}
-                    r={4}
-                  />
-                  <circle
-                    className="line-review-pole-east"
-                    cx={seg.bbox[2] * scaleFactor}
-                    cy={my}
-                    r={4}
-                  />
+                  {/* West (left) edge: top + bottom points with connecting line */}
+                  <circle className="line-review-pole-west" cx={lx} cy={west[0] * scaleFactor} r={3} />
+                  <circle className="line-review-pole-west" cx={lx} cy={west[1] * scaleFactor} r={3} />
+                  <line className="line-review-edge-west" x1={lx} y1={west[0] * scaleFactor} x2={lx} y2={west[1] * scaleFactor} />
+                  {/* East (right) edge: top + bottom points with connecting line */}
+                  <circle className="line-review-pole-east" cx={rx} cy={east[0] * scaleFactor} r={3} />
+                  <circle className="line-review-pole-east" cx={rx} cy={east[1] * scaleFactor} r={3} />
+                  <line className="line-review-edge-east" x1={rx} y1={east[0] * scaleFactor} x2={rx} y2={east[1] * scaleFactor} />
                 </g>
               );
             })}
+            {/* Merge connectors: top-right→top-left, bottom-right→bottom-left */}
+            {pipelineResult?.groupedLines
+              .filter((gl) => gl.merged && gl.constituents.length > 1)
+              .map((gl, gi) =>
+                gl.constituents.slice(0, -1).map((seg, si) => {
+                  const next = gl.constituents[si + 1];
+                  const segEast = eastEdgeY(seg);
+                  const nextWest = westEdgeY(next);
+                  const rx = seg.bbox[2] * scaleFactor;
+                  const lx = next.bbox[0] * scaleFactor;
+                  return (
+                    <g key={`conn-${gi}-${si}`}>
+                      <line className="line-review-debug-connector"
+                        x1={rx} y1={segEast[0] * scaleFactor}
+                        x2={lx} y2={nextWest[0] * scaleFactor} />
+                      <line className="line-review-debug-connector"
+                        x1={rx} y1={segEast[1] * scaleFactor}
+                        x2={lx} y2={nextWest[1] * scaleFactor} />
+                    </g>
+                  );
+                }),
+              )}
           </svg>
         )}
 

@@ -14,6 +14,7 @@ import type { Letter, LineSegmentWord, OcrWordBox, ReconciledLine } from '../../
 import {
   alignTranscriptToVisualLines,
   buildAlignedLinesFromDetected,
+  buildAlignedLinesFromEstimatedLayout,
   detectImageLines,
   type AlignmentInput,
   type AlignedLine,
@@ -532,6 +533,9 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (!imageReady || !imageRef.current) return [];
 
     const detectedLines = detectImageLines(imageRef.current);
+    if (detectedLines.length === 0) {
+      return buildAlignedLinesFromEstimatedLayout(transcriptLines, imageNaturalSize);
+    }
     return buildAlignedLinesFromDetected(transcriptLines, detectedLines);
   }, [currentPage, currentPageIndex, pageLineTexts, aiSegmentsMap, isDetecting, imageReady]);
   const hasTranscriptLinesOnPage = (pageLineTexts[currentPageIndex]?.length ?? 0) > 0;

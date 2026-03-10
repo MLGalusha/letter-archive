@@ -8,6 +8,7 @@ import LineReviewMode, {
   type LineReviewModeHandle,
 } from '../LineReviewMode';
 import { detectPageLines } from '../../../api/admin/letters';
+import { detectImageLines } from '../../../utils/lineAlignment';
 import type { Letter } from '../../../types/Letter';
 
 // Mock the client module
@@ -26,11 +27,7 @@ vi.mock('../../../utils/lineAlignment', async (importOriginal) => {
   return {
     ...actual,
     // Override detectImageLines to return per-line results (valley detection)
-    detectImageLines: vi.fn().mockReturnValue([
-      { y1: 100, y2: 135, x1: 50, x2: 450 },
-      { y1: 140, y2: 175, x1: 55, x2: 445 },
-      { y1: 180, y2: 215, x1: 50, x2: 450 },
-    ]),
+    detectImageLines: vi.fn(),
   };
 });
 
@@ -132,6 +129,7 @@ async function flushEffects() {
 
 describe('LineReviewMode', () => {
   const detectPageLinesMock = vi.mocked(detectPageLines);
+  const detectImageLinesMock = vi.mocked(detectImageLines);
   const defaultProps = {
     letter: makeLetter(),
     transcript: 'Line one\nLine two\nLine three',
@@ -142,6 +140,11 @@ describe('LineReviewMode', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    detectImageLinesMock.mockReturnValue([
+      { y1: 100, y2: 135, x1: 50, x2: 450 },
+      { y1: 140, y2: 175, x1: 55, x2: 445 },
+      { y1: 180, y2: 215, x1: 50, x2: 450 },
+    ]);
     // Reset requestAnimationFrame to run synchronously
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
       cb(0);
@@ -292,6 +295,18 @@ describe('LineReviewMode', () => {
     const input = getEditable(container);
     expect(input).toBeTruthy();
     expect(input?.textContent).toBe('Line one');
+  });
+
+  it('uses estimated layout fallback when pixel detection finds no lines', async () => {
+    detectImageLinesMock.mockReturnValue([]);
+
+    const { container } = render(<LineReviewMode {...defaultProps} />);
+    await simulateImageLoadAsync(container);
+
+    const input = getEditable(container);
+    expect(input).toBeTruthy();
+    expect(input?.textContent).toBe('Line one');
+    expect(screen.queryByText('Could not detect line positions for this page.')).toBeNull();
   });
 
   it('advances to next line on ArrowDown', async () => {

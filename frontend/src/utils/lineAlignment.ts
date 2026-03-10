@@ -883,3 +883,40 @@ export function buildAlignedLinesFromDetected(
 
   return result;
 }
+
+/**
+ * Last-resort fallback when no visual line geometry can be recovered at all.
+ * This keeps line review usable by laying transcript lines into evenly spaced
+ * bands across the likely handwritten region of the page.
+ */
+export function buildAlignedLinesFromEstimatedLayout(
+  transcriptLines: string[],
+  imageSize: { width: number; height: number },
+): AlignedLine[] {
+  if (transcriptLines.length === 0) return [];
+  if (imageSize.width <= 0 || imageSize.height <= 0) return [];
+
+  const left = Math.round(imageSize.width * 0.12);
+  const right = Math.round(imageSize.width * 0.88);
+  const top = Math.round(imageSize.height * 0.14);
+  const bottom = Math.round(imageSize.height * 0.88);
+  const usableHeight = Math.max(1, bottom - top);
+  const bandHeight = usableHeight / transcriptLines.length;
+
+  return transcriptLines.map((transcriptText, index) => {
+    const y1 = Math.round(top + (index * bandHeight));
+    const y2 = Math.round(top + ((index + 1) * bandHeight));
+    const baselineY = Math.max(y1 + 1, y2 - Math.max(6, Math.round(bandHeight * 0.2)));
+
+    return {
+      visualLineIndex: index,
+      transcriptText,
+      transcriptLineIndex: index,
+      bbox: [left, y1, right, y2],
+      baseline: [
+        [left, baselineY],
+        [right, baselineY],
+      ],
+    };
+  });
+}

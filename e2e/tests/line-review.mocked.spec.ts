@@ -23,6 +23,18 @@ async function openLineReview(
   return mockedApi;
 }
 
+function createLetterWithStoredReconciledLines() {
+  const initialLetter = createMockLetterReviewLetter();
+  const detectLinesByPageId = createMockDetectLinesByPageId();
+
+  return createMockLetterReviewLetter({
+    images: initialLetter.images.map((image) => ({
+      ...image,
+      ...(detectLinesByPageId[image.id] ?? {}),
+    })),
+  });
+}
+
 test.describe('@mocked Line Review', () => {
   test('enters review mode on collection 009 images and shows detected progress', async ({
     page,
@@ -35,6 +47,22 @@ test.describe('@mocked Line Review', () => {
     expect(mockedApi.detectLineRequests).toContain(
       `${API_BASE_URL}/admin/letters/pages/collection-009-page-1/detect-lines`,
     );
+  });
+
+  test('uses stored reconciled lines before any redetect request is made', async ({
+    page,
+  }) => {
+    const initialLetter = createLetterWithStoredReconciledLines();
+    const mockedApi = await openLineReview(page, initialLetter);
+
+    await expect(page.locator('.line-review-progress')).toContainText('Line 1');
+    await expect(page.locator('.line-review-editable')).toContainText('My dear mother,');
+    expect(mockedApi.detectLineRequests).toHaveLength(0);
+
+    await page.locator('.header-action.redetect').click();
+    await expect
+      .poll(() => mockedApi.detectLineRequests.length)
+      .toBe(1);
   });
 
   test('navigates across lines and pages in review mode', async ({ page }) => {
@@ -119,6 +147,52 @@ test.describe('@mocked Line Review', () => {
         sourceSegmentIds: [101],
       }),
     });
+  });
+
+  test('falls back to browser-side line detection when detect-lines returns no geometry', async ({
+    page,
+  }) => {
+    const detectLinesByPageId = createMockDetectLinesByPageId();
+    Object.values(detectLinesByPageId).forEach((result) => {
+      result.lineSegments = [];
+      result.ocrWordBoxes = [];
+      result.reconciledLines = [];
+    });
+
+    const mockedApi = await openLineReview(
+      page,
+      createMockLetterReviewLetter(),
+      detectLinesByPageId,
+    );
+
+    await expect(page.locator('.line-review-progress')).toContainText('Line 1');
+    await expect(page.locator('.line-review-editable')).toContainText('My dear mother,');
+    expect(mockedApi.detectLineRequests).toContain(
+      `${API_BASE_URL}/admin/letters/pages/collection-009-page-1/detect-lines`,
+    );
+
+    const editable = page.locator('.line-review-editable');
+    await editable.click();
+    await editable.evaluate((node, value) => {
+      node.textContent = value;
+      node.dispatchEvent(
+        new InputEvent('input', {
+          bubbles: true,
+          inputType: 'insertText',
+          data: value,
+        }),
+      );
+    }, 'My dearest mother,');
+
+    await page.locator('.header-action.review').click();
+
+    await expect(page.locator('.transcript-editor')).toContainText('My dearest mother,');
+    await expect
+      .poll(() => mockedApi.updateLetterRequests.length)
+      .toBe(1);
+    await expect
+      .poll(() => mockedApi.versionRequests.length)
+      .toBe(1);
   });
 
   test('saves edited transcript text and records a transcript version on exit', async ({

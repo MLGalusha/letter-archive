@@ -289,6 +289,33 @@ test.describe('@mocked Letter Review', () => {
     await expect(page.locator('.save-status.error')).toContainText('Save failed');
   });
 
+  test('shows the request id when metadata auto-save fails', async ({ page }) => {
+    const mockedApi = await openMockLetterReviewWithOptions(
+      page,
+      createMockLetterReviewLetter(),
+      {
+        routeFailures: {
+          updateLetter: {
+            status: 503,
+            error: 'Metadata save failed',
+            requestId: 'req-metadata-save-503',
+          },
+        },
+      },
+    );
+
+    await page.locator('#sender').fill('Alicia Smith');
+
+    await expect
+      .poll(() => mockedApi.updateLetterRequests.length)
+      .toBe(1);
+    await expect(page.locator('.toast')).toContainText(
+      'Metadata save failed (Request ID: req-metadata-save-503)',
+    );
+    await expect(page.locator('.save-status.error')).toContainText('Save failed');
+    expect(mockedApi.versionRequests).toHaveLength(0);
+  });
+
   test('runs AI sync immediately from the countdown state', async ({ page }) => {
     const mockedApi = await openMockLetterReview(page);
 

@@ -20,6 +20,7 @@ export async function installMockUploadApi(
   page: Page,
   options: {
     duplicateMap?: Record<string, boolean>;
+    duplicateError?: { message: string; requestId: string };
     uploadError?: { message: string; requestId: string };
   } = {},
 ) {
@@ -36,6 +37,21 @@ export async function installMockUploadApi(
       const body = route.request().postDataJSON() as { filenames?: string[] };
       const filenames = body.filenames ?? [];
       duplicateRequests.push(filenames);
+
+       if (options.duplicateError) {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          headers: {
+            'x-request-id': options.duplicateError.requestId,
+          },
+          body: JSON.stringify({
+            error: options.duplicateError.message,
+            requestId: options.duplicateError.requestId,
+          }),
+        });
+        return;
+      }
 
       await route.fulfill({
         status: 200,

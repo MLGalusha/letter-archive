@@ -66,4 +66,30 @@ test.describe('@mocked Upload Page', () => {
     );
     expect(mockedApi.uploadRequests).toHaveLength(1);
   });
+
+  test('shows request ids when duplicate checking fails during import', async ({
+    page,
+  }) => {
+    const mockedApi = await installMockUploadApi(page, {
+      duplicateError: {
+        message: 'Duplicate checker unavailable',
+        requestId: 'req-dupe-check-503',
+      },
+    });
+
+    await page.goto('/admin/upload');
+    await page.locator('.upload-letter-page').waitFor({ state: 'visible' });
+    await page.locator('input[type="file"]').first().setInputFiles(collection009UploadFiles);
+
+    await expect(
+      page.locator('.toast.toast-error').filter({
+        hasText: 'Duplicate checker unavailable (Request ID: req-dupe-check-503)',
+      }),
+    ).toBeVisible();
+    await expect(page.locator('.collections-section')).toContainText('Collection 009');
+    expect(mockedApi.duplicateRequests).toEqual([
+      ['009-19470810-L01-01.jpg', '009-19470810-L01-02.jpg'],
+    ]);
+    expect(mockedApi.uploadRequests).toHaveLength(0);
+  });
 });

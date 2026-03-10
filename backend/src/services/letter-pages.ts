@@ -24,7 +24,11 @@ export async function findOrCreatePage(params: CreatePageParams): Promise<Letter
 
   if (existing) {
     // If force=true, update the checksum and storage path
-    if (params.force && params.checksumSha256 !== existing.checksumSha256) {
+    if (
+      params.force &&
+      (params.checksumSha256 !== existing.checksumSha256 ||
+        params.storagePath !== existing.storagePath)
+    ) {
       const [updated] = await db
         .update(letterPages)
         .set({

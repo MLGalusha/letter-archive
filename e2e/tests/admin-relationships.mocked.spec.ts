@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { installMockAdminRelationshipsApi } from './utils/mock-admin-relationships-api';
+import { API_BASE_URL } from './utils/test-helpers';
 
 async function openMockAdminRelationships(page: Page) {
   const mockedApi = await installMockAdminRelationshipsApi(page);
@@ -78,6 +79,29 @@ test.describe('@mocked Admin Relationships', () => {
       confidence: 88,
       notes: 'Archive note',
     });
+  });
+
+  test('shows the request id when deleting a relationship fails', async ({
+    page,
+  }) => {
+    const mockedApi = await installMockAdminRelationshipsApi(page, {
+      deleteError: {
+        message: 'Delete failed',
+        requestId: 'req-rel-500',
+      },
+    });
+
+    await page.goto('/admin/entities/relationships');
+    await page.locator('.relationships-table').waitFor({ state: 'visible' });
+
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Delete relationship' }).first().click();
+
+    await expect(page.locator('.toast-error')).toContainText('Delete failed');
+    await expect(page.locator('.toast-error')).toContainText('Request ID: req-rel-500');
+    expect(mockedApi.deleteRequests).toEqual([
+      `${API_BASE_URL}/admin/relationships/rel-1`,
+    ]);
   });
 
   test('switches to graph view and finds a mocked connection path', async ({ page }) => {

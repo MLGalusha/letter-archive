@@ -55,6 +55,7 @@ export async function installMockAdminRelationshipsApi(
   options: {
     graphData?: ReturnType<typeof createMockRelationshipGraphData>;
     adminRelationships?: ReturnType<typeof createMockAdminRelationships>;
+    deleteError?: { message: string; requestId: string };
   } = {},
 ) {
   await page.addInitScript(() => {
@@ -74,6 +75,7 @@ export async function installMockAdminRelationshipsApi(
     confidence?: number;
     notes?: string;
   }> = [];
+  const deleteRequests: string[] = [];
   const nodeMap = new Map(graphData.nodes.map((node) => [node.id, node]));
 
   await page.route(
@@ -141,10 +143,49 @@ export async function installMockAdminRelationshipsApi(
     });
   });
 
+  await page.route(
+    new RegExp(`${escapeRegex(API_BASE_URL)}/admin/relationships/[^/]+$`),
+    async (route) => {
+      if (route.request().method() !== 'DELETE') {
+        await route.fallback();
+        return;
+      }
+
+      deleteRequests.push(route.request().url());
+
+      if (options.deleteError) {
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          headers: {
+            'x-request-id': options.deleteError.requestId,
+          },
+          body: JSON.stringify({
+            error: options.deleteError.message,
+            requestId: options.deleteError.requestId,
+          }),
+        });
+        return;
+      }
+
+      const relationshipId = route.request().url().split('/').at(-1);
+      const index = adminRelationships.findIndex((relationship) => relationship.id === relationshipId);
+      if (index >= 0) {
+        adminRelationships.splice(index, 1);
+      }
+
+      await route.fulfill({
+        status: 204,
+        body: '',
+      });
+    },
+  );
+
   return {
     ...graphApi,
     adminRelationships,
     searchRequests,
     createRequests,
+    deleteRequests,
   };
 }

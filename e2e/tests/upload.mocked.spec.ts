@@ -1,17 +1,48 @@
+import { access } from 'node:fs/promises';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { installMockUploadApi } from './utils/mock-upload-api';
 
-const collection009UploadFiles = [
-  path.resolve(
-    process.cwd(),
-    '../backend/storage/collections/009/19470810/L01/009-19470810-L01-01.jpg',
-  ),
-  path.resolve(
-    process.cwd(),
-    '../backend/storage/collections/009/19470810/L01/009-19470810-L01-02.jpg',
-  ),
-];
+const collection009UploadFixtures = [
+  {
+    name: '009-19470810-L01-01.jpg',
+    filePath: path.resolve(
+      process.cwd(),
+      '../backend/storage/collections/009/19470810/L01/009-19470810-L01-01.jpg',
+    ),
+  },
+  {
+    name: '009-19470810-L01-02.jpg',
+    filePath: path.resolve(
+      process.cwd(),
+      '../backend/storage/collections/009/19470810/L01/009-19470810-L01-02.jpg',
+    ),
+  },
+] as const;
+
+const fallbackJpegBytes = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+
+async function setCollection009UploadFiles(page: Page) {
+  const input = page.locator('input[type="file"]').first();
+
+  try {
+    await Promise.all(
+      collection009UploadFixtures.map((fixture) => access(fixture.filePath)),
+    );
+    await input.setInputFiles(
+      collection009UploadFixtures.map((fixture) => fixture.filePath),
+    );
+    return;
+  } catch {
+    await input.setInputFiles(
+      collection009UploadFixtures.map((fixture) => ({
+        name: fixture.name,
+        mimeType: 'image/jpeg',
+        buffer: fallbackJpegBytes,
+      })),
+    );
+  }
+}
 
 async function openMockUploadPage(page: Page) {
   const mockedApi = await installMockUploadApi(page);
@@ -26,7 +57,7 @@ test.describe('@mocked Upload Page', () => {
   }) => {
     const mockedApi = await openMockUploadPage(page);
 
-    await page.locator('input[type="file"]').first().setInputFiles(collection009UploadFiles);
+    await setCollection009UploadFiles(page);
 
     await expect(page.locator('.header-stats')).toContainText('2 imported');
     await expect(page.locator('.header-stats')).toContainText('2 original');
@@ -55,7 +86,7 @@ test.describe('@mocked Upload Page', () => {
 
     await page.goto('/admin/upload');
     await page.locator('.upload-letter-page').waitFor({ state: 'visible' });
-    await page.locator('input[type="file"]').first().setInputFiles(collection009UploadFiles);
+    await setCollection009UploadFiles(page);
 
     await page.getByRole('button', { name: 'Upload' }).click();
 
@@ -79,7 +110,7 @@ test.describe('@mocked Upload Page', () => {
 
     await page.goto('/admin/upload');
     await page.locator('.upload-letter-page').waitFor({ state: 'visible' });
-    await page.locator('input[type="file"]').first().setInputFiles(collection009UploadFiles);
+    await setCollection009UploadFiles(page);
 
     await expect(
       page.locator('.toast.toast-error').filter({
@@ -105,7 +136,7 @@ test.describe('@mocked Upload Page', () => {
 
     await page.goto('/admin/upload');
     await page.locator('.upload-letter-page').waitFor({ state: 'visible' });
-    await page.locator('input[type="file"]').first().setInputFiles(collection009UploadFiles);
+    await setCollection009UploadFiles(page);
 
     await expect(page.locator('.header-stats')).toContainText('1 duplicate');
     await page.getByRole('button', { name: 'Upload' }).click();
@@ -133,7 +164,7 @@ test.describe('@mocked Upload Page', () => {
 
     await page.goto('/admin/upload');
     await page.locator('.upload-letter-page').waitFor({ state: 'visible' });
-    await page.locator('input[type="file"]').first().setInputFiles(collection009UploadFiles);
+    await setCollection009UploadFiles(page);
 
     await page.getByRole('button', { name: 'Upload' }).click();
     await expect(page.locator('.duplicate-dialog')).toContainText('Duplicates Found');

@@ -451,6 +451,8 @@ export async function bulkClearTranscriptions(letterIds: string[]): Promise<Bulk
     extractedDate: null,
     extractedDateConfidence: null,
     tags: null,
+    metadataJson: null,
+    metadataV2Json: null,
     // Clear V2 metadata fields
     emotionalTone: null,
     senderRecipientRelationship: null,
@@ -558,6 +560,8 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearR
     tags: null,
     metadataStatus: 'PENDING',
     metadataError: null,
+    metadataJson: null,
+    metadataV2Json: null,
     // Clear V2 metadata fields
     emotionalTone: null,
     senderRecipientRelationship: null,
@@ -1004,6 +1008,12 @@ export async function regenerateTranscription(
     throw err;
   }
 
+  if (letter.pages.length === 0) {
+    const err = new Error('Letter has no pages to transcribe') as Error & { status: number };
+    err.status = 400;
+    throw err;
+  }
+
   log.info({ letterId, includeExtras }, 'Starting transcription regeneration');
 
   // Reset transcription-related fields
@@ -1141,6 +1151,13 @@ export async function transcribeLetterOnly(
     throw err;
   }
 
+  const pages = letter.pages;
+  if (pages.length === 0) {
+    const err = new Error('Letter has no pages to transcribe') as Error & { status: number };
+    err.status = 400;
+    throw err;
+  }
+
   log.info({ letterId }, 'Starting letter-only transcription');
 
   // Reset transcription-related fields
@@ -1154,13 +1171,6 @@ export async function transcribeLetterOnly(
     transcriptVerifiedBy: null,
     updatedAt: new Date(),
   }).where(eq(letters.id, letterId));
-
-  const pages = letter.pages;
-  if (pages.length === 0) {
-    const err = new Error('Letter has no pages to transcribe') as Error & { status: number };
-    err.status = 400;
-    throw err;
-  }
 
   const pageTranscriptions: string[] = [];
 

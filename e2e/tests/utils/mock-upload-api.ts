@@ -16,6 +16,22 @@ function makeUploadResult(filename: string) {
   };
 }
 
+function extractUploadedFilenames(body: Buffer | null): string[] {
+  if (!body) return [];
+
+  const filenames = new Set<string>();
+  const text = body.toString('utf8');
+  const filenamePattern = /filename="([^"]+)"/g;
+
+  for (const match of text.matchAll(filenamePattern)) {
+    if (match[1]) {
+      filenames.add(match[1]);
+    }
+  }
+
+  return Array.from(filenames);
+}
+
 export async function installMockUploadApi(
   page: Page,
   options: {
@@ -29,7 +45,7 @@ export async function installMockUploadApi(
   });
 
   const duplicateRequests: string[][] = [];
-  const uploadRequests: string[] = [];
+  const uploadRequests: Array<{ url: string; filenames: string[] }> = [];
 
   await page.route(
     new RegExp(`${escapeRegex(API_BASE_URL)}/admin/uploads/check-duplicates$`),
@@ -68,7 +84,11 @@ export async function installMockUploadApi(
   await page.route(
     new RegExp(`${escapeRegex(API_BASE_URL)}/admin/uploads(?:\\?force=true)?$`),
     async (route) => {
-      uploadRequests.push(route.request().url());
+      const filenames = extractUploadedFilenames(route.request().postDataBuffer());
+      uploadRequests.push({
+        url: route.request().url(),
+        filenames,
+      });
 
       if (options.uploadError) {
         await route.fulfill({
@@ -89,12 +109,9 @@ export async function installMockUploadApi(
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          success: 2,
+          success: filenames.length,
           failed: 0,
-          results: [
-            makeUploadResult('009-19470810-L01-01.jpg'),
-            makeUploadResult('009-19470810-L01-02.jpg'),
-          ],
+          results: filenames.map(makeUploadResult),
           errors: [],
         }),
       });

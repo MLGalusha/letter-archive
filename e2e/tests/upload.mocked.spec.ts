@@ -92,4 +92,63 @@ test.describe('@mocked Upload Page', () => {
     ]);
     expect(mockedApi.uploadRequests).toHaveLength(0);
   });
+
+  test('skips duplicate files in the real browser upload workflow', async ({
+    page,
+  }) => {
+    const mockedApi = await installMockUploadApi(page, {
+      duplicateMap: {
+        '009-19470810-L01-01.jpg': true,
+        '009-19470810-L01-02.jpg': false,
+      },
+    });
+
+    await page.goto('/admin/upload');
+    await page.locator('.upload-letter-page').waitFor({ state: 'visible' });
+    await page.locator('input[type="file"]').first().setInputFiles(collection009UploadFiles);
+
+    await expect(page.locator('.header-stats')).toContainText('1 duplicate');
+    await page.getByRole('button', { name: 'Upload' }).click();
+    await expect(page.locator('.duplicate-dialog')).toContainText('Duplicates Found');
+    await page.getByRole('button', { name: /Skip Duplicates/i }).click();
+
+    await expect(page.locator('.upload-banner')).toContainText('1 skipped');
+    expect(mockedApi.uploadRequests).toEqual([
+      {
+        url: expect.stringMatching(/\/admin\/uploads$/),
+        filenames: ['009-19470810-L01-02.jpg'],
+      },
+    ]);
+  });
+
+  test('replaces duplicate files through the real browser upload workflow', async ({
+    page,
+  }) => {
+    const mockedApi = await installMockUploadApi(page, {
+      duplicateMap: {
+        '009-19470810-L01-01.jpg': true,
+        '009-19470810-L01-02.jpg': false,
+      },
+    });
+
+    await page.goto('/admin/upload');
+    await page.locator('.upload-letter-page').waitFor({ state: 'visible' });
+    await page.locator('input[type="file"]').first().setInputFiles(collection009UploadFiles);
+
+    await page.getByRole('button', { name: 'Upload' }).click();
+    await expect(page.locator('.duplicate-dialog')).toContainText('Duplicates Found');
+    await page.getByRole('button', { name: /Replace Duplicates/i }).click();
+
+    await expect(page.locator('.upload-banner')).toContainText('1 replaced');
+    expect(mockedApi.uploadRequests).toEqual([
+      {
+        url: expect.stringMatching(/\/admin\/uploads$/),
+        filenames: ['009-19470810-L01-02.jpg'],
+      },
+      {
+        url: expect.stringMatching(/\/admin\/uploads\?force=true$/),
+        filenames: ['009-19470810-L01-01.jpg'],
+      },
+    ]);
+  });
 });

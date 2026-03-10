@@ -7,7 +7,7 @@ import {
   forwardRef,
   useImperativeHandle,
 } from 'react';
-import { getImageUrl } from '../../api/client';
+import { getErrorMessage, getImageUrl } from '../../api/client';
 import { detectPageLines, submitLineCorrection } from '../../api/admin/letters';
 import type { LineCorrectionPayload } from '../../api/admin/letters';
 import type { Letter, LineSegmentWord, OcrWordBox, ReconciledLine } from '../../types/Letter';
@@ -19,6 +19,7 @@ import {
   type AlignmentInput,
   type AlignedLine,
 } from '../../utils/lineAlignment';
+import { useToast } from '../../contexts/ToastContext';
 import './LineReviewMode.css';
 
 interface LineReviewModeProps {
@@ -353,6 +354,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   debugMode: debugLines = false,
   onDebugModeChange,
 }: LineReviewModeProps, ref) {
+  const { showToast } = useToast();
   // Filter to letter-type pages only
   const letterPages = useMemo(
     () => letter.images.filter((img) => img.type === 'letter'),
@@ -466,10 +468,11 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         setAiSegmentsMap(prev => ({ ...prev, [idx]: alignedSource }));
         setVisionBoxesMap(prev => ({ ...prev, [idx]: result.ocrWordBoxes ?? [] }));
       })
-      .catch(() => {
+      .catch((err) => {
         setAiSegmentsMap(prev => ({ ...prev, [idx]: [] }));
+        showToast(getErrorMessage(err, 'Line detection failed'), 'error');
       });
-  }, [currentPage, currentPageIndex, aiSegmentsMap, visionBoxesMap, pageLineTexts]);
+  }, [currentPage, currentPageIndex, aiSegmentsMap, pageLineTexts, showToast]);
 
 
   // Background pre-fetch: after current page finishes detecting, start
@@ -690,8 +693,18 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       }));
     } catch (err) {
       console.error('Failed to submit line correction:', err);
+      showToast(getErrorMessage(err, 'Failed to save line correction'), 'error');
     }
-  }, [reconciledLinesMap, reconciledLinesForPage, currentPageIndex, letterPages, letter, visionBoxesMap, imageNaturalSize]);
+  }, [
+    reconciledLinesMap,
+    reconciledLinesForPage,
+    currentPageIndex,
+    letterPages,
+    letter,
+    visionBoxesMap,
+    imageNaturalSize,
+    showToast,
+  ]);
 
   // Start drag-to-resize on a handle
   const startResize = useCallback((e: React.MouseEvent, side: 'left' | 'right') => {
@@ -930,10 +943,11 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         setAiSegmentsMap(prev => ({ ...prev, [idx]: alignedSource }));
         setVisionBoxesMap(prev => ({ ...prev, [idx]: result.ocrWordBoxes ?? [] }));
       })
-      .catch(() => {
+      .catch((err) => {
         setAiSegmentsMap(prev => ({ ...prev, [idx]: [] }));
+        showToast(getErrorMessage(err, 'Line detection failed'), 'error');
       });
-  }, [currentPage, currentPageIndex, isDetecting]);
+  }, [currentPage, currentPageIndex, isDetecting, showToast]);
 
   useImperativeHandle(ref, () => ({
     saveCurrentLine,

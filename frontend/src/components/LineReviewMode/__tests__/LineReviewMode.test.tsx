@@ -14,6 +14,7 @@ import type { Letter } from '../../../types/Letter';
 // Mock the client module
 vi.mock('../../../api/client', () => ({
   getImageUrl: (url: string) => `http://test${url}`,
+  getErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
 
 // Mock the detect-lines API call to resolve immediately with empty (triggers pixel fallback)
@@ -30,6 +31,12 @@ vi.mock('../../../utils/lineAlignment', async (importOriginal) => {
     detectImageLines: vi.fn(),
   };
 });
+
+vi.mock('../../../contexts/ToastContext', () => ({
+  useToast: () => ({
+    showToast: vi.fn(),
+  }),
+}));
 
 // jsdom doesn't implement scrollTo on elements
 beforeEach(() => {

@@ -339,6 +339,14 @@ export async function installMockLetterReviewApi(
         reconciledLines: Array<ReturnType<typeof createReconciledLine>>;
       }
     >;
+    detectLinesFailuresByPageId?: Record<
+      string,
+      { status?: number; error: string; requestId?: string }
+    >;
+    lineCorrectionFailuresByPageId?: Record<
+      string,
+      { status?: number; error: string; requestId?: string }
+    >;
   } = {},
 ): Promise<MockLetterReviewContext> {
   const letter = clone(options.initialLetter ?? baseLetter);
@@ -360,6 +368,8 @@ export async function installMockLetterReviewApi(
   const detectLinesByPageId = options.detectLinesByPageId
     ? clone(options.detectLinesByPageId)
     : createMockDetectLinesByPageId();
+  const detectLinesFailuresByPageId = clone(options.detectLinesFailuresByPageId ?? {});
+  const lineCorrectionFailuresByPageId = clone(options.lineCorrectionFailuresByPageId ?? {});
 
   await page.addInitScript(() => {
     sessionStorage.setItem('adminAuth', 'true');
@@ -644,6 +654,20 @@ export async function installMockLetterReviewApi(
     const pageId = route.request().url().split('/').slice(-2)[0];
     detectLineRequests.push(route.request().url());
 
+    const failure = detectLinesFailuresByPageId[pageId];
+    if (failure) {
+      await route.fulfill({
+        status: failure.status ?? 500,
+        contentType: 'application/json',
+        headers: failure.requestId ? { 'x-request-id': failure.requestId } : undefined,
+        body: JSON.stringify({
+          error: failure.error,
+          requestId: failure.requestId,
+        }),
+      });
+      return;
+    }
+
     const result = detectLinesByPageId[pageId];
     await route.fulfill({
       status: 200,
@@ -662,6 +686,20 @@ export async function installMockLetterReviewApi(
     const pageId = route.request().url().split('/').slice(-2)[0];
     const body = route.request().postDataJSON() as MockLineCorrectionRequest['body'];
     lineCorrectionRequests.push({ url: route.request().url(), body });
+
+    const failure = lineCorrectionFailuresByPageId[pageId];
+    if (failure) {
+      await route.fulfill({
+        status: failure.status ?? 500,
+        contentType: 'application/json',
+        headers: failure.requestId ? { 'x-request-id': failure.requestId } : undefined,
+        body: JSON.stringify({
+          error: failure.error,
+          requestId: failure.requestId,
+        }),
+      });
+      return;
+    }
 
     const current = detectLinesByPageId[pageId] ?? {
       lineSegments: [],

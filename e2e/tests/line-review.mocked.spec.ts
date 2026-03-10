@@ -9,11 +9,11 @@ import { API_BASE_URL } from './utils/test-helpers';
 async function openLineReview(
   page: Page,
   initialLetter = createMockLetterReviewLetter(),
-  detectLinesByPageId?: Parameters<typeof installMockLetterReviewApi>[1]['detectLinesByPageId'],
+  options: Omit<Parameters<typeof installMockLetterReviewApi>[1], 'initialLetter'> = {},
 ) {
   const mockedApi = await installMockLetterReviewApi(page, {
     initialLetter,
-    detectLinesByPageId,
+    ...options,
   });
   await page.goto(`/admin/letters/${initialLetter.id}`);
   await page.locator('.letter-review-page').waitFor({ state: 'visible' });
@@ -130,7 +130,7 @@ test.describe('@mocked Line Review', () => {
     const mockedApi = await openLineReview(
       page,
       createMockLetterReviewLetter(),
-      detectLinesByPageId,
+      { detectLinesByPageId },
     );
 
     await expect(page.locator('.line-review-input-overlay')).toHaveClass(
@@ -162,7 +162,7 @@ test.describe('@mocked Line Review', () => {
     const mockedApi = await openLineReview(
       page,
       createMockLetterReviewLetter(),
-      detectLinesByPageId,
+      { detectLinesByPageId },
     );
 
     await expect(page.locator('.line-review-progress')).toContainText('Line 1');
@@ -265,5 +265,60 @@ test.describe('@mocked Line Review', () => {
         sourceSegmentIds: [101],
       }),
     });
+  });
+
+  test('shows the request id when detect-lines fails and falls back locally', async ({
+    page,
+  }) => {
+    const mockedApi = await openLineReview(page, createMockLetterReviewLetter(), {
+      detectLinesFailuresByPageId: {
+        'collection-009-page-1': {
+          status: 503,
+          error: 'Line detector offline',
+          requestId: 'req-line-detect-503',
+        },
+      },
+    });
+
+    await expect(page.locator('.toast')).toContainText(
+      'Line detector offline (Request ID: req-line-detect-503)',
+    );
+    await expect(page.locator('.line-review-progress')).toContainText('Line 1');
+    expect(mockedApi.detectLineRequests).toContain(
+      `${API_BASE_URL}/admin/letters/pages/collection-009-page-1/detect-lines`,
+    );
+  });
+
+  test('shows the request id when saving a line correction fails', async ({
+    page,
+  }) => {
+    const mockedApi = await openLineReview(page, createMockLetterReviewLetter(), {
+      lineCorrectionFailuresByPageId: {
+        'collection-009-page-1': {
+          status: 500,
+          error: 'Line correction save failed',
+          requestId: 'req-line-correction-500',
+        },
+      },
+    });
+    const handle = page.locator('.line-review-resize-right');
+    const box = await handle.boundingBox();
+
+    expect(box).toBeTruthy();
+    if (!box) {
+      return;
+    }
+
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2);
+    await page.mouse.up();
+
+    await expect(page.locator('.toast')).toContainText(
+      'Line correction save failed (Request ID: req-line-correction-500)',
+    );
+    await expect
+      .poll(() => mockedApi.lineCorrectionRequests.length)
+      .toBe(1);
   });
 });

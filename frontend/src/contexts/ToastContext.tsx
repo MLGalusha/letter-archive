@@ -9,6 +9,7 @@ export interface ToastItem {
 
 const MAX_TOASTS = 6;
 const DISMISS_MS = 5000;
+const recentToastKeys = new Map<string, number>();
 
 interface ToastContextValue {
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
@@ -19,6 +20,11 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const toastsRef = useRef<ToastItem[]>([]);
+
+  useEffect(() => {
+    toastsRef.current = toasts;
+  }, [toasts]);
 
   // Cleanup all timers on unmount
   useEffect(() => {
@@ -30,6 +36,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    const key = `${type}:${message}`;
+    const now = Date.now();
+    const lastShownAt = recentToastKeys.get(key);
+
+    if (lastShownAt && now - lastShownAt < DISMISS_MS) {
+      return;
+    }
+
+    if (toastsRef.current.some((toast) => toast.message === message && toast.type === type)) {
+      return;
+    }
+
+    recentToastKeys.set(key, now);
     const id = Date.now().toString();
     setToasts((prev) => {
       const next = [{ id, message, type }, ...prev];

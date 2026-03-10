@@ -114,6 +114,27 @@ See [.claude/docs/](.claude/docs/) for detailed architecture docs:
 - [Entity Management](.claude/docs/entities.md) — People, places, and relationship tracking
 - [Components](.claude/docs/components.md) — Frontend UI component library
 
+## Verification
+
+Run the full local regression stack from the repo root:
+
+```bash
+./scripts/verify-all.sh
+```
+
+Useful toggles:
+
+- `VERIFY_SKIP_TYPECHECK=1 ./scripts/verify-all.sh`
+- `VERIFY_SKIP_BUILD=1 ./scripts/verify-all.sh`
+
+Run mocked Playwright coverage separately:
+
+```bash
+cd e2e && npm run test:mocked
+```
+
+For request-level debugging after a failure, use the structured backend log queries documented in [backend/README.md](backend/README.md).
+
 ## License
 
 MIT

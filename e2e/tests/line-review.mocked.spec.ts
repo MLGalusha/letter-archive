@@ -109,6 +109,9 @@ test.describe('@mocked Line Review', () => {
       /line-review-input-phantom/,
     );
     await page.locator('.phantom-reject-btn').click();
+    await expect
+      .poll(() => mockedApi.lineCorrectionRequests.length)
+      .toBe(1);
     expect(mockedApi.lineCorrectionRequests[0]).toEqual({
       url: `${API_BASE_URL}/admin/letters/pages/collection-009-page-1/line-corrections`,
       body: expect.objectContaining({

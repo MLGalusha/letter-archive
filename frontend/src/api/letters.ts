@@ -44,7 +44,7 @@ export interface AdminLettersResponse {
   };
 }
 
-export type SortField = 'createdAt' | 'updatedAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection' | 'lastOpenedAt';
+export type SortField = 'createdAt' | 'updatedAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection' | 'lastOpenedAt' | 'flagged';
 export type SortOrder = 'asc' | 'desc';
 
 export interface LetterQueryParams {

@@ -29,6 +29,7 @@ export const SERVER_SORT_FIELDS = [
   "workflow",
   "visibility",
   "collection",
+  "flagged",
 ] as const;
 
 export const ALL_COLUMNS: ColumnDef[] = [

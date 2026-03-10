@@ -13,7 +13,8 @@ export type ServerSortField =
   | "recipient"
   | "workflow"
   | "visibility"
-  | "collection";
+  | "collection"
+  | "flagged";
 
 export type ClientSortField = "letters" | "extras";
 

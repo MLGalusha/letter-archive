@@ -327,8 +327,23 @@ export default function RecentActivityTable({
                 </th>
               )}
               {visibleColumns.has("flag") && (
-                <th className="flag-header">
-                  <Icon name="flag" size={14} />
+                <th
+                  className={`flag-header sortable-header ${getSortInfo("flagged") ? "sorted" : ""}`}
+                  onClick={() => onSort("flagged")}
+                >
+                  <span className="header-content">
+                    <Icon name="flag" size={14} />
+                    {getSortInfo("flagged") && (
+                      <span className="sort-indicator">
+                        <span className="sort-arrow">
+                          {getSortInfo("flagged")?.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                        {getSortInfo("flagged")!.total > 1 && (
+                          <span className="sort-priority">{getSortInfo("flagged")?.priority}</span>
+                        )}
+                      </span>
+                    )}
+                  </span>
                 </th>
               )}
             </tr>

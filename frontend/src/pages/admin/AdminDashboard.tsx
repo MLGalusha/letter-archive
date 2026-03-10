@@ -96,7 +96,6 @@ export default function AdminDashboard() {
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>(
     persistedState.current.visibilityFilter ?? 'ALL'
   );
-  const [flaggedFilter, setFlaggedFilter] = useState<'all' | 'true' | 'false'>('all');
   // Content status filters (persisted to localStorage)
   const [transcriptStatusFilters, setTranscriptStatusFilters] = useState<ContentStatus[]>(
     (persistedState.current.transcriptStatusFilters as ContentStatus[]) ?? []
@@ -330,7 +329,6 @@ export default function AdminDashboard() {
         // Content status filters (join arrays to comma-separated strings)
         transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(',') : undefined,
         metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(',') : undefined,
-        flagged: flaggedFilter !== 'all' ? flaggedFilter : undefined,
       });
       setLetters(response.letters);
       setPagination(response.pagination);
@@ -360,7 +358,7 @@ export default function AdminDashboard() {
       setLoading(false);
       setIsInitialLoad(false);
     }
-  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, pagination.page, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters, flaggedFilter]);
+  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, pagination.page, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
   // Auth check — runs once on mount
   useEffect(() => {
@@ -376,7 +374,7 @@ export default function AdminDashboard() {
     const isAuth = sessionStorage.getItem("adminAuth");
     if (!isAuth) return; // Don't fetch if not authenticated
     fetchLetters(true, 1);
-  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters, flaggedFilter]);
+  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
   const handleRowClick = (letterId: string, index: number, e: React.MouseEvent) => {
     if (editMode) {
@@ -619,7 +617,6 @@ export default function AdminDashboard() {
         dateTo: dateToFilter ?? undefined,
         transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(',') : undefined,
         metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(',') : undefined,
-        flagged: flaggedFilter !== 'all' ? flaggedFilter : undefined,
       });
       setSelectedIds(new Set(allIds));
       setAllFilteredSelected(true);
@@ -1131,15 +1128,6 @@ export default function AdminDashboard() {
               title="Hidden letters"
             >
               {stats.hidden} Hidden
-            </button>
-          </div>
-          <div className="filter-buttons filter-buttons-vertical">
-            <button
-              className={`filter-pill filter-flagged ${flaggedFilter === 'true' ? 'active' : ''}`}
-              onClick={() => setFlaggedFilter(flaggedFilter === 'true' ? 'all' : 'true')}
-              title="Flagged letters"
-            >
-              {stats.flagged > 0 ? stats.flagged : ''} Flagged
             </button>
           </div>
         </div>

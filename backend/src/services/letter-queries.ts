@@ -88,7 +88,7 @@ export const adminLettersQuerySchema = z.object({
   ),
   collection: z.string().optional(),
   search: z.string().optional(),
-  sort: z.enum(['createdAt', 'updatedAt', 'letterDate', 'sender', 'recipient', 'workflow', 'visibility', 'collection', 'lastOpenedAt']).default('createdAt'),
+  sort: z.enum(['createdAt', 'updatedAt', 'letterDate', 'sender', 'recipient', 'workflow', 'visibility', 'collection', 'lastOpenedAt', 'flagged']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   flagged: z.enum(['all', 'true', 'false']).optional(),
   // Date filters - individual components
@@ -291,15 +291,20 @@ export async function queryAdminLetters(
       clauses.push(sql`(sender ILIKE ${searchTerm} OR recipient ILIKE ${searchTerm} OR summary ILIKE ${searchTerm} OR hook ILIKE ${searchTerm})`);
     }
     if (query.year) {
-      clauses.push(sql`SUBSTRING(date_raw, 1, 4) = ${query.year.toString()}`);
+      // Build regex so X in date_raw matches any digit: year 1856 matches 1856, 185X, 18XX, etc.
+      const yearStr = query.year.toString().padStart(4, '0');
+      const yearPattern = '^' + yearStr.split('').map(ch => `[${ch}X]`).join('') + '$';
+      clauses.push(sql`SUBSTRING(date_raw, 1, 4) ~ ${yearPattern}`);
     }
     if (query.month) {
       const monthStr = query.month.toString().padStart(2, '0');
-      clauses.push(sql`SUBSTRING(date_raw, 5, 2) = ${monthStr}`);
+      const monthPattern = '^' + monthStr.split('').map(ch => `[${ch}X]`).join('') + '$';
+      clauses.push(sql`SUBSTRING(date_raw, 5, 2) ~ ${monthPattern}`);
     }
     if (query.day) {
       const dayStr = query.day.toString().padStart(2, '0');
-      clauses.push(sql`SUBSTRING(date_raw, 7, 2) = ${dayStr}`);
+      const dayPattern = '^' + dayStr.split('').map(ch => `[${ch}X]`).join('') + '$';
+      clauses.push(sql`SUBSTRING(date_raw, 7, 2) ~ ${dayPattern}`);
     }
     if (query.dateFrom && !query.year && !query.month && !query.day) {
       clauses.push(sql`REPLACE(date_raw, 'X', '0') >= ${query.dateFrom}`);
@@ -359,6 +364,8 @@ export async function queryAdminLetters(
         return sql`updated_at`;
       case 'lastOpenedAt':
         return sql`COALESCE((SELECT last_opened_at FROM letter_views WHERE letter_id = id), '1970-01-01'::timestamptz)`;
+      case 'flagged':
+        return sql`flagged`;
       case 'createdAt':
       default:
         return sql`created_at`;

@@ -172,6 +172,18 @@ function splitTranscriptByPage(fullText: string, pageCount: number): string[] {
   return pages;
 }
 
+function clearTranscriptVerification(letter: MockLetterReviewLetter) {
+  letter.transcriptStatus = 'EDITED';
+  letter.transcript.verified = false;
+  delete letter.transcriptVerifiedAt;
+}
+
+function clearMetadataVerification(letter: MockLetterReviewLetter) {
+  letter.metadataContentStatus = 'EDITED';
+  letter.metadata.verified = false;
+  delete letter.metadataVerifiedAt;
+}
+
 function createReconciledLine(
   line: number,
   bbox: [number, number, number, number],
@@ -443,21 +455,61 @@ export async function installMockLetterReviewApi(
       const body = route.request().postDataJSON() as MockUpdateLetterRequest['body'];
       updateLetterRequests.push({ url: route.request().url(), body });
 
+      const transcriptPageCount = Math.max(letter.transcript.pages.length, 1);
+
       if (typeof body.transcriptionText === 'string') {
+        const transcriptChanged = body.transcriptionText !== letter.transcript.fullText;
         letter.transcript.fullText = body.transcriptionText;
-        const pageTexts = splitTranscriptByPage(body.transcriptionText, letter.images.length);
+        const pageTexts = splitTranscriptByPage(body.transcriptionText, transcriptPageCount);
         letter.transcript.pages = pageTexts.map((text, index) => ({
           pageNumber: index + 1,
           text,
         }));
+
+        if (transcriptChanged && letter.transcriptStatus === 'VERIFIED') {
+          clearTranscriptVerification(letter);
+        } else if (transcriptChanged && letter.transcriptStatus !== 'EDITED') {
+          letter.transcriptStatus = 'EDITED';
+        }
       }
 
-      if (body.sender !== undefined) letter.metadata.sender = body.sender ?? undefined;
-      if (body.recipient !== undefined) letter.metadata.recipient = body.recipient ?? undefined;
-      if (body.locationWritten !== undefined) letter.metadata.location = body.locationWritten ?? undefined;
-      if (body.hook !== undefined) letter.metadata.hook = body.hook ?? undefined;
-      if (body.summary !== undefined) letter.metadata.description = body.summary ?? undefined;
-      if (body.notes !== undefined) letter.metadata.notes = body.notes ?? undefined;
+      let metadataChanged = false;
+      if (body.sender !== undefined) {
+        const nextSender = body.sender ?? undefined;
+        metadataChanged = metadataChanged || nextSender !== letter.metadata.sender;
+        letter.metadata.sender = nextSender;
+      }
+      if (body.recipient !== undefined) {
+        const nextRecipient = body.recipient ?? undefined;
+        metadataChanged = metadataChanged || nextRecipient !== letter.metadata.recipient;
+        letter.metadata.recipient = nextRecipient;
+      }
+      if (body.locationWritten !== undefined) {
+        const nextLocation = body.locationWritten ?? undefined;
+        metadataChanged = metadataChanged || nextLocation !== letter.metadata.location;
+        letter.metadata.location = nextLocation;
+      }
+      if (body.hook !== undefined) {
+        const nextHook = body.hook ?? undefined;
+        metadataChanged = metadataChanged || nextHook !== letter.metadata.hook;
+        letter.metadata.hook = nextHook;
+      }
+      if (body.summary !== undefined) {
+        const nextDescription = body.summary ?? undefined;
+        metadataChanged = metadataChanged || nextDescription !== letter.metadata.description;
+        letter.metadata.description = nextDescription;
+      }
+      if (body.notes !== undefined) {
+        const nextNotes = body.notes ?? undefined;
+        metadataChanged = metadataChanged || nextNotes !== letter.metadata.notes;
+        letter.metadata.notes = nextNotes;
+      }
+
+      if (metadataChanged && letter.metadataContentStatus === 'VERIFIED') {
+        clearMetadataVerification(letter);
+      } else if (metadataChanged && letter.metadataContentStatus !== 'EDITED') {
+        letter.metadataContentStatus = 'EDITED';
+      }
 
       await route.fulfill({
         status: 200,

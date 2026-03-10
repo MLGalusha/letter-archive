@@ -238,6 +238,45 @@ test.describe('@mocked Line Review', () => {
     });
   });
 
+  test('clears transcript verification after a line-review edit is saved', async ({
+    page,
+  }) => {
+    const initialLetter = createMockLetterReviewLetter({
+      transcriptStatus: 'VERIFIED',
+      transcriptVerifiedAt: '2025-03-01T00:00:00.000Z',
+      transcript: {
+        verified: true,
+      },
+    });
+    const mockedApi = await openLineReview(page, initialLetter);
+
+    const editable = page.locator('.line-review-editable');
+    await editable.click();
+    await editable.evaluate((node, value) => {
+      node.textContent = value;
+      node.dispatchEvent(
+        new InputEvent('input', {
+          bubbles: true,
+          inputType: 'insertText',
+          data: value,
+        }),
+      );
+    }, 'My dearest mother,');
+
+    await page.locator('.header-action.review').click();
+
+    const transcriptSection = page.locator('.editor-section').first();
+    await expect(transcriptSection.locator('.verified-info')).toHaveCount(0);
+    await expect(transcriptSection.locator('.verify-btn')).toBeVisible();
+    await expect(transcriptSection.locator('.transcript-editor')).toHaveAttribute(
+      'contenteditable',
+      'true',
+    );
+    await expect
+      .poll(() => mockedApi.updateLetterRequests.length)
+      .toBe(1);
+  });
+
   test('deletes and restores a detected line through correction requests', async ({
     page,
   }) => {

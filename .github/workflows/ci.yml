@@ -206,6 +206,14 @@ jobs:
           path: e2e/playwright-report
           if-no-files-found: ignore
 
+      - name: Upload backend structured logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-structured-logs-smoke
+          path: backend/logs
+          if-no-files-found: ignore
+
       - name: Dump backend logs on failure
         if: failure()
         run: cat /tmp/backend.log || true
@@ -321,6 +329,14 @@ jobs:
         with:
           name: playwright-full-report
           path: e2e/playwright-report
+          if-no-files-found: ignore
+
+      - name: Upload backend structured logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-structured-logs-full
+          path: backend/logs
           if-no-files-found: ignore
 
       - name: Dump backend logs on failure

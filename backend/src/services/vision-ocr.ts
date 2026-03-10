@@ -24,8 +24,12 @@ export interface OcrWordBox {
  * word-level bounding boxes. Returns null if Vision is not configured
  * or on any error (non-fatal).
  */
-export async function runVisionWordDetection(imagePath: string): Promise<OcrWordBox[] | null> {
+export async function runVisionWordDetection(
+  imagePath: string,
+  onProgress?: (label: string) => void,
+): Promise<OcrWordBox[] | null> {
   try {
+    onProgress?.('Running word detection (Vision OCR)');
     // Apply EXIF orientation so Vision sees the image as displayed
     const correctedBuffer = await sharp(imagePath).rotate().toBuffer();
 
@@ -73,6 +77,7 @@ export async function runVisionWordDetection(imagePath: string): Promise<OcrWord
     log.info({ imagePath, wordCount: wordBoxes.length }, 'Vision word detection completed');
 
     // Analyze pixels inside each box to classify content vs empty/bleed
+    onProgress?.('Analyzing pixel content');
     await analyzeBoxPixels(correctedBuffer, wordBoxes);
 
     return wordBoxes;
@@ -234,8 +239,9 @@ async function analyzeBoxPixels(
 export async function detectAndStorePageOcrWords(
   pageId: string,
   imagePath: string,
+  onProgress?: (label: string) => void,
 ): Promise<OcrWordBox[] | null> {
-  const wordBoxes = await runVisionWordDetection(imagePath);
+  const wordBoxes = await runVisionWordDetection(imagePath, onProgress);
   if (wordBoxes) {
     await db.update(letterPages).set({
       ocrWordBoxes: wordBoxes,

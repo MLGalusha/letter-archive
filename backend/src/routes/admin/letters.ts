@@ -1326,16 +1326,35 @@ router.post('/letters/pages/:pageId/detect-lines', async (req, res, next) => {
       return;
     }
 
-    const absolutePath = getAbsoluteStoragePath(page.storagePath);
-    const result = await detectAndStorePageLines(pageId, absolutePath);
+    // SSE: stream progress events during detection
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
 
-    res.json({
+    const onProgress = (label: string) => {
+      res.write(`data: ${JSON.stringify({ type: 'progress', label })}\n\n`);
+    };
+
+    const absolutePath = getAbsoluteStoragePath(page.storagePath);
+    const result = await detectAndStorePageLines(pageId, absolutePath, undefined, onProgress);
+
+    res.write(`data: ${JSON.stringify({
+      type: 'result',
       lineSegments: result.lineSegments ?? (Array.isArray(page.lineSegments) ? page.lineSegments : []),
       ocrWordBoxes: result.ocrWordBoxes ?? (Array.isArray(page.ocrWordBoxes) ? page.ocrWordBoxes : null),
       reconciledLines: result.reconciledLines ?? (Array.isArray(page.reconciledLines) ? page.reconciledLines : null),
-    });
+    })}\n\n`);
+
+    res.end();
   } catch (error) {
-    next(error);
+    if (res.headersSent) {
+      res.write(`data: ${JSON.stringify({ type: 'error', message: error instanceof Error ? error.message : 'Detection failed' })}\n\n`);
+      res.end();
+    } else {
+      next(error);
+    }
   }
 });
 

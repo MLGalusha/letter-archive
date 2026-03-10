@@ -1,4 +1,4 @@
-import { apiPost, apiPut, apiPatch } from "../client";
+import { apiPost, apiPut, apiPatch, API_BASE_URL } from "../client";
 import type { Letter, LineSegment, OcrWordBox, ReconciledLine } from "../../types/Letter";
 
 export interface UpdateLetterData {
@@ -59,8 +59,64 @@ export async function unverifyMetadata(letterId: string): Promise<Letter> {
   return apiPost<Letter>(`/admin/letters/${letterId}/unverify-metadata`);
 }
 
-export async function detectPageLines(pageId: string): Promise<{ lineSegments: LineSegment[]; ocrWordBoxes: OcrWordBox[] | null; reconciledLines: ReconciledLine[] | null }> {
-  return apiPost<{ lineSegments: LineSegment[]; ocrWordBoxes: OcrWordBox[] | null; reconciledLines: ReconciledLine[] | null }>(`/admin/letters/pages/${pageId}/detect-lines`);
+export type DetectLinesResult = { lineSegments: LineSegment[]; ocrWordBoxes: OcrWordBox[] | null; reconciledLines: ReconciledLine[] | null };
+
+/**
+ * Detect page lines with SSE progress streaming.
+ * Calls onProgress for each pipeline step, then returns the final result.
+ */
+export async function detectPageLines(
+  pageId: string,
+  onProgress?: (label: string) => void,
+): Promise<DetectLinesResult> {
+  const response = await fetch(`${API_BASE_URL}/admin/letters/pages/${pageId}/detect-lines`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || 'Line detection failed');
+  }
+
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result: DetectLinesResult | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    // Parse SSE messages (split on double newline)
+    const parts = buffer.split('\n\n');
+    buffer = parts.pop()!; // keep incomplete tail
+
+    for (const part of parts) {
+      const line = part.trim();
+      if (!line.startsWith('data: ')) continue;
+
+      const data = JSON.parse(line.slice(6));
+      if (data.type === 'progress') {
+        onProgress?.(data.label);
+      } else if (data.type === 'result') {
+        result = {
+          lineSegments: data.lineSegments,
+          ocrWordBoxes: data.ocrWordBoxes,
+          reconciledLines: data.reconciledLines,
+        };
+      } else if (data.type === 'error') {
+        throw new Error(data.message);
+      }
+    }
+  }
+
+  if (!result) {
+    throw new Error('No result received from line detection');
+  }
+
+  return result;
 }
 
 export async function toggleLetterFlag(letterId: string, flagged: boolean): Promise<Letter> {

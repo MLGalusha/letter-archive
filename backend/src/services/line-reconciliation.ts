@@ -53,10 +53,6 @@ export interface ReconciliationThresholds {
   maxBaselineDiscrepancy: number;
   concaveHullFactor: number;
   maxExtensionGapFactor: number;
-  phantomMinSignals: number;
-  rmsContrastBleed: number;
-  hppOverlapMin: number;
-  minValueBleed: number;
   minWordWidthRatio: number;
   sequenceMatchMin: number;
   overlapIouThreshold: number;
@@ -112,10 +108,6 @@ const DEFAULT_THRESHOLDS: ReconciliationThresholds = {
   maxBaselineDiscrepancy: 0.3,
   concaveHullFactor: 1.5,
   maxExtensionGapFactor: 1.5,
-  phantomMinSignals: 3,
-  rmsContrastBleed: 0.20,
-  hppOverlapMin: 0.30,
-  minValueBleed: 140,
   minWordWidthRatio: 0.30,
   sequenceMatchMin: 0.15,
   overlapIouThreshold: 0.30,
@@ -479,135 +471,6 @@ function extendSegmentWidths(
 }
 
 // ---------------------------------------------------------------------------
-// Phase 3: Phantom Filtering
-// ---------------------------------------------------------------------------
-
-async function detectPhantomSegments(
-  lines: ReconciledLine[],
-  imageBuffer: Buffer,
-  imageWidth: number,
-  imageHeight: number,
-  thresholds: ReconciliationThresholds,
-): Promise<void> {
-  // Compute pixel stats for all lines first
-  const allStats: Array<ReconciledLine['pixelStats']> = [];
-
-  for (const line of lines) {
-    const [x1, y1, x2, y2] = line.bbox;
-    const left = Math.max(0, Math.round(x1));
-    const top = Math.max(0, Math.round(y1));
-    const width = Math.min(Math.round(x2) - left, imageWidth - left);
-    const height = Math.min(Math.round(y2) - top, imageHeight - top);
-
-    if (width <= 0 || height <= 0) {
-      line.pixelStats = {
-        rmsContrast: 0,
-        michelson: 0,
-        inkDensity: 0,
-        variance: 0,
-        minValue: 255,
-        meanValue: 255,
-      };
-      allStats.push(line.pixelStats);
-      continue;
-    }
-
-    try {
-      // Get sharp stats for RMS contrast and Michelson
-      const region = sharp(imageBuffer).extract({ left, top, width, height }).greyscale();
-      const { channels } = await region.stats();
-      const ch = channels[0];
-
-      const rmsContrast = ch.stdev / Math.max(1, ch.mean);
-      const michelson = (ch.max - ch.min) / Math.max(1, ch.max + ch.min);
-
-      // Get raw buffer for ink density and variance
-      const { data: rawBuf } = await sharp(imageBuffer)
-        .extract({ left, top, width, height })
-        .greyscale()
-        .raw()
-        .toBuffer({ resolveWithObject: true });
-
-      const pixelCount = width * height;
-      let sum = 0;
-      let sumSq = 0;
-      let minVal = 255;
-      let darkCount = 0;
-
-      for (let i = 0; i < rawBuf.length; i++) {
-        const val = rawBuf[i];
-        sum += val;
-        sumSq += val * val;
-        if (val < minVal) minVal = val;
-        if (val < 140) darkCount++;
-      }
-
-      const meanValue = sum / pixelCount;
-      const variance = sumSq / pixelCount - meanValue * meanValue;
-      const inkDensity = darkCount / pixelCount;
-
-      line.pixelStats = {
-        rmsContrast,
-        michelson,
-        inkDensity,
-        variance,
-        minValue: minVal,
-        meanValue,
-      };
-    } catch {
-      line.pixelStats = {
-        rmsContrast: 0,
-        michelson: 0,
-        inkDensity: 0,
-        variance: 0,
-        minValue: 255,
-        meanValue: 255,
-      };
-    }
-
-    allStats.push(line.pixelStats);
-  }
-
-  // Compute page-wide medians for relative comparisons
-  const validStats = allStats.filter((s): s is NonNullable<typeof s> => s != null);
-  const medianVariance = median(validStats.map((s) => s.variance));
-  const medianDensity = median(validStats.map((s) => s.inkDensity));
-
-  // Count phantom signals for each line
-  let phantomCount = 0;
-  for (const line of lines) {
-    const stats = line.pixelStats;
-    if (!stats) continue;
-
-    let signals = 0;
-
-    // No Vision content boxes
-    if (line.visionWordCount === 0) signals++;
-
-    // Low RMS contrast
-    if (stats.rmsContrast < thresholds.rmsContrastBleed) signals++;
-
-    // High min value (light — no dark ink)
-    if (stats.minValue > thresholds.minValueBleed) signals++;
-
-    // Low HPP overlap
-    if (line.hppOverlap < thresholds.hppOverlapMin) signals++;
-
-    // Very low variance AND density relative to page median
-    if (stats.variance < medianVariance * 0.25 && stats.inkDensity < medianDensity * 0.25) {
-      signals++;
-    }
-
-    if (signals >= thresholds.phantomMinSignals) {
-      line.isPhantom = true;
-      phantomCount++;
-    }
-  }
-
-  log.debug({ phantomCount, totalLines: lines.length }, 'Phase 3: phantom filtering complete');
-}
-
-// ---------------------------------------------------------------------------
 // Phase 4: Transcript Reconciliation
 // ---------------------------------------------------------------------------
 
@@ -617,7 +480,7 @@ function reconcileWithTranscript(
   transcriptLines: string[],
   thresholds: ReconciliationThresholds,
 ): void {
-  const nonPhantom = lines.filter((l) => !l.isPhantom && !l.isDeleted);
+  const activeLines = lines.filter((l) => !l.isDeleted);
 
   // Compute average word box width for punctuation filtering
   const contentBoxes = ocrWordBoxes.filter((b) => b.hasContent);
@@ -627,8 +490,8 @@ function reconcileWithTranscript(
       : 0;
   const minWidth = avgBoxWidth * thresholds.minWordWidthRatio;
 
-  // For each non-phantom segment, count vision words (excluding punctuation-width boxes)
-  for (const line of nonPhantom) {
+  // For each segment, count vision words (excluding punctuation-width boxes)
+  for (const line of activeLines) {
     const overlapping = contentBoxes.filter((box) => {
       const overlap = yOverlapRatio(line.bbox, box.bbox);
       return overlap > 0.5;
@@ -642,40 +505,40 @@ function reconcileWithTranscript(
   }
 
   // Basic 1:1 line count matching
-  if (nonPhantom.length === transcriptLines.length) {
-    for (let i = 0; i < nonPhantom.length; i++) {
-      nonPhantom[i].transcriptLineIndex = i;
+  if (activeLines.length === transcriptLines.length) {
+    for (let i = 0; i < activeLines.length; i++) {
+      activeLines[i].transcriptLineIndex = i;
 
       const transcriptWordCount = transcriptLines[i].trim().split(/\s+/).filter(Boolean).length;
-      const visionCount = nonPhantom[i].visionWordCount;
+      const visionCount = activeLines[i].visionWordCount;
 
       if (transcriptWordCount > 0 && visionCount > 0) {
         const ratio = Math.min(visionCount, transcriptWordCount) /
                       Math.max(visionCount, transcriptWordCount);
-        nonPhantom[i].wordCountRatio = ratio;
-        nonPhantom[i].transcriptMatchScore = ratio;
+        activeLines[i].wordCountRatio = ratio;
+        activeLines[i].transcriptMatchScore = ratio;
       } else if (transcriptWordCount === 0 && visionCount === 0) {
-        nonPhantom[i].transcriptMatchScore = 1.0;
-        nonPhantom[i].wordCountRatio = 1.0;
+        activeLines[i].transcriptMatchScore = 1.0;
+        activeLines[i].wordCountRatio = 1.0;
       } else {
-        nonPhantom[i].transcriptMatchScore = 0;
-        nonPhantom[i].wordCountRatio = 0;
+        activeLines[i].transcriptMatchScore = 0;
+        activeLines[i].wordCountRatio = 0;
       }
     }
 
     log.debug(
-      { nonPhantomLines: nonPhantom.length, transcriptLines: transcriptLines.length },
+      { activeLineCount: activeLines.length, transcriptLines: transcriptLines.length },
       'Phase 4: 1:1 transcript reconciliation',
     );
   } else {
     // Line count mismatch — apply sequence matching heuristic
     log.debug(
-      { nonPhantomLines: nonPhantom.length, transcriptLines: transcriptLines.length },
+      { activeLineCount: activeLines.length, transcriptLines: transcriptLines.length },
       'Phase 4: line count mismatch, skipping detailed reconciliation',
     );
 
     // Still set basic word count ratios based on vision word counts
-    for (const line of nonPhantom) {
+    for (const line of activeLines) {
       if (line.visionWordCount > 0) {
         line.transcriptMatchScore = thresholds.sequenceMatchMin;
       }
@@ -796,11 +659,6 @@ function computeConfidence(
   hasTranscript: boolean,
 ): void {
   for (const line of lines) {
-    if (line.isPhantom) {
-      line.confidence = 0;
-      continue;
-    }
-
     const stats = line.pixelStats;
 
     // Individual signal scores (0-1)
@@ -808,7 +666,6 @@ function computeConfidence(
     const contrastScore = stats ? Math.min(1, stats.rmsContrast / 0.5) : 0;
     const hppScore = Math.min(1, line.hppOverlap / 0.6); // 60%+ overlap = 1.0
     const singleSegmentScore = line.wasMerged ? 0.5 : 1.0;
-    const phantomPassScore = line.isPhantom ? 0 : 1.0;
     const transcriptScore = line.transcriptMatchScore ?? 0;
 
     let weightedSum: number;
@@ -817,40 +674,36 @@ function computeConfidence(
     if (hasTranscript) {
       // With transcript
       weightedSum =
-        visionScore * 0.25 +
+        visionScore * 0.30 +
         contrastScore * 0.15 +
         hppScore * 0.15 +
         singleSegmentScore * 0.05 +
-        phantomPassScore * 0.15 +
-        transcriptScore * 0.25;
+        transcriptScore * 0.35;
       totalWeight = 1.0;
     } else {
       // Without transcript — redistribute transcript weight
       weightedSum =
-        visionScore * 0.35 +
-        contrastScore * 0.20 +
-        hppScore * 0.20 +
-        singleSegmentScore * 0.05 +
-        phantomPassScore * 0.20;
+        visionScore * 0.40 +
+        contrastScore * 0.25 +
+        hppScore * 0.25 +
+        singleSegmentScore * 0.10;
       totalWeight = 1.0;
     }
 
     // Geometric mean approach: use weighted product for values > 0
     const signals = hasTranscript
       ? [
-          { score: visionScore, weight: 0.25 },
+          { score: visionScore, weight: 0.30 },
           { score: contrastScore, weight: 0.15 },
           { score: hppScore, weight: 0.15 },
           { score: singleSegmentScore, weight: 0.05 },
-          { score: phantomPassScore, weight: 0.15 },
-          { score: transcriptScore, weight: 0.25 },
+          { score: transcriptScore, weight: 0.35 },
         ]
       : [
-          { score: visionScore, weight: 0.35 },
-          { score: contrastScore, weight: 0.20 },
-          { score: hppScore, weight: 0.20 },
-          { score: singleSegmentScore, weight: 0.05 },
-          { score: phantomPassScore, weight: 0.20 },
+          { score: visionScore, weight: 0.40 },
+          { score: contrastScore, weight: 0.25 },
+          { score: hppScore, weight: 0.25 },
+          { score: singleSegmentScore, weight: 0.10 },
         ];
 
     // Weighted geometric mean: exp(sum(w_i * ln(s_i)) / sum(w_i))
@@ -889,6 +742,7 @@ export async function reconcileLines(params: {
   imageHeight: number;
   transcriptLines?: string[];
   thresholds?: Partial<ReconciliationThresholds>;
+  onProgress?: (label: string) => void;
 }): Promise<ReconciledLine[]> {
   const {
     segments,
@@ -898,6 +752,7 @@ export async function reconcileLines(params: {
     imageHeight,
     transcriptLines,
     thresholds: overrides,
+    onProgress,
   } = params;
 
   const thresholds: ReconciliationThresholds = { ...DEFAULT_THRESHOLDS, ...overrides };
@@ -917,27 +772,29 @@ export async function reconcileLines(params: {
   log.debug({ medianHeight }, 'Computed median line height');
 
   // Step 2: Compute HPP
+  onProgress?.('Computing projection profile');
   const hpp = await computeHPP(imageBuffer);
   log.debug({ peakCount: hpp.peaks.length }, 'HPP computation complete');
 
   // Step 3 (Phase 1): Geometric merge
+  onProgress?.('Merging line fragments');
   let lines = mergeFragments(segments, medianHeight, thresholds);
 
   // Assign HPP overlaps before phantom detection
   assignHPPOverlaps(lines, hpp.peaks);
 
   // Step 4 (Phase 2): Line width extension
+  onProgress?.('Extending line widths');
   extendSegmentWidths(lines, ocrWordBoxes, medianHeight, thresholds);
 
-  // Step 5 (Phase 3): Phantom filtering
-  await detectPhantomSegments(lines, imageBuffer, imageWidth, imageHeight, thresholds);
-
-  // Step 6 (Phase 4): Transcript reconciliation
+  // Step 5 (Phase 4): Transcript reconciliation
   if (transcriptLines && transcriptLines.length > 0) {
+    onProgress?.('Matching transcript lines');
     reconcileWithTranscript(lines, ocrWordBoxes, transcriptLines, thresholds);
   }
 
   // Step 7 (Phase 5): Confidence scoring
+  onProgress?.('Scoring line confidence');
   computeConfidence(lines, !!transcriptLines);
 
   // Step 8: Sort by vertical position (top-to-bottom), assign line numbers
@@ -949,7 +806,6 @@ export async function reconcileLines(params: {
   log.info(
     {
       outputLineCount: lines.length,
-      phantomCount: lines.filter((l) => l.isPhantom).length,
       mergedCount: lines.filter((l) => l.wasMerged).length,
       extendedCount: lines.filter((l) => l.wasExtended).length,
     },
@@ -992,51 +848,6 @@ export async function calibrateThresholds(
     const list = byType.get(c.correctionType) ?? [];
     list.push(c);
     byType.set(c.correctionType, list);
-  }
-
-  // --- Phantom detection calibration ---
-  // reject_phantom = algorithm said phantom, user said real
-  // confirm_phantom = algorithm said phantom, user agreed
-  // delete = algorithm said real, user said phantom/delete
-  const rejectPhantom = byType.get('reject_phantom') ?? [];
-  const confirmPhantom = byType.get('confirm_phantom') ?? [];
-  const deletes = byType.get('delete') ?? [];
-
-  // Collect pixel stats from "real" lines (rejected phantoms = actually real)
-  const realStats = rejectPhantom
-    .map((c) => c.errorRegionPixelStats ?? c.algorithmOutput.pixelStats)
-    .filter((s): s is NonNullable<typeof s> => s != null);
-
-  // Collect pixel stats from "phantom" lines (confirmed phantoms + deletes)
-  const phantomStats = [
-    ...confirmPhantom.map((c) => c.algorithmOutput.pixelStats),
-    ...deletes.map((c) => c.algorithmOutput.pixelStats),
-  ].filter((s): s is NonNullable<typeof s> => s != null);
-
-  if (realStats.length > 0 && phantomStats.length > 0) {
-    // Find midpoint between real and phantom distributions for each metric
-
-    const realRms = median(realStats.map((s) => s.rmsContrast));
-    const phantomRms = median(phantomStats.map((s) => s.rmsContrast));
-    if (realRms !== phantomRms) {
-      calibrated.rmsContrastBleed = (realRms + phantomRms) / 2;
-    }
-
-    const realMinVal = median(realStats.map((s) => s.minValue));
-    const phantomMinVal = median(phantomStats.map((s) => s.minValue));
-    if (realMinVal !== phantomMinVal) {
-      calibrated.minValueBleed = (realMinVal + phantomMinVal) / 2;
-    }
-
-    const realHpp = median(
-      rejectPhantom.map((c) => c.algorithmOutput.hppOverlap),
-    );
-    const phantomHpp = median(
-      [...confirmPhantom, ...deletes].map((c) => c.algorithmOutput.hppOverlap),
-    );
-    if (realHpp !== phantomHpp) {
-      calibrated.hppOverlapMin = (realHpp + phantomHpp) / 2;
-    }
   }
 
   // --- Merge calibration ---

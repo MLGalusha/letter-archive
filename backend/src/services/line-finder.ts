@@ -101,14 +101,19 @@ export async function savePageLineSegments(
   }).where(eq(letterPages.id, pageId));
 }
 
+export type OnProgress = (label: string) => void;
+
 export async function detectAndStorePageLines(
   pageId: string,
   imagePath: string,
   transcriptLines?: string[],
+  onProgress?: OnProgress,
 ): Promise<{ lineSegments: LineSegment[] | null; ocrWordBoxes: import('./vision-ocr.js').OcrWordBox[] | null; reconciledLines: ReconciledLine[] | null }> {
   // Run Kraken line detection and Vision OCR word detection in parallel
+  onProgress?.('Detecting line positions');
+
   const visionPromise = import('./vision-ocr.js')
-    .then(({ detectAndStorePageOcrWords }) => detectAndStorePageOcrWords(pageId, imagePath))
+    .then(({ detectAndStorePageOcrWords }) => detectAndStorePageOcrWords(pageId, imagePath, onProgress))
     .catch(() => null as null);
 
   const [segments, ocrWordBoxes] = await Promise.all([
@@ -117,6 +122,7 @@ export async function detectAndStorePageLines(
   ]);
 
   if (segments) {
+    onProgress?.('Saving line segments');
     await savePageLineSegments(pageId, segments);
   }
 
@@ -124,6 +130,7 @@ export async function detectAndStorePageLines(
   let reconciledLines: ReconciledLine[] | null = null;
   if (segments && segments.length > 0) {
     try {
+      onProgress?.('Loading image data');
       const [imageBuffer, metadata] = await Promise.all([
         sharp(imagePath).toBuffer(),
         sharp(imagePath).metadata(),
@@ -136,8 +143,10 @@ export async function detectAndStorePageLines(
         imageWidth: metadata.width ?? 0,
         imageHeight: metadata.height ?? 0,
         transcriptLines,
+        onProgress,
       });
 
+      onProgress?.('Saving reconciled lines');
       // Store reconciled lines
       await db.update(letterPages).set({
         reconciledLines: reconciledLines,

@@ -9,6 +9,10 @@ const {
   dbDeleteMock,
   deleteWhereMock,
   runTranscriptionMock,
+  getLetterByIdMock,
+  auditMetadataMock,
+  resyncMetadataMock,
+  syncLetterParticipantsFromMetadataMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   findManyMock: vi.fn(),
@@ -18,6 +22,10 @@ const {
   dbDeleteMock: vi.fn(),
   deleteWhereMock: vi.fn(),
   runTranscriptionMock: vi.fn(),
+  getLetterByIdMock: vi.fn(),
+  auditMetadataMock: vi.fn(),
+  resyncMetadataMock: vi.fn(),
+  syncLetterParticipantsFromMetadataMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -82,7 +90,7 @@ vi.mock('../../db/index.js', () => {
 });
 
 vi.mock('../letters.js', () => ({
-  getLetterById: vi.fn(),
+  getLetterById: getLetterByIdMock,
 }));
 
 vi.mock('../../pipeline/processor.js', () => ({
@@ -95,8 +103,8 @@ vi.mock('../../pipeline/metadataV2.js', () => ({
 }));
 
 vi.mock('../../ai/resync.js', () => ({
-  resyncMetadata: vi.fn(),
-  auditMetadata: vi.fn(),
+  resyncMetadata: resyncMetadataMock,
+  auditMetadata: auditMetadataMock,
 }));
 
 vi.mock('../../ai/openai.js', () => ({
@@ -129,14 +137,17 @@ vi.mock('../processing-queue.js', () => ({
 }));
 
 vi.mock('../entities/participant-sync.js', () => ({
-  syncLetterParticipantsFromMetadata: vi.fn(),
+  syncLetterParticipantsFromMetadata: syncLetterParticipantsFromMetadataMock,
 }));
 
 import {
   bulkClearMetadata,
   normalizeRelationshipType,
   regenerateTranscription,
+  resyncCheck,
+  resyncLetterMetadata,
   transcribeLetterOnly,
+  updateExtraContent,
 } from '../letter-operations.js';
 
 describe('letter operations service', () => {
@@ -145,6 +156,7 @@ describe('letter operations service', () => {
     updateWhereMock.mockResolvedValue(undefined);
     deleteWhereMock.mockResolvedValue(undefined);
     findManyMock.mockResolvedValue([]);
+    getLetterByIdMock.mockResolvedValue(undefined);
   });
 
   it('normalizes common AI relationship variants', () => {
@@ -209,5 +221,196 @@ describe('letter operations service', () => {
     });
     expect(dbUpdateMock).not.toHaveBeenCalled();
     expect(runTranscriptionMock).not.toHaveBeenCalled();
+  });
+
+  it('marks manual extra-content edits as edited when content is added from an empty state', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-5',
+      extraContentStatus: 'EMPTY',
+    });
+
+    const result = await updateExtraContent('letter-5', 'Typed by an admin');
+
+    expect(result).toBe(true);
+    expect(updateSetMock).toHaveBeenCalledWith({
+      extraContentTranscript: 'Typed by an admin',
+      extraContentStatus: 'EDITED',
+      updatedAt: expect.any(Date),
+    });
+  });
+
+  it('resets extra-content to empty and clears verification metadata when content is removed', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-6',
+      extraContentStatus: 'VERIFIED',
+    });
+
+    const result = await updateExtraContent('letter-6', '   ');
+
+    expect(result).toBe(true);
+    expect(updateSetMock).toHaveBeenCalledWith({
+      extraContentTranscript: null,
+      extraContentStatus: 'EMPTY',
+      extraContentVerifiedAt: null,
+      extraContentVerifiedBy: null,
+      updatedAt: expect.any(Date),
+    });
+  });
+
+  it('drops verified extra-content back to edited when content is changed directly', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-7',
+      extraContentStatus: 'VERIFIED',
+    });
+
+    const result = await updateExtraContent('letter-7', 'Corrected note text');
+
+    expect(result).toBe(true);
+    expect(updateSetMock).toHaveBeenCalledWith({
+      extraContentTranscript: 'Corrected note text',
+      extraContentStatus: 'EDITED',
+      extraContentVerifiedAt: null,
+      extraContentVerifiedBy: null,
+      updatedAt: expect.any(Date),
+    });
+  });
+
+  it('passes explicit null sender and recipient changes through metadata audit checks', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-8',
+      sender: 'Alice',
+      recipient: 'Bob',
+      extractedDate: '1947-08-10',
+      summary: 'Alice writes to Bob.',
+      hook: 'Alice reaches out to Bob.',
+      senderRecipientRelationship: 'friend',
+      metadataV2Json: {
+        notable_quotes: [
+          { text: 'Hello there', context: 'Alice greets Bob.', position: 'opening' },
+        ],
+      },
+      persons: [
+        { role: 'sender', person: { canonicalName: 'Alice' } },
+        { role: 'recipient', person: { canonicalName: 'Bob' } },
+      ],
+    });
+    auditMetadataMock.mockResolvedValue({
+      shouldUpdateSummary: false,
+      shouldUpdateHook: false,
+      shouldCreateSenderPerson: false,
+      shouldCreateRecipientPerson: false,
+      shouldUpdateRelationship: false,
+      shouldUpdateQuoteContexts: false,
+      issues: [],
+      reason: 'No changes needed',
+    });
+
+    const result = await resyncCheck('letter-8', {
+      oldSender: 'Alice',
+      newSender: null,
+      oldRecipient: 'Bob',
+      newRecipient: null,
+    });
+
+    expect(auditMetadataMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sender: null,
+        recipient: null,
+        linkedPersons: [
+          { canonicalName: 'Alice', role: 'sender' },
+          { canonicalName: 'Bob', role: 'recipient' },
+        ],
+        quoteContexts: [
+          { text: 'Hello there', context: 'Alice greets Bob.', position: 'opening' },
+        ],
+      }),
+      {
+        oldSender: 'Alice',
+        newSender: null,
+        oldRecipient: 'Bob',
+        newRecipient: null,
+      },
+    );
+    expect(result).toEqual({
+      needsResync: false,
+      decision: expect.objectContaining({ reason: 'No changes needed' }),
+    });
+  });
+
+  it('syncs participants with cleared recipients during metadata resync', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-9',
+      sender: 'Alice',
+      recipient: 'Bob',
+      transcriptionText: 'Original transcript',
+      extractedDate: '1947-08-10',
+      summary: 'Alice writes to Bob.',
+      hook: 'Alice reaches out to Bob.',
+      senderRecipientRelationship: 'friend',
+      metadataV2Json: { topics: ['war'] },
+      persons: [],
+    });
+    resyncMetadataMock.mockResolvedValue({
+      summary: 'Alice writes after the recipient was removed.',
+      hook: null,
+      senderPerson: null,
+      recipientPerson: null,
+      relationshipType: null,
+      updatedQuoteContexts: null,
+      wasUpdated: true,
+      decision: {
+        shouldUpdateSummary: true,
+        shouldUpdateHook: false,
+        shouldCreateSenderPerson: false,
+        shouldCreateRecipientPerson: false,
+        shouldUpdateRelationship: false,
+        shouldUpdateQuoteContexts: false,
+        issues: ['Recipient was removed'],
+        reason: 'Recipient cleared',
+      },
+    });
+
+    const result = await resyncLetterMetadata('letter-9', {
+      oldSender: 'Alice',
+      newSender: 'Alice',
+      oldRecipient: 'Bob',
+      newRecipient: null,
+    });
+
+    expect(resyncMetadataMock).toHaveBeenCalledWith({
+      transcript: 'Original transcript',
+      context: expect.objectContaining({
+        sender: 'Alice',
+        recipient: null,
+      }),
+      change: {
+        oldSender: 'Alice',
+        newSender: 'Alice',
+        oldRecipient: 'Bob',
+        newRecipient: null,
+      },
+    });
+    expect(updateSetMock).toHaveBeenCalledWith({
+      summary: 'Alice writes after the recipient was removed.',
+      updatedAt: expect.any(Date),
+    });
+    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenCalledWith({
+      letterId: 'letter-9',
+      sender: 'Alice',
+      recipient: null,
+      relationshipType: 'friend',
+    });
+    expect(result).toEqual({
+      wasUpdated: true,
+      updatedFields: {
+        summary: true,
+        hook: false,
+        senderPerson: false,
+        recipientPerson: false,
+        relationshipType: false,
+        quoteContexts: false,
+      },
+      decision: expect.objectContaining({ reason: 'Recipient cleared' }),
+    });
   });
 });

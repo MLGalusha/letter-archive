@@ -841,12 +841,17 @@ router.post('/letters/:letterId/transcribe-extras', async (req, res, next) => {
 router.put('/letters/:letterId/extra-content', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const { extraContent } = req.body;
-    if (extraContent === undefined) {
+    const { extraContent, extraContentTranscript } = (req.body ?? {}) as {
+      extraContent?: string | null;
+      extraContentTranscript?: string | null;
+    };
+    const nextExtraContent =
+      extraContent !== undefined ? extraContent : extraContentTranscript;
+    if (nextExtraContent === undefined) {
       res.status(400).json({ error: 'extraContent field required' });
       return;
     }
-    const result = await updateExtraContent(letterId, extraContent);
+    const result = await updateExtraContent(letterId, nextExtraContent);
     if (!result) {
       res.status(404).json({ error: 'Letter not found' });
       return;

@@ -15,7 +15,9 @@ export async function updateExtraContent(
   letterId: string,
   extraContentTranscript: string,
 ): Promise<Letter> {
-  return apiPut<Letter>(`/admin/letters/${letterId}/extra-content`, { extraContentTranscript });
+  return apiPut<Letter>(`/admin/letters/${letterId}/extra-content`, {
+    extraContent: extraContentTranscript,
+  });
 }
 
 export async function verifyExtraContent(letterId: string): Promise<Letter> {

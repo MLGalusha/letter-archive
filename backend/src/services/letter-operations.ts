@@ -1383,19 +1383,45 @@ export async function updateExtraContent(
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
 
-  // Determine new status based on edit
-  let newStatus = existingLetter.extraContentStatus;
-  if (existingLetter.extraContentStatus === 'AI_DRAFT') {
-    newStatus = 'EDITED';
+  const hasContent = Boolean(extraContentTranscript?.trim());
+  const updates: {
+    extraContentTranscript: string | null;
+    extraContentStatus: typeof contentStatusValues[number];
+    extraContentVerifiedAt?: null;
+    extraContentVerifiedBy?: null;
+    updatedAt: Date;
+  } = {
+    extraContentTranscript: hasContent ? extraContentTranscript : null,
+    extraContentStatus: existingLetter.extraContentStatus,
+    updatedAt: new Date(),
+  };
+
+  if (!hasContent) {
+    updates.extraContentStatus = 'EMPTY';
+    updates.extraContentVerifiedAt = null;
+    updates.extraContentVerifiedBy = null;
+  } else if (existingLetter.extraContentStatus === 'VERIFIED') {
+    updates.extraContentStatus = 'EDITED';
+    updates.extraContentVerifiedAt = null;
+    updates.extraContentVerifiedBy = null;
+  } else if (
+    existingLetter.extraContentStatus === 'AI_DRAFT' ||
+    existingLetter.extraContentStatus === 'EMPTY'
+  ) {
+    updates.extraContentStatus = 'EDITED';
   }
 
-  await db.update(letters).set({
-    extraContentTranscript: extraContentTranscript || null,
-    extraContentStatus: newStatus,
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
+  await db.update(letters).set(updates).where(eq(letters.id, letterId));
 
-  log.debug({ letterId, previousStatus: existingLetter.extraContentStatus, newStatus }, 'Extra content updated');
+  log.debug(
+    {
+      letterId,
+      previousStatus: existingLetter.extraContentStatus,
+      newStatus: updates.extraContentStatus,
+      hasContent,
+    },
+    'Extra content updated',
+  );
   return true;
 }
 
@@ -1722,12 +1748,14 @@ export async function resyncCheck(letterId: string, body: ResyncInput): Promise<
   if (!letter) return null;
 
   const { oldSender, newSender, oldRecipient, newRecipient } = body;
+  const resolvedSender = newSender === undefined ? (letter.sender ?? null) : newSender;
+  const resolvedRecipient = newRecipient === undefined ? (letter.recipient ?? null) : newRecipient;
 
   log.debug(
     {
       letterId,
-      sender: newSender || letter.sender,
-      recipient: newRecipient || letter.recipient,
+      sender: resolvedSender,
+      recipient: resolvedRecipient,
     },
     'Metadata audit requested',
   );
@@ -1746,8 +1774,8 @@ export async function resyncCheck(letterId: string, body: ResyncInput): Promise<
 
   // Build full audit context
   const auditContext: MetadataAuditContext = {
-    sender: newSender || letter.sender || null,
-    recipient: newRecipient || letter.recipient || null,
+    sender: resolvedSender,
+    recipient: resolvedRecipient,
     date: letter.extractedDate || null,
     summary: letter.summary || null,
     hook: letter.hook || null,
@@ -1814,12 +1842,14 @@ export async function resyncLetterMetadata(letterId: string, body: ResyncInput):
   if (!letter) return null;
 
   const { oldSender, newSender, oldRecipient, newRecipient } = body;
+  const resolvedSender = newSender === undefined ? (letter.sender ?? null) : newSender;
+  const resolvedRecipient = newRecipient === undefined ? (letter.recipient ?? null) : newRecipient;
 
   log.info(
     {
       letterId,
-      sender: newSender || letter.sender,
-      recipient: newRecipient || letter.recipient,
+      sender: resolvedSender,
+      recipient: resolvedRecipient,
     },
     'Metadata sync requested',
   );
@@ -1840,8 +1870,8 @@ export async function resyncLetterMetadata(letterId: string, body: ResyncInput):
 
   // Build full audit context
   const auditContext: MetadataAuditContext = {
-    sender: newSender || letter.sender || null,
-    recipient: newRecipient || letter.recipient || null,
+    sender: resolvedSender,
+    recipient: resolvedRecipient,
     date: letter.extractedDate || null,
     summary: letter.summary || null,
     hook: letter.hook || null,
@@ -1895,8 +1925,8 @@ export async function resyncLetterMetadata(letterId: string, body: ResyncInput):
     if (result.senderPerson || result.recipientPerson || change) {
       await syncLetterParticipantsFromMetadata({
         letterId,
-        sender: newSender || letter.sender,
-        recipient: newRecipient || letter.recipient,
+        sender: resolvedSender,
+        recipient: resolvedRecipient,
         relationshipType: (dbUpdates.senderRecipientRelationship as DBRelationshipType | null | undefined)
           ?? letter.senderRecipientRelationship,
       });

@@ -14,8 +14,11 @@ import argparse
 import io
 import json
 import os
+from functools import lru_cache
+from importlib import resources
 
 from kraken import blla
+from kraken.lib import vgsl
 from PIL import Image, ImageDraw
 
 
@@ -48,6 +51,19 @@ def normalize_orientation(img_bytes):
     return buf.getvalue()
 
 
+@lru_cache(maxsize=1)
+def load_default_model():
+    """
+    Load Kraken's bundled baseline segmentation model once.
+
+    Kraken 6.x currently mis-resolves the default model path when `blla.segment`
+    is called without an explicit model, so we load it ourselves from the
+    package root and pass it in directly.
+    """
+    model_path = resources.files("kraken").joinpath("blla.mlmodel")
+    return vgsl.TorchVGSLModel.load_model(str(model_path))
+
+
 def segment_image(img):
     """Use Kraken baseline segmentation to detect text lines.
 
@@ -57,7 +73,7 @@ def segment_image(img):
 
     Returns raw Kraken segments sorted by position, no post-processing.
     """
-    seg = blla.segment(img)
+    seg = blla.segment(img, model=load_default_model())
 
     lines = []
     for line in seg.lines:

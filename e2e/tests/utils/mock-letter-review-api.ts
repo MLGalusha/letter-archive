@@ -92,6 +92,13 @@ interface MockExtraContentRequest {
   };
 }
 
+interface MockAiNotesRequest {
+  url: string;
+  body: {
+    aiNotes?: string | null;
+  };
+}
+
 interface MockResyncRequest {
   url: string;
   body: {
@@ -334,6 +341,7 @@ export interface MockLetterReviewContext {
   verifyMetadataRequests: string[];
   unverifyMetadataRequests: string[];
   updateExtraContentRequests: MockExtraContentRequest[];
+  updateAiNotesRequests: MockAiNotesRequest[];
   verifyExtraContentRequests: string[];
   unverifyExtraContentRequests: string[];
   resyncCheckRequests: MockResyncRequest[];
@@ -372,6 +380,7 @@ export async function installMockLetterReviewApi(
         | 'verifyTranscript'
         | 'verifyMetadata'
         | 'extraContent'
+        | 'aiNotes'
         | 'verifyExtraContent'
         | 'unverifyExtraContent'
         | 'resyncCheck'
@@ -388,6 +397,7 @@ export async function installMockLetterReviewApi(
   const verifyMetadataRequests: string[] = [];
   const unverifyMetadataRequests: string[] = [];
   const updateExtraContentRequests: MockExtraContentRequest[] = [];
+  const updateAiNotesRequests: MockAiNotesRequest[] = [];
   const verifyExtraContentRequests: string[] = [];
   const unverifyExtraContentRequests: string[] = [];
   const resyncCheckRequests: MockResyncRequest[] = [];
@@ -647,6 +657,23 @@ export async function installMockLetterReviewApi(
     });
   });
 
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/ai-notes$`), async (route) => {
+    const body = route.request().postDataJSON() as MockAiNotesRequest['body'];
+    updateAiNotesRequests.push({ url: route.request().url(), body });
+    if (routeFailures.aiNotes) {
+      await fulfillFailure(route, routeFailures.aiNotes);
+      return;
+    }
+
+    letter.aiNotes = body.aiNotes ?? '';
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(letter),
+    });
+  });
+
   await page.route(new RegExp(`${escapeRegex(letterPath)}/verify-extra-content$`), async (route) => {
     verifyExtraContentRequests.push(route.request().url());
     if (routeFailures.verifyExtraContent) {
@@ -875,6 +902,7 @@ export async function installMockLetterReviewApi(
     verifyMetadataRequests,
     unverifyMetadataRequests,
     updateExtraContentRequests,
+    updateAiNotesRequests,
     verifyExtraContentRequests,
     unverifyExtraContentRequests,
     resyncCheckRequests,

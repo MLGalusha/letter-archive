@@ -316,6 +316,32 @@ test.describe('@mocked Letter Review', () => {
     expect(mockedApi.versionRequests).toHaveLength(0);
   });
 
+  test('shows the request id when AI notes auto-save fails', async ({ page }) => {
+    const mockedApi = await openMockLetterReviewWithOptions(
+      page,
+      createMockLetterReviewLetter(),
+      {
+        routeFailures: {
+          aiNotes: {
+            status: 503,
+            error: 'AI notes save failed',
+            requestId: 'req-ai-notes-503',
+          },
+        },
+      },
+    );
+
+    await page.locator('.ai-notes-editor').fill('Investigator note that fails to save.');
+
+    await expect
+      .poll(() => mockedApi.updateAiNotesRequests.length)
+      .toBe(1);
+    await expect(page.locator('.toast')).toContainText(
+      'AI notes save failed (Request ID: req-ai-notes-503)',
+    );
+    await expect(page.locator('.save-status.error')).toContainText('Save failed');
+  });
+
   test('runs AI sync immediately from the countdown state', async ({ page }) => {
     const mockedApi = await openMockLetterReview(page);
 

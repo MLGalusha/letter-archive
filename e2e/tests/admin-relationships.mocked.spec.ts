@@ -130,4 +130,34 @@ test.describe('@mocked Admin Relationships', () => {
     await expect(page.locator('.graph-svg .node circle').nth(3)).toHaveAttribute('opacity', '0.3');
     await expect(page.locator('.graph-svg .link').nth(2)).toHaveAttribute('stroke-opacity', '0.2');
   });
+
+  test('shows the request id when the connection finder fails in graph view', async ({
+    page,
+  }) => {
+    const mockedApi = await installMockAdminRelationshipsApi(page, {
+      pathError: {
+        message: 'Graph path unavailable',
+        requestId: 'req-graph-path-503',
+      },
+    });
+
+    await page.goto('/admin/entities/relationships');
+    await page.locator('.relationships-table').waitFor({ state: 'visible' });
+    await page.locator('.toggle-btn:has-text("Graph")').click();
+    await page.locator('.finder-toggle').click();
+
+    const inputs = page.locator('.finder-search');
+    await inputs.nth(0).fill('Alice');
+    await page.locator('.finder-suggestions li', { hasText: 'Alice Smith' }).click();
+
+    await inputs.nth(1).fill('Carol');
+    await page.locator('.finder-suggestions li', { hasText: 'Carol Clark' }).click();
+
+    await expect(page.locator('.finder-error')).toContainText(
+      'Graph path unavailable (Request ID: req-graph-path-503)',
+    );
+    await expect
+      .poll(() => mockedApi.pathRequests.length)
+      .toBe(1);
+  });
 });

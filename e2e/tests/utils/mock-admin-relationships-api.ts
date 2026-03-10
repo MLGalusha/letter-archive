@@ -56,6 +56,7 @@ export async function installMockAdminRelationshipsApi(
     graphData?: ReturnType<typeof createMockRelationshipGraphData>;
     adminRelationships?: ReturnType<typeof createMockAdminRelationships>;
     deleteError?: { message: string; requestId: string };
+    pathError?: { message: string; requestId: string; status?: number };
   } = {},
 ) {
   await page.addInitScript(() => {
@@ -64,6 +65,7 @@ export async function installMockAdminRelationshipsApi(
 
   const graphApi = await installMockRelationshipGraphApi(page, {
     graphData: options.graphData,
+    pathError: options.pathError,
   });
   const graphData = options.graphData ?? createMockRelationshipGraphData();
   const adminRelationships = [...(options.adminRelationships ?? createMockAdminRelationships())];

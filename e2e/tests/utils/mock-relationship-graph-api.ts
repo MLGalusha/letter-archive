@@ -95,6 +95,7 @@ export async function installMockRelationshipGraphApi(
     graphData?: ReturnType<typeof createMockRelationshipGraphData>;
     collectionGraphData?: ReturnType<typeof createMockRelationshipGraphData>;
     connectionPaths?: Record<string, MockConnectionPath>;
+    pathError?: { message: string; requestId: string; status?: number };
   } = {},
 ) {
   const graphData = options.graphData ?? createMockRelationshipGraphData();
@@ -126,6 +127,21 @@ export async function installMockRelationshipGraphApi(
         /\/relationships\/path\/([^/]+)\/([^/]+)$/,
       ) ?? [];
       pathRequests.push(route.request().url());
+
+      if (options.pathError) {
+        await route.fulfill({
+          status: options.pathError.status ?? 500,
+          contentType: 'application/json',
+          headers: {
+            'x-request-id': options.pathError.requestId,
+          },
+          body: JSON.stringify({
+            error: options.pathError.message,
+            requestId: options.pathError.requestId,
+          }),
+        });
+        return;
+      }
 
       const key = `${personAId}:${personBId}`;
       await route.fulfill({

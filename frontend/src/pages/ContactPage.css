@@ -1,40 +1,50 @@
 .contact-page {
   width: 100%;
-  min-height: 100vh;
-  background: var(--bg-dark);
-  padding: var(--spacing-xl) var(--spacing-md);
+  text-align: left;
 }
 
-.contact-container {
-  max-width: 900px;
-  margin: 0 auto;
-}
+/* ── Hero ───────────────────────────────────────────── */
 
-.contact-container h1 {
+.contact-hero {
   text-align: center;
+  padding: var(--spacing-xl) 0 var(--spacing-lg);
+}
+
+.contact-kicker {
+  font-size: var(--font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-sm);
+}
+
+.contact-headline {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: var(--spacing-md);
+  letter-spacing: -0.01em;
+}
+
+.contact-subtitle {
+  max-width: 540px;
+  margin: 0 auto;
+  font-size: var(--font-lg);
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+/* ── Primary contact card ───────────────────────────── */
+
+.contact-primary {
   margin-bottom: var(--spacing-lg);
 }
 
-.contact-intro {
-  text-align: center;
-  margin-bottom: var(--spacing-xl);
-  padding: var(--spacing-lg);
-}
-
-.contact-intro p {
-  font-size: 1.1rem;
-  line-height: 1.7;
-  color: var(--text);
-  margin: 0;
-}
-
-.contact-sections {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: var(--spacing-lg);
-}
-
-.contact-section {
+.contact-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-md);
   background: var(--bg-light);
   border: var(--border-card);
   border-top: solid 1px var(--highlight);
@@ -43,34 +53,124 @@
   padding: var(--spacing-lg);
 }
 
-.contact-section h2 {
-  margin-top: 0;
+.contact-card-icon {
+  font-size: 1.75rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  opacity: 0.4;
+}
+
+.contact-card-body h2 {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: 1.2rem;
+}
+
+.contact-card-body p {
+  line-height: 1.7;
+  color: var(--text-muted);
+  margin: 0 0 var(--spacing-sm) 0;
+}
+
+/* ── Email link ─────────────────────────────────────── */
+
+.contact-email {
+  display: inline-block;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  padding: 0.35rem 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s ease;
+}
+
+.contact-email:hover {
+  border-color: var(--text-muted);
+}
+
+/* ── Channel cards (3-col) ──────────────────────────── */
+
+.contact-channels {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+.channel-card {
+  background: var(--bg-light);
+  border: var(--border-card);
+  border-top: solid 1px var(--highlight);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+}
+
+.channel-eyebrow {
+  font-size: var(--font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-xs);
+}
+
+.channel-card h3 {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: 1rem;
+}
+
+.channel-card p {
+  line-height: 1.6;
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  margin: 0 0 var(--spacing-sm) 0;
+  flex: 1;
+}
+
+/* ── Explore prompt ─────────────────────────────────── */
+
+.contact-explore {
+  text-align: center;
+  padding: var(--spacing-lg) 0 var(--spacing-xl);
+}
+
+.contact-explore-text {
+  font-size: var(--font-lg);
+  color: var(--text-muted);
   margin-bottom: var(--spacing-md);
 }
 
-.contact-section p {
-  line-height: 1.7;
-  color: var(--text);
-  margin-bottom: var(--spacing-sm);
+.contact-explore-links {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-sm);
 }
 
-.contact-detail {
-  color: var(--text-muted);
-  font-weight: 600;
-  margin-top: var(--spacing-md);
-  margin-bottom: 0;
+.contact-explore-btn {
+  text-decoration: none;
+  font-size: var(--font-sm);
+  cursor: pointer;
 }
 
-@media (max-width: 768px) {
-  .contact-page {
-    padding: var(--spacing-lg) var(--spacing-sm);
+/* ── Mobile ─────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .contact-card {
+    flex-direction: column;
+    gap: var(--spacing-sm);
   }
 
-  .contact-sections {
+  .contact-channels {
     grid-template-columns: 1fr;
   }
 
-  .contact-section {
-    padding: var(--spacing-md);
+  .contact-explore-links {
+    flex-direction: column;
+    align-items: center;
   }
 }

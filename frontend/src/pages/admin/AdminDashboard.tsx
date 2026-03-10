@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { getErrorMessage } from "../../api/client";
 import { getAdminLetters, getFilteredLetterIds, deleteLetter } from "../../api/letters";
-import { toggleLetterFlag } from "../../api/admin/letters";
+import { toggleLetterFlag, publishLetter, hideLetter } from "../../api/admin/letters";
 import {
   getProcessingStatus,
   startTranscription,
@@ -788,6 +788,38 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error("Failed to clear metadata:", err);
       showToast(err instanceof Error ? err.message : "Failed to clear metadata", 'error');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkPublish = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkActionLoading(true);
+    const count = selectedIds.size;
+    try {
+      await Promise.all(Array.from(selectedIds).map(id => publishLetter(id)));
+      showToast(`Published ${count} letter${count === 1 ? '' : 's'}`, 'success');
+      await fetchLetters();
+    } catch (err) {
+      console.error("Failed to publish:", err);
+      showToast(err instanceof Error ? err.message : "Failed to publish letters", 'error');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkHide = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkActionLoading(true);
+    const count = selectedIds.size;
+    try {
+      await Promise.all(Array.from(selectedIds).map(id => hideLetter(id)));
+      showToast(`Hid ${count} letter${count === 1 ? '' : 's'}`, 'success');
+      await fetchLetters();
+    } catch (err) {
+      console.error("Failed to hide:", err);
+      showToast(err instanceof Error ? err.message : "Failed to hide letters", 'error');
     } finally {
       setBulkActionLoading(false);
     }
@@ -1641,8 +1673,25 @@ export default function AdminDashboard() {
               )}
             </div>
 
-            {/* Right section: destructive actions + cancel/save */}
+            {/* Right section: visibility + destructive actions */}
             <div className="edit-toolbar-right">
+              <div className="toolbar-visibility-actions">
+                <button
+                  className="toolbar-process-btn"
+                  onClick={handleBulkPublish}
+                  disabled={selectedIds.size === 0 || bulkActionLoading}
+                >
+                  Publish
+                </button>
+                <button
+                  className="toolbar-process-btn"
+                  onClick={handleBulkHide}
+                  disabled={selectedIds.size === 0 || bulkActionLoading}
+                >
+                  Hide
+                </button>
+              </div>
+              <div className="toolbar-divider" />
               <div className="toolbar-destructive-actions">
                 <button
                   className="toolbar-btn-destructive"

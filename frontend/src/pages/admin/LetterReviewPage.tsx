@@ -40,6 +40,7 @@ import {
   type DynamicEditorRef,
 } from "../../components/common";
 import { trackEdit } from "../../utils/recentEdits";
+import { highlightTranscriptMarkers } from "../../utils/transcriptHighlight";
 import type {
   Letter,
   LetterImage,
@@ -320,12 +321,13 @@ export default function LetterReviewPage() {
   // transcript state changes outside direct typing (for example after exiting
   // line review). We only write when the DOM is actually out of sync to avoid
   // cursor jumps during normal editing.
+  // Uses innerHTML to render highlighted uncertainty markers ([illegible], etc.)
   useEffect(() => {
     const editor = editorRef.current;
     if (editor) {
       const currentContent = editor.innerText;
       if (currentContent !== transcript) {
-        editor.innerText = transcript;
+        editor.innerHTML = highlightTranscriptMarkers(transcript);
       }
       // Recalculate font size after content is set
       calculateFontSize();
@@ -627,8 +629,21 @@ export default function LetterReviewPage() {
     try {
       const updated = await confirmTranscript(letterId);
       setLetter(updated);
+      // Populate form fields with extracted metadata
+      setSender(updated.metadata.sender || "");
+      setRecipient(updated.metadata.recipient || "");
+      setDate(updated.metadata.date || "");
+      setDateConfidence(updated.metadata.dateConfidence || "unknown");
+      setLocation(updated.metadata.location || "");
+      setHook(updated.metadata.hook || "");
+      setDescription(updated.metadata.description || "");
+      setEmotionalTone(updated.metadata.emotionalTone || "");
+      setRelationship(updated.metadata.senderRecipientRelationship || "");
+      setPrimaryTopics(updated.metadata.primaryTopics || []);
+      setOriginalSender(updated.metadata.sender || "");
+      setOriginalRecipient(updated.metadata.recipient || "");
       showToast(
-        "Transcript confirmed - metadata extraction will begin shortly",
+        "Transcript confirmed — metadata extracted",
         "success",
       );
     } catch (err) {
@@ -960,9 +975,9 @@ export default function LetterReviewPage() {
       setLetter(updated);
       setTranscript(originalTranscriptText);
 
-      // Update contenteditable
+      // Update contenteditable with highlighted markers
       if (editorRef.current) {
-        editorRef.current.innerText = originalTranscriptText;
+        editorRef.current.innerHTML = highlightTranscriptMarkers(originalTranscriptText);
       }
 
       // If was originally verified, re-verify

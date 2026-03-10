@@ -160,19 +160,19 @@ export default function EntityReviewPage() {
             className={`filter-tab ${filter === "all" ? "active" : ""}`}
             onClick={() => setFilter("all")}
           >
-            All
+            All{stats ? ` (${stats.pending.persons + stats.pending.places})` : ""}
           </button>
           <button
             className={`filter-tab ${filter === "person" ? "active" : ""}`}
             onClick={() => setFilter("person")}
           >
-            People
+            People{stats ? ` (${stats.pending.persons})` : ""}
           </button>
           <button
             className={`filter-tab ${filter === "place" ? "active" : ""}`}
             onClick={() => setFilter("place")}
           >
-            Places
+            Places{stats ? ` (${stats.pending.places})` : ""}
           </button>
         </div>
 
@@ -182,7 +182,7 @@ export default function EntityReviewPage() {
         ) : items.length === 0 ? (
           <div className="empty-state">
             <Icon name="check" size={48} />
-            <p>No pending items to review</p>
+            <p>No pending {filter === "person" ? "people" : filter === "place" ? "places" : "items"} to review</p>
           </div>
         ) : (
           <div className="queue-items">

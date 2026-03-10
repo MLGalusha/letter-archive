@@ -36,6 +36,7 @@
   display: flex;
   gap: var(--spacing-sm);
   align-items: center;
+  margin-left: auto;
 }
 
 /* Toolbar buttons with icon + text (matches AdminDashboard) */

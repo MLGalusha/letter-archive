@@ -1,5 +1,14 @@
-import type { RefObject, CSSProperties } from "react";
+import { useMemo, type RefObject, type CSSProperties } from "react";
 import { Icon } from "../../../components/common";
+import { countMarkers, type MarkerType } from "../../../utils/transcriptHighlight";
+
+const MARKER_LABELS: Record<MarkerType, string> = {
+  illegible: "illegible",
+  unclear: "unclear",
+  "crossed out": "crossed out",
+  insertion: "insertion",
+  margin: "margin",
+};
 
 interface TranscriptionSectionProps {
   letter: {
@@ -44,11 +53,28 @@ export default function TranscriptionSection({
   onTranscriptInput,
   onEditorKeyDown,
 }: TranscriptionSectionProps) {
+  const markerCounts = useMemo(
+    () => countMarkers(letter.transcript.fullText),
+    [letter.transcript.fullText]
+  );
+  const totalMarkers = Object.values(markerCounts).reduce((a, b) => a + b, 0);
+
   return (
     <div className="editor-section">
       <div className="editor-header">
         <h2>
           Transcription
+          {totalMarkers > 0 && (
+            <span
+              className="transcript-markers-badge"
+              title={Object.entries(markerCounts)
+                .filter(([, n]) => n > 0)
+                .map(([type, n]) => `${n} ${MARKER_LABELS[type as MarkerType]}`)
+                .join(", ")}
+            >
+              {totalMarkers} uncertain
+            </span>
+          )}
           {letterTranscribeState !== "idle" && (
             <span className={`transcribe-status-indicator ${letterTranscribeState}`}>
               {letterTranscribeState === "transcribing" && (

@@ -118,7 +118,7 @@ export function StatusIcon({
       );
     case "EDITED":
       return (
-        <span className="status-icon status-edited" title={`${title}: Edited`}>
+        <span className={`status-icon status-edited status-edited-${type === "T" ? "transcript" : "metadata"}`} title={`${title}: Edited`}>
           Edited
         </span>
       );

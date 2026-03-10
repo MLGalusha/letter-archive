@@ -272,8 +272,10 @@ export async function queryAdminLetters(
     flaggedCount: Number(statsRow.flagged_count || 0),
   };
 
-  // Build WHERE clause fragments for the raw SQL queries
-  // Build WHERE clause in raw SQL for use with DISTINCT ON queries
+  // Build WHERE clause fragments for the raw SQL queries.
+  // Content status filters (transcript/metadata/extraContent) are applied AFTER
+  // DISTINCT ON so they match the representative row (preferring type='L'),
+  // not arbitrary rows in the group that happen to match.
   const buildWhereClause = () => {
     const clauses: ReturnType<typeof sql>[] = [sql`TRUE`];
 
@@ -312,6 +314,16 @@ export async function queryAdminLetters(
     if (query.dateTo && !query.year && !query.month && !query.day) {
       clauses.push(sql`REPLACE(date_raw, 'X', '9') <= ${query.dateTo}`);
     }
+    if (query.flagged === 'true') clauses.push(sql`flagged = true`);
+    else if (query.flagged === 'false') clauses.push(sql`flagged = false`);
+
+    return sql.join(clauses, sql` AND `);
+  };
+
+  // Content status filters applied AFTER DISTINCT ON picks the representative row.
+  // This ensures we filter on the primary (type='L') row's status, not a cover/telegram.
+  const buildContentStatusClause = () => {
+    const clauses: ReturnType<typeof sql>[] = [];
     if (query.transcriptStatus && query.transcriptStatus.length > 0) {
       clauses.push(sql`transcript_status = ANY(ARRAY[${sql.join(query.transcriptStatus.map(s => sql`${s}`), sql`, `)}]::content_status[])`);
     }
@@ -321,22 +333,26 @@ export async function queryAdminLetters(
     if (query.extraContentStatus && query.extraContentStatus.length > 0) {
       clauses.push(sql`extra_content_status = ANY(ARRAY[${sql.join(query.extraContentStatus.map(s => sql`${s}`), sql`, `)}]::content_status[])`);
     }
-    if (query.flagged === 'true') clauses.push(sql`flagged = true`);
-    else if (query.flagged === 'false') clauses.push(sql`flagged = false`);
-
-    return sql.join(clauses, sql` AND `);
+    return clauses.length > 0
+      ? sql`WHERE ${sql.join(clauses, sql` AND `)}`
+      : sql``;
   };
 
   const whereClause = buildWhereClause();
+  const contentStatusClause = buildContentStatusClause();
 
   // Get total count for filtered results (for pagination)
-  // Count unique groups, not individual type rows
+  // DISTINCT ON picks representative per group, then content status filters applied
   const countResult = await db.execute(sql`
     SELECT COUNT(*) as count FROM (
-      SELECT DISTINCT collection_id, date_raw, type_sequence
+      SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
+        transcript_status, metadata_content_status, extra_content_status
       FROM letters
       WHERE ${whereClause}
-    ) groups
+      ORDER BY collection_id, date_raw, type_sequence,
+        CASE WHEN type = 'L' THEN 0 ELSE 1 END, type
+    ) representatives
+    ${contentStatusClause}
   `);
   const countRows = getRows<{ count: number | bigint }>(countResult);
   const totalFiltered = Number(countRows[0]?.count || 0);
@@ -376,15 +392,22 @@ export async function queryAdminLetters(
   // Prefers 'L' type if available, otherwise uses first available type
   const offset = (query.page - 1) * query.limit;
 
+  // Content status filters are applied as a post-DISTINCT-ON WHERE so they
+  // always match the representative row (type='L' preferred), not a stray
+  // cover/telegram row whose status differs from the primary letter.
   const representativeIdsResult = await db.execute(sql`
     SELECT id FROM (
-      SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
-        id, ${getSortExpression()} as sort_key
-      FROM letters
-      WHERE ${whereClause}
-      ORDER BY collection_id, date_raw, type_sequence,
-        CASE WHEN type = 'L' THEN 0 ELSE 1 END, type
-    ) representatives
+      SELECT * FROM (
+        SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
+          id, transcript_status, metadata_content_status, extra_content_status,
+          ${getSortExpression()} as sort_key
+        FROM letters
+        WHERE ${whereClause}
+        ORDER BY collection_id, date_raw, type_sequence,
+          CASE WHEN type = 'L' THEN 0 ELSE 1 END, type
+      ) representatives
+      ${contentStatusClause}
+    ) filtered
     ORDER BY sort_key ${sortDir}
     LIMIT ${query.limit}
     OFFSET ${offset}

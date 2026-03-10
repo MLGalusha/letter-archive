@@ -544,6 +544,8 @@
   transition: font-size 0.15s ease-out; /* Smooth font size transition during resize */
   overflow-wrap: normal;
   text-align: left; /* Override inherited center alignment from #root */
+  caret-color: #1565c0;
+  caret-shape: block; /* Block cursor — progressive enhancement (Chrome 133+, Firefox) */
 }
 
 .transcript-editor:focus {
@@ -560,6 +562,57 @@
 /* Verified state - blue border on editor */
 .transcript-editor.verified {
   border-color: #3b82f6;
+}
+
+/* ── Transcript uncertainty badge ── */
+.transcript-markers-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: var(--font-xs);
+  font-weight: 500;
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+  cursor: help;
+  vertical-align: middle;
+}
+
+/* ── Transcript uncertainty markers ── */
+.transcript-marker {
+  border-radius: 3px;
+  padding: 0 2px;
+  font-style: italic;
+}
+
+.transcript-marker--illegible {
+  background: rgba(239, 68, 68, 0.18);
+  color: #dc2626;
+  border-bottom: 2px solid #dc2626;
+}
+
+.transcript-marker--unclear {
+  background: rgba(245, 158, 11, 0.18);
+  color: #b45309;
+  border-bottom: 2px dotted #d97706;
+}
+
+.transcript-marker--crossed-out {
+  background: rgba(107, 114, 128, 0.15);
+  color: #6b7280;
+  text-decoration: line-through;
+}
+
+.transcript-marker--insertion {
+  background: rgba(59, 130, 246, 0.15);
+  color: #2563eb;
+  border-bottom: 2px dashed #3b82f6;
+}
+
+.transcript-marker--margin {
+  background: rgba(139, 92, 246, 0.15);
+  color: #7c3aed;
+  border-bottom: 2px dashed #8b5cf6;
 }
 
 /* Metadata Section */

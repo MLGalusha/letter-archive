@@ -491,9 +491,10 @@ router.post('/letters/:letterId/confirm-transcript', async (req, res, next) => {
     await db.update(letters).set({
       transcriptConfirmedAt: new Date(),
       transcriptConfirmedBy: 'admin',
-      metadataStatus: 'PENDING',
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
+
+    await runMetadataExtractionV2(letterId);
 
     const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
     if (!letterDTO) {

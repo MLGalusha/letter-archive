@@ -22,24 +22,18 @@ export interface GroupedLine {
   region: 'body' | 'margin' | 'header' | 'footer';
 }
 
-/** A merge candidate that passed step 1 (gap) but was rejected by a later step */
-export interface MergeRejection {
+/** A merge that Kraken approved but Vision rejected */
+export interface VisionRejectedMerge {
   left: EnrichedSegment;
   right: EnrichedSegment;
-  /** Which pipeline step rejected: 2=height ratio, 3=edge Y, 4=edge height, 5=vision */
-  step: 2 | 3 | 4 | 5;
-  /** Human-readable rejection reason */
-  reason: string;
-  /** The computed values that caused rejection */
-  values: Record<string, number>;
 }
 
 export interface GroupingResult {
   lines: GroupedLine[];
   /** Segments that were classified as marginal/non-body */
   marginalSegments: EnrichedSegment[];
-  /** Merge candidates that passed gap check but were rejected by a later step */
-  mergeRejections: MergeRejection[];
+  /** Merges that Kraken wanted but Vision rejected (for debug) */
+  visionRejections: VisionRejectedMerge[];
 }
 
 function midY(seg: EnrichedSegment): number {
@@ -52,43 +46,6 @@ function segHeight(seg: EnrichedSegment): number {
 
 function segWidth(seg: EnrichedSegment): number {
   return seg.bbox[2] - seg.bbox[0];
-}
-
-/**
- * Pick the Vision word that best represents a segment at a merge junction.
- * Scores by proximity to the connecting edge (sharp decay, 2× weight)
- * plus vertical coverage of the segment.
- */
-function pickJunctionWord(
-  segBbox: [number, number, number, number],
-  side: 'left' | 'right',
-  words: OcrWordBox[],
-): OcrWordBox | null {
-  const segH = segBbox[3] - segBbox[1];
-  const edgeX = side === 'right' ? segBbox[2] : segBbox[0];
-
-  let best: OcrWordBox | null = null;
-  let bestScore = -Infinity;
-
-  for (const w of words) {
-    const vTop = Math.max(w.bbox[1], segBbox[1]);
-    const vBot = Math.min(w.bbox[3], segBbox[3]);
-    if (vBot <= vTop) continue;
-    if (w.bbox[2] <= segBbox[0] || w.bbox[0] >= segBbox[2]) continue;
-
-    const vCoverage = (vBot - vTop) / Math.max(segH, 1);
-    const wordEdge = side === 'left' ? w.bbox[0] : w.bbox[2];
-    const edgeDist = Math.abs(wordEdge - edgeX);
-    const proximity = 1 / (1 + edgeDist / Math.max(segH * 0.5, 1));
-
-    const score = vCoverage + proximity * 2;
-    if (score > bestScore) {
-      bestScore = score;
-      best = w;
-    }
-  }
-
-  return best;
 }
 
 function computeMedian(values: number[]): number {
@@ -277,17 +234,11 @@ export function westEdgeY(seg: EnrichedSegment): [number, number] {
  * aren't enough Vision words to judge. Returns `false` if Vision says
  * the edges clearly don't align (different lines).
  */
-interface VisionMergeResult {
-  ok: boolean;
-  reason?: string;
-  values?: Record<string, number>;
-}
-
 function visionConfirmsMerge(
   left: EnrichedSegment,
   right: EnrichedSegment,
   medianLineHeight: number,
-): VisionMergeResult {
+): boolean {
   // Quick win: if any Vision word literally spans the gap between the
   // two segments, that's definitive proof they belong on the same line.
   const gapStart = left.bbox[2];
@@ -295,23 +246,32 @@ function visionConfirmsMerge(
   const allWords = [...left.visionWords, ...right.visionWords];
   for (const w of allWords) {
     if (w.bbox[0] <= gapStart && w.bbox[2] >= gapEnd) {
-      return { ok: true }; // a word bridges the gap
+      return true; // a word bridges the gap
     }
   }
 
-  // If either side has no Vision words, Vision has no evidence to reject.
-  // Kraken edge checks (steps 1-4) already confirmed alignment, so allow.
-  if (left.visionWords.length === 0 || right.visionWords.length === 0) return { ok: true };
+  // If neither side has Vision words, allow (nothing to validate against).
+  // If one side has words and the other doesn't, only allow if the wordless
+  // segment is substantial (wide enough to be a real text fragment).
+  // Tiny segments with no words are likely edge artifacts.
+  const hasLeft = left.visionWords.length > 0;
+  const hasRight = right.visionWords.length > 0;
+  if (!hasLeft && !hasRight) return true;
+  if (!hasLeft) {
+    return segWidth(left) >= medianLineHeight * 1.5;
+  }
+  if (!hasRight) {
+    return segWidth(right) >= medianLineHeight * 1.5;
+  }
 
-  // Pick the best representative word on each segment's connecting side
-  // (same logic the debug overlay uses to display junction boxes)
-  const leftWord = pickJunctionWord(left.bbox, 'right', left.visionWords);
-  const rightWord = pickJunctionWord(right.bbox, 'left', right.visionWords);
-  // If no qualifying junction word found, no evidence to reject — allow.
-  if (!leftWord || !rightWord) return { ok: true };
+  const leftWord = left.visionWords[left.visionWords.length - 1];
+  const rightWord = right.visionWords[0];
 
+  // Right edge of left word: top Y = bbox[1], bottom Y = bbox[3]
   const leftTop = leftWord.bbox[1];
   const leftBottom = leftWord.bbox[3];
+
+  // Left edge of right word: top Y = bbox[1], bottom Y = bbox[3]
   const rightTop = rightWord.bbox[1];
   const rightBottom = rightWord.bbox[3];
 
@@ -325,29 +285,14 @@ function visionConfirmsMerge(
   const maxWordH = Math.max(leftWordH, rightWordH, 1);
   const minWordH = Math.min(leftWordH, rightWordH);
 
-  // Vision boxes are less precise than Kraken — allow generous tolerance.
-  // Kraken edge checks (steps 3–4) already confirmed edge alignment,
-  // so Vision just needs to agree they're on the same line, not pixel-match.
-  const maxDelta = medianLineHeight * 0.7;
+  // Vision boxes are less precise than Kraken but should still agree
+  // on which line they're on. Use moderate tolerance.
+  const maxDelta = medianLineHeight * 0.5;
 
-  if (topDelta > maxDelta || bottomDelta > maxDelta) {
-    return {
-      ok: false,
-      reason: 'Vision word Y alignment too far',
-      values: { topDelta, bottomDelta, maxDelta, leftWordH, rightWordH },
-    };
-  }
+  if (topDelta > maxDelta || bottomDelta > maxDelta) return false;
+  if (minWordH / maxWordH < 0.5) return false;
 
-  const heightRatio = minWordH / maxWordH;
-  if (heightRatio < 0.35) {
-    return {
-      ok: false,
-      reason: 'Vision word height ratio too low',
-      values: { heightRatio, leftWordH, rightWordH, threshold: 0.35 },
-    };
-  }
-
-  return { ok: true };
+  return true;
 }
 
 /**
@@ -366,8 +311,8 @@ function chainSegments(
   medianLineHeight: number,
   maxGapRatio: number,
   maxEdgeRatio: number,
-): { chains: EnrichedSegment[][]; mergeRejections: MergeRejection[] } {
-  if (segments.length === 0) return { chains: [], mergeRejections: [] };
+): { chains: EnrichedSegment[][]; visionRejections: VisionRejectedMerge[] } {
+  if (segments.length === 0) return { chains: [], visionRejections: [] };
 
   // Sort by left edge, then top edge as tiebreaker
   const sorted = [...segments].sort((a, b) => {
@@ -377,7 +322,7 @@ function chainSegments(
   });
 
   const chains: EnrichedSegment[][] = [];
-  const mergeRejections: MergeRejection[] = [];
+  const visionRejections: VisionRejectedMerge[] = [];
 
   for (const seg of sorted) {
     let bestChainIdx = -1;
@@ -396,8 +341,6 @@ function chainSegments(
       const effectiveMaxGap = continuityBoost ? baseMaxGap * 1.5 : baseMaxGap;
       if (gap > effectiveMaxGap) continue;
 
-      // --- Step 1 passed (within gap range) — track rejections from here ---
-
       // 2. Overall height compatibility: segments with very different
       //    heights are clearly from different lines (e.g., short margin
       //    annotation vs. full body line). Reject early.
@@ -405,15 +348,7 @@ function chainSegments(
       const tailH = segHeight(tail);
       const maxOverallH = Math.max(segH, tailH, 1);
       const minOverallH = Math.min(segH, tailH);
-      const overallHeightRatio = minOverallH / maxOverallH;
-      if (overallHeightRatio < 0.35) {
-        mergeRejections.push({
-          left: tail, right: seg, step: 2,
-          reason: 'Overall height ratio too low',
-          values: { ratio: overallHeightRatio, tailH, segH, threshold: 0.35 },
-        });
-        continue;
-      }
+      if (minOverallH / maxOverallH < 0.35) continue;
 
       // 3. Edge matching: RIGHT side of tail → LEFT side of seg.
       //    Get top/bottom Y at the meeting edges from boundary polygons.
@@ -425,14 +360,7 @@ function chainSegments(
       // Position check: the top and bottom Y at meeting edges must be close
       const topDelta = Math.abs(segLeft[0] - tailRight[0]);
       const bottomDelta = Math.abs(segLeft[1] - tailRight[1]);
-      if (topDelta > maxEdgeDelta || bottomDelta > maxEdgeDelta) {
-        mergeRejections.push({
-          left: tail, right: seg, step: 3,
-          reason: 'Edge Y alignment too far',
-          values: { topDelta, bottomDelta, maxEdgeDelta },
-        });
-        continue;
-      }
+      if (topDelta > maxEdgeDelta || bottomDelta > maxEdgeDelta) continue;
 
       // 4. Edge height check: the heights at the meeting edges must be similar.
       //    Prevents merging a tall segment (different line) with a short one.
@@ -440,27 +368,14 @@ function chainSegments(
       const segEdgeH = segLeft[1] - segLeft[0];
       const maxH = Math.max(tailEdgeH, segEdgeH, 1);
       const minH = Math.min(tailEdgeH, segEdgeH);
-      const edgeHeightRatio = minH / maxH;
-      if (edgeHeightRatio < 0.4) {
-        mergeRejections.push({
-          left: tail, right: seg, step: 4,
-          reason: 'Edge height ratio too low',
-          values: { ratio: edgeHeightRatio, tailEdgeH, segEdgeH, threshold: 0.4 },
-        });
-        continue;
-      }
+      if (minH / maxH < 0.4) continue;
 
       // 5. Vision word edge alignment: use Vision boxes as independent
       //    confirmation. Grab the rightmost word of tail and leftmost word
       //    of seg, compare their top-top / bottom-bottom Y alignment.
       //    If Vision says the junction doesn't line up, reject the merge.
-      const visionResult = visionConfirmsMerge(tail, seg, medianLineHeight);
-      if (!visionResult.ok) {
-        mergeRejections.push({
-          left: tail, right: seg, step: 5,
-          reason: visionResult.reason ?? 'Vision rejected',
-          values: visionResult.values ?? {},
-        });
+      if (!visionConfirmsMerge(tail, seg, medianLineHeight)) {
+        visionRejections.push({ left: tail, right: seg });
         continue;
       }
 
@@ -478,7 +393,7 @@ function chainSegments(
     }
   }
 
-  return { chains, mergeRejections };
+  return { chains, visionRejections };
 }
 
 /**
@@ -581,7 +496,7 @@ export function constrainedGrouping(
   },
 ): GroupingResult {
   if (!segments || segments.length === 0) {
-    return { lines: [], marginalSegments: [], mergeRejections: [] };
+    return { lines: [], marginalSegments: [], visionRejections: [] };
   }
 
   const maxGapRatio = opts?.maxGapRatio ?? 2.0;
@@ -603,7 +518,7 @@ export function constrainedGrouping(
   // Step 2: Group candidate segments (excludes obvious margin).
   // This allows small body fragments (like "9" from "970") to merge with
   // adjacent body segments before region classification runs.
-  const { chains: allChains, mergeRejections } = chainSegments(
+  const { chains: allChains, visionRejections } = chainSegments(
     candidateSegments,
     medianLineHeight,
     maxGapRatio,
@@ -644,6 +559,6 @@ export function constrainedGrouping(
   return {
     lines: allLines,
     marginalSegments,
-    mergeRejections,
+    visionRejections,
   };
 }

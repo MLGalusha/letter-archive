@@ -1716,14 +1716,23 @@
   border: solid 1px #ffcc80;
 }
 
-/* Edited - orange/warning color */
+/* Edited - color matches filter pills per content type */
 .status-icon.status-edited {
   min-width: 50px;
   padding: 0.2rem 0.5rem;
   border-radius: var(--radius-sm);
-  background: #fff3e0;
-  color: #9a3412;
-  border: solid 1px #ffcc80;
+}
+
+.status-icon.status-edited-transcript {
+  background: #f3e5f5;
+  color: #7b1fa2;
+  border: solid 1px #ce93d8;
+}
+
+.status-icon.status-edited-metadata {
+  background: #f3e5f5;
+  color: #7b1fa2;
+  border: solid 1px #ce93d8;
 }
 
 /* Verified - blue */
@@ -2350,6 +2359,13 @@
   align-items: center;
   gap: var(--spacing-sm);
   flex-shrink: 0;
+}
+
+/* Visibility actions group */
+.toolbar-visibility-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
 }
 
 /* Destructive actions group */

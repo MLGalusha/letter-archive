@@ -260,6 +260,31 @@ describe('UploadLetterPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('surfaces duplicate check failures while still importing files', async () => {
+    const user = userEvent.setup();
+    checkDuplicatesMock.mockRejectedValueOnce(
+      new ApiError(503, 'Duplicate service unavailable', undefined, 'req-dupes-503'),
+    );
+
+    const { container } = render(<UploadLetterPage />);
+
+    await user.upload(
+      getFileInput(container),
+      makeImageFile('001-18860314-L01-01.jpg'),
+    );
+
+    await waitFor(() => {
+      expect(checkDuplicatesMock).toHaveBeenCalledWith(['001-18860314-L01-01.jpg']);
+    });
+
+    expect(showToastMock).toHaveBeenCalledWith('1 file imported');
+    expect(showToastMock).toHaveBeenCalledWith(
+      'Duplicate service unavailable (Request ID: req-dupes-503)',
+      'error',
+    );
+    expect(await screen.findByText('Collection 001')).toBeInTheDocument();
+  });
+
   it('asks how to handle duplicates and can skip them during upload', async () => {
     const user = userEvent.setup();
     checkDuplicatesMock.mockResolvedValueOnce({

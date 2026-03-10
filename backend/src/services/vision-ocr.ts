@@ -15,6 +15,8 @@ export interface OcrWordBox {
   text: string;
   bbox: [number, number, number, number]; // [x1, y1, x2, y2]
   confidence: number;
+  blockIndex: number;
+  paragraphIndex: number;
   pixelStats?: BoxPixelStats;
   hasContent?: boolean;  // determined by pixel analysis
 }
@@ -47,7 +49,9 @@ export async function runVisionWordDetection(
     const wordBoxes: OcrWordBox[] = [];
 
     for (const page of annotation.pages) {
+      let blockIdx = 0;
       for (const block of page.blocks ?? []) {
+        let paragraphIdx = 0;
         for (const paragraph of block.paragraphs ?? []) {
           for (const word of paragraph.words ?? []) {
             const text = word.symbols?.map(s => s.text).join('') ?? '';
@@ -68,9 +72,13 @@ export async function runVisionWordDetection(
                 Math.max(...ys),
               ],
               confidence: word.confidence ?? 0,
+              blockIndex: blockIdx,
+              paragraphIndex: paragraphIdx,
             });
           }
+          paragraphIdx++;
         }
+        blockIdx++;
       }
     }
 

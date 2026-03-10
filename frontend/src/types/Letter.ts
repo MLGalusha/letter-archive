@@ -119,6 +119,11 @@ export interface LineSegment {
   boundary?: { x: number; y: number }[];
 }
 
+export interface MergedLineSegment extends LineSegment {
+  merged: boolean;
+  constituents: LineSegment[];
+}
+
 export interface BoxPixelStats {
   inkDensity: number;
   variance: number;
@@ -130,6 +135,8 @@ export interface OcrWordBox {
   text: string;
   bbox: [number, number, number, number];
   confidence: number;
+  blockIndex?: number;
+  paragraphIndex?: number;
   pixelStats?: BoxPixelStats;
   hasContent?: boolean;
 }

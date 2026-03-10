@@ -5,7 +5,7 @@ import routes from './routes/index.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { env, hasOpenAI } from './config/env.js';
-import { logger } from './utils/logger.js';
+import { logger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { recoverOrphanedJobs } from './services/processing-queue.js';
 
 const app = express();
@@ -46,6 +46,8 @@ app.listen(env.PORT, () => {
       port: env.PORT,
       openai: hasOpenAI ? 'enabled' : 'stub mode',
       storageDir: env.STORAGE_DIR,
+      logDir: LOG_DIR,
+      logRetentionHours: getLogRetentionHours(),
     },
     'Server started'
   );

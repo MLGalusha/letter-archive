@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { uploadFiles, checkDuplicates, type UploadResult, type UploadError } from "../../api/admin";
+import { getErrorMessage } from "../../api/client";
 import {
   parseFilename,
 } from "../../utils/filename-parser";
@@ -150,12 +151,12 @@ export default function UploadLetterPage() {
         }
         return img;
       }));
-    } catch {
-      // Silently fail — duplicates just won't be flagged
+    } catch (err) {
+      showToast(getErrorMessage(err, "Failed to check duplicates"), "error");
     } finally {
       setDuplicateCheckLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   // Handlers
   const handleFilesSelected = useCallback(async (files: FileList | null) => {
@@ -215,13 +216,13 @@ export default function UploadLetterPage() {
           }
           return img;
         }));
-      } catch {
-        // Silently fail
+      } catch (err) {
+        showToast(getErrorMessage(err, "Failed to check duplicates"), "error");
       } finally {
         setDuplicateCheckLoading(false);
       }
     }
-  }, [images]);
+  }, [images, showToast]);
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     handleFilesSelected(e.target.files);

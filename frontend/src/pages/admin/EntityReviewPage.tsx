@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button, Icon } from "../../components/common";
 import { useToast } from "../../contexts/ToastContext";
+import { getErrorMessage } from "../../api/client";
 import {
   getReviewQueue,
   resolveReviewItem,
@@ -49,10 +50,7 @@ export default function EntityReviewPage() {
         setItems(response.items);
         setStats(response.stats);
       } catch (err) {
-        showToast(
-          err instanceof Error ? err.message : "Failed to load review queue",
-          "error"
-        );
+        showToast(getErrorMessage(err, "Failed to load review queue"), "error");
       } finally {
         setLoading(false);
       }
@@ -92,10 +90,7 @@ export default function EntityReviewPage() {
         "success"
       );
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to resolve",
-        "error"
-      );
+      showToast(getErrorMessage(err, "Failed to resolve"), "error");
     } finally {
       setProcessingId(null);
     }
@@ -119,7 +114,7 @@ export default function EntityReviewPage() {
           : await searchPlaces(searchQuery);
       setSearchResults(response.matches);
     } catch (err) {
-      showToast("Search failed", "error");
+      showToast(getErrorMessage(err, "Search failed"), "error");
     }
   };
 

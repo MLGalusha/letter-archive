@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button, Icon } from '../common';
 import { getDuplicateSuggestions, type DuplicateSuggestion } from '../../api/entities';
+import { getErrorMessage } from '../../api/client';
+import { useToast } from '../../contexts/ToastContext';
 import './DuplicateSuggestions.css';
 
 interface DuplicateSuggestionsProps {
@@ -16,6 +18,7 @@ export default function DuplicateSuggestions({
   onMerge,
   onRefresh,
 }: DuplicateSuggestionsProps) {
+  const { showToast } = useToast();
   const [suggestions, setSuggestions] = useState<DuplicateSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -41,13 +44,13 @@ export default function DuplicateSuggestions({
         const response = await getDuplicateSuggestions(entityType, 50);
         setSuggestions(response.suggestions);
       } catch (err) {
-        console.error('Failed to fetch duplicate suggestions:', err);
+        showToast(getErrorMessage(err, 'Failed to fetch duplicate suggestions'), 'error');
       } finally {
         setLoading(false);
       }
     }
     fetchSuggestions();
-  }, [entityType, onRefresh]);
+  }, [entityType, onRefresh, showToast]);
 
   const getPairKey = useCallback((a: string, b: string) => {
     return [a, b].sort().join('|');

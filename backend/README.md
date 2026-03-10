@@ -41,6 +41,8 @@ npm run worker
 | `STORAGE_DIR` | `./storage` | Local storage directory for uploaded files |
 | `OPENAI_API_KEY` | (none) | OpenAI API key (optional - stub mode if not set) |
 | `OPENAI_MODEL` | `gpt-4o` | OpenAI model for transcription/extraction |
+| `LOG_DIR` | `./logs` | Directory for hourly NDJSON application logs |
+| `LOG_RETENTION_HOURS` | `168` | How long to retain hourly log files before pruning |
 
 ## Scripts
 
@@ -51,10 +53,29 @@ npm run worker
 | `npm run build` | Build TypeScript to JavaScript |
 | `npm run start` | Run production build |
 | `npm run typecheck` | Run TypeScript type checking |
+| `npm run logs:query -- --hours 24` | Query recent hourly logs with filters |
+| `npm run logs:errors` | Show error and fatal logs from the last 24 hours |
 | `npm run db:up` | Start PostgreSQL container |
 | `npm run db:down` | Stop PostgreSQL container |
 | `npm run drizzle:generate` | Generate migration from schema changes |
 | `npm run drizzle:migrate` | Apply migrations to database |
+
+## Logs
+
+The backend and worker both write structured NDJSON logs to hourly files in `backend/logs/` by default. Every HTTP response includes `x-request-id`, and that same `requestId` is written into the backend logs so you can trace a failing request across middleware and route handlers.
+
+Examples:
+
+```bash
+# last 24 hours of errors
+npm run logs:errors
+
+# all entries for a specific request id
+npm run logs:query -- --request-id 123e4567-e89b-12d3-a456-426614174000
+
+# recent log lines for one route
+npm run logs:query -- --path /letters/pages/collection-009-page-1/detect-lines --hours 6
+```
 
 ## API Endpoints
 

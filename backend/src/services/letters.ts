@@ -217,6 +217,9 @@ export async function resetLetterForProcessing(letterId: string): Promise<void> 
       metadataStatus: 'PENDING',
       metadataError: null,
       metadataAttemptCount: 0,
+      entityExtractionJson: null,
+      entityExtractionStatus: 'PENDING',
+      entityExtractionError: null,
       // Reset two-track content status to EMPTY
       transcriptStatus: 'EMPTY',
       metadataContentStatus: 'EMPTY',

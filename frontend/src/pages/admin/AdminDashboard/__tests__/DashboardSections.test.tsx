@@ -19,6 +19,7 @@ function makeLetter(): Letter {
     transcriptStatus: "AI_DRAFT",
     metadataContentStatus: "AI_DRAFT",
     extraContentStatus: "EMPTY",
+    flagged: false,
     createdAt: "2025-01-01T00:00:00.000Z",
     lettersCount: 1,
     extrasCount: 0,
@@ -75,6 +76,7 @@ describe("RecentActivityTable", () => {
         onToggleColumnMenu={vi.fn()}
         onToggleColumn={vi.fn()}
         columnMenuRef={createRef<HTMLDivElement>()}
+        onToggleFlag={vi.fn()}
       />,
     );
 

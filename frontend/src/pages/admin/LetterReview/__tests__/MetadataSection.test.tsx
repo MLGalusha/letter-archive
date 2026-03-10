@@ -17,6 +17,7 @@ const buildLetter = (overrides: Partial<Letter> = {}): Letter => ({
   transcriptStatus: "EDITED",
   metadataContentStatus: "EMPTY",
   extraContentStatus: "EMPTY",
+  flagged: false,
   createdAt: "2024-01-01T00:00:00.000Z",
   linkedPersons: [],
   linkedPlaces: [],
@@ -138,6 +139,38 @@ describe("MetadataSection", () => {
     expect(onSenderChange).toHaveBeenCalledWith("Ada");
     expect(onTriggerAutoSave).toHaveBeenCalledWith({ sender: "Ada" });
     expect(onStartSyncTimer).toHaveBeenCalled();
+  });
+
+  it("lets operators sync immediately while a countdown is active", async () => {
+    const user = userEvent.setup();
+    const onAISync = vi.fn();
+    const props = buildProps({
+      letter: buildLetter({ metadataContentStatus: "EDITED" }),
+      syncCountdown: 175,
+      onAISync,
+    });
+
+    render(<MetadataSection {...props} />);
+
+    const syncButton = screen.getByRole("button", { name: /2:55/i });
+    await user.click(syncButton);
+
+    expect(onAISync).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps double-click cancellation available while countdown is active", () => {
+    const onCountdownDoubleClick = vi.fn();
+    const props = buildProps({
+      letter: buildLetter({ metadataContentStatus: "EDITED" }),
+      syncCountdown: 175,
+      onCountdownDoubleClick,
+    });
+
+    render(<MetadataSection {...props} />);
+
+    fireEvent.doubleClick(screen.getByRole("button", { name: /2:55/i }));
+
+    expect(onCountdownDoubleClick).toHaveBeenCalledTimes(1);
   });
 
   it("shows verified metadata as read-only", () => {

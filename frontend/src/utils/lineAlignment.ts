@@ -1,4 +1,17 @@
-import type { LineSegment, LineSegmentWord } from '../types/Letter';
+import type { LineSegment, LineSegmentWord, ReconciledLine } from '../types/Letter';
+
+/** Input can be raw LineSegments or reconciled lines (same bbox/baseline shape) */
+export type AlignmentInput = LineSegment | ReconciledLine;
+
+/** Minimal shape needed for alignment — both LineSegment and ReconciledLine satisfy this */
+interface AlignableSegment {
+  line: number;
+  bbox: [number, number, number, number];
+  baseline: number[][];
+  boundary?: { x: number; y: number }[];
+  words?: LineSegmentWord[];
+  ocrText?: string;
+}
 
 export interface AlignedLine {
   visualLineIndex: number;
@@ -313,10 +326,10 @@ function filterWordsForTranscript(
 }
 
 function buildFilteredSegment(
-  segment: LineSegment,
+  segment: AlignableSegment,
   transcriptText: string,
   wordMetrics?: WordMetricsMap,
-): LineSegment {
+): AlignableSegment {
   const filteredWords = filterWordsForTranscript(segment.words, transcriptText, wordMetrics);
   if (filteredWords.length === 0) {
     return {
@@ -339,7 +352,7 @@ function buildFilteredSegment(
 }
 
 function scoreSegmentAgainstTranscript(
-  segment: LineSegment,
+  segment: AlignableSegment,
   transcriptText: string,
   wordMetrics?: WordMetricsMap,
 ): number {
@@ -357,16 +370,16 @@ function scoreSegmentAgainstTranscript(
   return clamp((structureScore * 0.6) + (sequenceScore * 0.4), 0, 1);
 }
 
-function scoreSegmentSkipPenalty(segment: LineSegment): number {
+function scoreSegmentSkipPenalty(segment: AlignableSegment): number {
   const structureScore = computeRunStructureScore(sortWordsLeftToRight(segment.words));
   return 0.08 + (structureScore * 0.12);
 }
 
 function selectBestSegmentsForTranscript(
   transcriptLines: string[],
-  lineSegments: LineSegment[],
+  lineSegments: AlignableSegment[],
   wordMetrics?: WordMetricsMap,
-): LineSegment[] {
+): AlignableSegment[] {
   const lineCount = transcriptLines.length;
   const segmentCount = lineSegments.length;
 
@@ -434,24 +447,31 @@ function selectBestSegmentsForTranscript(
 }
 
 function createAlignedLine(
-  segment: LineSegment,
+  segment: AlignableSegment,
   transcriptText: string,
   transcriptLineIndex: number,
   visualLineIndex: number,
   wordMetrics?: WordMetricsMap,
 ): AlignedLine {
   const filteredSegment = buildFilteredSegment(segment, transcriptText, wordMetrics);
+  const hasFilteredWords = (filteredSegment.words?.length ?? 0) > 0;
+  const useFilteredGeometry = hasFilteredWords;
+  const preserveBoundary = !useFilteredGeometry
+    || (
+      filteredSegment.bbox[0] === segment.bbox[0]
+      && filteredSegment.bbox[1] === segment.bbox[1]
+      && filteredSegment.bbox[2] === segment.bbox[2]
+      && filteredSegment.bbox[3] === segment.bbox[3]
+    );
 
-  // Use the original Kraken-detected bbox and boundary so the highlight
-  // spans the full line. Filtered words are still used for font sizing.
   return {
     visualLineIndex,
     transcriptText,
     transcriptLineIndex,
-    bbox: segment.bbox,
-    baseline: segment.baseline,
+    bbox: useFilteredGeometry ? filteredSegment.bbox : segment.bbox,
+    baseline: useFilteredGeometry ? filteredSegment.baseline : segment.baseline,
     words: filteredSegment.words,
-    boundary: segment.boundary,
+    boundary: preserveBoundary ? segment.boundary : undefined,
   };
 }
 
@@ -462,7 +482,7 @@ function createAlignedLine(
  */
 export function alignTranscriptToVisualLines(
   pageText: string,
-  lineSegments: LineSegment[],
+  lineSegments: AlignableSegment[],
   wordMetrics?: WordMetricsMap,
 ): AlignedLine[] {
   const transcriptLines = pageText.split('\n').filter(l => l.trim().length > 0);
@@ -493,7 +513,7 @@ export function alignTranscriptToVisualLines(
     // Fall back to simple 1:1 positional assignment (first N segments).
     const hasWords = lineSegments.some(seg => seg.words && seg.words.length > 0);
 
-    let selectedSegments: LineSegment[];
+    let selectedSegments: AlignableSegment[];
     if (hasWords) {
       selectedSegments = selectBestSegmentsForTranscript(
         transcriptLines,
@@ -501,8 +521,15 @@ export function alignTranscriptToVisualLines(
         wordMetrics,
       );
     } else {
-      // Positional: take the first N segments in reading order
-      selectedSegments = lineSegments.slice(0, transcriptLines.length);
+      return lineSegments.map((seg, i) =>
+        createAlignedLine(
+          seg,
+          i < transcriptLines.length ? transcriptLines[i] : '',
+          i < transcriptLines.length ? i : -1,
+          i,
+          wordMetrics,
+        ),
+      );
     }
 
     return selectedSegments.map((seg, i) =>
@@ -855,4 +882,41 @@ export function buildAlignedLinesFromDetected(
   }
 
   return result;
+}
+
+/**
+ * Last-resort fallback when no visual line geometry can be recovered at all.
+ * This keeps line review usable by laying transcript lines into evenly spaced
+ * bands across the likely handwritten region of the page.
+ */
+export function buildAlignedLinesFromEstimatedLayout(
+  transcriptLines: string[],
+  imageSize: { width: number; height: number },
+): AlignedLine[] {
+  if (transcriptLines.length === 0) return [];
+  if (imageSize.width <= 0 || imageSize.height <= 0) return [];
+
+  const left = Math.round(imageSize.width * 0.12);
+  const right = Math.round(imageSize.width * 0.88);
+  const top = Math.round(imageSize.height * 0.14);
+  const bottom = Math.round(imageSize.height * 0.88);
+  const usableHeight = Math.max(1, bottom - top);
+  const bandHeight = usableHeight / transcriptLines.length;
+
+  return transcriptLines.map((transcriptText, index) => {
+    const y1 = Math.round(top + (index * bandHeight));
+    const y2 = Math.round(top + ((index + 1) * bandHeight));
+    const baselineY = Math.max(y1 + 1, y2 - Math.max(6, Math.round(bandHeight * 0.2)));
+
+    return {
+      visualLineIndex: index,
+      transcriptText,
+      transcriptLineIndex: index,
+      bbox: [left, y1, right, y2],
+      baseline: [
+        [left, baselineY],
+        [right, baselineY],
+      ],
+    };
+  });
 }

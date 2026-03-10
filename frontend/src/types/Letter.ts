@@ -134,6 +134,31 @@ export interface OcrWordBox {
   hasContent?: boolean;
 }
 
+export interface ReconciledLine {
+  line: number;
+  bbox: [number, number, number, number];
+  baseline: number[][];
+  boundary?: { x: number; y: number }[];
+  sourceSegmentIds: number[];
+  wasMerged: boolean;
+  wasExtended: boolean;
+  mergeGapPx?: number;
+  confidence: number;
+  isPhantom: boolean;
+  isPrintedText: boolean;
+  isDeleted: boolean;
+  pixelStats?: BoxPixelStats & {
+    rmsContrast: number;
+    michelson: number;
+  };
+  hppOverlap: number;
+  visionWordCount: number;
+  transcriptLineIndex?: number;
+  transcriptMatchScore?: number;
+  wordCountRatio?: number;
+  adminBboxOverride?: [number, number, number, number];
+}
+
 export interface LetterImage {
   id: string;
   type: LetterImageType;
@@ -142,6 +167,7 @@ export interface LetterImage {
   originalFilename?: string;
   lineSegments?: LineSegment[];
   ocrWordBoxes?: OcrWordBox[];
+  reconciledLines?: ReconciledLine[];
 }
 
 export interface LetterMetadata {

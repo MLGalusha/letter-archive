@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { getErrorMessage } from "../../../api/client";
+import { useToast } from "../../../contexts/ToastContext";
 
 /**
  * Inline editable entity item component
@@ -24,6 +26,7 @@ export default function EditableEntityItem({
   onOpenEntity?: () => void;
   openEntityLabel?: string;
 }) {
+  const { showToast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(name);
   const [isSaving, setIsSaving] = useState(false);
@@ -50,6 +53,7 @@ export default function EditableEntityItem({
     } catch (err) {
       console.error("Failed to save entity name:", err);
       setEditValue(name);
+      showToast(getErrorMessage(err, "Failed to save entity name"), "error");
     } finally {
       setIsSaving(false);
     }
@@ -71,6 +75,7 @@ export default function EditableEntityItem({
       await onRemove();
     } catch (err) {
       console.error("Failed to remove entity:", err);
+      showToast(getErrorMessage(err, "Failed to remove entity"), "error");
     } finally {
       setIsSaving(false);
     }

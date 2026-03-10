@@ -7,6 +7,7 @@
   },
   "scripts": {
     "test": "playwright test",
+    "test:mocked": "playwright test --config=playwright.mocked.config.ts",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
     "report": "playwright show-report"

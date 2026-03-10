@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { getErrorMessage } from "../../api/client";
 import { Button, Icon, Modal } from "../../components/common";
 import { useToast } from "../../contexts/ToastContext";
 import {
@@ -174,8 +175,8 @@ export default function PeoplePage() {
       } else {
         showToast("Candidate profile is no longer available", "info");
       }
-    } catch {
-      showToast("Failed to open candidate profile", "error");
+    } catch (err) {
+      showToast(getErrorMessage(err, "Failed to open candidate profile"), "error");
     }
   }, [persons, showToast]);
 
@@ -189,8 +190,8 @@ export default function PeoplePage() {
       setSelectedRelationships(response.relationships || []);
       setSelectedLetters(response.letters || []);
       setSameNameCandidates(sameNameResponse.candidates || []);
-    } catch {
-      showToast("Failed to load person details", "error");
+    } catch (err) {
+      showToast(getErrorMessage(err, "Failed to load person details"), "error");
     } finally {
       setLoadingRelationships(false);
     }
@@ -398,7 +399,7 @@ export default function PeoplePage() {
         await fetchSelectedPersonDetails(selectedPerson.id);
       }
     } catch (err) {
-      showToast("Failed to remove relationship", "error");
+      showToast(getErrorMessage(err, "Failed to remove relationship"), "error");
     }
   };
 
@@ -499,7 +500,7 @@ export default function PeoplePage() {
       setBiographyStatus(response.person.biographyStatus);
       showToast("Biography unverified", "success");
     } catch (err) {
-      showToast("Failed to unverify biography", "error");
+      showToast(getErrorMessage(err, "Failed to unverify biography"), "error");
     }
   };
 

@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { eq, and, isNotNull } from 'drizzle-orm';
 import { db, letters } from './db/index.js';
 import { processLetter, processMetadata } from './pipeline/processor.js';
-import { createLogger } from './utils/logger.js';
+import { createLogger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 
 const log = createLogger({ module: 'worker' });
 
@@ -126,7 +126,12 @@ function sleep(ms: number): Promise<void> {
  */
 async function main() {
   log.info(
-    { pollInterval: POLL_INTERVAL, batchSize: BATCH_SIZE },
+    {
+      pollInterval: POLL_INTERVAL,
+      batchSize: BATCH_SIZE,
+      logDir: LOG_DIR,
+      logRetentionHours: getLogRetentionHours(),
+    },
     'Background worker starting'
   );
 

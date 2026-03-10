@@ -25,13 +25,58 @@ export class ApiError extends Error {
   status: number;
   data?: unknown;
   requestId?: string;
+  responseMessage: string;
 
-  constructor(status: number, message: string, data?: unknown) {
-    super(message);
+  constructor(status: number, message: string, data?: unknown, requestId?: string) {
+    const resolvedRequestId = requestId ?? (data as { requestId?: string } | undefined)?.requestId;
+    const displayMessage = resolvedRequestId
+      ? `${message} (Request ID: ${resolvedRequestId})`
+      : message;
+    super(displayMessage);
     this.name = 'ApiError';
     this.status = status;
     this.data = data;
-    this.requestId = (data as { requestId?: string })?.requestId;
+    this.requestId = resolvedRequestId;
+    this.responseMessage = message;
+  }
+}
+
+export function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) {
+    return error.message;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+function getRequestIdFromResponse(response: Response, data?: unknown): string | undefined {
+  const bodyRequestId = (data as { requestId?: string } | undefined)?.requestId;
+  return bodyRequestId || response.headers.get('x-request-id') || undefined;
+}
+
+async function parseResponseBody(response: Response): Promise<unknown> {
+  if (response.status === 204) {
+    return undefined;
+  }
+
+  const text = await response.text();
+  if (!text.trim()) {
+    return undefined;
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return JSON.parse(text);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
   }
 }
 
@@ -42,13 +87,21 @@ async function handleResponse<T>(
   startTime: number
 ): Promise<T> {
   const duration = Date.now() - startTime;
+  const data = await parseResponseBody(response);
 
   if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
+    const requestId = getRequestIdFromResponse(response, data);
+    const message = typeof data === 'string'
+      ? data
+      : (data as { error?: string; message?: string } | undefined)?.error
+        || (data as { error?: string; message?: string } | undefined)?.message
+        || response.statusText
+        || 'Request failed';
     const error = new ApiError(
       response.status,
-      (data as { error?: string }).error || response.statusText,
-      data
+      message,
+      data,
+      requestId,
     );
 
     log.error('Request failed', {
@@ -64,7 +117,46 @@ async function handleResponse<T>(
   }
 
   log.debug('Request completed', { method, path, status: response.status, duration });
-  return response.json();
+  return data as T;
+}
+
+async function performRequest<T>(
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+  path: string,
+  input: string,
+  init: RequestInit,
+): Promise<T> {
+  const startTime = Date.now();
+
+  try {
+    const response = await fetch(input, {
+      ...init,
+      credentials: 'include',
+    });
+
+    return handleResponse<T>(response, method, path, startTime);
+  } catch (error) {
+    const duration = Date.now() - startTime;
+
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    const apiError = new ApiError(
+      0,
+      error instanceof Error ? error.message : 'Network request failed',
+      { cause: error instanceof Error ? error.message : String(error) },
+    );
+
+    log.error('Request failed before response', {
+      method,
+      path,
+      duration,
+      error: apiError.message,
+    });
+
+    throw apiError;
+  }
 }
 
 /**
@@ -85,13 +177,7 @@ export async function apiGet<T>(
   }
 
   log.debug('GET request', { path, params });
-  const startTime = Date.now();
-
-  const response = await fetch(url.toString(), {
-    credentials: 'include',
-  });
-
-  return handleResponse<T>(response, 'GET', path, startTime);
+  return performRequest<T>('GET', path, url.toString(), {});
 }
 
 /**
@@ -101,16 +187,11 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const isFormData = body instanceof FormData;
 
   log.debug('POST request', { path, isFormData });
-  const startTime = Date.now();
-
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  return performRequest<T>('POST', path, `${API_BASE_URL}${path}`, {
     method: 'POST',
     headers: isFormData ? {} : { 'Content-Type': 'application/json' },
     body: isFormData ? body : body ? JSON.stringify(body) : undefined,
-    credentials: 'include',
   });
-
-  return handleResponse<T>(response, 'POST', path, startTime);
 }
 
 /**
@@ -118,16 +199,11 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
  */
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   log.debug('PUT request', { path });
-  const startTime = Date.now();
-
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  return performRequest<T>('PUT', path, `${API_BASE_URL}${path}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    credentials: 'include',
   });
-
-  return handleResponse<T>(response, 'PUT', path, startTime);
 }
 
 /**
@@ -135,16 +211,11 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
  */
 export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   log.debug('PATCH request', { path });
-  const startTime = Date.now();
-
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  return performRequest<T>('PATCH', path, `${API_BASE_URL}${path}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    credentials: 'include',
   });
-
-  return handleResponse<T>(response, 'PATCH', path, startTime);
 }
 
 /**
@@ -152,14 +223,9 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
  */
 export async function apiDelete<T>(path: string): Promise<T> {
   log.debug('DELETE request', { path });
-  const startTime = Date.now();
-
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  return performRequest<T>('DELETE', path, `${API_BASE_URL}${path}`, {
     method: 'DELETE',
-    credentials: 'include',
   });
-
-  return handleResponse<T>(response, 'DELETE', path, startTime);
 }
 
 /**

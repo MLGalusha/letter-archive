@@ -7,13 +7,19 @@ import {
   forwardRef,
   useImperativeHandle,
 } from 'react';
-import { getImageUrl } from '../../api/client';
-import { detectPageLines } from '../../api/admin/letters';
-import type { Letter, LineSegment, LineSegmentWord, OcrWordBox } from '../../types/Letter';
+import { getErrorMessage, getImageUrl } from '../../api/client';
+import { detectPageLines, submitLineCorrection } from '../../api/admin/letters';
+import type { LineCorrectionPayload } from '../../api/admin/letters';
+import type { Letter, LineSegmentWord, OcrWordBox, ReconciledLine } from '../../types/Letter';
 import {
   alignTranscriptToVisualLines,
+  buildAlignedLinesFromDetected,
+  buildAlignedLinesFromEstimatedLayout,
+  detectImageLines,
+  type AlignmentInput,
   type AlignedLine,
 } from '../../utils/lineAlignment';
+import { useToast } from '../../contexts/ToastContext';
 import './LineReviewMode.css';
 
 interface LineReviewModeProps {
@@ -348,6 +354,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   debugMode: debugLines = false,
   onDebugModeChange,
 }: LineReviewModeProps, ref) {
+  const { showToast } = useToast();
   // Filter to letter-type pages only
   const letterPages = useMemo(
     () => letter.images.filter((img) => img.type === 'letter'),
@@ -361,10 +368,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   // AI-detected line segments per page (cached across page switches)
   // undefined = not attempted, null = in progress, LineSegment[] = done
-  const [aiSegmentsMap, setAiSegmentsMap] = useState<Record<number, LineSegment[] | null | undefined>>(() => {
-    const initial: Record<number, LineSegment[] | null | undefined> = {};
+  const [aiSegmentsMap, setAiSegmentsMap] = useState<Record<number, AlignmentInput[] | null | undefined>>(() => {
+    const initial: Record<number, AlignmentInput[] | null | undefined> = {};
     letterPages.forEach((page, index) => {
-      if (Array.isArray(page.lineSegments)) {
+      if (Array.isArray(page.reconciledLines) && page.reconciledLines.length > 0) {
+        initial[index] = page.reconciledLines;
+      } else if (Array.isArray(page.lineSegments)) {
         initial[index] = page.lineSegments;
       }
     });
@@ -374,6 +383,10 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   // Debug overlay layer toggles
   const [showKrakenLines, setShowKrakenLines] = useState(true);
   const [showVisionWords, setShowVisionWords] = useState(false);
+  const [showReconciledLines, setShowReconciledLines] = useState(true);
+  const [showMergeCandidates, setShowMergeCandidates] = useState(false);
+  const [showPhantomSuspects, setShowPhantomSuspects] = useState(false);
+  const [showHppPeaks, setShowHppPeaks] = useState(false);
 
   // Vision word boxes per page (cached across page switches)
   // undefined = not attempted, null = in progress, OcrWordBox[] = done
@@ -432,10 +445,10 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (!currentPage) return;
 
     const hasSegments = aiSegmentsMap[currentPageIndex] !== undefined;
-    const hasVision = visionBoxesMap[currentPageIndex] !== undefined;
 
-    // Already have both, or detection is in progress (null)
-    if (hasSegments && hasVision) return;
+    // Stored reconciled/segment data is enough to render reliably without
+    // forcing another backend call on first load.
+    if (hasSegments) return;
     if (aiSegmentsMap[currentPageIndex] === null) return;
 
     const pageText = pageLineTexts[currentPageIndex]?.join('\n') || '';
@@ -449,13 +462,17 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     detectPageLines(pageId)
       .then(result => {
-        setAiSegmentsMap(prev => ({ ...prev, [idx]: result.lineSegments }));
+        const alignedSource = result.reconciledLines?.length
+          ? result.reconciledLines
+          : result.lineSegments;
+        setAiSegmentsMap(prev => ({ ...prev, [idx]: alignedSource }));
         setVisionBoxesMap(prev => ({ ...prev, [idx]: result.ocrWordBoxes ?? [] }));
       })
-      .catch(() => {
+      .catch((err) => {
         setAiSegmentsMap(prev => ({ ...prev, [idx]: [] }));
+        showToast(getErrorMessage(err, 'Line detection failed'), 'error');
       });
-  }, [currentPage, currentPageIndex, aiSegmentsMap, visionBoxesMap, pageLineTexts]);
+  }, [currentPage, currentPageIndex, aiSegmentsMap, pageLineTexts, showToast]);
 
 
   // Background pre-fetch: after current page finishes detecting, start
@@ -471,10 +488,9 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       if (idx === currentPageIndex) continue;
 
       const hasSegments = aiSegmentsMap[idx] !== undefined;
-      const hasVision = visionBoxesMap[idx] !== undefined;
       const inProgress = aiSegmentsMap[idx] === null;
 
-      if (inProgress || (hasSegments && hasVision)) continue;
+      if (inProgress || hasSegments) continue;
 
       const pageText = pageLineTexts[idx]?.join('\n') || '';
       if (!pageText.trim()) continue;
@@ -485,7 +501,10 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
       detectPageLines(page.id)
         .then(result => {
-          setAiSegmentsMap(prev => ({ ...prev, [idx]: result.lineSegments }));
+          const alignedSource = result.reconciledLines?.length
+            ? result.reconciledLines
+            : result.lineSegments;
+          setAiSegmentsMap(prev => ({ ...prev, [idx]: alignedSource }));
           setVisionBoxesMap(prev => ({ ...prev, [idx]: result.ocrWordBoxes ?? [] }));
         })
         .catch(() => {
@@ -499,25 +518,33 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   // Whether we're still waiting for AI detection for the current page
   const isDetecting = aiSegmentsMap[currentPageIndex] === null;
+  const imageReady = imageNaturalSize.width > 0;
 
   // Compute aligned lines for current page
   const alignedLines: AlignedLine[] = useMemo(() => {
     if (!currentPage) return [];
     if (isDetecting) return []; // AI detection in progress — show spinner, no lines yet
-    const pageText = pageLineTexts[currentPageIndex]?.join('\n') || '';
+    const transcriptLines = pageLineTexts[currentPageIndex] ?? [];
+    const pageText = transcriptLines.join('\n');
 
     const aiResult = aiSegmentsMap[currentPageIndex];
-    if (!aiResult || aiResult.length === 0) return [];
+    if (aiResult && aiResult.length > 0) {
+      const lines = alignTranscriptToVisualLines(pageText, aiResult);
+      return lines.filter(l => l.transcriptLineIndex >= 0);
+    }
 
-    const lines = alignTranscriptToVisualLines(pageText, aiResult);
-    // Skip empty lines (extra detected segments with no transcript text)
-    return lines.filter(l => l.transcriptLineIndex >= 0);
-  }, [currentPage, currentPageIndex, pageLineTexts, aiSegmentsMap, isDetecting]);
+    if (!imageReady || !imageRef.current) return [];
+
+    const detectedLines = detectImageLines(imageRef.current);
+    if (detectedLines.length === 0) {
+      return buildAlignedLinesFromEstimatedLayout(transcriptLines, imageNaturalSize);
+    }
+    return buildAlignedLinesFromDetected(transcriptLines, detectedLines);
+  }, [currentPage, currentPageIndex, pageLineTexts, aiSegmentsMap, isDetecting, imageReady]);
   const hasTranscriptLinesOnPage = (pageLineTexts[currentPageIndex]?.length ?? 0) > 0;
 
   // Only expose currentLine when the image for this page has loaded,
   // so overlays never render at positions scaled from a previous page's dimensions
-  const imageReady = imageNaturalSize.width > 0;
   const currentLine = imageReady ? alignedLines[currentLineIndex] : undefined;
   const pageLineCounts = useMemo(
     () => letterPages.map((_page, idx) => {
@@ -553,6 +580,177 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const scaleFactor = imageNaturalSize.width > 0
     ? imageDisplaySize.width / imageNaturalSize.width
     : 1;
+
+  // Extract ReconciledLine[] from the aiSegmentsMap for debug overlays.
+  // Items are ReconciledLine when the reconciliation pipeline ran (they have wasMerged).
+  const reconciledLinesForPage = useMemo<ReconciledLine[]>(() => {
+    const segs = aiSegmentsMap[currentPageIndex];
+    if (!segs || segs.length === 0) return [];
+    // Type guard: ReconciledLine has wasMerged, LineSegment does not
+    if (!('wasMerged' in segs[0])) return [];
+    return segs as ReconciledLine[];
+  }, [aiSegmentsMap, currentPageIndex]);
+
+  // Local mutable copy of reconciled lines for admin corrections
+  const [reconciledLinesMap, setReconciledLinesMap] = useState<Record<number, ReconciledLine[] | null | undefined>>(() => {
+    const initial: Record<number, ReconciledLine[] | null | undefined> = {};
+    letterPages.forEach((page, index) => {
+      if (Array.isArray(page.reconciledLines)) {
+        initial[index] = page.reconciledLines;
+      }
+    });
+    return initial;
+  });
+
+  // Keep reconciledLinesMap in sync when aiSegmentsMap updates (e.g. after detection)
+  useEffect(() => {
+    if (reconciledLinesForPage.length > 0) {
+      setReconciledLinesMap(prev => {
+        if (prev[currentPageIndex] !== undefined) return prev;
+        return { ...prev, [currentPageIndex]: reconciledLinesForPage };
+      });
+    }
+  }, [reconciledLinesForPage, currentPageIndex]);
+
+  const currentReconciledLine = useMemo(() => {
+    const lines = reconciledLinesMap[currentPageIndex] ?? reconciledLinesForPage;
+    return lines[currentLineIndex];
+  }, [reconciledLinesMap, currentPageIndex, reconciledLinesForPage, currentLineIndex]);
+
+  // Drag-to-resize state
+  const [resizing, setResizing] = useState<{
+    side: 'left' | 'right';
+    startX: number;
+    startBbox: [number, number, number, number];
+  } | null>(null);
+
+  // Handle line corrections (delete, phantom confirm/reject, resize)
+  const handleLineCorrection = useCallback(async (
+    lineIndex: number,
+    correctionType: LineCorrectionPayload['correctionType'],
+    correctedBbox?: [number, number, number, number],
+  ) => {
+    const reconciledLines = reconciledLinesMap[currentPageIndex] ?? reconciledLinesForPage;
+    if (!reconciledLines || !reconciledLines[lineIndex]) return;
+
+    const line = reconciledLines[lineIndex];
+    const page = letterPages[currentPageIndex];
+    if (!page) return;
+
+    const allStats = reconciledLines
+      .filter(l => l.pixelStats)
+      .map(l => l.pixelStats!);
+
+    const median = (arr: number[]) => {
+      if (arr.length === 0) return 0;
+      const sorted = [...arr].sort((a, b) => a - b);
+      return sorted[Math.floor(sorted.length / 2)];
+    };
+
+    const payload: LineCorrectionPayload = {
+      letterId: letter.id,
+      collectionCode: letter.collectionCode,
+      correctionType,
+      algorithmOutput: {
+        bbox: line.bbox,
+        confidence: line.confidence,
+        isPhantom: line.isPhantom,
+        wasMerged: line.wasMerged,
+        mergeGapPx: line.mergeGapPx,
+        pixelStats: line.pixelStats ? Object.fromEntries(
+          Object.entries(line.pixelStats).map(([k, v]) => [k, v])
+        ) : undefined,
+        hppOverlap: line.hppOverlap,
+        visionWordCount: line.visionWordCount,
+        transcriptMatchScore: line.transcriptMatchScore,
+      },
+      correctedBbox,
+      correctedIsDeleted: correctionType === 'delete' || correctionType === 'confirm_phantom' ? true
+        : correctionType === 'undelete' || correctionType === 'reject_phantom' ? false
+        : undefined,
+      sourceSegmentIds: line.sourceSegmentIds,
+      pageContext: {
+        medianRmsContrast: median(allStats.map(s => s.rmsContrast)),
+        medianVariance: median(allStats.map(s => s.variance)),
+        medianDensity: median(allStats.map(s => s.inkDensity)),
+        medianMinValue: median(allStats.map(s => s.minValue)),
+        totalSegments: reconciledLines.length,
+        totalVisionBoxes: (visionBoxesMap[currentPageIndex] ?? []).length,
+        imageWidth: imageNaturalSize.width,
+        imageHeight: imageNaturalSize.height,
+      },
+    };
+
+    try {
+      const result = await submitLineCorrection(page.id, payload);
+      setReconciledLinesMap(prev => ({
+        ...prev,
+        [currentPageIndex]: result.reconciledLines,
+      }));
+      setAiSegmentsMap(prev => ({
+        ...prev,
+        [currentPageIndex]: result.reconciledLines,
+      }));
+    } catch (err) {
+      console.error('Failed to submit line correction:', err);
+      showToast(getErrorMessage(err, 'Failed to save line correction'), 'error');
+    }
+  }, [
+    reconciledLinesMap,
+    reconciledLinesForPage,
+    currentPageIndex,
+    letterPages,
+    letter,
+    visionBoxesMap,
+    imageNaturalSize,
+    showToast,
+  ]);
+
+  // Start drag-to-resize on a handle
+  const startResize = useCallback((e: React.MouseEvent, side: 'left' | 'right') => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!currentLine) return;
+    setResizing({ side, startX: e.clientX, startBbox: [...currentLine.bbox] as [number, number, number, number] });
+  }, [currentLine]);
+
+  // Handle resize drag + mouseup
+  useEffect(() => {
+    if (!resizing) return;
+
+    const handleMouseMove = (_e: MouseEvent) => {
+      // Visual feedback handled by CSS cursor; bbox updates on mouseup only
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (!resizing || !currentLine) {
+        setResizing(null);
+        return;
+      }
+
+      const deltaX = (e.clientX - resizing.startX) / scaleFactor;
+      const newBbox = [...resizing.startBbox] as [number, number, number, number];
+
+      if (resizing.side === 'left') {
+        newBbox[0] = Math.max(0, resizing.startBbox[0] + deltaX);
+      } else {
+        newBbox[2] = Math.min(imageNaturalSize.width, resizing.startBbox[2] + deltaX);
+      }
+
+      if (Math.abs(deltaX) > 5) {
+        handleLineCorrection(currentLineIndex, 'resize', newBbox);
+      }
+
+      setResizing(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizing, currentLine, scaleFactor, imageNaturalSize.width, currentLineIndex, handleLineCorrection]);
 
   // Page-global font size: one consistent size derived from OCR word widths across all lines
   const pageFontSize = useMemo(
@@ -605,20 +803,19 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const rawLineIndex = pageNonBlankMap[currentPageIndex]?.[transcriptIdx];
     if (rawLineIndex === undefined) return;
 
-    setPageRawTexts((prev) => {
-      const updated = [...prev];
-      const rawLines = updated[currentPageIndex].split('\n');
-      rawLines[rawLineIndex] = mergeEditedTextWithOriginalSpacing(originalText, newText);
-      updated[currentPageIndex] = rawLines.join('\n');
+    const updated = [...pageRawTexts];
+    const rawLines = updated[currentPageIndex].split('\n');
+    rawLines[rawLineIndex] = mergeEditedTextWithOriginalSpacing(originalText, newText);
+    updated[currentPageIndex] = rawLines.join('\n');
 
-      // Reconstruct and auto-save
-      const fullText = reconstructTranscript(updated);
-      onTranscriptChange(fullText);
-      onAutoSave({ transcriptionText: fullText });
+    setPageRawTexts(updated);
 
-      return updated;
-    });
-  }, [currentPageIndex, currentLineIndex, alignedLines, pageNonBlankMap, onTranscriptChange, onAutoSave]);
+    // Flush parent updates synchronously so exiting review mode does not
+    // discard the line edit before the child unmounts.
+    const fullText = reconstructTranscript(updated);
+    onTranscriptChange(fullText);
+    onAutoSave({ transcriptionText: fullText });
+  }, [currentPageIndex, currentLineIndex, alignedLines, pageNonBlankMap, onTranscriptChange, onAutoSave, pageRawTexts]);
 
   // Navigate to next line
   const goToNextLine = useCallback(() => {
@@ -740,13 +937,17 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     detectPageLines(pageId)
       .then(result => {
-        setAiSegmentsMap(prev => ({ ...prev, [idx]: result.lineSegments }));
+        const alignedSource = result.reconciledLines?.length
+          ? result.reconciledLines
+          : result.lineSegments;
+        setAiSegmentsMap(prev => ({ ...prev, [idx]: alignedSource }));
         setVisionBoxesMap(prev => ({ ...prev, [idx]: result.ocrWordBoxes ?? [] }));
       })
-      .catch(() => {
+      .catch((err) => {
         setAiSegmentsMap(prev => ({ ...prev, [idx]: [] }));
+        showToast(getErrorMessage(err, 'Line detection failed'), 'error');
       });
-  }, [currentPage, currentPageIndex, isDetecting]);
+  }, [currentPage, currentPageIndex, isDetecting, showToast]);
 
   useImperativeHandle(ref, () => ({
     saveCurrentLine,
@@ -873,10 +1074,23 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           </svg>
         )}
 
+        {/* Deleted-line striped overlay (shown on the line region itself) */}
+        {currentLine && currentReconciledLine?.isDeleted && (
+          <div
+            className="line-review-deleted-overlay"
+            style={{
+              top: currentLine.bbox[1] * scaleFactor,
+              left: currentLine.bbox[0] * scaleFactor,
+              width: (currentLine.bbox[2] - currentLine.bbox[0]) * scaleFactor,
+              height: (currentLine.bbox[3] - currentLine.bbox[1]) * scaleFactor,
+            }}
+          />
+        )}
+
         {/* Input overlay — positioned below the clear strip, sized to the line */}
         {currentLine && (
           <div
-            className="line-review-input-overlay"
+            className={`line-review-input-overlay${currentReconciledLine?.isDeleted ? ' line-review-input-deleted' : ''}${currentReconciledLine?.isPhantom && !currentReconciledLine?.isDeleted ? ' line-review-input-phantom' : ''}`}
             style={{
               top: inputTop,
               left: inputLeft,
@@ -884,6 +1098,17 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
               height: INPUT_DISPLAY_HEIGHT,
             }}
           >
+            {/* Left resize handle */}
+            <div
+              className="line-review-resize-handle line-review-resize-left"
+              onMouseDown={(e) => startResize(e, 'left')}
+            />
+            {/* Right resize handle */}
+            <div
+              className="line-review-resize-handle line-review-resize-right"
+              onMouseDown={(e) => startResize(e, 'right')}
+            />
+
             <div
               ref={inputRef}
               contentEditable
@@ -894,6 +1119,40 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                 if (e.key === 'Enter') e.preventDefault();
               }}
             />
+
+            {/* Delete/Restore button */}
+            {currentReconciledLine && (
+              <button
+                className="line-review-delete-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleLineCorrection(
+                    currentLineIndex,
+                    currentReconciledLine.isDeleted ? 'undelete' : 'delete',
+                  );
+                }}
+                title={currentReconciledLine.isDeleted ? 'Restore line' : 'Delete line'}
+              >
+                {currentReconciledLine.isDeleted ? '\u21A9' : '\u00D7'}
+              </button>
+            )}
+
+            {/* Phantom confirm/reject controls */}
+            {currentReconciledLine?.isPhantom && !currentReconciledLine?.isDeleted && (
+              <div className="line-review-phantom-controls">
+                <span className="phantom-label">Phantom?</span>
+                <button
+                  className="phantom-confirm-btn"
+                  onClick={() => handleLineCorrection(currentLineIndex, 'confirm_phantom')}
+                  title="Confirm this is bleed-through"
+                >{'\u2713'}</button>
+                <button
+                  className="phantom-reject-btn"
+                  onClick={() => handleLineCorrection(currentLineIndex, 'reject_phantom')}
+                  title="This is real handwriting"
+                >{'\u2717'}</button>
+              </div>
+            )}
           </div>
         )}
 
@@ -961,6 +1220,131 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           </svg>
         )}
 
+        {/* Debug overlay — Reconciled line boundaries (white dashed outline) */}
+        {debugLines && showReconciledLines && reconciledLinesForPage.length > 0 && imageDisplaySize.width > 0 && (
+          <svg
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: imageDisplaySize.width,
+              height: displayedImageHeight,
+              pointerEvents: 'none',
+              zIndex: 7,
+            }}
+          >
+            {reconciledLinesForPage.filter(l => !l.isDeleted).map((line, i) =>
+              line.boundary && line.boundary.length > 2 ? (
+                <polygon
+                  key={`recon-${i}`}
+                  className="line-review-debug-reconciled"
+                  points={line.boundary
+                    .map(p => `${p.x * scaleFactor},${p.y * scaleFactor}`)
+                    .join(' ')}
+                />
+              ) : (
+                <rect
+                  key={`recon-${i}`}
+                  className="line-review-debug-reconciled"
+                  x={line.bbox[0] * scaleFactor}
+                  y={line.bbox[1] * scaleFactor}
+                  width={(line.bbox[2] - line.bbox[0]) * scaleFactor}
+                  height={(line.bbox[3] - line.bbox[1]) * scaleFactor}
+                />
+              ),
+            )}
+          </svg>
+        )}
+
+        {/* Debug overlay — HPP peaks (cyan horizontal bars at each line's Y-range) */}
+        {debugLines && showHppPeaks && reconciledLinesForPage.length > 0 && imageDisplaySize.width > 0 && (
+          <svg
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: imageDisplaySize.width,
+              height: displayedImageHeight,
+              pointerEvents: 'none',
+              zIndex: 8,
+            }}
+          >
+            {reconciledLinesForPage.filter(l => !l.isPhantom && !l.isDeleted).map((line, i) => (
+              <rect
+                key={`hpp-${i}`}
+                x={0}
+                y={line.bbox[1] * scaleFactor}
+                width={imageDisplaySize.width}
+                height={(line.bbox[3] - line.bbox[1]) * scaleFactor}
+                fill="rgba(0,200,220,0.08)"
+                stroke="rgba(0,200,220,0.3)"
+                strokeWidth="1"
+              />
+            ))}
+          </svg>
+        )}
+
+        {/* Debug overlay — Merge candidates (orange dashed outline on merged lines) */}
+        {debugLines && showMergeCandidates && reconciledLinesForPage.length > 0 && imageDisplaySize.width > 0 && (
+          <svg
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: imageDisplaySize.width,
+              height: displayedImageHeight,
+              pointerEvents: 'none',
+              zIndex: 9,
+            }}
+          >
+            {reconciledLinesForPage
+              .filter(l => l.wasMerged && l.sourceSegmentIds.length > 1)
+              .map((line, i) => (
+                <rect
+                  key={`merge-${i}`}
+                  className="line-review-debug-merge-candidate"
+                  x={line.bbox[0] * scaleFactor}
+                  y={line.bbox[1] * scaleFactor}
+                  width={(line.bbox[2] - line.bbox[0]) * scaleFactor}
+                  height={(line.bbox[3] - line.bbox[1]) * scaleFactor}
+                />
+              ))}
+          </svg>
+        )}
+
+        {/* Debug overlay — Phantom suspects (striped red overlay on phantom-flagged lines) */}
+        {debugLines && showPhantomSuspects && reconciledLinesForPage.length > 0 && imageDisplaySize.width > 0 && (
+          <svg
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: imageDisplaySize.width,
+              height: displayedImageHeight,
+              pointerEvents: 'none',
+              zIndex: 9,
+            }}
+          >
+            <defs>
+              <pattern id="phantom-stripes" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+                <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(220,50,50,0.4)" strokeWidth="3" />
+              </pattern>
+            </defs>
+            {reconciledLinesForPage.filter(l => l.isPhantom).map((line, i) => (
+              <rect
+                key={`phantom-${i}`}
+                x={line.bbox[0] * scaleFactor}
+                y={line.bbox[1] * scaleFactor}
+                width={(line.bbox[2] - line.bbox[0]) * scaleFactor}
+                height={(line.bbox[3] - line.bbox[1]) * scaleFactor}
+                fill="url(#phantom-stripes)"
+                stroke="rgba(220,50,50,0.6)"
+                strokeWidth="1"
+              />
+            ))}
+          </svg>
+        )}
+
         {/* Detecting lines — detection in progress */}
         {isDetecting && imageNaturalSize.width > 0 && (
           <div className="line-review-analyzing">
@@ -1010,6 +1394,34 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           >
             <span className="debug-legend-swatch debug-legend-vision" />
             Vision Words
+          </button>
+          <button
+            className={`debug-legend-toggle${showReconciledLines ? ' debug-legend-toggle-active' : ''}`}
+            onClick={() => setShowReconciledLines(v => !v)}
+          >
+            <span className="debug-legend-swatch debug-legend-reconciled" />
+            Reconciled
+          </button>
+          <button
+            className={`debug-legend-toggle${showMergeCandidates ? ' debug-legend-toggle-active' : ''}`}
+            onClick={() => setShowMergeCandidates(v => !v)}
+          >
+            <span className="debug-legend-swatch debug-legend-merge" />
+            Merged
+          </button>
+          <button
+            className={`debug-legend-toggle${showPhantomSuspects ? ' debug-legend-toggle-active' : ''}`}
+            onClick={() => setShowPhantomSuspects(v => !v)}
+          >
+            <span className="debug-legend-swatch debug-legend-phantom" />
+            Phantom
+          </button>
+          <button
+            className={`debug-legend-toggle${showHppPeaks ? ' debug-legend-toggle-active' : ''}`}
+            onClick={() => setShowHppPeaks(v => !v)}
+          >
+            <span className="debug-legend-swatch debug-legend-hpp" />
+            HPP
           </button>
         </div>
       )}

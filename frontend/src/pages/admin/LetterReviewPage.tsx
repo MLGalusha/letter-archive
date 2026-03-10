@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { getErrorMessage } from "../../api/client";
 import { getAdminLetterById, deleteLetter } from "../../api/letters";
 import {
   updateLetter,
@@ -749,10 +750,11 @@ export default function LetterReviewPage() {
         } catch (err) {
           setAutoSaveStatus("error");
           console.error("Auto-save error:", err);
+          showToast(getErrorMessage(err, "Save failed"), "error");
         }
       }, 1500);
     },
-    [letterId, letter],
+    [letterId, letter, showToast],
   );
 
   // Cleanup timers on unmount
@@ -1167,10 +1169,11 @@ export default function LetterReviewPage() {
         } catch (err) {
           setAutoSaveStatus("error");
           console.error("Extra content auto-save error:", err);
+          showToast(getErrorMessage(err, "Failed to save extra content"), "error");
         }
       }, 1500);
     },
-    [letterId],
+    [letterId, showToast],
   );
 
   // AI notes auto-save
@@ -1194,10 +1197,11 @@ export default function LetterReviewPage() {
         } catch (err) {
           setAutoSaveStatus("error");
           console.error("AI notes auto-save error:", err);
+          showToast(getErrorMessage(err, "Failed to save AI notes"), "error");
         }
       }, 1500);
     },
-    [letterId],
+    [letterId, showToast],
   );
 
   const handleRegenerateEntities = useCallback(async (): Promise<void> => {
@@ -1420,7 +1424,10 @@ export default function LetterReviewPage() {
               const updated = await toggleLetterFlag(letter.id, newFlagged);
               setLetter(updated);
             } catch (err) {
-              showToast(`Failed to ${newFlagged ? 'flag' : 'unflag'} letter`, 'error');
+              showToast(
+                getErrorMessage(err, `Failed to ${newFlagged ? 'flag' : 'unflag'} letter`),
+                'error',
+              );
             }
           }}
           data-tooltip={letter.flagged ? "Unflag" : "Flag for follow-up"}

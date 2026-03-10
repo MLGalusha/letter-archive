@@ -1,4 +1,5 @@
 import type { RefObject } from "react";
+import { getErrorMessage } from "../../../api/client";
 import { Icon, Dropdown, DropdownItem } from "../../../components/common";
 import EditableEntityItem from "./EditableEntityItem";
 import type { Letter, EmotionalTone, RelationshipType } from "../../../types/Letter";
@@ -197,8 +198,10 @@ export default function MetadataSection({
             letter.metadataContentStatus !== "VERIFIED" && (
               <button
                 className={`action-btn sync-btn ${syncState !== "idle" ? syncState : ""} ${syncCountdown !== null && syncState === "idle" ? "has-countdown" : ""}`}
-                onClick={syncCountdown !== null && syncState === "idle" ? onCountdownClick : onAISync}
+                onClick={onAISync}
                 onDoubleClick={syncCountdown !== null && syncState === "idle" ? onCountdownDoubleClick : undefined}
+                onMouseEnter={syncCountdown !== null && syncState === "idle" ? onCountdownClick : undefined}
+                onFocus={syncCountdown !== null && syncState === "idle" ? onCountdownClick : undefined}
                 disabled={
                   saving ||
                   (syncState !== "idle" && syncCountdown === null) ||
@@ -583,7 +586,7 @@ export default function MetadataSection({
                       showToast("Re-extracting entities...", "info");
                       await onRegenerateEntities();
                     } catch (err) {
-                      showToast("Failed to re-extract entities", "error");
+                      showToast(getErrorMessage(err, "Failed to re-extract entities"), "error");
                     }
                   }}
                   title="Re-run entity extraction (Prompt 2)"

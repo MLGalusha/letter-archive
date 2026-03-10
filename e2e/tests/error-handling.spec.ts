@@ -33,8 +33,8 @@ test.describe('Error Handling', () => {
       await loginAsAdmin(page);
 
       // Dashboard should load even with potential API issues
-      const header = page.locator(SELECTORS.dashboard.header);
-      await expect(header).toBeVisible();
+      const dashboard = page.locator(SELECTORS.dashboard.ready);
+      await expect(dashboard).toBeVisible();
     });
   });
 
@@ -177,8 +177,8 @@ test.describe('Error Handling', () => {
       await page.reload();
       await page.waitForLoadState('networkidle');
 
-      const header = page.locator(SELECTORS.dashboard.header);
-      await expect(header).toBeVisible();
+      const dashboard = page.locator(SELECTORS.dashboard.ready);
+      await expect(dashboard).toBeVisible();
     });
 
     test('page remains functional after error', async ({ page }) => {

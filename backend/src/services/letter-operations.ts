@@ -451,6 +451,8 @@ export async function bulkClearTranscriptions(letterIds: string[]): Promise<Bulk
     extractedDate: null,
     extractedDateConfidence: null,
     tags: null,
+    metadataJson: null,
+    metadataV2Json: null,
     // Clear V2 metadata fields
     emotionalTone: null,
     senderRecipientRelationship: null,
@@ -558,6 +560,8 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearR
     tags: null,
     metadataStatus: 'PENDING',
     metadataError: null,
+    metadataJson: null,
+    metadataV2Json: null,
     // Clear V2 metadata fields
     emotionalTone: null,
     senderRecipientRelationship: null,
@@ -658,12 +662,16 @@ export async function buildLetterUpdates(
   // TWO-TRACK STATUS TRANSITIONS (new system)
   // =========================================================================
 
-  // Transcript edit: AI_DRAFT -> EDITED (but not VERIFIED -> EDITED)
+  // Transcript edit: AI_DRAFT/VERIFIED -> EDITED
   if (updates.transcriptionText !== undefined) {
     const currentTranscriptStatus = existingLetter.transcriptStatus;
-    if (currentTranscriptStatus === 'AI_DRAFT') {
+    if (currentTranscriptStatus === 'AI_DRAFT' || currentTranscriptStatus === 'VERIFIED') {
       dbUpdates.transcriptStatus = 'EDITED';
-      log.debug({ letterId }, 'Transcript status: AI_DRAFT -> EDITED');
+      if (currentTranscriptStatus === 'VERIFIED') {
+        dbUpdates.transcriptVerifiedAt = null;
+        dbUpdates.transcriptVerifiedBy = null;
+      }
+      log.debug({ letterId, previousStatus: currentTranscriptStatus }, 'Transcript status -> EDITED');
     }
   }
 
@@ -679,9 +687,13 @@ export async function buildLetterUpdates(
 
   if (hasMetadataUpdate) {
     const currentMetadataStatus = existingLetter.metadataContentStatus;
-    if (currentMetadataStatus === 'AI_DRAFT') {
+    if (currentMetadataStatus === 'AI_DRAFT' || currentMetadataStatus === 'VERIFIED') {
       dbUpdates.metadataContentStatus = 'EDITED';
-      log.debug({ letterId }, 'Metadata status: AI_DRAFT -> EDITED');
+      if (currentMetadataStatus === 'VERIFIED') {
+        dbUpdates.metadataVerifiedAt = null;
+        dbUpdates.metadataVerifiedBy = null;
+      }
+      log.debug({ letterId, previousStatus: currentMetadataStatus }, 'Metadata status -> EDITED');
     }
   }
 
@@ -1004,6 +1016,12 @@ export async function regenerateTranscription(
     throw err;
   }
 
+  if (letter.pages.length === 0) {
+    const err = new Error('Letter has no pages to transcribe') as Error & { status: number };
+    err.status = 400;
+    throw err;
+  }
+
   log.info({ letterId, includeExtras }, 'Starting transcription regeneration');
 
   // Reset transcription-related fields
@@ -1141,6 +1159,13 @@ export async function transcribeLetterOnly(
     throw err;
   }
 
+  const pages = letter.pages;
+  if (pages.length === 0) {
+    const err = new Error('Letter has no pages to transcribe') as Error & { status: number };
+    err.status = 400;
+    throw err;
+  }
+
   log.info({ letterId }, 'Starting letter-only transcription');
 
   // Reset transcription-related fields
@@ -1154,13 +1179,6 @@ export async function transcribeLetterOnly(
     transcriptVerifiedBy: null,
     updatedAt: new Date(),
   }).where(eq(letters.id, letterId));
-
-  const pages = letter.pages;
-  if (pages.length === 0) {
-    const err = new Error('Letter has no pages to transcribe') as Error & { status: number };
-    err.status = 400;
-    throw err;
-  }
 
   const pageTranscriptions: string[] = [];
 
@@ -1257,6 +1275,8 @@ export async function transcribeExtras(letterId: string): Promise<TranscribeExtr
     await db.update(letters).set({
       extraContentStatus: 'EMPTY',
       extraContentTranscript: null,
+      extraContentVerifiedAt: null,
+      extraContentVerifiedBy: null,
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
 
@@ -1346,6 +1366,8 @@ export async function transcribeExtras(letterId: string): Promise<TranscribeExtr
   await db.update(letters).set({
     extraContentTranscript: combinedTranscript || null,
     extraContentStatus: newStatus,
+    extraContentVerifiedAt: null,
+    extraContentVerifiedBy: null,
     updatedAt: new Date(),
   }).where(eq(letters.id, letterId));
 
@@ -1373,19 +1395,45 @@ export async function updateExtraContent(
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
 
-  // Determine new status based on edit
-  let newStatus = existingLetter.extraContentStatus;
-  if (existingLetter.extraContentStatus === 'AI_DRAFT') {
-    newStatus = 'EDITED';
+  const hasContent = Boolean(extraContentTranscript?.trim());
+  const updates: {
+    extraContentTranscript: string | null;
+    extraContentStatus: typeof contentStatusValues[number];
+    extraContentVerifiedAt?: null;
+    extraContentVerifiedBy?: null;
+    updatedAt: Date;
+  } = {
+    extraContentTranscript: hasContent ? extraContentTranscript : null,
+    extraContentStatus: existingLetter.extraContentStatus,
+    updatedAt: new Date(),
+  };
+
+  if (!hasContent) {
+    updates.extraContentStatus = 'EMPTY';
+    updates.extraContentVerifiedAt = null;
+    updates.extraContentVerifiedBy = null;
+  } else if (existingLetter.extraContentStatus === 'VERIFIED') {
+    updates.extraContentStatus = 'EDITED';
+    updates.extraContentVerifiedAt = null;
+    updates.extraContentVerifiedBy = null;
+  } else if (
+    existingLetter.extraContentStatus === 'AI_DRAFT' ||
+    existingLetter.extraContentStatus === 'EMPTY'
+  ) {
+    updates.extraContentStatus = 'EDITED';
   }
 
-  await db.update(letters).set({
-    extraContentTranscript: extraContentTranscript || null,
-    extraContentStatus: newStatus,
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
+  await db.update(letters).set(updates).where(eq(letters.id, letterId));
 
-  log.debug({ letterId, previousStatus: existingLetter.extraContentStatus, newStatus }, 'Extra content updated');
+  log.debug(
+    {
+      letterId,
+      previousStatus: existingLetter.extraContentStatus,
+      newStatus: updates.extraContentStatus,
+      hasContent,
+    },
+    'Extra content updated',
+  );
   return true;
 }
 
@@ -1712,12 +1760,14 @@ export async function resyncCheck(letterId: string, body: ResyncInput): Promise<
   if (!letter) return null;
 
   const { oldSender, newSender, oldRecipient, newRecipient } = body;
+  const resolvedSender = newSender === undefined ? (letter.sender ?? null) : newSender;
+  const resolvedRecipient = newRecipient === undefined ? (letter.recipient ?? null) : newRecipient;
 
   log.debug(
     {
       letterId,
-      sender: newSender || letter.sender,
-      recipient: newRecipient || letter.recipient,
+      sender: resolvedSender,
+      recipient: resolvedRecipient,
     },
     'Metadata audit requested',
   );
@@ -1736,8 +1786,8 @@ export async function resyncCheck(letterId: string, body: ResyncInput): Promise<
 
   // Build full audit context
   const auditContext: MetadataAuditContext = {
-    sender: newSender || letter.sender || null,
-    recipient: newRecipient || letter.recipient || null,
+    sender: resolvedSender,
+    recipient: resolvedRecipient,
     date: letter.extractedDate || null,
     summary: letter.summary || null,
     hook: letter.hook || null,
@@ -1804,12 +1854,14 @@ export async function resyncLetterMetadata(letterId: string, body: ResyncInput):
   if (!letter) return null;
 
   const { oldSender, newSender, oldRecipient, newRecipient } = body;
+  const resolvedSender = newSender === undefined ? (letter.sender ?? null) : newSender;
+  const resolvedRecipient = newRecipient === undefined ? (letter.recipient ?? null) : newRecipient;
 
   log.info(
     {
       letterId,
-      sender: newSender || letter.sender,
-      recipient: newRecipient || letter.recipient,
+      sender: resolvedSender,
+      recipient: resolvedRecipient,
     },
     'Metadata sync requested',
   );
@@ -1830,8 +1882,8 @@ export async function resyncLetterMetadata(letterId: string, body: ResyncInput):
 
   // Build full audit context
   const auditContext: MetadataAuditContext = {
-    sender: newSender || letter.sender || null,
-    recipient: newRecipient || letter.recipient || null,
+    sender: resolvedSender,
+    recipient: resolvedRecipient,
     date: letter.extractedDate || null,
     summary: letter.summary || null,
     hook: letter.hook || null,
@@ -1885,8 +1937,8 @@ export async function resyncLetterMetadata(letterId: string, body: ResyncInput):
     if (result.senderPerson || result.recipientPerson || change) {
       await syncLetterParticipantsFromMetadata({
         letterId,
-        sender: newSender || letter.sender,
-        recipient: newRecipient || letter.recipient,
+        sender: resolvedSender,
+        recipient: resolvedRecipient,
         relationshipType: (dbUpdates.senderRecipientRelationship as DBRelationshipType | null | undefined)
           ?? letter.senderRecipientRelationship,
       });

@@ -752,7 +752,11 @@ export async function removeFromQueue(letterId: string, type: QueueJobType): Pro
     if (letter.transcriptionStatus !== 'PENDING') {
       throw new ProcessingError(`Cannot remove: transcription status is ${letter.transcriptionStatus}`, 400);
     }
-    // Transcription PENDING is the default state, no reset needed beyond confirming it stays
+    await db.update(letters).set({
+      transcriptionStatus: 'FAILED',
+      transcriptionError: 'Removed from queue by admin',
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
   } else if (type === 'metadata') {
     if (letter.metadataStatus !== 'PENDING') {
       throw new ProcessingError(`Cannot remove: metadata status is ${letter.metadataStatus}`, 400);

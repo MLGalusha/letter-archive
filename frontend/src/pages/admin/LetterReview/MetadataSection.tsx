@@ -198,8 +198,10 @@ export default function MetadataSection({
             letter.metadataContentStatus !== "VERIFIED" && (
               <button
                 className={`action-btn sync-btn ${syncState !== "idle" ? syncState : ""} ${syncCountdown !== null && syncState === "idle" ? "has-countdown" : ""}`}
-                onClick={syncCountdown !== null && syncState === "idle" ? onCountdownClick : onAISync}
+                onClick={onAISync}
                 onDoubleClick={syncCountdown !== null && syncState === "idle" ? onCountdownDoubleClick : undefined}
+                onMouseEnter={syncCountdown !== null && syncState === "idle" ? onCountdownClick : undefined}
+                onFocus={syncCountdown !== null && syncState === "idle" ? onCountdownClick : undefined}
                 disabled={
                   saving ||
                   (syncState !== "idle" && syncCountdown === null) ||

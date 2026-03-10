@@ -40,10 +40,12 @@ interface MockLetterReviewLetter {
   transcriptStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
   metadataContentStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
   extraContentStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+  extraContentTranscript?: string;
   createdAt: string;
   updatedAt?: string;
   transcriptVerifiedAt?: string;
   metadataVerifiedAt?: string;
+  extraContentVerifiedAt?: string;
   flagged: boolean;
   linkedPersons?: unknown[];
   linkedPlaces?: unknown[];
@@ -82,6 +84,24 @@ interface MockVersionRequest {
   };
 }
 
+interface MockExtraContentRequest {
+  url: string;
+  body: {
+    extraContent?: string | null;
+    extraContentTranscript?: string | null;
+  };
+}
+
+interface MockResyncRequest {
+  url: string;
+  body: {
+    oldSender?: string | null;
+    newSender?: string | null;
+    oldRecipient?: string | null;
+    newRecipient?: string | null;
+  };
+}
+
 type MockLetterReviewOverrides = Partial<MockLetterReviewLetter> & {
   transcript?: Partial<MockLetterReviewLetter['transcript']>;
   metadata?: Partial<MockLetterReviewLetter['metadata']>;
@@ -89,6 +109,7 @@ type MockLetterReviewOverrides = Partial<MockLetterReviewLetter> & {
 
 const TRANSCRIPT_VERIFIED_AT = '2025-03-01T00:00:00.000Z';
 const METADATA_VERIFIED_AT = '2025-03-02T00:00:00.000Z';
+const EXTRA_CONTENT_VERIFIED_AT = '2025-03-03T00:00:00.000Z';
 const COLLECTION_009_ROOT = path.resolve(
   process.cwd(),
   '../backend/storage/collections/009',
@@ -294,6 +315,11 @@ export interface MockLetterReviewContext {
   unverifyTranscriptRequests: string[];
   verifyMetadataRequests: string[];
   unverifyMetadataRequests: string[];
+  updateExtraContentRequests: MockExtraContentRequest[];
+  verifyExtraContentRequests: string[];
+  unverifyExtraContentRequests: string[];
+  resyncCheckRequests: MockResyncRequest[];
+  resyncRequests: MockResyncRequest[];
   flagRequests: Array<{ url: string; body: unknown }>;
   detectLineRequests: string[];
   lineCorrectionRequests: MockLineCorrectionRequest[];
@@ -320,6 +346,11 @@ export async function installMockLetterReviewApi(
   const unverifyTranscriptRequests: string[] = [];
   const verifyMetadataRequests: string[] = [];
   const unverifyMetadataRequests: string[] = [];
+  const updateExtraContentRequests: MockExtraContentRequest[] = [];
+  const verifyExtraContentRequests: string[] = [];
+  const unverifyExtraContentRequests: string[] = [];
+  const resyncCheckRequests: MockResyncRequest[] = [];
+  const resyncRequests: MockResyncRequest[] = [];
   const flagRequests: Array<{ url: string; body: unknown }> = [];
   const detectLineRequests: string[] = [];
   const lineCorrectionRequests: MockLineCorrectionRequest[] = [];
@@ -467,6 +498,133 @@ export async function installMockLetterReviewApi(
     });
   });
 
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/extra-content$`), async (route) => {
+    const body = route.request().postDataJSON() as MockExtraContentRequest['body'];
+    updateExtraContentRequests.push({ url: route.request().url(), body });
+
+    const nextExtraContent =
+      body.extraContent !== undefined
+        ? body.extraContent
+        : (body.extraContentTranscript ?? '');
+
+    if (!nextExtraContent?.trim()) {
+      delete letter.extraContentTranscript;
+      letter.extraContentStatus = 'EMPTY';
+      delete letter.extraContentVerifiedAt;
+    } else {
+      letter.extraContentTranscript = nextExtraContent;
+      if (
+        letter.extraContentStatus === 'EMPTY' ||
+        letter.extraContentStatus === 'AI_DRAFT' ||
+        letter.extraContentStatus === 'VERIFIED'
+      ) {
+        letter.extraContentStatus = 'EDITED';
+        delete letter.extraContentVerifiedAt;
+      }
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(letter),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/verify-extra-content$`), async (route) => {
+    verifyExtraContentRequests.push(route.request().url());
+    letter.extraContentStatus = 'VERIFIED';
+    letter.extraContentVerifiedAt = EXTRA_CONTENT_VERIFIED_AT;
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(letter),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/unverify-extra-content$`), async (route) => {
+    unverifyExtraContentRequests.push(route.request().url());
+    letter.extraContentStatus = 'EDITED';
+    delete letter.extraContentVerifiedAt;
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(letter),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/resync-check$`), async (route) => {
+    const body = route.request().postDataJSON() as MockResyncRequest['body'];
+    resyncCheckRequests.push({ url: route.request().url(), body });
+
+    const needsResync =
+      body.oldSender !== body.newSender || body.oldRecipient !== body.newRecipient;
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        needsResync,
+        decision: {
+          shouldUpdateSummary: needsResync,
+          shouldUpdateHook: needsResync,
+          shouldCreateSenderPerson: Boolean(needsResync && body.newSender && body.oldSender !== body.newSender),
+          shouldCreateRecipientPerson: Boolean(
+            needsResync && body.newRecipient && body.oldRecipient !== body.newRecipient,
+          ),
+          shouldUpdateRelationship: false,
+          shouldUpdateQuoteContexts: false,
+          issues: needsResync ? ['Identity fields changed'] : [],
+          reason: needsResync ? 'Identity changed' : 'Already in sync',
+        },
+      }),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/resync$`), async (route) => {
+    const body = route.request().postDataJSON() as MockResyncRequest['body'];
+    resyncRequests.push({ url: route.request().url(), body });
+
+    letter.metadata.sender = body.newSender ?? undefined;
+    letter.metadata.recipient = body.newRecipient ?? undefined;
+    letter.metadata.description = body.newRecipient
+      ? `${body.newSender ?? 'Unknown sender'} metadata synced for ${body.newRecipient}.`
+      : `${body.newSender ?? 'Unknown sender'} metadata synced for the review record.`;
+    letter.metadata.hook = body.newSender
+      ? `Synced metadata for ${body.newSender}.`
+      : 'Synced metadata.';
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        letter,
+        resync: {
+          wasUpdated: true,
+          updatedFields: {
+            summary: true,
+            hook: true,
+            senderPerson: Boolean(body.newSender && body.oldSender !== body.newSender),
+            recipientPerson: Boolean(body.newRecipient && body.oldRecipient !== body.newRecipient),
+            relationshipType: false,
+            quoteContexts: false,
+          },
+          decision: {
+            shouldUpdateSummary: true,
+            shouldUpdateHook: true,
+            shouldCreateSenderPerson: Boolean(body.newSender && body.oldSender !== body.newSender),
+            shouldCreateRecipientPerson: Boolean(body.newRecipient && body.oldRecipient !== body.newRecipient),
+            shouldUpdateRelationship: false,
+            shouldUpdateQuoteContexts: false,
+            issues: ['Identity fields changed'],
+            reason: 'Identity changed',
+          },
+        },
+      }),
+    });
+  });
+
   await page.route(new RegExp(`${escapeRegex(letterPath)}/flag$`), async (route) => {
     const body = route.request().postDataJSON() as { flagged?: boolean };
     flagRequests.push({ url: route.request().url(), body });
@@ -551,6 +709,11 @@ export async function installMockLetterReviewApi(
     unverifyTranscriptRequests,
     verifyMetadataRequests,
     unverifyMetadataRequests,
+    updateExtraContentRequests,
+    verifyExtraContentRequests,
+    unverifyExtraContentRequests,
+    resyncCheckRequests,
+    resyncRequests,
     flagRequests,
     detectLineRequests,
     lineCorrectionRequests,

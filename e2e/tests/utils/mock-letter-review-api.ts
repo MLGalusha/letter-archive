@@ -367,6 +367,8 @@ export async function installMockLetterReviewApi(
     >;
     routeFailures?: Partial<
       Record<
+        | 'loadLetter'
+        | 'updateLetter'
         | 'verifyTranscript'
         | 'verifyMetadata'
         | 'extraContent'
@@ -454,6 +456,10 @@ export async function installMockLetterReviewApi(
     if (route.request().method() === 'PUT') {
       const body = route.request().postDataJSON() as MockUpdateLetterRequest['body'];
       updateLetterRequests.push({ url: route.request().url(), body });
+      if (routeFailures.updateLetter) {
+        await fulfillFailure(route, routeFailures.updateLetter);
+        return;
+      }
 
       const transcriptPageCount = Math.max(letter.transcript.pages.length, 1);
 
@@ -516,6 +522,11 @@ export async function installMockLetterReviewApi(
         contentType: 'application/json',
         body: JSON.stringify(letter),
       });
+      return;
+    }
+
+    if (routeFailures.loadLetter) {
+      await fulfillFailure(route, routeFailures.loadLetter);
       return;
     }
 

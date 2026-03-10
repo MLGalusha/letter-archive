@@ -56,6 +56,26 @@ function createMockLetterWithExtras(
 }
 
 test.describe('@mocked Letter Review', () => {
+  test('shows the request id when the review page fails to load', async ({ page }) => {
+    const initialLetter = createMockLetterReviewLetter();
+    await installMockLetterReviewApi(page, {
+      initialLetter,
+      routeFailures: {
+        loadLetter: {
+          status: 503,
+          error: 'Review record unavailable',
+          requestId: 'req-review-load-503',
+        },
+      },
+    });
+
+    await page.goto(`/admin/letters/${initialLetter.id}`);
+
+    await expect(page.locator('.review-content.loading-content')).toContainText(
+      'Review record unavailable (Request ID: req-review-load-503)',
+    );
+  });
+
   test('renders the review page with frozen collection 009 images', async ({
     page,
   }) => {

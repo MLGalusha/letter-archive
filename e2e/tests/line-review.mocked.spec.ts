@@ -360,4 +360,42 @@ test.describe('@mocked Line Review', () => {
       .poll(() => mockedApi.lineCorrectionRequests.length)
       .toBe(1);
   });
+
+  test('shows the request id when transcript auto-save fails on exit', async ({
+    page,
+  }) => {
+    const mockedApi = await openLineReview(page, createMockLetterReviewLetter(), {
+      routeFailures: {
+        updateLetter: {
+          status: 503,
+          error: 'Transcript save failed',
+          requestId: 'req-transcript-save-503',
+        },
+      },
+    });
+
+    const editable = page.locator('.line-review-editable');
+    await editable.click();
+    await editable.evaluate((node, value) => {
+      node.textContent = value;
+      node.dispatchEvent(
+        new InputEvent('input', {
+          bubbles: true,
+          inputType: 'insertText',
+          data: value,
+        }),
+      );
+    }, 'My dearest mother,');
+
+    await page.locator('.header-action.review').click();
+
+    await expect(page.locator('.toast')).toContainText(
+      'Transcript save failed (Request ID: req-transcript-save-503)',
+    );
+    await expect(page.locator('.save-status.error')).toContainText('Save failed');
+    await expect
+      .poll(() => mockedApi.updateLetterRequests.length)
+      .toBe(1);
+    expect(mockedApi.versionRequests).toHaveLength(0);
+  });
 });

@@ -242,6 +242,33 @@ test.describe('@mocked Letter Review', () => {
     await expect(extraSection.locator('.verified-info')).toHaveCount(0);
   });
 
+  test('shows the request id when extra content auto-save fails', async ({ page }) => {
+    const initialLetter = createMockLetterWithExtras({
+      extraContentStatus: 'EDITED',
+    });
+    const mockedApi = await openMockLetterReviewWithOptions(page, initialLetter, {
+      routeFailures: {
+        extraContent: {
+          status: 503,
+          error: 'Extra content save failed',
+          requestId: 'req-extra-save-503',
+        },
+      },
+    });
+
+    const extraSection = page.locator('.extra-content-section');
+    const editor = extraSection.locator('[contenteditable="true"]').first();
+    await editor.fill('Cover note that fails to save.');
+
+    await expect
+      .poll(() => mockedApi.updateExtraContentRequests.length)
+      .toBe(1);
+    await expect(page.locator('.toast')).toContainText(
+      'Extra content save failed (Request ID: req-extra-save-503)',
+    );
+    await expect(page.locator('.save-status.error')).toContainText('Save failed');
+  });
+
   test('runs AI sync immediately from the countdown state', async ({ page }) => {
     const mockedApi = await openMockLetterReview(page);
 

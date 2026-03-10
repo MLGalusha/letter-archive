@@ -2,8 +2,22 @@ import type { ErrorRequestHandler } from 'express';
 import { ZodError } from 'zod';
 import { logger } from '../utils/logger.js';
 
-function isErrorWithStatusCode(err: unknown): err is { statusCode: number; name?: string; message?: string } {
-  return typeof err === 'object' && err !== null && 'statusCode' in err && typeof err.statusCode === 'number';
+function getExplicitStatus(err: unknown): number | null {
+  if (typeof err !== 'object' || err === null) {
+    return null;
+  }
+
+  const statusCode = 'statusCode' in err ? (err as { statusCode?: unknown }).statusCode : undefined;
+  if (typeof statusCode === 'number') {
+    return statusCode;
+  }
+
+  const status = 'status' in err ? (err as { status?: unknown }).status : undefined;
+  if (typeof status === 'number') {
+    return status;
+  }
+
+  return null;
 }
 
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
@@ -24,19 +38,22 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
     statusCode = 400;
     errorType = 'validation_error';
     userMessage = 'Validation error';
-  } else if (isErrorWithStatusCode(err)) {
-    // Support typed errors like ProcessingError that carry their own status code
-    statusCode = err.statusCode;
-    errorType = err.name || 'application_error';
-    userMessage = err.message || userMessage;
-  } else if (errorMessage.includes('Invalid filename')) {
-    statusCode = 400;
-    errorType = 'invalid_filename';
-    userMessage = errorMessage;
-  } else if (errorMessage.includes('not found')) {
-    statusCode = 404;
-    errorType = 'not_found';
-    userMessage = errorMessage;
+  } else {
+    const explicitStatus = getExplicitStatus(err);
+    if (explicitStatus !== null) {
+      // Support typed errors that carry either statusCode or Express-style status
+      statusCode = explicitStatus;
+      errorType = (err as { name?: string }).name || 'application_error';
+      userMessage = (err as { message?: string }).message || userMessage;
+    } else if (errorMessage.includes('Invalid filename')) {
+      statusCode = 400;
+      errorType = 'invalid_filename';
+      userMessage = errorMessage;
+    } else if (errorMessage.includes('not found')) {
+      statusCode = 404;
+      errorType = 'not_found';
+      userMessage = errorMessage;
+    }
   }
 
   if (requestId) {

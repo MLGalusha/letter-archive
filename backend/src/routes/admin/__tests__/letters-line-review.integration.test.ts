@@ -19,6 +19,8 @@ const {
   unverifyTranscriptMock,
   verifyMetadataMock,
   unverifyMetadataMock,
+  regenerateTranscriptionMock,
+  transcribeLetterOnlyMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   dbInsertMock: vi.fn(),
@@ -37,6 +39,8 @@ const {
   unverifyTranscriptMock: vi.fn(),
   verifyMetadataMock: vi.fn(),
   unverifyMetadataMock: vi.fn(),
+  regenerateTranscriptionMock: vi.fn(),
+  transcribeLetterOnlyMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -142,8 +146,8 @@ vi.mock('../../../services/letter-operations.js', () => ({
   unverifyTranscript: unverifyTranscriptMock,
   verifyMetadata: verifyMetadataMock,
   unverifyMetadata: unverifyMetadataMock,
-  regenerateTranscription: vi.fn(),
-  transcribeLetterOnly: vi.fn(),
+  regenerateTranscription: regenerateTranscriptionMock,
+  transcribeLetterOnly: transcribeLetterOnlyMock,
   transcribeExtras: vi.fn(),
   updateExtraContent: vi.fn(),
   verifyExtraContent: vi.fn(),
@@ -497,6 +501,56 @@ describe('admin letters line review route integration', () => {
       fieldType: 'transcript',
       source: 'human',
     });
+  });
+
+  it('passes includeExtras through regeneration and returns the refreshed letter DTO', async () => {
+    regenerateTranscriptionMock.mockResolvedValueOnce({
+      mainTranscript: true,
+      extras: true,
+      extrasCount: 2,
+    });
+    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(createLetterDto());
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/regenerate-transcription?includeExtras=true`,
+      path: `/letters/${LETTER_ID}/regenerate-transcription`,
+      query: { includeExtras: 'true' },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(regenerateTranscriptionMock).toHaveBeenCalledWith(LETTER_ID, true);
+    expect(response.body).toEqual({
+      letter: createLetterDto(),
+      regenerated: {
+        mainTranscript: true,
+        extras: true,
+        extrasCount: 2,
+      },
+    });
+  });
+
+  it('returns a request-correlated 400 when transcribe-letter hits a typed status error', async () => {
+    transcribeLetterOnlyMock.mockRejectedValueOnce(
+      Object.assign(new Error('Letter has no pages to transcribe'), { status: 400 }),
+    );
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/transcribe-letter`,
+      path: `/letters/${LETTER_ID}/transcribe-letter`,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toEqual({
+      error: 'Letter has no pages to transcribe',
+      requestId: expect.any(String),
+    });
+    expect(response.headers['x-request-id']).toBe(
+      (response.body as { requestId: string }).requestId,
+    );
   });
 
   it.each([

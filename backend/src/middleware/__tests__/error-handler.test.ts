@@ -72,6 +72,27 @@ describe('errorHandler', () => {
     expect(log.warn).toHaveBeenCalled();
   });
 
+  it('honors express-style status properties on thrown errors', () => {
+    const req = createReq();
+    const res = createRes();
+
+    errorHandler(
+      Object.assign(new Error('Bad request'), { status: 400 }),
+      req,
+      res,
+      vi.fn(),
+    );
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: 'Bad request',
+        requestId: 'req-123',
+      }),
+    );
+    expect(log.warn).toHaveBeenCalled();
+  });
+
   it('handles non-Error thrown values without crashing', () => {
     const req = createReq();
     const res = createRes();

@@ -353,6 +353,64 @@ function buildWordPositionedContent(
   div.textContent = joined;
 }
 
+/**
+ * Find the Vision word that best represents a Kraken segment at a merge
+ * junction. Uses the word's connecting-side edge to measure both:
+ *   - vertical coverage: how much of the segment's height the word spans
+ *   - proximity: how close the word's edge is to the segment's edge
+ *
+ * @param side 'right' = merge at segment's right edge (use word's right edge)
+ *             'left'  = merge at segment's left edge (use word's left edge)
+ */
+function findLargestEdgeWord(
+  segBbox: [number, number, number, number],
+  side: 'left' | 'right',
+  segmentWords: OcrWordBox[],
+  allWords: OcrWordBox[],
+): OcrWordBox | null {
+  const segH = segBbox[3] - segBbox[1];
+  const segW = segBbox[2] - segBbox[0];
+  const edgeX = side === 'right' ? segBbox[2] : segBbox[0];
+
+  function pickBest(words: OcrWordBox[]): OcrWordBox | null {
+    let best: OcrWordBox | null = null;
+    let bestScore = -Infinity;
+
+    for (const w of words) {
+      // Must overlap vertically with the segment
+      const vTop = Math.max(w.bbox[1], segBbox[1]);
+      const vBot = Math.min(w.bbox[3], segBbox[3]);
+      if (vBot <= vTop) continue;
+
+      // Must overlap horizontally with the segment
+      if (w.bbox[2] <= segBbox[0] || w.bbox[0] >= segBbox[2]) continue;
+
+      // Vertical coverage: how much of the segment's height this word spans (0–1)
+      const vCoverage = (vBot - vTop) / Math.max(segH, 1);
+
+      // Proximity: how close the word's connecting edge is to the
+      // segment's connecting edge. Uses sharp decay (normalized by
+      // segment height) so near-perfect alignment gets a huge boost.
+      const wordEdge = side === 'left' ? w.bbox[0] : w.bbox[2];
+      const edgeDist = Math.abs(wordEdge - edgeX);
+      const proximity = 1 / (1 + edgeDist / Math.max(segH * 0.5, 1));
+
+      // Combined: proximity weighted 2× — a word whose edge nearly
+      // aligns with the segment edge wins even if it's shorter.
+      const score = vCoverage + proximity * 2;
+      if (score > bestScore) {
+        bestScore = score;
+        best = w;
+      }
+    }
+
+    return best;
+  }
+
+  // Prefer assigned words, fallback to global pool
+  return pickBest(segmentWords) ?? pickBest(allWords);
+}
+
 const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(function LineReviewMode({
   letter,
   transcript,
@@ -931,6 +989,15 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     return `${sx1},${sy1} ${sx2},${sy1} ${sx2},${sy2} ${sx1},${sy2}`;
   }, [currentLine, scaleFactor]);
 
+  // Flat list of ALL Vision words for fallback junction rendering
+  const allVisionWords = useMemo(() => {
+    if (!pipelineResult) return [];
+    return [
+      ...pipelineResult.enriched.flatMap((s) => s.visionWords),
+      ...(pipelineResult.unassigned ?? []),
+    ];
+  }, [pipelineResult]);
+
   return (
     <div className="line-review-mode" ref={containerRef}>
       <div
@@ -1219,24 +1286,45 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                   );
                 }),
               )}
-            {/* Vision junction debug: show the two Vision word boxes being compared
-                at each merge junction, with cyan connecting lines top-top / bottom-bottom */}
+            {/* Vision junction debug: show the Vision word boxes being compared
+                at each merge junction. Each Kraken segment maps to a Vision word:
+                assigned word if available, otherwise nearest word from global pool.
+                Spanning words that bridge the gap show as a single box. */}
             {pipelineResult?.groupedLines
               .filter((gl) => gl.merged && gl.constituents.length > 1)
               .flatMap((gl, gi) =>
                 gl.constituents.slice(0, -1).map((seg, si) => {
                   const next = gl.constituents[si + 1];
-                  const leftWord = seg.visionWords.length > 0
-                    ? seg.visionWords[seg.visionWords.length - 1]
-                    : null;
-                  const rightWord = next.visionWords.length > 0
-                    ? next.visionWords[0]
-                    : null;
-                  if (!leftWord && !rightWord) return null;
                   const s = scaleFactor;
+
+                  // Check for a spanning word that bridges the gap
+                  const gapStart = seg.bbox[2];
+                  const gapEnd = next.bbox[0];
+                  const juncWords = [...seg.visionWords, ...next.visionWords];
+                  const spanWord = juncWords.find(
+                    (w) => w.bbox[0] <= gapStart && w.bbox[2] >= gapEnd,
+                  );
+                  if (spanWord) {
+                    return (
+                      <g key={`vjunc-${gi}-${si}`}>
+                        <rect
+                          className="line-review-debug-vision-junction"
+                          x={spanWord.bbox[0] * s}
+                          y={spanWord.bbox[1] * s}
+                          width={(spanWord.bbox[2] - spanWord.bbox[0]) * s}
+                          height={(spanWord.bbox[3] - spanWord.bbox[1]) * s}
+                        />
+                      </g>
+                    );
+                  }
+
+                  // Each Kraken segment picks the largest Vision word on its merge side
+                  const leftWord = findLargestEdgeWord(seg.bbox, 'right', seg.visionWords, allVisionWords);
+                  const rightWord = findLargestEdgeWord(next.bbox, 'left', next.visionWords, allVisionWords);
+                  if (!leftWord && !rightWord) return null;
+
                   return (
                     <g key={`vjunc-${gi}-${si}`}>
-                      {/* Left word box (rightmost word of left segment) */}
                       {leftWord && (
                         <rect
                           className="line-review-debug-vision-junction"
@@ -1246,7 +1334,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                           height={(leftWord.bbox[3] - leftWord.bbox[1]) * s}
                         />
                       )}
-                      {/* Right word box (leftmost word of right segment) */}
                       {rightWord && (
                         <rect
                           className="line-review-debug-vision-junction"
@@ -1272,20 +1359,19 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                 }).filter(Boolean),
               )}
             {/* Vision-rejected merges: Kraken wanted these but Vision said no.
-                Show with red boxes + red connectors so you can see what was rejected. */}
+                Show with red boxes + red connectors so you can see what was rejected.
+                Each Kraken segment maps to a Vision word (assigned or nearest fallback). */}
             {(pipelineResult?.visionRejections ?? []).map((rej, ri) => {
               const s = scaleFactor;
-              const leftWord = rej.left.visionWords.length > 0
-                ? rej.left.visionWords[rej.left.visionWords.length - 1]
-                : null;
-              const rightWord = rej.right.visionWords.length > 0
-                ? rej.right.visionWords[0]
-                : null;
-              // Also draw Kraken connectors (orange dashed) so you can see what Kraken wanted
+              // Each Kraken segment picks the largest Vision word on its merge side
+              const leftWord = findLargestEdgeWord(rej.left.bbox, 'right', rej.left.visionWords, allVisionWords);
+              const rightWord = findLargestEdgeWord(rej.right.bbox, 'left', rej.right.visionWords, allVisionWords);
+              // Kraken edge coords for orange connectors
               const segEast = eastEdgeY(rej.left);
               const nextWest = westEdgeY(rej.right);
               const rx = rej.left.bbox[2] * s;
               const lx = rej.right.bbox[0] * s;
+
               return (
                 <g key={`vrej-${ri}`}>
                   {/* Kraken's intended merge (orange dashed) */}
@@ -1295,7 +1381,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                   <line className="line-review-debug-connector"
                     x1={rx} y1={segEast[1] * s}
                     x2={lx} y2={nextWest[1] * s} />
-                  {/* Vision boxes that caused the rejection (red) */}
+                  {/* Vision boxes for each Kraken segment */}
                   {leftWord && (
                     <rect className="line-review-debug-vision-rejected"
                       x={leftWord.bbox[0] * s} y={leftWord.bbox[1] * s}

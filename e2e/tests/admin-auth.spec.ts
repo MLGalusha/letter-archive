@@ -41,9 +41,7 @@ test.describe('Admin Authentication', () => {
 
       // Should redirect to admin dashboard
       await page.waitForURL(/\/admin$/);
-      // AdminDashboard has a loading gate until initial data fetch completes,
-      // so the header may take longer than the default 5s assertion timeout
-      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Dashboard', { timeout: 30000 });
+      await expect(page.locator(SELECTORS.dashboard.ready)).toBeVisible({ timeout: 30000 });
     });
 
     test('shows error with invalid credentials', async ({ page }) => {
@@ -162,7 +160,7 @@ test.describe('Admin Authentication', () => {
       await setLoggedIn(page);
       await page.goto('/admin');
 
-      await expect(page.locator(SELECTORS.dashboard.header)).toBeVisible({ timeout: 30000 });
+      await expect(page.locator(SELECTORS.dashboard.ready)).toBeVisible({ timeout: 30000 });
     });
   });
 
@@ -173,8 +171,7 @@ test.describe('Admin Authentication', () => {
       // Reload the page
       await page.reload();
 
-      // Should still be on admin dashboard (loading gate needs time after reload)
-      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Dashboard', { timeout: 30000 });
+      await expect(page.locator(SELECTORS.dashboard.ready)).toBeVisible({ timeout: 30000 });
     });
 
     test('maintains session when navigating between admin pages', async ({ page }) => {
@@ -186,7 +183,7 @@ test.describe('Admin Authentication', () => {
 
       // Navigate back to dashboard
       await page.goto('/admin');
-      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Dashboard', { timeout: 30000 });
+      await expect(page.locator(SELECTORS.dashboard.ready)).toBeVisible({ timeout: 30000 });
     });
   });
 

@@ -8,6 +8,13 @@ import { Page, expect } from '@playwright/test';
 export const ADMIN_EMAIL = 'admin@letterarchive.com';
 export const ADMIN_PASSWORD = 'admin123';
 export const API_BASE_URL = process.env.E2E_API_BASE_URL || 'http://localhost:3002';
+const DASHBOARD_SHELL_SELECTOR = '.admin-header';
+const DASHBOARD_READY_SELECTOR = 'table.letters-table';
+
+export async function waitForAdminDashboardReady(page: Page): Promise<void> {
+  await page.locator(DASHBOARD_SHELL_SELECTOR).waitFor({ state: 'visible', timeout: 30000 });
+  await page.locator(DASHBOARD_READY_SELECTOR).waitFor({ state: 'visible', timeout: 30000 });
+}
 
 /**
  * Login as admin user
@@ -16,8 +23,8 @@ export const API_BASE_URL = process.env.E2E_API_BASE_URL || 'http://localhost:30
  * triggers React's useEffect auth redirect, but waitForLoadState('networkidle')
  * can resolve before the redirect fires, causing the helper to exit without logging in.
  *
- * After login, waits for .admin-header to confirm the dashboard fully rendered
- * (AdminDashboard has a loading gate until the initial data fetch completes).
+ * After login, waits for the dashboard shell and table to confirm the initial
+ * data load completed.
  */
 export async function loginAsAdmin(page: Page): Promise<void> {
   // Use networkidle to ensure Vite has finished serving all JS modules
@@ -29,9 +36,7 @@ export async function loginAsAdmin(page: Page): Promise<void> {
   await page.click('button[type="submit"]');
 
   await page.waitForURL(/\/admin$/);
-  // AdminDashboard has a loading gate until initial data fetch completes.
-  // In CI, cold Vite + API call can take 15-20s on the first test.
-  await page.locator('.admin-header').waitFor({ state: 'visible', timeout: 30000 });
+  await waitForAdminDashboardReady(page);
 }
 
 /**
@@ -50,8 +55,7 @@ export async function logoutAdmin(page: Page): Promise<void> {
  * Returns false if no letters exist (empty database).
  */
 export async function navigateToFirstLetter(page: Page): Promise<boolean> {
-  // Wait for dashboard to fully render (past the loading gate)
-  await page.locator('.admin-header').waitFor({ state: 'visible', timeout: 30000 });
+  await waitForAdminDashboardReady(page);
 
   const firstRow = page.locator('table tbody tr').first();
   const hasRow = await firstRow
@@ -188,7 +192,8 @@ export const SELECTORS = {
   dashboard: {
     table: 'table.letters-table',
     tableRow: 'table tbody tr',
-    header: '.admin-header h1',
+    shell: DASHBOARD_SHELL_SELECTOR,
+    ready: DASHBOARD_READY_SELECTOR,
     uploadBtn: 'aside .nav-item:has-text("Upload")',
     editBtn: '.toolbar-buttons button:has-text("Edit")',
     processBtn: 'button:has-text("Process")',

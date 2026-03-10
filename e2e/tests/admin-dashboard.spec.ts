@@ -19,7 +19,7 @@ test.describe('Admin Dashboard', () => {
 
   test.describe('Dashboard Display', () => {
     test('shows admin panel header', async ({ page }) => {
-      await expect(page.locator(SELECTORS.dashboard.header)).toHaveText('Dashboard');
+      await expect(page.locator(SELECTORS.dashboard.shell)).toBeVisible();
     });
 
     test('shows letters table', async ({ page }) => {

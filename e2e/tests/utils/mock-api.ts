@@ -192,7 +192,18 @@ export interface MockAdminDashboardContext {
   flagRequests: Array<{ url: string; body: unknown }>;
 }
 
-export async function installMockAdminDashboardApi(page: Page): Promise<MockAdminDashboardContext> {
+interface MockAdminDashboardOptions {
+  flagError?: {
+    message: string;
+    requestId?: string;
+    status?: number;
+  };
+}
+
+export async function installMockAdminDashboardApi(
+  page: Page,
+  options: MockAdminDashboardOptions = {},
+): Promise<MockAdminDashboardContext> {
   const letters = cloneLetters(baseLetters);
   const adminLettersRequests: URL[] = [];
   const flagRequests: Array<{ url: string; body: unknown }> = [];
@@ -236,6 +247,21 @@ export async function installMockAdminDashboardApi(page: Page): Promise<MockAdmi
     const body = request.postDataJSON() as { flagged?: boolean };
     const letterId = request.url().split('/').slice(-2)[0];
     flagRequests.push({ url: request.url(), body });
+
+    if (options.flagError) {
+      await route.fulfill({
+        status: options.flagError.status ?? 500,
+        contentType: 'application/json',
+        headers: options.flagError.requestId
+          ? { 'x-request-id': options.flagError.requestId }
+          : undefined,
+        body: JSON.stringify({
+          error: options.flagError.message,
+          requestId: options.flagError.requestId,
+        }),
+      });
+      return;
+    }
 
     const target = letters.find((letter) => letter.id === letterId);
     if (target && typeof body?.flagged === 'boolean') {

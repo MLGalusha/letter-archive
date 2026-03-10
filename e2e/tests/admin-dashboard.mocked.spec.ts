@@ -79,4 +79,23 @@ test.describe('@mocked Admin Dashboard', () => {
       },
     ]);
   });
+
+  test('shows the request id when a flag toggle fails', async ({ page }) => {
+    await installMockAdminDashboardApi(page, {
+      flagError: {
+        message: 'Flag service unavailable',
+        requestId: 'req-flag-123',
+      },
+    });
+
+    await page.goto('/admin');
+    await page.locator('.admin-header').waitFor({ state: 'visible' });
+
+    const flagButton = page.getByRole('button', { name: 'Flag letter' }).first();
+    await flagButton.click();
+
+    await expect(page.locator('.toast-error')).toContainText('Flag service unavailable');
+    await expect(page.locator('.toast-error')).toContainText('Request ID: req-flag-123');
+    await expect(flagButton).toHaveAttribute('aria-label', 'Flag letter');
+  });
 });

@@ -11,7 +11,7 @@ import { getErrorMessage, getImageUrl } from '../../api/client';
 import { detectPageLines } from '../../api/admin/letters';
 import type { Letter, LineSegment, LineSegmentWord, OcrWordBox } from '../../types/Letter';
 import { attachWordsToSegments } from '../../utils/attachWordsToSegments';
-import { constrainedGrouping, eastEdgeY, westEdgeY, type GroupedLine, type VisionRejectedMerge } from '../../utils/constrainedGrouping';
+import { constrainedGrouping, eastEdgeY, westEdgeY, type GroupedLine, type MergeRejection } from '../../utils/constrainedGrouping';
 import { matchTranscriptToLines, type MatchedLine } from '../../utils/transcriptMatcher';
 import {
   alignTranscriptToVisualLines,
@@ -448,8 +448,19 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const [showKrakenLines, setShowKrakenLines] = useState(true);
   const [showVisionWords, setShowVisionWords] = useState(false);
   const [showGroupedLines, setShowGroupedLines] = useState(true);
-  const [showUnifiedLines, setShowUnifiedLines] = useState(false);
   const [showExcludedContent, setShowExcludedContent] = useState(false);
+
+  // Merge info popup state
+  const [mergePopup, setMergePopup] = useState<{
+    x: number;
+    y: number;
+    status: 'approved' | 'rejected';
+    step?: 2 | 3 | 4 | 5;
+    reason?: string;
+    values?: Record<string, number>;
+    leftText?: string;
+    rightText?: string;
+  } | null>(null);
 
   // Raw Kraken line segments per page (for debug overlay, never reconciled)
   const [krakenSegmentsMap, setKrakenSegmentsMap] = useState<Record<number, LineSegment[] | undefined>>(() => {
@@ -514,13 +525,13 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const { enriched, unassigned } = attachWordsToSegments(rawSegments, wordBoxes);
 
     // Phase 3: Constrained grouping
-    const { lines: groupedLines, marginalSegments, visionRejections } = constrainedGrouping(enriched);
+    const { lines: groupedLines, marginalSegments, mergeRejections } = constrainedGrouping(enriched);
 
     // Phase 4-5: Match transcript to grouped lines
     const transcriptLines = pageLineTexts[currentPageIndex] ?? [];
     const matchResult = matchTranscriptToLines(transcriptLines, groupedLines, unassigned);
 
-    return { enriched, unassigned, groupedLines, marginalSegments, matchResult, visionRejections };
+    return { enriched, unassigned, groupedLines, marginalSegments, matchResult, mergeRejections };
   }, [krakenSegmentsMap, currentPageIndex, letterPages, visionBoxesMap, pageLineTexts]);
 
   // Merged AI segments for alignment — use grouped lines from the pipeline
@@ -881,10 +892,19 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const pageId = currentPage.id;
     const idx = currentPageIndex;
 
-    // Immediately show spinner and clear stale data
-    setAiSegmentsMap(prev => ({ ...prev, [idx]: null }));
-    setVisionBoxesMap(prev => ({ ...prev, [idx]: undefined }));
-    setKrakenSegmentsMap(prev => ({ ...prev, [idx]: undefined }));
+    // Clear ALL pages so background pre-fetch re-detects them too
+    const clearedAi: Record<number, LineSegment[] | null | undefined> = {};
+    const clearedVision: Record<number, OcrWordBox[] | null | undefined> = {};
+    const clearedKraken: Record<number, LineSegment[] | undefined> = {};
+    letterPages.forEach((_, i) => {
+      if (i === idx) {
+        clearedAi[i] = null; // mark current as in-progress
+      }
+      // Leave other pages as undefined so pre-fetch picks them up
+    });
+    setAiSegmentsMap(clearedAi);
+    setVisionBoxesMap(clearedVision);
+    setKrakenSegmentsMap(clearedKraken);
     setCurrentLineIndex(0);
     setDetectionSteps([]);
 
@@ -902,7 +922,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         showToast(getErrorMessage(err, 'Line detection failed'), 'error');
         setDetectionSteps([]);
       });
-  }, [currentPage, currentPageIndex, isDetecting, showToast]);
+  }, [currentPage, currentPageIndex, isDetecting, letterPages, showToast]);
 
   useImperativeHandle(ref, () => ({
     saveCurrentLine,
@@ -999,7 +1019,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   }, [pipelineResult]);
 
   return (
-    <div className="line-review-mode" ref={containerRef}>
+    <div className="line-review-mode" ref={containerRef} onClick={() => setMergePopup(null)}>
       <div
         className="line-review-image-container"
         style={{ maxWidth: imageNaturalSize.width > 0 ? imageNaturalSize.width : undefined }}
@@ -1170,43 +1190,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         )}
 
         {/* Debug overlay — Matched/unified transcript lines (gold) */}
-        {debugLines && showUnifiedLines && imageDisplaySize.width > 0 && pipelineResult && (
-          <svg
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: imageDisplaySize.width,
-              height: displayedImageHeight,
-              pointerEvents: 'none',
-              zIndex: 7,
-            }}
-          >
-            {pipelineResult.matchResult.matched
-              .filter((m): m is MatchedLine & { bbox: [number, number, number, number] } => m.bbox !== null)
-              .map((m, i) =>
-                m.boundary && m.boundary.length > 2 ? (
-                  <polygon
-                    key={`unified-poly-${i}`}
-                    className="line-review-debug-unified"
-                    points={m.boundary
-                      .map(p => `${p.x * scaleFactor},${p.y * scaleFactor}`)
-                      .join(' ')}
-                  />
-                ) : (
-                  <rect
-                    key={`unified-rect-${i}`}
-                    className="line-review-debug-unified"
-                    x={m.bbox[0] * scaleFactor}
-                    y={m.bbox[1] * scaleFactor}
-                    width={(m.bbox[2] - m.bbox[0]) * scaleFactor}
-                    height={(m.bbox[3] - m.bbox[1]) * scaleFactor}
-                  />
-                ),
-              )}
-          </svg>
-        )}
-
         {/* Debug overlay — Excluded content (gray dashed) */}
         {debugLines && showExcludedContent && imageDisplaySize.width > 0 && pipelineResult && (
           <svg
@@ -1287,9 +1270,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                 }),
               )}
             {/* Vision junction debug: show the Vision word boxes being compared
-                at each merge junction. Each Kraken segment maps to a Vision word:
-                assigned word if available, otherwise nearest word from global pool.
-                Spanning words that bridge the gap show as a single box. */}
+                at each merge junction. Click to see merge details. */}
             {pipelineResult?.groupedLines
               .filter((gl) => gl.merged && gl.constituents.length > 1)
               .flatMap((gl, gi) =>
@@ -1304,6 +1285,26 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                   const spanWord = juncWords.find(
                     (w) => w.bbox[0] <= gapStart && w.bbox[2] >= gapEnd,
                   );
+
+                  // Clickable hit area between the two segments
+                  const hitX = Math.min(seg.bbox[2], next.bbox[0]) * s;
+                  const hitW = Math.abs(next.bbox[0] - seg.bbox[2]) * s + 12;
+                  const hitY = Math.min(seg.bbox[1], next.bbox[1]) * s - 4;
+                  const hitH = (Math.max(seg.bbox[3], next.bbox[3]) - Math.min(seg.bbox[1], next.bbox[1])) * s + 8;
+
+                  const handleClick = (e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    const leftWord = findLargestEdgeWord(seg.bbox, 'right', seg.visionWords, allVisionWords);
+                    const rightWord = findLargestEdgeWord(next.bbox, 'left', next.visionWords, allVisionWords);
+                    setMergePopup({
+                      x: e.clientX,
+                      y: e.clientY,
+                      status: 'approved',
+                      leftText: leftWord?.text ?? '(none)',
+                      rightText: rightWord?.text ?? '(none)',
+                    });
+                  };
+
                   if (spanWord) {
                     return (
                       <g key={`vjunc-${gi}-${si}`}>
@@ -1314,11 +1315,15 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                           width={(spanWord.bbox[2] - spanWord.bbox[0]) * s}
                           height={(spanWord.bbox[3] - spanWord.bbox[1]) * s}
                         />
+                        <rect
+                          x={hitX - 6} y={hitY} width={hitW} height={hitH}
+                          fill="transparent" style={{ cursor: 'pointer', pointerEvents: 'all' }}
+                          onClick={handleClick}
+                        />
                       </g>
                     );
                   }
 
-                  // Each Kraken segment picks the largest Vision word on its merge side
                   const leftWord = findLargestEdgeWord(seg.bbox, 'right', seg.visionWords, allVisionWords);
                   const rightWord = findLargestEdgeWord(next.bbox, 'left', next.visionWords, allVisionWords);
                   if (!leftWord && !rightWord) return null;
@@ -1343,7 +1348,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                           height={(rightWord.bbox[3] - rightWord.bbox[1]) * s}
                         />
                       )}
-                      {/* Connecting lines top-top and bottom-bottom */}
                       {leftWord && rightWord && (
                         <>
                           <line className="line-review-debug-vision-connector"
@@ -1354,26 +1358,38 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                             x2={rightWord.bbox[0] * s} y2={rightWord.bbox[3] * s} />
                         </>
                       )}
+                      <rect
+                        x={hitX - 6} y={hitY} width={hitW} height={hitH}
+                        fill="transparent" style={{ cursor: 'pointer', pointerEvents: 'all' }}
+                        onClick={handleClick}
+                      />
                     </g>
                   );
                 }).filter(Boolean),
               )}
-            {/* Vision-rejected merges: Kraken wanted these but Vision said no.
-                Show with red boxes + red connectors so you can see what was rejected.
-                Each Kraken segment maps to a Vision word (assigned or nearest fallback). */}
-            {(pipelineResult?.visionRejections ?? []).map((rej, ri) => {
+            {/* Rejected merges: segments passed gap check but failed a later step.
+                Show with red connectors. Click for rejection details. */}
+            {(pipelineResult?.mergeRejections ?? []).filter((r) => r.step === 5).map((rej, ri) => {
               const s = scaleFactor;
-              // Each Kraken segment picks the largest Vision word on its merge side
-              const leftWord = findLargestEdgeWord(rej.left.bbox, 'right', rej.left.visionWords, allVisionWords);
-              const rightWord = findLargestEdgeWord(rej.right.bbox, 'left', rej.right.visionWords, allVisionWords);
-              // Kraken edge coords for orange connectors
+              const leftWord = rej.step === 5
+                ? findLargestEdgeWord(rej.left.bbox, 'right', rej.left.visionWords, allVisionWords)
+                : null;
+              const rightWord = rej.step === 5
+                ? findLargestEdgeWord(rej.right.bbox, 'left', rej.right.visionWords, allVisionWords)
+                : null;
               const segEast = eastEdgeY(rej.left);
               const nextWest = westEdgeY(rej.right);
               const rx = rej.left.bbox[2] * s;
               const lx = rej.right.bbox[0] * s;
 
+              // Clickable hit area between the two segments
+              const hitX = Math.min(rej.left.bbox[2], rej.right.bbox[0]) * s;
+              const hitW = Math.abs(rej.right.bbox[0] - rej.left.bbox[2]) * s + 12;
+              const hitY = Math.min(rej.left.bbox[1], rej.right.bbox[1]) * s - 4;
+              const hitH = (Math.max(rej.left.bbox[3], rej.right.bbox[3]) - Math.min(rej.left.bbox[1], rej.right.bbox[1])) * s + 8;
+
               return (
-                <g key={`vrej-${ri}`}>
+                <g key={`mrej-${ri}`}>
                   {/* Kraken's intended merge (orange dashed) */}
                   <line className="line-review-debug-connector"
                     x1={rx} y1={segEast[0] * s}
@@ -1381,7 +1397,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                   <line className="line-review-debug-connector"
                     x1={rx} y1={segEast[1] * s}
                     x2={lx} y2={nextWest[1] * s} />
-                  {/* Vision boxes for each Kraken segment */}
+                  {/* Vision boxes (only for step 5 rejections) */}
                   {leftWord && (
                     <rect className="line-review-debug-vision-rejected"
                       x={leftWord.bbox[0] * s} y={leftWord.bbox[1] * s}
@@ -1394,7 +1410,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                       width={(rightWord.bbox[2] - rightWord.bbox[0]) * s}
                       height={(rightWord.bbox[3] - rightWord.bbox[1]) * s} />
                   )}
-                  {/* Red connectors showing Vision mismatch */}
                   {leftWord && rightWord && (
                     <>
                       <line className="line-review-debug-vision-rejected-connector"
@@ -1405,10 +1420,82 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                         x2={rightWord.bbox[0] * s} y2={rightWord.bbox[3] * s} />
                     </>
                   )}
+                  {/* Clickable hit area */}
+                  <rect
+                    x={hitX - 6} y={hitY} width={hitW} height={hitH}
+                    fill="transparent" style={{ cursor: 'pointer', pointerEvents: 'all' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMergePopup({
+                        x: e.clientX,
+                        y: e.clientY,
+                        status: 'rejected',
+                        step: rej.step,
+                        reason: rej.reason,
+                        values: rej.values,
+                        leftText: leftWord?.text ?? '(no vision word)',
+                        rightText: rightWord?.text ?? '(no vision word)',
+                      });
+                    }}
+                  />
                 </g>
               );
             })}
           </svg>
+        )}
+
+        {/* Merge info popup */}
+        {mergePopup && (
+          <div
+            className="merge-info-popup"
+            style={{ left: mergePopup.x, top: mergePopup.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="merge-info-header">
+              <span className={`merge-info-badge merge-info-badge-${mergePopup.status}`}>
+                {mergePopup.status === 'approved' ? 'Merged' : `Rejected at Step ${mergePopup.step}`}
+              </span>
+              <button className="merge-info-close" onClick={() => setMergePopup(null)}>&times;</button>
+            </div>
+            {mergePopup.reason && (
+              <div className="merge-info-reason">{mergePopup.reason}</div>
+            )}
+            {mergePopup.status === 'approved' && (
+              <div className="merge-info-reason">Passed all 5 merge checks</div>
+            )}
+            <div className="merge-info-words">
+              <span>Left: <strong>{mergePopup.leftText}</strong></span>
+              <span>Right: <strong>{mergePopup.rightText}</strong></span>
+            </div>
+            {mergePopup.values && Object.keys(mergePopup.values).length > 0 && (
+              <table className="merge-info-values">
+                <tbody>
+                  {Object.entries(mergePopup.values).map(([key, val]) => (
+                    <tr key={key}>
+                      <td>{key}</td>
+                      <td>{typeof val === 'number' ? val.toFixed(2) : String(val)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <div className="merge-info-steps">
+              {(['1: Gap', '2: Height ratio', '3: Edge Y', '4: Edge height', '5: Vision'] as const).map((label, i) => {
+                const stepNum = i + 1;
+                const isFailStep = mergePopup.status === 'rejected' && mergePopup.step === stepNum;
+                const isPassed = mergePopup.status === 'approved' || (mergePopup.step != null && stepNum < mergePopup.step);
+                return (
+                  <span key={stepNum} className={
+                    isFailStep ? 'merge-step merge-step-fail' :
+                    isPassed ? 'merge-step merge-step-pass' :
+                    'merge-step merge-step-skip'
+                  }>
+                    {label}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         {/* Detecting lines — detection in progress */}
@@ -1471,13 +1558,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           >
             <span className="debug-legend-swatch debug-legend-merged" />
             Grouped Lines
-          </button>
-          <button
-            className={`debug-legend-toggle${showUnifiedLines ? ' debug-legend-toggle-active' : ''}`}
-            onClick={() => setShowUnifiedLines(v => !v)}
-          >
-            <span className="debug-legend-swatch debug-legend-unified" />
-            Matched Lines
           </button>
           <button
             className={`debug-legend-toggle${showExcludedContent ? ' debug-legend-toggle-active' : ''}`}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { getErrorMessage } from '../../api/client';
 import { findConnectionPath, type PathNode, type PathEdge } from '../../api/entities';
 import './ConnectionFinder.css';
 
@@ -67,7 +68,7 @@ export function ConnectionFinder({ persons, onPathFound }: ConnectionFinderProps
         onPathFound?.([]);
       }
     } catch (err) {
-      setError('Failed to find connection');
+      setError(getErrorMessage(err, 'Failed to find connection'));
       console.error('Connection finder error:', err);
     } finally {
       setLoading(false);

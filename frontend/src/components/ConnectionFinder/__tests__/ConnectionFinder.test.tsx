@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { ApiError } from "../../../api/client";
 import ConnectionFinder from "../ConnectionFinder";
 import { findConnectionPath } from "../../../api/entities";
 
@@ -96,14 +97,18 @@ describe("ConnectionFinder", () => {
 
   it("surfaces API failures without reporting a highlighted path", async () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    findConnectionPathMock.mockRejectedValue(new Error("graph offline"));
+    findConnectionPathMock.mockRejectedValue(
+      new ApiError(503, "graph offline", undefined, "req-graph-503"),
+    );
 
     const { onPathFound } = renderFinder();
 
     selectPerson(0, "alice", "Alice Smith");
     selectPerson(1, "bob", "Bob Baker");
 
-    expect(await screen.findByText("Failed to find connection")).toBeInTheDocument();
+    expect(
+      await screen.findByText("graph offline (Request ID: req-graph-503)"),
+    ).toBeInTheDocument();
     expect(onPathFound).not.toHaveBeenCalled();
     expect(consoleErrorSpy).toHaveBeenCalled();
 

@@ -891,9 +891,10 @@ export default function AdminDashboard() {
       showToast('Select a collection filter to analyze', 'error');
       return;
     }
+    const normalizedCollectionCode = collectionFilter.padStart(3, '0');
     try {
-      showToast(`Analyzing collection ${collectionFilter}...`, 'info');
-      const result: CollectionAnalysisResult = await analyzeCollection(collectionFilter);
+      showToast(`Analyzing collection ${normalizedCollectionCode}...`, 'info');
+      const result: CollectionAnalysisResult = await analyzeCollection(normalizedCollectionCode);
       const { stats } = result;
       showToast(
         `Analysis complete: ${stats.peopleFound} people, ${stats.placesFound} places, ` +
@@ -1537,7 +1538,7 @@ export default function AdminDashboard() {
       <ConfirmDialog
         isOpen={showAnalyzeConfirm}
         title="Analyze Collection"
-        message={`Analyze all letters in the "${collectionFilter}" collection? This will process sender/recipient relationships.`}
+        message={`Analyze all letters in the "${collectionFilter === 'all' ? collectionFilter : collectionFilter.padStart(3, '0')}" collection? This will process sender/recipient relationships.`}
         confirmText="Analyze"
         onConfirm={() => {
           setShowAnalyzeConfirm(false);

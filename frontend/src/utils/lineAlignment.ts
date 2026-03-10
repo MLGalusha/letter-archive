@@ -1,9 +1,9 @@
-import type { LineSegment, LineSegmentWord, ReconciledLine } from '../types/Letter';
+import type { LineSegment, LineSegmentWord } from '../types/Letter';
 
-/** Input can be raw LineSegments or reconciled lines (same bbox/baseline shape) */
-export type AlignmentInput = LineSegment | ReconciledLine;
+/** Input type for alignment functions */
+export type AlignmentInput = LineSegment;
 
-/** Minimal shape needed for alignment — both LineSegment and ReconciledLine satisfy this */
+/** Minimal shape needed for alignment */
 interface AlignableSegment {
   line: number;
   bbox: [number, number, number, number];

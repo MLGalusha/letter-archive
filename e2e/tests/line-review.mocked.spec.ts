@@ -23,14 +23,14 @@ async function openLineReview(
   return mockedApi;
 }
 
-function createLetterWithStoredReconciledLines() {
+function createLetterWithStoredLineSegments() {
   const initialLetter = createMockLetterReviewLetter();
   const detectLinesByPageId = createMockDetectLinesByPageId();
 
   return createMockLetterReviewLetter({
     images: initialLetter.images.map((image) => ({
       ...image,
-      ...(detectLinesByPageId[image.id] ?? {}),
+      lineSegments: detectLinesByPageId[image.id]?.lineSegments ?? [],
     })),
   });
 }
@@ -49,10 +49,10 @@ test.describe('@mocked Line Review', () => {
     );
   });
 
-  test('uses stored reconciled lines before any redetect request is made', async ({
+  test('uses stored line segments before any redetect request is made', async ({
     page,
   }) => {
-    const initialLetter = createLetterWithStoredReconciledLines();
+    const initialLetter = createLetterWithStoredLineSegments();
     const mockedApi = await openLineReview(page, initialLetter);
 
     await expect(page.locator('.line-review-progress')).toContainText('Line 1');
@@ -93,62 +93,6 @@ test.describe('@mocked Line Review', () => {
       .toBeGreaterThan(initialDetectCount);
   });
 
-  test('submits a resize correction when the line handle is dragged', async ({
-    page,
-  }) => {
-    const mockedApi = await openLineReview(page);
-    const handle = page.locator('.line-review-resize-right');
-    const box = await handle.boundingBox();
-
-    expect(box).toBeTruthy();
-    if (!box) {
-      return;
-    }
-
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2);
-    await page.mouse.up();
-
-    await expect
-      .poll(() => mockedApi.lineCorrectionRequests.length)
-      .toBe(1);
-    expect(mockedApi.lineCorrectionRequests[0]).toEqual({
-      url: `${API_BASE_URL}/admin/letters/pages/collection-009-page-1/line-corrections`,
-      body: expect.objectContaining({
-        correctionType: 'resize',
-        sourceSegmentIds: [101],
-        correctedBbox: expect.any(Array),
-      }),
-    });
-  });
-
-  test('lets reviewers reject a phantom classification', async ({ page }) => {
-    const detectLinesByPageId = createMockDetectLinesByPageId();
-    detectLinesByPageId['collection-009-page-1'].reconciledLines[0].isPhantom = true;
-
-    const mockedApi = await openLineReview(
-      page,
-      createMockLetterReviewLetter(),
-      { detectLinesByPageId },
-    );
-
-    await expect(page.locator('.line-review-input-overlay')).toHaveClass(
-      /line-review-input-phantom/,
-    );
-    await page.locator('.phantom-reject-btn').click();
-    await expect
-      .poll(() => mockedApi.lineCorrectionRequests.length)
-      .toBe(1);
-    expect(mockedApi.lineCorrectionRequests[0]).toEqual({
-      url: `${API_BASE_URL}/admin/letters/pages/collection-009-page-1/line-corrections`,
-      body: expect.objectContaining({
-        correctionType: 'reject_phantom',
-        sourceSegmentIds: [101],
-      }),
-    });
-  });
-
   test('falls back to browser-side line detection when detect-lines returns no geometry', async ({
     page,
   }) => {
@@ -156,7 +100,6 @@ test.describe('@mocked Line Review', () => {
     Object.values(detectLinesByPageId).forEach((result) => {
       result.lineSegments = [];
       result.ocrWordBoxes = [];
-      result.reconciledLines = [];
     });
 
     const mockedApi = await openLineReview(
@@ -277,35 +220,6 @@ test.describe('@mocked Line Review', () => {
       .toBe(1);
   });
 
-  test('deletes and restores a detected line through correction requests', async ({
-    page,
-  }) => {
-    const mockedApi = await openLineReview(page);
-
-    const overlay = page.locator('.line-review-input-overlay');
-    const deleteButton = page.locator('.line-review-delete-btn');
-
-    await deleteButton.click();
-    await expect(overlay).toHaveClass(/line-review-input-deleted/);
-    expect(mockedApi.lineCorrectionRequests[0]).toEqual({
-      url: `${API_BASE_URL}/admin/letters/pages/collection-009-page-1/line-corrections`,
-      body: expect.objectContaining({
-        correctionType: 'delete',
-        sourceSegmentIds: [101],
-      }),
-    });
-
-    await deleteButton.click();
-    await expect(overlay).not.toHaveClass(/line-review-input-deleted/);
-    expect(mockedApi.lineCorrectionRequests[1]).toEqual({
-      url: `${API_BASE_URL}/admin/letters/pages/collection-009-page-1/line-corrections`,
-      body: expect.objectContaining({
-        correctionType: 'undelete',
-        sourceSegmentIds: [101],
-      }),
-    });
-  });
-
   test('shows the request id when detect-lines fails and falls back locally', async ({
     page,
   }) => {
@@ -326,39 +240,6 @@ test.describe('@mocked Line Review', () => {
     expect(mockedApi.detectLineRequests).toContain(
       `${API_BASE_URL}/admin/letters/pages/collection-009-page-1/detect-lines`,
     );
-  });
-
-  test('shows the request id when saving a line correction fails', async ({
-    page,
-  }) => {
-    const mockedApi = await openLineReview(page, createMockLetterReviewLetter(), {
-      lineCorrectionFailuresByPageId: {
-        'collection-009-page-1': {
-          status: 500,
-          error: 'Line correction save failed',
-          requestId: 'req-line-correction-500',
-        },
-      },
-    });
-    const handle = page.locator('.line-review-resize-right');
-    const box = await handle.boundingBox();
-
-    expect(box).toBeTruthy();
-    if (!box) {
-      return;
-    }
-
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2);
-    await page.mouse.up();
-
-    await expect(page.locator('.toast')).toContainText(
-      'Line correction save failed (Request ID: req-line-correction-500)',
-    );
-    await expect
-      .poll(() => mockedApi.lineCorrectionRequests.length)
-      .toBe(1);
   });
 
   test('shows the request id when transcript auto-save fails on exit', async ({

@@ -19,7 +19,7 @@ vi.mock('../../../api/client', () => ({
 
 // Mock the detect-lines API call to resolve immediately with empty (triggers pixel fallback)
 vi.mock('../../../api/admin/letters', () => ({
-  detectPageLines: vi.fn().mockResolvedValue({ lineSegments: [], ocrWordBoxes: [], reconciledLines: [] }),
+  detectPageLines: vi.fn().mockResolvedValue({ lineSegments: [], ocrWordBoxes: [] }),
 }));
 
 // Mock detectImageLines since jsdom can't do real pixel analysis
@@ -200,47 +200,6 @@ describe('LineReviewMode', () => {
                   bbox: [50, 100, 450, 135],
                   ocrText: '',
                   words: [],
-                },
-              ],
-            },
-          ],
-        })}
-      />,
-    );
-
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    expect(detectPageLinesMock).not.toHaveBeenCalled();
-  });
-
-  it('uses stored reconciled lines without auto-detecting again', async () => {
-    render(
-      <LineReviewMode
-        {...defaultProps}
-        letter={makeLetter({
-          images: [
-            {
-              id: 'page-1',
-              type: 'letter',
-              pageNumber: 1,
-              imageUrl: '/images/page-1',
-              originalFilename: 'page1.jpg',
-              reconciledLines: [
-                {
-                  line: 1,
-                  baseline: [[50, 135], [450, 135]],
-                  bbox: [50, 100, 450, 135],
-                  sourceSegmentIds: [1],
-                  wasMerged: false,
-                  wasExtended: false,
-                  confidence: 0.98,
-                  isPhantom: false,
-                  isPrintedText: false,
-                  isDeleted: false,
-                  hppOverlap: 0.8,
-                  visionWordCount: 3,
                 },
               ],
             },

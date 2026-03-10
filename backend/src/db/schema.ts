@@ -265,7 +265,6 @@ export const letterPages = pgTable(
     checksumSha256: text('checksum_sha256'),
     lineSegments: jsonb('line_segments'),
     ocrWordBoxes: jsonb('ocr_word_boxes'),
-    reconciledLines: jsonb('reconciled_lines'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -498,37 +497,6 @@ export const letterViews = pgTable('letter_views', {
 });
 
 /**
- * Line corrections — tracks admin adjustments to reconciled lines.
- * Each correction captures the algorithm's output and admin's correction,
- * used for adaptive threshold calibration.
- */
-export const lineCorrections = pgTable(
-  'line_corrections',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    pageId: uuid('page_id')
-      .notNull()
-      .references(() => letterPages.id, { onDelete: 'cascade' }),
-    letterId: uuid('letter_id')
-      .notNull()
-      .references(() => letters.id, { onDelete: 'cascade' }),
-    collectionCode: text('collection_code'),
-    correctionType: text('correction_type').notNull(),
-    timestamp: timestamp('timestamp', { withTimezone: true }).notNull().defaultNow(),
-    algorithmOutput: jsonb('algorithm_output').notNull(),
-    correctedBbox: jsonb('corrected_bbox'),
-    correctedIsDeleted: boolean('corrected_is_deleted'),
-    sourceSegmentIds: jsonb('source_segment_ids').notNull(),
-    errorRegionPixelStats: jsonb('error_region_pixel_stats'),
-    pageContext: jsonb('page_context').notNull(),
-  },
-  (table) => [
-    index('idx_line_corrections_page').on(table.pageId),
-    index('idx_line_corrections_collection').on(table.collectionCode),
-  ]
-);
-
-/**
  * Review queue for pending entity matches needing admin confirmation
  */
 export const entityReviewQueue = pgTable(
@@ -584,17 +552,6 @@ export const letterViewsRelations = relations(letterViews, ({ one }) => ({
 export const letterPagesRelations = relations(letterPages, ({ one }) => ({
   letter: one(letters, {
     fields: [letterPages.letterId],
-    references: [letters.id],
-  }),
-}));
-
-export const lineCorrectionsRelations = relations(lineCorrections, ({ one }) => ({
-  page: one(letterPages, {
-    fields: [lineCorrections.pageId],
-    references: [letterPages.id],
-  }),
-  letter: one(letters, {
-    fields: [lineCorrections.letterId],
     references: [letters.id],
   }),
 }));
@@ -709,10 +666,6 @@ export type EntityReviewStatus = 'pending' | 'confirmed' | 'rejected' | 'new_ent
 export type PersonRelationship = typeof personRelationships.$inferSelect;
 export type NewPersonRelationship = typeof personRelationships.$inferInsert;
 export type PersonRelationshipType = 'spouse' | 'fiancé/fiancée' | 'romantic-partner' | 'parent-child' | 'sibling' | 'grandparent-grandchild' | 'aunt-uncle-niece-nephew' | 'cousin' | 'in-law' | 'friend' | 'acquaintance' | 'business-associate' | 'employer-employee' | 'unknown';
-
-// Line correction types
-export type LineCorrection = typeof lineCorrections.$inferSelect;
-export type NewLineCorrection = typeof lineCorrections.$inferInsert;
 
 // Audit log types
 export type AuditLog = typeof auditLog.$inferSelect;

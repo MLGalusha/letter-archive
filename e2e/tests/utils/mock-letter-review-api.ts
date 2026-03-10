@@ -9,6 +9,7 @@ interface MockLetterImage {
   imageUrl: string;
   pageNumber?: number;
   originalFilename?: string;
+  lineSegments?: unknown[];
 }
 
 interface MockLetterReviewLetter {
@@ -51,15 +52,6 @@ interface MockLetterReviewLetter {
   linkedPlaces?: unknown[];
   entityExtractionStatus?: string;
   entityExtractionJson?: unknown;
-}
-
-interface MockLineCorrectionRequest {
-  url: string;
-  body: {
-    correctionType?: string;
-    correctedBbox?: [number, number, number, number];
-    sourceSegmentIds?: number[];
-  };
 }
 
 interface MockUpdateLetterRequest {
@@ -191,10 +183,9 @@ function clearMetadataVerification(letter: MockLetterReviewLetter) {
   delete letter.metadataVerifiedAt;
 }
 
-function createReconciledLine(
+function createLineSegment(
   line: number,
   bbox: [number, number, number, number],
-  sourceSegmentId: number,
 ) {
   return {
     line,
@@ -203,34 +194,24 @@ function createReconciledLine(
       [bbox[0], bbox[3] - 6],
       [bbox[2], bbox[3] - 6],
     ],
-    sourceSegmentIds: [sourceSegmentId],
-    wasMerged: false,
-    wasExtended: false,
-    confidence: 0.94,
-    isPhantom: false,
-    isPrintedText: false,
-    isDeleted: false,
-    hppOverlap: 0.78,
-    visionWordCount: 0,
+    ocrText: '',
   };
 }
 
 const defaultDetectLinesByPageId = {
   'collection-009-page-1': {
-    lineSegments: [],
-    ocrWordBoxes: [],
-    reconciledLines: [
-      createReconciledLine(1, [170, 210, 1480, 280], 101),
-      createReconciledLine(2, [185, 320, 1495, 390], 102),
+    lineSegments: [
+      createLineSegment(1, [170, 210, 1480, 280]),
+      createLineSegment(2, [185, 320, 1495, 390]),
     ],
+    ocrWordBoxes: [],
   },
   'collection-009-page-2': {
-    lineSegments: [],
-    ocrWordBoxes: [],
-    reconciledLines: [
-      createReconciledLine(1, [175, 205, 1490, 275], 201),
-      createReconciledLine(2, [190, 315, 1505, 385], 202),
+    lineSegments: [
+      createLineSegment(1, [175, 205, 1490, 275]),
+      createLineSegment(2, [190, 315, 1505, 385]),
     ],
+    ocrWordBoxes: [],
   },
 } as const;
 
@@ -238,9 +219,8 @@ export function createMockDetectLinesByPageId() {
   return clone(defaultDetectLinesByPageId) as Record<
     string,
     {
-      lineSegments: unknown[];
+      lineSegments: Array<ReturnType<typeof createLineSegment>>;
       ocrWordBoxes: unknown[];
-      reconciledLines: Array<ReturnType<typeof createReconciledLine>>;
     }
   >;
 }
@@ -348,7 +328,6 @@ export interface MockLetterReviewContext {
   resyncRequests: MockResyncRequest[];
   flagRequests: Array<{ url: string; body: unknown }>;
   detectLineRequests: string[];
-  lineCorrectionRequests: MockLineCorrectionRequest[];
   updateLetterRequests: MockUpdateLetterRequest[];
   versionRequests: MockVersionRequest[];
 }
@@ -362,14 +341,9 @@ export async function installMockLetterReviewApi(
       {
         lineSegments: unknown[];
         ocrWordBoxes: unknown[];
-        reconciledLines: Array<ReturnType<typeof createReconciledLine>>;
       }
     >;
     detectLinesFailuresByPageId?: Record<
-      string,
-      { status?: number; error: string; requestId?: string }
-    >;
-    lineCorrectionFailuresByPageId?: Record<
       string,
       { status?: number; error: string; requestId?: string }
     >;
@@ -404,7 +378,6 @@ export async function installMockLetterReviewApi(
   const resyncRequests: MockResyncRequest[] = [];
   const flagRequests: Array<{ url: string; body: unknown }> = [];
   const detectLineRequests: string[] = [];
-  const lineCorrectionRequests: MockLineCorrectionRequest[] = [];
   const updateLetterRequests: MockUpdateLetterRequest[] = [];
   const versionRequests: MockVersionRequest[] = [];
   const letterPath = `${API_BASE_URL}/admin/letters/${letter.id}`;
@@ -412,7 +385,6 @@ export async function installMockLetterReviewApi(
     ? clone(options.detectLinesByPageId)
     : createMockDetectLinesByPageId();
   const detectLinesFailuresByPageId = clone(options.detectLinesFailuresByPageId ?? {});
-  const lineCorrectionFailuresByPageId = clone(options.lineCorrectionFailuresByPageId ?? {});
   const routeFailures = clone(options.routeFailures ?? {});
 
   const fulfillFailure = async (route: Route, failure: MockApiFailure) => {
@@ -830,69 +802,8 @@ export async function installMockLetterReviewApi(
         result ?? {
           lineSegments: [],
           ocrWordBoxes: [],
-          reconciledLines: [],
         },
       ),
-    });
-  });
-
-  await page.route(new RegExp(`${escapeRegex(API_BASE_URL)}/admin/letters/pages/[^/]+/line-corrections$`), async (route) => {
-    const pageId = route.request().url().split('/').slice(-2)[0];
-    const body = route.request().postDataJSON() as MockLineCorrectionRequest['body'];
-    lineCorrectionRequests.push({ url: route.request().url(), body });
-
-    const failure = lineCorrectionFailuresByPageId[pageId];
-    if (failure) {
-      await route.fulfill({
-        status: failure.status ?? 500,
-        contentType: 'application/json',
-        headers: failure.requestId ? { 'x-request-id': failure.requestId } : undefined,
-        body: JSON.stringify({
-          error: failure.error,
-          requestId: failure.requestId,
-        }),
-      });
-      return;
-    }
-
-    const current = detectLinesByPageId[pageId] ?? {
-      lineSegments: [],
-      ocrWordBoxes: [],
-      reconciledLines: [],
-    };
-
-    const targetIndex = current.reconciledLines.findIndex((line) => {
-      if (!Array.isArray(body.sourceSegmentIds) || body.sourceSegmentIds.length === 0) {
-        return false;
-      }
-
-      return line.sourceSegmentIds.join(',') === body.sourceSegmentIds.join(',');
-    });
-
-    if (targetIndex >= 0) {
-      const target = current.reconciledLines[targetIndex];
-      if (body.correctionType === 'delete' || body.correctionType === 'confirm_phantom') {
-        target.isDeleted = true;
-      }
-      if (body.correctionType === 'undelete' || body.correctionType === 'reject_phantom') {
-        target.isDeleted = false;
-      }
-      if (body.correctionType === 'resize' && body.correctedBbox) {
-        target.bbox = body.correctedBbox;
-        target.baseline = [
-          [body.correctedBbox[0], body.correctedBbox[3] - 6],
-          [body.correctedBbox[2], body.correctedBbox[3] - 6],
-        ];
-      }
-    }
-
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        correction: { ok: true },
-        reconciledLines: current.reconciledLines,
-      }),
     });
   });
 
@@ -909,7 +820,6 @@ export async function installMockLetterReviewApi(
     resyncRequests,
     flagRequests,
     detectLineRequests,
-    lineCorrectionRequests,
     updateLetterRequests,
     versionRequests,
   };

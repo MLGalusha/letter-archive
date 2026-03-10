@@ -97,9 +97,6 @@ vi.mock('../../../db/index.js', () => {
     letterPages: {
       id: 'letterPages.id',
     },
-    lineCorrections: {
-      id: 'lineCorrections.id',
-    },
   };
 });
 
@@ -175,63 +172,10 @@ vi.mock('../../../services/letter-operations.js', () => ({
   resyncLetterMetadata: resyncLetterMetadataMock,
 }));
 
-vi.mock('../../../services/line-reconciliation.js', () => ({
-  calibrateThresholds: vi.fn(),
-}));
-
 import lettersRouter from '../letters.js';
 
 const LETTER_ID = '11111111-1111-4111-8111-111111111111';
 const PAGE_ID = 'collection-009-page-1';
-
-function createAlgorithmOutput(overrides: Record<string, unknown> = {}) {
-  return {
-    bbox: [10, 20, 300, 40],
-    confidence: 0.92,
-    isPhantom: false,
-    wasMerged: false,
-    hppOverlap: 0.84,
-    visionWordCount: 6,
-    transcriptMatchScore: 0.91,
-    ...overrides,
-  };
-}
-
-function createPageContext(overrides: Record<string, unknown> = {}) {
-  return {
-    medianRmsContrast: 0.44,
-    medianVariance: 0.51,
-    medianDensity: 0.72,
-    medianMinValue: 0.12,
-    totalSegments: 3,
-    totalVisionBoxes: 18,
-    imageWidth: 1600,
-    imageHeight: 2200,
-    ...overrides,
-  };
-}
-
-function createLineCorrectionBody(
-  overrides: Partial<{
-    collectionCode: string;
-    correctionType: string;
-    algorithmOutput: Record<string, unknown>;
-    correctedBbox: [number, number, number, number];
-    correctedIsDeleted: boolean;
-    sourceSegmentIds: number[];
-    pageContext: Record<string, unknown>;
-  }> = {},
-) {
-  return {
-    letterId: LETTER_ID,
-    collectionCode: '009',
-    correctionType: 'reject_phantom',
-    algorithmOutput: createAlgorithmOutput(),
-    sourceSegmentIds: [101],
-    pageContext: createPageContext(),
-    ...overrides,
-  };
-}
 
 function createStoredPage(overrides: Record<string, unknown> = {}) {
   return {
@@ -239,20 +183,6 @@ function createStoredPage(overrides: Record<string, unknown> = {}) {
     storagePath: 'collections/009/19470810/L01/009-19470810-L01-01.jpg',
     lineSegments: [{ id: 10 }],
     ocrWordBoxes: [{ text: 'Dear', bbox: [10, 20, 30, 10] }],
-    reconciledLines: [
-      {
-        sourceSegmentIds: [101],
-        isDeleted: false,
-        isPhantom: true,
-        bbox: [10, 20, 300, 40],
-      },
-      {
-        sourceSegmentIds: [202],
-        isDeleted: false,
-        isPhantom: false,
-        bbox: [20, 80, 260, 36],
-      },
-    ],
     ...overrides,
   };
 }
@@ -281,119 +211,6 @@ describe('admin letters line review route integration', () => {
     vi.clearAllMocks();
   });
 
-  it('injects requestId into manual line-correction validation errors', async () => {
-    const response = await invokeRouter(lettersRouter, {
-      method: 'POST',
-      url: `/letters/pages/${PAGE_ID}/line-corrections`,
-      path: `/letters/pages/${PAGE_ID}/line-corrections`,
-      body: { letterId: 'bad-shape' },
-      headers: { 'content-type': 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.body).toEqual({
-      error: 'Invalid request body',
-      details: expect.any(Array),
-      requestId: expect.any(String),
-    });
-    expect(response.headers['x-request-id']).toBe(
-      (response.body as { requestId: string }).requestId,
-    );
-  });
-
-  it('records reject_phantom corrections and updates matching reconciled lines', async () => {
-    findFirstMock.mockResolvedValueOnce(createStoredPage());
-    insertReturningMock.mockResolvedValueOnce([
-      { id: 'corr-1', correctionType: 'reject_phantom' },
-    ]);
-    updateWhereMock.mockResolvedValueOnce(undefined);
-
-    const response = await invokeRouter(lettersRouter, {
-      method: 'POST',
-      url: `/letters/pages/${PAGE_ID}/line-corrections`,
-      path: `/letters/pages/${PAGE_ID}/line-corrections`,
-      body: createLineCorrectionBody(),
-      headers: { 'content-type': 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(dbInsertMock).toHaveBeenCalledTimes(1);
-    expect(insertValuesMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        pageId: PAGE_ID,
-        letterId: LETTER_ID,
-        correctionType: 'reject_phantom',
-        sourceSegmentIds: [101],
-      }),
-    );
-    expect(updateSetMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        reconciledLines: [
-          expect.objectContaining({
-            sourceSegmentIds: [101],
-            isPhantom: false,
-          }),
-          expect.objectContaining({
-            sourceSegmentIds: [202],
-            isPhantom: false,
-          }),
-        ],
-        updatedAt: expect.any(Date),
-      }),
-    );
-    expect(response.body).toEqual({
-      correction: { id: 'corr-1', correctionType: 'reject_phantom' },
-      reconciledLines: [
-        expect.objectContaining({
-          sourceSegmentIds: [101],
-          isDeleted: false,
-          isPhantom: false,
-        }),
-        expect.objectContaining({
-          sourceSegmentIds: [202],
-          isDeleted: false,
-          isPhantom: false,
-        }),
-      ],
-    });
-  });
-
-  it('applies resize corrections to the reconciled line bbox override', async () => {
-    findFirstMock.mockResolvedValueOnce(createStoredPage());
-    insertReturningMock.mockResolvedValueOnce([
-      { id: 'corr-2', correctionType: 'resize' },
-    ]);
-    updateWhereMock.mockResolvedValueOnce(undefined);
-
-    const correctedBbox: [number, number, number, number] = [12, 18, 340, 44];
-    const response = await invokeRouter(lettersRouter, {
-      method: 'POST',
-      url: `/letters/pages/${PAGE_ID}/line-corrections`,
-      path: `/letters/pages/${PAGE_ID}/line-corrections`,
-      body: createLineCorrectionBody({
-        correctionType: 'resize',
-        correctedBbox,
-      }),
-      headers: { 'content-type': 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toEqual({
-      correction: { id: 'corr-2', correctionType: 'resize' },
-      reconciledLines: [
-        expect.objectContaining({
-          sourceSegmentIds: [101],
-          bbox: correctedBbox,
-          adminBboxOverride: correctedBbox,
-        }),
-        expect.objectContaining({
-          sourceSegmentIds: [202],
-          bbox: [20, 80, 260, 36],
-        }),
-      ],
-    });
-  });
-
   it('returns detected line data with stored OCR fallbacks when the detector omits them', async () => {
     findFirstMock.mockResolvedValueOnce(createStoredPage());
     getAbsoluteStoragePathMock.mockReturnValueOnce('/tmp/collection-009-page-1.jpg');
@@ -419,12 +236,6 @@ describe('admin letters line review route integration', () => {
     expect(response.body).toEqual({
       lineSegments: [{ id: 999, bbox: [1, 2, 3, 4] }],
       ocrWordBoxes: [{ text: 'Dear', bbox: [10, 20, 30, 10] }],
-      reconciledLines: expect.arrayContaining([
-        expect.objectContaining({
-          sourceSegmentIds: [101],
-          isPhantom: true,
-        }),
-      ]),
     });
   });
 

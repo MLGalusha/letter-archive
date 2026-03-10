@@ -60,31 +60,6 @@ export interface FrontendOcrWordBox {
   hasContent?: boolean;
 }
 
-export interface FrontendReconciledLine {
-  line: number;
-  bbox: [number, number, number, number];
-  baseline: number[][];
-  boundary?: { x: number; y: number }[];
-  sourceSegmentIds: number[];
-  wasMerged: boolean;
-  wasExtended: boolean;
-  mergeGapPx?: number;
-  confidence: number;
-  isPhantom: boolean;
-  isPrintedText: boolean;
-  isDeleted: boolean;
-  pixelStats?: FrontendBoxPixelStats & {
-    rmsContrast: number;
-    michelson: number;
-  };
-  hppOverlap: number;
-  visionWordCount: number;
-  transcriptLineIndex?: number;
-  transcriptMatchScore?: number;
-  wordCountRatio?: number;
-  adminBboxOverride?: [number, number, number, number];
-}
-
 export interface FrontendLetterImage {
   id: string;
   type: FrontendLetterImageType;
@@ -93,7 +68,6 @@ export interface FrontendLetterImage {
   originalFilename?: string;
   lineSegments?: FrontendLineSegment[];
   ocrWordBoxes?: FrontendOcrWordBox[];
-  reconciledLines?: FrontendReconciledLine[];
 }
 
 // V2 Metadata types
@@ -445,9 +419,6 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
       ocrWordBoxes: Array.isArray(page.ocrWordBoxes)
         ? page.ocrWordBoxes as FrontendOcrWordBox[]
         : undefined,
-      reconciledLines: Array.isArray(page.reconciledLines)
-        ? page.reconciledLines as FrontendReconciledLine[]
-        : undefined,
     })),
     transcript: {
       pages: letter.transcriptionText
@@ -619,9 +590,6 @@ export function transformLetterWithRelatedToDTO(
         ocrWordBoxes: Array.isArray(page.ocrWordBoxes)
           ? page.ocrWordBoxes as FrontendOcrWordBox[]
           : undefined,
-        reconciledLines: Array.isArray(page.reconciledLines)
-          ? page.reconciledLines as FrontendReconciledLine[]
-          : undefined,
       });
     }
   }
@@ -641,9 +609,6 @@ export function transformLetterWithRelatedToDTO(
           : undefined,
         ocrWordBoxes: Array.isArray(page.ocrWordBoxes)
           ? page.ocrWordBoxes as FrontendOcrWordBox[]
-          : undefined,
-        reconciledLines: Array.isArray(page.reconciledLines)
-          ? page.reconciledLines as FrontendReconciledLine[]
           : undefined,
       });
     }

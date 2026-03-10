@@ -148,6 +148,7 @@ vi.mock('../entities/participant-sync.js', () => ({
 
 import {
   bulkClearMetadata,
+  buildLetterUpdates,
   normalizeRelationshipType,
   regenerateTranscription,
   resyncCheck,
@@ -229,6 +230,50 @@ describe('letter operations service', () => {
     });
     expect(dbUpdateMock).not.toHaveBeenCalled();
     expect(runTranscriptionMock).not.toHaveBeenCalled();
+  });
+
+  it('drops verified transcript edits back to edited in direct letter updates', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-verified-transcript',
+      workflow: 'TRANSCRIBED',
+      transcriptStatus: 'VERIFIED',
+      metadataContentStatus: 'EDITED',
+    });
+
+    const result = await buildLetterUpdates('letter-verified-transcript', {
+      transcriptionText: 'Corrected transcript text',
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.dbUpdates).toEqual({
+      transcriptionText: 'Corrected transcript text',
+      transcriptStatus: 'EDITED',
+      transcriptVerifiedAt: null,
+      transcriptVerifiedBy: null,
+      updatedAt: expect.any(Date),
+    });
+  });
+
+  it('drops verified metadata edits back to edited in direct letter updates', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-verified-metadata',
+      workflow: 'METADATA_DRAFTED',
+      transcriptStatus: 'EDITED',
+      metadataContentStatus: 'VERIFIED',
+    });
+
+    const result = await buildLetterUpdates('letter-verified-metadata', {
+      sender: 'Alicia Smith',
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.dbUpdates).toEqual({
+      sender: 'Alicia Smith',
+      metadataContentStatus: 'EDITED',
+      metadataVerifiedAt: null,
+      metadataVerifiedBy: null,
+      updatedAt: expect.any(Date),
+    });
   });
 
   it('marks manual extra-content edits as edited when content is added from an empty state', async () => {

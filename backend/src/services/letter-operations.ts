@@ -662,12 +662,16 @@ export async function buildLetterUpdates(
   // TWO-TRACK STATUS TRANSITIONS (new system)
   // =========================================================================
 
-  // Transcript edit: AI_DRAFT -> EDITED (but not VERIFIED -> EDITED)
+  // Transcript edit: AI_DRAFT/VERIFIED -> EDITED
   if (updates.transcriptionText !== undefined) {
     const currentTranscriptStatus = existingLetter.transcriptStatus;
-    if (currentTranscriptStatus === 'AI_DRAFT') {
+    if (currentTranscriptStatus === 'AI_DRAFT' || currentTranscriptStatus === 'VERIFIED') {
       dbUpdates.transcriptStatus = 'EDITED';
-      log.debug({ letterId }, 'Transcript status: AI_DRAFT -> EDITED');
+      if (currentTranscriptStatus === 'VERIFIED') {
+        dbUpdates.transcriptVerifiedAt = null;
+        dbUpdates.transcriptVerifiedBy = null;
+      }
+      log.debug({ letterId, previousStatus: currentTranscriptStatus }, 'Transcript status -> EDITED');
     }
   }
 
@@ -683,9 +687,13 @@ export async function buildLetterUpdates(
 
   if (hasMetadataUpdate) {
     const currentMetadataStatus = existingLetter.metadataContentStatus;
-    if (currentMetadataStatus === 'AI_DRAFT') {
+    if (currentMetadataStatus === 'AI_DRAFT' || currentMetadataStatus === 'VERIFIED') {
       dbUpdates.metadataContentStatus = 'EDITED';
-      log.debug({ letterId }, 'Metadata status: AI_DRAFT -> EDITED');
+      if (currentMetadataStatus === 'VERIFIED') {
+        dbUpdates.metadataVerifiedAt = null;
+        dbUpdates.metadataVerifiedBy = null;
+      }
+      log.debug({ letterId, previousStatus: currentMetadataStatus }, 'Metadata status -> EDITED');
     }
   }
 

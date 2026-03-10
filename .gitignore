@@ -53,6 +53,11 @@ e2e/Users/
 # Backend specific
 backend/uploads/*
 !backend/uploads/.gitkeep
+backend/python/__pycache__/
+backend/python/output/
+backend/python/venv/
+backend/test-line-detection.ts
+backend/test-line-overlay.png
 
 # Claude
 CLAUDE.md

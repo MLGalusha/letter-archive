@@ -4,6 +4,7 @@ import {
   apiDelete,
   apiGet,
   apiPost,
+  getErrorMessage,
   getImageUrl,
 } from '../client';
 
@@ -70,8 +71,9 @@ describe('api client', () => {
     await expect(apiGet('/broken')).rejects.toMatchObject({
       name: 'ApiError',
       status: 502,
-      message: 'Bad gateway upstream',
+      message: 'Bad gateway upstream (Request ID: req-123)',
       requestId: 'req-123',
+      responseMessage: 'Bad gateway upstream',
     });
   });
 
@@ -85,6 +87,15 @@ describe('api client', () => {
       status: 0,
       message: 'fetch failed',
     });
+  });
+
+  it('formats ApiError messages for operator-facing displays', () => {
+    const error = new ApiError(500, 'Internal server error', undefined, 'req-999');
+    expect(getErrorMessage(error, 'Fallback')).toBe(
+      'Internal server error (Request ID: req-999)',
+    );
+    expect(getErrorMessage(new Error('Boom'), 'Fallback')).toBe('Boom');
+    expect(getErrorMessage(null, 'Fallback')).toBe('Fallback');
   });
 
   it('keeps absolute image urls unchanged and prefixes relative ones', () => {

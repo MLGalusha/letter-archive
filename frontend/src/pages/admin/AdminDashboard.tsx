@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { getErrorMessage } from "../../api/client";
 import { getAdminLetters, getFilteredLetterIds, deleteLetter } from "../../api/letters";
 import { toggleLetterFlag } from "../../api/admin/letters";
 import {
@@ -550,7 +551,10 @@ export default function AdminDashboard() {
     } catch (err) {
       // Revert optimistic update
       setLetters(prev => prev.map(l => l.id === letterId ? { ...l, flagged: !flagged, flaggedAt: !flagged ? new Date().toISOString() : undefined, flaggedBy: !flagged ? 'admin' : undefined } : l));
-      showToast(`Failed to ${flagged ? 'flag' : 'unflag'} letter`, 'error');
+      showToast(
+        getErrorMessage(err, `Failed to ${flagged ? 'flag' : 'unflag'} letter`),
+        'error',
+      );
     }
   };
 
@@ -621,7 +625,7 @@ export default function AdminDashboard() {
       setAllFilteredSelected(true);
     } catch (err) {
       console.error('Failed to select all filtered:', err);
-      showToast('Failed to select all filtered letters', 'error');
+      showToast(getErrorMessage(err, 'Failed to select all filtered letters'), 'error');
     }
   };
 

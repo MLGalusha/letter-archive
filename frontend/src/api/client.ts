@@ -25,14 +25,32 @@ export class ApiError extends Error {
   status: number;
   data?: unknown;
   requestId?: string;
+  responseMessage: string;
 
   constructor(status: number, message: string, data?: unknown, requestId?: string) {
-    super(message);
+    const resolvedRequestId = requestId ?? (data as { requestId?: string } | undefined)?.requestId;
+    const displayMessage = resolvedRequestId
+      ? `${message} (Request ID: ${resolvedRequestId})`
+      : message;
+    super(displayMessage);
     this.name = 'ApiError';
     this.status = status;
     this.data = data;
-    this.requestId = requestId ?? (data as { requestId?: string } | undefined)?.requestId;
+    this.requestId = resolvedRequestId;
+    this.responseMessage = message;
   }
+}
+
+export function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) {
+    return error.message;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return fallback;
 }
 
 function getRequestIdFromResponse(response: Response, data?: unknown): string | undefined {

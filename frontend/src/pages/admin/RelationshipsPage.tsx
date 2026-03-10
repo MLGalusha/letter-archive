@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { getErrorMessage } from "../../api/client";
 import { Button, Icon, Modal } from "../../components/common";
 import { useToast } from "../../contexts/ToastContext";
 import {
@@ -217,8 +218,8 @@ export default function RelationshipsPage() {
       await deleteAdminRelationship(id);
       showToast("Relationship deleted", "success");
       await fetchData();
-    } catch {
-      showToast("Failed to delete relationship", "error");
+    } catch (err) {
+      showToast(getErrorMessage(err, "Failed to delete relationship"), "error");
     }
   };
 

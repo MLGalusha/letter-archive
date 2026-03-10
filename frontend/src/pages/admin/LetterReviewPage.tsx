@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { getErrorMessage } from "../../api/client";
 import { getAdminLetterById, deleteLetter } from "../../api/letters";
 import {
   updateLetter,
@@ -1420,7 +1421,10 @@ export default function LetterReviewPage() {
               const updated = await toggleLetterFlag(letter.id, newFlagged);
               setLetter(updated);
             } catch (err) {
-              showToast(`Failed to ${newFlagged ? 'flag' : 'unflag'} letter`, 'error');
+              showToast(
+                getErrorMessage(err, `Failed to ${newFlagged ? 'flag' : 'unflag'} letter`),
+                'error',
+              );
             }
           }}
           data-tooltip={letter.flagged ? "Unflag" : "Flag for follow-up"}

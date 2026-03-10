@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getErrorMessage } from '../../api/client';
 import {
   getProcessingQueue,
   startTranscription,
@@ -118,7 +119,7 @@ export default function ProcessingQueuePage() {
       showToast('Job cancelled', 'info');
       fetchQueue();
     } catch (err) {
-      showToast('Failed to cancel job', 'error');
+      showToast(getErrorMessage(err, 'Failed to cancel job'), 'error');
     }
   };
 
@@ -128,7 +129,7 @@ export default function ProcessingQueuePage() {
       showToast('Removed from queue', 'info');
       fetchQueue();
     } catch (err) {
-      showToast('Failed to remove from queue', 'error');
+      showToast(getErrorMessage(err, 'Failed to remove from queue'), 'error');
     }
   };
 
@@ -138,7 +139,7 @@ export default function ProcessingQueuePage() {
       showToast(result.message, 'info');
       fetchQueue();
     } catch (err) {
-      showToast('Failed to clear queue', 'error');
+      showToast(getErrorMessage(err, 'Failed to clear queue'), 'error');
     }
   };
 
@@ -148,7 +149,7 @@ export default function ProcessingQueuePage() {
       showToast('Job re-queued', 'info');
       fetchQueue();
     } catch (err) {
-      showToast('Failed to retry job', 'error');
+      showToast(getErrorMessage(err, 'Failed to retry job'), 'error');
     }
   };
 
@@ -159,7 +160,7 @@ export default function ProcessingQueuePage() {
       showToast(`Started transcription for ${result.total} letters`, 'success');
       fetchQueue();
     } catch (err) {
-      showToast('Failed to start transcription', 'error');
+      showToast(getErrorMessage(err, 'Failed to start transcription'), 'error');
     }
   };
 
@@ -169,7 +170,7 @@ export default function ProcessingQueuePage() {
       showToast(`Started metadata extraction for ${result.total} letters`, 'success');
       fetchQueue();
     } catch (err) {
-      showToast('Failed to start metadata extraction', 'error');
+      showToast(getErrorMessage(err, 'Failed to start metadata extraction'), 'error');
     }
   };
 
@@ -179,7 +180,7 @@ export default function ProcessingQueuePage() {
       showToast(`Started entity extraction for ${result.total} letters`, 'success');
       fetchQueue();
     } catch (err) {
-      showToast('Failed to start entity extraction', 'error');
+      showToast(getErrorMessage(err, 'Failed to start entity extraction'), 'error');
     }
   };
 
@@ -189,7 +190,7 @@ export default function ProcessingQueuePage() {
       showToast('Processing paused', 'info');
       fetchQueue();
     } catch (err) {
-      showToast('Failed to pause processing', 'error');
+      showToast(getErrorMessage(err, 'Failed to pause processing'), 'error');
     }
   };
 
@@ -199,7 +200,7 @@ export default function ProcessingQueuePage() {
       showToast('Processing resumed', 'success');
       fetchQueue();
     } catch (err) {
-      showToast('Failed to resume processing', 'error');
+      showToast(getErrorMessage(err, 'Failed to resume processing'), 'error');
     }
   };
 
@@ -209,7 +210,7 @@ export default function ProcessingQueuePage() {
       showToast('Processing aborted', 'info');
       fetchQueue();
     } catch (err) {
-      showToast('Failed to abort processing', 'error');
+      showToast(getErrorMessage(err, 'Failed to abort processing'), 'error');
     }
   };
 

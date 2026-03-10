@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { getErrorMessage } from "../../api/client";
 import { Button, Modal } from "../../components/common";
 import { useToast } from "../../contexts/ToastContext";
 import {
@@ -185,8 +186,8 @@ export default function PlacesPage() {
       } else {
         showToast("Candidate place is no longer available", "info");
       }
-    } catch {
-      showToast("Failed to open candidate place", "error");
+    } catch (err) {
+      showToast(getErrorMessage(err, "Failed to open candidate place"), "error");
     }
   }, [places, showToast]);
 
@@ -199,8 +200,8 @@ export default function PlacesPage() {
       ]);
       setSelectedLetters(response.letters || []);
       setSameNameCandidates(sameNameResponse.candidates || []);
-    } catch {
-      showToast("Failed to load place references", "error");
+    } catch (err) {
+      showToast(getErrorMessage(err, "Failed to load place references"), "error");
     } finally {
       setLoadingDetails(false);
     }

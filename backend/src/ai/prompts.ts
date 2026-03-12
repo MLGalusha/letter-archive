@@ -39,7 +39,6 @@ export const EXTRA_CONTENT_TRANSCRIPTION_SYSTEM_PROMPT = `You are an expert arch
 
 CRITICAL GUIDELINES:
 - Transcribe the text exactly as written, preserving original spelling, punctuation, and capitalization
-- DO NOT fabricate or guess at content you cannot read
 - DO NOT add any commentary, headers, or metadata to the transcription
 
 DOCUMENT-SPECIFIC GUIDELINES:
@@ -63,8 +62,7 @@ EPHEMERA:
 
 HANDLING UNCERTAINTY:
 - Use [illegible] for words that cannot be read at all
-- Use [unclear: best guess] for words you can partially make out
-- Note crossed-out text as [crossed out: text if readable]
+- Note crossed-out text as [crossed out]
 
 OUTPUT FORMAT:
 Return ONLY the transcription text, nothing else. No headers, no explanations, no "Here is the transcription:" - just the transcribed text.`;
@@ -122,7 +120,6 @@ export const TRANSCRIPTION_SYSTEM_PROMPT = `You are an expert archivist speciali
 
 CRITICAL GUIDELINES:
 - Transcribe the text exactly as written, preserving original spelling, punctuation, and capitalization
-- DO NOT fabricate or guess at content you cannot read
 - DO NOT add any commentary, headers, or metadata to the transcription
 
 LINE BREAK RULES (VERY IMPORTANT):
@@ -133,6 +130,7 @@ LINE BREAK RULES (VERY IMPORTANT):
 - Do NOT wrap long logical sentences across lines differently than the original
 
 SPACING AND LAYOUT RULES (VERY IMPORTANT):
+- Body text is left-aligned by default — this is your baseline; only add leading spaces when text is visually offset from the left margin
 - Preserve the horizontal position of text as it appears in the original document
 - If text appears on the right side (like a date or location), use spaces to position it there
 - If text is centered, use spaces to center it relative to the normal left margin
@@ -143,8 +141,8 @@ SPACING AND LAYOUT RULES (VERY IMPORTANT):
 
 HANDLING UNCERTAINTY:
 - Use [illegible] for words that cannot be read at all
-- Use [unclear: best guess] for words you can partially make out
-- Note crossed-out text as [crossed out: text if readable]
+- Note crossed-out text as [crossed out]
+- In typewritten text, ignore characters or words overtyped with "x" (typist corrections). Transcribe only the intended text, not the struck-through error.
 - Indicate inserted text or marginal notes as [insertion: text] or [margin: text]
 
 OUTPUT FORMAT:
@@ -1020,6 +1018,166 @@ export function buildCollectionAnalysisPrompt(
 
   prompt += '</collection_letters>\n\n';
   prompt += 'Analyze this collection and extract all entities, relationships, and potential duplicates. Return JSON only.';
+
+  return prompt;
+}
+
+// ============================================================================
+// COLLECTION ENTITY RESOLUTION (Post-extraction identity resolution)
+// ============================================================================
+
+import type {
+  CollectionPerson,
+  CollectionLetterPersonJunction,
+  CollectionRelationship,
+  LetterMissingParticipant,
+  GenericPerson,
+} from '../services/entities/collection-queries.js';
+
+/**
+ * System prompt for collection-level entity resolution.
+ * Expert genealogist doing cross-letter identity resolution.
+ */
+export const ENTITY_RESOLUTION_SYSTEM_PROMPT = `You are an expert genealogist performing cross-letter identity resolution on a collection of historical letters. You have been given ALL canonical persons, their letter appearances, and relationships for the entire collection.
+
+<task>
+Analyze all entities across the collection and produce a resolution plan:
+1. MERGE GROUPS: Identify persons that are actually the same individual (nicknames, spelling variations, formal vs informal names)
+2. GENERIC RESOLUTIONS: Resolve placeholder entities ("the sender", "your brother") to real identified persons, or mark for deletion
+3. SENDER/RECIPIENT FILLS: For letters with missing sender or recipient fields, infer the correct person from junction data
+4. RELATIONSHIP CORRECTIONS: Fix mistyped relationships or flag duplicates created by split entities
+</task>
+
+<merge_guidelines>
+- Nickname to formal name mappings are common: "Jimmie" → "James", "Molly" → "Mary", "Geo." → "George"
+- Shared correspondents are a strong signal: if "Jimmie" and "James A Hamler Jr" both appear as sender writing to the same recipient, they are likely the same person
+- Same role patterns: if person A is always sender and person B is always sender with similar names, they may be the same
+- Consider letter dates: entities appearing in overlapping time periods with similar contexts are stronger merge candidates
+- Prefer the most complete/formal name as the canonical name
+- The keep_person_id should be the one with more data (more letters, more relationships)
+- Confidence tiers:
+  - 0.95+: Obvious match (same name with minor spelling variation, clear nickname)
+  - 0.85-0.94: Strong match (nickname + shared correspondents + consistent context)
+  - 0.70-0.84: Probable match (similar name but less contextual evidence)
+  - Below 0.70: Uncertain, include but expect human review
+</merge_guidelines>
+
+<generic_guidelines>
+- Resolve "the sender" or "the writer" to the actual sender if unambiguous from letter context
+- Resolve "your brother" to a named brother if the relationship is established elsewhere
+- DELETE generic entities that add no information (e.g., "a man" with no identifying details)
+- KEEP generic entities only if they refer to a genuinely unidentified person with meaningful context
+- For merge: set resolves_to_person_id to the real person's ID
+- For delete: set resolves_to_person_id to null
+</generic_guidelines>
+
+<fill_guidelines>
+- Infer sender/recipient from junction data: if a person has role "sender" in the junction table but the letter's sender field is null, fill it
+- Only fill when there is strong evidence (the junction exists with the right role)
+- Use the canonical name for the fill
+- Do NOT overwrite existing values
+</fill_guidelines>
+
+<relationship_guidelines>
+- After merges, some relationships may become duplicates (A↔B and A↔C, where B and C are now merged)
+- Flag relationships with incorrect types (e.g., two known siblings marked as "unknown")
+- For corrections: provide the corrected_type from the allowed relationship types
+- For deletions (duplicate relationships): set corrected_type to null
+- Allowed relationship types: spouse, fiancé/fiancée, romantic-partner, parent-child, sibling, grandparent-grandchild, aunt-uncle-niece-nephew, cousin, in-law, friend, acquaintance, business-associate, employer-employee, unknown
+</relationship_guidelines>
+
+<confidence_thresholds>
+Actions with confidence >= 0.85 will be auto-executed.
+Actions with confidence < 0.85 will be queued for human review.
+Set confidence accurately — overconfident merges destroy data.
+</confidence_thresholds>
+
+<verification>
+Before returning, verify:
+1. No person ID appears in both keep_person_id and merge_person_ids across different merge groups
+2. All referenced person IDs exist in the provided data
+3. All referenced letter IDs exist in the provided data
+4. Merge groups don't create circular references
+5. Generic resolutions point to valid person IDs (or null for deletions)
+6. Relationship corrections reference valid relationship types
+</verification>`;
+
+/**
+ * Build user prompt for entity resolution.
+ * Assembles all collection entity data in XML-tagged sections.
+ */
+export function buildEntityResolutionUserPrompt(data: {
+  persons: CollectionPerson[];
+  junctions: CollectionLetterPersonJunction[];
+  relationships: CollectionRelationship[];
+  missingParticipants: LetterMissingParticipant[];
+  genericPersons: GenericPerson[];
+}): string {
+  let prompt = '';
+
+  // Section 1: Canonical persons
+  prompt += '<canonical_persons>\n';
+  for (const p of data.persons) {
+    const aliases = p.aliases.length > 0 ? ` aliases=[${p.aliases.join(', ')}]` : '';
+    prompt += `- id=${p.id} name="${p.canonicalName}"${aliases} letters=${p.letterCount} sender=${p.senderCount} recipient=${p.recipientCount} mentioned=${p.mentionedCount}\n`;
+  }
+  prompt += '</canonical_persons>\n\n';
+
+  // Section 2: Letter-person junctions (grouped by letter)
+  prompt += '<letter_person_junctions>\n';
+  const junctionsByLetter = new Map<string, CollectionLetterPersonJunction[]>();
+  for (const j of data.junctions) {
+    const existing = junctionsByLetter.get(j.letterId) || [];
+    existing.push(j);
+    junctionsByLetter.set(j.letterId, existing);
+  }
+  for (const [letterId, junctions] of junctionsByLetter) {
+    const first = junctions[0];
+    prompt += `\nLetter ${letterId} (${first.dateRaw}):\n`;
+    if (first.summary) prompt += `  Summary: ${first.summary}\n`;
+    for (const j of junctions) {
+      const nameWritten = j.nameAsWritten ? ` nameAsWritten="${j.nameAsWritten}"` : '';
+      const ctx = j.context ? ` context="${j.context}"` : '';
+      prompt += `  - person=${j.personId} "${j.personName}" role=${j.role}${nameWritten}${ctx} confidence=${j.confidence}\n`;
+    }
+  }
+  prompt += '</letter_person_junctions>\n\n';
+
+  // Section 3: Existing relationships
+  if (data.relationships.length > 0) {
+    prompt += '<existing_relationships>\n';
+    for (const r of data.relationships) {
+      prompt += `- id=${r.id} "${r.personAName}" (${r.personAId}) ↔ "${r.personBName}" (${r.personBId}) type=${r.relationshipType} confidence=${r.confidence}\n`;
+    }
+    prompt += '</existing_relationships>\n\n';
+  }
+
+  // Section 4: Letters with missing sender/recipient
+  if (data.missingParticipants.length > 0) {
+    prompt += '<letters_missing_participants>\n';
+    for (const l of data.missingParticipants) {
+      const missing = [];
+      if (l.missingSender) missing.push('sender');
+      if (l.missingRecipient) missing.push('recipient');
+      prompt += `- letter=${l.letterId} date=${l.dateRaw} missing=[${missing.join(', ')}]`;
+      if (l.sender) prompt += ` sender="${l.sender}"`;
+      if (l.recipient) prompt += ` recipient="${l.recipient}"`;
+      if (l.summary) prompt += ` summary="${l.summary}"`;
+      prompt += '\n';
+    }
+    prompt += '</letters_missing_participants>\n\n';
+  }
+
+  // Section 5: Generic entities
+  if (data.genericPersons.length > 0) {
+    prompt += '<generic_entities>\n';
+    for (const g of data.genericPersons) {
+      prompt += `- id=${g.id} name="${g.canonicalName}" letters=${g.letterCount}\n`;
+    }
+    prompt += '</generic_entities>\n\n';
+  }
+
+  prompt += 'Analyze all entities and produce a resolution plan. Return JSON only.';
 
   return prompt;
 }

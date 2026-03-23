@@ -1,0 +1,83 @@
+.notfound-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--spacing-xl) var(--spacing-md);
+  min-height: 60vh;
+}
+
+/* ── 404 number ────────────────────────────────────── */
+
+.notfound-code {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: clamp(5rem, 12vw, 9rem);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--border);
+  margin-bottom: var(--spacing-sm);
+  letter-spacing: -0.02em;
+}
+
+/* ── Heading ───────────────────────────────────────── */
+
+.notfound-heading {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: var(--spacing-sm);
+  letter-spacing: -0.01em;
+}
+
+/* ── Description ───────────────────────────────────── */
+
+.notfound-message {
+  max-width: 440px;
+  font-size: var(--font-lg);
+  line-height: 1.7;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-lg);
+}
+
+/* ── Actions ───────────────────────────────────────── */
+
+.notfound-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.notfound-btn {
+  text-decoration: none;
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+
+.notfound-link {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.notfound-link:hover {
+  opacity: 0.6;
+}
+
+/* ── Mobile ────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .notfound-page {
+    padding: var(--spacing-lg) var(--spacing-sm);
+    min-height: 50vh;
+  }
+
+  .notfound-code {
+    font-size: clamp(4rem, 10vw, 6rem);
+  }
+}

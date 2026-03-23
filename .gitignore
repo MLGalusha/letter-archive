@@ -60,6 +60,12 @@ backend/python/venv/
 backend/test-line-detection.ts
 backend/test-line-overlay.png
 
+# Playwright MCP cache
+.playwright-mcp/
+
+# Screenshots (design artifacts)
+*.png
+
 # Claude
 CLAUDE.md
 .claude/

@@ -2,6 +2,9 @@ import { runTranscription } from './transcription.js';
 import { runMetadataExtraction } from './metadata.js';
 import { runMetadataExtractionV2 } from './metadataV2.js';
 import { getLetterById } from '../services/letters.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger({ module: 'processor' });
 
 /**
  * Processes a letter through the transcription phase only.
@@ -18,11 +21,11 @@ export async function processLetter(letterId: string): Promise<void> {
 
   // Only process type='L' letters
   if (letter.type !== 'L') {
-    console.log(`Skipping processing for non-letter type: ${letter.type}`);
+    log.debug({ letterId, letterType: letter.type }, 'Skipping non-letter type');
     return;
   }
 
-  console.log(`Processing letter ${letterId} (workflow: ${letter.workflow})`);
+  log.info({ letterId, workflow: letter.workflow }, 'Processing letter');
 
   // Phase 1: Transcription
   if (letter.workflow === 'UPLOADED' && letter.transcriptionStatus === 'PENDING') {
@@ -44,7 +47,7 @@ export async function processMetadata(letterId: string): Promise<void> {
   }
 
   if (letter.type !== 'L') {
-    console.log(`Skipping metadata for non-letter type: ${letter.type}`);
+    log.debug({ letterId, letterType: letter.type }, 'Skipping metadata for non-letter type');
     return;
   }
 
@@ -55,7 +58,7 @@ export async function processMetadata(letterId: string): Promise<void> {
     letter.workflow === 'TRANSCRIBED' &&
     letter.metadataStatus === 'PENDING'
   ) {
-    console.log(`Processing metadata for letter ${letterId}`);
+    log.info({ letterId }, 'Processing metadata');
     // Use V2 extraction (Responses API with structured outputs)
     await runMetadataExtractionV2(letterId);
   }

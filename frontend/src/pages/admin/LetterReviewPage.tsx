@@ -1,33 +1,24 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { isAuthenticated } from "../../api/auth";
 import { getErrorMessage } from "../../api/client";
 import { getAdminLetterById, deleteLetter } from "../../api/letters";
 import {
   updateLetter,
   confirmTranscript,
   regenerateMetadata,
-  regenerateEntities,
   verifyTranscript,
   unverifyTranscript,
   verifyMetadata,
   unverifyMetadata,
   createVersion,
-  resyncMetadata,
-  checkResyncNeeded,
   transcribeExtras,
   updateExtraContent,
   verifyExtraContent,
   unverifyExtraContent,
-  updateAiNotes,
   transcribeLetter,
-  updateLinkedPerson,
-  updateLinkedPlace,
-  addLinkedPerson,
-  addLinkedPlace,
-  removeLinkedPerson,
-  removeLinkedPlace,
 } from "../../api/admin";
-import { toggleLetterFlag } from "../../api/admin/letters";
+import { toggleLetterFlag, reExtractLetter, updateIdentity, updateNoteStatus, addNote } from "../../api/admin/letters";
 import LetterViewer from "../../components/LetterViewer/LetterViewer";
 import AdminLayout from "../../components/AdminLayout";
 import { useToast } from "../../contexts/ToastContext";
@@ -51,7 +42,8 @@ import type {
 import TranscriptionSection from "./LetterReview/TranscriptionSection";
 import { ExtraContentSection } from "./LetterReview/ExtraContentSection";
 import MetadataSection from "./LetterReview/MetadataSection";
-import AddEntityModal from "./LetterReview/AddEntityModal";
+import EntitySection from "./LetterReview/EntitySection";
+import NotesSection from "./LetterReview/NotesSection";
 import LineReviewMode, {
   type LineReviewModeHandle,
 } from "../../components/LineReviewMode/LineReviewMode";
@@ -88,26 +80,26 @@ export default function LetterReviewPage() {
   const [extraContentTranscribing, setExtraContentTranscribing] =
     useState(false);
 
-  // AI notes state
-  const [aiNotes, setAiNotes] = useState("");
-
   // Extra content refs
   const extraContentRef = useRef<DynamicEditorRef>(null);
-  const aiNotesRef = useRef<HTMLTextAreaElement>(null);
 
   // Track original identity values for re-sync detection
   const [originalSender, setOriginalSender] = useState("");
   const [originalRecipient, setOriginalRecipient] = useState("");
 
-  // AI sync state - single button that checks and auto-applies
-  const [syncState, setSyncState] = useState<
-    "idle" | "checking" | "updating" | "done"
-  >("idle");
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
-
   // Metadata regeneration state
   const [regenerateState, setRegenerateState] = useState<
     "idle" | "regenerating" | "done"
+  >("idle");
+
+  // Re-extraction state (for metadata re-extract with corrected identity)
+  const [reExtractState, setReExtractState] = useState<
+    "idle" | "extracting" | "done"
+  >("idle");
+
+  // Entity re-extraction state (separate from metadata re-extract)
+  const [entityReExtractState, setEntityReExtractState] = useState<
+    "idle" | "extracting" | "done"
   >("idle");
 
   // Letter transcription state (transcribe letter only, no extras)
@@ -123,22 +115,7 @@ export default function LetterReviewPage() {
   const [showExtrasTranscribeConfirm, setShowExtrasTranscribeConfirm] =
     useState(false);
 
-  // Add entity modal state
-  const [showAddPersonModal, setShowAddPersonModal] = useState(false);
-  const [showAddPlaceModal, setShowAddPlaceModal] = useState(false);
-  const [addingEntity, setAddingEntity] = useState(false);
-
-  // 5-minute auto-sync timer
-  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null,
-  );
-  const [syncCountdown, setSyncCountdown] = useState<number | null>(null);
-  const [showCancelHint, setShowCancelHint] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const cancelHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
 
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -205,8 +182,7 @@ export default function LetterReviewPage() {
   }, []);
 
   useEffect(() => {
-    const isAuth = sessionStorage.getItem("adminAuth");
-    if (!isAuth) {
+    if (!isAuthenticated()) {
       navigate("/admin-login");
       return;
     }
@@ -235,9 +211,8 @@ export default function LetterReviewPage() {
           // Store original values for AI sync detection
           setOriginalSender(foundLetter.metadata.sender || "");
           setOriginalRecipient(foundLetter.metadata.recipient || "");
-          // Extra content and AI notes
+          // Extra content
           setExtraContent(foundLetter.extraContentTranscript || "");
-          setAiNotes(foundLetter.aiNotes || "");
           // Reset extra content editing state for new letter
           setIsExtraContentEditing(false);
         } catch (err) {
@@ -344,143 +319,8 @@ export default function LetterReviewPage() {
   useEffect(() => autoResizeTextarea(hookRef.current), [hook]);
   useEffect(() => autoResizeTextarea(descriptionRef.current), [description]);
   useEffect(() => autoResizeTextarea(notesRef.current), [notes]);
-  useEffect(() => autoResizeTextarea(aiNotesRef.current), [aiNotes]);
 
   // Clear any pending sync timer
-  const clearSyncTimer = useCallback(() => {
-    if (syncTimerRef.current) {
-      clearTimeout(syncTimerRef.current);
-      syncTimerRef.current = null;
-    }
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
-    }
-    setSyncCountdown(null);
-    setShowCancelHint(false);
-  }, []);
-
-  // Countdown click handlers for cancel UX
-  const handleCountdownClick = useCallback(() => {
-    setShowCancelHint(true);
-    if (cancelHintTimeoutRef.current) {
-      clearTimeout(cancelHintTimeoutRef.current);
-    }
-    cancelHintTimeoutRef.current = setTimeout(() => {
-      setShowCancelHint(false);
-    }, 2000);
-  }, []);
-
-  const handleCountdownDoubleClick = useCallback(() => {
-    clearSyncTimer();
-    setShowCancelHint(false);
-  }, [clearSyncTimer]);
-
-  // Single AI Sync button: checks if updates needed and auto-applies them
-  const handleAISync = useCallback(async () => {
-    if (!letterId || !letter) return;
-
-    // Clear any pending auto-sync timer
-    clearSyncTimer();
-
-    // Step 1: Check if sync is needed
-    setSyncState("checking");
-    setSyncMessage("Checking metadata...");
-
-    try {
-      const checkResult = await checkResyncNeeded(letterId, {
-        oldSender: originalSender || null,
-        newSender: sender || null,
-        oldRecipient: originalRecipient || null,
-        newRecipient: recipient || null,
-      });
-
-      if (!checkResult.needsResync) {
-        // No changes needed
-        setSyncState("done");
-        setSyncMessage("Already up to date");
-        showToast("Metadata is already in sync", "success");
-        statusTimeoutRef.current = setTimeout(() => {
-          setSyncState("idle");
-          setSyncMessage(null);
-        }, 2000);
-        return;
-      }
-
-      // Step 2: Apply the changes automatically
-      setSyncState("updating");
-      const issueCount = checkResult.decision.issues?.length || 0;
-      setSyncMessage(
-        `Updating ${issueCount} issue${issueCount !== 1 ? "s" : ""}...`,
-      );
-
-      const resyncResult = await resyncMetadata(letterId, {
-        oldSender: originalSender || null,
-        newSender: sender || null,
-        oldRecipient: originalRecipient || null,
-        newRecipient: recipient || null,
-      });
-
-      // Update local state with the synced letter
-      setLetter(resyncResult.letter);
-      setDescription(resyncResult.letter.metadata.description || "");
-      setHook(resyncResult.letter.metadata.hook || "");
-
-      // Update original values for future change detection
-      setOriginalSender(sender);
-      setOriginalRecipient(recipient);
-
-      // Build success message
-      const updatedFields: string[] = [];
-      if (resyncResult.resync.updatedFields.summary)
-        updatedFields.push("summary");
-      if (resyncResult.resync.updatedFields.hook) updatedFields.push("hook");
-      if (resyncResult.resync.updatedFields.senderPerson)
-        updatedFields.push("sender link");
-      if (resyncResult.resync.updatedFields.recipientPerson)
-        updatedFields.push("recipient link");
-      if (resyncResult.resync.updatedFields.relationshipType)
-        updatedFields.push("relationship");
-      if (resyncResult.resync.updatedFields.quoteContexts)
-        updatedFields.push("quote contexts");
-
-      setSyncState("done");
-      if (updatedFields.length > 0) {
-        setSyncMessage(`Updated: ${updatedFields.join(", ")}`);
-        showToast(`AI updated ${updatedFields.join(", ")}`, "success");
-      } else {
-        setSyncMessage("No changes needed");
-      }
-
-      // Track this edit
-      trackEdit({
-        id: resyncResult.letter.id,
-        metadata: resyncResult.letter.metadata,
-        collectionCode: resyncResult.letter.collectionCode,
-      });
-
-      // Clear done state after a moment
-      statusTimeoutRef.current = setTimeout(() => {
-        setSyncState("idle");
-        setSyncMessage(null);
-      }, 3000);
-    } catch (err) {
-      setSyncState("idle");
-      setSyncMessage(null);
-      showToast(err instanceof Error ? err.message : "AI sync failed", "error");
-      console.error("AI Sync error:", err);
-    }
-  }, [
-    letterId,
-    letter,
-    originalSender,
-    originalRecipient,
-    sender,
-    recipient,
-    showToast,
-    clearSyncTimer,
-  ]);
-
   // Letter transcription handler (transcribes only the letter, not extras)
   const handleTranscribeLetter = useCallback(
     async (skipConfirm = false) => {
@@ -567,34 +407,6 @@ export default function LetterReviewPage() {
     },
     [letterId, letter, showToast],
   );
-
-  // Start 5-minute auto-sync timer when metadata changes
-  const startSyncTimer = useCallback(() => {
-    // Clear existing timer
-    clearSyncTimer();
-
-    // Start countdown at 3 minutes (180 seconds)
-    setSyncCountdown(180);
-
-    // Update countdown every second
-    countdownIntervalRef.current = setInterval(() => {
-      setSyncCountdown((prev) => {
-        if (prev === null || prev <= 1) {
-          return null;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    // Set 3-minute timer for auto-sync
-    syncTimerRef.current = setTimeout(
-      () => {
-        clearSyncTimer();
-        handleAISync();
-      },
-      3 * 60 * 1000,
-    );
-  }, [clearSyncTimer, handleAISync]);
 
   const handleVisibilityChange = async (newVisibility: VisibilityState) => {
     if (!letterId || !letter) return;
@@ -696,6 +508,83 @@ export default function LetterReviewPage() {
     }
   };
 
+  // Re-extract handler — calls the re-extract API with corrected sender/recipient
+  const handleReExtract = useCallback(
+    async (mode: "full" | "metadata_only" | "entities_only") => {
+      if (!letterId || !letter) return;
+
+      const isEntityOnly = mode === "entities_only";
+      if (isEntityOnly) {
+        setEntityReExtractState("extracting");
+      } else {
+        setReExtractState("extracting");
+      }
+
+      try {
+        const updated = await reExtractLetter(letterId, {
+          confirmedSender: sender || undefined,
+          confirmedRecipient: recipient || undefined,
+          mode,
+        });
+
+        // Update letter state
+        setLetter(updated);
+
+        if (!isEntityOnly) {
+          // Update form fields with fresh metadata
+          setSender(updated.metadata.sender || "");
+          setRecipient(updated.metadata.recipient || "");
+          setDate(updated.metadata.date || "");
+          setDateConfidence(updated.metadata.dateConfidence || "unknown");
+          setLocation(updated.metadata.location || "");
+          setHook(updated.metadata.hook || "");
+          setDescription(updated.metadata.description || "");
+          setEmotionalTone(updated.metadata.emotionalTone || "");
+          setRelationship(
+            updated.metadata.senderRecipientRelationship || "",
+          );
+          setPrimaryTopics(updated.metadata.primaryTopics || []);
+          // Update original values so the notification bar dismisses
+          setOriginalSender(updated.metadata.sender || "");
+          setOriginalRecipient(updated.metadata.recipient || "");
+
+          setReExtractState("done");
+          showToast("Metadata re-extracted with corrections", "success");
+
+          statusTimeoutRef.current = setTimeout(() => {
+            setReExtractState("idle");
+          }, 2000);
+        } else {
+          setEntityReExtractState("done");
+          showToast("Entities re-extracted", "success");
+
+          statusTimeoutRef.current = setTimeout(() => {
+            setEntityReExtractState("idle");
+          }, 2000);
+        }
+
+        // Track this edit
+        trackEdit({
+          id: updated.id,
+          metadata: updated.metadata,
+          collectionCode: updated.collectionCode,
+        });
+      } catch (err) {
+        if (isEntityOnly) {
+          setEntityReExtractState("idle");
+        } else {
+          setReExtractState("idle");
+        }
+        showToast(
+          err instanceof Error ? err.message : "Re-extraction failed",
+          "error",
+        );
+        console.error("Re-extract error:", err);
+      }
+    },
+    [letterId, letter, sender, recipient, showToast],
+  );
+
   // Auto-save function (debounced)
   const triggerAutoSave = useCallback(
     async (data: {
@@ -714,7 +603,42 @@ export default function LetterReviewPage() {
         clearTimeout(autoSaveTimerRef.current);
       }
 
-      // Set up debounced save
+      // Sender/recipient changes go through the smart identity endpoint IMMEDIATELY (no debounce)
+      const hasSenderChange = data.sender !== undefined;
+      const hasRecipientChange = data.recipient !== undefined;
+
+      if (hasSenderChange || hasRecipientChange) {
+        // Immediate identity update — no timer
+        setAutoSaveStatus("saving");
+        try {
+          const identityData: { sender?: string; recipient?: string } = {};
+          if (hasSenderChange) identityData.sender = data.sender || '';
+          if (hasRecipientChange) identityData.recipient = data.recipient || '';
+          const updated = await updateIdentity(letterId, identityData);
+          setLetter(updated);
+          // Refresh form state with propagated values
+          setSender(updated.metadata.sender || "");
+          setRecipient(updated.metadata.recipient || "");
+          setHook(updated.metadata.hook || "");
+          setDescription(updated.metadata.description || "");
+          setAutoSaveStatus("saved");
+          showToast("Name updated across metadata", "success");
+
+          // Also save any other fields that changed alongside
+          const otherData = { ...data };
+          delete otherData.sender;
+          delete otherData.recipient;
+          if (Object.keys(otherData).length > 0) {
+            await updateLetter(letterId, otherData);
+          }
+        } catch (err) {
+          setAutoSaveStatus("error");
+          showToast(getErrorMessage(err, "Failed to update name"), "error");
+        }
+        return;
+      }
+
+      // Set up debounced save for non-identity fields
       autoSaveTimerRef.current = setTimeout(async () => {
         setAutoSaveStatus("saving");
         try {
@@ -778,12 +702,6 @@ export default function LetterReviewPage() {
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
       }
-      if (syncTimerRef.current) {
-        clearTimeout(syncTimerRef.current);
-      }
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-      }
     };
   }, []);
 
@@ -813,9 +731,6 @@ export default function LetterReviewPage() {
   // Handlers for metadata verification
   const handleVerifyMetadata = async () => {
     if (!letterId) return;
-
-    // Cancel any pending sync timer - user is verifying current state
-    clearSyncTimer();
 
     setSaving(true);
     try {
@@ -1047,9 +962,6 @@ export default function LetterReviewPage() {
       clearTimeout(metadataTooltipTimeoutRef.current);
     }
 
-    // Cancel any pending sync timer
-    clearSyncTimer();
-
     // Unverify via API
     setSaving(true);
     try {
@@ -1064,7 +976,7 @@ export default function LetterReviewPage() {
     } finally {
       setSaving(false);
     }
-  }, [letter?.metadataContentStatus, letterId, showToast, clearSyncTimer]);
+  }, [letter?.metadataContentStatus, letterId, showToast]);
 
   // Extra content verification handlers
   const handleVerifyExtraContent = useCallback(async () => {
@@ -1191,161 +1103,33 @@ export default function LetterReviewPage() {
     [letterId, showToast],
   );
 
-  // AI notes auto-save
-  const handleAiNotesChange = useCallback(
-    (newNotes: string) => {
-      setAiNotes(newNotes);
+  // Structured note handlers
+  const handleNoteStatusChange = useCallback(
+    async (noteId: string, status: 'resolved' | 'dismissed') => {
       if (!letterId) return;
-
-      // Clear existing timer
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
-
-      // Set up debounced save
-      autoSaveTimerRef.current = setTimeout(async () => {
-        setAutoSaveStatus("saving");
-        try {
-          const updated = await updateAiNotes(letterId, newNotes);
-          setLetter(updated);
-          setAutoSaveStatus("saved");
-        } catch (err) {
-          setAutoSaveStatus("error");
-          console.error("AI notes auto-save error:", err);
-          showToast(getErrorMessage(err, "Failed to save AI notes"), "error");
-        }
-      }, 1500);
-    },
-    [letterId, showToast],
-  );
-
-  const handleRegenerateEntities = useCallback(async (): Promise<void> => {
-    if (!letterId) {
-      throw new Error("Missing letter ID");
-    }
-    const updated = await regenerateEntities(letterId);
-    setLetter(updated);
-    showToast("Entities re-extracted successfully", "success");
-  }, [letterId, showToast]);
-
-  const handleUpdateLinkedPerson = useCallback(
-    async (personId: string, newName: string): Promise<Letter> => {
-      if (!letterId) {
-        throw new Error("Missing letter ID");
-      }
-      return updateLinkedPerson(letterId, personId, newName);
-    },
-    [letterId],
-  );
-
-  const handleUpdateLinkedPlace = useCallback(
-    async (placeId: string, newName: string): Promise<Letter> => {
-      if (!letterId) {
-        throw new Error("Missing letter ID");
-      }
-      return updateLinkedPlace(letterId, placeId, newName);
-    },
-    [letterId],
-  );
-
-  const handleRemoveLinkedPerson = useCallback(
-    async (personId: string): Promise<Letter> => {
-      if (!letterId) {
-        throw new Error("Missing letter ID");
-      }
-      return removeLinkedPerson(letterId, personId);
-    },
-    [letterId],
-  );
-
-  const handleRemoveLinkedPlace = useCallback(
-    async (placeId: string): Promise<Letter> => {
-      if (!letterId) {
-        throw new Error("Missing letter ID");
-      }
-      return removeLinkedPlace(letterId, placeId);
-    },
-    [letterId],
-  );
-
-  const handleAddPerson = useCallback(
-    async (name: string, role: string): Promise<void> => {
-      if (!letterId) {
-        throw new Error("Missing letter ID");
-      }
-
-      if (!["sender", "recipient", "mentioned"].includes(role)) {
-        throw new Error("Invalid person role");
-      }
-
-      setAddingEntity(true);
       try {
-        const updated = await addLinkedPerson(
-          letterId,
-          name,
-          role as "sender" | "recipient" | "mentioned",
-        );
+        const updated = await updateNoteStatus(letterId, noteId, status);
         setLetter(updated);
-        setShowAddPersonModal(false);
-        showToast("Person added", "success");
+        showToast(`Note ${status}`, 'success');
       } catch (err) {
-        showToast(
-          err instanceof Error ? err.message : "Failed to add person",
-          "error",
-        );
-        throw err;
-      } finally {
-        setAddingEntity(false);
+        showToast(getErrorMessage(err, `Failed to ${status} note`), 'error');
       }
     },
     [letterId, showToast],
   );
 
-  const handleAddPlace = useCallback(
-    async (name: string, role: string): Promise<void> => {
-      if (!letterId) {
-        throw new Error("Missing letter ID");
-      }
-
-      if (!["written_from", "destination", "mentioned"].includes(role)) {
-        throw new Error("Invalid place role");
-      }
-
-      setAddingEntity(true);
+  const handleAddNote = useCallback(
+    async (note: { content: string; category: string; priority: string }) => {
+      if (!letterId) return;
       try {
-        const updated = await addLinkedPlace(
-          letterId,
-          name,
-          role as "written_from" | "mentioned" | "destination",
-        );
+        const updated = await addNote(letterId, note);
         setLetter(updated);
-        setShowAddPlaceModal(false);
-        showToast("Place added", "success");
+        showToast('Note added', 'success');
       } catch (err) {
-        showToast(
-          err instanceof Error ? err.message : "Failed to add place",
-          "error",
-        );
-        throw err;
-      } finally {
-        setAddingEntity(false);
+        showToast(getErrorMessage(err, 'Failed to add note'), 'error');
       }
     },
     [letterId, showToast],
-  );
-
-  const handleOpenLinkedPerson = useCallback(
-    (personId: string) => {
-      navigate(`/admin/entities/people?personId=${personId}`);
-    },
-    [navigate],
-  );
-
-  const handleOpenLinkedPlace = useCallback(
-    (placeId: string) => {
-      navigate(`/admin/entities/places?placeId=${placeId}`);
-    },
-    [navigate],
   );
 
   const handleToggleReviewMode = useCallback(() => {
@@ -1674,6 +1458,8 @@ export default function LetterReviewPage() {
               relationship={relationship}
               primaryTopics={primaryTopics}
               topicsDropdownOpen={topicsDropdownOpen}
+              originalSender={originalSender}
+              originalRecipient={originalRecipient}
               onSenderChange={setSender}
               onRecipientChange={setRecipient}
               onDateChange={setDate}
@@ -1690,39 +1476,40 @@ export default function LetterReviewPage() {
                   updates as Parameters<typeof triggerAutoSave>[0],
                 )
               }
-              onStartSyncTimer={startSyncTimer}
               hookRef={hookRef}
               descriptionRef={descriptionRef}
-              syncState={syncState}
-              syncMessage={syncMessage}
-              syncCountdown={syncCountdown}
-              showCancelHint={showCancelHint}
               regenerateState={regenerateState}
-              onAISync={handleAISync}
-              onCountdownClick={handleCountdownClick}
-              onCountdownDoubleClick={handleCountdownDoubleClick}
+              reExtractState={reExtractState}
+              onReExtract={handleReExtract}
               onVerifyMetadata={handleVerifyMetadata}
               onConfirmTranscript={handleConfirmTranscript}
               onRegenerateMetadata={handleRegenerateMetadata}
-              onRegenerateEntities={handleRegenerateEntities}
               onMetadataFieldClick={handleMetadataFieldClick}
               onMetadataFieldDoubleClick={handleMetadataFieldDoubleClick}
               showMetadataTooltip={showMetadataTooltip}
               metadataTooltipPosition={metadataTooltipPosition}
-              onUpdateLinkedPerson={handleUpdateLinkedPerson}
-              onUpdateLinkedPlace={handleUpdateLinkedPlace}
-              onRemoveLinkedPerson={handleRemoveLinkedPerson}
-              onRemoveLinkedPlace={handleRemoveLinkedPlace}
-              onSetLetter={(updatedLetter) => setLetter(updatedLetter)}
-              onShowAddPersonModal={setShowAddPersonModal}
-              onShowAddPlaceModal={setShowAddPlaceModal}
-              onOpenLinkedPerson={handleOpenLinkedPerson}
-              onOpenLinkedPlace={handleOpenLinkedPlace}
               saving={saving}
               showToast={showToast}
             />
 
-            {/* Notes Section */}
+            {/* Entity Extraction Section */}
+            {letter.entityExtractionJson && (
+              <EntitySection
+                entityExtractionJson={letter.entityExtractionJson}
+                reExtractState={entityReExtractState}
+                onReExtractEntities={() => handleReExtract("entities_only")}
+              />
+            )}
+
+            {/* AI Notes Section (structured) */}
+            <NotesSection
+              notes={letter.aiNotes as import("./LetterReview/NotesSection").StructuredNote[] | string | null}
+              letterId={letterId!}
+              onNoteStatusChange={handleNoteStatusChange}
+              onAddNote={handleAddNote}
+            />
+
+            {/* Admin Notes Section */}
             <div className="editor-section notes-section">
               <div className="notes-section-header">
                 <span className="help-text">Internal reference only</span>
@@ -1745,16 +1532,6 @@ export default function LetterReviewPage() {
                         ? "verified-field"
                         : ""
                     }
-                  />
-                </div>
-                <div className="form-group">
-                  <label>AI Notes</label>
-                  <textarea
-                    ref={aiNotesRef}
-                    className="ai-notes-editor"
-                    value={aiNotes}
-                    onChange={(e) => handleAiNotesChange(e.target.value)}
-                    placeholder="AI observations and admin notes will appear here. You can edit or add your own notes."
                   />
                 </div>
               </div>
@@ -1833,21 +1610,6 @@ export default function LetterReviewPage() {
         </div>
       )}
 
-      <AddEntityModal
-        type="person"
-        isOpen={showAddPersonModal}
-        isAdding={addingEntity}
-        onClose={() => setShowAddPersonModal(false)}
-        onAdd={handleAddPerson}
-      />
-
-      <AddEntityModal
-        type="place"
-        isOpen={showAddPlaceModal}
-        isAdding={addingEntity}
-        onClose={() => setShowAddPlaceModal(false)}
-        onAdd={handleAddPlace}
-      />
     </div>
     </AdminLayout>
   );

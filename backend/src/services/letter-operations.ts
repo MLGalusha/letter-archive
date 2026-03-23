@@ -4,7 +4,7 @@
  * Extracted business logic from admin letters route handlers.
  * Covers: bulk operations, single letter updates, version history,
  * two-track verification, transcription, extra content, linked entities,
- * and metadata resync.
+ * and linked entities.
  */
 
 import { eq, and, inArray, sql } from 'drizzle-orm';
@@ -22,7 +22,6 @@ import {
 import { getLetterById } from '../services/letters.js';
 import { runTranscription } from '../pipeline/processor.js';
 import { runMetadataExtractionV2, runEntityExtractionOnly } from '../pipeline/metadataV2.js';
-import { resyncMetadata, auditMetadata, type MetadataAuditContext, type LinkedPersonInfo } from '../ai/resync.js';
 import { checkExtraContentForText, transcribeExtraContent, transcribeImage } from '../ai/openai.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
 import { detectAndStoreLinesForPages } from '../services/line-finder.js';
@@ -33,6 +32,7 @@ import {
   processLettersAsync,
 } from './processing-queue.js';
 import { syncLetterParticipantsFromMetadata } from './entities/participant-sync.js';
+import { propagateName } from './name-propagation.js';
 
 const log = createLogger({ module: 'letter-operations' });
 
@@ -186,31 +186,6 @@ export interface VersionInput {
 export interface VersionResult {
   versionNumber: number;
   createdAt: string;
-}
-
-export interface ResyncInput {
-  oldSender: string | null;
-  newSender: string | null;
-  oldRecipient: string | null;
-  newRecipient: string | null;
-}
-
-export interface ResyncCheckResult {
-  needsResync: boolean;
-  decision: Awaited<ReturnType<typeof auditMetadata>>;
-}
-
-export interface ResyncResult {
-  wasUpdated: boolean;
-  updatedFields: {
-    summary: boolean;
-    hook: boolean;
-    senderPerson: boolean;
-    recipientPerson: boolean;
-    relationshipType: boolean;
-    quoteContexts: boolean;
-  };
-  decision: unknown;
 }
 
 export interface TranscriptionRegenerateResult {
@@ -433,16 +408,18 @@ export async function bulkClearTranscriptions(letterIds: string[]): Promise<Bulk
     transcriptionText: null,
     transcriptConfirmedAt: null,
     transcriptConfirmedBy: null,
-    transcriptionStatus: 'PENDING',
-    transcriptionError: null,
+    transcriptionStatus: 'FAILED',
+    transcriptionError: 'Cleared by admin',
+    transcriptionAttemptCount: 0,
     // Clear extra content transcription
     extraContentTranscript: null,
     extraContentStatus: 'EMPTY',
     extraContentVerifiedAt: null,
     extraContentVerifiedBy: null,
     // Clear metadata (depends on transcription)
-    metadataStatus: 'PENDING',
-    metadataError: null,
+    metadataStatus: 'FAILED',
+    metadataError: 'Cleared by admin',
+    metadataAttemptCount: 0,
     sender: null,
     recipient: null,
     locationWritten: null,
@@ -460,8 +437,8 @@ export async function bulkClearTranscriptions(letterIds: string[]): Promise<Bulk
     aiNotes: null,
     // Clear entity extraction
     entityExtractionJson: null,
-    entityExtractionStatus: 'PENDING',
-    entityExtractionError: null,
+    entityExtractionStatus: 'FAILED',
+    entityExtractionError: 'Cleared by admin',
     // Reset two-track content status
     transcriptStatus: 'EMPTY',
     transcriptVerifiedAt: null,
@@ -488,44 +465,75 @@ export async function bulkClearTranscriptions(letterIds: string[]): Promise<Bulk
  * Bulk update sender/recipient fields.
  *
  * Used by the copy-paste edit mode in the admin dashboard.
+ *
+ * For bulk updates, uses Path 1 (name propagation) only -- does not trigger AI
+ * for bulk operations as that would be too expensive. If a letter needs AI
+ * update (empty -> new name), does a simple field update instead.
  */
 export async function bulkUpdateFields(updates: BulkUpdateFieldEntry[]): Promise<BulkUpdateFieldsResult> {
   log.info({ updateCount: updates.length }, 'Bulk update fields request received');
 
   let successCount = 0;
   for (const update of updates) {
-    const dbUpdates: Record<string, unknown> = {
-      updatedAt: new Date(),
-    };
-
     const sender = update.sender !== undefined ? (update.sender || null) : undefined;
     const recipient = update.recipient !== undefined ? (update.recipient || null) : undefined;
 
-    if (sender !== undefined) {
-      dbUpdates.sender = sender;
-    }
-    if (recipient !== undefined) {
-      dbUpdates.recipient = recipient;
+    if (sender === undefined && recipient === undefined) continue;
+
+    // Fetch the current letter to determine which path to use
+    const letter = await db.query.letters.findFirst({
+      where: eq(letters.id, update.letterId),
+    });
+    if (!letter) continue;
+
+    let didPropagate = false;
+
+    // Try name propagation for sender if old and new both exist
+    if (sender !== undefined && sender !== null && letter.sender && letter.sender !== sender) {
+      try {
+        await propagateName({ letterId: update.letterId, field: 'sender', oldName: letter.sender, newName: sender });
+        didPropagate = true;
+      } catch (err) {
+        log.warn({ letterId: update.letterId, err }, 'Bulk propagation failed for sender, using simple update');
+      }
     }
 
-    // Only update if there are actual field changes
-    if (Object.keys(dbUpdates).length > 1) {
-      await db.update(letters).set(dbUpdates).where(
-        and(
-          eq(letters.id, update.letterId)
-        ),
-      );
+    // Try name propagation for recipient if old and new both exist
+    if (recipient !== undefined && recipient !== null && letter.recipient && letter.recipient !== recipient) {
+      try {
+        await propagateName({ letterId: update.letterId, field: 'recipient', oldName: letter.recipient, newName: recipient });
+        didPropagate = true;
+      } catch (err) {
+        log.warn({ letterId: update.letterId, err }, 'Bulk propagation failed for recipient, using simple update');
+      }
+    }
 
-      if (sender !== undefined || recipient !== undefined) {
-        await syncLetterParticipantsFromMetadata({
-          letterId: update.letterId,
-          sender,
-          recipient,
-        });
+    // For any fields that were not propagated, do a simple DB update
+    if (!didPropagate) {
+      const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
+
+      if (sender !== undefined) {
+        dbUpdates.sender = sender;
+      }
+      if (recipient !== undefined) {
+        dbUpdates.recipient = recipient;
       }
 
-      successCount++;
+      if (Object.keys(dbUpdates).length > 1) {
+        await db.update(letters).set(dbUpdates).where(eq(letters.id, update.letterId));
+      }
     }
+
+    // Sync entity links regardless of path
+    if (sender !== undefined || recipient !== undefined) {
+      await syncLetterParticipantsFromMetadata({
+        letterId: update.letterId,
+        sender: sender !== undefined ? sender : undefined,
+        recipient: recipient !== undefined ? recipient : undefined,
+      });
+    }
+
+    successCount++;
   }
 
   log.info({ updated: successCount }, 'Bulk update fields completed');
@@ -558,8 +566,9 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearR
     extractedDate: null,
     extractedDateConfidence: null,
     tags: null,
-    metadataStatus: 'PENDING',
-    metadataError: null,
+    metadataStatus: 'FAILED',
+    metadataError: 'Cleared by admin',
+    metadataAttemptCount: 0,
     metadataJson: null,
     metadataV2Json: null,
     // Clear V2 metadata fields
@@ -569,8 +578,8 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearR
     aiNotes: null,
     // Clear entity extraction
     entityExtractionJson: null,
-    entityExtractionStatus: 'PENDING',
-    entityExtractionError: null,
+    entityExtractionStatus: 'FAILED',
+    entityExtractionError: 'Cleared by admin',
     // Reset metadata two-track status (keep transcript status intact)
     metadataContentStatus: 'EMPTY',
     metadataVerifiedAt: null,
@@ -1486,12 +1495,12 @@ export async function unverifyExtraContent(letterId: string): Promise<true | nul
  * Update AI notes for a letter.
  * Returns null if letter not found.
  */
-export async function updateAiNotes(letterId: string, aiNotes: string | null): Promise<true | null> {
+export async function updateAiNotes(letterId: string, aiNotes: unknown): Promise<true | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
 
   await db.update(letters).set({
-    aiNotes: aiNotes || null,
+    aiNotes: Array.isArray(aiNotes) ? aiNotes : [],
     updatedAt: new Date(),
   }).where(eq(letters.id, letterId));
 
@@ -1730,247 +1739,3 @@ export async function removeLinkedPlace(letterId: string, linkId: string): Promi
   return true;
 }
 
-// ============================================================================
-// METADATA RESYNC
-// ============================================================================
-
-/**
- * Audit all metadata for consistency issues (decision only, no updates).
- *
- * Checks: summary/hook use actual names, sender/recipient are linked,
- * relationship type is set.
- *
- * Returns null if letter not found.
- */
-export async function resyncCheck(letterId: string, body: ResyncInput): Promise<ResyncCheckResult | null> {
-  // Fetch letter with linked persons
-  const letter = await db.query.letters.findFirst({
-    where: eq(letters.id, letterId),
-    with: {
-      collection: true,
-      pages: { orderBy: (p, { asc: asc2 }) => [asc2(p.pageNumber)] },
-      persons: {
-        with: {
-          person: true,
-        },
-      },
-    },
-  });
-
-  if (!letter) return null;
-
-  const { oldSender, newSender, oldRecipient, newRecipient } = body;
-  const resolvedSender = newSender === undefined ? (letter.sender ?? null) : newSender;
-  const resolvedRecipient = newRecipient === undefined ? (letter.recipient ?? null) : newRecipient;
-
-  log.debug(
-    {
-      letterId,
-      sender: resolvedSender,
-      recipient: resolvedRecipient,
-    },
-    'Metadata audit requested',
-  );
-
-  // Build linked persons info
-  const linkedPersons: LinkedPersonInfo[] = (letter.persons || []).map(lp => ({
-    canonicalName: lp.person?.canonicalName || '',
-    role: lp.role as 'sender' | 'recipient' | 'mentioned',
-  }));
-
-  // Extract quote contexts from metadataV2Json
-  const metadataV2 = letter.metadataV2Json as {
-    notable_quotes?: Array<{ text: string; context: string; position: 'opening' | 'middle' | 'closing' }>;
-  } | null;
-  const quoteContexts = metadataV2?.notable_quotes || [];
-
-  // Build full audit context
-  const auditContext: MetadataAuditContext = {
-    sender: resolvedSender,
-    recipient: resolvedRecipient,
-    date: letter.extractedDate || null,
-    summary: letter.summary || null,
-    hook: letter.hook || null,
-    relationshipType: letter.senderRecipientRelationship || null,
-    linkedPersons,
-    quoteContexts,
-  };
-
-  // Build change info if there was a change
-  const change = (oldSender !== newSender || oldRecipient !== newRecipient)
-    ? { oldSender, newSender, oldRecipient, newRecipient }
-    : undefined;
-
-  // Call the audit function (fast model)
-  const decision = await auditMetadata(auditContext, change);
-
-  const needsResync =
-    decision.shouldUpdateSummary ||
-    decision.shouldUpdateHook ||
-    decision.shouldCreateSenderPerson ||
-    decision.shouldCreateRecipientPerson ||
-    decision.shouldUpdateRelationship ||
-    decision.shouldUpdateQuoteContexts;
-
-  log.debug(
-    {
-      letterId,
-      needsResync,
-      issueCount: decision.issues.length,
-      reason: decision.reason,
-    },
-    'Metadata audit completed',
-  );
-
-  return { needsResync, decision };
-}
-
-/**
- * Full metadata sync using a two-model approach.
- *
- * 1. GPT-5-mini audits all metadata for issues
- * 2. Main model regenerates/fixes the affected fields
- *
- * Can fix: summary, hook, quote contexts using generic terms,
- * missing linked persons, missing relationship type.
- *
- * Returns null if letter not found.
- */
-export async function resyncLetterMetadata(letterId: string, body: ResyncInput): Promise<ResyncResult | null> {
-  // Fetch letter with linked persons
-  const letter = await db.query.letters.findFirst({
-    where: eq(letters.id, letterId),
-    with: {
-      collection: true,
-      pages: { orderBy: (p, { asc: asc2 }) => [asc2(p.pageNumber)] },
-      persons: {
-        with: {
-          person: true,
-        },
-      },
-    },
-  });
-
-  if (!letter) return null;
-
-  const { oldSender, newSender, oldRecipient, newRecipient } = body;
-  const resolvedSender = newSender === undefined ? (letter.sender ?? null) : newSender;
-  const resolvedRecipient = newRecipient === undefined ? (letter.recipient ?? null) : newRecipient;
-
-  log.info(
-    {
-      letterId,
-      sender: resolvedSender,
-      recipient: resolvedRecipient,
-    },
-    'Metadata sync requested',
-  );
-
-  // Build linked persons info
-  const linkedPersons: LinkedPersonInfo[] = (letter.persons || []).map(lp => ({
-    canonicalName: lp.person?.canonicalName || '',
-    role: lp.role as 'sender' | 'recipient' | 'mentioned',
-  }));
-
-  // Extract quote contexts from metadataV2Json
-  const existingMetadataV2 = letter.metadataV2Json as Record<string, unknown> | null;
-  const quoteContexts = (existingMetadataV2?.notable_quotes || []) as Array<{
-    text: string;
-    context: string;
-    position: 'opening' | 'middle' | 'closing';
-  }>;
-
-  // Build full audit context
-  const auditContext: MetadataAuditContext = {
-    sender: resolvedSender,
-    recipient: resolvedRecipient,
-    date: letter.extractedDate || null,
-    summary: letter.summary || null,
-    hook: letter.hook || null,
-    relationshipType: letter.senderRecipientRelationship || null,
-    linkedPersons,
-    quoteContexts,
-  };
-
-  // Build change info if there was a change
-  const change = (oldSender !== newSender || oldRecipient !== newRecipient)
-    ? { oldSender, newSender, oldRecipient, newRecipient }
-    : undefined;
-
-  // Get transcript
-  const transcript = letter.transcriptionText || '';
-
-  // Perform full resync using AI
-  const result = await resyncMetadata({
-    transcript,
-    context: auditContext,
-    change,
-  });
-
-  // If something was updated, save it
-  if (result.wasUpdated) {
-    const dbUpdates: Record<string, unknown> = {
-      updatedAt: new Date(),
-    };
-
-    if (result.summary) {
-      dbUpdates.summary = result.summary;
-    }
-    if (result.hook) {
-      dbUpdates.hook = result.hook;
-    }
-    if (result.relationshipType) {
-      const normalizedRelationship = normalizeRelationshipType(result.relationshipType);
-      if (normalizedRelationship) {
-        dbUpdates.senderRecipientRelationship = normalizedRelationship;
-      }
-    }
-    if (result.updatedQuoteContexts) {
-      dbUpdates.metadataV2Json = {
-        ...(existingMetadataV2 || {}),
-        notable_quotes: result.updatedQuoteContexts,
-      };
-    }
-
-    await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
-
-    if (result.senderPerson || result.recipientPerson || change) {
-      await syncLetterParticipantsFromMetadata({
-        letterId,
-        sender: resolvedSender,
-        recipient: resolvedRecipient,
-        relationshipType: (dbUpdates.senderRecipientRelationship as DBRelationshipType | null | undefined)
-          ?? letter.senderRecipientRelationship,
-      });
-    }
-
-    log.info(
-      {
-        letterId,
-        updatedSummary: Boolean(result.summary),
-        updatedHook: Boolean(result.hook),
-        createdSenderPerson: Boolean(result.senderPerson),
-        createdRecipientPerson: Boolean(result.recipientPerson),
-        updatedRelationship: Boolean(result.relationshipType),
-        updatedQuoteContexts: Boolean(result.updatedQuoteContexts),
-        decision: result.decision.reason,
-      },
-      'Metadata sync completed',
-    );
-  } else {
-    log.info({ letterId, reason: result.decision.reason }, 'Metadata sync: no updates needed');
-  }
-
-  return {
-    wasUpdated: result.wasUpdated,
-    updatedFields: {
-      summary: Boolean(result.summary),
-      hook: Boolean(result.hook),
-      senderPerson: Boolean(result.senderPerson),
-      recipientPerson: Boolean(result.recipientPerson),
-      relationshipType: Boolean(result.relationshipType),
-      quoteContexts: Boolean(result.updatedQuoteContexts),
-    },
-    decision: result.decision,
-  };
-}

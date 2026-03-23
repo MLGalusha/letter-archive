@@ -4,7 +4,7 @@ export interface ProcessingStatus {
   isRunning: boolean;
   isPaused: boolean;
   shouldAbort: boolean;
-  currentJob: { letterId: string; type: "transcription" | "metadata" } | null;
+  currentJob: { letterId: string; type: "transcription" | "metadata" | "entity_extraction" | "entity_resolution" } | null;
   completed: number;
   failed: number;
   total: number;
@@ -46,6 +46,12 @@ export async function startEntityExtraction(
   options?: StartProcessingOptions,
 ): Promise<{ message: string; total: number }> {
   return apiPost<{ message: string; total: number }>("/admin/processing/start-entities", options || {});
+}
+
+export async function startEntityResolution(
+  collectionCode: string,
+): Promise<{ message: string; total: number }> {
+  return apiPost<{ message: string; total: number }>("/admin/processing/start-entity-resolution", { collectionCode });
 }
 
 export async function pauseProcessing(): Promise<{ message: string }> {

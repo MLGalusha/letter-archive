@@ -1060,33 +1060,6 @@
   font-weight: 600;
 }
 
-/* AI sync status indicator (in metadata header) */
-.sync-status-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  margin-left: var(--spacing-sm);
-  font-weight: 500;
-}
-
-.sync-status-indicator.checking,
-.sync-status-indicator.updating {
-  background: #fff3e0;
-  color: #e65100;
-}
-
-.sync-status-indicator.done {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
-.sync-status-indicator .spinning {
-  animation: spin 1s linear infinite;
-}
-
 /* Regenerate transcription status indicator (in transcript header) */
 .regen-status-indicator {
   display: inline-flex;
@@ -1111,74 +1084,6 @@
 
 .regen-status-indicator .spinning {
   animation: spin 1s linear infinite;
-}
-
-/* Sync button with countdown state */
-.action-btn.sync-btn.has-countdown {
-  background: #fef3c7;
-  color: #92400e;
-  border-color: #fcd34d;
-  position: relative;
-}
-
-.action-btn.sync-btn.has-countdown:hover:not(:disabled) {
-  background: #fde68a;
-  border-color: #fbbf24;
-}
-
-.sync-countdown-text {
-  font-variant-numeric: tabular-nums;
-  min-width: 2.5em;
-  text-align: center;
-}
-
-.action-btn.sync-btn .cancel-hint {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--bg-dark, #1f2937);
-  color: var(--text-light, #f9fafb);
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  white-space: nowrap;
-  margin-top: 4px;
-  z-index: 10;
-  pointer-events: none;
-}
-
-/* Legacy resync indicator (can be removed if not used) */
-.resync-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.85rem;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  margin-left: var(--spacing-sm);
-}
-
-.resync-indicator.checking {
-  color: var(--text-muted);
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-.resync-indicator.pending {
-  background: #fff8e1;
-  color: #f57c00;
-  font-weight: 500;
-}
-
-.resync-indicator.needs-update {
-  background: #fff3e0;
-  color: #e65100;
-  font-weight: 500;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
 }
 
 /* Section footer (for metadata verification button only) */
@@ -1628,48 +1533,6 @@
   cursor: not-allowed;
 }
 
-/* Re-sync prompt modal */
-.resync-prompt {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.resync-message {
-  margin: 0;
-  font-size: var(--font-sm);
-  color: var(--text);
-}
-
-.affected-fields-list {
-  margin: 0;
-  padding-left: var(--spacing-lg);
-  font-size: var(--font-sm);
-}
-
-.affected-fields-list li {
-  margin-bottom: var(--spacing-xs);
-  color: var(--text);
-}
-
-.affected-fields-list strong {
-  color: #e65100;
-}
-
-.resync-question {
-  margin: 0;
-  font-size: var(--font-sm);
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.resync-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-sm);
-}
-
 /* ============================================================================
    VERIFIED TRANSCRIPT EDITING FLOW STYLES
    ============================================================================ */
@@ -1938,38 +1801,6 @@
   cursor: not-allowed;
 }
 
-.action-btn.sync-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0.75rem;
-  background: #fff3e0;
-  color: #e65100;
-  border: solid 1px #ffcc80;
-  border-radius: var(--radius-md);
-  font-size: var(--font-xs);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.action-btn.sync-btn:hover:not(:disabled) {
-  background: #ffe0b2;
-  border-color: #ffb74d;
-}
-
-.action-btn.sync-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.action-btn.sync-btn.done {
-  background: #e8f5e9;
-  color: #4caf50;
-  border-color: #81c784;
-}
-
-.action-btn.sync-btn .spinning,
 .action-btn.generate-btn .spinning {
   animation: spin 1s linear infinite;
 }
@@ -2076,4 +1907,111 @@
 
 .confirm-dialog .btn-confirm:hover {
   background: #d84315;
+}
+
+/* ============================================================================
+   RE-EXTRACTION NOTIFICATION BAR
+   ============================================================================ */
+
+.re-extract-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: 0.6rem 0.75rem;
+  background: #eff6ff;
+  border: solid 1px #bfdbfe;
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+
+body.dark .re-extract-bar {
+  background: hsl(220 30% 14%);
+  border-color: hsl(220 30% 25%);
+}
+
+.re-extract-message {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--font-sm);
+  color: #1d4ed8;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+body.dark .re-extract-message {
+  color: #93c5fd;
+}
+
+.re-extract-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex-shrink: 0;
+}
+
+.re-extract-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.re-extract-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.re-extract-btn-secondary {
+  background: var(--bg);
+  color: var(--text-muted);
+  border: solid 1px var(--border);
+}
+
+.re-extract-btn-secondary:hover:not(:disabled) {
+  background: var(--bg-light);
+  border-color: var(--text-muted);
+}
+
+.re-extract-btn-primary {
+  background: #1d4ed8;
+  color: white;
+  border: solid 1px #1d4ed8;
+}
+
+.re-extract-btn-primary:hover:not(:disabled) {
+  background: #1e40af;
+  border-color: #1e40af;
+}
+
+body.dark .re-extract-btn-primary {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}
+
+body.dark .re-extract-btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.re-extract-btn-primary .spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* Done state for re-extract primary button */
+.re-extract-btn-primary:has(.icon-check) {
+  background: #15803d;
+  border-color: #15803d;
+}
+
+body.dark .re-extract-btn-primary:has(.icon-check) {
+  background: #16a34a;
+  border-color: #16a34a;
 }

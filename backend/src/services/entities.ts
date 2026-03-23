@@ -7,3 +7,5 @@ export * from './entities/relationships.js';
 export * from './entities/extraction.js';
 export * from './entities/participant-sync.js';
 export * from './entities/place-themes.js';
+export * from './entities/collection-queries.js';
+export * from './entities/resolution.js';

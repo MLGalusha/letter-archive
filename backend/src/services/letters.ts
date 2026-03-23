@@ -10,8 +10,9 @@ import {
   type EmotionalTone,
   type RelationshipType,
 } from '../db/index.js';
-import type { MetadataV2 } from '../ai/schemas/metadataV2.js';
+import type { MetadataV2, StructuredNote, AiNoteOutput } from '../ai/schemas/metadataV2.js';
 import type { EntityExtraction } from '../ai/schemas/entityExtraction.js';
+import { createNotification } from './notifications.js';
 
 export interface LetterIdentity {
   collectionId: string;
@@ -264,8 +265,34 @@ export async function updateMetadataV2(
     updates.senderRecipientRelationship = metadata.sender_recipient_relationship as RelationshipType | null;
     updates.primaryTopics = metadata.primary_topics;
 
-    // AI notes (observations, hunches from extraction)
-    updates.aiNotes = metadata.ai_notes;
+    // AI notes: enrich AI output with backend fields before storing
+    if (metadata.ai_notes && Array.isArray(metadata.ai_notes) && metadata.ai_notes.length > 0) {
+      const structuredNotes: StructuredNote[] = metadata.ai_notes.map((note: AiNoteOutput) => ({
+        id: crypto.randomUUID(),
+        content: note.content,
+        category: note.category,
+        priority: note.priority,
+        status: 'open' as const,
+        resolves_when: note.resolves_when,
+        resolved_at: null,
+        resolved_by: null,
+        source: 'ai' as const,
+      }));
+      updates.aiNotes = structuredNotes;
+
+      // Create notification for high-priority notes
+      const highPriorityNotes = structuredNotes.filter(n => n.priority === 'high');
+      if (highPriorityNotes.length > 0) {
+        createNotification({
+          type: 'system',
+          title: `${highPriorityNotes.length} note${highPriorityNotes.length > 1 ? 's' : ''} need attention`,
+          message: highPriorityNotes.map(n => n.content).join('; '),
+          link: `/admin/letters/${letterId}`,
+        });
+      }
+    } else {
+      updates.aiNotes = [];
+    }
 
     // Store full V2 JSON for entity processing and future features
     updates.metadataV2Json = metadata;

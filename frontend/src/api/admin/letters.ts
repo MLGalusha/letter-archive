@@ -118,6 +118,29 @@ export async function detectPageLines(
   return result;
 }
 
+export async function reExtractLetter(
+  letterId: string,
+  options: {
+    confirmedSender?: string;
+    confirmedRecipient?: string;
+    mode: 'full' | 'metadata_only' | 'entities_only';
+  }
+): Promise<Letter> {
+  return apiPost<Letter>(`/admin/letters/${letterId}/re-extract`, options);
+}
+
+export async function updateIdentity(letterId: string, data: { sender?: string; recipient?: string }): Promise<Letter> {
+  return apiPatch<Letter>(`/admin/letters/${letterId}/identity`, data);
+}
+
 export async function toggleLetterFlag(letterId: string, flagged: boolean): Promise<Letter> {
   return apiPatch<Letter>(`/admin/letters/${letterId}/flag`, { flagged });
+}
+
+export async function updateNoteStatus(letterId: string, noteId: string, status: 'resolved' | 'dismissed'): Promise<Letter> {
+  return apiPatch<Letter>(`/admin/letters/${letterId}/notes/${noteId}`, { status });
+}
+
+export async function addNote(letterId: string, note: { content: string; category: string; priority: string }): Promise<Letter> {
+  return apiPost<Letter>(`/admin/letters/${letterId}/notes`, note);
 }

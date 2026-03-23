@@ -1,7 +1,5 @@
 import type { RefObject } from "react";
-import { getErrorMessage } from "../../../api/client";
 import { Icon, Dropdown, DropdownItem } from "../../../components/common";
-import EditableEntityItem from "./EditableEntityItem";
 import type { Letter, EmotionalTone, RelationshipType } from "../../../types/Letter";
 import {
   EMOTIONAL_TONE_OPTIONS,
@@ -26,6 +24,10 @@ interface MetadataSectionProps {
   primaryTopics: string[];
   topicsDropdownOpen: boolean;
 
+  // Original AI-extracted values for change detection
+  originalSender: string;
+  originalRecipient: string;
+
   // Setter callbacks
   onSenderChange: (value: string) => void;
   onRecipientChange: (value: string) => void;
@@ -39,32 +41,24 @@ interface MetadataSectionProps {
   onPrimaryTopicsChange: (value: string[]) => void;
   onTopicsDropdownOpenChange: (value: boolean) => void;
 
-  // Auto-save and sync
+  // Auto-save
   onTriggerAutoSave: (updates: Record<string, unknown>) => void;
-  onStartSyncTimer: () => void;
 
   // Refs
   hookRef: RefObject<HTMLTextAreaElement | null>;
   descriptionRef: RefObject<HTMLTextAreaElement | null>;
 
-  // Sync/regenerate state
-  syncState: string;
-  syncMessage: string | null;
-  syncCountdown: number | null;
-  showCancelHint: boolean;
+  // Regenerate state
   regenerateState: string;
 
-  // Sync handlers
-  onAISync: () => void;
-  onCountdownClick: () => void;
-  onCountdownDoubleClick: () => void;
+  // Re-extraction state
+  reExtractState: "idle" | "extracting" | "done";
+  onReExtract: (mode: "full" | "metadata_only" | "entities_only") => void;
 
   // Verification and generation handlers
   onVerifyMetadata: () => void;
   onConfirmTranscript: () => void;
   onRegenerateMetadata: () => void;
-  onRegenerateEntities: () => Promise<void>;
-
   // Metadata field click/double-click handlers
   onMetadataFieldClick: (e: React.MouseEvent) => void;
   onMetadataFieldDoubleClick: (e: React.MouseEvent) => void;
@@ -72,19 +66,6 @@ interface MetadataSectionProps {
   // Metadata tooltip
   showMetadataTooltip: boolean;
   metadataTooltipPosition: { x: number; y: number };
-
-  // Entity handlers
-  onUpdateLinkedPerson: (personId: string, newName: string) => Promise<Letter>;
-  onUpdateLinkedPlace: (placeId: string, newName: string) => Promise<Letter>;
-  onRemoveLinkedPerson: (personId: string) => Promise<Letter>;
-  onRemoveLinkedPlace: (placeId: string) => Promise<Letter>;
-  onSetLetter: (letter: Letter) => void;
-
-  // Add entity modals
-  onShowAddPersonModal: (show: boolean) => void;
-  onShowAddPlaceModal: (show: boolean) => void;
-  onOpenLinkedPerson: (personId: string) => void;
-  onOpenLinkedPlace: (placeId: string) => void;
 
   // General state
   saving: boolean;
@@ -105,6 +86,8 @@ export default function MetadataSection({
   relationship,
   primaryTopics,
   topicsDropdownOpen,
+  originalSender,
+  originalRecipient,
   onSenderChange,
   onRecipientChange,
   onDateChange,
@@ -117,36 +100,20 @@ export default function MetadataSection({
   onPrimaryTopicsChange,
   onTopicsDropdownOpenChange,
   onTriggerAutoSave,
-  onStartSyncTimer,
   hookRef,
   descriptionRef,
-  syncState,
-  syncMessage,
-  syncCountdown,
-  showCancelHint,
   regenerateState,
-  onAISync,
-  onCountdownClick,
-  onCountdownDoubleClick,
+  reExtractState,
+  onReExtract,
   onVerifyMetadata,
   onConfirmTranscript,
   onRegenerateMetadata,
-  onRegenerateEntities,
   onMetadataFieldClick,
   onMetadataFieldDoubleClick,
   showMetadataTooltip,
   metadataTooltipPosition,
-  onUpdateLinkedPerson,
-  onUpdateLinkedPlace,
-  onRemoveLinkedPerson,
-  onRemoveLinkedPlace,
-  onSetLetter,
-  onShowAddPersonModal,
-  onShowAddPlaceModal,
-  onOpenLinkedPerson,
-  onOpenLinkedPlace,
   saving,
-  showToast,
+  showToast: _showToast,
 }: MetadataSectionProps) {
   return (
     <div className="metadata-section">
@@ -193,75 +160,6 @@ export default function MetadataSection({
               </button>
             )}
 
-          {/* Sync button - hidden when verified or empty */}
-          {letter.metadataContentStatus !== "EMPTY" &&
-            letter.metadataContentStatus !== "VERIFIED" && (
-              <button
-                className={`action-btn sync-btn ${syncState !== "idle" ? syncState : ""} ${syncCountdown !== null && syncState === "idle" ? "has-countdown" : ""}`}
-                onClick={onAISync}
-                onDoubleClick={syncCountdown !== null && syncState === "idle" ? onCountdownDoubleClick : undefined}
-                onMouseEnter={syncCountdown !== null && syncState === "idle" ? onCountdownClick : undefined}
-                onFocus={syncCountdown !== null && syncState === "idle" ? onCountdownClick : undefined}
-                disabled={
-                  saving ||
-                  (syncState !== "idle" && syncCountdown === null) ||
-                  !letter.transcript.fullText
-                }
-                title={syncCountdown !== null && syncState === "idle"
-                  ? "Click to sync now, double-click to cancel"
-                  : "Sync metadata with identity changes"
-                }
-              >
-                {syncState === "checking" ||
-                syncState === "updating" ? (
-                  <>
-                    <Icon
-                      name="process"
-                      size={14}
-                      className="spinning"
-                    />
-                    <span>Syncing...</span>
-                  </>
-                ) : syncState === "done" ? (
-                  <>
-                    <Icon name="check" size={14} />
-                    <span>Synced</span>
-                  </>
-                ) : syncCountdown !== null ? (
-                  <>
-                    <Icon name="process" size={14} />
-                    <span className="sync-countdown-text">
-                      {Math.floor(syncCountdown / 60)}:{String(syncCountdown % 60).padStart(2, "0")}
-                    </span>
-                    {showCancelHint && (
-                      <span className="cancel-hint">
-                        Double-click to cancel
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <Icon name="process" size={14} />
-                    <span>Sync</span>
-                  </>
-                )}
-              </button>
-            )}
-
-          {/* AI sync status indicator */}
-          {syncMessage && (
-            <span className={`sync-status-indicator ${syncState}`}>
-              {syncState === "checking" && (
-                <Icon name="process" size={14} className="spinning" />
-              )}
-              {syncState === "updating" && (
-                <Icon name="process" size={14} className="spinning" />
-              )}
-              {syncState === "done" && <Icon name="check" size={14} />}
-              <span>{syncMessage}</span>
-            </span>
-          )}
-
           {/* Verification UI */}
           {letter.metadataContentStatus === "VERIFIED" ? (
             <div className="verified-info">
@@ -299,7 +197,6 @@ export default function MetadataSection({
               onChange={(e) => {
                 onSenderChange(e.target.value);
                 onTriggerAutoSave({ sender: e.target.value || null });
-                onStartSyncTimer();
               }}
               placeholder="Who wrote the letter"
               readOnly={letter.metadataContentStatus === "VERIFIED"}
@@ -319,7 +216,6 @@ export default function MetadataSection({
               onChange={(e) => {
                 onRecipientChange(e.target.value);
                 onTriggerAutoSave({ recipient: e.target.value || null });
-                onStartSyncTimer();
               }}
               placeholder="Who received the letter"
               readOnly={letter.metadataContentStatus === "VERIFIED"}
@@ -331,6 +227,63 @@ export default function MetadataSection({
             />
           </div>
         </div>
+
+        {/* Re-extraction notification bar — shown when sender or recipient has changed */}
+        {letter.metadataContentStatus !== "VERIFIED" &&
+          letter.metadataContentStatus !== "EMPTY" &&
+          (sender.trim() !== originalSender.trim() ||
+            recipient.trim() !== originalRecipient.trim()) && (
+            <div className="re-extract-bar">
+              <div className="re-extract-message">
+                <Icon name="refresh" size={14} />
+                <span>
+                  {sender.trim() !== originalSender.trim() &&
+                  recipient.trim() !== originalRecipient.trim()
+                    ? "Sender and recipient have been changed."
+                    : sender.trim() !== originalSender.trim()
+                      ? "Sender has been changed."
+                      : "Recipient has been changed."}
+                  {" "}Re-extract metadata with the corrected{" "}
+                  {sender.trim() !== originalSender.trim() &&
+                  recipient.trim() !== originalRecipient.trim()
+                    ? "identities"
+                    : "identity"}?
+                </span>
+              </div>
+              <div className="re-extract-actions">
+                <button
+                  className="re-extract-btn re-extract-btn-secondary"
+                  disabled={saving || reExtractState === "extracting"}
+                  title="Keep name changes without re-extracting metadata"
+                >
+                  Update Names Only
+                </button>
+                <button
+                  className="re-extract-btn re-extract-btn-primary"
+                  onClick={() => onReExtract("full")}
+                  disabled={saving || reExtractState === "extracting"}
+                  title="Re-extract all metadata using corrected sender/recipient"
+                >
+                  {reExtractState === "extracting" ? (
+                    <>
+                      <Icon name="process" size={14} className="spinning" />
+                      <span>Extracting...</span>
+                    </>
+                  ) : reExtractState === "done" ? (
+                    <>
+                      <Icon name="check" size={14} />
+                      <span>Done</span>
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="refresh" size={14} />
+                      <span>Re-extract with Corrections</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
 
         <div className="form-row">
           <div className="form-group">
@@ -557,132 +510,6 @@ export default function MetadataSection({
                     </div>
                   </Dropdown>
                 )}
-              </div>
-            </div>
-
-            {/* Linked Entities Section */}
-            <div className="linked-entities">
-              <div className="entity-extraction-status" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                  Entity extraction:{" "}
-                  <span style={{
-                    color: letter.entityExtractionStatus === "SUCCESS" ? "var(--green, #22c55e)"
-                      : letter.entityExtractionStatus === "FAILED" ? "var(--red, #ef4444)"
-                      : letter.entityExtractionStatus === "RUNNING" ? "var(--blue, #3b82f6)"
-                      : "var(--text-muted)",
-                    fontWeight: 600,
-                  }}>
-                    {letter.entityExtractionStatus || "PENDING"}
-                  </span>
-                  {letter.entityExtractionError && (
-                    <span title={letter.entityExtractionError} style={{ color: "var(--red, #ef4444)", marginLeft: "4px" }}> (error)</span>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  className="add-entity-btn"
-                  onClick={async () => {
-                    try {
-                      showToast("Re-extracting entities...", "info");
-                      await onRegenerateEntities();
-                    } catch (err) {
-                      showToast(getErrorMessage(err, "Failed to re-extract entities"), "error");
-                    }
-                  }}
-                  title="Re-run entity extraction (Prompt 2)"
-                  disabled={letter.entityExtractionStatus === "RUNNING"}
-                  style={{ fontSize: "11px" }}
-                >
-                  Re-extract
-                </button>
-              </div>
-              <div className="entity-group">
-                <div className="entity-group-header">
-                  <label>Linked People</label>
-                  {letter.metadataContentStatus !== "VERIFIED" && (
-                    <button
-                      type="button"
-                      className="add-entity-btn"
-                      onClick={() => onShowAddPersonModal(true)}
-                      title="Add a person"
-                    >
-                      <Icon name="plus" size={12} />
-                      Add
-                    </button>
-                  )}
-                </div>
-                <div className="entity-list">
-                  {letter.linkedPersons && letter.linkedPersons.length > 0 ? (
-                    letter.linkedPersons.map((lp) => (
-                      <EditableEntityItem
-                        key={lp.id}
-                        id={lp.id}
-                        name={lp.canonicalName}
-                        role={lp.role}
-                        confidence={lp.confidence}
-                        isVerified={letter.metadataContentStatus === "VERIFIED"}
-                        onOpenEntity={() => onOpenLinkedPerson(lp.personId)}
-                        openEntityLabel={`Open ${lp.canonicalName} in People`}
-                        onSave={async (newName) => {
-                          const updated = await onUpdateLinkedPerson(lp.id, newName);
-                          onSetLetter(updated);
-                          showToast("Person name updated", "success");
-                        }}
-                        onRemove={async () => {
-                          const updated = await onRemoveLinkedPerson(lp.id);
-                          onSetLetter(updated);
-                          showToast("Person removed", "success");
-                        }}
-                      />
-                    ))
-                  ) : (
-                    <span className="no-entities">No people linked</span>
-                  )}
-                </div>
-              </div>
-              <div className="entity-group">
-                <div className="entity-group-header">
-                  <label>Linked Places</label>
-                  {letter.metadataContentStatus !== "VERIFIED" && (
-                    <button
-                      type="button"
-                      className="add-entity-btn"
-                      onClick={() => onShowAddPlaceModal(true)}
-                      title="Add a place"
-                    >
-                      <Icon name="plus" size={12} />
-                      Add
-                    </button>
-                  )}
-                </div>
-                <div className="entity-list">
-                  {letter.linkedPlaces && letter.linkedPlaces.length > 0 ? (
-                    letter.linkedPlaces.map((lpl) => (
-                      <EditableEntityItem
-                        key={lpl.id}
-                        id={lpl.id}
-                        name={lpl.canonicalName}
-                        role={lpl.role}
-                        confidence={lpl.confidence}
-                        isVerified={letter.metadataContentStatus === "VERIFIED"}
-                        onOpenEntity={() => onOpenLinkedPlace(lpl.placeId)}
-                        openEntityLabel={`Open ${lpl.canonicalName} in Places`}
-                        onSave={async (newName) => {
-                          const updated = await onUpdateLinkedPlace(lpl.id, newName);
-                          onSetLetter(updated);
-                          showToast("Place name updated", "success");
-                        }}
-                        onRemove={async () => {
-                          const updated = await onRemoveLinkedPlace(lpl.id);
-                          onSetLetter(updated);
-                          showToast("Place removed", "success");
-                        }}
-                      />
-                    ))
-                  ) : (
-                    <span className="no-entities">No places linked</span>
-                  )}
-                </div>
               </div>
             </div>
 

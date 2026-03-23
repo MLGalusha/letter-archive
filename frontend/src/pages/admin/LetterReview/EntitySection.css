@@ -1,0 +1,499 @@
+/* ============================================================================
+   Entity Section — expandable person/place cards for letter review
+   ============================================================================ */
+
+.entity-section {
+  background: var(--bg-light);
+  border: var(--border-card);
+  border-top: solid 1px var(--highlight);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: var(--spacing-md);
+}
+
+.entity-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+}
+
+.entity-section-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.entity-count {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* Subsection (People / Places) */
+.entity-subsection {
+  margin-bottom: var(--spacing-sm);
+}
+
+.entity-subsection:last-child {
+  margin-bottom: 0;
+}
+
+.entity-subsection-title {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+/* Entity Card */
+.entity-card {
+  border: solid 1px var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-xs);
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+
+.entity-card:last-child {
+  margin-bottom: 0;
+}
+
+.entity-card:hover {
+  border-color: var(--text-muted);
+}
+
+/* Collapsed row */
+.entity-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  background: var(--bg);
+  transition: background 0.15s ease;
+}
+
+.entity-card-header:hover {
+  background: var(--bg-light);
+}
+
+.entity-card-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.entity-card-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.entity-card-name {
+  font-weight: 600;
+  font-size: var(--font-sm);
+  color: var(--text);
+}
+
+.entity-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Role/type badge pills */
+.entity-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* Person role colors */
+.entity-badge.role-sender {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.entity-badge.role-recipient {
+  background: #fce7f3;
+  color: #be185d;
+}
+
+.entity-badge.role-mentioned {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+/* Place role colors */
+.entity-badge.role-written_from {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.entity-badge.role-destination {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* Place type colors */
+.entity-badge.type-city {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.entity-badge.type-region {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.entity-badge.type-country {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.entity-badge.type-street {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.entity-badge.type-landmark {
+  background: #fdf4ff;
+  color: #a21caf;
+}
+
+.entity-badge.type-other {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+/* Confidence */
+.entity-confidence {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Dark mode badge adjustments */
+body.dark .entity-badge.role-sender {
+  background: hsl(220 40% 18%);
+  color: #93c5fd;
+}
+
+body.dark .entity-badge.role-recipient {
+  background: hsl(330 30% 18%);
+  color: #f9a8d4;
+}
+
+body.dark .entity-badge.role-mentioned {
+  background: hsl(0 0% 18%);
+  color: hsl(0 0% 70%);
+}
+
+body.dark .entity-badge.role-written_from {
+  background: hsl(220 40% 18%);
+  color: #93c5fd;
+}
+
+body.dark .entity-badge.role-destination {
+  background: hsl(40 40% 16%);
+  color: #fcd34d;
+}
+
+body.dark .entity-badge.type-city {
+  background: hsl(260 30% 18%);
+  color: #c4b5fd;
+}
+
+body.dark .entity-badge.type-region {
+  background: hsl(200 40% 16%);
+  color: #7dd3fc;
+}
+
+body.dark .entity-badge.type-country {
+  background: hsl(160 30% 14%);
+  color: #6ee7b7;
+}
+
+body.dark .entity-badge.type-street {
+  background: hsl(20 40% 16%);
+  color: #fdba74;
+}
+
+body.dark .entity-badge.type-landmark {
+  background: hsl(290 30% 16%);
+  color: #e879f9;
+}
+
+body.dark .entity-badge.type-other {
+  background: hsl(0 0% 18%);
+  color: hsl(0 0% 70%);
+}
+
+/* Expanded body */
+.entity-card-body {
+  padding: 0.75rem;
+  border-top: solid 1px var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--bg-light);
+}
+
+/* Narrative block — prominent at top */
+.entity-narrative {
+  font-size: var(--font-sm);
+  color: var(--text);
+  line-height: 1.6;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent);
+}
+
+/* Emotional significance */
+.entity-emotional {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+/* Detail tags */
+.entity-detail-label {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.entity-details-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.entity-detail-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--bg);
+  border: solid 1px var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.entity-detail-category {
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.entity-detail-category::after {
+  content: ":";
+}
+
+/* Quotes */
+.entity-quotes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.entity-quote {
+  margin: 0;
+  padding: 0.4rem 0.75rem;
+  border-left: 2px solid var(--border);
+  font-size: var(--font-sm);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.entity-quote p {
+  margin: 0;
+  font-style: italic;
+  color: var(--text);
+}
+
+.entity-quote cite {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  font-style: normal;
+}
+
+/* Relationships list */
+.entity-relationships {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.entity-relationship-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-sm);
+  color: var(--text);
+}
+
+.entity-relationship-type {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: capitalize;
+  background: var(--bg);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  border: solid 1px var(--border);
+}
+
+.entity-relationship-evidence {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Place connections */
+.entity-connections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.entity-connection-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--bg);
+  border: solid 1px var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: var(--text);
+}
+
+.entity-connection-type {
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+/* Associated people tags (in place cards) */
+.entity-people-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.entity-person-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: var(--bg);
+  border: solid 1px var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* Why mentioned / descriptive details text blocks */
+.entity-text-block {
+  font-size: var(--font-sm);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* Section group within expanded card */
+.entity-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* No entities message */
+.entity-empty {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  font-style: italic;
+  padding: var(--spacing-xs) 0;
+}
+
+/* Re-extract entities button in header */
+.entity-re-extract-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  padding: 0.3rem 0.6rem;
+  background: var(--bg);
+  color: var(--text-muted);
+  border: solid 1px var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.entity-re-extract-btn:hover:not(:disabled) {
+  background: var(--bg-light);
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.entity-re-extract-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.entity-re-extract-btn.extracting {
+  background: #fff3e0;
+  color: #e65100;
+  border-color: #ffcc80;
+}
+
+body.dark .entity-re-extract-btn.extracting {
+  background: hsl(30 40% 14%);
+  color: #fdba74;
+  border-color: hsl(30 30% 25%);
+}
+
+.entity-re-extract-btn.extracting .spinning {
+  animation: spin 1s linear infinite;
+}
+
+.entity-re-extract-btn.done {
+  background: #e8f5e9;
+  color: #15803d;
+  border-color: #81c784;
+}
+
+body.dark .entity-re-extract-btn.done {
+  background: hsl(140 30% 14%);
+  color: #6ee7b7;
+  border-color: hsl(140 25% 25%);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

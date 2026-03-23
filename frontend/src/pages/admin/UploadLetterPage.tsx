@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { isAuthenticated } from "../../api/auth";
 import { uploadFiles, checkDuplicates, type UploadResult, type UploadError } from "../../api/admin";
 import { getErrorMessage } from "../../api/client";
 import {
   parseFilename,
 } from "../../utils/filename-parser";
-import { Button, ConfirmDialog } from "../../components/common";
+import { Button, ConfirmDialog, Icon } from "../../components/common";
 import { useToast } from "../../contexts/ToastContext";
 import AdminLayout from "../../components/AdminLayout/AdminLayout";
 import CollectionCard from "./UploadLetter/CollectionCard";
@@ -76,11 +77,11 @@ export default function UploadLetterPage() {
     itemName: '',
   });
   const [duplicateCheckLoading, setDuplicateCheckLoading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
 
   // Auth check
   useEffect(() => {
-    const isAuth = sessionStorage.getItem("adminAuth");
-    if (!isAuth) {
+    if (!isAuthenticated()) {
       navigate("/admin-login");
     }
   }, [navigate]);
@@ -236,6 +237,25 @@ export default function UploadLetterPage() {
   const handleSelectFolder = () => {
     folderInputRef.current?.click();
   };
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    handleFilesSelected(e.dataTransfer.files);
+  }, [handleFilesSelected]);
 
   const toggleEditMode = () => {
     setEditState((prev) => ({
@@ -844,154 +864,175 @@ export default function UploadLetterPage() {
         className="hidden-input"
       />
 
-      <div className="upload-content">
-        {/* Upload Success Banner */}
-        {uploadBanner.show && (
-          <div className="upload-banner">
-            <div className="banner-icon">✓</div>
-            <div className="banner-content">
-              <strong>Upload Complete</strong>
-              <div className="banner-stats">
-                <span className="banner-stat"><strong>{uploadBanner.fileCount}</strong> files</span>
-                <span className="banner-stat"><strong>{uploadBanner.totalSize}</strong></span>
-                <span className="banner-stat"><strong>{uploadBanner.collectionCount}</strong> collection{uploadBanner.collectionCount !== 1 ? 's' : ''}</span>
-                {uploadBanner.replacedCount > 0 && (
-                  <span className="banner-stat"><strong>{uploadBanner.replacedCount}</strong> replaced</span>
-                )}
-                {uploadBanner.skippedCount > 0 && (
-                  <span className="banner-stat"><strong>{uploadBanner.skippedCount}</strong> skipped</span>
-                )}
-                {uploadBanner.excludedCount > 0 && (
-                  <span className="banner-stat"><strong>{uploadBanner.excludedCount}</strong> uncategorized excluded</span>
+      {images.length === 0 && collections.length === 0 ? (
+        <div className="upload-content">
+          {/* Upload Success Banner */}
+          {uploadBanner.show && (
+            <div className="upload-banner">
+              <div className="banner-icon">✓</div>
+              <div className="banner-content">
+                <strong>Upload Complete</strong>
+                <div className="banner-stats">
+                  <span className="banner-stat"><strong>{uploadBanner.fileCount}</strong> files</span>
+                  <span className="banner-stat"><strong>{uploadBanner.totalSize}</strong></span>
+                  <span className="banner-stat"><strong>{uploadBanner.collectionCount}</strong> collection{uploadBanner.collectionCount !== 1 ? 's' : ''}</span>
+                  {uploadBanner.replacedCount > 0 && (
+                    <span className="banner-stat"><strong>{uploadBanner.replacedCount}</strong> replaced</span>
+                  )}
+                  {uploadBanner.skippedCount > 0 && (
+                    <span className="banner-stat"><strong>{uploadBanner.skippedCount}</strong> skipped</span>
+                  )}
+                  {uploadBanner.excludedCount > 0 && (
+                    <span className="banner-stat"><strong>{uploadBanner.excludedCount}</strong> uncategorized excluded</span>
+                  )}
+                </div>
+              </div>
+              <button className="banner-dismiss" onClick={handleDismissBanner} title="Dismiss">×</button>
+            </div>
+          )}
+
+          {/* Empty state: large drop zone */}
+          <div
+            className={`upload-drop-zone ${dragActive ? 'drag-active' : ''}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <Icon name="upload" size={48} className="drop-zone-icon" />
+            <span className="drop-zone-title">Drag images here</span>
+            <span className="drop-zone-or">or</span>
+            <div className="drop-zone-buttons">
+              <button className="drop-zone-btn" onClick={handleSelectFolder}>
+                Browse Folder
+              </button>
+              <button className="drop-zone-btn" onClick={handleSelectFiles}>
+                Browse Files
+              </button>
+            </div>
+          </div>
+
+          {/* Compact naming hint */}
+          <div className="upload-hint-row">
+            <code className="hint-format">CCC-YYYYMMDD-TII-PP.ext</code>
+            <span className="hint-text">Files are auto-organized by collection code</span>
+          </div>
+        </div>
+      ) : (
+        <div className="upload-content">
+          {/* Upload Success Banner */}
+          {uploadBanner.show && (
+            <div className="upload-banner">
+              <div className="banner-icon">✓</div>
+              <div className="banner-content">
+                <strong>Upload Complete</strong>
+                <div className="banner-stats">
+                  <span className="banner-stat"><strong>{uploadBanner.fileCount}</strong> files</span>
+                  <span className="banner-stat"><strong>{uploadBanner.totalSize}</strong></span>
+                  <span className="banner-stat"><strong>{uploadBanner.collectionCount}</strong> collection{uploadBanner.collectionCount !== 1 ? 's' : ''}</span>
+                  {uploadBanner.replacedCount > 0 && (
+                    <span className="banner-stat"><strong>{uploadBanner.replacedCount}</strong> replaced</span>
+                  )}
+                  {uploadBanner.skippedCount > 0 && (
+                    <span className="banner-stat"><strong>{uploadBanner.skippedCount}</strong> skipped</span>
+                  )}
+                  {uploadBanner.excludedCount > 0 && (
+                    <span className="banner-stat"><strong>{uploadBanner.excludedCount}</strong> uncategorized excluded</span>
+                  )}
+                </div>
+              </div>
+              <button className="banner-dismiss" onClick={handleDismissBanner} title="Dismiss">×</button>
+            </div>
+          )}
+
+          {/* Collections Section */}
+          {collections.length > 0 && (
+            <div className="collections-section">
+              <h2>Collections</h2>
+              <div className="collection-grid">
+                {sortedCollections.map((collection) => (
+                  <CollectionCard
+                    key={collection.collectionCode}
+                    collection={collection}
+                    isSelected={
+                      editState.selectedCollection ===
+                      collection.collectionCode
+                    }
+                    editMode={editState.active && editState.mode === "organize"}
+                    deletionMode={editState.active && editState.mode === "delete"}
+                    hasDuplicates={collectionHasDuplicates[collection.collectionCode] || false}
+                    isMarkedForDeletion={collection.letters.length > 0 && collection.letters.every(l => l.images.every(img => editState.deletionImageIds.has(img.id)))}
+                    isPartialDeletion={collection.letters.some(l => l.images.some(img => editState.deletionImageIds.has(img.id))) && !collection.letters.every(l => l.images.every(img => editState.deletionImageIds.has(img.id)))}
+                    onSelect={() =>
+                      handleCollectionSelect(collection.collectionCode)
+                    }
+                    onClick={() => setOpenCollectionCode(collection.collectionCode)}
+                    onToggleDeletion={() => handleToggleDeletionCollection(collection.collectionCode)}
+                  />
+                ))}
+                {editState.active && editState.mode === "organize" && (
+                  <div
+                    className={`collection-card new-collection ${editState.selectedCollection === "new" ? "selected" : ""}`}
+                    onClick={handleNewCollectionSelect}
+                  >
+                    <div className="collection-code">
+                      <span className="new-collection-icon">+</span>
+                      New Collection
+                    </div>
+                    {editState.selectedCollection === "new" && (
+                      <div className="selected-badge">Selected</div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
-            <button className="banner-dismiss" onClick={handleDismissBanner} title="Dismiss">×</button>
-          </div>
-        )}
+          )}
 
-        {/* Collections Section */}
-        {collections.length > 0 && (
-          <div className="collections-section">
-            <h2>Collections</h2>
-            <div className="collection-grid">
-              {sortedCollections.map((collection) => (
-                <CollectionCard
-                  key={collection.collectionCode}
-                  collection={collection}
-                  isSelected={
-                    editState.selectedCollection ===
-                    collection.collectionCode
-                  }
-                  editMode={editState.active && editState.mode === "organize"}
-                  deletionMode={editState.active && editState.mode === "delete"}
-                  hasDuplicates={collectionHasDuplicates[collection.collectionCode] || false}
-                  isMarkedForDeletion={collection.letters.length > 0 && collection.letters.every(l => l.images.every(img => editState.deletionImageIds.has(img.id)))}
-                  isPartialDeletion={collection.letters.some(l => l.images.some(img => editState.deletionImageIds.has(img.id))) && !collection.letters.every(l => l.images.every(img => editState.deletionImageIds.has(img.id)))}
-                  onSelect={() =>
-                    handleCollectionSelect(collection.collectionCode)
-                  }
-                  onClick={() => setOpenCollectionCode(collection.collectionCode)}
-                  onToggleDeletion={() => handleToggleDeletionCollection(collection.collectionCode)}
-                />
-              ))}
-              {editState.active && editState.mode === "organize" && (
+          {/* New Collection Card (when no collections exist but in edit mode) */}
+          {collections.length === 0 && editState.active && editState.mode === "organize" && (
+            <div className="collections-section">
+              <h2>Collections</h2>
+              <div className="collection-grid">
                 <div
                   className={`collection-card new-collection ${editState.selectedCollection === "new" ? "selected" : ""}`}
                   onClick={handleNewCollectionSelect}
                 >
-                  <div className="collection-code">
-                    <span className="new-collection-icon">+</span>
-                    New Collection
-                  </div>
+                  <div className="new-collection-icon">+</div>
+                  <div className="collection-code">New Collection</div>
                   {editState.selectedCollection === "new" && (
                     <div className="selected-badge">Selected</div>
                   )}
                 </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* New Collection Card (when no collections exist but in edit mode) */}
-        {collections.length === 0 && editState.active && editState.mode === "organize" && (
-          <div className="collections-section">
-            <h2>Collections</h2>
-            <div className="collection-grid">
-              <div
-                className={`collection-card new-collection ${editState.selectedCollection === "new" ? "selected" : ""}`}
-                onClick={handleNewCollectionSelect}
-              >
-                <div className="new-collection-icon">+</div>
-                <div className="collection-code">New Collection</div>
-                {editState.selectedCollection === "new" && (
-                  <div className="selected-badge">Selected</div>
-                )}
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Uncategorized Section */}
-        {uncategorizedImages.length > 0 && (
-          <UncategorizedCarousel
-            images={uncategorizedImages}
-            editState={editState}
-            onImageSelect={handleImageSelect}
-            onViewImage={handleViewImage}
-            onToggleDeletionImage={handleToggleDeletionImage}
-          />
-        )}
+          {/* Uncategorized Section */}
+          {uncategorizedImages.length > 0 && (
+            <UncategorizedCarousel
+              images={uncategorizedImages}
+              editState={editState}
+              onImageSelect={handleImageSelect}
+              onViewImage={handleViewImage}
+              onToggleDeletionImage={handleToggleDeletionImage}
+            />
+          )}
 
-        {/* Message */}
-        {message && (
-          <div
-            className={`message ${message.includes("Successfully") ? "success" : "error"}`}
-          >
-            {message}
-          </div>
-        )}
+          {/* Message */}
+          {message && (
+            <div
+              className={`message ${message.includes("Successfully") ? "success" : "error"}`}
+            >
+              {message}
+            </div>
+          )}
 
-        {/* Guide sections */}
-        <div className="guide-section">
-          <h3>Naming Format</h3>
-          <code className="filename-example">003-18860314-L01-01.jpg</code>
-          <div className="format-breakdown">
-            <span><strong>003</strong> — Collection (3 digits)</span>
-            <span><strong>18860314</strong> — Date YYYYMMDD (use X for unknown)</span>
-            <span><strong>L</strong> — Type: L=Letter, P=Photo, E=Ephemera, V=Voice, A=Article, D=Diary, C=Cover, N=Card, T=Telegram</span>
-            <span><strong>01</strong> — Sequence number</span>
-            <span><strong>01</strong> — Page number (optional)</span>
+          {/* Compact naming hint */}
+          <div className="upload-hint-row">
+            <code className="hint-format">CCC-YYYYMMDD-TII-PP.ext</code>
+            <span className="hint-text">Files are auto-organized by collection code</span>
           </div>
         </div>
-
-        <div className="guide-section">
-          <h3>How to Use</h3>
-          <div className="guide-steps">
-            <div className="guide-step">
-              <span className="step-number">1</span>
-              <div>
-                <strong>Upload images</strong>
-                <p>Click the upload icon and select files or a folder. Images appear in the Uncategorized section below.</p>
-              </div>
-            </div>
-            <div className="guide-step">
-              <span className="step-number">2</span>
-              <div>
-                <strong>Organize with Edit mode</strong>
-                <p>Select images, choose or create a collection, then click "Add to Collection".</p>
-              </div>
-            </div>
-            <div className="guide-step">
-              <span className="step-number">3</span>
-              <div>
-                <strong>Save to archive</strong>
-                <p>Click "Upload" to save your organized letters.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Collection Modal */}
       {openCollection && (

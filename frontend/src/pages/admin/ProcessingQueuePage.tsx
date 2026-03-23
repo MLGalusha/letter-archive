@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { getErrorMessage } from '../../api/client';
 import {
   getProcessingQueue,
@@ -23,7 +24,7 @@ import { useToast } from '../../contexts/ToastContext';
 import AdminLayout from '../../components/AdminLayout/AdminLayout';
 import './ProcessingQueuePage.css';
 
-type QueueTab = 'transcription' | 'metadata' | 'entityExtraction';
+type QueueTab = 'transcription' | 'metadata' | 'entity_extraction';
 
 function formatTimeAgo(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();
@@ -50,7 +51,8 @@ function jobTypeLabel(type: string): string {
   switch (type) {
     case 'transcription': return 'Transcription';
     case 'metadata': return 'Metadata';
-    case 'entity_extraction': return 'Entity Extraction';
+    case 'entity_extraction': return 'Entities';
+    case 'entity_resolution': return 'Resolution';
     default: return type;
   }
 }
@@ -76,7 +78,7 @@ function formatDateRaw(dateRaw: string): string {
 
 /** Format sender/recipient into a short description */
 function formatCorrespondents(sender: string | null, recipient: string | null): string {
-  if (sender && recipient) return `${sender} → ${recipient}`;
+  if (sender && recipient) return `${sender} \u2192 ${recipient}`;
   if (sender) return `From: ${sender}`;
   if (recipient) return `To: ${recipient}`;
   return '';
@@ -87,19 +89,21 @@ export default function ProcessingQueuePage() {
   const [queue, setQueue] = useState<QueueStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<QueueTab>('transcription');
-  const [, setTick] = useState(0); // Force re-render for elapsed time
+  const [collectionFilter, setCollectionFilter] = useState<string>('all');
+  const [expandedErrors, setExpandedErrors] = useState<Set<number>>(new Set());
+  const [, setTick] = useState(0);
 
   const fetchQueue = useCallback(async () => {
     try {
       const data = await getProcessingQueue();
       setQueue(data);
     } catch (err) {
-      console.error('Failed to fetch queue status:', err);
-      showToast(getErrorMessage(err, 'Failed to load queue status'), 'error');
+      // Silently ignore polling failures — don't spam toasts every 2 seconds
+      console.debug('Queue poll failed:', err);
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, []);
 
   // Poll for queue updates
   useEffect(() => {
@@ -113,6 +117,16 @@ export default function ProcessingQueuePage() {
     const interval = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Collect unique collection codes from all queued items
+  const collectionCodes = useMemo(() => {
+    if (!queue) return [];
+    const codes = new Set<string>();
+    queue.queued.transcription.forEach(i => codes.add(i.collectionCode));
+    queue.queued.metadata.forEach(i => codes.add(i.collectionCode));
+    queue.queued.entityExtraction.forEach(i => codes.add(i.collectionCode));
+    return Array.from(codes).sort();
+  }, [queue]);
 
   const handleCancel = async (letterId: string, type: QueueJobType) => {
     try {
@@ -154,10 +168,10 @@ export default function ProcessingQueuePage() {
     }
   };
 
-  // On-demand processing controls
   const handleStartTranscription = async () => {
     try {
-      const result = await startTranscription();
+      const options = collectionFilter !== 'all' ? { collectionCode: collectionFilter } : undefined;
+      const result = await startTranscription(options);
       showToast(`Started transcription for ${result.total} letters`, 'success');
       fetchQueue();
     } catch (err) {
@@ -167,7 +181,8 @@ export default function ProcessingQueuePage() {
 
   const handleStartMetadata = async () => {
     try {
-      const result = await startMetadataExtraction();
+      const options = collectionFilter !== 'all' ? { collectionCode: collectionFilter } : undefined;
+      const result = await startMetadataExtraction(options);
       showToast(`Started metadata extraction for ${result.total} letters`, 'success');
       fetchQueue();
     } catch (err) {
@@ -177,7 +192,8 @@ export default function ProcessingQueuePage() {
 
   const handleStartEntities = async () => {
     try {
-      const result = await startEntityExtraction();
+      const options = collectionFilter !== 'all' ? { collectionCode: collectionFilter } : undefined;
+      const result = await startEntityExtraction(options);
       showToast(`Started entity extraction for ${result.total} letters`, 'success');
       fetchQueue();
     } catch (err) {
@@ -215,18 +231,14 @@ export default function ProcessingQueuePage() {
     }
   };
 
-  // Derive start handler for current tab
-  const startHandlerForTab = activeTab === 'transcription'
-    ? handleStartTranscription
-    : activeTab === 'metadata'
-    ? handleStartMetadata
-    : handleStartEntities;
-
-  const startLabelForTab = activeTab === 'transcription'
-    ? 'Start Transcription'
-    : activeTab === 'metadata'
-    ? 'Start Metadata'
-    : 'Start Entities';
+  const toggleErrorExpanded = (index: number) => {
+    setExpandedErrors(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
 
   if (loading) {
     return (
@@ -249,96 +261,115 @@ export default function ProcessingQueuePage() {
   }
 
   const { counts, onDemandProcessing } = queue;
-  const totalQueued = counts.queuedTranscription + counts.queuedMetadata + counts.queuedEntityExtraction;
   const isIdle = !onDemandProcessing.isRunning && !onDemandProcessing.isPaused;
   const batchProgress = onDemandProcessing.total
     ? Math.round((onDemandProcessing.completed / onDemandProcessing.total) * 100)
     : 0;
 
-  const queuedItems: QueuedItem[] = activeTab === 'transcription'
+  // Queue items for the active tab, filtered by collection
+  const allQueuedItems: QueuedItem[] = activeTab === 'transcription'
     ? queue.queued.transcription
     : activeTab === 'metadata'
-    ? queue.queued.metadata
-    : queue.queued.entityExtraction;
+      ? queue.queued.metadata
+      : queue.queued.entityExtraction;
 
-  const queueTabType: QueueJobType = activeTab === 'entityExtraction'
-    ? 'entity_extraction'
-    : activeTab;
+  const queuedItems = collectionFilter === 'all'
+    ? allQueuedItems
+    : allQueuedItems.filter(i => i.collectionCode === collectionFilter);
 
-  const currentTabCount = activeTab === 'transcription'
-    ? counts.queuedTranscription
-    : activeTab === 'metadata'
-    ? counts.queuedMetadata
-    : counts.queuedEntityExtraction;
+  const queueTabType: QueueJobType = activeTab;
 
-  const headerActions = (
-    <>
-      {isIdle ? (
-        <Button onClick={startHandlerForTab} disabled={currentTabCount === 0}>
-          {startLabelForTab} ({currentTabCount})
-        </Button>
-      ) : (
-        <div className="pq-header-batch">
-          <div className="pq-header-progress">
-            <div className="pq-header-progress-bar">
-              <div className="pq-header-progress-fill" style={{ width: `${batchProgress}%` }} />
-            </div>
-            <span className="pq-header-progress-text">
-              {onDemandProcessing.completed}/{onDemandProcessing.total}
-            </span>
-          </div>
-          {onDemandProcessing.isPaused ? (
-            <Button onClick={handleResume}>Resume</Button>
-          ) : (
-            <Button onClick={handlePause} variant="secondary">Pause</Button>
-          )}
-          <Button onClick={handleAbort} variant="danger">Abort</Button>
+  // Pipeline phase data
+  const phases = [
+    { key: 'transcription' as const, label: 'Transcription', count: counts.queuedTranscription, handler: handleStartTranscription },
+    { key: 'metadata' as const, label: 'Metadata', count: counts.queuedMetadata, handler: handleStartMetadata },
+    { key: 'entity_extraction' as const, label: 'Entities', count: counts.queuedEntityExtraction, handler: handleStartEntities },
+  ];
+
+  // Determine which phase is currently running
+  const runningPhaseType = onDemandProcessing.currentJob?.type ?? null;
+
+  // Header global controls
+  const headerActions = !isIdle ? (
+    <div className="pq-header-batch">
+      <div className="pq-header-progress">
+        <div className="pq-header-progress-bar">
+          <div className="pq-header-progress-fill" style={{ width: `${batchProgress}%` }} />
         </div>
+        <span className="pq-header-progress-text">
+          {onDemandProcessing.completed}/{onDemandProcessing.total}
+        </span>
+      </div>
+      {onDemandProcessing.isPaused ? (
+        <Button onClick={handleResume} size="sm">Resume</Button>
+      ) : (
+        <Button onClick={handlePause} variant="secondary" size="sm">Pause</Button>
       )}
-    </>
-  );
+      <Button onClick={handleAbort} variant="danger" size="sm">Abort</Button>
+    </div>
+  ) : undefined;
 
   return (
     <AdminLayout headerActions={headerActions}>
     <div className="pq-page">
-      <h2 className="pq-title">Processing Queue</h2>
-
-      {/* Summary Bar */}
-      <div className="pq-summary">
-        <div className={`pq-summary-chip ${counts.activeCount > 0 ? 'active' : ''}`}>
-          <span className="pq-chip-count">{counts.activeCount}</span>
-          <span className="pq-chip-label">Active</span>
-        </div>
-        <div className={`pq-summary-chip ${totalQueued > 0 ? 'queued' : ''}`}>
-          <span className="pq-chip-count">{totalQueued}</span>
-          <span className="pq-chip-label">Queued</span>
-        </div>
-        <div className={`pq-summary-chip ${counts.recentSuccessCount > 0 ? 'success' : ''}`}>
-          <span className="pq-chip-count">{counts.recentSuccessCount}</span>
-          <span className="pq-chip-label">Done</span>
-        </div>
-        <div className={`pq-summary-chip ${counts.recentFailedCount > 0 ? 'failed' : ''}`}>
-          <span className="pq-chip-count">{counts.recentFailedCount}</span>
-          <span className="pq-chip-label">Failed</span>
+      {/* Page Header */}
+      <div className="pq-header">
+        <div>
+          <p className="pq-kicker">Admin</p>
+          <h2 className="pq-title">Processing Queue</h2>
+          <p className="pq-subtitle">Pipeline overview, active jobs, and queue management</p>
         </div>
       </div>
 
-      {/* Batch errors inline */}
-      {onDemandProcessing.errors.length > 0 && (
-        <div className="pq-batch-errors">
-          <h4>Batch Errors ({onDemandProcessing.errors.length})</h4>
-          <div className="pq-error-list">
-            {onDemandProcessing.errors.map((error, index) => (
-              <div key={index} className="pq-error-item">{error}</div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Pipeline Status Overview */}
+      <div className="pq-pipeline">
+        {phases.map((phase, i) => {
+          const isRunning = !isIdle && runningPhaseType === phase.key;
+          return (
+            <div key={phase.key} className="pq-pipeline-row">
+              <div className={`pq-phase-card ${isRunning ? 'running' : ''}`}>
+                <div className="pq-phase-number">{i + 1}</div>
+                <div className="pq-phase-body">
+                  <h3 className="pq-phase-name">{phase.label}</h3>
+                  <span className="pq-phase-count">
+                    {phase.count} ready
+                  </span>
+                  {isRunning ? (
+                    <div className="pq-phase-running">
+                      <div className="pq-phase-progress-bar">
+                        <div className="pq-phase-progress-fill" style={{ width: `${batchProgress}%` }} />
+                      </div>
+                      <span className="pq-phase-progress-text">
+                        {onDemandProcessing.completed}/{onDemandProcessing.total}
+                      </span>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={phase.handler}
+                      disabled={phase.count === 0 || !isIdle}
+                    >
+                      Start
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {i < phases.length - 1 && (
+                <div className="pq-pipeline-arrow">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9,18 15,12 9,6" />
+                  </svg>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
       {/* Active Jobs */}
-      {queue.active.length > 0 && (
-        <section className="pq-section">
-          <h3>Active Jobs</h3>
+      <section className="pq-section">
+        <h3 className="pq-section-title">Active Jobs</h3>
+        {queue.active.length > 0 ? (
           <table className="pq-table">
             <thead>
               <tr>
@@ -358,12 +389,14 @@ export default function ProcessingQueuePage() {
                 return (
                   <tr key={`${job.letterId}-${job.type}`}>
                     <td>
-                      <div className="pq-cell-mono">{formatDateRaw(job.letterTitle)}</div>
+                      <Link to={`/admin/letters/${job.letterId}`} className="pq-letter-link">
+                        {formatDateRaw(job.letterTitle)}
+                      </Link>
                       {formatCorrespondents(job.sender, job.recipient) && (
                         <div className="pq-cell-muted">{formatCorrespondents(job.sender, job.recipient)}</div>
                       )}
                     </td>
-                    <td>{job.collectionCode}</td>
+                    <td><span className="pq-collection-badge">{job.collectionCode}</span></td>
                     <td><span className="pq-type-badge">{jobTypeLabel(job.type)}</span></td>
                     <td className="pq-progress-cell">
                       {job.progress ? (
@@ -381,6 +414,7 @@ export default function ProcessingQueuePage() {
                     <td>
                       <Button
                         variant="danger"
+                        size="sm"
                         onClick={() => handleCancel(job.letterId, job.type)}
                       >
                         Cancel
@@ -391,31 +425,50 @@ export default function ProcessingQueuePage() {
               })}
             </tbody>
           </table>
-        </section>
-      )}
+        ) : (
+          <div className="pq-empty-state">
+            <span className="pq-empty-icon">&#9711;</span>
+            <span>No active jobs</span>
+          </div>
+        )}
+      </section>
 
       {/* Queue Section */}
       <section className="pq-section">
-        <h3>Queue</h3>
+        <div className="pq-section-header">
+          <h3 className="pq-section-title">Queue</h3>
+          <div className="pq-collection-filter">
+            <label htmlFor="pq-filter">Collection:</label>
+            <select
+              id="pq-filter"
+              value={collectionFilter}
+              onChange={e => setCollectionFilter(e.target.value)}
+            >
+              <option value="all">All</option>
+              {collectionCodes.map(code => (
+                <option key={code} value={code}>{code}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         <div className="pq-tabs">
-          <button
-            className={`pq-tab ${activeTab === 'transcription' ? 'active' : ''}`}
-            onClick={() => setActiveTab('transcription')}
-          >
-            Transcription ({counts.queuedTranscription})
-          </button>
-          <button
-            className={`pq-tab ${activeTab === 'metadata' ? 'active' : ''}`}
-            onClick={() => setActiveTab('metadata')}
-          >
-            Metadata ({counts.queuedMetadata})
-          </button>
-          <button
-            className={`pq-tab ${activeTab === 'entityExtraction' ? 'active' : ''}`}
-            onClick={() => setActiveTab('entityExtraction')}
-          >
-            Entities ({counts.queuedEntityExtraction})
-          </button>
+          {phases.map(phase => {
+            const tabCount = phase.key === 'transcription'
+              ? counts.queuedTranscription
+              : phase.key === 'metadata'
+                ? counts.queuedMetadata
+                : counts.queuedEntityExtraction;
+            return (
+              <button
+                key={phase.key}
+                className={`pq-tab ${activeTab === phase.key ? 'active' : ''}`}
+                onClick={() => setActiveTab(phase.key)}
+              >
+                {phase.label} ({tabCount})
+              </button>
+            );
+          })}
         </div>
 
         {queuedItems.length > 0 ? (
@@ -433,16 +486,19 @@ export default function ProcessingQueuePage() {
                 {queuedItems.map((item: QueuedItem) => (
                   <tr key={item.letterId}>
                     <td>
-                      <div className="pq-cell-mono">{formatDateRaw(item.letterTitle)}</div>
+                      <Link to={`/admin/letters/${item.letterId}`} className="pq-letter-link">
+                        {formatDateRaw(item.letterTitle)}
+                      </Link>
                       {formatCorrespondents(item.sender, item.recipient) && (
                         <div className="pq-cell-muted">{formatCorrespondents(item.sender, item.recipient)}</div>
                       )}
                     </td>
-                    <td>{item.collectionCode}</td>
+                    <td><span className="pq-collection-badge">{item.collectionCode}</span></td>
                     <td className="pq-cell-muted">{formatTimeAgo(item.queuedAt)}</td>
                     <td>
                       <Button
                         variant="ghost"
+                        size="sm"
                         onClick={() => handleRemove(item.letterId, queueTabType)}
                       >
                         Remove
@@ -455,21 +511,32 @@ export default function ProcessingQueuePage() {
             <div className="pq-queue-footer">
               <Button
                 variant="danger"
+                size="sm"
                 onClick={() => handleClear(queueTabType)}
               >
-                Clear All {jobTypeLabel(queueTabType)} Queue
+                Clear All
               </Button>
             </div>
           </>
         ) : (
-          <div className="pq-empty">No {jobTypeLabel(queueTabType).toLowerCase()} jobs queued</div>
+          <div className="pq-empty-state">
+            <span>No {jobTypeLabel(activeTab).toLowerCase()} jobs queued</span>
+          </div>
         )}
       </section>
 
       {/* Recent Activity */}
-      {queue.recent.length > 0 && (
-        <section className="pq-section">
-          <h3>Recent Activity</h3>
+      <section className="pq-section">
+        <div className="pq-section-header">
+          <h3 className="pq-section-title">Recent Activity</h3>
+          {queue.recent.length > 0 && (
+            <span className="pq-recent-summary">
+              {counts.recentSuccessCount} done, {counts.recentFailedCount} failed
+            </span>
+          )}
+        </div>
+
+        {queue.recent.length > 0 ? (
           <table className="pq-table">
             <thead>
               <tr>
@@ -482,36 +549,63 @@ export default function ProcessingQueuePage() {
               </tr>
             </thead>
             <tbody>
-              {queue.recent.map((job: QueueRecentJob, i: number) => (
-                <tr key={`${job.letterId}-${job.type}-${i}`}>
-                  <td className="pq-cell-mono">{formatDateRaw(job.letterTitle)}</td>
-                  <td>{job.collectionCode}</td>
-                  <td><span className="pq-type-badge">{jobTypeLabel(job.type)}</span></td>
-                  <td>
-                    <span className={`pq-status ${job.status === 'SUCCESS' ? 'success' : 'failed'}`}>
-                      {job.status === 'SUCCESS' ? 'Done' : 'Failed'}
-                    </span>
-                    {job.error && (
-                      <span className="pq-error-hint" title={job.error}>(?)</span>
-                    )}
-                  </td>
-                  <td className="pq-cell-muted">{formatTimeAgo(job.completedAt)}</td>
-                  <td>
-                    {job.status === 'FAILED' && (
-                      <Button
-                        variant="ghost"
-                        onClick={() => handleRetry(job.letterId, job.type)}
-                      >
-                        Retry
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {queue.recent.map((job: QueueRecentJob, i: number) => {
+                const isFailed = job.status === 'FAILED';
+                const isExpanded = expandedErrors.has(i);
+                return (
+                  <tr
+                    key={`${job.letterId}-${job.type}-${i}`}
+                    className={isFailed ? 'pq-row-failed' : ''}
+                  >
+                    <td>
+                      <Link to={`/admin/letters/${job.letterId}`} className="pq-letter-link">
+                        {formatDateRaw(job.letterTitle)}
+                      </Link>
+                    </td>
+                    <td><span className="pq-collection-badge">{job.collectionCode}</span></td>
+                    <td><span className="pq-type-badge">{jobTypeLabel(job.type)}</span></td>
+                    <td>
+                      <div className="pq-status-cell">
+                        <span className={`pq-status ${job.status === 'SUCCESS' ? 'success' : 'failed'}`}>
+                          {job.status === 'SUCCESS' ? 'Done' : 'Failed'}
+                        </span>
+                        {isFailed && job.error && (
+                          <button
+                            className="pq-error-toggle"
+                            onClick={() => toggleErrorExpanded(i)}
+                            title="Toggle error details"
+                          >
+                            {isExpanded ? '\u25B4' : '\u25BE'}
+                          </button>
+                        )}
+                      </div>
+                      {isFailed && job.error && isExpanded && (
+                        <div className="pq-error-detail">{job.error}</div>
+                      )}
+                    </td>
+                    <td className="pq-cell-muted">{formatTimeAgo(job.completedAt)}</td>
+                    <td>
+                      {isFailed && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRetry(job.letterId, job.type)}
+                        >
+                          Retry
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
-        </section>
-      )}
+        ) : (
+          <div className="pq-empty-state">
+            <span>No recent activity</span>
+          </div>
+        )}
+      </section>
     </div>
     </AdminLayout>
   );

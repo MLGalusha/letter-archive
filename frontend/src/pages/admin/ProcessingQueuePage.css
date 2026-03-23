@@ -1,12 +1,38 @@
+/* ── Processing Queue Page ─────────────────────────────── */
+
 .pq-page {
   padding: var(--spacing-lg);
-  max-width: 960px;
+  max-width: 1020px;
   margin: 0 auto;
 }
 
+/* ── Page Header ──────────────────────────────────────── */
+
+.pq-header {
+  margin-bottom: var(--spacing-lg);
+}
+
+.pq-kicker {
+  font-size: var(--font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--text-muted);
+  margin: 0 0 var(--spacing-xs);
+}
+
 .pq-title {
-  margin: 0 0 var(--spacing-md);
-  font-size: 1.5rem;
+  margin: 0 0 var(--spacing-xs);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.pq-subtitle {
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  line-height: 1.6;
+  margin: 0;
 }
 
 .pq-loading {
@@ -15,91 +41,157 @@
   color: var(--text-muted);
 }
 
-/* Summary Bar */
-.pq-summary {
-  display: flex;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-lg);
-  flex-wrap: wrap;
-}
+/* ── Pipeline Overview ────────────────────────────────── */
 
-.pq-summary-chip {
+.pq-pipeline {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
+  gap: 0;
+  margin-bottom: var(--spacing-lg);
+}
+
+.pq-pipeline-row {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.pq-phase-card {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
   background: var(--bg-light);
+  border: var(--border-card);
+  border-top: 2px solid var(--highlight);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: var(--spacing-md);
+  min-width: 0;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pq-phase-card.running {
+  border-top-color: #1976d2;
+  box-shadow: 0 2px 12px hsla(211, 70%, 45%, 0.12);
+}
+
+.pq-phase-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  font-size: var(--font-sm);
-}
-
-.pq-chip-count {
   font-weight: 700;
-  font-size: var(--font-base);
-}
-
-.pq-chip-label {
+  font-size: var(--font-sm);
   color: var(--text-muted);
+  flex-shrink: 0;
 }
 
-.pq-summary-chip.active {
-  background: #e3f2fd;
-  border-color: #90caf9;
+.pq-phase-card.running .pq-phase-number {
+  background: #1976d2;
+  border-color: #1976d2;
+  color: #fff;
 }
 
-.pq-summary-chip.active .pq-chip-count {
-  color: #1565c0;
+.pq-phase-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
 }
 
-.pq-summary-chip.queued {
-  background: #fff3e0;
-  border-color: #ffcc80;
+.pq-phase-name {
+  margin: 0;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text);
 }
 
-.pq-summary-chip.queued .pq-chip-count {
-  color: #e65100;
+.pq-phase-count {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
-.pq-summary-chip.success {
-  background: #e8f5e9;
-  border-color: #a5d6a7;
+.pq-phase-running {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.pq-summary-chip.success .pq-chip-count {
-  color: #2e7d32;
+.pq-phase-progress-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
 }
 
-.pq-summary-chip.queued .pq-chip-label,
-.pq-summary-chip.success .pq-chip-label,
-.pq-summary-chip.failed .pq-chip-label {
-  color: #374151;
+.pq-phase-progress-fill {
+  height: 100%;
+  background: #1976d2;
+  border-radius: 3px;
+  transition: width 0.5s ease;
 }
 
-.pq-summary-chip.failed {
-  background: #ffebee;
-  border-color: #ef9a9a;
+.pq-phase-progress-text {
+  font-size: var(--font-xs);
+  color: #1976d2;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
-.pq-summary-chip.failed .pq-chip-count {
-  color: #c62828;
+body.dark .pq-phase-progress-text {
+  color: #64b5f6;
 }
 
-/* Sections */
+.pq-pipeline-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  padding: 0 var(--spacing-xs);
+}
+
+/* ── Section Cards ────────────────────────────────────── */
+
 .pq-section {
   background: var(--bg-light);
-  border: 1px solid var(--border);
+  border: var(--border-card);
+  border-top: 1px solid var(--highlight);
   border-radius: var(--radius-lg);
-  padding: var(--spacing-md);
-  margin-bottom: var(--spacing-md);
+  box-shadow: var(--shadow);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
 }
 
-.pq-section h3 {
-  margin: 0 0 var(--spacing-sm);
+.pq-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.pq-section-title {
+  margin: 0;
   font-size: 1rem;
+  font-weight: 600;
 }
 
-/* Tables */
+/* ── Tables ───────────────────────────────────────────── */
+
+.pq-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .pq-table {
   width: 100%;
   border-collapse: collapse;
@@ -108,18 +200,19 @@
 
 .pq-table th {
   text-align: left;
-  padding: var(--spacing-xs) var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
   border-bottom: 1px solid var(--border);
   color: var(--text-muted);
-  font-weight: 500;
+  font-weight: 600;
   font-size: var(--font-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 
 .pq-table td {
-  padding: var(--spacing-xs) var(--spacing-xs);
-  border-bottom: 1px solid var(--bg);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
 
@@ -127,17 +220,41 @@
   border-bottom: none;
 }
 
-.pq-cell-mono {
-  font-family: monospace;
-  font-size: var(--font-xs);
+.pq-table tbody tr:hover {
+  background: hsla(0, 0%, 50%, 0.03);
 }
 
-.pq-cell-muted {
-  color: var(--text-muted);
-  font-size: var(--font-xs);
+/* ── Letter Links ─────────────────────────────────────── */
+
+.pq-letter-link {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: var(--font-sm);
 }
 
-/* Type Badge */
+.pq-letter-link:hover {
+  text-decoration: underline;
+  color: var(--highlight);
+}
+
+/* ── Collection Badge ─────────────────────────────────── */
+
+.pq-collection-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+/* ── Type Badge ───────────────────────────────────────── */
+
 .pq-type-badge {
   display: inline-block;
   padding: 2px 6px;
@@ -148,7 +265,48 @@
   font-weight: 500;
 }
 
-/* Status indicators */
+/* ── Cell Styles ──────────────────────────────────────── */
+
+.pq-cell-mono {
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  font-size: var(--font-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.pq-cell-muted {
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+}
+
+/* ── Progress in Active Jobs ──────────────────────────── */
+
+.pq-progress-cell {
+  min-width: 120px;
+}
+
+.pq-job-progress-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.pq-job-progress-fill {
+  height: 100%;
+  background: #1976d2;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+/* ── Status Indicators ────────────────────────────────── */
+
+.pq-status-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .pq-status {
   font-weight: 600;
   font-size: var(--font-xs);
@@ -166,18 +324,62 @@ body.dark .pq-status.success {
   color: #86efac;
 }
 
-.pq-error-hint {
-  margin-left: 4px;
-  color: #c62828;
-  cursor: help;
-  font-size: var(--font-xs);
+body.dark .pq-status.failed {
+  color: #ef9a9a;
 }
 
-/* Tabs */
+/* ── Error Details (expandable in recent activity) ────── */
+
+.pq-error-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: none;
+  border: none;
+  color: #c62828;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+
+.pq-error-toggle:hover {
+  background: hsla(0, 70%, 40%, 0.08);
+}
+
+.pq-error-detail {
+  margin-top: 6px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: #ffebee;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  color: #c62828;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+body.dark .pq-error-detail {
+  background: hsl(0 30% 15%);
+  color: #ef9a9a;
+}
+
+.pq-row-failed {
+  background: hsla(0, 70%, 50%, 0.03);
+}
+
+body.dark .pq-row-failed {
+  background: hsla(0, 40%, 30%, 0.08);
+}
+
+/* ── Tabs ─────────────────────────────────────────────── */
+
 .pq-tabs {
   display: flex;
   gap: 2px;
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
   border-bottom: 1px solid var(--border);
 }
 
@@ -189,6 +391,8 @@ body.dark .pq-status.success {
   margin-bottom: -1px;
   transition: all 0.15s ease;
   background: none;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .pq-tab:hover {
@@ -197,28 +401,77 @@ body.dark .pq-status.success {
 
 .pq-tab.active {
   color: var(--text);
-  border-bottom-color: var(--text);
+  border-bottom-color: var(--highlight);
   font-weight: 600;
 }
 
-/* Queue Footer */
+/* ── Collection Filter ────────────────────────────────── */
+
+.pq-collection-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+
+.pq-collection-filter label {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pq-collection-filter select {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.pq-collection-filter select:focus {
+  outline: none;
+  border-color: var(--highlight);
+}
+
+/* ── Queue Footer ─────────────────────────────────────── */
+
 .pq-queue-footer {
   display: flex;
   justify-content: flex-end;
   margin-top: var(--spacing-sm);
   padding-top: var(--spacing-sm);
-  border-top: 1px solid var(--bg);
+  border-top: 1px solid var(--border);
 }
 
-/* Empty State */
-.pq-empty {
-  text-align: center;
-  padding: var(--spacing-md);
+/* ── Empty States ─────────────────────────────────────── */
+
+.pq-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-lg) var(--spacing-md);
   color: var(--text-muted);
   font-size: var(--font-sm);
 }
 
-/* Header batch progress */
+.pq-empty-icon {
+  font-size: 1.1rem;
+  opacity: 0.4;
+}
+
+/* ── Recent Activity Summary ──────────────────────────── */
+
+.pq-recent-summary {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Header Batch Progress (global controls) ──────────── */
+
 .pq-header-batch {
   display: flex;
   align-items: center;
@@ -253,53 +506,87 @@ body.dark .pq-status.success {
   white-space: nowrap;
 }
 
-/* Batch Errors */
-.pq-batch-errors {
-  background: var(--bg-light);
-  border: 1px solid #ef9a9a;
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-sm) var(--spacing-md);
-  margin-bottom: var(--spacing-md);
+/* ── Responsive ───────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .pq-page {
+    padding: var(--spacing-md) var(--spacing-sm);
+  }
+
+  .pq-pipeline {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  .pq-pipeline-row {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .pq-phase-card {
+    width: 100%;
+  }
+
+  .pq-pipeline-arrow {
+    transform: rotate(90deg);
+    padding: 0;
+  }
+
+  .pq-section {
+    padding: var(--spacing-md);
+  }
+
+  .pq-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+  }
+
+  /* Prevent iOS zoom */
+  .pq-collection-filter select {
+    font-size: 16px;
+  }
+
+  /* Hide less important columns on mobile */
+  .pq-table th:nth-child(2),
+  .pq-table td:nth-child(2) {
+    display: none;
+  }
+
+  .pq-table th:nth-child(5),
+  .pq-table td:nth-child(5) {
+    display: none;
+  }
 }
 
-.pq-batch-errors h4 {
-  margin: 0 0 var(--spacing-xs);
-  font-size: var(--font-sm);
-  color: #c62828;
+@media (max-width: 640px) {
+  /* Pipeline phase cards: hide step number, compact layout */
+  .pq-phase-number {
+    display: none;
+  }
+
+  .pq-phase-card {
+    padding: var(--spacing-sm);
+  }
+
+  /* Hide page subtitle */
+  .pq-subtitle {
+    display: none;
+  }
 }
 
-.pq-error-list {
-  max-height: 150px;
-  overflow-y: auto;
-}
+@media (max-width: 480px) {
+  .pq-header-batch {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
 
-.pq-error-item {
-  padding: 4px var(--spacing-xs);
-  background: #ffebee;
-  border-radius: var(--radius-sm);
-  margin-bottom: 4px;
-  font-size: var(--font-xs);
-  font-family: monospace;
-  color: #c62828;
-}
+  .pq-tabs {
+    overflow-x: auto;
+  }
 
-
-/* Active job progress bar */
-.pq-progress-cell {
-  min-width: 120px;
-}
-
-.pq-job-progress-bar {
-  height: 6px;
-  background: var(--border);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 4px;
-}
-
-.pq-job-progress-fill {
-  height: 100%;
-  background: #1976d2;
-  border-radius: 3px;
-  transition: width 0.5s ease;
+  .pq-table th:nth-child(3),
+  .pq-table td:nth-child(3) {
+    display: none;
+  }
 }

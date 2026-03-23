@@ -34,6 +34,8 @@ interface TranscriptionSectionProps {
   onEditorKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
 }
 
+const hasContent = (text: string) => text.trim().length > 0;
+
 export default function TranscriptionSection({
   letter,
   letterTranscribeState,
@@ -93,7 +95,9 @@ export default function TranscriptionSection({
               className="action-btn transcribe-btn"
               onClick={() => onTranscribeLetter()}
               disabled={saving || letterTranscribeState === "transcribing"}
-              title="Transcribe letter pages"
+              title={hasContent(letter.transcript.fullText)
+                ? "Regenerate transcription from images"
+                : "Transcribe letter pages"}
             >
               {letterTranscribeState === "transcribing" ? (
                 <>
@@ -103,7 +107,7 @@ export default function TranscriptionSection({
               ) : (
                 <>
                   <Icon name="process" size={14} />
-                  <span>Transcribe</span>
+                  <span>{hasContent(letter.transcript.fullText) ? "Regenerate" : "Transcribe"}</span>
                 </>
               )}
             </button>

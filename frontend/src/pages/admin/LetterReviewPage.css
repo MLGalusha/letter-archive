@@ -1135,12 +1135,12 @@
    V2 METADATA SECTION STYLES
    ============================================================================ */
 
-.v2-metadata-section {
+.ai-metadata-section {
   margin-top: var(--spacing-md);
   padding-top: var(--spacing-md);
 }
 
-.v2-section-header {
+.ai-section-header {
   font-size: var(--font-sm);
   font-weight: 600;
   color: var(--text);
@@ -1151,7 +1151,7 @@
   border-bottom: 1px solid var(--border);
 }
 
-.v2-fields {
+.ai-fields {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
@@ -1907,6 +1907,39 @@
 
 .confirm-dialog .btn-confirm:hover {
   background: #d84315;
+}
+
+/* Regenerate popup options */
+.regenerate-popup {
+  min-width: 340px;
+}
+
+.regenerate-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-md);
+}
+
+.regenerate-options .btn-option {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 0.65rem 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.regenerate-options .btn-option:hover {
+  background: var(--bg-light);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* ============================================================================

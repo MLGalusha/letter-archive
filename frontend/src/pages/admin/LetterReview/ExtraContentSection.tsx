@@ -49,7 +49,9 @@ export const ExtraContentSection: React.FC<ExtraContentSectionProps> = ({
               className="action-btn transcribe-btn"
               onClick={() => onTranscribeExtras()}
               disabled={saving || extraContentTranscribing}
-              title="Transcribe telegrams, covers, and ephemera"
+              title={extraContent.trim()
+                ? "Regenerate extra content transcription"
+                : "Transcribe telegrams, covers, and ephemera"}
             >
               {extraContentTranscribing ? (
                 <>
@@ -58,12 +60,12 @@ export const ExtraContentSection: React.FC<ExtraContentSectionProps> = ({
                     size={14}
                     className="spinning"
                   />
-                  <span>Transcribing...</span>
+                  <span>{extraContent.trim() ? "Regenerating..." : "Transcribing..."}</span>
                 </>
               ) : (
                 <>
                   <Icon name="process" size={14} />
-                  <span>Transcribe</span>
+                  <span>{extraContent.trim() ? "Regenerate" : "Transcribe"}</span>
                 </>
               )}
             </button>

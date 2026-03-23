@@ -69,7 +69,7 @@ export default function LetterReviewPage() {
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
 
-  // V2 Metadata state
+  // AI-extracted metadata state
   const [emotionalTone, setEmotionalTone] = useState<EmotionalTone | "">("");
   const [relationship, setRelationship] = useState<RelationshipType | "">("");
   const [primaryTopics, setPrimaryTopics] = useState<string[]>([]);
@@ -110,10 +110,9 @@ export default function LetterReviewPage() {
     string | null
   >(null);
 
-  // Confirmation dialog state (for transcription when content exists)
-  const [showTranscribeConfirm, setShowTranscribeConfirm] = useState(false);
-  const [showExtrasTranscribeConfirm, setShowExtrasTranscribeConfirm] =
-    useState(false);
+  // Regenerate popup state
+  const [showTranscriptRegeneratePopup, setShowTranscriptRegeneratePopup] = useState(false);
+  const [showMetadataRegeneratePopup, setShowMetadataRegeneratePopup] = useState(false);
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
@@ -326,13 +325,13 @@ export default function LetterReviewPage() {
     async (skipConfirm = false) => {
       if (!letterId || !letter) return;
 
-      // Check if transcript already has content and show confirmation
+      // Check if transcript already has content — show regenerate popup
       if (!skipConfirm && letter.transcript.fullText.trim()) {
-        setShowTranscribeConfirm(true);
+        setShowTranscriptRegeneratePopup(true);
         return;
       }
 
-      setShowTranscribeConfirm(false);
+      setShowTranscriptRegeneratePopup(false);
       setLetterTranscribeState("transcribing");
       setLetterTranscribeMessage("Transcribing letter...");
 
@@ -375,14 +374,11 @@ export default function LetterReviewPage() {
     async (skipConfirm = false) => {
       if (!letterId || !letter) return;
 
-      // Check if extra content already has content and show confirmation
+      // Check if extra content already has content — confirm before replacing
       if (!skipConfirm && letter.extraContentTranscript?.trim()) {
-        setShowExtrasTranscribeConfirm(true);
-        return;
+        if (!window.confirm("Replace extra content transcription? This will overwrite the current content.")) return;
       }
 
-      setShowExtrasTranscribeConfirm(false);
-      // Use existing handleTranscribeExtras logic
       setExtraContentTranscribing(true);
       try {
         const result = await transcribeExtras(letterId);
@@ -469,11 +465,16 @@ export default function LetterReviewPage() {
     }
   };
 
-  // Regenerate metadata handler
-  const handleRegenerateMetadata = async () => {
+  // Regenerate metadata handler — shows popup for options
+  const handleRegenerateMetadata = () => {
     if (!letterId) return;
-    if (!window.confirm("Re-extract all metadata from the transcript? This will overwrite the current metadata.")) return;
+    setShowMetadataRegeneratePopup(true);
+  };
 
+  // Execute metadata regeneration (metadata only)
+  const executeMetadataRegenerate = async () => {
+    if (!letterId) return;
+    setShowMetadataRegeneratePopup(false);
     setRegenerateState("regenerating");
     try {
       const updated = await regenerateMetadata(letterId);
@@ -489,13 +490,11 @@ export default function LetterReviewPage() {
       setEmotionalTone(updated.metadata.emotionalTone || "");
       setRelationship(updated.metadata.senderRecipientRelationship || "");
       setPrimaryTopics(updated.metadata.primaryTopics || []);
-      // Update original values for sync detection
       setOriginalSender(updated.metadata.sender || "");
       setOriginalRecipient(updated.metadata.recipient || "");
       setRegenerateState("done");
       showToast("Metadata regenerated", "success");
 
-      // Reset state after a moment
       statusTimeoutRef.current = setTimeout(() => {
         setRegenerateState("idle");
       }, 2000);
@@ -511,13 +510,15 @@ export default function LetterReviewPage() {
 
   // Re-extract handler — calls the re-extract API with corrected sender/recipient
   const handleReExtract = useCallback(
-    async (mode: "full" | "metadata_only" | "entities_only") => {
+    async (mode: "full" | "metadata_only" | "entities_only", skipConfirm = false) => {
       if (!letterId || !letter) return;
 
-      const confirmMsg = mode === "entities_only"
-        ? "Re-extract entities from the transcript? This will overwrite current entity data."
-        : "Re-extract all metadata and entities? This will overwrite current data.";
-      if (!window.confirm(confirmMsg)) return;
+      if (!skipConfirm) {
+        const confirmMsg = mode === "entities_only"
+          ? "Re-extract entities from the transcript? This will overwrite current entity data."
+          : "Re-extract all metadata and entities? This will overwrite current data.";
+        if (!window.confirm(confirmMsg)) return;
+      }
 
       const isEntityOnly = mode === "entities_only";
       if (isEntityOnly) {
@@ -1552,60 +1553,112 @@ export default function LetterReviewPage() {
         )}
       </div>
 
-      {/* Confirmation dialog for letter transcription */}
-      {showTranscribeConfirm && (
+      {/* Regenerate Transcription popup */}
+      {showTranscriptRegeneratePopup && (
         <div
           className="confirm-dialog-overlay"
-          onClick={() => setShowTranscribeConfirm(false)}
+          onClick={() => setShowTranscriptRegeneratePopup(false)}
         >
-          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <h3>Replace Transcription?</h3>
-            <p>
-              This letter already has a transcription. Are you sure you want to
-              replace it?
-            </p>
+          <div className="confirm-dialog regenerate-popup" onClick={(e) => e.stopPropagation()}>
+            <h3>Regenerate Transcription</h3>
+            <p>Choose what to regenerate. This will overwrite the existing content.</p>
+            <div className="regenerate-options">
+              <button
+                className="btn-option"
+                onClick={() => {
+                  setShowTranscriptRegeneratePopup(false);
+                  handleTranscribeLetter(true);
+                }}
+              >
+                <Icon name="file" size={16} />
+                <span>Letter Transcript</span>
+              </button>
+              {hasExtras && (
+                <button
+                  className="btn-option"
+                  onClick={() => {
+                    setShowTranscriptRegeneratePopup(false);
+                    handleTranscribeExtrasWithConfirm(true);
+                  }}
+                >
+                  <Icon name="plus" size={16} />
+                  <span>Extra Content</span>
+                </button>
+              )}
+              {hasExtras && (
+                <button
+                  className="btn-option"
+                  onClick={async () => {
+                    setShowTranscriptRegeneratePopup(false);
+                    // Transcribe both: letter first, then extras
+                    await handleTranscribeLetter(true);
+                    await handleTranscribeExtrasWithConfirm(true);
+                  }}
+                >
+                  <Icon name="process" size={16} />
+                  <span>Both</span>
+                </button>
+              )}
+            </div>
             <div className="confirm-dialog-actions">
               <button
                 className="btn-cancel"
-                onClick={() => setShowTranscribeConfirm(false)}
+                onClick={() => setShowTranscriptRegeneratePopup(false)}
               >
                 Cancel
-              </button>
-              <button
-                className="btn-confirm"
-                onClick={() => handleTranscribeLetter(true)}
-              >
-                Replace
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Confirmation dialog for extra content transcription */}
-      {showExtrasTranscribeConfirm && (
+      {/* Regenerate Metadata popup */}
+      {showMetadataRegeneratePopup && (
         <div
           className="confirm-dialog-overlay"
-          onClick={() => setShowExtrasTranscribeConfirm(false)}
+          onClick={() => setShowMetadataRegeneratePopup(false)}
         >
-          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <h3>Replace Extra Content?</h3>
-            <p>
-              This letter already has extra content transcription. Are you sure
-              you want to replace it?
-            </p>
+          <div className="confirm-dialog regenerate-popup" onClick={(e) => e.stopPropagation()}>
+            <h3>Regenerate Analysis</h3>
+            <p>Choose what to regenerate. This will overwrite the existing data.</p>
+            <div className="regenerate-options">
+              <button
+                className="btn-option"
+                onClick={() => {
+                  setShowMetadataRegeneratePopup(false);
+                  executeMetadataRegenerate();
+                }}
+              >
+                <Icon name="edit" size={16} />
+                <span>Metadata Only</span>
+              </button>
+              <button
+                className="btn-option"
+                onClick={() => {
+                  setShowMetadataRegeneratePopup(false);
+                  handleReExtract("entities_only", true);
+                }}
+              >
+                <Icon name="person" size={16} />
+                <span>Entities Only</span>
+              </button>
+              <button
+                className="btn-option"
+                onClick={() => {
+                  setShowMetadataRegeneratePopup(false);
+                  handleReExtract("full", true);
+                }}
+              >
+                <Icon name="process" size={16} />
+                <span>Both</span>
+              </button>
+            </div>
             <div className="confirm-dialog-actions">
               <button
                 className="btn-cancel"
-                onClick={() => setShowExtrasTranscribeConfirm(false)}
+                onClick={() => setShowMetadataRegeneratePopup(false)}
               >
                 Cancel
-              </button>
-              <button
-                className="btn-confirm"
-                onClick={() => handleTranscribeExtrasWithConfirm(true)}
-              >
-                Replace
               </button>
             </div>
           </div>

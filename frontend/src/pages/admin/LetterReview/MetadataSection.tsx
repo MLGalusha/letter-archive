@@ -325,8 +325,8 @@ export default function MetadataSection({
 
 
         {/* AI-Extracted Metadata Section */}
-        <div className="v2-metadata-section">
-          <div className="v2-fields">
+        <div className="ai-metadata-section">
+          <div className="ai-fields">
             <div className="form-row">
               <div className="form-group">
                 <label htmlFor="emotionalTone">Emotional Tone</label>

@@ -274,8 +274,9 @@ export function getImageUrl(imageUrl: string): string {
   }
   // Append admin token as query param so <img src> can access non-published images
   const token = localStorage.getItem('adminToken');
-  const query = token ? `?token=${encodeURIComponent(token)}` : '';
-  return `${API_BASE_URL}${imageUrl}${query}`;
+  if (!token) return `${API_BASE_URL}${imageUrl}`;
+  const separator = imageUrl.includes('?') ? '&' : '?';
+  return `${API_BASE_URL}${imageUrl}${separator}token=${encodeURIComponent(token)}`;
 }
 
 // ── Blog & Content types ─────────────────────────────────────────────────────

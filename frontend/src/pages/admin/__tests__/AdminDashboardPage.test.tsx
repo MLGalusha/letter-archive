@@ -22,8 +22,8 @@ const {
   bulkTranscribeMock,
   bulkExtractMetadataMock,
   bulkUpdateFieldsMock,
-  analyzeCollectionMock,
   showToastMock,
+  isAuthenticatedMock,
 } = vi.hoisted(() => ({
   getAdminLettersMock: vi.fn(),
   getFilteredLetterIdsMock: vi.fn(),
@@ -40,8 +40,12 @@ const {
   bulkTranscribeMock: vi.fn(),
   bulkExtractMetadataMock: vi.fn(),
   bulkUpdateFieldsMock: vi.fn(),
-  analyzeCollectionMock: vi.fn(),
   showToastMock: vi.fn(),
+  isAuthenticatedMock: vi.fn(),
+}));
+
+vi.mock("../../../api/auth", () => ({
+  isAuthenticated: isAuthenticatedMock,
 }));
 
 vi.mock("../../../api/letters", () => ({
@@ -66,10 +70,6 @@ vi.mock("../../../api/admin", () => ({
   bulkTranscribe: (...args: unknown[]) => bulkTranscribeMock(...args),
   bulkExtractMetadata: (...args: unknown[]) => bulkExtractMetadataMock(...args),
   bulkUpdateFields: (...args: unknown[]) => bulkUpdateFieldsMock(...args),
-}));
-
-vi.mock("../../../api/collections", () => ({
-  analyzeCollection: (...args: unknown[]) => analyzeCollectionMock(...args),
 }));
 
 vi.mock("../../../contexts/ToastContext", () => ({
@@ -201,13 +201,15 @@ function createLettersResponse() {
 }
 
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+let consoleDebugSpy: ReturnType<typeof vi.spyOn>;
 
-describe("AdminDashboard collection analysis", () => {
+describe("AdminDashboard processing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    sessionStorage.setItem("adminAuth", "true");
+    isAuthenticatedMock.mockReturnValue(true);
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    consoleDebugSpy = vi.spyOn(console, "debug").mockImplementation(() => undefined);
 
     getAdminLettersMock.mockResolvedValue(createLettersResponse());
     getProcessingStatusMock.mockResolvedValue({
@@ -221,89 +223,14 @@ describe("AdminDashboard collection analysis", () => {
       errors: [],
       lastCompletedAt: null,
     });
-    analyzeCollectionMock.mockResolvedValue({
-      collectionId: "collection-9",
-      collectionCode: "009",
-      letterCount: 1,
-      analysis: {
-        people: [],
-        places: [],
-        relationships: [],
-        potentialDuplicates: [],
-      },
-      stats: {
-        peopleFound: 2,
-        placesFound: 1,
-        relationshipsFound: 1,
-        duplicatesFound: 0,
-        entitiesCreated: 2,
-        entitiesLinked: 1,
-        itemsQueuedForReview: 3,
-      },
-      isStub: false,
-    });
   });
 
   afterEach(() => {
     consoleErrorSpy.mockRestore();
+    consoleDebugSpy.mockRestore();
   });
 
-  it("normalizes short collection filters before running collection analysis", async () => {
-    const user = userEvent.setup();
-
-    render(
-      <MemoryRouter>
-        <AdminDashboard />
-      </MemoryRouter>,
-    );
-
-    await screen.findByTitle("Filter by collection number");
-    await user.type(screen.getByTitle("Filter by collection number"), "9");
-    await user.click(screen.getByRole("button", { name: "Edit" }));
-    await user.click(screen.getByRole("button", { name: "Analyze Collection" }));
-
-    expect(
-      await screen.findByText(/Analyze all letters in the "009" collection\?/i),
-    ).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Analyze" }));
-
-    await waitFor(() => {
-      expect(analyzeCollectionMock).toHaveBeenCalledWith("009");
-    });
-    expect(showToastMock).toHaveBeenCalledWith("Analyzing collection 009...", "info");
-    expect(showToastMock).toHaveBeenCalledWith(
-      "Analysis complete: 2 people, 1 places, 1 relationships. Created 2, linked 1, 3 queued for review.",
-      "success",
-    );
-  });
-
-  it("surfaces analyze failures through the toast layer", async () => {
-    const user = userEvent.setup();
-    analyzeCollectionMock.mockRejectedValueOnce(new Error("analysis offline"));
-
-    render(
-      <MemoryRouter>
-        <AdminDashboard />
-      </MemoryRouter>,
-    );
-
-    await waitFor(() => {
-      expect(getAdminLettersMock).toHaveBeenCalled();
-    });
-
-    await user.type(screen.getByTitle("Filter by collection number"), "9");
-    await user.click(screen.getByRole("button", { name: "Edit" }));
-    await user.click(screen.getByRole("button", { name: "Analyze Collection" }));
-    await user.click(await screen.findByRole("button", { name: "Analyze" }));
-
-    await waitFor(() => {
-      expect(showToastMock).toHaveBeenCalledWith("analysis offline", "error");
-    });
-    expect(consoleErrorSpy).toHaveBeenCalled();
-  });
-
-  it("surfaces processing status poll failures through the toast layer", async () => {
+  it("ignores processing status poll failures without surfacing a toast", async () => {
     getProcessingStatusMock.mockRejectedValueOnce(
       new ApiError(
         503,
@@ -320,11 +247,12 @@ describe("AdminDashboard collection analysis", () => {
     );
 
     await waitFor(() => {
-      expect(showToastMock).toHaveBeenCalledWith(
-        "processing status offline (Request ID: req-dashboard-status-503)",
-        "error",
-      );
+      expect(getProcessingStatusMock).toHaveBeenCalled();
     });
-    expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(showToastMock).not.toHaveBeenCalledWith(
+      "processing status offline (Request ID: req-dashboard-status-503)",
+      "error",
+    );
+    expect(consoleDebugSpy).toHaveBeenCalled();
   });
 });

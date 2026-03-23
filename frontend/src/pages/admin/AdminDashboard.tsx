@@ -24,8 +24,6 @@ import {
   Button,
   ConfirmDialog,
 } from "../../components/common";
-import { analyzeCollection, type CollectionAnalysisResult } from "../../api/collections";
-import { startEntityResolution } from "../../api/admin/processing";
 import AdminLayout from "../../components/AdminLayout";
 import Icon from "../../components/common/Icon";
 import { getRecentEdits, formatTimeAgo, type RecentEdit } from "../../utils/recentEdits";
@@ -158,8 +156,7 @@ export default function AdminDashboard() {
     });
   }, [visibilityFilter, collectionFilter, searchQuery, sortColumns, dateMode, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
-  // Edit mode
-  const [editMode, setEditMode] = useState(false);
+  // Selection-driven toolbar (no manual edit mode toggle)
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
@@ -190,8 +187,6 @@ export default function AdminDashboard() {
   const [pendingMetadataIds, setPendingMetadataIds] = useState<string[]>([]);
   const [showTranscribeConfirm, setShowTranscribeConfirm] = useState(false);
   const [showMetadataConfirm, setShowMetadataConfirm] = useState(false);
-  const [showAnalyzeConfirm, setShowAnalyzeConfirm] = useState(false);
-  const [showResolveConfirm, setShowResolveConfirm] = useState(false);
   // Overwrite/skip state for transcribe and metadata
   const [transcribeExistingCount, setTranscribeExistingCount] = useState(0);
   const [metadataExistingCount, setMetadataExistingCount] = useState(0);
@@ -269,31 +264,32 @@ export default function AdminDashboard() {
     fetchLetters(true, 1);
   }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
-  const handleRowClick = (letterId: string, index: number, e: React.MouseEvent) => {
-    if (editMode) {
-      if (hasDragMoved) return;
-
-      if (e.shiftKey && lastClickedIndex !== null) {
-        const start = Math.min(lastClickedIndex, index);
-        const end = Math.max(lastClickedIndex, index);
-        const newSelected = new Set(selectedIds);
-        for (let i = start; i <= end; i++) {
-          newSelected.add(filteredLetters[i].id);
-        }
-        setSelectedIds(newSelected);
-        setAllFilteredSelected(false);
-      } else {
-        toggleSelection(letterId);
-        setLastClickedIndex(index);
-      }
-    } else {
-      navigate(`/admin/letters/${letterId}`);
-    }
+  const handleRowClick = (letterId: string, _index: number, _e: React.MouseEvent) => {
+    if (hasDragMoved) return;
+    // If in copy mode, don't navigate
+    if (copyModeActive) return;
+    navigate(`/admin/letters/${letterId}`);
   };
 
-  // Drag selection handlers
+  // Checkbox-driven selection with shift-click range support
+  const handleCheckboxChange = (letterId: string, index: number, e: React.MouseEvent) => {
+    if (e.shiftKey && lastClickedIndex !== null) {
+      const start = Math.min(lastClickedIndex, index);
+      const end = Math.max(lastClickedIndex, index);
+      const newSelected = new Set(selectedIds);
+      for (let i = start; i <= end; i++) {
+        newSelected.add(filteredLetters[i].id);
+      }
+      setSelectedIds(newSelected);
+      setAllFilteredSelected(false);
+    } else {
+      toggleSelection(letterId);
+    }
+    setLastClickedIndex(index);
+  };
+
+  // Drag selection handlers — always active for multi-select
   const handleRowMouseDown = (index: number, e: React.MouseEvent) => {
-    if (!editMode) return;
     if (e.button !== 0) return;
     const tagName = (e.target as HTMLElement).tagName;
     if (tagName === "INPUT" || tagName === "BUTTON") return;
@@ -359,11 +355,9 @@ export default function AdminDashboard() {
   }, [isDragging]);
 
   useEffect(() => {
-    if (editMode) {
-      document.addEventListener("mouseup", handleMouseUp);
-      return () => document.removeEventListener("mouseup", handleMouseUp);
-    }
-  }, [editMode, handleMouseUp]);
+    document.addEventListener("mouseup", handleMouseUp);
+    return () => document.removeEventListener("mouseup", handleMouseUp);
+  }, [handleMouseUp]);
 
   // Apply client-side sorting for computed columns
   const filteredLetters = useMemo(() => {
@@ -411,6 +405,9 @@ export default function AdminDashboard() {
     selectAllFiltered,
   } = useDashboardSelection(filteredLetters);
 
+  // Toolbar is visible whenever anything is selected (no manual toggle)
+  const editMode = selectedIds.size > 0 || copyModeActive || pendingChanges.size > 0;
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString(undefined, {
       month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -432,17 +429,12 @@ export default function AdminDashboard() {
     }
   };
 
-  // Edit mode functions
-  const toggleEditMode = async () => {
-    if (editMode) {
-      if (pendingChanges.size > 0) {
-        await handleSaveChanges();
-      } else {
-        exitEditMode();
-      }
+  // Save pending changes + clear selection (toolbar "Done" button when in copy mode)
+  const handleDone = async () => {
+    if (pendingChanges.size > 0) {
+      await handleSaveChanges();
     } else {
-      setShowDateDropdown(false);
-      setEditMode(true);
+      exitEditMode();
     }
   };
 
@@ -536,7 +528,7 @@ export default function AdminDashboard() {
 
       showToast(`Updated ${pendingChanges.size} letter${pendingChanges.size === 1 ? '' : 's'}`, 'success');
 
-      setEditMode(false);
+
       clearSelection();
       setPendingChanges(new Map());
       setCopyModeActive(false);
@@ -553,7 +545,6 @@ export default function AdminDashboard() {
   };
 
   const exitEditMode = () => {
-    setEditMode(false);
     clearSelection();
     setPendingChanges(new Map());
     setCopyModeActive(false);
@@ -574,7 +565,7 @@ export default function AdminDashboard() {
       await Promise.all(Array.from(selectedIds).map((id) => deleteLetter(id)));
       clearSelection();
       setShowDeleteModal(false);
-      setEditMode(false);
+
       showToast(`Deleted ${count} letter${count === 1 ? '' : 's'}`, 'success');
       await fetchLetters();
     } catch (err) {
@@ -690,10 +681,18 @@ export default function AdminDashboard() {
       .join(', ');
   };
 
-  const handleStartTranscription = async () => {
+  const handleStartTranscription = async (skipExisting = false) => {
     try {
       if (selectedIds.size > 0) {
-        const result = await bulkTranscribe(Array.from(selectedIds));
+        let ids = Array.from(selectedIds);
+        if (skipExisting) {
+          ids = letters.filter(l => ids.includes(l.id) && l.transcriptStatus === 'EMPTY').map(l => l.id);
+          if (ids.length === 0) {
+            showToast('No letters without transcripts to process', 'info');
+            return;
+          }
+        }
+        const result = await bulkTranscribe(ids);
         if (result.queued === 0 && result.skipped > 0) {
           const summary = result.skipReasons ? summarizeSkipReasons(result.skipReasons) : `${result.skipped} skipped`;
           showToast(`No letters processed: ${summary}`, 'error');
@@ -717,10 +716,17 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleStartMetadataExtraction = async (skipConfirmation = false) => {
+  const handleStartMetadataExtraction = async (skipConfirmation = false, skipExisting = false) => {
     try {
       if (selectedIds.size > 0) {
-        const ids = skipConfirmation ? pendingMetadataIds : Array.from(selectedIds);
+        let ids = skipConfirmation ? pendingMetadataIds : Array.from(selectedIds);
+        if (skipExisting) {
+          ids = letters.filter(l => ids.includes(l.id) && l.metadataContentStatus === 'EMPTY').map(l => l.id);
+          if (ids.length === 0) {
+            showToast('No letters without metadata to process', 'info');
+            return;
+          }
+        }
         const result = await bulkExtractMetadata(ids, skipConfirmation);
 
         if (result.unconfirmedCount && result.unconfirmedCount > 0 && !skipConfirmation && result.queued === 0) {
@@ -756,57 +762,6 @@ export default function AdminDashboard() {
   const handleConfirmUnverified = async () => {
     setShowUnconfirmedDialog(false);
     await handleStartMetadataExtraction(true);
-  };
-
-  const handleAnalyzeCollection = async () => {
-    if (collectionFilter === 'all') {
-      showToast('Select a collection filter to analyze', 'error');
-      return;
-    }
-
-    const normalizedCollectionCode = collectionFilter.padStart(3, '0');
-
-    try {
-      showToast(`Analyzing collection ${normalizedCollectionCode}...`, 'info');
-      const result: CollectionAnalysisResult = await analyzeCollection(
-        normalizedCollectionCode,
-      );
-      const { stats } = result;
-      showToast(
-        `Analysis complete: ${stats.peopleFound} people, ${stats.placesFound} places, ` +
-          `${stats.relationshipsFound} relationships. Created ${stats.entitiesCreated}, ` +
-          `linked ${stats.entitiesLinked}, ${stats.itemsQueuedForReview} queued for review.`,
-        'success',
-      );
-    } catch (err) {
-      console.error("Failed to analyze collection:", err);
-      showToast(
-        err instanceof Error ? err.message : "Failed to analyze collection",
-        'error',
-      );
-    }
-  };
-
-  const handleResolveEntities = async () => {
-    if (collectionFilter === 'all') {
-      showToast('Select a collection filter to resolve entities', 'error');
-      return;
-    }
-
-    const normalizedCollectionCode = collectionFilter.padStart(3, '0');
-
-    try {
-      const result = await startEntityResolution(normalizedCollectionCode);
-      showToast(result.message, 'info');
-    } catch (err) {
-      console.error("Failed to start entity resolution:", err);
-      showToast(
-        err instanceof Error
-          ? err.message
-          : "Failed to start entity resolution",
-        'error',
-      );
-    }
   };
 
 
@@ -1198,7 +1153,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Processing status pill (when running and not in edit mode) */}
-        {processingStatus?.isRunning && !editMode && (
+        {processingStatus?.isRunning && selectedIds.size === 0 && (
           <span className="stat-pill stat-processing">
             {processingStatus.currentJob?.type === "transcription" ? "T" : "M"}:{" "}
             {processingStatus.completed}/{processingStatus.total}
@@ -1206,18 +1161,9 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* Actions: Edit on top, Recent on bottom */}
+      {/* Actions: Recent edits */}
       <div className="header-actions-right">
         <div className="filter-group-stacked">
-          <Button
-            icon={editMode ? "check" : "edit"}
-            size="sm"
-            active={editMode}
-            onClick={toggleEditMode}
-            disabled={isSaving}
-          >
-            {isSaving ? "Saving..." : editMode ? "Done" : "Edit"}
-          </Button>
           <div className="recent-edits-dropdown" ref={recentDropdownRef}>
             <button
               className="recent-edits-btn"
@@ -1266,6 +1212,7 @@ export default function AdminDashboard() {
           onRowClick={handleRowClick}
           onRowMouseDown={handleRowMouseDown}
           onRowMouseEnter={handleRowMouseEnter}
+          onCheckboxChange={handleCheckboxChange}
           selectedIds={selectedIds}
           editMode={editMode}
           copyModeActive={copyModeActive}
@@ -1332,57 +1279,79 @@ export default function AdminDashboard() {
         onCancel={() => setShowUnconfirmedDialog(false)}
       />
 
-      {/* Transcribe confirmation */}
-      <ConfirmDialog
-        isOpen={showTranscribeConfirm}
-        title="Transcribe Letters"
-        message={`Transcribe ${selectedIds.size > 0 ? `${selectedIds.size} selected` : 'all'} letter${selectedIds.size === 1 ? '' : 's'}?`}
-        confirmText="Transcribe"
-        onConfirm={() => {
-          setShowTranscribeConfirm(false);
-          handleStartTranscription();
-        }}
-        onCancel={() => setShowTranscribeConfirm(false)}
-      />
+      {/* Transcribe confirmation — with overwrite/skip when existing transcripts found */}
+      {showTranscribeConfirm && (
+        <div className="modal-overlay" onClick={() => setShowTranscribeConfirm(false)}>
+          <div className="modal-content modal-sm confirm-dialog" onClick={e => e.stopPropagation()}>
+            <h2 className="confirm-dialog-title">Transcribe Letters</h2>
+            <div className="confirm-dialog-message">
+              {transcribeExistingCount > 0 && selectedIds.size > 0 ? (
+                <p>
+                  {transcribeExistingCount} of {selectedIds.size} selected letter{selectedIds.size === 1 ? '' : 's'} already
+                  {transcribeExistingCount === 1 ? ' has a' : ' have'} transcript{transcribeExistingCount === 1 ? '' : 's'}.
+                  Would you like to overwrite existing transcripts or skip them?
+                </p>
+              ) : (
+                <p>Transcribe {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'all'} letter{selectedIds.size === 1 ? '' : 's'}?</p>
+              )}
+            </div>
+            <div className="confirm-dialog-actions">
+              <Button variant="secondary" onClick={() => setShowTranscribeConfirm(false)}>Cancel</Button>
+              {transcribeExistingCount > 0 && selectedIds.size > 0 ? (
+                <>
+                  <Button variant="secondary" onClick={() => { setShowTranscribeConfirm(false); handleStartTranscription(true); }}>
+                    Skip Existing ({selectedIds.size - transcribeExistingCount})
+                  </Button>
+                  <Button variant="primary" onClick={() => { setShowTranscribeConfirm(false); handleStartTranscription(false); }}>
+                    Overwrite All ({selectedIds.size})
+                  </Button>
+                </>
+              ) : (
+                <Button variant="primary" onClick={() => { setShowTranscribeConfirm(false); handleStartTranscription(); }}>
+                  Transcribe
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* Extract Metadata confirmation */}
-      <ConfirmDialog
-        isOpen={showMetadataConfirm}
-        title="Extract Metadata"
-        message={`Extract metadata for ${selectedIds.size > 0 ? `${selectedIds.size} selected` : 'all'} letter${selectedIds.size === 1 ? '' : 's'}?`}
-        confirmText="Extract"
-        onConfirm={() => {
-          setShowMetadataConfirm(false);
-          handleStartMetadataExtraction();
-        }}
-        onCancel={() => setShowMetadataConfirm(false)}
-      />
-
-      {/* Analyze Collection confirmation */}
-      <ConfirmDialog
-        isOpen={showAnalyzeConfirm}
-        title="Analyze Collection"
-        message={`Analyze all letters in the "${collectionFilter === 'all' ? collectionFilter : collectionFilter.padStart(3, '0')}" collection? This will process sender/recipient relationships.`}
-        confirmText="Analyze"
-        onConfirm={() => {
-          setShowAnalyzeConfirm(false);
-          handleAnalyzeCollection();
-        }}
-        onCancel={() => setShowAnalyzeConfirm(false)}
-      />
-
-      {/* Resolve Entities confirmation */}
-      <ConfirmDialog
-        isOpen={showResolveConfirm}
-        title="Resolve Entities"
-        message={`Run AI entity resolution on collection "${collectionFilter === 'all' ? collectionFilter : collectionFilter.padStart(3, '0')}"? This will merge duplicates, resolve generics, fill missing sender/recipients, and generate biographies.`}
-        confirmText="Resolve"
-        onConfirm={() => {
-          setShowResolveConfirm(false);
-          handleResolveEntities();
-        }}
-        onCancel={() => setShowResolveConfirm(false)}
-      />
+      {/* Extract Metadata confirmation — with overwrite/skip when existing metadata found */}
+      {showMetadataConfirm && (
+        <div className="modal-overlay" onClick={() => setShowMetadataConfirm(false)}>
+          <div className="modal-content modal-sm confirm-dialog" onClick={e => e.stopPropagation()}>
+            <h2 className="confirm-dialog-title">Extract Metadata</h2>
+            <div className="confirm-dialog-message">
+              {metadataExistingCount > 0 && selectedIds.size > 0 ? (
+                <p>
+                  {metadataExistingCount} of {selectedIds.size} selected letter{selectedIds.size === 1 ? '' : 's'} already
+                  {metadataExistingCount === 1 ? ' has' : ' have'} metadata.
+                  Would you like to overwrite existing metadata or skip them?
+                </p>
+              ) : (
+                <p>Extract metadata for {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'all'} letter{selectedIds.size === 1 ? '' : 's'}?</p>
+              )}
+            </div>
+            <div className="confirm-dialog-actions">
+              <Button variant="secondary" onClick={() => setShowMetadataConfirm(false)}>Cancel</Button>
+              {metadataExistingCount > 0 && selectedIds.size > 0 ? (
+                <>
+                  <Button variant="secondary" onClick={() => { setShowMetadataConfirm(false); handleStartMetadataExtraction(false, true); }}>
+                    Skip Existing ({selectedIds.size - metadataExistingCount})
+                  </Button>
+                  <Button variant="primary" onClick={() => { setShowMetadataConfirm(false); handleStartMetadataExtraction(); }}>
+                    Overwrite All ({selectedIds.size})
+                  </Button>
+                </>
+              ) : (
+                <Button variant="primary" onClick={() => { setShowMetadataConfirm(false); handleStartMetadataExtraction(); }}>
+                  Extract
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
 
       {/* Floating edit toolbar with process actions */}
@@ -1495,20 +1464,6 @@ export default function AdminDashboard() {
                   >
                     Extract Metadata{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
                   </button>
-                  <button
-                    className="toolbar-process-btn"
-                    onClick={() => setShowAnalyzeConfirm(true)}
-                    disabled={collectionFilter === 'all'}
-                  >
-                    Analyze Collection
-                  </button>
-                  <button
-                    className="toolbar-process-btn"
-                    onClick={() => setShowResolveConfirm(true)}
-                    disabled={collectionFilter === 'all'}
-                  >
-                    Resolve Entities
-                  </button>
                 </div>
               )}
             </div>
@@ -1555,6 +1510,16 @@ export default function AdminDashboard() {
                   Delete
                 </button>
               </div>
+              <div className="toolbar-divider" />
+              {pendingChanges.size > 0 ? (
+                <button className="toolbar-done-btn" onClick={handleDone} disabled={isSaving}>
+                  {isSaving ? 'Saving...' : 'Save & Close'}
+                </button>
+              ) : (
+                <button className="toolbar-close-btn" onClick={exitEditMode} title="Clear selection">
+                  <Icon name="close" size={16} />
+                </button>
+              )}
             </div>
           </div>
         </div>

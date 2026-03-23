@@ -24,6 +24,7 @@ interface RecentActivityTableProps {
   onRowClick: (letterId: string, index: number, e: React.MouseEvent) => void;
   onRowMouseDown: (index: number, e: React.MouseEvent) => void;
   onRowMouseEnter: (index: number) => void;
+  onCheckboxChange: (letterId: string, index: number, e: React.MouseEvent) => void;
   selectedIds: Set<string>;
   editMode: boolean;
   copyModeActive: boolean;
@@ -65,6 +66,7 @@ export default function RecentActivityTable({
   onRowClick,
   onRowMouseDown,
   onRowMouseEnter,
+  onCheckboxChange,
   selectedIds,
   editMode,
   copyModeActive,
@@ -136,6 +138,7 @@ export default function RecentActivityTable({
         <table className="letters-table">
           <thead ref={theadRef}>
             <tr>
+              <th className="checkbox-header" />
               {visibleColumns.has("sender") && (
                 <th
                   className={`sortable-header ${getSortInfo("sender") ? "sorted" : ""}`}
@@ -359,6 +362,15 @@ export default function RecentActivityTable({
                   onMouseEnter={() => onRowMouseEnter(index)}
                   className={`letter-row ${selectedIds.has(letter.id) ? "selected" : ""} ${editMode ? "edit-mode" : ""}`}
                 >
+                  <td className="checkbox-cell" onClick={(e) => { e.stopPropagation(); onCheckboxChange(letter.id, index, e); }}>
+                    <input
+                      type="checkbox"
+                      className="row-checkbox"
+                      checked={selectedIds.has(letter.id)}
+                      readOnly
+                      tabIndex={-1}
+                    />
+                  </td>
                   {visibleColumns.has("sender") && (
                     <td
                       className={`

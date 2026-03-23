@@ -1816,16 +1816,15 @@
   position: relative;
 }
 
-/* Column toggle floating in table header */
+/* Column toggle floating in table header — centered in the checkbox column */
 .column-toggle-in-table {
   position: sticky;
   top: 0;
   left: 0;
-  width: fit-content;
-  padding-left: 4px;
-  padding-right: 6px;
+  width: 32px;
   display: flex;
   align-items: center;
+  justify-content: center;
   z-index: 12;
   pointer-events: none;
   background: var(--bg);
@@ -1833,12 +1832,6 @@
 
 .column-toggle-in-table > * {
   pointer-events: auto;
-}
-
-/* First th/td always has left padding to make room for the column toggle */
-.letters-table th:first-child,
-.letters-table td:first-child {
-  padding-left: 30px;
 }
 
 .column-toggle-btn {
@@ -2409,5 +2402,80 @@
 .toolbar-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Close / Done buttons at end of toolbar */
+.toolbar-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #4b5563;
+  border-radius: 4px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.toolbar-close-btn:hover {
+  color: #e5e7eb;
+  border-color: #6b7280;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.toolbar-done-btn {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  background: #2563eb;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.toolbar-done-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.toolbar-done-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Row checkboxes ────────────────────────────────────── */
+.checkbox-header {
+  width: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  padding: 0 !important;
+}
+
+.checkbox-cell {
+  width: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  padding: 0 var(--spacing-xs) !important;
+  text-align: center;
+  cursor: pointer;
+}
+
+.row-checkbox {
+  width: 14px;
+  height: 14px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+  margin: 0;
+  pointer-events: none; /* clicks handled by td */
+}
+
+body.dark .row-checkbox {
+  accent-color: #60a5fa;
 }
 

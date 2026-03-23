@@ -1,32 +1,20 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { listCollections, type CollectionInfo } from '../api/collections';
 import Footer from '../components/Footer/Footer';
+import { useAsync } from '../hooks/useAsync';
 import './CollectionsPage.css';
 
 export default function CollectionsPage() {
   const navigate = useNavigate();
-  const [collections, setCollections] = useState<CollectionInfo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortMode, setSortMode] = useState<'letters-desc' | 'letters-asc' | 'title-asc'>('letters-desc');
-
-  useEffect(() => {
-    async function fetchCollections() {
-      try {
-        const data = await listCollections();
-        setCollections(data.filter((c) => (c.letterCount || 0) > 0));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load collections');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchCollections();
+  const { data, loading, error } = useAsync(async () => {
+    const collections = await listCollections();
+    return collections.filter((collection) => (collection.letterCount || 0) > 0);
   }, []);
+  const collections: CollectionInfo[] = data ?? [];
 
   const handleCollectionClick = (code: string) => {
     navigate(`/collections/${code}`);

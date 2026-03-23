@@ -1,33 +1,20 @@
-import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getPlacePublic, type PublicPlaceDetail } from '../api/entities';
 import Breadcrumb from '../components/Breadcrumb';
 import Footer from '../components/Footer/Footer';
+import { useAsync } from '../hooks/useAsync';
 import './PlacePage.css';
 
 export default function PlacePage() {
   const navigate = useNavigate();
   const { placeId } = useParams<{ placeId: string }>();
 
-  const [data, setData] = useState<PublicPlaceDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!placeId) return;
-
-    async function fetchPlace() {
-      try {
-        const result = await getPlacePublic(placeId!);
-        setData(result);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Place not found');
-      } finally {
-        setLoading(false);
-      }
+  const { data, loading, error } = useAsync<PublicPlaceDetail>(async () => {
+    if (!placeId) {
+      throw new Error('Place not found');
     }
 
-    fetchPlace();
+    return getPlacePublic(placeId);
   }, [placeId]);
 
   const handleBack = () => {

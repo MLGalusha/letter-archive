@@ -1,0 +1,482 @@
+/* ── Usage Page ────────────────────────────────────────── */
+
+.usage-page {
+  padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-xl);
+  max-width: 1100px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+/* ── Page Header ──────────────────────────────────────── */
+
+.usage-header {
+  margin-bottom: var(--spacing-lg);
+}
+
+.usage-kicker {
+  font-size: var(--font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-xs);
+}
+
+.usage-title {
+  margin: 0 0 var(--spacing-xs);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.usage-subtitle {
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 520px;
+}
+
+/* ── Summary Cards ────────────────────────────────────── */
+
+.usage-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+.usage-summary-card {
+  padding: var(--spacing-md) var(--spacing-sm);
+  background: var(--bg-light);
+  border: var(--border-card);
+  border-top: 1px solid var(--highlight);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  text-align: center;
+  transition: box-shadow 0.2s ease;
+}
+
+.usage-summary-card:hover {
+  box-shadow: 0 2px 8px hsla(0, 0%, 0%, 0.06);
+}
+
+.usage-summary-value {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.usage-summary-label {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-top: 6px;
+}
+
+/* ── Section Cards ────────────────────────────────────── */
+
+.usage-section {
+  background: var(--bg-light);
+  border: var(--border-card);
+  border-top: 1px solid var(--highlight);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.usage-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--border);
+}
+
+.usage-section-header h2 {
+  margin: 0;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  flex: 1;
+}
+
+.usage-section-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ── Period selector ─────────────────────────────────── */
+
+.usage-period-select {
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.usage-period-select:focus {
+  outline: none;
+  border-color: var(--highlight);
+  box-shadow: 0 0 0 3px hsla(0, 0%, 50%, 0.08);
+}
+
+/* ── Charts ──────────────────────────────────────────── */
+
+.usage-chart-container {
+  width: 100%;
+  height: 320px;
+}
+
+.usage-charts-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.usage-pie-container {
+  width: 100%;
+  height: 320px;
+}
+
+/* recharts tooltip styling */
+.usage-tooltip {
+  background: var(--bg-light) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: var(--shadow) !important;
+  padding: var(--spacing-sm) !important;
+  font-size: var(--font-xs) !important;
+}
+
+.usage-tooltip-label {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+/* ── Legend ───────────────────────────────────────────── */
+
+.usage-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm) var(--spacing-md);
+  margin-top: var(--spacing-md);
+  justify-content: center;
+}
+
+.usage-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+
+.usage-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* ── Filters Row ─────────────────────────────────────── */
+
+.usage-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  align-items: flex-end;
+}
+
+.usage-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.usage-filter-group label {
+  font-weight: 600;
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.usage-filter-group select,
+.usage-filter-group input {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.usage-filter-group select:focus,
+.usage-filter-group input:focus {
+  outline: none;
+  border-color: var(--highlight);
+  box-shadow: 0 0 0 3px hsla(0, 0%, 50%, 0.08);
+}
+
+/* ── Call History Table ──────────────────────────────── */
+
+.usage-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-sm);
+  white-space: nowrap;
+}
+
+.usage-table th {
+  text-align: left;
+  padding: var(--spacing-sm);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: var(--font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+}
+
+.usage-table td {
+  padding: var(--spacing-sm);
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.usage-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.usage-table tbody tr:hover {
+  background: hsla(0, 0%, 50%, 0.03);
+}
+
+.usage-table .mono {
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  font-size: var(--font-xs);
+}
+
+/* ── Type Badge ──────────────────────────────────────── */
+
+.usage-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+}
+
+.usage-type-badge.transcription {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.usage-type-badge.metadata {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.usage-type-badge.entity_extraction {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.usage-type-badge.entity_resolution {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+body.dark .usage-type-badge.transcription {
+  background: hsl(210 40% 18%);
+  color: #64b5f6;
+}
+
+body.dark .usage-type-badge.metadata {
+  background: hsl(120 30% 15%);
+  color: #81c784;
+}
+
+body.dark .usage-type-badge.entity_extraction {
+  background: hsl(30 40% 15%);
+  color: #ffb74d;
+}
+
+body.dark .usage-type-badge.entity_resolution {
+  background: hsl(280 30% 18%);
+  color: #ce93d8;
+}
+
+/* ── Letter link ─────────────────────────────────────── */
+
+.usage-letter-link {
+  color: var(--highlight);
+  text-decoration: none;
+  font-size: var(--font-xs);
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+}
+
+.usage-letter-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Load More ───────────────────────────────────────── */
+
+.usage-load-more {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-md) 0 var(--spacing-xs);
+}
+
+/* ── Empty / Loading ─────────────────────────────────── */
+
+.usage-loading {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+
+.usage-empty {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  font-style: italic;
+}
+
+.usage-error {
+  text-align: center;
+  padding: var(--spacing-lg);
+  color: var(--danger-text);
+  background: var(--danger-bg);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+/* ── Responsive ──────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .usage-charts-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .usage-page {
+    padding: var(--spacing-md) var(--spacing-sm);
+  }
+
+  .usage-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .usage-section {
+    padding: var(--spacing-md);
+  }
+
+  .usage-chart-container,
+  .usage-pie-container {
+    height: 260px;
+  }
+
+  .usage-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Prevent iOS zoom on input focus */
+  .usage-filter-group select,
+  .usage-filter-group input {
+    font-size: 16px;
+  }
+
+  .usage-section-header {
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+  }
+
+  .usage-summary-value {
+    font-size: 1.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Summary cards: show only Total Spend + This Month (first 2), hide others */
+  .usage-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .usage-summary-card:nth-child(n+3) {
+    display: none;
+  }
+
+  .usage-section-header h2 {
+    font-size: 1.1rem;
+  }
+
+  /* Bar chart: shorter on mobile */
+  .usage-chart-container {
+    height: 150px;
+  }
+
+  /* Hide pie chart section entirely on mobile (second child of charts row) */
+  .usage-charts-row > .usage-section:nth-child(2) {
+    display: none;
+  }
+
+  /* Charts row becomes single column */
+  .usage-charts-row {
+    grid-template-columns: 1fr;
+  }
+
+  /* Hide page subtitle */
+  .usage-subtitle {
+    display: none;
+  }
+
+  /* Call history: hide Model (3), Input Tokens (4), Output Tokens (5),
+     Input Cost (6), Output Cost (7), Duration (9) — keep Date, Type, Total Cost, Letter */
+  .usage-table th:nth-child(3),
+  .usage-table td:nth-child(3),
+  .usage-table th:nth-child(4),
+  .usage-table td:nth-child(4),
+  .usage-table th:nth-child(5),
+  .usage-table td:nth-child(5),
+  .usage-table th:nth-child(6),
+  .usage-table td:nth-child(6),
+  .usage-table th:nth-child(7),
+  .usage-table td:nth-child(7),
+  .usage-table th:nth-child(9),
+  .usage-table td:nth-child(9) {
+    display: none;
+  }
+}

@@ -1,17 +1,24 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import { eq } from 'drizzle-orm';
 import routes from './routes/index.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { env, hasOpenAI } from './config/env.js';
 import { logger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { recoverOrphanedJobs } from './services/processing-queue.js';
+import { db, adminUsers } from './db/index.js';
+import { hashPassword } from './auth/jwt.js';
 
 const app = express();
 
 // Request logging (must be first to capture all requests)
 app.use(requestLogger);
+
+// Rate limiting
+import { globalRateLimit } from './middleware/rate-limit.js';
+app.use(globalRateLimit);
 
 // Middleware
 const corsOrigins = env.CORS_ORIGINS
@@ -56,4 +63,21 @@ app.listen(env.PORT, () => {
   recoverOrphanedJobs().catch(err => {
     logger.error({ err }, 'Failed to recover orphaned jobs');
   });
+
+  // Seed dev admin account in non-production environments
+  if (process.env.NODE_ENV !== 'production') {
+    const DEV_EMAIL = 'dev@localhost.test';
+    const DEV_PASSWORD = 'dev';
+    db.select().from(adminUsers).where(eq(adminUsers.email, DEV_EMAIL)).limit(1)
+      .then(async ([existing]) => {
+        if (!existing) {
+          const passwordHash = await hashPassword(DEV_PASSWORD);
+          await db.insert(adminUsers).values({ email: DEV_EMAIL, passwordHash });
+          logger.info({ email: DEV_EMAIL }, 'Dev admin account seeded');
+        }
+      })
+      .catch(err => {
+        logger.error({ err }, 'Failed to seed dev admin');
+      });
+  }
 });

@@ -1,0 +1,12 @@
+.placeholder-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  margin: 0 2px;
+  background: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffcc80;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}

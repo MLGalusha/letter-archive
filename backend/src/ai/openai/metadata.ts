@@ -13,6 +13,7 @@ import {
 import type { DateConfidence } from '../../db/schema.js';
 import { logIfSlow, TIMING_THRESHOLDS } from '../../utils/logger.js';
 import { log, openai } from './client.js';
+import { logApiUsage } from '../../services/usage-tracking.js';
 
 export interface ExtractMetadataParams {
   transcriptionText: string;
@@ -111,6 +112,15 @@ export async function extractMetadata(
 
     logIfSlow(log, 'OpenAI metadata extraction', duration, TIMING_THRESHOLDS.OPENAI_API, context);
 
+    // Fire-and-forget usage tracking
+    logApiUsage({
+      callType: 'metadata',
+      model: env.OPENAI_MODEL,
+      inputTokens: usage?.prompt_tokens ?? 0,
+      outputTokens: usage?.completion_tokens ?? 0,
+      durationMs: duration,
+    });
+
     return metadata;
   } catch (error) {
     const duration = Date.now() - start;
@@ -146,6 +156,13 @@ function generateStubMetadata(params: ExtractMetadataParams): ExtractedMetadata 
   };
 }
 
+export interface ExtractionCorrections {
+  confirmedSender?: string;
+  confirmedRecipient?: string;
+  previousAiSender?: string;
+  previousAiRecipient?: string;
+}
+
 export interface ExtractMetadataV2Params {
   transcriptionText: string;
   context?: {
@@ -154,6 +171,7 @@ export interface ExtractMetadataV2Params {
     dateFromFilename?: string | null;
     extraContentTranscript?: string | null;
   };
+  corrections?: ExtractionCorrections;
 }
 
 export interface ExtractMetadataV2Result {
@@ -188,7 +206,7 @@ export async function extractMetadataV2(
       model: env.OPENAI_MODEL,
       input: [
         { role: 'system', content: METADATA_V2_SYSTEM_PROMPT },
-        { role: 'user', content: buildMetadataV2UserPrompt(params.transcriptionText, params.context) },
+        { role: 'user', content: buildMetadataV2UserPrompt(params.transcriptionText, params.context, params.corrections) },
       ],
       text: {
         format: {
@@ -268,6 +286,15 @@ export async function extractMetadataV2(
 
     logIfSlow(log, 'OpenAI V2 metadata extraction', duration, TIMING_THRESHOLDS.OPENAI_API, context);
 
+    // Fire-and-forget usage tracking
+    logApiUsage({
+      callType: 'metadata_v2',
+      model: env.OPENAI_MODEL,
+      inputTokens: usage?.input_tokens ?? 0,
+      outputTokens: usage?.output_tokens ?? 0,
+      durationMs: duration,
+    });
+
     return {
       metadata,
       isStub: false,
@@ -312,7 +339,7 @@ function generateStubMetadataV2(params: ExtractMetadataV2Params): ExtractMetadat
       sender_recipient_relationship: 'unknown',
       primary_topics: [],
       notable_quotes: [],
-      ai_notes: null,
+      ai_notes: [],
     },
     isStub: true,
   };

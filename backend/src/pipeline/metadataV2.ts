@@ -1,4 +1,5 @@
 import { extractMetadataV2, extractEntities } from '../ai/openai.js';
+import type { ExtractionCorrections } from '../ai/openai.js';
 import {
   getLetterWithPages,
   updateMetadataV2,
@@ -9,9 +10,15 @@ import {
 import { processEntityExtraction } from '../services/entities.js';
 import { updateJobProgress, clearJobProgress } from '../services/processing-queue.js';
 import { createLogger } from '../utils/logger.js';
+import { createNotification } from '../services/notifications.js';
 
 const log = createLogger({ module: 'metadata-v2-pipeline' });
-const MAX_ATTEMPTS = 3;
+export interface ExtractionOptions {
+  confirmedSender?: string;
+  confirmedRecipient?: string;
+  previousAiSender?: string;
+  previousAiRecipient?: string;
+}
 
 /**
  * Runs the two-phase metadata + entity extraction pipeline for a letter.
@@ -22,7 +29,7 @@ const MAX_ATTEMPTS = 3;
  * Phase 2 failure is non-fatal — metadata from Phase 1 is always preserved.
  * Only processes type='L' letters that have been transcribed.
  */
-export async function runMetadataExtractionV2(letterId: string): Promise<void> {
+export async function runMetadataExtractionV2(letterId: string, options?: ExtractionOptions): Promise<void> {
   const start = Date.now();
   const letterLog = log.child({ letterId });
 
@@ -54,22 +61,9 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
     throw new Error(`Letter ${letterId} has no transcription text`);
   }
 
-  // Check attempt count
-  if (letter.metadataAttemptCount >= MAX_ATTEMPTS) {
-    letterLog.warn(
-      { attemptCount: letter.metadataAttemptCount, maxAttempts: MAX_ATTEMPTS },
-      'Max metadata extraction attempts reached'
-    );
-    await updateMetadataV2(letterId, 'FAILED', undefined, 'Max attempts exceeded');
-    return;
-  }
-
-  // Increment attempt count
-  const attemptNumber = letter.metadataAttemptCount + 1;
-  await incrementMetadataAttempts(letterId);
   letterLog.info(
-    { attemptNumber, maxAttempts: MAX_ATTEMPTS, transcriptLength: letter.transcriptionText.length },
-    'Starting metadata extraction attempt'
+    { transcriptLength: letter.transcriptionText.length },
+    'Starting metadata extraction'
   );
 
   // Update status to running
@@ -91,9 +85,19 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
 
   let metadataResult;
   try {
+    const corrections: ExtractionCorrections | undefined = options
+      ? {
+          confirmedSender: options.confirmedSender,
+          confirmedRecipient: options.confirmedRecipient,
+          previousAiSender: options.previousAiSender,
+          previousAiRecipient: options.previousAiRecipient,
+        }
+      : undefined;
+
     metadataResult = await extractMetadataV2({
       transcriptionText: letter.transcriptionText,
       context: extractionContext,
+      corrections,
     });
 
     // Store basic metadata
@@ -105,7 +109,7 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
       {
         ...context,
         duration: phase1Duration,
-        attemptNumber,
+
         isStub: metadataResult.isStub,
         emotionalTone: metadataResult.metadata.emotional_tone,
         relationship: metadataResult.metadata.sender_recipient_relationship,
@@ -117,6 +121,16 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
       },
       'Phase 1 (basic metadata) completed successfully'
     );
+
+    // Notification: metadata extracted
+    const senderName = metadataResult.metadata.sender?.name || 'Unknown';
+    const recipientName = metadataResult.metadata.recipient?.name || 'Unknown';
+    createNotification({
+      type: 'metadata',
+      title: 'Metadata extracted',
+      message: `Sender: ${senderName}, Recipient: ${recipientName}`,
+      link: `/admin/letters/${letterId}`,
+    });
   } catch (error) {
     clearJobProgress(letterId, 'metadata');
 
@@ -127,7 +141,7 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
       {
         ...context,
         duration,
-        attemptNumber,
+
         err: error,
       },
       'Phase 1 (basic metadata) failed'
@@ -146,6 +160,15 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
   try {
     await updateEntityExtraction(letterId, 'RUNNING');
 
+    const entityCorrections: ExtractionCorrections | undefined = options
+      ? {
+          confirmedSender: options.confirmedSender,
+          confirmedRecipient: options.confirmedRecipient,
+          previousAiSender: options.previousAiSender,
+          previousAiRecipient: options.previousAiRecipient,
+        }
+      : undefined;
+
     const entityResult = await extractEntities({
       transcriptionText: letter.transcriptionText,
       basicMetadata: {
@@ -155,6 +178,7 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
         summary: metadataResult.metadata.summary,
       },
       context: extractionContext,
+      corrections: entityCorrections,
     });
 
     // Store entity extraction JSON
@@ -170,7 +194,7 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
       {
         ...context,
         duration: totalDuration,
-        attemptNumber,
+
         isStub: entityResult.isStub,
         peopleCount: entityResult.entities.people.length,
         placesCount: entityResult.entities.places.length,
@@ -184,6 +208,14 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
       },
       'Phase 2 (entity extraction) completed successfully'
     );
+
+    // Notification: entities extracted
+    createNotification({
+      type: 'entity',
+      title: 'Entities extracted',
+      message: `${entityResult.entities.people.length} people, ${entityResult.entities.places.length} places found`,
+      link: `/admin/letters/${letterId}`,
+    });
   } catch (error) {
     clearJobProgress(letterId, 'metadata');
 
@@ -192,7 +224,7 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
     letterLog.warn(
       {
         ...context,
-        attemptNumber,
+
         err: error,
       },
       'Phase 2 (entity extraction) failed — basic metadata preserved'
@@ -207,7 +239,7 @@ export async function runMetadataExtractionV2(letterId: string): Promise<void> {
  * Runs only the entity extraction (Phase 2) for a letter.
  * Used for re-extraction without re-running basic metadata.
  */
-export async function runEntityExtractionOnly(letterId: string): Promise<void> {
+export async function runEntityExtractionOnly(letterId: string, options?: ExtractionOptions): Promise<void> {
   const start = Date.now();
   const letterLog = log.child({ letterId });
 
@@ -234,6 +266,15 @@ export async function runEntityExtractionOnly(letterId: string): Promise<void> {
   await updateEntityExtraction(letterId, 'RUNNING');
   updateJobProgress(letterId, 'entity_extraction', 0, 1, 'Extracting entities');
 
+  const corrections: ExtractionCorrections | undefined = options
+    ? {
+        confirmedSender: options.confirmedSender,
+        confirmedRecipient: options.confirmedRecipient,
+        previousAiSender: options.previousAiSender,
+        previousAiRecipient: options.previousAiRecipient,
+      }
+    : undefined;
+
   try {
     const entityResult = await extractEntities({
       transcriptionText: letter.transcriptionText,
@@ -244,6 +285,7 @@ export async function runEntityExtractionOnly(letterId: string): Promise<void> {
         dateFromFilename: letter.letterDate,
         extraContentTranscript: letter.extraContentTranscript,
       },
+      corrections,
     });
 
     await updateEntityExtraction(letterId, 'SUCCESS', entityResult.entities, null);
@@ -267,6 +309,14 @@ export async function runEntityExtractionOnly(letterId: string): Promise<void> {
       },
       'Entity-only extraction completed'
     );
+
+    // Notification: entities extracted (standalone)
+    createNotification({
+      type: 'entity',
+      title: 'Entities extracted',
+      message: `${entityResult.entities.people.length} people, ${entityResult.entities.places.length} places found`,
+      link: `/admin/letters/${letterId}`,
+    });
   } catch (error) {
     clearJobProgress(letterId, 'entity_extraction');
 

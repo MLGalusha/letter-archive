@@ -10,6 +10,7 @@ import {
 } from '../schemas/entityExtraction.js';
 import { logIfSlow, TIMING_THRESHOLDS } from '../../utils/logger.js';
 import { log, openai } from './client.js';
+import { logApiUsage } from '../../services/usage-tracking.js';
 
 export interface ExtractEntitiesParams {
   transcriptionText: string;
@@ -24,6 +25,12 @@ export interface ExtractEntitiesParams {
     dateRaw?: string;
     dateFromFilename?: string | null;
     extraContentTranscript?: string | null;
+  };
+  corrections?: {
+    confirmedSender?: string;
+    confirmedRecipient?: string;
+    previousAiSender?: string;
+    previousAiRecipient?: string;
   };
 }
 
@@ -65,6 +72,7 @@ export async function extractEntities(
             params.transcriptionText,
             params.basicMetadata,
             params.context,
+            params.corrections,
           ),
         },
       ],
@@ -145,6 +153,15 @@ export async function extractEntities(
     );
 
     logIfSlow(log, 'OpenAI entity extraction', duration, TIMING_THRESHOLDS.OPENAI_API, context);
+
+    // Fire-and-forget usage tracking
+    logApiUsage({
+      callType: 'entity_extraction',
+      model: env.OPENAI_MODEL,
+      inputTokens: usage?.input_tokens ?? 0,
+      outputTokens: usage?.output_tokens ?? 0,
+      durationMs: duration,
+    });
 
     return {
       entities,

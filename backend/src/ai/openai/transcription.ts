@@ -10,6 +10,7 @@ import {
 } from '../prompts.js';
 import { logIfSlow, TIMING_THRESHOLDS } from '../../utils/logger.js';
 import { log, openai } from './client.js';
+import { logApiUsage } from '../../services/usage-tracking.js';
 
 export interface TranscribeImageParams {
   filePath: string;
@@ -91,6 +92,15 @@ export async function transcribeImage(
     );
 
     logIfSlow(log, 'OpenAI transcription', duration, TIMING_THRESHOLDS.OPENAI_API, context);
+
+    // Fire-and-forget usage tracking
+    logApiUsage({
+      callType: 'transcription',
+      model: env.OPENAI_MODEL,
+      inputTokens: usage?.prompt_tokens ?? 0,
+      outputTokens: usage?.completion_tokens ?? 0,
+      durationMs: duration,
+    });
 
     return {
       text: text.trim(),
@@ -239,6 +249,8 @@ export async function checkExtraContentForText(
       isStub: false,
     };
 
+    const checkUsage = response.usage;
+
     log.info(
       {
         ...context,
@@ -248,6 +260,15 @@ export async function checkExtraContentForText(
       },
       'Extra content check completed',
     );
+
+    // Fire-and-forget usage tracking
+    logApiUsage({
+      callType: 'extra_content_check',
+      model: 'gpt-4o-mini',
+      inputTokens: checkUsage?.prompt_tokens ?? 0,
+      outputTokens: checkUsage?.completion_tokens ?? 0,
+      durationMs: duration,
+    });
 
     return result;
   } catch (error) {
@@ -354,6 +375,15 @@ File: ${params.filePath}
     );
 
     logIfSlow(log, 'OpenAI extra content transcription', duration, TIMING_THRESHOLDS.OPENAI_API, context);
+
+    // Fire-and-forget usage tracking
+    logApiUsage({
+      callType: 'extra_content_transcription',
+      model: env.OPENAI_MODEL,
+      inputTokens: usage?.prompt_tokens ?? 0,
+      outputTokens: usage?.completion_tokens ?? 0,
+      durationMs: duration,
+    });
 
     return {
       text: text.trim(),

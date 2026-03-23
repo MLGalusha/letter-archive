@@ -423,6 +423,18 @@ function buildEmotionalToneDocs(): string {
  */
 export const METADATA_V2_SYSTEM_PROMPT = `You are an expert archivist extracting structured metadata from historical letter transcriptions.
 
+<source_priority>
+The letter transcription is your PRIMARY source of truth. Extract all information you can from it first.
+
+Extra content (envelopes, telegrams, ephemera) is SUPPLEMENTARY context only:
+- Use it to fill gaps when the letter itself doesn't provide the information
+- Do NOT let envelope addresses or postmarks override information found in the letter body
+- Extra content that contains additional letter-like text (notes, messages) carries more weight than purely logistical content (addresses, postmarks)
+- If the letter and extra content contradict each other, prefer the letter
+
+If no extra content exists, that simply means there is none — do not treat its absence as a gap.
+</source_priority>
+
 <guidelines>
 - Extract ONLY information explicitly stated or clearly implied in the text
 - Set null for any field you cannot determine with reasonable confidence
@@ -431,6 +443,21 @@ export const METADATA_V2_SYSTEM_PROMPT = `You are an expert archivist extracting
 - For dates, use ISO format (YYYY-MM-DD) if complete, or partial format (YYYY-MM or YYYY) if incomplete
 - Confidence scores: 0.9+ = explicit in text, 0.7-0.9 = strongly implied, 0.5-0.7 = inferred
 </guidelines>
+
+<unknown_identity>
+## Unknown Sender/Recipient
+
+If you cannot determine the sender's name from the letter or extra content, use the exact placeholder «SENDER» (with guillemet characters « and ») as their name in ALL output fields — sender, summary, hook, notable_quotes context, ai_notes, everywhere.
+
+If you cannot determine the recipient's name, use the exact placeholder «RECIPIENT» in the same way.
+
+Rules for placeholders:
+- Use the EXACT tokens «SENDER» and «RECIPIENT» — do not use [SENDER], "unknown", "the author", or any variation
+- Use these placeholders consistently in every field where the name would appear
+- Do NOT use gendered pronouns (he/she/him/her) for unknown persons — instead write "the sender" or "the recipient"
+- For possessives of unknown persons, write "the sender's" or "the recipient's" (not «SENDER»'s)
+- If you CAN determine the name, use the actual name — only use placeholders when truly unknown
+</unknown_identity>
 
 <controlled_vocabularies>
 IMPORTANT: Use EXACTLY the values specified below. Do not use synonyms or variations.
@@ -479,14 +506,20 @@ notable_quotes (1-3):
 - Select memorable, representative quotes from the letter
 - Each quote: exact text, brief context explaining significance, position in letter
 
-ai_notes:
-- Observations, hunches, and connections that may help the admin review this letter
-- Note potential name connections (e.g., "Jimmie may be same person as James C. Kawler Jr. mentioned in telegram")
-- Flag unclear or ambiguous content worth reviewing (e.g., "Unclear if 'John' refers to sender's brother or friend")
-- Suggest possible relationships or context that needs verification
-- Note any interesting historical context or patterns you observe
-- Keep concise - use bullet points
-- Set null if no notable observations
+ai_notes: An array of structured observations for the admin reviewer. Each note is:
+- content: The observation. Be specific, cite evidence from the letter.
+- category: One of: identity, date, transcription, relationship, context, cross-reference, location, condition
+- priority: "high" = admin must address for correctness, "medium" = improves quality, "low" = informational
+- resolves_when: A trigger key if auto-resolvable, or null. Valid keys: sender_filled, recipient_filled, date_confirmed, date_conflict_resolved, location_filled, relationship_set, transcription_edited
+
+Rules:
+- 2-6 notes per letter. Fewer is better.
+- Unknown sender → MUST have high-priority identity note with resolves_when: "sender_filled"
+- Unknown recipient → MUST have high-priority identity note with resolves_when: "recipient_filled"
+- Date conflicts → always high priority
+- A typical letter should have 0-1 high priority notes
+- Historical context → always low priority
+- Empty array [] if no observations
 </field_instructions>
 
 <example>
@@ -522,7 +555,11 @@ Extracted metadata:
     { "text": "Please, please give me one more month.", "context": "Desperate plea for more time", "position": "middle" },
     { "text": "George doesn't know you like I do.", "context": "Comparing himself to rival suitor", "position": "middle" }
   ],
-  "ai_notes": "• Barbara appears to be Molly's daughter - suggests Molly may be a widow or divorced\n• Stockport Road is in Manchester, UK - sender mentions 'flying over' suggesting transatlantic correspondence\n• The unsigned closing 'Your devoted admirer' makes sender identification difficult"
+  "ai_notes": [
+    { "content": "Sender signs as 'Your devoted admirer' with no name — identity unknown. Handwriting or envelope may help.", "category": "identity", "priority": "high", "resolves_when": "sender_filled" },
+    { "content": "Barbara appears to be Molly's daughter — suggests Molly may be a widow or divorced.", "category": "relationship", "priority": "medium", "resolves_when": null },
+    { "content": "Stockport Road is in Manchester, UK. Sender mentions 'flying over', suggesting transatlantic correspondence.", "category": "location", "priority": "low", "resolves_when": null }
+  ]
 }
 </example>
 
@@ -547,13 +584,56 @@ export function buildMetadataV2UserPrompt(
     dateRaw?: string;
     dateFromFilename?: string | null;
     extraContentTranscript?: string | null;
+  },
+  corrections?: {
+    confirmedSender?: string;
+    confirmedRecipient?: string;
+    previousAiSender?: string;
+    previousAiRecipient?: string;
   }
 ): string {
-  let prompt = `<letter_transcription>\n${transcriptionText}\n</letter_transcription>`;
+  let prompt = '';
+
+  // Include letter transcription if available
+  if (transcriptionText?.trim()) {
+    prompt += `<letter_transcription>\n${transcriptionText}\n</letter_transcription>`;
+  } else {
+    prompt += `<letter_transcription>\nNo letter transcription available.\n</letter_transcription>`;
+  }
 
   // Include extra content if available (telegrams, envelopes, ephemera)
   if (context?.extraContentTranscript?.trim()) {
     prompt += `\n\n<extra_content>\nThe following is transcribed text from related items (envelope, telegram, ephemera, etc.) that may provide additional context:\n\n${context.extraContentTranscript}\n</extra_content>`;
+  }
+
+  // Include reviewer corrections if available
+  if (corrections) {
+    const correctionLines: string[] = [];
+
+    if (corrections.confirmedSender) {
+      if (corrections.previousAiSender && corrections.confirmedSender !== corrections.previousAiSender) {
+        correctionLines.push(`The AI previously identified the sender as "${corrections.previousAiSender}".`);
+        correctionLines.push(`The human reviewer has corrected the sender to: "${corrections.confirmedSender}"`);
+      } else {
+        correctionLines.push(`The sender has been confirmed by a human reviewer as: "${corrections.confirmedSender}"`);
+      }
+    }
+
+    if (corrections.confirmedRecipient) {
+      if (corrections.previousAiRecipient && corrections.confirmedRecipient !== corrections.previousAiRecipient) {
+        if (correctionLines.length > 0) correctionLines.push('');
+        correctionLines.push(`The AI previously identified the recipient as "${corrections.previousAiRecipient}".`);
+        correctionLines.push(`The human reviewer has corrected the recipient to: "${corrections.confirmedRecipient}"`);
+      } else {
+        correctionLines.push(`The recipient has been confirmed by a human reviewer as: "${corrections.confirmedRecipient}"`);
+      }
+    }
+
+    if (correctionLines.length > 0) {
+      correctionLines.push('');
+      correctionLines.push('Use the corrected/confirmed values as ground truth. Do not override them.');
+      prompt += `\n\n<reviewer_corrections>\n${correctionLines.join('\n')}\n</reviewer_corrections>`;
+    }
   }
 
   if (context) {
@@ -664,6 +744,18 @@ function buildEntityRelationshipTypeDocs(): string {
  */
 export const ENTITY_EXTRACTION_SYSTEM_PROMPT = `You are an expert archivist performing deep entity extraction from historical letter transcriptions. Your goal is to build rich, detailed profiles of every person and place mentioned.
 
+<source_priority>
+The letter transcription is your PRIMARY source of truth. Extract entities from it first.
+
+Extra content (envelopes, telegrams, ephemera) is SUPPLEMENTARY:
+- Use it to discover additional entities not mentioned in the letter body (e.g., a return address reveals a place)
+- Do NOT let envelope or postmark names override names found in the letter text
+- Extra content with letter-like text (notes, messages) carries more weight than logistical content (addresses, postmarks)
+- If the letter and extra content contradict each other on entity details, prefer the letter
+
+If no extra content exists, that simply means there is none — extract from the letter alone.
+</source_priority>
+
 <guidelines>
 - Extract ALL people and places from BOTH the letter AND any extra content (envelopes, telegrams, ephemera)
 - Be thorough: capture every name, nickname, alias, and place reference
@@ -673,6 +765,15 @@ export const ENTITY_EXTRACTION_SYSTEM_PROMPT = `You are an expert archivist perf
 - Preserve exact names and spellings as written in the letter
 </guidelines>
 
+<unknown_identity>
+## Unknown Sender/Recipient
+
+If the sender or recipient name is unknown, use the exact placeholder «SENDER» or «RECIPIENT» as the person's name.
+- Set isPlaceholder to true for that person entity
+- Use "the sender" or "the recipient" instead of pronouns in narratives and descriptions
+- The placeholder should appear in the name field, and "the sender"/"the recipient" should be used in prose fields like narrative and emotional_significance
+</unknown_identity>
+
 <people_instructions>
 For EACH person mentioned (sender, recipient, or anyone discussed):
 
@@ -680,6 +781,9 @@ name: The primary name used in the letter (exact spelling)
 aliases: Any other names, nicknames, or forms of address used for this person in the letter (e.g., if "James" is also called "Jimmie" or "J.C.")
 role: "sender", "recipient", or "mentioned"
 relationship_to_sender: Their relationship to the letter writer (e.g., "romantic-partner", "daughter", "friend") or null if unknown
+narrative: A 1-3 sentence description of who this person is in the context of this letter. Describe their identity, their role in the letter's story, and why they matter. This should read like a brief character introduction.
+  Example: "Molly is the letter's recipient, a woman in England being courted by the anonymous sender. He fears losing her to another suitor named George, and pleads desperately for more time to win her affection."
+  Set null only if there is truly nothing to say beyond the person's name.
 details: An array of life details discovered in the letter. Each detail has:
   - detail: The specific information (e.g., "Works as a coal miner", "Currently ill with fever")
   - category: One of: "occupation", "age", "health", "location", "education", "personality", "life_event", "family", "financial", "military", "religion", "appearance", "hobby"
@@ -696,6 +800,9 @@ For EACH place mentioned:
 name: The place name as written
 type: "city", "region", "country", "street", "landmark", or "other"
 role: "written_from" (where the letter was written), "mentioned", or "destination" (where recipient lives or letter is sent to)
+narrative: A 1-2 sentence description of this place's significance in the letter. Why does it matter to the story being told?
+  Example: "Stockport Road is a street in Manchester where the sender and Molly once walked together, representing a cherished shared memory he invokes to persuade her."
+  Set null only if the place is mentioned incidentally with no meaningful context.
 why_mentioned: Why this place comes up in the letter (e.g., "Where the sender and recipient walked together", "Location of the recipient's school")
 descriptive_details: Any descriptions of the place from the letter (scenery, conditions, what it's like) or null if none
 associated_people: Names of people connected to this place in the letter
@@ -740,6 +847,7 @@ Given a letter where the sender writes to "Dearest Molly" about visiting, mentio
       "aliases": [],
       "role": "recipient",
       "relationship_to_sender": "romantic-partner",
+      "narrative": "Molly is the letter's recipient, a woman in England being courted by the anonymous sender. He fears losing her to another suitor named George, and pleads desperately for more time to win her affection.",
       "details": [
         { "detail": "Has a daughter named Barbara", "category": "family" },
         { "detail": "Has another suitor named George", "category": "life_event" },
@@ -758,6 +866,7 @@ Given a letter where the sender writes to "Dearest Molly" about visiting, mentio
       "aliases": [],
       "role": "mentioned",
       "relationship_to_sender": null,
+      "narrative": "George is a rival suitor for Molly's affection whom the sender dismisses as not truly knowing her.",
       "details": [
         { "detail": "Another suitor competing for Molly's affection", "category": "life_event" }
       ],
@@ -772,6 +881,7 @@ Given a letter where the sender writes to "Dearest Molly" about visiting, mentio
       "aliases": [],
       "role": "mentioned",
       "relationship_to_sender": null,
+      "narrative": "Barbara is Molly's daughter, currently attending school. The sender's warm greetings to her suggest he has a caring relationship with the family.",
       "details": [
         { "detail": "Currently attending school", "category": "education" },
         { "detail": "Molly's daughter", "category": "family" }
@@ -788,6 +898,7 @@ Given a letter where the sender writes to "Dearest Molly" about visiting, mentio
       "name": "Stockport Road",
       "type": "street",
       "role": "mentioned",
+      "narrative": "Stockport Road is a street in Manchester where the sender and Molly once walked together, representing a cherished shared memory he invokes to persuade her.",
       "why_mentioned": "Location of a meaningful shared memory between sender and Molly",
       "descriptive_details": null,
       "associated_people": ["Molly"],
@@ -842,13 +953,56 @@ export function buildEntityExtractionUserPrompt(
     dateRaw?: string;
     dateFromFilename?: string | null;
     extraContentTranscript?: string | null;
+  },
+  corrections?: {
+    confirmedSender?: string;
+    confirmedRecipient?: string;
+    previousAiSender?: string;
+    previousAiRecipient?: string;
   }
 ): string {
-  let prompt = `<letter_transcription>\n${transcriptionText}\n</letter_transcription>`;
+  let prompt = '';
+
+  // Include letter transcription if available
+  if (transcriptionText?.trim()) {
+    prompt += `<letter_transcription>\n${transcriptionText}\n</letter_transcription>`;
+  } else {
+    prompt += `<letter_transcription>\nNo letter transcription available.\n</letter_transcription>`;
+  }
 
   // Include extra content if available
   if (context?.extraContentTranscript?.trim()) {
     prompt += `\n\n<extra_content>\nThe following is transcribed text from related items (envelope, telegram, ephemera, etc.) that may provide additional context:\n\n${context.extraContentTranscript}\n</extra_content>`;
+  }
+
+  // Include reviewer corrections if available
+  if (corrections) {
+    const correctionLines: string[] = [];
+
+    if (corrections.confirmedSender) {
+      if (corrections.previousAiSender && corrections.confirmedSender !== corrections.previousAiSender) {
+        correctionLines.push(`The AI previously identified the sender as "${corrections.previousAiSender}".`);
+        correctionLines.push(`The human reviewer has corrected the sender to: "${corrections.confirmedSender}"`);
+      } else {
+        correctionLines.push(`The sender has been confirmed by a human reviewer as: "${corrections.confirmedSender}"`);
+      }
+    }
+
+    if (corrections.confirmedRecipient) {
+      if (corrections.previousAiRecipient && corrections.confirmedRecipient !== corrections.previousAiRecipient) {
+        if (correctionLines.length > 0) correctionLines.push('');
+        correctionLines.push(`The AI previously identified the recipient as "${corrections.previousAiRecipient}".`);
+        correctionLines.push(`The human reviewer has corrected the recipient to: "${corrections.confirmedRecipient}"`);
+      } else {
+        correctionLines.push(`The recipient has been confirmed by a human reviewer as: "${corrections.confirmedRecipient}"`);
+      }
+    }
+
+    if (correctionLines.length > 0) {
+      correctionLines.push('');
+      correctionLines.push('Use the corrected/confirmed values as ground truth. Do not override them.');
+      prompt += `\n\n<reviewer_corrections>\n${correctionLines.join('\n')}\n</reviewer_corrections>`;
+    }
   }
 
   // Include basic metadata from Prompt 1 as context
@@ -1018,6 +1172,82 @@ export function buildCollectionAnalysisPrompt(
 
   prompt += '</collection_letters>\n\n';
   prompt += 'Analyze this collection and extract all entities, relationships, and potential duplicates. Return JSON only.';
+
+  return prompt;
+}
+
+// ============================================================================
+// METADATA UPDATE (AI-assisted sender/recipient correction)
+// ============================================================================
+
+/**
+ * System prompt for AI-assisted metadata update.
+ * Used when a human reviewer sets a sender/recipient for the first time
+ * (was previously null) and we need AI to rewrite summary, hook, etc.
+ */
+export const METADATA_UPDATE_SYSTEM_PROMPT = `You are updating existing metadata for a historical letter.
+A human reviewer has provided new information about the sender and/or recipient.
+
+You will receive the existing extracted metadata and the correction.
+Update the metadata to incorporate the new information.
+
+Rules:
+- Keep all existing information that is still valid
+- Update the summary to naturally incorporate the identified sender/recipient
+- Update the hook if it references the sender/recipient (hooks should use first names, be 1-2 sentences, max 150 chars)
+- Update entity roles if sender/recipient identity changes who the sender/recipient is
+- Do NOT change dates, locations, topics, emotional tone, or other metadata unless directly affected by the identity change
+- Return the COMPLETE updated metadata in the same format as the input`;
+
+/**
+ * Build user prompt for AI-assisted metadata update.
+ * Includes existing metadata, existing entities, and the correction.
+ */
+export function buildMetadataUpdateUserPrompt(params: {
+  existingMetadata: Record<string, unknown>;
+  existingEntities: Record<string, unknown> | null;
+  correction: {
+    field: 'sender' | 'recipient' | 'both';
+    oldSender?: string | null;
+    newSender?: string;
+    oldRecipient?: string | null;
+    newRecipient?: string;
+  };
+}): string {
+  let prompt = '';
+
+  prompt += '<existing_metadata>\n';
+  prompt += JSON.stringify(params.existingMetadata, null, 2);
+  prompt += '\n</existing_metadata>\n';
+
+  if (params.existingEntities) {
+    prompt += '\n<existing_entities>\n';
+    prompt += JSON.stringify(params.existingEntities, null, 2);
+    prompt += '\n</existing_entities>\n';
+  }
+
+  prompt += '\n<correction>\n';
+
+  const { correction } = params;
+
+  if (correction.newSender) {
+    if (correction.oldSender) {
+      prompt += `The sender was previously identified as "${correction.oldSender}" but should be "${correction.newSender}".\n`;
+    } else {
+      prompt += `The sender was previously unknown. The human reviewer has identified the sender as: "${correction.newSender}".\n`;
+    }
+  }
+
+  if (correction.newRecipient) {
+    if (correction.oldRecipient) {
+      prompt += `The recipient was previously identified as "${correction.oldRecipient}" but should be "${correction.newRecipient}".\n`;
+    } else {
+      prompt += `The recipient was previously unknown. The human reviewer has identified the recipient as: "${correction.newRecipient}".\n`;
+    }
+  }
+
+  prompt += '</correction>\n\n';
+  prompt += 'Update the metadata to incorporate the correction. Return the COMPLETE updated metadata JSON.';
 
   return prompt;
 }

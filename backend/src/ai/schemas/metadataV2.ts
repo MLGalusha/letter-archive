@@ -131,6 +131,71 @@ export const QuotePositionEnum = z.enum(['opening', 'middle', 'closing']);
 export type QuotePosition = z.infer<typeof QuotePositionEnum>;
 
 // ============================================================================
+// AI NOTE SCHEMAS
+// ============================================================================
+
+/**
+ * Note categories for structured AI observations
+ */
+export const NoteCategoryEnum = z.enum([
+  'identity',
+  'date',
+  'transcription',
+  'relationship',
+  'context',
+  'cross-reference',
+  'location',
+  'condition',
+]);
+export type NoteCategory = z.infer<typeof NoteCategoryEnum>;
+
+/**
+ * Note priority levels
+ */
+export const NotePriorityEnum = z.enum(['high', 'medium', 'low']);
+export type NotePriority = z.infer<typeof NotePriorityEnum>;
+
+/**
+ * Auto-resolution trigger keys
+ */
+export const ResolvesWhenEnum = z.enum([
+  'sender_filled',
+  'recipient_filled',
+  'date_confirmed',
+  'date_conflict_resolved',
+  'location_filled',
+  'relationship_set',
+  'transcription_edited',
+]);
+export type ResolvesWhen = z.infer<typeof ResolvesWhenEnum>;
+
+/**
+ * AI output schema for a single note (what the model returns)
+ */
+export const AiNoteOutputSchema = z.object({
+  content: z.string(),
+  category: NoteCategoryEnum,
+  priority: NotePriorityEnum,
+  resolves_when: ResolvesWhenEnum.nullable(),
+});
+export type AiNoteOutput = z.infer<typeof AiNoteOutputSchema>;
+
+/**
+ * Full structured note (after backend enrichment)
+ */
+export interface StructuredNote {
+  id: string;
+  content: string;
+  category: NoteCategory;
+  priority: NotePriority;
+  status: 'open' | 'resolved' | 'dismissed';
+  resolves_when: ResolvesWhen | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  source: 'ai' | 'admin';
+}
+
+// ============================================================================
 // SUB-SCHEMAS
 // ============================================================================
 
@@ -189,8 +254,8 @@ export const MetadataV2Schema = z.object({
   // Notable quotes (1-3)
   notable_quotes: z.array(NotableQuoteSchema),
 
-  // AI observations and hunches for admin review
-  ai_notes: z.string().nullable(),
+  // AI observations and hunches for admin review (structured)
+  ai_notes: z.array(AiNoteOutputSchema).nullable(),
 });
 
 export type MetadataV2 = z.infer<typeof MetadataV2Schema>;
@@ -278,7 +343,29 @@ export const METADATA_V2_JSON_SCHEMA = {
         additionalProperties: false,
       },
     },
-    ai_notes: { type: ['string', 'null'] },
+    ai_notes: {
+      type: ['array', 'null'],
+      items: {
+        type: 'object',
+        properties: {
+          content: { type: 'string' },
+          category: {
+            type: 'string',
+            enum: ['identity', 'date', 'transcription', 'relationship', 'context', 'cross-reference', 'location', 'condition'],
+          },
+          priority: {
+            type: 'string',
+            enum: ['high', 'medium', 'low'],
+          },
+          resolves_when: {
+            type: ['string', 'null'],
+            enum: ['sender_filled', 'recipient_filled', 'date_confirmed', 'date_conflict_resolved', 'location_filled', 'relationship_set', 'transcription_edited', null],
+          },
+        },
+        required: ['content', 'category', 'priority', 'resolves_when'],
+        additionalProperties: false,
+      },
+    },
   },
   required: [
     'sender',

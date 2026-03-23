@@ -8,8 +8,6 @@ import {
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger({ module: 'metadata-pipeline' });
-const MAX_ATTEMPTS = 3;
-
 /**
  * Runs metadata extraction for a letter.
  * - Only processes type='L' letters that have been transcribed
@@ -47,22 +45,9 @@ export async function runMetadataExtraction(letterId: string): Promise<void> {
     throw new Error(`Letter ${letterId} has no transcription text`);
   }
 
-  // Check attempt count
-  if (letter.metadataAttemptCount >= MAX_ATTEMPTS) {
-    letterLog.warn(
-      { attemptCount: letter.metadataAttemptCount, maxAttempts: MAX_ATTEMPTS },
-      'Max metadata extraction attempts reached'
-    );
-    await updateMetadataStatus(letterId, 'FAILED', undefined, 'Max attempts exceeded');
-    return;
-  }
-
-  // Increment attempt count
-  const attemptNumber = letter.metadataAttemptCount + 1;
-  await incrementMetadataAttempts(letterId);
   letterLog.info(
-    { attemptNumber, maxAttempts: MAX_ATTEMPTS, transcriptLength: letter.transcriptionText.length },
-    'Starting metadata extraction attempt'
+    { transcriptLength: letter.transcriptionText.length },
+    'Starting metadata extraction'
   );
 
   // Update status to running
@@ -104,7 +89,7 @@ export async function runMetadataExtraction(letterId: string): Promise<void> {
       {
         ...context,
         duration,
-        attemptNumber,
+
         hasSender: !!result.sender,
         hasRecipient: !!result.recipient,
         hasHook: !!result.hook,
@@ -123,7 +108,7 @@ export async function runMetadataExtraction(letterId: string): Promise<void> {
       {
         ...context,
         duration,
-        attemptNumber,
+
         err: error,
       },
       'Metadata extraction pipeline failed'

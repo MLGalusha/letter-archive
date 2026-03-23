@@ -8,8 +8,6 @@ import { db, letters } from '../db/index.js';
 import { eq, and, inArray } from 'drizzle-orm';
 
 const log = createLogger({ module: 'transcription-pipeline' });
-const MAX_ATTEMPTS = 3;
-
 /**
  * Map letter type codes to human-readable document types for transcription
  */
@@ -58,20 +56,7 @@ export async function runTranscription(letterId: string): Promise<void> {
     return;
   }
 
-  // Check attempt count
-  if (letter.transcriptionAttemptCount >= MAX_ATTEMPTS) {
-    letterLog.warn(
-      { attemptCount: letter.transcriptionAttemptCount, maxAttempts: MAX_ATTEMPTS },
-      'Max transcription attempts reached'
-    );
-    await updateTranscriptionStatus(letterId, 'FAILED', null, 'Max attempts exceeded');
-    return;
-  }
-
-  // Increment attempt count
-  const attemptNumber = letter.transcriptionAttemptCount + 1;
-  await incrementTranscriptionAttempts(letterId);
-  letterLog.info({ attemptNumber, maxAttempts: MAX_ATTEMPTS }, 'Starting transcription attempt');
+  letterLog.info('Starting transcription');
 
   // Update status to running
   await updateLetterWorkflow(letterId, 'TRANSCRIBING');
@@ -254,7 +239,7 @@ export async function runTranscription(letterId: string): Promise<void> {
         pageCount: pages.length,
         totalTextLength: combinedTranscription.length,
         stubMode,
-        attemptNumber,
+
         extrasTranscribed,
       },
       'Transcription pipeline completed successfully'
@@ -268,7 +253,7 @@ export async function runTranscription(letterId: string): Promise<void> {
       {
         ...context,
         duration,
-        attemptNumber,
+
         err: error,
       },
       'Transcription pipeline failed'

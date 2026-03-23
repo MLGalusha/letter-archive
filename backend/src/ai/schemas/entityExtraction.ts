@@ -86,10 +86,12 @@ export const ExtractedPersonSchema = z.object({
   aliases: z.array(z.string()),
   role: PersonRoleEnum,
   relationship_to_sender: z.string().nullable(),
+  narrative: z.string().nullable(), // 1-3 sentence description of who this person is in this letter's context
   details: z.array(PersonDetailSchema),
   emotional_significance: z.string().nullable(),
   quotes: z.array(PersonQuoteSchema),
   confidence: z.number().min(0).max(1),
+  isPlaceholder: z.boolean().default(false),
 });
 export type ExtractedPerson = z.infer<typeof ExtractedPersonSchema>;
 
@@ -100,10 +102,12 @@ export const ExtractedPlaceSchema = z.object({
   name: z.string(),
   type: PlaceTypeEnum,
   role: PlaceRoleEnum,
+  narrative: z.string().nullable(), // 1-2 sentence description of the place's significance in this letter
   why_mentioned: z.string(),
   descriptive_details: z.string().nullable(),
   associated_people: z.array(z.string()),
   confidence: z.number().min(0).max(1),
+  isPlaceholder: z.boolean().default(false),
 });
 export type ExtractedPlace = z.infer<typeof ExtractedPlaceSchema>;
 
@@ -161,6 +165,7 @@ export const ENTITY_EXTRACTION_JSON_SCHEMA = {
           aliases: { type: 'array', items: { type: 'string' } },
           role: { type: 'string', enum: ['sender', 'recipient', 'mentioned'] },
           relationship_to_sender: { type: ['string', 'null'] },
+          narrative: { type: ['string', 'null'] },
           details: {
             type: 'array',
             items: {
@@ -187,10 +192,11 @@ export const ENTITY_EXTRACTION_JSON_SCHEMA = {
             },
           },
           confidence: { type: 'number', minimum: 0, maximum: 1 },
+          isPlaceholder: { type: 'boolean' },
         },
         required: [
-          'name', 'aliases', 'role', 'relationship_to_sender',
-          'details', 'emotional_significance', 'quotes', 'confidence',
+          'name', 'aliases', 'role', 'relationship_to_sender', 'narrative',
+          'details', 'emotional_significance', 'quotes', 'confidence', 'isPlaceholder',
         ],
         additionalProperties: false,
       },
@@ -203,14 +209,16 @@ export const ENTITY_EXTRACTION_JSON_SCHEMA = {
           name: { type: 'string' },
           type: { type: 'string', enum: ['city', 'region', 'country', 'street', 'landmark', 'other'] },
           role: { type: 'string', enum: ['written_from', 'mentioned', 'destination'] },
+          narrative: { type: ['string', 'null'] },
           why_mentioned: { type: 'string' },
           descriptive_details: { type: ['string', 'null'] },
           associated_people: { type: 'array', items: { type: 'string' } },
           confidence: { type: 'number', minimum: 0, maximum: 1 },
+          isPlaceholder: { type: 'boolean' },
         },
         required: [
-          'name', 'type', 'role', 'why_mentioned',
-          'descriptive_details', 'associated_people', 'confidence',
+          'name', 'type', 'role', 'narrative', 'why_mentioned',
+          'descriptive_details', 'associated_people', 'confidence', 'isPlaceholder',
         ],
         additionalProperties: false,
       },

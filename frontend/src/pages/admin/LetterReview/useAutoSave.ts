@@ -104,34 +104,34 @@ export function useAutoSave({
       const hasRecipientChange = data.recipient !== undefined;
 
       if (hasSenderChange || hasRecipientChange) {
-        setAutoSaveStatus('saving');
+        // Debounce identity changes to avoid firing on every keystroke
+        scheduleDebouncedSave(
+          async () => {
+            const identityData: { sender?: string; recipient?: string } = {};
+            if (hasSenderChange) {
+              identityData.sender = data.sender || '';
+            }
+            if (hasRecipientChange) {
+              identityData.recipient = data.recipient || '';
+            }
 
-        try {
-          const identityData: { sender?: string; recipient?: string } = {};
-          if (hasSenderChange) {
-            identityData.sender = data.sender || '';
-          }
-          if (hasRecipientChange) {
-            identityData.recipient = data.recipient || '';
-          }
+            const updated = await updateIdentity(letterId, identityData);
+            setLetter(updated);
+            syncIdentityMetadata(updated);
+            showToast('Name updated across metadata', 'success');
 
-          const updated = await updateIdentity(letterId, identityData);
-          setLetter(updated);
-          syncIdentityMetadata(updated);
-          setAutoSaveStatus('saved');
-          showToast('Name updated across metadata', 'success');
+            const otherData = { ...data };
+            delete otherData.sender;
+            delete otherData.recipient;
 
-          const otherData = { ...data };
-          delete otherData.sender;
-          delete otherData.recipient;
-
-          if (Object.keys(otherData).length > 0) {
-            await updateLetter(letterId, otherData);
-          }
-        } catch (error) {
-          setAutoSaveStatus('error');
-          showToast(getErrorMessage(error, 'Failed to update name'), 'error');
-        }
+            if (Object.keys(otherData).length > 0) {
+              await updateLetter(letterId, otherData);
+            }
+          },
+          {
+            errorMessage: 'Failed to update name',
+          },
+        );
 
         return;
       }

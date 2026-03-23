@@ -163,6 +163,33 @@ export async function updateCanonicalPerson(
     .where(eq(canonicalPersons.id, id));
 }
 
+/**
+ * Add an old name as an alias to a canonical person record.
+ * Skips if the alias already exists or matches the current canonical name.
+ */
+export async function addAliasToCanonicalPerson(
+  personId: string,
+  alias: string,
+): Promise<void> {
+  const person = await getCanonicalPersonById(personId);
+  if (!person) return;
+
+  const normalizedAlias = alias.trim();
+  if (!normalizedAlias) return;
+
+  // Don't add if it matches the current canonical name
+  if (normalizedAlias.toLowerCase() === person.canonicalName.toLowerCase()) return;
+
+  // Don't add if already present
+  const existing = person.aliases ?? [];
+  if (existing.some(a => a.toLowerCase() === normalizedAlias.toLowerCase())) return;
+
+  await db
+    .update(canonicalPersons)
+    .set({ aliases: [...existing, normalizedAlias], updatedAt: new Date() })
+    .where(eq(canonicalPersons.id, personId));
+}
+
 export async function updateCanonicalPersonWithUndo(
   id: string,
   data: Partial<Pick<CanonicalPerson, 'canonicalName' | 'aliases' | 'notes'>>,

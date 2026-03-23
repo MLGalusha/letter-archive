@@ -65,6 +65,253 @@ function replaceInHook(text: string, oldName: string, newName: string): string {
   return text.replace(regex, firstName);
 }
 
+// ============================================================================
+// NAME COMPONENT PARSING & VARIANT GENERATION
+// ============================================================================
+
+const HONORIFICS = new Set([
+  'MR', 'MRS', 'MS', 'MISS', 'DR', 'REV', 'SGT', 'PVT', 'CPL', 'LT', 'CAPT',
+  'COL', 'MAJ', 'GEN', 'PROF', 'HON', 'SIR', 'DAME', 'FATHER', 'SISTER', 'BROTHER',
+]);
+
+const SUFFIXES = new Set([
+  'JR', 'JUNIOR', 'SR', 'SENIOR', 'II', 'III', 'IV', 'V', 'ESQ',
+]);
+
+export interface NameComponents {
+  honorific: string | null;
+  firstName: string;
+  middleParts: string[];
+  lastName: string;
+  suffix: string | null;
+}
+
+export interface NameVariant {
+  pattern: string;
+  replacementMode: 'full' | 'firstName';
+}
+
+/**
+ * Parse a full name string into structured components.
+ * Recognizes honorifics (MR, DR, etc.), suffixes (JR, III, etc.),
+ * and splits the core name into first, middle, and last parts.
+ */
+export function parseNameComponents(fullName: string): NameComponents {
+  const tokens = fullName.trim().split(/\s+/);
+  if (tokens.length === 0 || (tokens.length === 1 && !tokens[0])) {
+    return { honorific: null, firstName: fullName.trim(), middleParts: [], lastName: fullName.trim(), suffix: null };
+  }
+
+  let honorific: string | null = null;
+  let suffix: string | null = null;
+
+  // Check first token for honorific
+  const firstNorm = tokens[0].replace(/\.$/g, '').toUpperCase();
+  if (HONORIFICS.has(firstNorm) && tokens.length > 1) {
+    honorific = tokens.shift()!;
+  }
+
+  // Check last token for suffix
+  if (tokens.length > 1) {
+    const lastNorm = tokens[tokens.length - 1].replace(/\.$/g, '').toUpperCase();
+    if (SUFFIXES.has(lastNorm)) {
+      suffix = tokens.pop()!;
+    }
+  }
+
+  // Remaining tokens: first, middles..., last
+  if (tokens.length === 0) {
+    return { honorific, firstName: fullName.trim(), middleParts: [], lastName: fullName.trim(), suffix };
+  }
+
+  const firstName = tokens[0];
+  if (tokens.length === 1) {
+    return { honorific, firstName, middleParts: [], lastName: firstName, suffix };
+  }
+
+  const lastName = tokens[tokens.length - 1];
+  const middleParts = tokens.slice(1, -1);
+
+  return { honorific, firstName, middleParts, lastName, suffix };
+}
+
+/**
+ * Generate name variants from parsed components, ordered longest first.
+ * Each variant has a pattern to match and a replacement mode (full name or first name only).
+ * Deduplicates and filters variants shorter than 3 characters.
+ */
+export function generateNameVariants(components: NameComponents, originalName: string): NameVariant[] {
+  const { honorific, firstName, middleParts, lastName, suffix } = components;
+  const seen = new Set<string>();
+  const variants: NameVariant[] = [];
+
+  function add(parts: string[], mode: 'full' | 'firstName') {
+    const pattern = parts.filter(Boolean).join(' ');
+    if (pattern.length < 3) return;
+    const key = pattern.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    variants.push({ pattern, replacementMode: mode });
+  }
+
+  const h = honorific ?? '';
+  const m = middleParts.join(' ');
+  const s = suffix ?? '';
+
+  // 1. Full original name
+  add([originalName], 'full');
+
+  // 2. Without honorific
+  if (honorific) {
+    add([firstName, m, lastName, s].filter(Boolean), 'full');
+  }
+
+  // 3. Without suffix
+  if (suffix) {
+    add([h, firstName, m, lastName].filter(Boolean), 'full');
+  }
+
+  // 4. Without honorific AND suffix
+  if (honorific && suffix) {
+    add([firstName, m, lastName].filter(Boolean), 'full');
+  }
+
+  // 5. Without middle parts
+  if (middleParts.length > 0) {
+    add([h, firstName, lastName, s].filter(Boolean), 'full');
+    add([firstName, lastName, s].filter(Boolean), 'full');
+    add([h, firstName, lastName].filter(Boolean), 'full');
+    add([firstName, lastName].filter(Boolean), 'full');
+  }
+
+  // 6. Honorific + last name
+  if (honorific && firstName !== lastName) {
+    add([honorific, lastName], 'full');
+  }
+
+  // 7. First name only (if different from full name and from lastName)
+  if (firstName !== lastName && firstName.toLowerCase() !== originalName.toLowerCase()) {
+    add([firstName], 'firstName');
+  }
+
+  // Sort by pattern length descending (longest first to prevent double-replacement)
+  variants.sort((a, b) => b.pattern.length - a.pattern.length);
+
+  return variants;
+}
+
+/**
+ * Collect first names and aliases from OTHER people in the entity extraction JSON.
+ * Used to prevent false-positive replacement of short name variants.
+ */
+export function getOtherPeopleFirstNames(
+  entityJson: Record<string, unknown> | null | undefined,
+  oldName: string,
+  field: 'sender' | 'recipient',
+): Set<string> {
+  const names = new Set<string>();
+  if (!entityJson || !Array.isArray(entityJson.people)) return names;
+
+  const oldNameLower = oldName.toLowerCase();
+
+  for (const person of entityJson.people as Record<string, unknown>[]) {
+    const personName = typeof person.name === 'string' ? person.name : '';
+    // Skip the target person (matched by role or name)
+    if (person.role === field || personName.toLowerCase() === oldNameLower) {
+      continue;
+    }
+    // Add first name
+    if (personName) {
+      const first = getFirstName(personName);
+      if (first.length >= 3) names.add(first.toLowerCase());
+    }
+    // Add aliases
+    if (Array.isArray(person.aliases)) {
+      for (const alias of person.aliases as string[]) {
+        if (typeof alias === 'string' && alias.length >= 3) {
+          names.add(alias.toLowerCase());
+          const aliasFirst = getFirstName(alias);
+          if (aliasFirst.length >= 3) names.add(aliasFirst.toLowerCase());
+        }
+      }
+    }
+  }
+
+  return names;
+}
+
+/**
+ * Apply name variants to a string, longest first.
+ * Skips single-word variants that collide with other people's names.
+ */
+function applyVariantsToString(
+  text: string,
+  variants: NameVariant[],
+  newName: string,
+  collisionNames: Set<string>,
+): string {
+  let result = text;
+  const newFirstName = getFirstName(newName);
+
+  for (const variant of variants) {
+    // Skip single-word variants that collide with other people
+    if (!variant.pattern.includes(' ') && collisionNames.has(variant.pattern.toLowerCase())) {
+      continue;
+    }
+    const replacement = variant.replacementMode === 'firstName' ? newFirstName : newName;
+    result = replaceInString(result, variant.pattern, replacement);
+  }
+
+  return result;
+}
+
+/**
+ * Apply name variants to hook text. Always uses first-name replacement for brevity.
+ */
+function applyVariantsToHook(
+  text: string,
+  variants: NameVariant[],
+  newName: string,
+  collisionNames: Set<string>,
+): string {
+  let result = text;
+  const newFirstName = getFirstName(newName);
+
+  for (const variant of variants) {
+    if (!variant.pattern.includes(' ') && collisionNames.has(variant.pattern.toLowerCase())) {
+      continue;
+    }
+    result = replaceInString(result, variant.pattern, newFirstName);
+  }
+
+  return result;
+}
+
+/**
+ * Deep-apply name variants throughout a JSON-like object.
+ */
+function deepApplyVariants(
+  value: unknown,
+  variants: NameVariant[],
+  newName: string,
+  collisionNames: Set<string>,
+): unknown {
+  if (typeof value === 'string') {
+    return applyVariantsToString(value, variants, newName, collisionNames);
+  }
+  if (Array.isArray(value)) {
+    return value.map(item => deepApplyVariants(item, variants, newName, collisionNames));
+  }
+  if (value !== null && typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      result[key] = deepApplyVariants(val, variants, newName, collisionNames);
+    }
+    return result;
+  }
+  return value;
+}
+
 /**
  * Deep-replace a name throughout a JSON-like object.
  * Walks all string values and replaces whole-word matches.
@@ -87,43 +334,38 @@ function deepReplaceInValue(value: unknown, oldName: string, newName: string): u
 }
 
 /**
- * Update metadataV2Json with the new name.
- * Targets: sender/recipient name fields, summary, hook (first name), ai_notes,
- * notable_quotes context.
+ * Update metadataV2Json with the new name using variant-based replacement.
  */
 function propagateInMetadataV2(
   metadata: Record<string, unknown>,
   field: 'sender' | 'recipient',
-  oldName: string,
+  variants: NameVariant[],
   newName: string,
+  collisionNames: Set<string>,
 ): Record<string, unknown> {
   const updated = { ...metadata };
 
-  // Update the sender/recipient name object
+  // Update the sender/recipient name object (always use full new name)
   const nameObj = updated[field] as { name?: string | null; confidence?: number } | undefined;
-  if (nameObj && typeof nameObj === 'object') {
-    const currentName = nameObj.name;
-    if (currentName && buildWholeWordRegex(oldName).test(currentName)) {
-      updated[field] = { ...nameObj, name: replaceInString(currentName, oldName, newName) };
-    }
+  if (nameObj && typeof nameObj === 'object' && typeof nameObj.name === 'string') {
+    updated[field] = { ...nameObj, name: applyVariantsToString(nameObj.name, variants, newName, collisionNames) };
   }
 
   // Update summary
   if (typeof updated.summary === 'string') {
-    updated.summary = replaceInString(updated.summary, oldName, newName);
+    updated.summary = applyVariantsToString(updated.summary, variants, newName, collisionNames);
   }
 
   // Update hook (use first name for brevity)
   if (typeof updated.hook === 'string') {
-    updated.hook = replaceInHook(updated.hook, oldName, newName);
+    updated.hook = applyVariantsToHook(updated.hook, variants, newName, collisionNames);
   }
 
   // Update ai_notes (structured array in metadataV2Json)
   if (Array.isArray(updated.ai_notes)) {
-    updated.ai_notes = deepReplaceInValue(updated.ai_notes, oldName, newName);
+    updated.ai_notes = deepApplyVariants(updated.ai_notes, variants, newName, collisionNames);
   } else if (typeof updated.ai_notes === 'string') {
-    // Legacy string format fallback
-    updated.ai_notes = replaceInString(updated.ai_notes, oldName, newName);
+    updated.ai_notes = applyVariantsToString(updated.ai_notes, variants, newName, collisionNames);
   }
 
   // Update notable_quotes contexts
@@ -131,7 +373,7 @@ function propagateInMetadataV2(
     updated.notable_quotes = (updated.notable_quotes as Record<string, unknown>[]).map(quote => ({
       ...quote,
       context: typeof quote.context === 'string'
-        ? replaceInString(quote.context, oldName, newName)
+        ? applyVariantsToString(quote.context, variants, newName, collisionNames)
         : quote.context,
     }));
   }
@@ -140,51 +382,88 @@ function propagateInMetadataV2(
 }
 
 /**
- * Update entityExtractionJson with the new name.
- * Targets: people[].name, people[].relationship_to_sender, people[].narrative,
- * people[].emotional_significance, people[].quotes[].context,
- * places[].associated_people, relationships[].person_a/person_b,
- * person_place_connections[].person_name
+ * Check if a person entry is the target being renamed (by role or name match).
+ */
+function isTargetPerson(
+  person: Record<string, unknown>,
+  oldName: string,
+  field: 'sender' | 'recipient',
+): boolean {
+  if (person.role === field) return true;
+  if (typeof person.name === 'string' && person.name.toLowerCase() === oldName.toLowerCase()) return true;
+  return false;
+}
+
+/**
+ * Update entityExtractionJson with the new name using variant-based replacement.
+ *
+ * Target person's entry: apply ALL variants (safe since we know it's the right person),
+ * and preserve the old name in their aliases array.
+ *
+ * Other entries: only apply multi-word variants; skip single-word to avoid false positives.
  */
 function propagateInEntityExtraction(
   entities: Record<string, unknown>,
   oldName: string,
   newName: string,
+  field: 'sender' | 'recipient',
+  variants: NameVariant[],
+  collisionNames: Set<string>,
 ): Record<string, unknown> {
   const updated = { ...entities };
+  const noCollision = new Set<string>(); // empty set = no collision filtering for target person
+  const multiWordVariants = variants.filter(v => v.pattern.includes(' '));
 
   // Update people array
   if (Array.isArray(updated.people)) {
     updated.people = (updated.people as Record<string, unknown>[]).map(person => {
       const p = { ...person };
+      const isTarget = isTargetPerson(p, oldName, field);
+      // Target person: use all variants, no collision filtering
+      // Other people: use only multi-word variants with collision filtering
+      const effectiveVariants = isTarget ? variants : multiWordVariants;
+      const effectiveCollisions = isTarget ? noCollision : collisionNames;
 
       // Update person name
-      if (typeof p.name === 'string' && buildWholeWordRegex(oldName).test(p.name)) {
-        p.name = replaceInString(p.name, oldName, newName);
+      if (typeof p.name === 'string') {
+        p.name = applyVariantsToString(p.name, effectiveVariants, newName, effectiveCollisions);
       }
 
-      // Update aliases
-      if (Array.isArray(p.aliases)) {
+      // Preserve old name in target person's aliases
+      if (isTarget && Array.isArray(p.aliases)) {
+        const existingAliases = p.aliases as string[];
+        const hasOldName = existingAliases.some(a =>
+          typeof a === 'string' && a.toLowerCase() === oldName.toLowerCase()
+        );
+        if (!hasOldName) {
+          p.aliases = [...existingAliases, oldName];
+        }
+        // Replace other alias values that match variants
+        p.aliases = (p.aliases as string[]).map(alias => {
+          if (typeof alias === 'string' && alias.toLowerCase() === oldName.toLowerCase()) return alias; // keep the preserved old name
+          return applyVariantsToString(alias, effectiveVariants, newName, effectiveCollisions);
+        });
+      } else if (Array.isArray(p.aliases)) {
         p.aliases = (p.aliases as string[]).map(alias =>
-          buildWholeWordRegex(oldName).test(alias)
-            ? replaceInString(alias, oldName, newName)
+          typeof alias === 'string'
+            ? applyVariantsToString(alias, effectiveVariants, newName, effectiveCollisions)
             : alias
         );
       }
 
-      // Update relationship_to_sender
+      // Update text fields
       if (typeof p.relationship_to_sender === 'string') {
-        p.relationship_to_sender = replaceInString(p.relationship_to_sender, oldName, newName);
+        p.relationship_to_sender = applyVariantsToString(p.relationship_to_sender, effectiveVariants, newName, effectiveCollisions);
       }
-
-      // Update narrative
       if (typeof p.narrative === 'string') {
-        p.narrative = replaceInString(p.narrative, oldName, newName);
+        p.narrative = applyVariantsToString(p.narrative, effectiveVariants, newName, effectiveCollisions);
+        // Add name-change context for the target person's narrative
+        if (isTarget && oldName.toLowerCase() !== newName.toLowerCase()) {
+          p.narrative = `${p.narrative} (Originally identified as ${oldName}.)`;
+        }
       }
-
-      // Update emotional_significance
       if (typeof p.emotional_significance === 'string') {
-        p.emotional_significance = replaceInString(p.emotional_significance, oldName, newName);
+        p.emotional_significance = applyVariantsToString(p.emotional_significance, effectiveVariants, newName, effectiveCollisions);
       }
 
       // Update quotes contexts
@@ -192,7 +471,7 @@ function propagateInEntityExtraction(
         p.quotes = (p.quotes as Record<string, unknown>[]).map(quote => ({
           ...quote,
           context: typeof quote.context === 'string'
-            ? replaceInString(quote.context, oldName, newName)
+            ? applyVariantsToString(quote.context, effectiveVariants, newName, effectiveCollisions)
             : quote.context,
         }));
       }
@@ -202,7 +481,7 @@ function propagateInEntityExtraction(
         p.details = (p.details as Record<string, unknown>[]).map(detail => ({
           ...detail,
           detail: typeof detail.detail === 'string'
-            ? replaceInString(detail.detail, oldName, newName)
+            ? applyVariantsToString(detail.detail, effectiveVariants, newName, effectiveCollisions)
             : detail.detail,
         }));
       }
@@ -211,60 +490,60 @@ function propagateInEntityExtraction(
     });
   }
 
-  // Update places: associated_people arrays, narrative
+  // Update places: use multi-word variants + collision filtering
   if (Array.isArray(updated.places)) {
     updated.places = (updated.places as Record<string, unknown>[]).map(place => {
       const pl = { ...place };
 
       if (Array.isArray(pl.associated_people)) {
         pl.associated_people = (pl.associated_people as string[]).map(name =>
-          buildWholeWordRegex(oldName).test(name)
-            ? replaceInString(name, oldName, newName)
+          typeof name === 'string'
+            ? applyVariantsToString(name, variants, newName, collisionNames)
             : name
         );
       }
 
       if (typeof pl.narrative === 'string') {
-        pl.narrative = replaceInString(pl.narrative, oldName, newName);
+        pl.narrative = applyVariantsToString(pl.narrative, variants, newName, collisionNames);
       }
 
       if (typeof pl.why_mentioned === 'string') {
-        pl.why_mentioned = replaceInString(pl.why_mentioned, oldName, newName);
+        pl.why_mentioned = applyVariantsToString(pl.why_mentioned, variants, newName, collisionNames);
       }
 
       return pl;
     });
   }
 
-  // Update relationships: person_a, person_b, evidence
+  // Update relationships
   if (Array.isArray(updated.relationships)) {
     updated.relationships = (updated.relationships as Record<string, unknown>[]).map(rel => {
       const r = { ...rel };
 
-      if (typeof r.person_a === 'string' && buildWholeWordRegex(oldName).test(r.person_a)) {
-        r.person_a = replaceInString(r.person_a, oldName, newName);
+      if (typeof r.person_a === 'string') {
+        r.person_a = applyVariantsToString(r.person_a, variants, newName, collisionNames);
       }
-      if (typeof r.person_b === 'string' && buildWholeWordRegex(oldName).test(r.person_b)) {
-        r.person_b = replaceInString(r.person_b, oldName, newName);
+      if (typeof r.person_b === 'string') {
+        r.person_b = applyVariantsToString(r.person_b, variants, newName, collisionNames);
       }
       if (typeof r.evidence === 'string') {
-        r.evidence = replaceInString(r.evidence, oldName, newName);
+        r.evidence = applyVariantsToString(r.evidence, variants, newName, collisionNames);
       }
 
       return r;
     });
   }
 
-  // Update person_place_connections: person_name, evidence
+  // Update person_place_connections
   if (Array.isArray(updated.person_place_connections)) {
     updated.person_place_connections = (updated.person_place_connections as Record<string, unknown>[]).map(conn => {
       const c = { ...conn };
 
-      if (typeof c.person_name === 'string' && buildWholeWordRegex(oldName).test(c.person_name)) {
-        c.person_name = replaceInString(c.person_name, oldName, newName);
+      if (typeof c.person_name === 'string') {
+        c.person_name = applyVariantsToString(c.person_name, variants, newName, collisionNames);
       }
       if (typeof c.evidence === 'string') {
-        c.evidence = replaceInString(c.evidence, oldName, newName);
+        c.evidence = applyVariantsToString(c.evidence, variants, newName, collisionNames);
       }
 
       return c;
@@ -277,8 +556,10 @@ function propagateInEntityExtraction(
 /**
  * Propagate a name change through all metadata fields for a letter.
  *
- * This is the "no AI" path — used when an old name exists and is being
- * replaced with a new name. Simple find-replace with whole-word matching.
+ * Parses the old name into components and generates variants (e.g., with/without
+ * honorific, suffix, middle parts) to catch shortened forms the AI may have used.
+ * Applies replacements longest-first to prevent double-replacement.
+ * Skips single-word variants that collide with other people's first names.
  */
 export async function propagateName(params: PropagateNameParams): Promise<PropagateNameResult> {
   const { letterId, field, oldName, newName } = params;
@@ -294,6 +575,14 @@ export async function propagateName(params: PropagateNameParams): Promise<Propag
     throw new Error(`Letter not found: ${letterId}`);
   }
 
+  // Parse old name and generate variants
+  const components = parseNameComponents(oldName);
+  const variants = generateNameVariants(components, oldName);
+  const entityJson = letter.entityExtractionJson as Record<string, unknown> | null;
+  const collisionNames = getOtherPeopleFirstNames(entityJson, oldName, field);
+
+  letterLog.info({ variants: variants.map(v => v.pattern), collisionNames: [...collisionNames] }, 'Generated name variants');
+
   const fieldsUpdated: string[] = [];
   const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
 
@@ -303,7 +592,7 @@ export async function propagateName(params: PropagateNameParams): Promise<Propag
 
   // 2. Update summary
   if (letter.summary) {
-    const updated = replaceInString(letter.summary, oldName, newName);
+    const updated = applyVariantsToString(letter.summary, variants, newName, collisionNames);
     if (updated !== letter.summary) {
       dbUpdates.summary = updated;
       fieldsUpdated.push('summary');
@@ -312,7 +601,7 @@ export async function propagateName(params: PropagateNameParams): Promise<Propag
 
   // 3. Update hook (first name only)
   if (letter.hook) {
-    const updated = replaceInHook(letter.hook, oldName, newName);
+    const updated = applyVariantsToHook(letter.hook, variants, newName, collisionNames);
     if (updated !== letter.hook) {
       dbUpdates.hook = updated;
       fieldsUpdated.push('hook');
@@ -324,21 +613,24 @@ export async function propagateName(params: PropagateNameParams): Promise<Propag
     const updatedMetadata = propagateInMetadataV2(
       letter.metadataV2Json as Record<string, unknown>,
       field,
-      oldName,
+      variants,
       newName,
+      collisionNames,
     );
     dbUpdates.metadataV2Json = updatedMetadata;
-    // Also keep legacy metadataJson in sync
     dbUpdates.metadataJson = updatedMetadata;
     fieldsUpdated.push('metadataV2Json');
   }
 
-  // 5. Update entityExtractionJson
-  if (letter.entityExtractionJson && typeof letter.entityExtractionJson === 'object') {
+  // 5. Update entityExtractionJson (with scoped replacement + alias preservation)
+  if (entityJson && typeof entityJson === 'object') {
     const updatedEntities = propagateInEntityExtraction(
-      letter.entityExtractionJson as Record<string, unknown>,
+      entityJson,
       oldName,
       newName,
+      field,
+      variants,
+      collisionNames,
     );
     dbUpdates.entityExtractionJson = updatedEntities;
     fieldsUpdated.push('entityExtractionJson');
@@ -346,7 +638,7 @@ export async function propagateName(params: PropagateNameParams): Promise<Propag
 
   // 6. Update aiNotes (structured jsonb array)
   if (letter.aiNotes && Array.isArray(letter.aiNotes)) {
-    const updatedNotes = deepReplaceInValue(letter.aiNotes, oldName, newName);
+    const updatedNotes = deepApplyVariants(letter.aiNotes, variants, newName, collisionNames);
     if (JSON.stringify(updatedNotes) !== JSON.stringify(letter.aiNotes)) {
       dbUpdates.aiNotes = updatedNotes;
       fieldsUpdated.push('aiNotes');

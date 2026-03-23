@@ -1,7 +1,7 @@
 import { unlink } from 'node:fs/promises';
 import { Router } from 'express';
 import { and, eq } from 'drizzle-orm';
-import { db, letterPages, letters } from '../../../db/index.js';
+import { db, canonicalPersons, letterPages, letterPersons, letters } from '../../../db/index.js';
 import type { StructuredNote, NoteCategory, NotePriority } from '../../../ai/schemas/metadataV2.js';
 import { detectAndStorePageLines } from '../../../services/line-finder.js';
 import {
@@ -19,6 +19,8 @@ import {
 import { resetLetterForProcessing } from '../../../services/letters.js';
 import { propagateName, propagatePlaceholderReplacement } from '../../../services/name-propagation.js';
 import { checkNoteAutoResolutions } from '../../../services/note-resolution.js';
+import { addAliasToCanonicalPerson } from '../../../services/entities/persons.js';
+import { syncLetterParticipantsFromMetadata } from '../../../services/entities/participant-sync.js';
 import { getAbsoluteStoragePath } from '../../../services/storage.js';
 import { runEntityExtractionOnly, runMetadataExtractionV2, type ExtractionOptions } from '../../../pipeline/metadataV2.js';
 import { BadRequestError, NotFoundError } from '../../../utils/response-helpers.js';
@@ -293,6 +295,44 @@ router.patch('/:letterId/identity', async (req, res, next) => {
       checkNoteAutoResolutions(letterId, 'recipient').catch(err =>
         req.log.warn({ letterId, err }, 'Note auto-resolution failed for recipient'));
     }
+
+    // Preserve old canonical name as alias when renaming
+    // Uses the canonical person's name (not letter.sender which may be stale/intermediate)
+    const aliasPromises: Promise<void>[] = [];
+    async function preserveOldNameAsAlias(role: 'sender' | 'recipient', newName: string) {
+      const linked = await db.query.letterPersons.findFirst({
+        where: and(eq(letterPersons.letterId, letterId), eq(letterPersons.role, role)),
+      });
+      if (!linked) return;
+      const person = await db.query.canonicalPersons.findFirst({
+        where: eq(canonicalPersons.id, linked.personId),
+      });
+      if (!person) return;
+      // Only add if the canonical name differs from the new name (the real rename)
+      if (person.canonicalName.toLowerCase() !== newName.toLowerCase()) {
+        await addAliasToCanonicalPerson(linked.personId, person.canonicalName);
+      }
+    }
+    if (newSender !== undefined && newSender && letter.sender && letter.sender !== newSender && !isPlaceholderValue(letter.sender)) {
+      aliasPromises.push(
+        preserveOldNameAsAlias('sender', newSender).catch(err =>
+          req.log.warn({ letterId, err }, 'Failed to add old sender as alias')),
+      );
+    }
+    if (newRecipient !== undefined && newRecipient && letter.recipient && letter.recipient !== newRecipient && !isPlaceholderValue(letter.recipient)) {
+      aliasPromises.push(
+        preserveOldNameAsAlias('recipient', newRecipient).catch(err =>
+          req.log.warn({ letterId, err }, 'Failed to add old recipient as alias')),
+      );
+    }
+    await Promise.all(aliasPromises);
+
+    // Sync participant links with the new names
+    syncLetterParticipantsFromMetadata({
+      letterId,
+      sender: newSender ?? undefined,
+      recipient: newRecipient ?? undefined,
+    }).catch(err => req.log.warn({ letterId, err }, 'Participant sync failed after identity update'));
 
     res.json(await requireLetterDto(letterId));
   } catch (error) {

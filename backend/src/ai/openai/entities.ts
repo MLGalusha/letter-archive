@@ -14,6 +14,7 @@ import { logApiUsage } from '../../services/usage-tracking.js';
 
 export interface ExtractEntitiesParams {
   transcriptionText: string;
+  letterId?: string;
   basicMetadata?: {
     sender?: string | null;
     recipient?: string | null;
@@ -48,6 +49,7 @@ export async function extractEntities(
   params: ExtractEntitiesParams,
 ): Promise<ExtractEntitiesResult> {
   const context = {
+    letterId: params.letterId,
     collectionCode: params.context?.collectionCode,
     dateRaw: params.context?.dateRaw,
     transcriptLength: params.transcriptionText.length,
@@ -156,6 +158,7 @@ export async function extractEntities(
 
     // Fire-and-forget usage tracking
     logApiUsage({
+      letterId: params.letterId,
       callType: 'entity_extraction',
       model: env.OPENAI_MODEL,
       inputTokens: usage?.input_tokens ?? 0,

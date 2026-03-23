@@ -88,6 +88,7 @@ export async function runTranscription(letterId: string): Promise<void> {
 
       const result = await transcribeImage({
         filePath: absolutePath,
+        letterId,
         context: {
           collectionCode: letter.collection.collectionCode,
           dateRaw: letter.dateRaw,
@@ -174,6 +175,7 @@ export async function runTranscription(letterId: string): Promise<void> {
 
             const checkResult = await checkExtraContentForText({
               filePath,
+              letterId,
               documentType: docType,
             });
 
@@ -184,6 +186,7 @@ export async function runTranscription(letterId: string): Promise<void> {
 
             const transcription = await transcribeExtraContent({
               filePath,
+              letterId,
               documentType: docType,
               context: {
                 collectionCode: letter.collection.collectionCode,

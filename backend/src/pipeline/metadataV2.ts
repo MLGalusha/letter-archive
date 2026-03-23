@@ -96,6 +96,7 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
 
     metadataResult = await extractMetadataV2({
       transcriptionText: letter.transcriptionText,
+      letterId,
       context: extractionContext,
       corrections,
     });
@@ -171,6 +172,7 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
 
     const entityResult = await extractEntities({
       transcriptionText: letter.transcriptionText,
+      letterId,
       basicMetadata: {
         sender: metadataResult.metadata.sender.name,
         recipient: metadataResult.metadata.recipient.name,
@@ -278,6 +280,7 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
   try {
     const entityResult = await extractEntities({
       transcriptionText: letter.transcriptionText,
+      letterId,
       basicMetadata,
       context: {
         collectionCode: letter.collection.collectionCode,

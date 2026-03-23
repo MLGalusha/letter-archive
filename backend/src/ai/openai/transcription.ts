@@ -14,6 +14,7 @@ import { logApiUsage } from '../../services/usage-tracking.js';
 
 export interface TranscribeImageParams {
   filePath: string;
+  letterId?: string;
   context?: {
     collectionCode?: string;
     dateRaw?: string;
@@ -31,6 +32,7 @@ export async function transcribeImage(
   params: TranscribeImageParams,
 ): Promise<TranscribeImageResult> {
   const context = {
+    letterId: params.letterId,
     filePath: params.filePath,
     collectionCode: params.context?.collectionCode,
     dateRaw: params.context?.dateRaw,
@@ -95,6 +97,7 @@ export async function transcribeImage(
 
     // Fire-and-forget usage tracking
     logApiUsage({
+      letterId: params.letterId,
       callType: 'transcription',
       model: env.OPENAI_MODEL,
       inputTokens: usage?.prompt_tokens ?? 0,
@@ -159,6 +162,7 @@ With warm regards,
 
 export interface CheckExtraContentParams {
   filePath: string;
+  letterId?: string;
   documentType?: string;
 }
 
@@ -173,6 +177,7 @@ export async function checkExtraContentForText(
   params: CheckExtraContentParams,
 ): Promise<CheckExtraContentResult> {
   const context = {
+    letterId: params.letterId,
     filePath: params.filePath,
     documentType: params.documentType,
   };
@@ -263,6 +268,7 @@ export async function checkExtraContentForText(
 
     // Fire-and-forget usage tracking
     logApiUsage({
+      letterId: params.letterId,
       callType: 'extra_content_check',
       model: 'gpt-4o-mini',
       inputTokens: checkUsage?.prompt_tokens ?? 0,
@@ -285,6 +291,7 @@ export async function checkExtraContentForText(
 
 export interface TranscribeExtraContentParams {
   filePath: string;
+  letterId?: string;
   documentType?: string;
   context?: {
     collectionCode?: string;
@@ -301,6 +308,7 @@ export async function transcribeExtraContent(
   params: TranscribeExtraContentParams,
 ): Promise<TranscribeExtraContentResult> {
   const context = {
+    letterId: params.letterId,
     filePath: params.filePath,
     documentType: params.documentType,
     collectionCode: params.context?.collectionCode,
@@ -378,6 +386,7 @@ File: ${params.filePath}
 
     // Fire-and-forget usage tracking
     logApiUsage({
+      letterId: params.letterId,
       callType: 'extra_content_transcription',
       model: env.OPENAI_MODEL,
       inputTokens: usage?.prompt_tokens ?? 0,

@@ -90,6 +90,7 @@ export async function regenerateTranscription(
 
           const checkResult = await checkExtraContentForText({
             filePath,
+            letterId,
             documentType: docType,
           });
 
@@ -97,6 +98,7 @@ export async function regenerateTranscription(
 
           const transcription = await transcribeExtraContent({
             filePath,
+            letterId,
             documentType: docType,
             context: {
               collectionCode: letter.collection.collectionCode,
@@ -190,6 +192,7 @@ export async function transcribeLetterOnly(
 
     const result = await transcribeImage({
       filePath: absolutePath,
+      letterId,
       context: {
         collectionCode: letter.collection.collectionCode,
         dateRaw: letter.dateRaw,
@@ -292,6 +295,7 @@ export async function transcribeExtras(letterId: string): Promise<TranscribeExtr
 
       const checkResult = await checkExtraContentForText({
         filePath,
+        letterId,
         documentType: docType,
       });
 
@@ -305,6 +309,7 @@ export async function transcribeExtras(letterId: string): Promise<TranscribeExtr
 
       const transcription = await transcribeExtraContent({
         filePath,
+        letterId,
         documentType: docType,
         context: {
           collectionCode: letter.collection.collectionCode,

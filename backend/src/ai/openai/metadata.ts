@@ -17,6 +17,7 @@ import { logApiUsage } from '../../services/usage-tracking.js';
 
 export interface ExtractMetadataParams {
   transcriptionText: string;
+  letterId?: string;
   context?: {
     collectionCode?: string;
     dateRaw?: string;
@@ -39,6 +40,7 @@ export async function extractMetadata(
   params: ExtractMetadataParams,
 ): Promise<ExtractedMetadata> {
   const context = {
+    letterId: params.letterId,
     collectionCode: params.context?.collectionCode,
     dateRaw: params.context?.dateRaw,
     transcriptLength: params.transcriptionText.length,
@@ -114,6 +116,7 @@ export async function extractMetadata(
 
     // Fire-and-forget usage tracking
     logApiUsage({
+      letterId: params.letterId,
       callType: 'metadata',
       model: env.OPENAI_MODEL,
       inputTokens: usage?.prompt_tokens ?? 0,
@@ -165,6 +168,7 @@ export interface ExtractionCorrections {
 
 export interface ExtractMetadataV2Params {
   transcriptionText: string;
+  letterId?: string;
   context?: {
     collectionCode?: string;
     dateRaw?: string;
@@ -188,6 +192,7 @@ export async function extractMetadataV2(
   params: ExtractMetadataV2Params,
 ): Promise<ExtractMetadataV2Result> {
   const context = {
+    letterId: params.letterId,
     collectionCode: params.context?.collectionCode,
     dateRaw: params.context?.dateRaw,
     transcriptLength: params.transcriptionText.length,
@@ -288,6 +293,7 @@ export async function extractMetadataV2(
 
     // Fire-and-forget usage tracking
     logApiUsage({
+      letterId: params.letterId,
       callType: 'metadata_v2',
       model: env.OPENAI_MODEL,
       inputTokens: usage?.input_tokens ?? 0,

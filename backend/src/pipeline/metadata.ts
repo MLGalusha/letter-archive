@@ -57,6 +57,7 @@ export async function runMetadataExtraction(letterId: string): Promise<void> {
   try {
     const result = await extractMetadata({
       transcriptionText: letter.transcriptionText,
+      letterId,
       context: {
         collectionCode: letter.collection.collectionCode,
         dateRaw: letter.dateRaw,

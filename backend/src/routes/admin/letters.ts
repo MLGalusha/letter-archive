@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { eq, and, sql } from 'drizzle-orm';
 import { unlink } from 'node:fs/promises';
 import { z } from 'zod';
-import { db, letters, letterPages } from '../../db/index.js';
+import { db, letters, letterPages, collections } from '../../db/index.js';
 import { getLetterById, resetLetterForProcessing } from '../../services/letters.js';
 import { getAbsoluteStoragePath } from '../../services/storage.js';
 import { runMetadataExtractionV2, runEntityExtractionOnly, type ExtractionOptions } from '../../pipeline/metadataV2.js';
@@ -1472,5 +1472,132 @@ router.post('/letters/pages/:pageId/detect-lines', async (req, res, next) => {
   }
 });
 
+
+// ============================================================================
+// AGGREGATE NOTES ACROSS ALL LETTERS
+// ============================================================================
+
+const notesQuerySchema = z.object({
+  status: z.enum(['open', 'resolved', 'dismissed']).optional(),
+  priority: z.enum(['high', 'medium', 'low']).optional(),
+  category: z.string().optional(),
+  search: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+router.get('/notes', async (req, res, next) => {
+  try {
+    const query = notesQuerySchema.parse(req.query);
+    req.log.debug({ ...query }, 'Aggregate notes query');
+
+    // Fetch all letters that have non-null aiNotes, joined with collection
+    const rows = await db
+      .select({
+        id: letters.id,
+        letterDate: letters.letterDate,
+        sender: letters.sender,
+        recipient: letters.recipient,
+        aiNotes: letters.aiNotes,
+        collectionCode: collections.collectionCode,
+      })
+      .from(letters)
+      .innerJoin(collections, eq(letters.collectionId, collections.id))
+      .where(sql`${letters.aiNotes} IS NOT NULL`);
+
+    // Flatten notes from all letters, handling legacy string/non-array gracefully
+    interface AggregatedNote {
+      id: string;
+      content: string;
+      category: string;
+      priority: string;
+      status: string;
+      resolves_when: string | null;
+      resolved_at: string | null;
+      resolved_by: string | null;
+      source: string;
+      letterId: string;
+      letterDate: string | null;
+      collectionCode: string;
+      sender: string | null;
+      recipient: string | null;
+    }
+
+    const allNotes: AggregatedNote[] = [];
+
+    for (const row of rows) {
+      const rawNotes = row.aiNotes;
+
+      // Skip if not an array (legacy text format or malformed data)
+      if (!Array.isArray(rawNotes)) continue;
+
+      for (const note of rawNotes) {
+        // Validate that note has expected shape
+        if (!note || typeof note !== 'object' || !('id' in note) || !('content' in note)) continue;
+
+        const n = note as Record<string, unknown>;
+        allNotes.push({
+          id: String(n.id ?? ''),
+          content: String(n.content ?? ''),
+          category: String(n.category ?? 'context'),
+          priority: String(n.priority ?? 'medium'),
+          status: String(n.status ?? 'open'),
+          resolves_when: n.resolves_when != null ? String(n.resolves_when) : null,
+          resolved_at: n.resolved_at != null ? String(n.resolved_at) : null,
+          resolved_by: n.resolved_by != null ? String(n.resolved_by) : null,
+          source: String(n.source ?? 'ai'),
+          letterId: row.id,
+          letterDate: row.letterDate,
+          collectionCode: row.collectionCode,
+          sender: row.sender,
+          recipient: row.recipient,
+        });
+      }
+    }
+
+    // Compute status counts from the full (unfiltered) set
+    const counts = {
+      open: allNotes.filter(n => n.status === 'open').length,
+      resolved: allNotes.filter(n => n.status === 'resolved').length,
+      dismissed: allNotes.filter(n => n.status === 'dismissed').length,
+    };
+
+    // Apply filters
+    let filtered = allNotes;
+
+    if (query.status) {
+      filtered = filtered.filter(n => n.status === query.status);
+    }
+    if (query.priority) {
+      filtered = filtered.filter(n => n.priority === query.priority);
+    }
+    if (query.category) {
+      filtered = filtered.filter(n => n.category === query.category);
+    }
+    if (query.search) {
+      const lower = query.search.toLowerCase();
+      filtered = filtered.filter(n => n.content.toLowerCase().includes(lower));
+    }
+
+    // Sort: open first (high priority at top), then resolved, then dismissed
+    const STATUS_ORDER: Record<string, number> = { open: 0, resolved: 1, dismissed: 2 };
+    const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
+
+    filtered.sort((a, b) => {
+      const statusDiff = (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3);
+      if (statusDiff !== 0) return statusDiff;
+      return (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3);
+    });
+
+    const total = filtered.length;
+    const paginated = filtered.slice(query.offset, query.offset + query.limit);
+
+    req.log.info({ total, returned: paginated.length }, 'Aggregate notes query completed');
+
+    res.json({ notes: paginated, total, counts });
+  } catch (error) {
+    next(error);
+  }
+});
 
 export default router;

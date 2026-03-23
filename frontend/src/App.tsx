@@ -20,6 +20,7 @@ import ProcessingQueuePage from "./pages/admin/ProcessingQueuePage";
 import SettingsPage from "./pages/admin/SettingsPage";
 import UsagePage from "./pages/admin/UsagePage";
 import NotificationsPage from "./pages/admin/NotificationsPage";
+import NotesPage from "./pages/admin/NotesPage";
 import "./App.css";
 
 function App() {
@@ -38,6 +39,7 @@ function App() {
         <Route path="/admin/upload" element={<UploadLetterPage />} />
         <Route path="/admin/processing" element={<ProcessingQueuePage />} />
         <Route path="/admin/letters/:letterId" element={<LetterReviewPage />} />
+        <Route path="/admin/notes" element={<NotesPage />} />
         <Route path="/admin/usage" element={<UsagePage />} />
         <Route path="/admin/notifications" element={<NotificationsPage />} />
         <Route path="/admin/settings" element={<SettingsPage />} />

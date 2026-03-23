@@ -39,6 +39,7 @@ import {
 import '@mdxeditor/editor/style.css';
 import AdminLayout from '../../components/AdminLayout';
 import { Button } from '../../components/common';
+import AutoResizeTextarea from '../../components/common/AutoResizeTextarea';
 import Icon from '../../components/common/Icon';
 import { getErrorMessage } from '../../api/client';
 import {
@@ -145,6 +146,75 @@ type PersistOptions = {
   showErrorToast?: boolean;
 };
 
+type BodyImageSlot = {
+  id: string;
+  alt: string;
+  src: string;
+  markdown: string;
+  start: number;
+  end: number;
+};
+
+const BODY_IMAGE_REGEX = /^\s*!\[([^\]]*)\]\(([^)]+)\)\s*$/gm;
+
+function parseBodyImageSlots(markdown: string): BodyImageSlot[] {
+  const slots: BodyImageSlot[] = [];
+  const normalizedMarkdown = markdown.replace(/\r\n/g, '\n');
+  const regex = new RegExp(BODY_IMAGE_REGEX);
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(normalizedMarkdown)) !== null) {
+    slots.push({
+      id: `image-slot-${slots.length}-${match.index}`,
+      alt: match[1].trim(),
+      src: match[2].trim(),
+      markdown: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    });
+  }
+
+  return slots;
+}
+
+function normalizeEditorMarkdown(markdown: string): string {
+  return markdown
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trimEnd();
+}
+
+function swapBodyImageSlots(markdown: string, firstIndex: number, secondIndex: number): string {
+  const slots = parseBodyImageSlots(markdown);
+  const first = slots[firstIndex];
+  const second = slots[secondIndex];
+
+  if (!first || !second) {
+    return markdown;
+  }
+
+  const earlier = first.start < second.start ? first : second;
+  const later = first.start < second.start ? second : first;
+  const earlierReplacement = earlier === first ? second.markdown : first.markdown;
+  const laterReplacement = later === second ? first.markdown : second.markdown;
+
+  return normalizeEditorMarkdown(
+    `${markdown.slice(0, earlier.start)}${earlierReplacement}${markdown.slice(earlier.end, later.start)}${laterReplacement}${markdown.slice(later.end)}`,
+  );
+}
+
+function removeBodyImageSlot(markdown: string, index: number): string {
+  const slots = parseBodyImageSlots(markdown);
+  const slot = slots[index];
+
+  if (!slot) {
+    return markdown;
+  }
+
+  return normalizeEditorMarkdown(`${markdown.slice(0, slot.start)}${markdown.slice(slot.end)}`);
+}
+
 export default function BlogEditorPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -187,6 +257,11 @@ export default function BlogEditorPage() {
   const heroPreview = useMemo(
     () => MOCK_MEDIA_LIBRARY.find((asset) => asset.src === heroImageUrl) || null,
     [heroImageUrl],
+  );
+  const bodyImageSlots = useMemo(() => parseBodyImageSlots(bodyMarkdown), [bodyMarkdown]);
+  const mediaAssetsBySource = useMemo(
+    () => new Map(MOCK_MEDIA_LIBRARY.map((asset) => [asset.src, asset])),
+    [],
   );
 
   const commonImageSuggestions = useMemo(
@@ -597,6 +672,19 @@ export default function BlogEditorPage() {
     insertSnippet(`\n![${asset.alt}](${asset.src})\n\n`);
   };
 
+  const moveBodyImageSlot = (index: number, direction: -1 | 1) => {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= bodyImageSlots.length) {
+      return;
+    }
+
+    replaceEditorMarkdown(swapBodyImageSlots(bodyMarkdown, index, nextIndex));
+  };
+
+  const deleteBodyImageSlot = (index: number) => {
+    replaceEditorMarkdown(removeBodyImageSlot(bodyMarkdown, index));
+  };
+
   if (loading) {
     return (
       <AdminLayout>
@@ -623,7 +711,7 @@ export default function BlogEditorPage() {
                 <div className="blog-editor-kicker">Editorial Studio</div>
                 <h1 className="blog-editor-heading">{isNew ? 'Compose a Blog Post' : 'Refine the Draft'}</h1>
                 <p className="blog-editor-subtitle">
-                  Start in the writing canvas. Metadata, publishing, and mock media live in the rail so the page still feels calm.
+                  Start in the writing canvas. Publishing details stay in the rail, while templates and media stay close to the draft where they are actually used.
                 </p>
               </div>
 
@@ -669,14 +757,127 @@ export default function BlogEditorPage() {
                 <label className="blog-editor-label" htmlFor="update-excerpt">
                   Deck / Excerpt
                 </label>
-                <textarea
+                <AutoResizeTextarea
                   id="update-excerpt"
                   className="blog-editor-excerpt-input"
-                  rows={3}
                   value={excerpt}
-                  onChange={handleMetadataChange(setExcerpt)}
+                  onChange={setExcerpt}
+                  minHeight={128}
                   placeholder="This is the short summary readers will see in blog cards, social previews, and search."
                 />
+              </div>
+
+              <div className="blog-editor-toolbelt">
+                <section className="blog-editor-inline-card">
+                  <div className="blog-inline-card-header">
+                    <div>
+                      <div className="blog-inline-eyebrow">Starting points</div>
+                      <h2>Templates</h2>
+                    </div>
+                    <p>
+                      Drop in a structure without turning the editor into a wall of fields.
+                    </p>
+                  </div>
+
+                  <div className="blog-template-grid">
+                    {BLOG_TEMPLATES.map((template) => (
+                      <button
+                        key={template.id}
+                        className="blog-template-card"
+                        type="button"
+                        onClick={() => applyTemplate(template)}
+                      >
+                        <strong>{template.label}</strong>
+                        <span>{template.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="blog-editor-inline-card">
+                  <div className="blog-inline-card-header">
+                    <div>
+                      <div className="blog-inline-eyebrow">Visual assets</div>
+                      <h2>Media shelf</h2>
+                    </div>
+                    <p>
+                      Set a hero or insert images at the cursor without sending you to the far edge of the page.
+                    </p>
+                  </div>
+
+                  <div className="blog-media-grid">
+                    {MOCK_MEDIA_LIBRARY.map((asset) => (
+                      <div key={asset.id} className="blog-media-card">
+                        <img src={asset.src} alt={asset.alt} />
+                        <div className="blog-media-copy">
+                          <strong>{asset.label}</strong>
+                          <span>{asset.hint}</span>
+                        </div>
+                        <div className="blog-media-actions">
+                          <button type="button" onClick={() => applyMockMediaToHero(asset)}>
+                            Set as hero
+                          </button>
+                          <button type="button" onClick={() => insertMockMedia(asset)}>
+                            Insert in post
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {bodyImageSlots.length > 0 && (
+                    <div className="blog-image-order-panel">
+                      <div className="blog-image-order-header">
+                        <div>
+                          <div className="blog-inline-eyebrow">Current image slots</div>
+                          <h3>Reorder images without fighting the editor</h3>
+                        </div>
+                        <p>
+                          These controls swap image placements in the draft so you can move visuals around without dragging blocks.
+                        </p>
+                      </div>
+
+                      <div className="blog-image-order-list">
+                        {bodyImageSlots.map((slot, index) => {
+                          const asset = mediaAssetsBySource.get(slot.src);
+                          const label = asset?.label || slot.alt || `Image ${index + 1}`;
+
+                          return (
+                            <div key={slot.id} className="blog-image-order-card">
+                              <div className="blog-image-order-meta">
+                                <strong>{label}</strong>
+                                <span>{slot.src}</span>
+                              </div>
+                              <div className="blog-image-order-actions">
+                                <button
+                                  type="button"
+                                  onClick={() => moveBodyImageSlot(index, -1)}
+                                  disabled={index === 0}
+                                >
+                                  Move earlier
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveBodyImageSlot(index, 1)}
+                                  disabled={index === bodyImageSlots.length - 1}
+                                >
+                                  Move later
+                                </button>
+                                <button
+                                  type="button"
+                                  className="danger"
+                                  onClick={() => deleteBodyImageSlot(index)}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </section>
               </div>
 
               <div className="blog-editor-snippets">
@@ -915,53 +1116,14 @@ export default function BlogEditorPage() {
               </div>
               <div className="editor-field">
                 <label htmlFor="update-seo-description">SEO description</label>
-                <textarea
+                <AutoResizeTextarea
                   id="update-seo-description"
-                  rows={3}
+                  className="blog-editor-meta-textarea"
                   value={seoDescription}
-                  onChange={handleMetadataChange(setSeoDescription)}
+                  onChange={setSeoDescription}
+                  minHeight={104}
                   placeholder="Leave blank to fall back to the deck."
                 />
-              </div>
-            </section>
-
-            <section className="blog-editor-rail-card">
-              <h2>Templates</h2>
-              <div className="blog-template-list">
-                {BLOG_TEMPLATES.map((template) => (
-                  <button
-                    key={template.id}
-                    className="blog-template-card"
-                    type="button"
-                    onClick={() => applyTemplate(template)}
-                  >
-                    <strong>{template.label}</strong>
-                    <span>{template.description}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="blog-editor-rail-card">
-              <h2>Mock Media</h2>
-              <div className="blog-media-list">
-                {MOCK_MEDIA_LIBRARY.map((asset) => (
-                  <div key={asset.id} className="blog-media-card">
-                    <img src={asset.src} alt={asset.alt} />
-                    <div className="blog-media-copy">
-                      <strong>{asset.label}</strong>
-                      <span>{asset.hint}</span>
-                    </div>
-                    <div className="blog-media-actions">
-                      <button type="button" onClick={() => applyMockMediaToHero(asset)}>
-                        Set as hero
-                      </button>
-                      <button type="button" onClick={() => insertMockMedia(asset)}>
-                        Insert in body
-                      </button>
-                    </div>
-                  </div>
-                ))}
               </div>
             </section>
           </aside>

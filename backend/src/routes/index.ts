@@ -7,7 +7,7 @@ import collectionsRouter from './collections.js';
 import sitemapRouter from './sitemap.js';
 import adminRouter from './admin/index.js';
 import authRouter from './auth.js';
-import updatesRouter from './updates.js';
+import blogRouter from './updates.js';
 import contentPagesRouter from './content-pages.js';
 
 const router = Router();
@@ -18,7 +18,7 @@ router.use(lettersRouter);
 router.use(imagesRouter);
 router.use(collectionsRouter);
 router.use(authRouter);
-router.use(updatesRouter);
+router.use(blogRouter);
 router.use(contentPagesRouter);
 router.use('/admin', adminRouter);
 

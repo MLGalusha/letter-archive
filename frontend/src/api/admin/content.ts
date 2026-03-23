@@ -2,7 +2,7 @@ import { apiGet, apiPost, apiPut, apiDelete } from '../client';
 
 // ── Types ────────────────────────────────────────────────
 
-export interface UpdatePost {
+export interface BlogPost {
   id: string;
   slug: string;
   title: string;
@@ -30,39 +30,39 @@ export interface ContentPage {
   updatedAt: string;
 }
 
-// ── Content Management - Updates ─────────────────────────
+// ── Content Management - Blog ────────────────────────────
 
-export async function adminListUpdates(
+export async function adminListBlogPosts(
   params?: { limit?: number; offset?: number },
-): Promise<{ updates: UpdatePost[]; total: number }> {
-  return apiGet<{ updates: UpdatePost[]; total: number }>(
-    '/admin/content/updates',
+): Promise<{ posts: BlogPost[]; total: number }> {
+  return apiGet<{ posts: BlogPost[]; total: number }>(
+    '/admin/content/blog',
     params as Record<string, string | number | undefined>,
   );
 }
 
-export async function adminGetUpdate(id: string): Promise<UpdatePost> {
-  return apiGet<UpdatePost>(`/admin/content/updates/${id}`);
+export async function adminGetBlogPost(id: string): Promise<BlogPost> {
+  return apiGet<BlogPost>(`/admin/content/blog/${id}`);
 }
 
-export async function adminCreateUpdate(data: Partial<UpdatePost>): Promise<UpdatePost> {
-  return apiPost<UpdatePost>('/admin/content/updates', data);
+export async function adminCreateBlogPost(data: Partial<BlogPost>): Promise<BlogPost> {
+  return apiPost<BlogPost>('/admin/content/blog', data);
 }
 
-export async function adminUpdatePost(id: string, data: Partial<UpdatePost>): Promise<UpdatePost> {
-  return apiPut<UpdatePost>(`/admin/content/updates/${id}`, data);
+export async function adminUpdateBlogPost(id: string, data: Partial<BlogPost>): Promise<BlogPost> {
+  return apiPut<BlogPost>(`/admin/content/blog/${id}`, data);
 }
 
-export async function adminPublishUpdate(id: string): Promise<UpdatePost> {
-  return apiPost<UpdatePost>(`/admin/content/updates/${id}/publish`);
+export async function adminPublishBlogPost(id: string): Promise<BlogPost> {
+  return apiPost<BlogPost>(`/admin/content/blog/${id}/publish`);
 }
 
-export async function adminUnpublishUpdate(id: string): Promise<UpdatePost> {
-  return apiPost<UpdatePost>(`/admin/content/updates/${id}/unpublish`);
+export async function adminUnpublishBlogPost(id: string): Promise<BlogPost> {
+  return apiPost<BlogPost>(`/admin/content/blog/${id}/unpublish`);
 }
 
-export async function adminDeleteUpdate(id: string): Promise<void> {
-  return apiDelete<void>(`/admin/content/updates/${id}`);
+export async function adminDeleteBlogPost(id: string): Promise<void> {
+  return apiDelete<void>(`/admin/content/blog/${id}`);
 }
 
 // ── Content Management - Pages ───────────────────────────

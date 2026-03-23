@@ -5,13 +5,13 @@ import { Button } from '../../components/common';
 import Icon from '../../components/common/Icon';
 import { getErrorMessage } from '../../api/client';
 import {
-  adminGetUpdate,
-  adminCreateUpdate,
-  adminUpdatePost,
-  adminPublishUpdate,
-  adminUnpublishUpdate,
-  adminDeleteUpdate,
-  type UpdatePost,
+  adminGetBlogPost,
+  adminCreateBlogPost,
+  adminUpdateBlogPost,
+  adminPublishBlogPost,
+  adminUnpublishBlogPost,
+  adminDeleteBlogPost,
+  type BlogPost,
 } from '../../api/admin/content';
 import { useToast } from '../../contexts/ToastContext';
 import './UpdateEditorPage.css';
@@ -32,7 +32,7 @@ function slugify(text: string): string {
     .trim();
 }
 
-export default function UpdateEditorPage() {
+export default function BlogEditorPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -62,38 +62,38 @@ export default function UpdateEditorPage() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ── Load existing update ──────────────────────────────
-  const loadUpdate = useCallback(async () => {
+  // ── Load existing blog post ───────────────────────────
+  const loadBlogPost = useCallback(async () => {
     if (!id) return;
     try {
       setLoading(true);
       setError(null);
-      const update = await adminGetUpdate(id);
-      setTitle(update.title);
-      setSlug(update.slug);
+      const post = await adminGetBlogPost(id);
+      setTitle(post.title);
+      setSlug(post.slug);
       setSlugManuallyEdited(true);
-      setExcerpt(update.excerpt || '');
-      setCategory(update.category || '');
-      setAuthorDisplayName(update.authorDisplayName || '');
-      setAuthorRole(update.authorRole || '');
-      setHeroImageUrl(update.heroImageUrl || '');
-      setHeroImageAlt(update.heroImageAlt || '');
-      setBodyMarkdown(update.bodyMarkdown || '');
-      setSeoTitle(update.seoTitle || '');
-      setSeoDescription(update.seoDescription || '');
-      setCtaLabel(update.ctaLabel || '');
-      setCtaUrl(update.ctaUrl || '');
-      setStatus(update.status);
+      setExcerpt(post.excerpt || '');
+      setCategory(post.category || '');
+      setAuthorDisplayName(post.authorDisplayName || '');
+      setAuthorRole(post.authorRole || '');
+      setHeroImageUrl(post.heroImageUrl || '');
+      setHeroImageAlt(post.heroImageAlt || '');
+      setBodyMarkdown(post.bodyMarkdown || '');
+      setSeoTitle(post.seoTitle || '');
+      setSeoDescription(post.seoDescription || '');
+      setCtaLabel(post.ctaLabel || '');
+      setCtaUrl(post.ctaUrl || '');
+      setStatus(post.status);
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to load update.'));
+      setError(getErrorMessage(err, 'Failed to load blog post.'));
     } finally {
       setLoading(false);
     }
   }, [id]);
 
   useEffect(() => {
-    loadUpdate();
-  }, [loadUpdate]);
+    loadBlogPost();
+  }, [loadBlogPost]);
 
   // ── Auto-slug from title ──────────────────────────────
   const handleTitleChange = (value: string) => {
@@ -109,7 +109,7 @@ export default function UpdateEditorPage() {
   };
 
   // ── Build form data ───────────────────────────────────
-  function buildFormData(): Partial<UpdatePost> {
+  function buildFormData(): Partial<BlogPost> {
     return {
       title,
       slug,
@@ -140,13 +140,13 @@ export default function UpdateEditorPage() {
       const data = buildFormData();
 
       if (isNew) {
-        const created = await adminCreateUpdate(data);
+        const created = await adminCreateBlogPost(data);
         showToast('Draft saved.', 'success');
-        navigate(`/admin/content/updates/${created.id}`, { replace: true });
+        navigate(`/admin/content/blog/${created.id}`, { replace: true });
       } else {
-        await adminUpdatePost(id!, data);
+        await adminUpdateBlogPost(id!, data);
         showToast('Draft saved.', 'success');
-        await loadUpdate();
+        await loadBlogPost();
       }
     } catch (err) {
       showToast(getErrorMessage(err, 'Failed to save.'), 'error');
@@ -166,15 +166,15 @@ export default function UpdateEditorPage() {
       const data = buildFormData();
 
       if (isNew) {
-        const created = await adminCreateUpdate(data);
-        await adminPublishUpdate(created.id);
-        showToast('Update published.', 'success');
-        navigate(`/admin/content/updates/${created.id}`, { replace: true });
+        const created = await adminCreateBlogPost(data);
+        await adminPublishBlogPost(created.id);
+        showToast('Blog post published.', 'success');
+        navigate(`/admin/content/blog/${created.id}`, { replace: true });
       } else {
-        await adminUpdatePost(id!, data);
-        await adminPublishUpdate(id!);
-        showToast('Update published.', 'success');
-        await loadUpdate();
+        await adminUpdateBlogPost(id!, data);
+        await adminPublishBlogPost(id!);
+        showToast('Blog post published.', 'success');
+        await loadBlogPost();
       }
     } catch (err) {
       showToast(getErrorMessage(err, 'Failed to publish.'), 'error');
@@ -187,9 +187,9 @@ export default function UpdateEditorPage() {
     if (!id) return;
     setPublishing(true);
     try {
-      await adminUnpublishUpdate(id);
-      showToast('Update unpublished.', 'success');
-      await loadUpdate();
+      await adminUnpublishBlogPost(id);
+      showToast('Blog post unpublished.', 'success');
+      await loadBlogPost();
     } catch (err) {
       showToast(getErrorMessage(err, 'Failed to unpublish.'), 'error');
     } finally {
@@ -199,12 +199,12 @@ export default function UpdateEditorPage() {
 
   const handleDelete = async () => {
     if (!id) return;
-    if (!window.confirm('Delete this update? This cannot be undone.')) return;
+    if (!window.confirm('Delete this blog post? This cannot be undone.')) return;
 
     setDeleting(true);
     try {
-      await adminDeleteUpdate(id);
-      showToast('Update deleted.', 'success');
+      await adminDeleteBlogPost(id);
+      showToast('Blog post deleted.', 'success');
       navigate('/admin/content');
     } catch (err) {
       showToast(getErrorMessage(err, 'Failed to delete.'), 'error');
@@ -217,7 +217,7 @@ export default function UpdateEditorPage() {
   if (loading) {
     return (
       <AdminLayout>
-        <div className="update-editor-loading">Loading update...</div>
+        <div className="update-editor-loading">Loading blog post...</div>
       </AdminLayout>
     );
   }
@@ -237,7 +237,7 @@ export default function UpdateEditorPage() {
         {/* Header */}
         <div className="update-editor-header">
           <h1 className="update-editor-title">
-            {isNew ? 'New Update' : 'Edit Update'}
+            {isNew ? 'New Blog Post' : 'Edit Blog Post'}
           </h1>
           {!isNew && (
             <span className={`updates-status-badge ${status}`}>{status}</span>
@@ -258,7 +258,7 @@ export default function UpdateEditorPage() {
               type="text"
               value={title}
               onChange={(e) => handleTitleChange(e.target.value)}
-              placeholder="Update title..."
+              placeholder="Blog post title..."
             />
           </div>
 
@@ -280,7 +280,7 @@ export default function UpdateEditorPage() {
               id="update-excerpt"
               value={excerpt}
               onChange={(e) => setExcerpt(e.target.value)}
-              placeholder="Short summary for listings and SEO..."
+              placeholder="Short summary for blog listings and SEO..."
               rows={2}
             />
           </div>
@@ -357,7 +357,7 @@ export default function UpdateEditorPage() {
               className="editor-body-textarea"
               value={bodyMarkdown}
               onChange={(e) => setBodyMarkdown(e.target.value)}
-              placeholder="Write your update in Markdown..."
+              placeholder="Write your blog post in Markdown..."
               rows={16}
             />
           </div>

@@ -276,9 +276,9 @@ export function getImageUrl(imageUrl: string): string {
   return `${API_BASE_URL}${imageUrl}`;
 }
 
-// ── Updates & Content types ──────────────────────────────────────────────────
+// ── Blog & Content types ─────────────────────────────────────────────────────
 
-export interface UpdatePost {
+export interface BlogPost {
   id: string;
   slug: string;
   title: string;
@@ -317,20 +317,20 @@ export interface ContentPage {
   updatedAt: string;
 }
 
-// ── Updates & Content API ────────────────────────────────────────────────────
+// ── Blog & Content API ───────────────────────────────────────────────────────
 
-export async function listUpdates(
+export async function listBlogPosts(
   params?: { limit?: number; offset?: number; category?: string },
-): Promise<{ updates: UpdatePost[]; total: number }> {
-  return apiGet<{ updates: UpdatePost[]; total: number }>('/updates', {
+): Promise<{ posts: BlogPost[]; total: number }> {
+  return apiGet<{ posts: BlogPost[]; total: number }>('/blog', {
     limit: params?.limit,
     offset: params?.offset,
     category: params?.category,
   });
 }
 
-export async function getUpdate(slug: string): Promise<UpdatePost> {
-  return apiGet<UpdatePost>(`/updates/${encodeURIComponent(slug)}`);
+export async function getBlogPost(slug: string): Promise<BlogPost> {
+  return apiGet<BlogPost>(`/blog/${encodeURIComponent(slug)}`);
 }
 
 export async function getFeaturedLetter(): Promise<FeaturedLetter | null> {

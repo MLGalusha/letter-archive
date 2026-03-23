@@ -18,20 +18,20 @@ const router = Router();
 // Schemas
 // ============================================================================
 
-const UPDATE_CATEGORIES = [
+const BLOG_POST_CATEGORIES = [
   'Archive Progress',
   'New Features',
   'Collections',
   'Behind the Scenes',
 ] as const;
 
-const createUpdateSchema = z.object({
+const createBlogPostSchema = z.object({
   slug: z.string().optional(),
   title: z.string().min(1),
   excerpt: z.string().optional(),
   bodyMarkdown: z.string().min(1),
   status: z.enum(['draft', 'published']).default('draft'),
-  category: z.enum(UPDATE_CATEGORIES).optional().nullable(),
+  category: z.enum(BLOG_POST_CATEGORIES).optional().nullable(),
   authorDisplayName: z.string().optional().nullable(),
   authorRole: z.string().optional().nullable(),
   heroImageUrl: z.string().url().optional().nullable(),
@@ -43,13 +43,13 @@ const createUpdateSchema = z.object({
   publishedAt: z.string().datetime().optional().nullable(),
 });
 
-const updateUpdateSchema = z.object({
+const updateBlogPostSchema = z.object({
   slug: z.string().optional(),
   title: z.string().min(1).optional(),
   excerpt: z.string().optional().nullable(),
   bodyMarkdown: z.string().min(1).optional(),
   status: z.enum(['draft', 'published']).optional(),
-  category: z.enum(UPDATE_CATEGORIES).optional().nullable(),
+  category: z.enum(BLOG_POST_CATEGORIES).optional().nullable(),
   authorDisplayName: z.string().optional().nullable(),
   authorRole: z.string().optional().nullable(),
   heroImageUrl: z.string().url().optional().nullable(),
@@ -76,15 +76,15 @@ const paginationSchema = z.object({
 });
 
 // ============================================================================
-// UPDATES CRUD
+// BLOG POSTS CRUD
 // ============================================================================
 
-// GET /content/updates — List all updates (all statuses)
-router.get('/content/updates', async (req, res) => {
+// GET /content/blog — List all blog posts (all statuses)
+router.get('/content/blog', async (req, res) => {
   try {
     const query = paginationSchema.parse(req.query);
 
-    const [rows, [{ count: total }]] = await Promise.all([
+    const [posts, [{ count: total }]] = await Promise.all([
       db
         .select()
         .from(updatePosts)
@@ -96,17 +96,17 @@ router.get('/content/updates', async (req, res) => {
         .from(updatePosts),
     ]);
 
-    res.json({ updates: rows, total });
+    res.json({ posts, total });
   } catch (error) {
-    req.log?.error({ error }, 'Failed to list updates');
+    req.log?.error({ error }, 'Failed to list blog posts');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// POST /content/updates — Create new update post
-router.post('/content/updates', validateBody(createUpdateSchema), async (req, res) => {
+// POST /content/blog — Create new blog post
+router.post('/content/blog', validateBody(createBlogPostSchema), async (req, res) => {
   try {
-    const data = req.body as z.infer<typeof createUpdateSchema>;
+    const data = req.body as z.infer<typeof createBlogPostSchema>;
 
     const slug = data.slug || slugify(data.title);
 
@@ -143,16 +143,16 @@ router.post('/content/updates', validateBody(createUpdateSchema), async (req, re
       })
       .returning();
 
-    req.log?.info({ postId: post.id, slug }, 'Update post created');
+    req.log?.info({ postId: post.id, slug }, 'Blog post created');
     res.status(201).json(post);
   } catch (error) {
-    req.log?.error({ error }, 'Failed to create update post');
+    req.log?.error({ error }, 'Failed to create blog post');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// GET /content/updates/:id — Get single update by ID
-router.get('/content/updates/:id', async (req, res) => {
+// GET /content/blog/:id — Get single blog post by ID
+router.get('/content/blog/:id', async (req, res) => {
   try {
     const id = req.params.id as string;
 
@@ -163,22 +163,22 @@ router.get('/content/updates/:id', async (req, res) => {
       .limit(1);
 
     if (!post) {
-      res.status(404).json({ error: 'Update post not found' });
+      res.status(404).json({ error: 'Blog post not found' });
       return;
     }
 
     res.json(post);
   } catch (error) {
-    req.log?.error({ error }, 'Failed to fetch update post');
+    req.log?.error({ error }, 'Failed to fetch blog post');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// PUT /content/updates/:id — Update post fields
-router.put('/content/updates/:id', validateBody(updateUpdateSchema), async (req, res) => {
+// PUT /content/blog/:id — Update blog post fields
+router.put('/content/blog/:id', validateBody(updateBlogPostSchema), async (req, res) => {
   try {
     const id = req.params.id as string;
-    const data = req.body as z.infer<typeof updateUpdateSchema>;
+    const data = req.body as z.infer<typeof updateBlogPostSchema>;
 
     // Check post exists
     const [existing] = await db
@@ -188,7 +188,7 @@ router.put('/content/updates/:id', validateBody(updateUpdateSchema), async (req,
       .limit(1);
 
     if (!existing) {
-      res.status(404).json({ error: 'Update post not found' });
+      res.status(404).json({ error: 'Blog post not found' });
       return;
     }
 
@@ -229,16 +229,16 @@ router.put('/content/updates/:id', validateBody(updateUpdateSchema), async (req,
       .where(eq(updatePosts.id, id))
       .returning();
 
-    req.log?.info({ postId: id }, 'Update post updated');
+    req.log?.info({ postId: id }, 'Blog post updated');
     res.json(updated);
   } catch (error) {
-    req.log?.error({ error }, 'Failed to update post');
+    req.log?.error({ error }, 'Failed to update blog post');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// POST /content/updates/:id/publish — Publish a post
-router.post('/content/updates/:id/publish', async (req, res) => {
+// POST /content/blog/:id/publish — Publish a blog post
+router.post('/content/blog/:id/publish', async (req, res) => {
   try {
     const id = req.params.id as string;
 
@@ -249,7 +249,7 @@ router.post('/content/updates/:id/publish', async (req, res) => {
       .limit(1);
 
     if (!existing) {
-      res.status(404).json({ error: 'Update post not found' });
+      res.status(404).json({ error: 'Blog post not found' });
       return;
     }
 
@@ -269,16 +269,16 @@ router.post('/content/updates/:id/publish', async (req, res) => {
       .where(eq(updatePosts.id, id))
       .returning();
 
-    req.log?.info({ postId: id }, 'Update post published');
+    req.log?.info({ postId: id }, 'Blog post published');
     res.json(updated);
   } catch (error) {
-    req.log?.error({ error }, 'Failed to publish post');
+    req.log?.error({ error }, 'Failed to publish blog post');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// POST /content/updates/:id/unpublish — Unpublish a post
-router.post('/content/updates/:id/unpublish', async (req, res) => {
+// POST /content/blog/:id/unpublish — Unpublish a blog post
+router.post('/content/blog/:id/unpublish', async (req, res) => {
   try {
     const id = req.params.id as string;
 
@@ -289,7 +289,7 @@ router.post('/content/updates/:id/unpublish', async (req, res) => {
       .limit(1);
 
     if (!existing) {
-      res.status(404).json({ error: 'Update post not found' });
+      res.status(404).json({ error: 'Blog post not found' });
       return;
     }
 
@@ -299,16 +299,16 @@ router.post('/content/updates/:id/unpublish', async (req, res) => {
       .where(eq(updatePosts.id, id))
       .returning();
 
-    req.log?.info({ postId: id }, 'Update post unpublished');
+    req.log?.info({ postId: id }, 'Blog post unpublished');
     res.json(updated);
   } catch (error) {
-    req.log?.error({ error }, 'Failed to unpublish post');
+    req.log?.error({ error }, 'Failed to unpublish blog post');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// DELETE /content/updates/:id — Delete post (only drafts)
-router.delete('/content/updates/:id', async (req, res) => {
+// DELETE /content/blog/:id — Delete blog post (only drafts)
+router.delete('/content/blog/:id', async (req, res) => {
   try {
     const id = req.params.id as string;
 
@@ -319,7 +319,7 @@ router.delete('/content/updates/:id', async (req, res) => {
       .limit(1);
 
     if (!existing) {
-      res.status(404).json({ error: 'Update post not found' });
+      res.status(404).json({ error: 'Blog post not found' });
       return;
     }
 
@@ -330,10 +330,10 @@ router.delete('/content/updates/:id', async (req, res) => {
 
     await db.delete(updatePosts).where(eq(updatePosts.id, id));
 
-    req.log?.info({ postId: id }, 'Update post deleted');
+    req.log?.info({ postId: id }, 'Blog post deleted');
     res.json({ success: true });
   } catch (error) {
-    req.log?.error({ error }, 'Failed to delete post');
+    req.log?.error({ error }, 'Failed to delete blog post');
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SEO from '../components/SEO';
-import { listUpdates, type UpdatePost } from '../api/client';
+import { listBlogPosts, type BlogPost } from '../api/client';
 import Footer from '../components/Footer/Footer';
 import './UpdatesPage.css';
 
@@ -12,114 +12,114 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-export default function UpdatesPage() {
+export default function BlogPage() {
   const navigate = useNavigate();
-  const [updates, setUpdates] = useState<UpdatePost[]>([]);
+  const [posts, setPosts] = useState<BlogPost[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchUpdates() {
+    async function fetchBlogPosts() {
       try {
-        const data = await listUpdates({ limit: PAGE_SIZE, offset: 0 });
-        setUpdates(data.updates);
+        const data = await listBlogPosts({ limit: PAGE_SIZE, offset: 0 });
+        setPosts(data.posts);
         setTotal(data.total);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load updates');
+        setError(err instanceof Error ? err.message : 'Failed to load blog posts');
       } finally {
         setLoading(false);
       }
     }
 
-    fetchUpdates();
+    fetchBlogPosts();
   }, []);
 
   const handleLoadMore = async () => {
     setLoadingMore(true);
     try {
-      const data = await listUpdates({ limit: PAGE_SIZE, offset: updates.length });
-      setUpdates((prev) => [...prev, ...data.updates]);
+      const data = await listBlogPosts({ limit: PAGE_SIZE, offset: posts.length });
+      setPosts((prev) => [...prev, ...data.posts]);
       setTotal(data.total);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load more updates');
+      setError(err instanceof Error ? err.message : 'Failed to load more blog posts');
     } finally {
       setLoadingMore(false);
     }
   };
 
-  const handleUpdateClick = (slug: string) => {
-    navigate(`/updates/${slug}`);
+  const handleBlogPostClick = (slug: string) => {
+    navigate(`/blog/${slug}`);
   };
 
   return (
     <div className="body-layout">
       <SEO
-        title="Updates"
-        description="Follow the progress of Letter Archive. Project updates, new collections, and behind-the-scenes notes on preserving personal correspondence."
-        canonicalUrl="/updates"
+        title="Blog"
+        description="Read field notes, collection highlights, and essays from Letter Archive as the project grows."
+        canonicalUrl="/blog"
       />
       <div className="updates-page">
         <header className="updates-hero">
-          <p className="updates-kicker">Updates</p>
-          <h1 className="updates-headline">Building the Archive</h1>
+          <p className="updates-kicker">Blog</p>
+          <h1 className="updates-headline">Stories from the Archive</h1>
           <p className="updates-subtitle">
-            Notes on our progress — new collections, project milestones,
-            and the stories behind the letters we preserve.
+            Essays, project notes, collection highlights, and the occasional oddity
+            uncovered while preserving personal correspondence.
           </p>
         </header>
 
-        {loading && <p className="loading-message">Loading updates...</p>}
+        {loading && <p className="loading-message">Loading blog posts...</p>}
         {error && <p className="error-message">{error}</p>}
 
-        {!loading && updates.length === 0 && !error && (
+        {!loading && posts.length === 0 && !error && (
           <div className="no-results">
-            <p>No updates yet. Check back soon.</p>
+            <p>No blog posts yet. Check back soon.</p>
           </div>
         )}
 
-        {updates.length > 0 && (
+        {posts.length > 0 && (
           <div className="updates-grid">
-            {updates.map((update) => (
+            {posts.map((post) => (
               <article
-                key={update.id}
+                key={post.id}
                 className="update-card"
-                onClick={() => handleUpdateClick(update.slug)}
+                onClick={() => handleBlogPostClick(post.slug)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    handleUpdateClick(update.slug);
+                    handleBlogPostClick(post.slug);
                   }
                 }}
               >
-                {update.heroImageUrl && (
+                {post.heroImageUrl && (
                   <div className="update-card-image">
                     <img
-                      src={update.heroImageUrl}
-                      alt={update.heroImageAlt || update.title}
+                      src={post.heroImageUrl}
+                      alt={post.heroImageAlt || post.title}
                       loading="lazy"
                     />
                   </div>
                 )}
                 <div className="update-card-body">
                   <div className="update-card-meta">
-                    {update.category && (
-                      <span className="update-category-badge">{update.category}</span>
+                    {post.category && (
+                      <span className="update-category-badge">{post.category}</span>
                     )}
                     <span className="update-date">
-                      {formatDate(update.publishedAt || update.createdAt)}
+                      {formatDate(post.publishedAt || post.createdAt)}
                     </span>
                   </div>
-                  <h2 className="update-card-title">{update.title}</h2>
-                  {update.excerpt && (
-                    <p className="update-card-excerpt">{update.excerpt}</p>
+                  <h2 className="update-card-title">{post.title}</h2>
+                  {post.excerpt && (
+                    <p className="update-card-excerpt">{post.excerpt}</p>
                   )}
                   <div className="update-card-footer">
-                    {update.authorDisplayName && (
-                      <span className="update-author">{update.authorDisplayName}</span>
+                    {post.authorDisplayName && (
+                      <span className="update-author">{post.authorDisplayName}</span>
                     )}
                     <span className="update-card-cta">Read more &rarr;</span>
                   </div>
@@ -129,14 +129,14 @@ export default function UpdatesPage() {
           </div>
         )}
 
-        {updates.length < total && (
+        {posts.length < total && (
           <div className="updates-load-more">
             <button
               className="btn-card"
               onClick={handleLoadMore}
               disabled={loadingMore}
             >
-              {loadingMore ? 'Loading...' : 'Load more updates'}
+              {loadingMore ? 'Loading...' : 'Load more posts'}
             </button>
           </div>
         )}

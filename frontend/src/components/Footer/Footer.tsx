@@ -14,7 +14,7 @@ export default function Footer() {
           <span className="footer-dot" aria-hidden="true">&middot;</span>
           <Link to="/collections">Collections</Link>
           <span className="footer-dot" aria-hidden="true">&middot;</span>
-          <Link to="/updates">Updates</Link>
+          <Link to="/blog">Blog</Link>
           <span className="footer-dot" aria-hidden="true">&middot;</span>
           <Link to="/about">About</Link>
           <span className="footer-dot" aria-hidden="true">&middot;</span>

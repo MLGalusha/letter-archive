@@ -6,9 +6,9 @@ import ArchiveList from "../components/ArchiveList/ArchiveList";
 import Footer from "../components/Footer/Footer";
 import {
   getFeaturedLetter,
-  listUpdates,
+  listBlogPosts,
   type FeaturedLetter,
-  type UpdatePost,
+  type BlogPost,
 } from "../api/client";
 import "./HomePage.css";
 
@@ -22,16 +22,16 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState<SearchFilters>({});
   const [featuredLetter, setFeaturedLetter] = useState<FeaturedLetter | null>(null);
-  const [latestUpdate, setLatestUpdate] = useState<UpdatePost | null>(null);
+  const [latestBlogPost, setLatestBlogPost] = useState<BlogPost | null>(null);
 
   useEffect(() => {
     getFeaturedLetter()
       .then((data) => setFeaturedLetter(data))
       .catch(() => {});
 
-    listUpdates({ limit: 1 })
+    listBlogPosts({ limit: 1 })
       .then((data) => {
-        if (data.updates.length > 0) setLatestUpdate(data.updates[0]);
+        if (data.posts.length > 0) setLatestBlogPost(data.posts[0]);
       })
       .catch(() => {});
   }, []);
@@ -96,29 +96,29 @@ export default function HomePage() {
         filters={filters}
       />
 
-      {latestUpdate && (
+      {latestBlogPost && (
         <section className="home-latest-update">
-          <div className="section-eyebrow">Latest Update</div>
+          <div className="section-eyebrow">Latest from the Blog</div>
           <div
             className="latest-update-card"
-            onClick={() => navigate(`/updates/${latestUpdate.slug}`)}
+            onClick={() => navigate(`/blog/${latestBlogPost.slug}`)}
             role="button"
             tabIndex={0}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                navigate(`/updates/${latestUpdate.slug}`);
+                navigate(`/blog/${latestBlogPost.slug}`);
               }
             }}
           >
             <div className="latest-update-content">
-              <h3 className="latest-update-title">{latestUpdate.title}</h3>
-              {latestUpdate.excerpt && (
-                <p className="latest-update-excerpt">{latestUpdate.excerpt}</p>
+              <h3 className="latest-update-title">{latestBlogPost.title}</h3>
+              {latestBlogPost.excerpt && (
+                <p className="latest-update-excerpt">{latestBlogPost.excerpt}</p>
               )}
               <div className="latest-update-footer">
                 <span className="latest-update-date">
-                  {formatDate(latestUpdate.publishedAt || latestUpdate.createdAt)}
+                  {formatDate(latestBlogPost.publishedAt || latestBlogPost.createdAt)}
                 </span>
                 <span className="latest-update-cta">Read more &rarr;</span>
               </div>

@@ -9,19 +9,19 @@ const router = Router();
 // Schemas
 // ============================================================================
 
-const listUpdatesSchema = z.object({
+const listBlogPostsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   offset: z.coerce.number().int().min(0).default(0),
   category: z.string().optional(),
 });
 
 // ============================================================================
-// GET /updates — List published updates
+// GET /blog — List published blog posts
 // ============================================================================
 
-router.get('/updates', async (req, res) => {
+router.get('/blog', async (req, res) => {
   try {
-    const query = listUpdatesSchema.parse(req.query);
+    const query = listBlogPostsSchema.parse(req.query);
 
     const conditions = [
       eq(updatePosts.status, 'published'),
@@ -34,7 +34,7 @@ router.get('/updates', async (req, res) => {
 
     const where = and(...conditions);
 
-    const [updates, [{ count: total }]] = await Promise.all([
+    const [posts, [{ count: total }]] = await Promise.all([
       db
         .select()
         .from(updatePosts)
@@ -48,18 +48,18 @@ router.get('/updates', async (req, res) => {
         .where(where),
     ]);
 
-    res.json({ updates, total });
+    res.json({ posts, total });
   } catch (error) {
-    req.log?.error({ error }, 'Failed to list updates');
+    req.log?.error({ error }, 'Failed to list blog posts');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // ============================================================================
-// GET /updates/:slug — Get single published update by slug
+// GET /blog/:slug — Get single published blog post by slug
 // ============================================================================
 
-router.get('/updates/:slug', async (req, res) => {
+router.get('/blog/:slug', async (req, res) => {
   try {
     const slug = req.params.slug as string;
 
@@ -75,13 +75,13 @@ router.get('/updates/:slug', async (req, res) => {
       .limit(1);
 
     if (!post) {
-      res.status(404).json({ error: 'Update not found' });
+      res.status(404).json({ error: 'Blog post not found' });
       return;
     }
 
     res.json(post);
   } catch (error) {
-    req.log?.error({ error }, 'Failed to fetch update');
+    req.log?.error({ error }, 'Failed to fetch blog post');
     res.status(500).json({ error: 'Internal server error' });
   }
 });

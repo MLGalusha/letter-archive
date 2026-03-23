@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import SEO from '../components/SEO';
-import { getUpdate, type UpdatePost } from '../api/client';
+import { getBlogPost, type BlogPost } from '../api/client';
 import Footer from '../components/Footer/Footer';
 import './UpdateDetailPage.css';
 
@@ -12,50 +12,50 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-export default function UpdateDetailPage() {
+export default function BlogDetailPage() {
   const { slug } = useParams<{ slug: string }>();
-  const [update, setUpdate] = useState<UpdatePost | null>(null);
+  const [post, setPost] = useState<BlogPost | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
 
-    async function fetchUpdate() {
+    async function fetchBlogPost() {
       try {
-        const data = await getUpdate(slug!);
-        setUpdate(data);
+        const data = await getBlogPost(slug!);
+        setPost(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Update not found');
+        setError(err instanceof Error ? err.message : 'Blog post not found');
       } finally {
         setLoading(false);
       }
     }
 
-    fetchUpdate();
+    fetchBlogPost();
   }, [slug]);
 
   if (loading) {
     return (
       <div className="body-layout">
         <div className="update-detail">
-          <p className="loading-message">Loading update...</p>
+          <p className="loading-message">Loading blog post...</p>
         </div>
         <Footer />
       </div>
     );
   }
 
-  if (!update || error) {
+  if (!post || error) {
     return (
       <div className="body-layout">
         <div className="update-detail">
-          <Link to="/updates" className="update-back-link">
-            &larr; All Updates
+          <Link to="/blog" className="update-back-link">
+            &larr; All Blog Posts
           </Link>
-          <h1>Update Not Found</h1>
+          <h1>Blog Post Not Found</h1>
           <p className="error-text">
-            {error || 'This update does not exist or is no longer published.'}
+            {error || 'This blog post does not exist or is no longer published.'}
           </p>
         </div>
         <Footer />
@@ -63,46 +63,46 @@ export default function UpdateDetailPage() {
     );
   }
 
-  const seoTitle = update.seoTitle || update.title;
-  const seoDescription = update.seoDescription || update.excerpt || `Read "${update.title}" on Letter Archive.`;
-  const publishedDate = update.publishedAt || update.createdAt;
+  const seoTitle = post.seoTitle || post.title;
+  const seoDescription = post.seoDescription || post.excerpt || `Read "${post.title}" on Letter Archive.`;
+  const publishedDate = post.publishedAt || post.createdAt;
 
   return (
     <div className="body-layout">
       <SEO
         title={seoTitle}
         description={seoDescription}
-        canonicalUrl={`/updates/${update.slug}`}
+        canonicalUrl={`/blog/${post.slug}`}
         ogType="article"
-        ogImage={update.heroImageUrl || undefined}
+        ogImage={post.heroImageUrl || undefined}
       />
       <article className="update-detail">
-        <Link to="/updates" className="update-back-link">
-          &larr; All Updates
+        <Link to="/blog" className="update-back-link">
+          &larr; All Blog Posts
         </Link>
 
-        {update.heroImageUrl && (
+        {post.heroImageUrl && (
           <div className="update-hero-image">
             <img
-              src={update.heroImageUrl}
-              alt={update.heroImageAlt || update.title}
+              src={post.heroImageUrl}
+              alt={post.heroImageAlt || post.title}
             />
           </div>
         )}
 
         <header className="update-header">
           <div className="update-meta">
-            {update.category && (
-              <span className="update-detail-category">{update.category}</span>
+            {post.category && (
+              <span className="update-detail-category">{post.category}</span>
             )}
             <time dateTime={publishedDate}>{formatDate(publishedDate)}</time>
           </div>
-          <h1 className="update-title">{update.title}</h1>
-          {(update.authorDisplayName || update.authorRole) && (
+          <h1 className="update-title">{post.title}</h1>
+          {(post.authorDisplayName || post.authorRole) && (
             <p className="update-byline">
-              {update.authorDisplayName}
-              {update.authorRole && (
-                <span className="update-byline-role"> &middot; {update.authorRole}</span>
+              {post.authorDisplayName}
+              {post.authorRole && (
+                <span className="update-byline-role"> &middot; {post.authorRole}</span>
               )}
             </p>
           )}
@@ -110,26 +110,26 @@ export default function UpdateDetailPage() {
 
         <div className="markdown-content">
           <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
-            {update.bodyMarkdown}
+            {post.bodyMarkdown}
           </ReactMarkdown>
         </div>
 
-        {update.ctaLabel && update.ctaUrl && (
+        {post.ctaLabel && post.ctaUrl && (
           <div className="update-cta">
             <a
-              href={update.ctaUrl}
+              href={post.ctaUrl}
               className="btn-card update-cta-btn"
-              target={update.ctaUrl.startsWith('http') ? '_blank' : undefined}
-              rel={update.ctaUrl.startsWith('http') ? 'noopener noreferrer' : undefined}
+              target={post.ctaUrl.startsWith('http') ? '_blank' : undefined}
+              rel={post.ctaUrl.startsWith('http') ? 'noopener noreferrer' : undefined}
             >
-              {update.ctaLabel}
+              {post.ctaLabel}
             </a>
           </div>
         )}
 
         <div className="update-footer-nav">
-          <Link to="/updates" className="update-back-link">
-            &larr; Back to all updates
+          <Link to="/blog" className="update-back-link">
+            &larr; Back to all blog posts
           </Link>
         </div>
       </article>

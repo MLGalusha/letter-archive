@@ -6,21 +6,21 @@ import Icon from '../../components/common/Icon';
 import { getErrorMessage } from '../../api/client';
 import { getAdminLetters } from '../../api/letters';
 import {
-  adminListUpdates,
-  adminPublishUpdate,
-  adminUnpublishUpdate,
-  adminDeleteUpdate,
+  adminListBlogPosts,
+  adminPublishBlogPost,
+  adminUnpublishBlogPost,
+  adminDeleteBlogPost,
   adminListContentPages,
   adminUpdateContentPage,
   adminGetFeaturedLetter,
   adminSetFeaturedLetter,
-  type UpdatePost,
+  type BlogPost,
   type ContentPage as ContentPageType,
 } from '../../api/admin/content';
 import { useToast } from '../../contexts/ToastContext';
 import './ContentPage.css';
 
-type TabKey = 'updates' | 'pages' | 'featured';
+type TabKey = 'blog' | 'pages' | 'featured';
 
 // ── Section definitions for each page ────────────────────
 
@@ -98,10 +98,10 @@ function formatDateTime(iso: string): string {
 // ══════════════════════════════════════════════════════════
 
 export default function ContentPage() {
-  const [activeTab, setActiveTab] = useState<TabKey>('updates');
+  const [activeTab, setActiveTab] = useState<TabKey>('blog');
 
   const tabs: { key: TabKey; label: string }[] = [
-    { key: 'updates', label: 'Updates' },
+    { key: 'blog', label: 'Blog' },
     { key: 'pages', label: 'Pages' },
     { key: 'featured', label: 'Featured' },
   ];
@@ -113,7 +113,7 @@ export default function ContentPage() {
           <div className="content-page-kicker">Administration</div>
           <h1 className="content-page-title">Content</h1>
           <p className="content-page-subtitle">
-            Manage update posts, static page content, and the featured letter.
+            Manage blog posts, static page content, and the featured letter.
           </p>
         </div>
 
@@ -129,7 +129,7 @@ export default function ContentPage() {
           ))}
         </div>
 
-        {activeTab === 'updates' && <UpdatesTab />}
+        {activeTab === 'blog' && <BlogTab />}
         {activeTab === 'pages' && <PagesTab />}
         {activeTab === 'featured' && <FeaturedTab />}
       </div>
@@ -138,47 +138,47 @@ export default function ContentPage() {
 }
 
 // ══════════════════════════════════════════════════════════
-// Updates Tab
+// Blog Tab
 // ══════════════════════════════════════════════════════════
 
-function UpdatesTab() {
+function BlogTab() {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [updates, setUpdates] = useState<UpdatePost[]>([]);
+  const [posts, setPosts] = useState<BlogPost[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const fetchUpdates = useCallback(async () => {
+  const fetchBlogPosts = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await adminListUpdates({ limit: 100, offset: 0 });
-      setUpdates(data.updates);
+      const data = await adminListBlogPosts({ limit: 100, offset: 0 });
+      setPosts(data.posts);
       setTotal(data.total);
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to load updates.'));
+      setError(getErrorMessage(err, 'Failed to load blog posts.'));
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchUpdates();
-  }, [fetchUpdates]);
+    fetchBlogPosts();
+  }, [fetchBlogPosts]);
 
-  const handleTogglePublish = async (update: UpdatePost) => {
-    setActionLoading(update.id);
+  const handleTogglePublish = async (post: BlogPost) => {
+    setActionLoading(post.id);
     try {
-      if (update.status === 'published') {
-        await adminUnpublishUpdate(update.id);
-        showToast('Update unpublished.', 'success');
+      if (post.status === 'published') {
+        await adminUnpublishBlogPost(post.id);
+        showToast('Blog post unpublished.', 'success');
       } else {
-        await adminPublishUpdate(update.id);
-        showToast('Update published.', 'success');
+        await adminPublishBlogPost(post.id);
+        showToast('Blog post published.', 'success');
       }
-      await fetchUpdates();
+      await fetchBlogPosts();
     } catch (err) {
       showToast(getErrorMessage(err, 'Action failed.'), 'error');
     } finally {
@@ -186,13 +186,13 @@ function UpdatesTab() {
     }
   };
 
-  const handleDelete = async (update: UpdatePost) => {
-    if (!window.confirm(`Delete "${update.title}"? This cannot be undone.`)) return;
-    setActionLoading(update.id);
+  const handleDelete = async (post: BlogPost) => {
+    if (!window.confirm(`Delete "${post.title}"? This cannot be undone.`)) return;
+    setActionLoading(post.id);
     try {
-      await adminDeleteUpdate(update.id);
-      showToast('Update deleted.', 'success');
-      await fetchUpdates();
+      await adminDeleteBlogPost(post.id);
+      showToast('Blog post deleted.', 'success');
+      await fetchBlogPosts();
     } catch (err) {
       showToast(getErrorMessage(err, 'Failed to delete.'), 'error');
     } finally {
@@ -201,33 +201,33 @@ function UpdatesTab() {
   };
 
   if (loading) {
-    return <div className="content-loading">Loading updates...</div>;
+    return <div className="content-loading">Loading blog posts...</div>;
   }
 
   return (
     <div className="content-section">
       <div className="content-section-header">
-        <span className="content-section-count">{total} update{total !== 1 ? 's' : ''}</span>
+        <span className="content-section-count">{total} blog post{total !== 1 ? 's' : ''}</span>
         <Button
           variant="primary"
           size="sm"
           icon="plus"
-          onClick={() => navigate('/admin/content/updates/new')}
+          onClick={() => navigate('/admin/content/blog/new')}
         >
-          New Update
+          New Blog Post
         </Button>
       </div>
 
       {error && <div className="content-error">{error}</div>}
 
-      {updates.length === 0 ? (
+      {posts.length === 0 ? (
         <div className="content-empty">
           <div className="content-empty-icon">
             <Icon name="file" size={40} />
           </div>
-          <p className="content-empty-title">No updates yet</p>
+          <p className="content-empty-title">No blog posts yet</p>
           <p className="content-empty-desc">
-            Create your first update post to share news with visitors.
+            Create your first blog post to share news with visitors.
           </p>
         </div>
       ) : (
@@ -244,49 +244,49 @@ function UpdatesTab() {
               </tr>
             </thead>
             <tbody>
-              {updates.map((update) => (
+              {posts.map((post) => (
                 <tr
-                  key={update.id}
+                  key={post.id}
                   className="updates-row"
-                  onClick={() => navigate(`/admin/content/updates/${update.id}`)}
+                  onClick={() => navigate(`/admin/content/blog/${post.id}`)}
                 >
                   <td className="updates-title-cell">
-                    <span className="updates-title-text">{update.title}</span>
-                    {update.excerpt && (
-                      <span className="updates-excerpt">{update.excerpt}</span>
+                    <span className="updates-title-text">{post.title}</span>
+                    {post.excerpt && (
+                      <span className="updates-excerpt">{post.excerpt}</span>
                     )}
                   </td>
                   <td>
-                    <span className={`updates-status-badge ${update.status}`}>
-                      {update.status}
+                    <span className={`updates-status-badge ${post.status}`}>
+                      {post.status}
                     </span>
                   </td>
                   <td className="updates-category-cell">
-                    {update.category || <span className="text-muted">--</span>}
+                    {post.category || <span className="text-muted">--</span>}
                   </td>
                   <td className="updates-author-cell">
-                    {update.authorDisplayName || <span className="text-muted">--</span>}
+                    {post.authorDisplayName || <span className="text-muted">--</span>}
                   </td>
                   <td className="updates-date-cell">
-                    {update.publishedAt
-                      ? formatDate(update.publishedAt)
-                      : formatDate(update.createdAt)}
+                    {post.publishedAt
+                      ? formatDate(post.publishedAt)
+                      : formatDate(post.createdAt)}
                   </td>
                   <td className="updates-actions-cell" onClick={(e) => e.stopPropagation()}>
                     <button
                       className="updates-action-btn"
-                      title={update.status === 'published' ? 'Unpublish' : 'Publish'}
-                      disabled={actionLoading === update.id}
-                      onClick={() => handleTogglePublish(update)}
+                      title={post.status === 'published' ? 'Unpublish' : 'Publish'}
+                      disabled={actionLoading === post.id}
+                      onClick={() => handleTogglePublish(post)}
                     >
-                      <Icon name={update.status === 'published' ? 'eye-off' : 'eye'} size={16} />
+                      <Icon name={post.status === 'published' ? 'eye-off' : 'eye'} size={16} />
                     </button>
-                    {update.status === 'draft' && (
+                    {post.status === 'draft' && (
                       <button
                         className="updates-action-btn danger"
                         title="Delete"
-                        disabled={actionLoading === update.id}
-                        onClick={() => handleDelete(update)}
+                        disabled={actionLoading === post.id}
+                        onClick={() => handleDelete(post)}
                       >
                         <Icon name="delete" size={16} />
                       </button>

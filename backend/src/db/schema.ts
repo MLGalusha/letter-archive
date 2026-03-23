@@ -528,7 +528,7 @@ export const entityReviewQueue = pgTable(
 // ============================================================================
 
 /**
- * Blog-style update posts for the public site
+ * Blog posts for the public site
  */
 export const updatePosts = pgTable(
   'update_posts',

@@ -4,7 +4,6 @@ export * from "./versions";
 export * from "./bulk";
 export * from "./processing";
 export * from "./queue";
-export * from "./resync";
 export * from "./extras";
 export * from "./transcription";
 export * from "./linked-entities";

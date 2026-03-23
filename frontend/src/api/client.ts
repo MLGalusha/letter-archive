@@ -120,6 +120,32 @@ async function handleResponse<T>(
   return data as T;
 }
 
+/**
+ * Build headers with auth token if available
+ */
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('adminToken');
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
+  }
+  return {};
+}
+
+/**
+ * Merge auth headers with any existing headers
+ */
+function mergeHeaders(init: RequestInit): RequestInit {
+  const authHeaders = getAuthHeaders();
+  const existing = init.headers || {};
+  return {
+    ...init,
+    headers: {
+      ...authHeaders,
+      ...(existing as Record<string, string>),
+    },
+  };
+}
+
 async function performRequest<T>(
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
@@ -130,9 +156,19 @@ async function performRequest<T>(
 
   try {
     const response = await fetch(input, {
-      ...init,
+      ...mergeHeaders(init),
       credentials: 'include',
     });
+
+    // Handle 401 by clearing token and redirecting to login
+    if (response.status === 401 && !path.startsWith('/auth/')) {
+      localStorage.removeItem('adminToken');
+      // Only redirect if we're on an admin page
+      if (window.location.pathname.startsWith('/admin')) {
+        window.location.href = '/admin-login';
+        throw new ApiError(401, 'Session expired. Redirecting to login.');
+      }
+    }
 
     return handleResponse<T>(response, method, path, startTime);
   } catch (error) {

@@ -24,12 +24,15 @@
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.4",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.38.3",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.3.1",
     "hull.js": "^1.0.6",
     "image-size": "^2.0.2",
+    "jsonwebtoken": "^9.0.3",
     "multer": "^1.4.5-lts.1",
     "openai": "^4.77.0",
     "pino": "^10.3.0",
@@ -39,8 +42,10 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^1.4.12",
     "@types/node": "^22.10.5",
     "drizzle-kit": "^0.30.1",

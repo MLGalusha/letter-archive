@@ -74,3 +74,45 @@
   display: flex;
   gap: var(--spacing-xs);
 }
+
+@media (max-width: 768px) {
+  .letter-detail-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+
+  .letter-top-actions {
+    justify-content: flex-start;
+  }
+
+  .adjacent-controls {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    align-items: flex-start;
+  }
+
+  .adjacent-controls span {
+    font-size: var(--font-xs);
+  }
+
+  .detail-action-btn {
+    font-size: var(--font-xs);
+    padding: 0.4rem 0.6rem;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .adjacent-buttons {
+    flex-wrap: wrap;
+  }
+
+  /* Hide position text (e.g. "Letter 5 of 23") on small mobile */
+  .adjacent-controls > span {
+    display: none;
+  }
+}

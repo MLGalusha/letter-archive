@@ -340,6 +340,60 @@
   }
 }
 
+@media (max-width: 640px) {
+  /* Tighten padding in metadata */
+  .metadata-form-readonly {
+    padding: var(--spacing-sm);
+    gap: var(--spacing-xs);
+  }
+
+  /* Compact field values */
+  .field-value {
+    padding: 0.4rem 0.6rem;
+    font-size: var(--font-xs);
+    line-height: 1.4;
+  }
+
+  .field-label {
+    font-size: 0.65rem;
+  }
+
+  /* Truncate description/summary to 3 lines */
+  .description-value {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Compact notable quotes */
+  .notable-quote {
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+
+  .notable-quote p {
+    font-size: var(--font-xs);
+  }
+
+  /* Compact section content */
+  .section-content {
+    padding: var(--spacing-sm);
+  }
+
+  .section-header {
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+
+  .section-header h2 {
+    font-size: 0.9rem;
+  }
+
+  /* Tighter details panel gap */
+  .details-panel-content {
+    gap: var(--spacing-sm);
+  }
+}
+
 /* Tablet view */
 @media (max-width: 1200px) {
   .display-layout {

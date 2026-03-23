@@ -39,6 +39,43 @@ export interface QueueRecentJob {
   completedAt: string;
 }
 
+export interface EntityResolutionPhases {
+  phase1: {
+    mergesExecuted: number;
+    mergesQueued: number;
+    genericsResolved: number;
+    genericsQueued: number;
+    genericsDeleted: number;
+    fillsApplied: number;
+    fillsQueued: number;
+    relationshipCorrections: number;
+    relationshipCorrectionsQueued: number;
+  };
+  phase2: {
+    relationshipsVerified: number;
+    correctionsApplied: number;
+    correctionsQueued: number;
+  };
+  phase3: {
+    biographiesGenerated: number;
+    biographiesSkipped: number;
+  };
+}
+
+export interface EntityResolutionStatus {
+  isRunning: boolean;
+  collectionCode: string | null;
+  startedAt: number | null;
+  completedAt: number | null;
+  result: {
+    collectionId: string;
+    phases: EntityResolutionPhases;
+    isStub: boolean;
+    errors: string[];
+  } | null;
+  error: string | null;
+}
+
 export interface QueueStatus {
   active: QueueActiveJob[];
   queued: {
@@ -56,6 +93,7 @@ export interface QueueStatus {
     recentFailedCount: number;
   };
   onDemandProcessing: ProcessingStatus;
+  entityResolution: EntityResolutionStatus;
 }
 
 export async function getProcessingQueue(): Promise<QueueStatus> {

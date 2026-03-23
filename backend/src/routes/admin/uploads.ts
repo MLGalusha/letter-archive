@@ -1,13 +1,19 @@
 import { Router } from 'express';
 import multer from 'multer';
+import { eq } from 'drizzle-orm';
 import { unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { processUploadedFile } from '../../services/upload.js';
 import { parseFilename } from '../../services/filename-parser.js';
 import { buildStoragePath, fileExists } from '../../services/storage.js';
+import { db, siteSettings } from '../../db/index.js';
+import { startTranscriptionProcessing } from '../../services/processing-queue.js';
+import { createLogger } from '../../utils/logger.js';
+import { createNotification } from '../../services/notifications.js';
 
 const router = Router();
+const log = createLogger({ module: 'uploads' });
 
 // Resolve uploads temp dir relative to the backend project root (not process.cwd())
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -134,6 +140,37 @@ router.post('/uploads', upload.array('files', 500), async (req, res, next) => {
     results,
     errors: errors.length > 0 ? errors : undefined,
   });
+
+  // Fire-and-forget: upload notification
+  if (results.length > 0) {
+    const collectionCodes = [...new Set(results.map(r => r.collectionCode))];
+    createNotification({
+      type: 'upload',
+      title: 'Letters uploaded',
+      message: `${results.length} letter${results.length === 1 ? '' : 's'} uploaded to ${collectionCodes.join(', ')}`,
+      link: '/admin',
+    });
+  }
+
+  // Fire-and-forget: auto-transcribe if the setting is enabled
+  if (results.length > 0) {
+    try {
+      const [row] = await db
+        .select()
+        .from(siteSettings)
+        .where(eq(siteSettings.key, 'auto_transcribe'))
+        .limit(1);
+
+      if (row?.value === 'true') {
+        log.info({ uploadedCount: results.length }, 'Auto-transcribe enabled, starting transcription');
+        startTranscriptionProcessing({}).catch(err => {
+          log.error({ err }, 'Auto-transcription failed to start');
+        });
+      }
+    } catch (err) {
+      log.error({ err }, 'Failed to check auto_transcribe setting');
+    }
+  }
 });
 
 export default router;

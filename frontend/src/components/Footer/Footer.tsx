@@ -4,26 +4,25 @@ import "./Footer.css";
 export default function Footer() {
   return (
     <footer className="footer">
-      <div className="footer-content">
-        <div className="footer-section">
-          <h4>Letter Archive</h4>
-          <p>Preserving personal letters from the past for future generations.</p>
-        </div>
-        <div className="footer-section">
-          <h4>Explore</h4>
-          <nav className="footer-nav">
-            <Link to="/">Archive</Link>
-            <Link to="/about">About</Link>
-            <Link to="/contact">Contact</Link>
-          </nav>
-        </div>
-        <div className="footer-section">
-          <h4>Connect</h4>
-          <p className="footer-text">Contribute letters or learn more about our mission.</p>
-        </div>
-      </div>
-      <div className="footer-bottom">
-        <p>&copy; {new Date().getFullYear()} Letter Archive. All rights reserved.</p>
+      <div className="footer-inner">
+        <h3 className="footer-title">Letter Archive</h3>
+        <p className="footer-tagline">
+          Preserving personal letters from the past for future generations.
+        </p>
+        <nav className="footer-nav">
+          <Link to="/">Home</Link>
+          <span className="footer-dot" aria-hidden="true">&middot;</span>
+          <Link to="/collections">Collections</Link>
+          <span className="footer-dot" aria-hidden="true">&middot;</span>
+          <Link to="/about">About</Link>
+          <span className="footer-dot" aria-hidden="true">&middot;</span>
+          <Link to="/contact">Contact</Link>
+          <span className="footer-dot" aria-hidden="true">&middot;</span>
+          <Link to="/support">Support</Link>
+        </nav>
+        <p className="footer-copyright">
+          &copy; {new Date().getFullYear()} Letter Archive
+        </p>
       </div>
     </footer>
   );

@@ -1,44 +1,46 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async";
 import Header from "./components/Header/Header";
 import ScrollToTop from "./components/ScrollToTop";
-import AdminLayout from "./components/AdminLayout";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import HomePage from "./pages/HomePage";
 import LetterDetailPage from "./pages/LetterDetailPage";
 import AboutPage from "./pages/AboutPage";
 import ContactPage from "./pages/ContactPage";
+import SupportPage from "./pages/SupportPage";
 import CollectionsPage from "./pages/CollectionsPage";
 import CollectionDetailPage from "./pages/CollectionDetailPage";
-import PersonPage from "./pages/PersonPage";
-import PlacePage from "./pages/PlacePage";
-import ExplorePage from "./pages/ExplorePage";
+import NotFoundPage from "./pages/NotFoundPage";
 import AdminLoginPage from "./pages/admin/AdminLoginPage";
+import AcceptInvitePage from "./pages/admin/AcceptInvitePage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import UploadLetterPage from "./pages/admin/UploadLetterPage";
 import LetterReviewPage from "./pages/admin/LetterReviewPage";
-import EntityReviewPage from "./pages/admin/EntityReviewPage";
-import PeoplePage from "./pages/admin/PeoplePage";
-import PlacesPage from "./pages/admin/PlacesPage";
-import RelationshipsPage from "./pages/admin/RelationshipsPage";
 import ProcessingQueuePage from "./pages/admin/ProcessingQueuePage";
+import SettingsPage from "./pages/admin/SettingsPage";
+import UsagePage from "./pages/admin/UsagePage";
+import NotificationsPage from "./pages/admin/NotificationsPage";
 import "./App.css";
 
 function App() {
   return (
+    <HelmetProvider>
+    <ErrorBoundary>
     <Router>
       <ScrollToTop />
       <Routes>
-        {/* Admin login - no layout */}
+        {/* Admin login + invite - no layout */}
         <Route path="/admin-login" element={<AdminLoginPage />} />
+        <Route path="/admin-invite" element={<AcceptInvitePage />} />
 
         {/* Admin routes - with sidebar layout */}
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/upload" element={<UploadLetterPage />} />
         <Route path="/admin/processing" element={<ProcessingQueuePage />} />
         <Route path="/admin/letters/:letterId" element={<LetterReviewPage />} />
-        <Route path="/admin/entities/review" element={<AdminLayout><EntityReviewPage /></AdminLayout>} />
-        <Route path="/admin/entities/people" element={<AdminLayout><PeoplePage /></AdminLayout>} />
-        <Route path="/admin/entities/places" element={<AdminLayout><PlacesPage /></AdminLayout>} />
-        <Route path="/admin/entities/relationships" element={<AdminLayout><RelationshipsPage /></AdminLayout>} />
+        <Route path="/admin/usage" element={<UsagePage />} />
+        <Route path="/admin/notifications" element={<NotificationsPage />} />
+        <Route path="/admin/settings" element={<SettingsPage />} />
 
         {/* Letter detail - no main header (has its own header) */}
         <Route path="/letter/:letterId" element={<LetterDetailPage />} />
@@ -53,17 +55,18 @@ function App() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/about" element={<AboutPage />} />
                 <Route path="/contact" element={<ContactPage />} />
+                <Route path="/support" element={<SupportPage />} />
                 <Route path="/collections" element={<CollectionsPage />} />
                 <Route path="/collections/:collectionCode" element={<CollectionDetailPage />} />
-                <Route path="/people/:personId" element={<PersonPage />} />
-                <Route path="/places/:placeId" element={<PlacePage />} />
-                <Route path="/explore" element={<ExplorePage />} />
+                <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </main>
           }
         />
       </Routes>
     </Router>
+    </ErrorBoundary>
+    </HelmetProvider>
   );
 }
 

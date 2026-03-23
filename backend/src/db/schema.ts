@@ -207,8 +207,8 @@ export const letters = pgTable(
     extraContentVerifiedAt: timestamp('extra_content_verified_at', { withTimezone: true }),
     extraContentVerifiedBy: text('extra_content_verified_by'),
 
-    // AI notes (observations, suggestions, hunches)
-    aiNotes: text('ai_notes'),
+    // AI notes (structured observations, suggestions, hunches)
+    aiNotes: jsonb('ai_notes'),
 
     // Admin review
     reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
@@ -524,6 +524,93 @@ export const entityReviewQueue = pgTable(
 );
 
 // ============================================================================
+// ADMIN AUTH TABLES
+// ============================================================================
+
+/**
+ * Admin users for JWT-based authentication
+ */
+export const adminUsers = pgTable('admin_users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Admin invite tokens — allows existing admins to invite new admins
+ */
+export const adminInvites = pgTable('admin_invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  token: text('token').notNull().unique(),
+  email: text('email'),
+  invitedBy: uuid('invited_by').notNull().references(() => adminUsers.id),
+  usedBy: uuid('used_by').references(() => adminUsers.id),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ============================================================================
+// SITE SETTINGS TABLE
+// ============================================================================
+
+/**
+ * Key-value store for site-wide configuration (admin-editable)
+ */
+export const siteSettings = pgTable('site_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ============================================================================
+// ADMIN NOTIFICATIONS TABLE
+// ============================================================================
+
+/**
+ * Admin notification feed — persistent, queryable notifications for the admin UI
+ */
+export const adminNotifications = pgTable('admin_notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  type: text('type').notNull(), // 'transcription', 'metadata', 'entity', 'upload', 'batch', 'admin', 'error', 'system'
+  title: text('title').notNull(),
+  message: text('message'),
+  link: text('link'), // optional frontend route, e.g., '/admin/letters/abc-123'
+  read: boolean('read').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ============================================================================
+// API USAGE TRACKING TABLE
+// ============================================================================
+
+/**
+ * Tracks OpenAI API usage and costs per call
+ */
+export const apiUsageLogs = pgTable(
+  'api_usage_logs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    letterId: uuid('letter_id').references(() => letters.id, { onDelete: 'set null' }),
+    callType: text('call_type').notNull(), // 'transcription', 'metadata', 'entity_extraction', 'metadata_update', 'extra_content_check', 'extra_content_transcription', 'metadata_v2', 'entity_resolution'
+    model: text('model').notNull(),
+    inputTokens: integer('input_tokens').notNull(),
+    outputTokens: integer('output_tokens').notNull(),
+    totalTokens: integer('total_tokens').notNull(),
+    inputCost: text('input_cost').notNull(), // Stored as string to avoid float precision issues (e.g., "0.001500")
+    outputCost: text('output_cost').notNull(),
+    totalCost: text('total_cost').notNull(),
+    durationMs: integer('duration_ms'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_usage_logs_letter').on(table.letterId),
+    index('idx_usage_logs_call_type').on(table.callType),
+    index('idx_usage_logs_created_at').on(table.createdAt),
+  ]
+);
+
+// ============================================================================
 // RELATIONS
 // ============================================================================
 
@@ -670,3 +757,21 @@ export type PersonRelationshipType = 'spouse' | 'fiancé/fiancée' | 'romantic-p
 // Audit log types
 export type AuditLog = typeof auditLog.$inferSelect;
 export type NewAuditLog = typeof auditLog.$inferInsert;
+
+// Admin auth types
+export type AdminUser = typeof adminUsers.$inferSelect;
+export type NewAdminUser = typeof adminUsers.$inferInsert;
+export type AdminInvite = typeof adminInvites.$inferSelect;
+export type NewAdminInvite = typeof adminInvites.$inferInsert;
+
+// Site settings types
+export type SiteSetting = typeof siteSettings.$inferSelect;
+export type NewSiteSetting = typeof siteSettings.$inferInsert;
+
+// Admin notification types
+export type AdminNotification = typeof adminNotifications.$inferSelect;
+export type NewAdminNotification = typeof adminNotifications.$inferInsert;
+
+// API usage log types
+export type ApiUsageLog = typeof apiUsageLogs.$inferSelect;
+export type NewApiUsageLog = typeof apiUsageLogs.$inferInsert;

@@ -5,8 +5,13 @@ import { z } from 'zod';
 import { db, letters, letterPages } from '../../db/index.js';
 import { getLetterById, resetLetterForProcessing } from '../../services/letters.js';
 import { getAbsoluteStoragePath } from '../../services/storage.js';
-import { runMetadataExtractionV2, runEntityExtractionOnly } from '../../pipeline/metadataV2.js';
+import { runMetadataExtractionV2, runEntityExtractionOnly, type ExtractionOptions } from '../../pipeline/metadataV2.js';
 import { detectAndStorePageLines } from '../../services/line-finder.js';
+import { propagateName, propagatePlaceholderReplacement } from '../../services/name-propagation.js';
+import { aiUpdateMetadata } from '../../services/metadata-update.js';
+import { isPlaceholderValue } from '../../utils/placeholders.js';
+import { checkNoteAutoResolutions } from '../../services/note-resolution.js';
+import type { StructuredNote, NoteCategory, NotePriority } from '../../ai/schemas/metadataV2.js';
 
 // Service imports
 import {
@@ -27,6 +32,8 @@ import {
   retryJob,
   cancelActiveJob,
   startEntityExtractionProcessing,
+  startEntityResolutionProcessing,
+  getEntityResolutionStatus,
   processingFilterSchema,
   queueJobTypeSchema,
 } from '../../services/processing-queue.js';
@@ -57,8 +64,6 @@ import {
   addLinkedPlace,
   removeLinkedPerson,
   removeLinkedPlace,
-  resyncCheck,
-  resyncLetterMetadata,
   type UpdateLetterInput,
 } from '../../services/letter-operations.js';
 
@@ -123,11 +128,15 @@ const addLinkedPlaceSchema = z.object({
   role: z.enum(['written_from', 'mentioned', 'destination']),
 });
 
-const resyncSchema = z.object({
-  oldSender: z.string().nullable(),
-  newSender: z.string().nullable(),
-  oldRecipient: z.string().nullable(),
-  newRecipient: z.string().nullable(),
+const reExtractSchema = z.object({
+  confirmedSender: z.string().optional(),
+  confirmedRecipient: z.string().optional(),
+  mode: z.enum(['full', 'metadata_only', 'entities_only']),
+});
+
+const updateIdentitySchema = z.object({
+  sender: z.string().nullable().optional(),
+  recipient: z.string().nullable().optional(),
 });
 
 // ============================================================================
@@ -199,6 +208,20 @@ router.post('/processing/start-entities', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+router.post('/processing/start-entity-resolution', async (req, res, next) => {
+  try {
+    const { collectionCode } = z.object({ collectionCode: z.string().min(1) }).parse(req.body || {});
+    const result = await startEntityResolutionProcessing(collectionCode);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/processing/entity-resolution-status', (_req, res) => {
+  res.json(getEntityResolutionStatus());
 });
 
 router.post('/processing/pause', (_req, res) => {
@@ -461,6 +484,22 @@ router.put('/letters/:letterId', async (req, res, next) => {
 
     req.log.info({ letterId, workflowChange: result.workflowChange }, 'Letter updated');
 
+    // Auto-resolve notes triggered by field changes
+    const fieldTriggers: Array<[string | undefined | null, string]> = [
+      [parseResult.data.sender, 'sender'],
+      [parseResult.data.recipient, 'recipient'],
+      [parseResult.data.locationWritten, 'locationWritten'],
+      [parseResult.data.extractedDateConfidence, 'extractedDateConfidence'],
+      [parseResult.data.extractedDate, 'extractedDate'],
+      [parseResult.data.transcriptionText, 'transcriptionText'],
+    ];
+    for (const [value, field] of fieldTriggers) {
+      if (value !== undefined) {
+        checkNoteAutoResolutions(letterId, field).catch(err =>
+          req.log.warn({ letterId, field, err }, 'Note auto-resolution failed'));
+      }
+    }
+
     const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
     if (!letterDTO) {
       res.status(404).json({ error: 'Letter not found after update' });
@@ -563,6 +602,201 @@ router.post('/letters/:letterId/regenerate-entities', async (req, res, next) => 
     const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
     if (!letterDTO) {
       res.status(500).json({ error: 'Failed to fetch updated letter' });
+      return;
+    }
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
+// RE-EXTRACTION WITH CORRECTIONS
+// ============================================================================
+
+router.post('/letters/:letterId/re-extract', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+    const parseResult = reExtractSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
+      return;
+    }
+
+    const { confirmedSender, confirmedRecipient, mode } = parseResult.data;
+
+    const letter = await getLetterById(letterId);
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    if (!letter.transcriptionText) {
+      res.status(400).json({ error: 'Letter must have a transcription before re-extraction' });
+      return;
+    }
+
+    // Build correction context from previous AI results
+    const metadataV2 = letter.metadataV2Json as Record<string, unknown> | null;
+    const senderObj = metadataV2?.sender as { name?: string | null } | undefined;
+    const recipientObj = metadataV2?.recipient as { name?: string | null } | undefined;
+
+    const extractionOptions: ExtractionOptions = {
+      confirmedSender: confirmedSender,
+      confirmedRecipient: confirmedRecipient,
+      previousAiSender: senderObj?.name ?? letter.sender ?? undefined,
+      previousAiRecipient: recipientObj?.name ?? letter.recipient ?? undefined,
+    };
+
+    req.log.info(
+      { letterId, mode, confirmedSender, confirmedRecipient },
+      'Starting re-extraction with corrections',
+    );
+
+    if (mode === 'full') {
+      // Reset attempt count so the pipeline doesn't block on MAX_ATTEMPTS
+      await db.update(letters).set({
+        metadataAttemptCount: 0,
+        metadataError: null,
+        updatedAt: new Date(),
+      }).where(eq(letters.id, letterId));
+
+      await runMetadataExtractionV2(letterId, extractionOptions);
+    } else if (mode === 'metadata_only') {
+      await db.update(letters).set({
+        metadataAttemptCount: 0,
+        metadataError: null,
+        updatedAt: new Date(),
+      }).where(eq(letters.id, letterId));
+
+      // Run full pipeline but we only care about Phase 1 results
+      // The pipeline always runs Phase 2 after Phase 1, but Phase 2 failure is non-fatal
+      await runMetadataExtractionV2(letterId, extractionOptions);
+    } else if (mode === 'entities_only') {
+      await runEntityExtractionOnly(letterId, extractionOptions);
+    }
+
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(500).json({ error: 'Failed to fetch updated letter' });
+      return;
+    }
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
+// QUICK IDENTITY UPDATE (no AI)
+// ============================================================================
+
+router.patch('/letters/:letterId/identity', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+    const parseResult = updateIdentitySchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
+      return;
+    }
+
+    const { sender: newSender, recipient: newRecipient } = parseResult.data;
+
+    if (newSender === undefined && newRecipient === undefined) {
+      res.status(400).json({ error: 'At least one of sender or recipient must be provided' });
+      return;
+    }
+
+    const letter = await getLetterById(letterId);
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    const updatePaths: string[] = [];
+
+    // Process sender change
+    if (newSender !== undefined) {
+      const oldSender = letter.sender;
+
+      if ((isPlaceholderValue(oldSender) || !oldSender) && newSender) {
+        // Path A: Placeholder replacement (old was placeholder or null, new name provided)
+        try {
+          await propagatePlaceholderReplacement({ letterId, field: 'sender', newName: newSender });
+          updatePaths.push('sender:placeholder-replaced');
+        } catch (err) {
+          req.log.warn({ letterId, err }, 'Placeholder replacement failed for sender, falling back to simple update');
+          await db.update(letters).set({ sender: newSender, updatedAt: new Date() }).where(eq(letters.id, letterId));
+          updatePaths.push('sender:simple-fallback');
+        }
+      } else if (oldSender && newSender) {
+        // Path B: Propagation (old name is a real name, new name provided)
+        if (oldSender !== newSender) {
+          try {
+            await propagateName({ letterId, field: 'sender', oldName: oldSender, newName: newSender });
+            updatePaths.push('sender:propagated');
+          } catch (err) {
+            req.log.warn({ letterId, err }, 'Name propagation failed for sender, falling back to simple update');
+            await db.update(letters).set({ sender: newSender, updatedAt: new Date() }).where(eq(letters.id, letterId));
+            updatePaths.push('sender:simple-fallback');
+          }
+        }
+        // If old === new, no-op
+      } else if (oldSender && !newSender) {
+        // Path C: Clear the field
+        await db.update(letters).set({ sender: null, updatedAt: new Date() }).where(eq(letters.id, letterId));
+        updatePaths.push('sender:cleared');
+      }
+    }
+
+    // Process recipient change
+    if (newRecipient !== undefined) {
+      const oldRecipient = letter.recipient;
+
+      if ((isPlaceholderValue(oldRecipient) || !oldRecipient) && newRecipient) {
+        // Path A: Placeholder replacement (old was placeholder or null, new name provided)
+        try {
+          await propagatePlaceholderReplacement({ letterId, field: 'recipient', newName: newRecipient });
+          updatePaths.push('recipient:placeholder-replaced');
+        } catch (err) {
+          req.log.warn({ letterId, err }, 'Placeholder replacement failed for recipient, falling back to simple update');
+          await db.update(letters).set({ recipient: newRecipient, updatedAt: new Date() }).where(eq(letters.id, letterId));
+          updatePaths.push('recipient:simple-fallback');
+        }
+      } else if (oldRecipient && newRecipient) {
+        // Path B: Propagation (old name is a real name, new name provided)
+        if (oldRecipient !== newRecipient) {
+          try {
+            await propagateName({ letterId, field: 'recipient', oldName: oldRecipient, newName: newRecipient });
+            updatePaths.push('recipient:propagated');
+          } catch (err) {
+            req.log.warn({ letterId, err }, 'Name propagation failed for recipient, falling back to simple update');
+            await db.update(letters).set({ recipient: newRecipient, updatedAt: new Date() }).where(eq(letters.id, letterId));
+            updatePaths.push('recipient:simple-fallback');
+          }
+        }
+      } else if (oldRecipient && !newRecipient) {
+        // Path C: Clear
+        await db.update(letters).set({ recipient: null, updatedAt: new Date() }).where(eq(letters.id, letterId));
+        updatePaths.push('recipient:cleared');
+      }
+    }
+
+    req.log.info({ letterId, newSender, newRecipient, updatePaths }, 'Smart identity update completed');
+
+    // Auto-resolve notes triggered by identity changes
+    if (newSender !== undefined && newSender) {
+      checkNoteAutoResolutions(letterId, 'sender').catch(err =>
+        req.log.warn({ letterId, err }, 'Note auto-resolution failed for sender'));
+    }
+    if (newRecipient !== undefined && newRecipient) {
+      checkNoteAutoResolutions(letterId, 'recipient').catch(err =>
+        req.log.warn({ letterId, err }, 'Note auto-resolution failed for recipient'));
+    }
+
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
       return;
     }
     res.json(letterDTO);
@@ -883,11 +1117,111 @@ router.put('/letters/:letterId/ai-notes', async (req, res, next) => {
   try {
     const { letterId } = req.params;
     const { aiNotes } = req.body;
-    const result = await updateAiNotes(letterId, aiNotes ?? null);
+    const result = await updateAiNotes(letterId, aiNotes ?? []);
     if (!result) {
       res.status(404).json({ error: 'Letter not found' });
       return;
     }
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const addNoteSchema = z.object({
+  content: z.string().min(1),
+  category: z.enum(['identity', 'date', 'transcription', 'relationship', 'context', 'cross-reference', 'location', 'condition']),
+  priority: z.enum(['high', 'medium', 'low']),
+});
+
+router.post('/letters/:letterId/notes', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+    const parseResult = addNoteSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
+      return;
+    }
+
+    const letter = await getLetterById(letterId);
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    const existingNotes: StructuredNote[] = Array.isArray(letter.aiNotes)
+      ? (letter.aiNotes as StructuredNote[])
+      : [];
+
+    const newNote: StructuredNote = {
+      id: crypto.randomUUID(),
+      content: parseResult.data.content,
+      category: parseResult.data.category as NoteCategory,
+      priority: parseResult.data.priority as NotePriority,
+      status: 'open',
+      resolves_when: null,
+      resolved_at: null,
+      resolved_by: null,
+      source: 'admin',
+    };
+
+    const updatedNotes = [...existingNotes, newNote];
+    await db.update(letters).set({ aiNotes: updatedNotes, updatedAt: new Date() }).where(eq(letters.id, letterId));
+
+    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
+    if (!letterDTO) {
+      res.status(404).json({ error: 'Letter not found after update' });
+      return;
+    }
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const updateNoteStatusSchema = z.object({
+  status: z.enum(['dismissed', 'resolved']),
+});
+
+router.patch('/letters/:letterId/notes/:noteId', async (req, res, next) => {
+  try {
+    const { letterId, noteId } = req.params;
+    const parseResult = updateNoteStatusSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
+      return;
+    }
+
+    const letter = await getLetterById(letterId);
+    if (!letter) {
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    const existingNotes: StructuredNote[] = Array.isArray(letter.aiNotes)
+      ? (letter.aiNotes as StructuredNote[])
+      : [];
+
+    const noteIndex = existingNotes.findIndex(n => n.id === noteId);
+    if (noteIndex === -1) {
+      res.status(404).json({ error: 'Note not found' });
+      return;
+    }
+
+    existingNotes[noteIndex] = {
+      ...existingNotes[noteIndex],
+      status: parseResult.data.status,
+      resolved_at: new Date().toISOString(),
+      resolved_by: 'admin',
+    };
+
+    await db.update(letters).set({ aiNotes: existingNotes, updatedAt: new Date() }).where(eq(letters.id, letterId));
+
     const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
     if (!letterDTO) {
       res.status(404).json({ error: 'Letter not found after update' });
@@ -1034,54 +1368,6 @@ router.delete('/letters/:letterId/linked-places/:linkId', async (req, res, next)
       return;
     }
     res.json(letterDTO);
-  } catch (error) {
-    next(error);
-  }
-});
-
-// ============================================================================
-// METADATA RESYNC
-// ============================================================================
-
-router.post('/letters/:letterId/resync-check', async (req, res, next) => {
-  try {
-    const { letterId } = req.params;
-    const parseResult = resyncSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
-      return;
-    }
-    const result = await resyncCheck(letterId, parseResult.data);
-    if (!result) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.post('/letters/:letterId/resync', async (req, res, next) => {
-  try {
-    const { letterId } = req.params;
-    const parseResult = resyncSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
-      return;
-    }
-    const result = await resyncLetterMetadata(letterId, parseResult.data);
-    if (!result) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
-
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(404).json({ error: 'Letter not found after resync' });
-      return;
-    }
-    res.json({ ...result, letter: letterDTO });
   } catch (error) {
     next(error);
   }

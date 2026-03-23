@@ -1,11 +1,14 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import Icon from '../common/Icon';
+import type { IconName } from '../common/Icon';
+import { getUnreadCount } from '../../api/admin/notifications';
 import './AdminSidebar.css';
 
 interface NavItem {
   label: string;
   path: string;
-  icon: 'edit' | 'plus' | 'process' | 'person' | 'place' | 'relationships' | 'eye' | 'logout';
+  icon: IconName;
 }
 
 interface NavSection {
@@ -19,18 +22,12 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Dashboard', path: '/admin', icon: 'edit' },
       { label: 'Upload', path: '/admin/upload', icon: 'plus' },
       { label: 'Processing', path: '/admin/processing', icon: 'process' },
-    ],
-  },
-  {
-    title: 'ENTITIES',
-    items: [
-      { label: 'People', path: '/admin/entities/people', icon: 'person' },
-      { label: 'Places', path: '/admin/entities/places', icon: 'place' },
-      { label: 'Relationships', path: '/admin/entities/relationships', icon: 'relationships' },
-      { label: 'Review Queue', path: '/admin/entities/review', icon: 'eye' },
+      { label: 'Usage', path: '/admin/usage', icon: 'chart' },
     ],
   },
 ];
+
+const POLL_INTERVAL = 30_000;
 
 interface AdminSidebarProps {
   collapsed?: boolean;
@@ -39,18 +36,28 @@ interface AdminSidebarProps {
 
 export default function AdminSidebar({ collapsed = false, onToggle }: AdminSidebarProps) {
   const location = useLocation();
-  const navigate = useNavigate();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnread = useCallback(async () => {
+    try {
+      const data = await getUnreadCount();
+      setUnreadCount(data.count);
+    } catch {
+      // silently ignore — sidebar should not break on notification errors
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUnread();
+    const interval = setInterval(fetchUnread, POLL_INTERVAL);
+    return () => clearInterval(interval);
+  }, [fetchUnread]);
 
   const isActive = (path: string) => {
     if (path === '/admin') {
       return location.pathname === '/admin';
     }
     return location.pathname.startsWith(path);
-  };
-
-  const handleLogout = () => {
-    sessionStorage.removeItem('adminAuth');
-    navigate('/admin-login');
   };
 
   return (
@@ -86,10 +93,25 @@ export default function AdminSidebar({ collapsed = false, onToggle }: AdminSideb
       </nav>
 
       <div className="sidebar-footer">
-        <button className="nav-item logout-btn" onClick={handleLogout}>
-          <Icon name="logout" size={18} />
-          <span className="nav-label">Logout</span>
-        </button>
+        <Link
+          to="/admin/notifications"
+          className={`nav-item nav-item-bell ${isActive('/admin/notifications') ? 'active' : ''}`}
+        >
+          <span className="bell-icon-wrap">
+            <Icon name="bell" size={18} />
+            {unreadCount > 0 && (
+              <span className="bell-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+            )}
+          </span>
+          <span className="nav-label">Notifications</span>
+        </Link>
+        <Link
+          to="/admin/settings"
+          className={`nav-item ${isActive('/admin/settings') ? 'active' : ''}`}
+        >
+          <Icon name="settings" size={18} />
+          <span className="nav-label">Settings</span>
+        </Link>
       </div>
     </aside>
   );

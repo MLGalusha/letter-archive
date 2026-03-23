@@ -40,6 +40,10 @@
   box-shadow: 0 1px 3px hsla(0, 0%, 0%, 0.1);
 }
 
+.admin-header:empty {
+  display: none;
+}
+
 .header-title {
   margin: 0;
   font-size: 1.25rem;
@@ -93,6 +97,15 @@
   /* Show overlay when sidebar is expanded */
   .admin-layout:not(.sidebar-collapsed) .mobile-overlay {
     display: block;
+  }
+
+  .admin-header {
+    padding: var(--spacing-xs);
+  }
+
+  .header-center {
+    gap: var(--spacing-xs);
+    flex-wrap: wrap;
   }
 }
 

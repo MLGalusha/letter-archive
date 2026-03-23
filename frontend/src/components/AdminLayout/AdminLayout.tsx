@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { isAuthenticated } from '../../api/auth';
 import AdminSidebar from '../AdminSidebar';
 import './AdminLayout.css';
 
@@ -13,6 +14,8 @@ interface AdminLayoutProps {
 export default function AdminLayout({ children, headerActions, fullHeight }: AdminLayoutProps) {
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    // Auto-collapse on mobile regardless of stored preference
+    if (window.innerWidth <= 768) return true;
     const stored = localStorage.getItem('adminSidebarCollapsed');
     return stored !== null ? stored === 'true' : false;
   });
@@ -20,13 +23,26 @@ export default function AdminLayout({ children, headerActions, fullHeight }: Adm
   const toggleSidebar = () => {
     const next = !sidebarCollapsed;
     setSidebarCollapsed(next);
-    localStorage.setItem('adminSidebarCollapsed', String(next));
+    // Only persist preference on non-mobile screens
+    if (window.innerWidth > 768) {
+      localStorage.setItem('adminSidebarCollapsed', String(next));
+    }
   };
+
+  // Auto-collapse sidebar when resizing to mobile
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth <= 768) {
+        setSidebarCollapsed(true);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Check authentication
   useEffect(() => {
-    const isAuth = sessionStorage.getItem('adminAuth');
-    if (!isAuth) {
+    if (!isAuthenticated()) {
       navigate('/admin-login');
     }
   }, [navigate]);

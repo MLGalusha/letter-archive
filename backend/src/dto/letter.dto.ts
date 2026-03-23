@@ -155,8 +155,8 @@ export interface FrontendLetter {
   extraContentStatus: ContentStatus;
   extraContentVerifiedAt?: string;
   extraContentVerifiedBy?: string;
-  // AI notes (observations, suggestions)
-  aiNotes?: string;
+  // AI notes (structured observations, suggestions)
+  aiNotes?: unknown;
   // Legacy field kept for backward compat
   transcriptConfirmedAt?: string;
   flagged: boolean;

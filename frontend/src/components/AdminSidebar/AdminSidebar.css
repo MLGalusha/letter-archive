@@ -135,19 +135,52 @@
   padding: var(--spacing-sm) 0;
 }
 
-.logout-btn {
+.sidebar-footer .nav-item {
   color: var(--text-muted);
 }
 
-.logout-btn:hover {
-  background: #ffebee;
-  color: #c62828;
+/* Bell icon with badge */
+.bell-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bell-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #d32f2f;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.admin-sidebar.collapsed .bell-badge {
+  top: -4px;
+  right: -4px;
 }
 
 /* Mobile: expanded sidebar overlays content instead of pushing it */
 @media (max-width: 768px) {
+  .admin-sidebar {
+    transition: transform 0.2s ease, width 0.2s ease;
+  }
+
   .admin-sidebar:not(.collapsed) {
     box-shadow: 4px 0 12px hsla(0, 0%, 0%, 0.15);
+  }
+
+  .admin-sidebar.collapsed .sidebar-toggle {
+    margin: 0 auto;
   }
 }
 

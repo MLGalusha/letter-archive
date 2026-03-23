@@ -41,20 +41,20 @@ export default function Header() {
         ☰
       </button>
       <nav className={`nav ${menuOpen ? "open" : ""}`}>
-        <Link to="/" className="page-selector">
+        <Link to="/" className="page-selector" onClick={() => setMenuOpen(false)}>
           Home
         </Link>
-        <Link to="/collections" className="page-selector">
+        <Link to="/collections" className="page-selector" onClick={() => setMenuOpen(false)}>
           Collections
         </Link>
-        <Link to="/explore" className="page-selector">
-          Explore
-        </Link>
-        <Link to="/about" className="page-selector">
+        <Link to="/about" className="page-selector" onClick={() => setMenuOpen(false)}>
           About
         </Link>
-        <Link to="/contact" className="page-selector">
+        <Link to="/contact" className="page-selector" onClick={() => setMenuOpen(false)}>
           Contact
+        </Link>
+        <Link to="/support" className="page-selector" onClick={() => setMenuOpen(false)}>
+          Support
         </Link>
         <button className="page-selector dark-mode-toggle" onClick={toggleDarkMode}>
           {darkMode ? "☀" : "☾"}

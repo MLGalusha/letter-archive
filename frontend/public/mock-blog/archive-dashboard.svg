@@ -1,0 +1,43 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="900" fill="#F5EFE5"/>
+  <rect x="52" y="48" width="1496" height="804" rx="28" fill="#FFFDF8" stroke="#D8CDBA" stroke-width="4"/>
+  <rect x="52" y="48" width="1496" height="88" rx="28" fill="#1F2937"/>
+  <circle cx="108" cy="92" r="11" fill="#F59E0B"/>
+  <circle cx="144" cy="92" r="11" fill="#F87171"/>
+  <circle cx="180" cy="92" r="11" fill="#34D399"/>
+  <text x="246" y="102" fill="#F8F7F2" font-family="Georgia, serif" font-size="34" font-weight="700">Archive Dashboard</text>
+  <rect x="112" y="184" width="420" height="186" rx="26" fill="#16304E"/>
+  <text x="150" y="240" fill="#EAF4FF" font-family="Arial, sans-serif" font-size="24" font-weight="700">Collections published</text>
+  <text x="150" y="326" fill="#FFFFFF" font-family="Georgia, serif" font-size="86" font-weight="700">48</text>
+  <rect x="150" y="338" width="286" height="16" rx="8" fill="#467DB8"/>
+  <rect x="150" y="338" width="214" height="16" rx="8" fill="#8BC5FF"/>
+  <rect x="560" y="184" width="420" height="186" rx="26" fill="#2A5A46"/>
+  <text x="598" y="240" fill="#EDF9F2" font-family="Arial, sans-serif" font-size="24" font-weight="700">Letters reviewed</text>
+  <text x="598" y="326" fill="#FFFFFF" font-family="Georgia, serif" font-size="86" font-weight="700">3,214</text>
+  <rect x="598" y="338" width="286" height="16" rx="8" fill="#5E927D"/>
+  <rect x="598" y="338" width="246" height="16" rx="8" fill="#A7E1C7"/>
+  <rect x="1008" y="184" width="430" height="186" rx="26" fill="#6B3B1E"/>
+  <text x="1046" y="240" fill="#FFF3EB" font-family="Arial, sans-serif" font-size="24" font-weight="700">Volunteer hours</text>
+  <text x="1046" y="326" fill="#FFFFFF" font-family="Georgia, serif" font-size="86" font-weight="700">126</text>
+  <rect x="1046" y="338" width="296" height="16" rx="8" fill="#A16845"/>
+  <rect x="1046" y="338" width="168" height="16" rx="8" fill="#F3C6A6"/>
+  <rect x="112" y="410" width="926" height="360" rx="28" fill="#F6F1E7" stroke="#DED4C4" stroke-width="3"/>
+  <text x="154" y="474" fill="#2A231B" font-family="Georgia, serif" font-size="38" font-weight="700">Recent archive activity</text>
+  <rect x="154" y="522" width="840" height="72" rx="18" fill="#FFFFFF"/>
+  <rect x="184" y="544" width="156" height="26" rx="13" fill="#DBEEF9"/>
+  <rect x="362" y="544" width="292" height="18" rx="9" fill="#D5D1C6"/>
+  <rect x="362" y="572" width="448" height="12" rx="6" fill="#E8E2D6"/>
+  <rect x="154" y="616" width="840" height="72" rx="18" fill="#FFFFFF"/>
+  <rect x="184" y="638" width="172" height="26" rx="13" fill="#E0F0E8"/>
+  <rect x="378" y="638" width="308" height="18" rx="9" fill="#D5D1C6"/>
+  <rect x="378" y="666" width="506" height="12" rx="6" fill="#E8E2D6"/>
+  <rect x="154" y="710" width="840" height="24" rx="12" fill="#E3DACB"/>
+  <rect x="1072" y="410" width="366" height="360" rx="28" fill="#FAF7F0" stroke="#DED4C4" stroke-width="3"/>
+  <text x="1112" y="474" fill="#2A231B" font-family="Georgia, serif" font-size="34" font-weight="700">Queue health</text>
+  <rect x="1112" y="522" width="286" height="20" rx="10" fill="#D8D0C2"/>
+  <rect x="1112" y="558" width="182" height="20" rx="10" fill="#81B29A"/>
+  <rect x="1112" y="614" width="286" height="20" rx="10" fill="#D8D0C2"/>
+  <rect x="1112" y="650" width="238" height="20" rx="10" fill="#3D5A80"/>
+  <rect x="1112" y="706" width="286" height="20" rx="10" fill="#D8D0C2"/>
+  <rect x="1112" y="742" width="126" height="20" rx="10" fill="#EE9B72"/>
+</svg>

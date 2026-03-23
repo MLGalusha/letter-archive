@@ -12,6 +12,24 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+function deriveExcerpt(markdown: string): string {
+  const plain = markdown
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '$1')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^>\s?/gm, '')
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/^\d+\.\s+/gm, '')
+    .replace(/\|/g, ' ')
+    .replace(/\*\*|__|\*|_/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return plain.slice(0, 150).trim();
+}
+
 export default function BlogPage() {
   const navigate = useNavigate();
   const [posts, setPosts] = useState<BlogPost[]>([]);
@@ -114,9 +132,7 @@ export default function BlogPage() {
                     </span>
                   </div>
                   <h2 className="update-card-title">{post.title}</h2>
-                  {post.excerpt && (
-                    <p className="update-card-excerpt">{post.excerpt}</p>
-                  )}
+                  <p className="update-card-excerpt">{post.excerpt || deriveExcerpt(post.bodyMarkdown)}</p>
                   <div className="update-card-footer">
                     {post.authorDisplayName && (
                       <span className="update-author">{post.authorDisplayName}</span>

@@ -1,0 +1,25 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="900" fill="#F3F0EB"/>
+  <rect x="64" y="56" width="1472" height="792" rx="32" fill="#FFFDF9" stroke="#D6CDC2" stroke-width="4"/>
+  <rect x="64" y="56" width="1472" height="88" rx="32" fill="#1D2A33"/>
+  <text x="124" y="112" fill="#FAFAF8" font-family="Georgia, serif" font-size="36" font-weight="700">Letter Detail</text>
+  <rect x="120" y="188" width="420" height="596" rx="28" fill="#F6F1E7" stroke="#DED2C2" stroke-width="3"/>
+  <text x="160" y="244" fill="#2D251D" font-family="Arial, sans-serif" font-size="24" font-weight="700">Metadata</text>
+  <rect x="160" y="286" width="130" height="18" rx="9" fill="#DCEBE2"/>
+  <rect x="160" y="332" width="280" height="16" rx="8" fill="#D4CBC0"/>
+  <rect x="160" y="366" width="248" height="16" rx="8" fill="#E2D9CD"/>
+  <rect x="160" y="420" width="326" height="84" rx="20" fill="#FFFFFF"/>
+  <rect x="160" y="534" width="326" height="84" rx="20" fill="#FFFFFF"/>
+  <rect x="160" y="648" width="326" height="84" rx="20" fill="#FFFFFF"/>
+  <rect x="576" y="188" width="904" height="596" rx="28" fill="#FFFFFF" stroke="#DED2C2" stroke-width="3"/>
+  <rect x="626" y="238" width="804" height="494" rx="22" fill="#EFE5D8"/>
+  <rect x="704" y="308" width="182" height="14" rx="7" fill="#C7B59B"/>
+  <rect x="704" y="350" width="594" height="10" rx="5" fill="#DACBBA"/>
+  <rect x="704" y="386" width="562" height="10" rx="5" fill="#DACBBA"/>
+  <rect x="704" y="422" width="578" height="10" rx="5" fill="#DACBBA"/>
+  <rect x="704" y="458" width="494" height="10" rx="5" fill="#DACBBA"/>
+  <rect x="704" y="494" width="568" height="10" rx="5" fill="#DACBBA"/>
+  <rect x="704" y="530" width="548" height="10" rx="5" fill="#DACBBA"/>
+  <rect x="704" y="566" width="520" height="10" rx="5" fill="#DACBBA"/>
+  <rect x="704" y="602" width="560" height="10" rx="5" fill="#DACBBA"/>
+</svg>

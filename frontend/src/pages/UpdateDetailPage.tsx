@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
+import remarkGfm from 'remark-gfm';
 import SEO from '../components/SEO';
 import { getBlogPost, type BlogPost } from '../api/client';
 import Footer from '../components/Footer/Footer';
@@ -10,6 +11,24 @@ import './UpdateDetailPage.css';
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function deriveExcerpt(markdown: string): string {
+  const plain = markdown
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '$1')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^>\s?/gm, '')
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/^\d+\.\s+/gm, '')
+    .replace(/\|/g, ' ')
+    .replace(/\*\*|__|\*|_/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return plain.slice(0, 220).trim();
 }
 
 export default function BlogDetailPage() {
@@ -64,7 +83,8 @@ export default function BlogDetailPage() {
   }
 
   const seoTitle = post.seoTitle || post.title;
-  const seoDescription = post.seoDescription || post.excerpt || `Read "${post.title}" on Letter Archive.`;
+  const deck = post.excerpt || deriveExcerpt(post.bodyMarkdown);
+  const seoDescription = post.seoDescription || deck || `Read "${post.title}" on Letter Archive.`;
   const publishedDate = post.publishedAt || post.createdAt;
 
   return (
@@ -98,6 +118,7 @@ export default function BlogDetailPage() {
             <time dateTime={publishedDate}>{formatDate(publishedDate)}</time>
           </div>
           <h1 className="update-title">{post.title}</h1>
+          {deck && <p className="update-dek">{deck}</p>}
           {(post.authorDisplayName || post.authorRole) && (
             <p className="update-byline">
               {post.authorDisplayName}
@@ -109,7 +130,45 @@ export default function BlogDetailPage() {
         </header>
 
         <div className="markdown-content">
-          <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeSanitize]}
+            components={{
+              img({ alt, src }) {
+                if (!src) return null;
+
+                return (
+                  <img
+                    className="markdown-inline-image"
+                    src={src}
+                    alt={alt || ''}
+                    loading="lazy"
+                  />
+                );
+              },
+              a({ href, children, ...props }) {
+                const isExternal = typeof href === 'string' && /^https?:\/\//.test(href);
+
+                return (
+                  <a
+                    href={href}
+                    {...props}
+                    target={isExternal ? '_blank' : undefined}
+                    rel={isExternal ? 'noopener noreferrer' : undefined}
+                  >
+                    {children}
+                  </a>
+                );
+              },
+              table({ children }) {
+                return (
+                  <div className="markdown-table-wrap">
+                    <table>{children}</table>
+                  </div>
+                );
+              },
+            }}
+          >
             {post.bodyMarkdown}
           </ReactMarkdown>
         </div>

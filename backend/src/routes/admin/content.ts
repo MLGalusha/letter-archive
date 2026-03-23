@@ -18,23 +18,22 @@ const router = Router();
 // Schemas
 // ============================================================================
 
-const BLOG_POST_CATEGORIES = [
-  'Archive Progress',
-  'New Features',
-  'Collections',
-  'Behind the Scenes',
-] as const;
+const imageAssetSchema = z.union([
+  z.string().url(),
+  z.string().regex(/^\/[\w./-]+$/),
+  z.string().regex(/^data:image\/[a-zA-Z0-9.+-]+;base64,[a-zA-Z0-9+/=]+$/),
+]);
 
 const createBlogPostSchema = z.object({
   slug: z.string().optional(),
   title: z.string().min(1),
   excerpt: z.string().optional(),
-  bodyMarkdown: z.string().min(1),
+  bodyMarkdown: z.string().default(''),
   status: z.enum(['draft', 'published']).default('draft'),
-  category: z.enum(BLOG_POST_CATEGORIES).optional().nullable(),
+  category: z.string().trim().min(1).max(60).optional().nullable(),
   authorDisplayName: z.string().optional().nullable(),
   authorRole: z.string().optional().nullable(),
-  heroImageUrl: z.string().url().optional().nullable(),
+  heroImageUrl: imageAssetSchema.optional().nullable(),
   heroImageAlt: z.string().optional().nullable(),
   seoTitle: z.string().optional().nullable(),
   seoDescription: z.string().optional().nullable(),
@@ -47,12 +46,12 @@ const updateBlogPostSchema = z.object({
   slug: z.string().optional(),
   title: z.string().min(1).optional(),
   excerpt: z.string().optional().nullable(),
-  bodyMarkdown: z.string().min(1).optional(),
+  bodyMarkdown: z.string().optional(),
   status: z.enum(['draft', 'published']).optional(),
-  category: z.enum(BLOG_POST_CATEGORIES).optional().nullable(),
+  category: z.string().trim().min(1).max(60).optional().nullable(),
   authorDisplayName: z.string().optional().nullable(),
   authorRole: z.string().optional().nullable(),
-  heroImageUrl: z.string().url().optional().nullable(),
+  heroImageUrl: imageAssetSchema.optional().nullable(),
   heroImageAlt: z.string().optional().nullable(),
   seoTitle: z.string().optional().nullable(),
   seoDescription: z.string().optional().nullable(),
@@ -250,6 +249,11 @@ router.post('/content/blog/:id/publish', async (req, res) => {
 
     if (!existing) {
       res.status(404).json({ error: 'Blog post not found' });
+      return;
+    }
+
+    if (!existing.bodyMarkdown.trim()) {
+      res.status(400).json({ error: 'Add some body content before publishing.' });
       return;
     }
 

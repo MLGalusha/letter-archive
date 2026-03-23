@@ -1,5 +1,7 @@
 import { eq, and, isNotNull, inArray, sql, or, ilike } from 'drizzle-orm';
 import { z } from 'zod';
+import { PAGINATION } from '../constants/pagination.js';
+import { TIMING } from '../constants/timing.js';
 import { db, letters, collections } from '../db/index.js';
 import { processLetter, processMetadata } from '../pipeline/processor.js';
 import { runEntityExtractionOnly } from '../pipeline/metadataV2.js';
@@ -318,7 +320,7 @@ export async function recoverOrphanedJobs(): Promise<void> {
  */
 export async function getQueueStatus() {
   const now = new Date();
-  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+  const oneHourAgo = new Date(now.getTime() - TIMING.JOB_RECOVERY_WINDOW_MS);
 
   // Active jobs: any status = RUNNING
   const activeLetters = await db.query.letters.findMany({
@@ -394,7 +396,7 @@ export async function getQueueStatus() {
     ),
     with: { collection: true },
     orderBy: (l, { asc }) => [asc(l.createdAt)],
-    limit: 50,
+    limit: PAGINATION.QUEUE_BATCH_SIZE,
   });
 
   // Queued metadata jobs
@@ -407,7 +409,7 @@ export async function getQueueStatus() {
     ),
     with: { collection: true },
     orderBy: (l, { asc }) => [asc(l.createdAt)],
-    limit: 50,
+    limit: PAGINATION.QUEUE_BATCH_SIZE,
   });
 
   // Queued entity extraction jobs (only after metadata has succeeded)
@@ -419,7 +421,7 @@ export async function getQueueStatus() {
     ),
     with: { collection: true },
     orderBy: (l, { asc }) => [asc(l.createdAt)],
-    limit: 50,
+    limit: PAGINATION.QUEUE_BATCH_SIZE,
   });
 
   // Recent completions/failures (last hour, limit 20)

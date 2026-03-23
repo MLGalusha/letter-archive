@@ -16,6 +16,7 @@ export * from './letter/index.js';
 export async function buildLetterUpdates(
   letterId: string,
   updates: UpdateLetterInput,
+  userId: string = 'admin',
 ): Promise<UpdateLetterResult | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
@@ -62,7 +63,7 @@ export async function buildLetterUpdates(
     dbUpdates.visibility = updates.visibility;
     if (updates.visibility === 'PUBLISHED') {
       dbUpdates.reviewedAt = new Date();
-      dbUpdates.reviewedBy = 'admin';
+      dbUpdates.reviewedBy = userId;
     }
   }
 

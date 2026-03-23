@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import { PAGINATION } from '../../constants/pagination.js';
 import {
   auditLog,
   db,
@@ -760,7 +761,7 @@ function getRows<T>(results: unknown): T[] {
 }
 
 export async function findPotentialDuplicatePersons(
-  limit: number = 20,
+  limit: number = PAGINATION.ENTITY_PAGE_SIZE,
 ): Promise<DuplicateSuggestion[]> {
   const results = await db.execute<{
     entity_a_id: string;

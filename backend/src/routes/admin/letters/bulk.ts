@@ -11,17 +11,14 @@ import {
   bulkMetadataSchema,
   bulkUpdateFieldsSchema,
 } from './shared.js';
+import { parseOrThrow } from './helpers.js';
 
 const router = Router();
 
 router.post('/transcribe', async (req, res, next) => {
   try {
-    const parseResult = bulkLetterIdsSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      res.status(400).json({ error: 'Invalid request', details: parseResult.error.errors });
-      return;
-    }
-    const result = await bulkTranscribe(parseResult.data.letterIds);
+    const { letterIds } = parseOrThrow(bulkLetterIdsSchema, req.body, 'Invalid request');
+    const result = await bulkTranscribe(letterIds);
     res.json(result);
   } catch (error) {
     next(error);
@@ -30,12 +27,7 @@ router.post('/transcribe', async (req, res, next) => {
 
 router.post('/extract-metadata', async (req, res, next) => {
   try {
-    const parseResult = bulkMetadataSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      res.status(400).json({ error: 'Invalid request', details: parseResult.error.errors });
-      return;
-    }
-    const { letterIds, skipConfirmationCheck } = parseResult.data;
+    const { letterIds, skipConfirmationCheck } = parseOrThrow(bulkMetadataSchema, req.body, 'Invalid request');
     const result = await bulkExtractMetadata(letterIds, skipConfirmationCheck);
     res.json(result);
   } catch (error) {
@@ -45,12 +37,8 @@ router.post('/extract-metadata', async (req, res, next) => {
 
 router.post('/clear-transcriptions', async (req, res, next) => {
   try {
-    const parseResult = bulkLetterIdsSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      res.status(400).json({ error: 'Invalid request', details: parseResult.error.errors });
-      return;
-    }
-    const result = await bulkClearTranscriptions(parseResult.data.letterIds);
+    const { letterIds } = parseOrThrow(bulkLetterIdsSchema, req.body, 'Invalid request');
+    const result = await bulkClearTranscriptions(letterIds);
     res.json(result);
   } catch (error) {
     next(error);
@@ -59,12 +47,8 @@ router.post('/clear-transcriptions', async (req, res, next) => {
 
 router.patch('/update-fields', async (req, res, next) => {
   try {
-    const parseResult = bulkUpdateFieldsSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      res.status(400).json({ error: 'Invalid request', details: parseResult.error.errors });
-      return;
-    }
-    const result = await bulkUpdateFields(parseResult.data.updates);
+    const { updates } = parseOrThrow(bulkUpdateFieldsSchema, req.body, 'Invalid request');
+    const result = await bulkUpdateFields(updates);
     res.json(result);
   } catch (error) {
     next(error);
@@ -73,12 +57,8 @@ router.patch('/update-fields', async (req, res, next) => {
 
 router.post('/clear-metadata', async (req, res, next) => {
   try {
-    const parseResult = bulkLetterIdsSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      res.status(400).json({ error: 'Invalid request', details: parseResult.error.errors });
-      return;
-    }
-    const result = await bulkClearMetadata(parseResult.data.letterIds);
+    const { letterIds } = parseOrThrow(bulkLetterIdsSchema, req.body, 'Invalid request');
+    const result = await bulkClearMetadata(letterIds);
     res.json(result);
   } catch (error) {
     next(error);

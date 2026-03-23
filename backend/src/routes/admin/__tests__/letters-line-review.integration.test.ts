@@ -278,9 +278,13 @@ describe('admin letters line review route integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(buildLetterUpdatesMock).toHaveBeenCalledWith(LETTER_ID, {
-      transcriptionText: 'Edited line one\nEdited line two',
-    });
+    expect(buildLetterUpdatesMock).toHaveBeenCalledWith(
+      LETTER_ID,
+      {
+        transcriptionText: 'Edited line one\nEdited line two',
+      },
+      'admin',
+    );
     expect(updateSetMock).toHaveBeenCalledWith({
       transcriptionText: 'Edited line one\nEdited line two',
     });
@@ -496,7 +500,7 @@ describe('admin letters line review route integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(verifyExtraContentMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(verifyExtraContentMock).toHaveBeenCalledWith(LETTER_ID, 'admin');
     expect(response.body).toEqual(
       createLetterDto({
         extraContentStatus: 'VERIFIED',
@@ -533,26 +537,30 @@ describe('admin letters line review route integration', () => {
       path: `/letters/${LETTER_ID}/verify-transcript`,
       serviceMock: verifyTranscriptMock,
       dto: createVerifiedLetterDto({ metadataVerifiedAt: null, metadataVerifiedBy: null }),
+      expectedArgs: [LETTER_ID, 'admin'],
     },
     {
       name: 'removes transcript verification through the admin letters route',
       path: `/letters/${LETTER_ID}/unverify-transcript`,
       serviceMock: unverifyTranscriptMock,
       dto: createLetterDto({ transcriptVerifiedAt: null, transcriptVerifiedBy: null }),
+      expectedArgs: [LETTER_ID],
     },
     {
       name: 'verifies metadata through the admin letters route',
       path: `/letters/${LETTER_ID}/verify-metadata`,
       serviceMock: verifyMetadataMock,
       dto: createVerifiedLetterDto({ transcriptVerifiedAt: null, transcriptVerifiedBy: null }),
+      expectedArgs: [LETTER_ID, 'admin'],
     },
     {
       name: 'removes metadata verification through the admin letters route',
       path: `/letters/${LETTER_ID}/unverify-metadata`,
       serviceMock: unverifyMetadataMock,
       dto: createLetterDto({ metadataVerifiedAt: null, metadataVerifiedBy: null }),
+      expectedArgs: [LETTER_ID],
     },
-  ])('$name', async ({ path, serviceMock, dto }) => {
+  ])('$name', async ({ path, serviceMock, dto, expectedArgs }) => {
     serviceMock.mockResolvedValueOnce(true);
     fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(dto);
 
@@ -564,7 +572,7 @@ describe('admin letters line review route integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(serviceMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(serviceMock).toHaveBeenCalledWith(...expectedArgs);
     expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(LETTER_ID);
     expect(response.body).toEqual(dto);
   });

@@ -1,0 +1,6 @@
+export const PAGINATION = {
+  MAX_LIMIT: 100,
+  DEFAULT_LIMIT: 50,
+  QUEUE_BATCH_SIZE: 50,
+  ENTITY_PAGE_SIZE: 20,
+} as const;

@@ -1,4 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm';
+import { TIMING } from '../../constants/timing.js';
 import { db, letters, letterVersions } from '../../db/index.js';
 import { getLetterById } from '../letters.js';
 import { syncLetterParticipantsFromMetadata } from '../entities/participant-sync.js';
@@ -60,7 +61,7 @@ export async function createVersion(
 
     log.debug({ letterId, fieldType, versionNumber: nextVersionNumber }, 'Version created');
 
-    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const cutoff = new Date(Date.now() - TIMING.RECENT_CUTOFF_MS).toISOString();
     await tx.delete(letterVersions).where(
       and(
         eq(letterVersions.letterId, letterId),

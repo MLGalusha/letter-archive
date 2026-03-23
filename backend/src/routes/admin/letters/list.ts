@@ -6,6 +6,7 @@ import {
   fetchLetterWithRelatedAndTransform,
   queryAdminLetters,
 } from '../../../services/letter-queries.js';
+import { NotFoundError } from '../../../utils/response-helpers.js';
 import { notesQuerySchema } from './shared.js';
 
 const router = Router();
@@ -34,10 +35,7 @@ router.get('/letters', async (req, res, next) => {
 router.get('/letters/:letterId', async (req, res, next) => {
   try {
     const letterDTO = await fetchLetterWithRelatedAndTransform(req.params.letterId);
-    if (!letterDTO) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
+    if (!letterDTO) throw new NotFoundError('Letter not found');
 
     db.execute(sql`
       INSERT INTO letter_views (letter_id, last_opened_at) VALUES (${req.params.letterId}, now())

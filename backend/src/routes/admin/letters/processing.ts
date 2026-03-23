@@ -17,6 +17,8 @@ import {
   startMetadataProcessing,
   startTranscriptionProcessing,
 } from '../../../services/processing-queue.js';
+import { BadRequestError } from '../../../utils/response-helpers.js';
+import { requireString } from './helpers.js';
 import { entityResolutionBodySchema } from './shared.js';
 
 const router = Router();
@@ -77,19 +79,19 @@ router.get('/entity-resolution-status', (_req, res) => {
   res.json(getEntityResolutionStatus());
 });
 
-router.post('/pause', (_req, res) => {
+router.post('/pause', (_req, res, next) => {
   try {
     res.json(pauseProcessing());
   } catch (error) {
-    res.status(400).json({ error: (error as Error).message });
+    next(new BadRequestError((error as Error).message));
   }
 });
 
-router.post('/resume', (_req, res) => {
+router.post('/resume', (_req, res, next) => {
   try {
     res.json(resumeProcessing());
   } catch (error) {
-    res.status(400).json({ error: (error as Error).message });
+    next(new BadRequestError((error as Error).message));
   }
 });
 
@@ -104,12 +106,8 @@ router.post('/abort', async (req, res, next) => {
 
 router.post('/cancel', async (req, res, next) => {
   try {
-    const { letterId, type } = req.body;
-    const jobType = queueJobTypeSchema.parse(type);
-    if (!letterId || typeof letterId !== 'string') {
-      res.status(400).json({ error: 'letterId required' });
-      return;
-    }
+    const letterId = requireString(req.body?.letterId, 'letterId required');
+    const jobType = queueJobTypeSchema.parse(req.body?.type);
     const result = await cancelActiveJob(letterId, jobType);
     res.json(result);
   } catch (error) {
@@ -119,12 +117,8 @@ router.post('/cancel', async (req, res, next) => {
 
 router.post('/queue/remove', async (req, res, next) => {
   try {
-    const { letterId, type } = req.body;
-    const jobType = queueJobTypeSchema.parse(type);
-    if (!letterId || typeof letterId !== 'string') {
-      res.status(400).json({ error: 'letterId required' });
-      return;
-    }
+    const letterId = requireString(req.body?.letterId, 'letterId required');
+    const jobType = queueJobTypeSchema.parse(req.body?.type);
     const result = await removeFromQueue(letterId, jobType);
     res.json(result);
   } catch (error) {
@@ -134,8 +128,7 @@ router.post('/queue/remove', async (req, res, next) => {
 
 router.post('/queue/clear', async (req, res, next) => {
   try {
-    const { type } = req.body;
-    const jobType = queueJobTypeSchema.parse(type);
+    const jobType = queueJobTypeSchema.parse(req.body?.type);
     const result = await clearQueue(jobType);
     res.json(result);
   } catch (error) {
@@ -145,12 +138,8 @@ router.post('/queue/clear', async (req, res, next) => {
 
 router.post('/queue/retry', async (req, res, next) => {
   try {
-    const { letterId, type } = req.body;
-    const jobType = queueJobTypeSchema.parse(type);
-    if (!letterId || typeof letterId !== 'string') {
-      res.status(400).json({ error: 'letterId required' });
-      return;
-    }
+    const letterId = requireString(req.body?.letterId, 'letterId required');
+    const jobType = queueJobTypeSchema.parse(req.body?.type);
     const result = await retryJob(letterId, jobType);
     res.json(result);
   } catch (error) {

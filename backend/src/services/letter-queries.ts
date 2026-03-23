@@ -1,5 +1,6 @@
 import { eq, and, inArray, sql, or, ilike, count } from 'drizzle-orm';
 import { z } from 'zod';
+import { PAGINATION } from '../constants/pagination.js';
 import { db, letters, letterPages, collections } from '../db/index.js';
 import { transformLetterToDTO, transformLetterWithRelatedToDTO, type LetterWithRelations } from '../dto/index.js';
 
@@ -70,7 +71,7 @@ const contentStatusValues = ['EMPTY', 'AI_DRAFT', 'EDITED', 'VERIFIED'] as const
 
 export const adminLettersQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(50),
+  limit: z.coerce.number().min(1).max(PAGINATION.MAX_LIMIT).default(PAGINATION.DEFAULT_LIMIT),
   visibility: z.enum(['PUBLISHED', 'HIDDEN', 'all']).optional(),
   workflow: z.preprocess(
     // Preprocess: split comma-separated string into array BEFORE validation

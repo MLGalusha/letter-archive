@@ -3,14 +3,14 @@ import { db, letters } from '../../db/index.js';
 import { getLetterById } from '../letters.js';
 import { log } from './shared.js';
 
-export async function verifyTranscript(letterId: string): Promise<{ previousStatus: string } | null> {
+export async function verifyTranscript(letterId: string, userId: string = 'admin'): Promise<{ previousStatus: string } | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
 
   await db.update(letters).set({
     transcriptStatus: 'VERIFIED',
     transcriptVerifiedAt: new Date(),
-    transcriptVerifiedBy: 'admin',
+    transcriptVerifiedBy: userId,
     updatedAt: new Date(),
   }).where(eq(letters.id, letterId));
 
@@ -40,16 +40,16 @@ export async function unverifyTranscript(letterId: string): Promise<true | null>
   return true;
 }
 
-export async function verifyMetadata(letterId: string): Promise<{ previousStatus: string } | null> {
+export async function verifyMetadata(letterId: string, userId: string = 'admin'): Promise<{ previousStatus: string } | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
 
   await db.update(letters).set({
     metadataContentStatus: 'VERIFIED',
     metadataVerifiedAt: new Date(),
-    metadataVerifiedBy: 'admin',
+    metadataVerifiedBy: userId,
     reviewedAt: new Date(),
-    reviewedBy: 'admin',
+    reviewedBy: userId,
     updatedAt: new Date(),
   }).where(eq(letters.id, letterId));
 
@@ -79,14 +79,14 @@ export async function unverifyMetadata(letterId: string): Promise<true | null> {
   return true;
 }
 
-export async function verifyExtraContent(letterId: string): Promise<{ previousStatus: string } | null> {
+export async function verifyExtraContent(letterId: string, userId: string = 'admin'): Promise<{ previousStatus: string } | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
 
   await db.update(letters).set({
     extraContentStatus: 'VERIFIED',
     extraContentVerifiedAt: new Date(),
-    extraContentVerifiedBy: 'admin',
+    extraContentVerifiedBy: userId,
     updatedAt: new Date(),
   }).where(eq(letters.id, letterId));
 

@@ -16,13 +16,13 @@ import {
   updateExtraContent,
   type UpdateLetterInput,
 } from '../../../services/letter-operations.js';
-import { getLetterById, resetLetterForProcessing } from '../../../services/letters.js';
+import { resetLetterForProcessing } from '../../../services/letters.js';
 import { propagateName, propagatePlaceholderReplacement } from '../../../services/name-propagation.js';
 import { checkNoteAutoResolutions } from '../../../services/note-resolution.js';
 import { getAbsoluteStoragePath } from '../../../services/storage.js';
 import { runEntityExtractionOnly, runMetadataExtractionV2, type ExtractionOptions } from '../../../pipeline/metadataV2.js';
+import { BadRequestError, NotFoundError } from '../../../utils/response-helpers.js';
 import { isPlaceholderValue } from '../../../utils/placeholders.js';
-import { fetchLetterWithRelatedAndTransform } from '../../../services/letter-queries.js';
 import {
   addNoteSchema,
   reExtractSchema,
@@ -32,37 +32,31 @@ import {
   updateNoteStatusSchema,
   versionBodySchema,
 } from './shared.js';
+import {
+  getUserId,
+  parseOrThrow,
+  requireFieldType,
+  requireLetter,
+  requireLetterDto,
+  requirePositiveInt,
+} from './helpers.js';
 
 const router = Router();
 
 router.patch('/:letterId/flag', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const parseResult = toggleFlagSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
-      return;
-    }
-    const { flagged } = parseResult.data;
-    const letter = await getLetterById(letterId);
-    if (!letter) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
+    const { flagged } = parseOrThrow(toggleFlagSchema, req.body, 'Invalid request body');
+    await requireLetter(letterId);
+
     await db.update(letters).set({
       flagged,
       flaggedAt: flagged ? new Date() : null,
-      flaggedBy: flagged ? 'admin' : null,
+      flaggedBy: flagged ? getUserId(req) : null,
     }).where(eq(letters.id, letterId));
 
     req.log.info({ letterId, flagged }, 'Letter flag toggled');
-
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(404).json({ error: 'Letter not found after update' });
-      return;
-    }
-    res.json(letterDTO);
+    res.json(await requireLetterDto(letterId));
   } catch (error) {
     next(error);
   }
@@ -71,11 +65,7 @@ router.patch('/:letterId/flag', async (req, res, next) => {
 router.post('/:letterId/process', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const letter = await getLetterById(letterId);
-    if (!letter) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
+    await requireLetter(letterId);
     await resetLetterForProcessing(letterId);
     res.json({ message: 'Letter enqueued for processing', letterId });
   } catch (error) {
@@ -86,29 +76,22 @@ router.post('/:letterId/process', async (req, res, next) => {
 router.put('/:letterId', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const parseResult = updateLetterSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
-      return;
-    }
+    const updates = parseOrThrow(updateLetterSchema, req.body, 'Invalid request body');
 
-    const result = await buildLetterUpdates(letterId, parseResult.data as UpdateLetterInput);
-    if (!result) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
+    const result = await buildLetterUpdates(letterId, updates as UpdateLetterInput, getUserId(req));
+    if (!result) throw new NotFoundError('Letter not found');
 
     await db.update(letters).set(result.dbUpdates).where(eq(letters.id, letterId));
 
     req.log.info({ letterId, workflowChange: result.workflowChange }, 'Letter updated');
 
     const fieldTriggers: Array<[string | undefined | null, string]> = [
-      [parseResult.data.sender, 'sender'],
-      [parseResult.data.recipient, 'recipient'],
-      [parseResult.data.locationWritten, 'locationWritten'],
-      [parseResult.data.extractedDateConfidence, 'extractedDateConfidence'],
-      [parseResult.data.extractedDate, 'extractedDate'],
-      [parseResult.data.transcriptionText, 'transcriptionText'],
+      [updates.sender, 'sender'],
+      [updates.recipient, 'recipient'],
+      [updates.locationWritten, 'locationWritten'],
+      [updates.extractedDateConfidence, 'extractedDateConfidence'],
+      [updates.extractedDate, 'extractedDate'],
+      [updates.transcriptionText, 'transcriptionText'],
     ];
     for (const [value, field] of fieldTriggers) {
       if (value !== undefined) {
@@ -117,12 +100,7 @@ router.put('/:letterId', async (req, res, next) => {
       }
     }
 
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(404).json({ error: 'Letter not found after update' });
-      return;
-    }
-    res.json(letterDTO);
+    res.json(await requireLetterDto(letterId));
   } catch (error) {
     next(error);
   }
@@ -131,29 +109,19 @@ router.put('/:letterId', async (req, res, next) => {
 router.post('/:letterId/confirm-transcript', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const letter = await getLetterById(letterId);
-    if (!letter) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
+    const letter = await requireLetter(letterId);
     if (letter.workflow !== 'TRANSCRIBED') {
-      res.status(400).json({ error: 'Letter must be in TRANSCRIBED state', currentState: letter.workflow });
-      return;
+      throw new BadRequestError('Letter must be in TRANSCRIBED state', { currentState: letter.workflow });
     }
+
     await db.update(letters).set({
       transcriptConfirmedAt: new Date(),
-      transcriptConfirmedBy: 'admin',
+      transcriptConfirmedBy: getUserId(req),
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
 
     await runMetadataExtractionV2(letterId);
-
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(500).json({ error: 'Failed to fetch updated letter' });
-      return;
-    }
-    res.json(letterDTO);
+    res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
   } catch (error) {
     next(error);
   }
@@ -162,19 +130,14 @@ router.post('/:letterId/confirm-transcript', async (req, res, next) => {
 router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const letter = await getLetterById(letterId);
-    if (!letter) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
+    const letter = await requireLetter(letterId);
     if (!letter.transcriptConfirmedAt) {
-      res.status(400).json({ error: 'Transcript must be confirmed before regenerating metadata' });
-      return;
+      throw new BadRequestError('Transcript must be confirmed before regenerating metadata');
     }
     if (letter.metadataStatus === 'RUNNING') {
-      res.status(400).json({ error: 'Metadata extraction is already in progress' });
-      return;
+      throw new BadRequestError('Metadata extraction is already in progress');
     }
+
     await db.update(letters).set({
       metadataAttemptCount: 0,
       metadataError: null,
@@ -182,13 +145,7 @@ router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
     }).where(eq(letters.id, letterId));
 
     await runMetadataExtractionV2(letterId);
-
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(500).json({ error: 'Failed to fetch updated letter' });
-      return;
-    }
-    res.json(letterDTO);
+    res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
   } catch (error) {
     next(error);
   }
@@ -197,27 +154,16 @@ router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
 router.post('/:letterId/regenerate-entities', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const letter = await getLetterById(letterId);
-    if (!letter) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
+    const letter = await requireLetter(letterId);
     if (!letter.transcriptionText) {
-      res.status(400).json({ error: 'Letter must have a transcription before extracting entities' });
-      return;
+      throw new BadRequestError('Letter must have a transcription before extracting entities');
     }
     if (letter.entityExtractionStatus === 'RUNNING') {
-      res.status(400).json({ error: 'Entity extraction is already in progress' });
-      return;
+      throw new BadRequestError('Entity extraction is already in progress');
     }
-    await runEntityExtractionOnly(letterId);
 
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(500).json({ error: 'Failed to fetch updated letter' });
-      return;
-    }
-    res.json(letterDTO);
+    await runEntityExtractionOnly(letterId);
+    res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
   } catch (error) {
     next(error);
   }
@@ -226,23 +172,11 @@ router.post('/:letterId/regenerate-entities', async (req, res, next) => {
 router.post('/:letterId/re-extract', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const parseResult = reExtractSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
-      return;
-    }
+    const { confirmedSender, confirmedRecipient, mode } = parseOrThrow(reExtractSchema, req.body, 'Invalid request body');
 
-    const { confirmedSender, confirmedRecipient, mode } = parseResult.data;
-
-    const letter = await getLetterById(letterId);
-    if (!letter) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
-
+    const letter = await requireLetter(letterId);
     if (!letter.transcriptionText) {
-      res.status(400).json({ error: 'Letter must have a transcription before re-extraction' });
-      return;
+      throw new BadRequestError('Letter must have a transcription before re-extraction');
     }
 
     const metadataV2 = letter.metadataV2Json as Record<string, unknown> | null;
@@ -250,8 +184,8 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
     const recipientObj = metadataV2?.recipient as { name?: string | null } | undefined;
 
     const extractionOptions: ExtractionOptions = {
-      confirmedSender: confirmedSender,
-      confirmedRecipient: confirmedRecipient,
+      confirmedSender,
+      confirmedRecipient,
       previousAiSender: senderObj?.name ?? letter.sender ?? undefined,
       previousAiRecipient: recipientObj?.name ?? letter.recipient ?? undefined,
     };
@@ -261,15 +195,7 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
       'Starting re-extraction with corrections',
     );
 
-    if (mode === 'full') {
-      await db.update(letters).set({
-        metadataAttemptCount: 0,
-        metadataError: null,
-        updatedAt: new Date(),
-      }).where(eq(letters.id, letterId));
-
-      await runMetadataExtractionV2(letterId, extractionOptions);
-    } else if (mode === 'metadata_only') {
+    if (mode === 'full' || mode === 'metadata_only') {
       await db.update(letters).set({
         metadataAttemptCount: 0,
         metadataError: null,
@@ -281,12 +207,7 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
       await runEntityExtractionOnly(letterId, extractionOptions);
     }
 
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(500).json({ error: 'Failed to fetch updated letter' });
-      return;
-    }
-    res.json(letterDTO);
+    res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
   } catch (error) {
     next(error);
   }
@@ -295,25 +216,13 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
 router.patch('/:letterId/identity', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const parseResult = updateIdentitySchema.safeParse(req.body);
-    if (!parseResult.success) {
-      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
-      return;
-    }
-
-    const { sender: newSender, recipient: newRecipient } = parseResult.data;
+    const { sender: newSender, recipient: newRecipient } = parseOrThrow(updateIdentitySchema, req.body, 'Invalid request body');
 
     if (newSender === undefined && newRecipient === undefined) {
-      res.status(400).json({ error: 'At least one of sender or recipient must be provided' });
-      return;
+      throw new BadRequestError('At least one of sender or recipient must be provided');
     }
 
-    const letter = await getLetterById(letterId);
-    if (!letter) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
-
+    const letter = await requireLetter(letterId);
     const updatePaths: string[] = [];
 
     if (newSender !== undefined) {
@@ -385,12 +294,7 @@ router.patch('/:letterId/identity', async (req, res, next) => {
         req.log.warn({ letterId, err }, 'Note auto-resolution failed for recipient'));
     }
 
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(404).json({ error: 'Letter not found after update' });
-      return;
-    }
-    res.json(letterDTO);
+    res.json(await requireLetterDto(letterId));
   } catch (error) {
     next(error);
   }
@@ -399,17 +303,9 @@ router.patch('/:letterId/identity', async (req, res, next) => {
 router.get('/:letterId/versions', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const fieldType = req.query.fieldType as string;
-    if (!fieldType || !['transcript', 'metadata'].includes(fieldType)) {
-      res.status(400).json({ error: 'fieldType query param required (transcript or metadata)' });
-      return;
-    }
-    const letter = await getLetterById(letterId);
-    if (!letter) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
-    const versions = await getVersions(letterId, fieldType as 'transcript' | 'metadata');
+    const fieldType = requireFieldType(req.query.fieldType);
+    await requireLetter(letterId);
+    const versions = await getVersions(letterId, fieldType);
     res.json({ versions: versions || [] });
   } catch (error) {
     next(error);
@@ -419,17 +315,9 @@ router.get('/:letterId/versions', async (req, res, next) => {
 router.post('/:letterId/versions', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const letter = await getLetterById(letterId);
-    if (!letter) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
-    const parseResult = versionBodySchema.safeParse(req.body);
-    if (!parseResult.success) {
-      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
-      return;
-    }
-    const result = await createVersion(letterId, parseResult.data);
+    await requireLetter(letterId);
+    const versionInput = parseOrThrow(versionBodySchema, req.body, 'Invalid request body');
+    const result = await createVersion(letterId, versionInput);
     res.json(result);
   } catch (error) {
     next(error);
@@ -439,28 +327,12 @@ router.post('/:letterId/versions', async (req, res, next) => {
 router.post('/:letterId/versions/:versionNumber/restore', async (req, res, next) => {
   try {
     const { letterId, versionNumber } = req.params;
-    const fieldType = req.query.fieldType as string;
-    if (!fieldType || !['transcript', 'metadata'].includes(fieldType)) {
-      res.status(400).json({ error: 'fieldType query param required (transcript or metadata)' });
-      return;
-    }
-    const vn = parseInt(versionNumber, 10);
-    if (isNaN(vn) || vn < 1) {
-      res.status(400).json({ error: 'Invalid version number' });
-      return;
-    }
-    const result = await restoreVersion(letterId, vn, fieldType as 'transcript' | 'metadata');
-    if (!result) {
-      res.status(404).json({ error: 'Letter or version not found' });
-      return;
-    }
+    const fieldType = requireFieldType(req.query.fieldType);
+    const vn = requirePositiveInt(versionNumber);
+    const result = await restoreVersion(letterId, vn, fieldType);
+    if (!result) throw new NotFoundError('Letter or version not found');
 
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(404).json({ error: 'Letter not found after restore' });
-      return;
-    }
-    res.json(letterDTO);
+    res.json(await requireLetterDto(letterId, 'Letter not found after restore'));
   } catch (error) {
     next(error);
   }
@@ -471,17 +343,10 @@ router.post('/:letterId/regenerate-transcription', async (req, res, next) => {
     const { letterId } = req.params;
     const includeExtras = req.query.includeExtras === 'true';
     const result = await regenerateTranscription(letterId, includeExtras);
-    if (!result) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(500).json({ error: 'Failed to fetch updated letter' });
-      return;
-    }
+    if (!result) throw new NotFoundError('Letter not found');
+
     res.json({
-      letter: letterDTO,
+      letter: await requireLetterDto(letterId, 'Failed to fetch updated letter', 500),
       regenerated: {
         mainTranscript: result.mainTranscript,
         extras: result.extras,
@@ -497,17 +362,10 @@ router.post('/:letterId/transcribe-letter', async (req, res, next) => {
   try {
     const { letterId } = req.params;
     const result = await transcribeLetterOnly(letterId);
-    if (!result) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(500).json({ error: 'Failed to fetch updated letter' });
-      return;
-    }
+    if (!result) throw new NotFoundError('Letter not found');
+
     res.json({
-      letter: letterDTO,
+      letter: await requireLetterDto(letterId, 'Failed to fetch updated letter', 500),
       transcribed: {
         pageCount: result.pageCount,
         textLength: result.textLength,
@@ -522,17 +380,10 @@ router.post('/:letterId/transcribe-extras', async (req, res, next) => {
   try {
     const { letterId } = req.params;
     const result = await transcribeExtras(letterId);
-    if (!result) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(500).json({ error: 'Failed to fetch updated letter' });
-      return;
-    }
+    if (!result) throw new NotFoundError('Letter not found');
+
     res.json({
-      letter: letterDTO,
+      letter: await requireLetterDto(letterId, 'Failed to fetch updated letter', 500),
       transcribedCount: result.transcribedCount,
       extraContentStatus: result.extraContentStatus,
     });
@@ -551,20 +402,12 @@ router.put('/:letterId/extra-content', async (req, res, next) => {
     const nextExtraContent =
       extraContent !== undefined ? extraContent : extraContentTranscript;
     if (nextExtraContent === undefined) {
-      res.status(400).json({ error: 'extraContent field required' });
-      return;
+      throw new BadRequestError('extraContent field required');
     }
+
     const result = await updateExtraContent(letterId, nextExtraContent);
-    if (!result) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(404).json({ error: 'Letter not found after update' });
-      return;
-    }
-    res.json(letterDTO);
+    if (!result) throw new NotFoundError('Letter not found');
+    res.json(await requireLetterDto(letterId));
   } catch (error) {
     next(error);
   }
@@ -573,18 +416,9 @@ router.put('/:letterId/extra-content', async (req, res, next) => {
 router.put('/:letterId/ai-notes', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const { aiNotes } = req.body;
-    const result = await updateAiNotes(letterId, aiNotes ?? []);
-    if (!result) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(404).json({ error: 'Letter not found after update' });
-      return;
-    }
-    res.json(letterDTO);
+    const result = await updateAiNotes(letterId, req.body?.aiNotes ?? []);
+    if (!result) throw new NotFoundError('Letter not found');
+    res.json(await requireLetterDto(letterId));
   } catch (error) {
     next(error);
   }
@@ -593,17 +427,8 @@ router.put('/:letterId/ai-notes', async (req, res, next) => {
 router.post('/:letterId/notes', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const parseResult = addNoteSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
-      return;
-    }
-
-    const letter = await getLetterById(letterId);
-    if (!letter) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
+    const noteInput = parseOrThrow(addNoteSchema, req.body, 'Invalid request body');
+    const letter = await requireLetter(letterId);
 
     const existingNotes: StructuredNote[] = Array.isArray(letter.aiNotes)
       ? (letter.aiNotes as StructuredNote[])
@@ -611,9 +436,9 @@ router.post('/:letterId/notes', async (req, res, next) => {
 
     const newNote: StructuredNote = {
       id: crypto.randomUUID(),
-      content: parseResult.data.content,
-      category: parseResult.data.category as NoteCategory,
-      priority: parseResult.data.priority as NotePriority,
+      content: noteInput.content,
+      category: noteInput.category as NoteCategory,
+      priority: noteInput.priority as NotePriority,
       status: 'open',
       resolves_when: null,
       resolved_at: null,
@@ -621,15 +446,12 @@ router.post('/:letterId/notes', async (req, res, next) => {
       source: 'admin',
     };
 
-    const updatedNotes = [...existingNotes, newNote];
-    await db.update(letters).set({ aiNotes: updatedNotes, updatedAt: new Date() }).where(eq(letters.id, letterId));
+    await db.update(letters).set({
+      aiNotes: [...existingNotes, newNote],
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
 
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(404).json({ error: 'Letter not found after update' });
-      return;
-    }
-    res.json(letterDTO);
+    res.json(await requireLetterDto(letterId));
   } catch (error) {
     next(error);
   }
@@ -638,43 +460,25 @@ router.post('/:letterId/notes', async (req, res, next) => {
 router.patch('/:letterId/notes/:noteId', async (req, res, next) => {
   try {
     const { letterId, noteId } = req.params;
-    const parseResult = updateNoteStatusSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      res.status(400).json({ error: 'Invalid request body', details: parseResult.error.errors });
-      return;
-    }
-
-    const letter = await getLetterById(letterId);
-    if (!letter) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
+    const { status } = parseOrThrow(updateNoteStatusSchema, req.body, 'Invalid request body');
+    const letter = await requireLetter(letterId);
 
     const existingNotes: StructuredNote[] = Array.isArray(letter.aiNotes)
       ? (letter.aiNotes as StructuredNote[])
       : [];
 
     const noteIndex = existingNotes.findIndex(n => n.id === noteId);
-    if (noteIndex === -1) {
-      res.status(404).json({ error: 'Note not found' });
-      return;
-    }
+    if (noteIndex === -1) throw new NotFoundError('Note not found');
 
     existingNotes[noteIndex] = {
       ...existingNotes[noteIndex],
-      status: parseResult.data.status,
+      status,
       resolved_at: new Date().toISOString(),
-      resolved_by: 'admin',
+      resolved_by: getUserId(req),
     };
 
     await db.update(letters).set({ aiNotes: existingNotes, updatedAt: new Date() }).where(eq(letters.id, letterId));
-
-    const letterDTO = await fetchLetterWithRelatedAndTransform(letterId);
-    if (!letterDTO) {
-      res.status(404).json({ error: 'Letter not found after update' });
-      return;
-    }
-    res.json(letterDTO);
+    res.json(await requireLetterDto(letterId));
   } catch (error) {
     next(error);
   }
@@ -683,11 +487,7 @@ router.patch('/:letterId/notes/:noteId', async (req, res, next) => {
 router.delete('/:letterId', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const letter = await getLetterById(letterId);
-    if (!letter) {
-      res.status(404).json({ error: 'Letter not found' });
-      return;
-    }
+    const letter = await requireLetter(letterId);
 
     const group = await db.select({ id: letters.id }).from(letters).where(
       and(
@@ -723,16 +523,11 @@ router.delete('/:letterId', async (req, res, next) => {
 
 router.post('/pages/:pageId/detect-lines', async (req, res, next) => {
   try {
-    const { pageId } = req.params;
-
     const page = await db.query.letterPages.findFirst({
-      where: eq(letterPages.id, pageId),
+      where: eq(letterPages.id, req.params.pageId),
     });
 
-    if (!page) {
-      res.status(404).json({ error: 'Page not found' });
-      return;
-    }
+    if (!page) throw new NotFoundError('Page not found');
 
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -745,7 +540,7 @@ router.post('/pages/:pageId/detect-lines', async (req, res, next) => {
     };
 
     const absolutePath = getAbsoluteStoragePath(page.storagePath);
-    const result = await detectAndStorePageLines(pageId, absolutePath, undefined, onProgress);
+    const result = await detectAndStorePageLines(req.params.pageId, absolutePath, undefined, onProgress);
 
     res.write(`data: ${JSON.stringify({
       type: 'result',

@@ -1,6 +1,7 @@
 import type { ErrorRequestHandler } from 'express';
 import { ZodError } from 'zod';
 import { logger } from '../utils/logger.js';
+import { AppError } from '../utils/response-helpers.js';
 
 function getExplicitStatus(err: unknown): number | null {
   if (typeof err !== 'object' || err === null) {
@@ -33,11 +34,18 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   let statusCode = 500;
   let errorType = 'internal_error';
   let userMessage = 'Internal server error';
+  let details: unknown;
 
   if (err instanceof ZodError) {
     statusCode = 400;
     errorType = 'validation_error';
     userMessage = 'Validation error';
+    details = err.errors;
+  } else if (err instanceof AppError) {
+    statusCode = err.statusCode;
+    errorType = err.name || 'application_error';
+    userMessage = err.message;
+    details = err.details;
   } else {
     const explicitStatus = getExplicitStatus(err);
     if (explicitStatus !== null) {
@@ -80,7 +88,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (err instanceof ZodError) {
     res.status(statusCode).json({
       error: userMessage,
-      details: err.errors,
+      details,
       requestId,
     });
     return;
@@ -88,6 +96,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
 
   res.status(statusCode).json({
     error: userMessage,
+    details,
     message: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
     requestId,
   });

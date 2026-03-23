@@ -4,6 +4,7 @@ import { stat } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { db, letterPages } from '../db/index.js';
+import { verifyToken } from '../auth/jwt.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
 import { logIfSlow, TIMING_THRESHOLDS } from '../utils/logger.js';
 
@@ -30,12 +31,33 @@ router.get('/images/:pageId', async (req, res, next) => {
     // Find the page record
     const page = await db.query.letterPages.findFirst({
       where: eq(letterPages.id, pageId),
+      with: {
+        letter: {
+          columns: {
+            visibility: true,
+          },
+        },
+      },
     });
 
-    if (!page) {
+    if (!page || !page.letter) {
       req.log.debug({ pageId }, 'Image page not found');
       res.status(404).json({ error: 'Image not found' });
       return;
+    }
+
+    // Public requests can only see published images; admins can see all
+    if (page.letter.visibility !== 'PUBLISHED') {
+      const authHeader = req.headers.authorization;
+      const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+      const queryToken = typeof req.query.token === 'string' ? req.query.token : null;
+      const token = headerToken || queryToken;
+      const isAdmin = token ? !!verifyToken(token) : false;
+      if (!isAdmin) {
+        req.log.debug({ pageId }, 'Image not published and requester is not admin');
+        res.status(404).json({ error: 'Image not found' });
+        return;
+      }
     }
 
     // Get absolute path

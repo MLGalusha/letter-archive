@@ -272,8 +272,10 @@ export function getImageUrl(imageUrl: string): string {
   if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
     return imageUrl;
   }
-  // Otherwise, prepend API base URL
-  return `${API_BASE_URL}${imageUrl}`;
+  // Append admin token as query param so <img src> can access non-published images
+  const token = localStorage.getItem('adminToken');
+  const query = token ? `?token=${encodeURIComponent(token)}` : '';
+  return `${API_BASE_URL}${imageUrl}${query}`;
 }
 
 // ── Blog & Content types ─────────────────────────────────────────────────────

@@ -397,12 +397,12 @@ export default function EntitySection({
             className={`action-btn entity-re-extract-btn ${reExtractState}`}
             onClick={onReExtractEntities}
             disabled={reExtractState === "extracting"}
-            title="Re-extract entities with current sender/recipient context"
+            title="Regenerate entities from transcript"
           >
             {reExtractState === "extracting" ? (
               <>
                 <Icon name="process" size={14} className="spinning" />
-                <span>Extracting...</span>
+                <span>Regenerating...</span>
               </>
             ) : reExtractState === "done" ? (
               <>
@@ -411,8 +411,8 @@ export default function EntitySection({
               </>
             ) : (
               <>
-                <Icon name="refresh" size={14} />
-                <span>Re-extract Entities</span>
+                <Icon name="process" size={14} />
+                <span>Regenerate</span>
               </>
             )}
           </button>

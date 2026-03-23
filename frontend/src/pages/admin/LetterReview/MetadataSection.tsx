@@ -128,7 +128,7 @@ export default function MetadataSection({
                 {regenerateState === "regenerating" ? (
                   <>
                     <Icon name="process" size={14} className="spinning" />
-                    <span>Regenerating...</span>
+                    <span>{letter.metadataContentStatus === "EMPTY" ? "Generating..." : "Regenerating..."}</span>
                   </>
                 ) : regenerateState === "done" ? (
                   <>

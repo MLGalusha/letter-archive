@@ -58,6 +58,7 @@ interface MetadataSectionProps {
   // Metadata tooltip
   showMetadataTooltip: boolean;
   metadataTooltipPosition: { x: number; y: number };
+  metadataTooltipRef: RefObject<HTMLDivElement | null>;
 
   // General state
   saving: boolean;
@@ -100,6 +101,7 @@ export default function MetadataSection({
   onMetadataFieldDoubleClick,
   showMetadataTooltip,
   metadataTooltipPosition,
+  metadataTooltipRef,
   saving,
   showToast: _showToast,
 }: MetadataSectionProps) {
@@ -473,6 +475,7 @@ export default function MetadataSection({
       {/* Metadata double-click tooltip */}
       {showMetadataTooltip && (
         <div
+          ref={metadataTooltipRef}
           className="field-tooltip"
           style={{
             left: Math.min(

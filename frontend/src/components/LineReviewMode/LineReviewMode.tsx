@@ -11,7 +11,7 @@ import { getErrorMessage, getImageUrl } from '../../api/client';
 import { detectPageLines } from '../../api/admin/letters';
 import type { Letter, LineSegment, LineSegmentWord, OcrWordBox } from '../../types/Letter';
 import { attachWordsToSegments } from '../../utils/attachWordsToSegments';
-import { constrainedGrouping, eastEdgeY, westEdgeY, type GroupedLine, type VisionRejectedMerge } from '../../utils/constrainedGrouping';
+import { constrainedGrouping, eastEdgeY, westEdgeY } from '../../utils/constrainedGrouping';
 import { matchTranscriptToLines, type MatchedLine } from '../../utils/transcriptMatcher';
 import {
   alignTranscriptToVisualLines,
@@ -23,6 +23,16 @@ import {
 } from '../../utils/lineAlignment';
 import { useToast } from '../../contexts/ToastContext';
 import { highlightTranscriptMarkers } from '../../utils/transcriptHighlight';
+import {
+  CSS_BORDER_PADDING,
+  FONT_FAMILY,
+  computeLineInputHeight,
+  measureRenderedTextWidth,
+  mergeEditedTextWithOriginalSpacing,
+  normalizeReviewLineText,
+  reconstructTranscript,
+  splitTranscriptByPage,
+} from './lineReviewUtils';
 import './LineReviewMode.css';
 
 interface LineReviewModeProps {
@@ -39,140 +49,6 @@ export interface LineReviewModeHandle {
   saveCurrentLine: () => void;
   redetectLines: () => void;
   isDetecting: boolean;
-}
-
-const PAGE_SEPARATOR_REGEX = /\n*---\s*Page\s*\d+\s*---\n*/i;
-
-/**
- * Splits the full transcript into per-page text arrays.
- */
-function splitTranscriptByPage(fullText: string, pageCount: number): string[] {
-  if (pageCount <= 1) return [fullText];
-  const parts = fullText.split(PAGE_SEPARATOR_REGEX);
-  // parts[0] is before first separator (empty), actual pages start at index 1
-  const pages: string[] = [];
-  for (let i = 1; i < parts.length; i++) {
-    pages.push(parts[i] || '');
-  }
-  // Pad if needed
-  while (pages.length < pageCount) {
-    pages.push('');
-  }
-  return pages;
-}
-
-/**
- * Reconstructs full transcript from per-page raw text strings.
- */
-function reconstructTranscript(pageTexts: string[]): string {
-  if (pageTexts.length === 1) {
-    return pageTexts[0];
-  }
-  return pageTexts
-    .map((text, i) => `--- Page ${i + 1} ---\n\n${text}`)
-    .join('\n\n');
-}
-
-const FONT_FAMILY = "Georgia, 'Times New Roman', serif";
-const CSS_BORDER_PADDING = 6; // border (2px) + padding (4px) on each side
-
-/**
- * Computes the input overlay height for a line based on the average height
- * of its OCR word bounding boxes. Falls back to a reasonable default when
- * no OCR words are available.
- */
-function computeLineInputHeight(
-  words: LineSegmentWord[] | undefined,
-  scaleFactor: number,
-  fontSize: number,
-): number {
-  // Minimum height based on font size so text is never clipped vertically
-  const fontBasedMin = fontSize + CSS_BORDER_PADDING * 2;
-
-  if (!words || words.length === 0) return Math.max(30, fontBasedMin);
-
-  let totalHeight = 0;
-  for (const w of words) {
-    totalHeight += (w.bbox[3] - w.bbox[1]);
-  }
-  const avgWordHeight = totalHeight / words.length;
-  // Scale to display coordinates and add padding for border + padding on both sides
-  const scaled = avgWordHeight * scaleFactor + CSS_BORDER_PADDING * 2;
-  // Use the larger of OCR-based height and font-based height
-  return Math.max(20, fontBasedMin, Math.min(80, scaled));
-}
-
-function measureRenderedTextWidth(
-  text: string,
-  fontSize: number,
-  wordSpacing = 0,
-): number {
-  const measureNode = document.createElement('span');
-  measureNode.textContent = text;
-  measureNode.style.position = 'absolute';
-  measureNode.style.left = '-99999px';
-  measureNode.style.top = '0';
-  measureNode.style.visibility = 'hidden';
-  measureNode.style.whiteSpace = 'pre';
-  measureNode.style.margin = '0';
-  measureNode.style.padding = '0';
-  measureNode.style.border = '0';
-  measureNode.style.lineHeight = '1';
-  measureNode.style.fontFamily = FONT_FAMILY;
-  measureNode.style.fontSize = `${fontSize}px`;
-  measureNode.style.wordSpacing = `${wordSpacing}px`;
-  measureNode.style.fontKerning = 'none';
-  measureNode.style.fontVariantLigatures = 'none';
-
-  document.body.appendChild(measureNode);
-  const width = measureNode.getBoundingClientRect().width;
-  measureNode.remove();
-
-  return width;
-}
-
-function normalizeReviewLineText(text: string): string {
-  return text.replace(/\s+/g, ' ').trim();
-}
-
-function mergeEditedTextWithOriginalSpacing(
-  originalText: string,
-  normalizedEditedText: string,
-): string {
-  if (!normalizedEditedText) return '';
-
-  const leadingWhitespace = originalText.match(/^\s*/)?.[0] ?? '';
-  const trailingWhitespace = originalText.match(/\s*$/)?.[0] ?? '';
-  const trimmedOriginal = originalText.trim();
-
-  if (!trimmedOriginal) {
-    return normalizedEditedText;
-  }
-
-  const originalTokens = trimmedOriginal.split(/\s+/).filter(Boolean);
-  const newTokens = normalizedEditedText.split(' ').filter(Boolean);
-
-  if (originalTokens.length === newTokens.length && newTokens.length > 0) {
-    const chunks = trimmedOriginal.match(/\S+|\s+/g) ?? [];
-    let tokenIndex = 0;
-
-    const rebuilt = chunks
-      .map((chunk) => {
-        if (/^\s+$/.test(chunk)) {
-          return chunk;
-        }
-        const replacement = newTokens[tokenIndex];
-        tokenIndex += 1;
-        return replacement ?? chunk;
-      })
-      .join('');
-
-    if (tokenIndex === newTokens.length) {
-      return `${leadingWhitespace}${rebuilt}${trailingWhitespace}`;
-    }
-  }
-
-  return `${leadingWhitespace}${newTokens.join(' ')}${trailingWhitespace}`;
 }
 
 export function computeAutoScrollTop(params: {
@@ -374,7 +250,6 @@ function findLargestEdgeWord(
   allWords: OcrWordBox[],
 ): OcrWordBox | null {
   const segH = segBbox[3] - segBbox[1];
-  const segW = segBbox[2] - segBbox[0];
   const edgeX = side === 'right' ? segBbox[2] : segBbox[0];
 
   function pickBest(words: OcrWordBox[]): OcrWordBox | null {
@@ -527,27 +402,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     return { enriched, unassigned, groupedLines, marginalSegments, matchResult, visionRejections };
   }, [krakenSegmentsMap, currentPageIndex, letterPages, visionBoxesMap, pageLineTexts]);
-
-  // Merged AI segments for alignment — use grouped lines from the pipeline
-  const mergedAiSegments = useMemo(() => {
-    const raw = aiSegmentsMap[currentPageIndex];
-    if (!raw || raw.length === 0) return raw;
-
-    // If pipeline produced grouped lines, convert them to AlignmentInput format
-    if (pipelineResult && pipelineResult.groupedLines.length > 0) {
-      return pipelineResult.groupedLines.map((gl): AlignmentInput => ({
-        line: gl.line,
-        bbox: gl.bbox,
-        baseline: gl.baseline,
-        boundary: gl.boundary,
-        ocrText: gl.visionText,
-        words: gl.visionWords.map(w => ({ text: w.text, bbox: w.bbox })),
-      }));
-    }
-
-    // Fallback: raw segments as-is
-    return raw;
-  }, [aiSegmentsMap, currentPageIndex, pipelineResult]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -812,7 +666,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (!currentLine || !containerRef.current) return;
 
     // Visible region: from highlight top (bbox[1]) to bottom of input
-    const lineInputH = computeLineInputHeight(currentLine.words, scaleFactor);
+    const lineInputH = computeLineInputHeight(currentLine.words, scaleFactor, pageFontSize);
     const regionTop = currentLine.bbox[1] * scaleFactor;
     const regionBottom = currentLine.bbox[3] * scaleFactor + lineInputH;
     const container = containerRef.current;
@@ -850,7 +704,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       top: nextScrollTop,
       behavior: 'smooth',
     });
-  }, [currentLine, currentLineIndex, globalLineIndex, scaleFactor]);
+  }, [currentLine, currentLineIndex, globalLineIndex, scaleFactor, pageFontSize]);
 
   // Build word-positioned content and focus when line changes
   useEffect(() => {

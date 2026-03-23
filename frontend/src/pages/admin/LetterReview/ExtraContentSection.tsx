@@ -11,6 +11,7 @@ interface ExtraContentSectionProps {
   isExtraContentEditing: boolean;
   showExtraContentTooltip: boolean;
   extraContentTooltipPosition: { x: number; y: number };
+  extraContentTooltipRef: RefObject<HTMLDivElement | null>;
   saving: boolean;
   extraContentRef: RefObject<DynamicEditorRef | null>;
   onTranscribeExtras: () => void;
@@ -28,6 +29,7 @@ export const ExtraContentSection: React.FC<ExtraContentSectionProps> = ({
   isExtraContentEditing,
   showExtraContentTooltip,
   extraContentTooltipPosition,
+  extraContentTooltipRef,
   saving,
   extraContentRef,
   onTranscribeExtras,
@@ -124,6 +126,7 @@ export const ExtraContentSection: React.FC<ExtraContentSectionProps> = ({
         {/* Double-click to edit tooltip for extra content */}
         {showExtraContentTooltip && (
           <div
+            ref={extraContentTooltipRef}
             className="edit-tooltip"
             style={{
               left: Math.min(

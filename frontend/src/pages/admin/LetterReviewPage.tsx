@@ -32,6 +32,7 @@ import {
 } from "../../components/common";
 import { trackEdit } from "../../utils/recentEdits";
 import { highlightTranscriptMarkers } from "../../utils/transcriptHighlight";
+import { useTooltip } from "../../hooks/useTooltip";
 import type {
   Letter,
   LetterImage,
@@ -85,8 +86,8 @@ export default function LetterReviewPage() {
   const extraContentRef = useRef<DynamicEditorRef>(null);
 
   // Track original identity values for re-sync detection
-  const [originalSender, setOriginalSender] = useState("");
-  const [originalRecipient, setOriginalRecipient] = useState("");
+  const [, setOriginalSender] = useState("");
+  const [, setOriginalRecipient] = useState("");
 
   // Metadata regeneration state
   const [regenerateState, setRegenerateState] = useState<
@@ -94,7 +95,7 @@ export default function LetterReviewPage() {
   >("idle");
 
   // Re-extraction state (for metadata re-extract with corrected identity)
-  const [reExtractState, setReExtractState] = useState<
+  const [, setReExtractState] = useState<
     "idle" | "extracting" | "done"
   >("idle");
 
@@ -140,28 +141,32 @@ export default function LetterReviewPage() {
   const [originalTranscriptVerified, setOriginalTranscriptVerified] =
     useState(false);
   const [hasTranscriptChanges, setHasTranscriptChanges] = useState(false);
-  const [showEditTooltip, setShowEditTooltip] = useState(false);
-  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
-  const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const {
+    show: showEditTooltip,
+    position: tooltipPosition,
+    ref: editTooltipRef,
+    showAt: showEditTooltipAt,
+    close: closeEditTooltip,
+  } = useTooltip();
 
   // Verified metadata editing flow state
-  const [showMetadataTooltip, setShowMetadataTooltip] = useState(false);
-  const [metadataTooltipPosition, setMetadataTooltipPosition] = useState({
-    x: 0,
-    y: 0,
-  });
-  const metadataTooltipTimeoutRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const {
+    show: showMetadataTooltip,
+    position: metadataTooltipPosition,
+    ref: metadataTooltipRef,
+    showAt: showMetadataTooltipAt,
+    close: closeMetadataTooltip,
+  } = useTooltip();
 
   // Verified extra content editing flow state
   const [isExtraContentEditing, setIsExtraContentEditing] = useState(false);
-  const [showExtraContentTooltip, setShowExtraContentTooltip] = useState(false);
-  const [extraContentTooltipPosition, setExtraContentTooltipPosition] =
-    useState({ x: 0, y: 0 });
-  const extraContentTooltipTimeoutRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const {
+    show: showExtraContentTooltip,
+    position: extraContentTooltipPosition,
+    ref: extraContentTooltipRef,
+    showAt: showExtraContentTooltipAt,
+    close: closeExtraContentTooltip,
+  } = useTooltip();
 
   // Line highlighting state
   const [_currentLineIndex, setCurrentLineIndex] = useState<number | null>(
@@ -842,21 +847,9 @@ export default function LetterReviewPage() {
       )
         return;
 
-      // Show tooltip near click position
-      setTooltipPosition({ x: e.clientX, y: e.clientY });
-      setShowEditTooltip(true);
-
-      // Clear existing timeout
-      if (tooltipTimeoutRef.current) {
-        clearTimeout(tooltipTimeoutRef.current);
-      }
-
-      // Auto-dismiss after 3 seconds
-      tooltipTimeoutRef.current = setTimeout(() => {
-        setShowEditTooltip(false);
-      }, 3000);
+      showEditTooltipAt(e.clientX, e.clientY);
     },
-    [letter?.transcriptStatus, isTranscriptEditing],
+    [letter?.transcriptStatus, isTranscriptEditing, showEditTooltipAt],
   );
 
   const handleTranscriptDoubleClick = useCallback(async () => {
@@ -867,11 +860,7 @@ export default function LetterReviewPage() {
     )
       return;
 
-    // Dismiss tooltip
-    setShowEditTooltip(false);
-    if (tooltipTimeoutRef.current) {
-      clearTimeout(tooltipTimeoutRef.current);
-    }
+    closeEditTooltip();
 
     // Store original state for potential revert
     setOriginalTranscriptText(transcript);
@@ -893,7 +882,7 @@ export default function LetterReviewPage() {
     } finally {
       setSaving(false);
     }
-  }, [letter?.transcriptStatus, letterId, transcript, showToast]);
+  }, [letter?.transcriptStatus, letterId, transcript, showToast, closeEditTooltip]);
 
   const handleTranscriptRevert = useCallback(async () => {
     if (!letterId || originalTranscriptText === null) return;
@@ -941,48 +930,20 @@ export default function LetterReviewPage() {
     }
   }, [letterId, originalTranscriptText, originalTranscriptVerified, showToast]);
 
-  // Cleanup tooltip timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (tooltipTimeoutRef.current) {
-        clearTimeout(tooltipTimeoutRef.current);
-      }
-      if (metadataTooltipTimeoutRef.current) {
-        clearTimeout(metadataTooltipTimeoutRef.current);
-      }
-    };
-  }, []);
-
   // Verified metadata editing flow handlers
   const handleMetadataFieldClick = useCallback(
     (e: React.MouseEvent) => {
       if (letter?.metadataContentStatus !== "VERIFIED") return;
 
-      // Show tooltip near click position
-      setMetadataTooltipPosition({ x: e.clientX, y: e.clientY });
-      setShowMetadataTooltip(true);
-
-      // Clear existing timeout
-      if (metadataTooltipTimeoutRef.current) {
-        clearTimeout(metadataTooltipTimeoutRef.current);
-      }
-
-      // Auto-dismiss after 3 seconds
-      metadataTooltipTimeoutRef.current = setTimeout(() => {
-        setShowMetadataTooltip(false);
-      }, 3000);
+      showMetadataTooltipAt(e.clientX, e.clientY);
     },
-    [letter?.metadataContentStatus],
+    [letter?.metadataContentStatus, showMetadataTooltipAt],
   );
 
   const handleMetadataFieldDoubleClick = useCallback(async () => {
     if (letter?.metadataContentStatus !== "VERIFIED" || !letterId) return;
 
-    // Dismiss tooltip
-    setShowMetadataTooltip(false);
-    if (metadataTooltipTimeoutRef.current) {
-      clearTimeout(metadataTooltipTimeoutRef.current);
-    }
+    closeMetadataTooltip();
 
     // Unverify via API
     setSaving(true);
@@ -998,7 +959,7 @@ export default function LetterReviewPage() {
     } finally {
       setSaving(false);
     }
-  }, [letter?.metadataContentStatus, letterId, showToast]);
+  }, [letter?.metadataContentStatus, letterId, showToast, closeMetadataTooltip]);
 
   // Extra content verification handlers
   const handleVerifyExtraContent = useCallback(async () => {
@@ -1049,21 +1010,9 @@ export default function LetterReviewPage() {
       )
         return;
 
-      // Show tooltip near click position
-      setExtraContentTooltipPosition({ x: e.clientX, y: e.clientY });
-      setShowExtraContentTooltip(true);
-
-      // Clear existing timeout
-      if (extraContentTooltipTimeoutRef.current) {
-        clearTimeout(extraContentTooltipTimeoutRef.current);
-      }
-
-      // Auto-dismiss after 3 seconds
-      extraContentTooltipTimeoutRef.current = setTimeout(() => {
-        setShowExtraContentTooltip(false);
-      }, 3000);
+      showExtraContentTooltipAt(e.clientX, e.clientY);
     },
-    [letter?.extraContentStatus, isExtraContentEditing],
+    [letter?.extraContentStatus, isExtraContentEditing, showExtraContentTooltipAt],
   );
 
   const handleExtraContentDoubleClick = useCallback(async () => {
@@ -1074,11 +1023,7 @@ export default function LetterReviewPage() {
     )
       return;
 
-    // Dismiss tooltip
-    setShowExtraContentTooltip(false);
-    if (extraContentTooltipTimeoutRef.current) {
-      clearTimeout(extraContentTooltipTimeoutRef.current);
-    }
+    closeExtraContentTooltip();
 
     // Unverify via API
     setSaving(true);
@@ -1095,7 +1040,7 @@ export default function LetterReviewPage() {
     } finally {
       setSaving(false);
     }
-  }, [letter?.extraContentStatus, letterId, showToast]);
+  }, [letter?.extraContentStatus, letterId, showToast, closeExtraContentTooltip]);
 
   // Extra content auto-save
   const handleExtraContentChange = useCallback(
@@ -1219,9 +1164,9 @@ export default function LetterReviewPage() {
   const hasLetterPages = letter.images.some((img) => img.type === "letter");
 
   // Types that produce transcribable extra content (photo is excluded — can't transcribe photos)
-  const hasExtras = letter.images.some((img) =>
+  const hasExtras = Boolean(letter.images.some((img) =>
     ["telegram", "cover", "ephemera"].includes(img.type)
-  );
+  ));
 
   const headerActions = (
     <>
@@ -1424,6 +1369,7 @@ export default function LetterReviewPage() {
                 transcriptFontSize={transcriptFontSize}
                 showEditTooltip={showEditTooltip}
                 tooltipPosition={tooltipPosition}
+                editTooltipRef={editTooltipRef}
                 saving={saving}
                 editorRef={editorRef}
                 onTranscribeLetter={handleTranscribeLetter}
@@ -1443,7 +1389,7 @@ export default function LetterReviewPage() {
             )}
 
             {/* Extra Content Section - only shown when letter has transcribable extras */}
-            {hasExtras && (
+            {hasExtras ? (
               <ExtraContentSection
                 letter={letter}
                 extraContent={extraContent}
@@ -1451,6 +1397,7 @@ export default function LetterReviewPage() {
                 isExtraContentEditing={isExtraContentEditing}
                 showExtraContentTooltip={showExtraContentTooltip}
                 extraContentTooltipPosition={extraContentTooltipPosition}
+                extraContentTooltipRef={extraContentTooltipRef}
                 saving={saving}
                 extraContentRef={extraContentRef}
                 onTranscribeExtras={handleTranscribeExtrasWithConfirm}
@@ -1464,7 +1411,7 @@ export default function LetterReviewPage() {
                 onExtraContentClick={handleExtraContentClick}
                 onExtraContentDoubleClick={handleExtraContentDoubleClick}
               />
-            )}
+            ) : null}
 
             <MetadataSection
               letter={letter}
@@ -1506,18 +1453,19 @@ export default function LetterReviewPage() {
               onMetadataFieldDoubleClick={handleMetadataFieldDoubleClick}
               showMetadataTooltip={showMetadataTooltip}
               metadataTooltipPosition={metadataTooltipPosition}
+              metadataTooltipRef={metadataTooltipRef}
               saving={saving}
               showToast={showToast}
             />
 
             {/* Entity Extraction Section */}
-            {letter.entityExtractionJson && (
+            {letter.entityExtractionJson ? (
               <EntitySection
                 entityExtractionJson={letter.entityExtractionJson}
                 reExtractState={entityReExtractState}
                 onReExtractEntities={() => handleReExtract("entities_only")}
               />
-            )}
+            ) : null}
 
             {/* AI Notes Section (structured) */}
             <div id="ai-notes-section">

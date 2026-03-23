@@ -66,6 +66,7 @@ const buildProps = (overrides: Partial<ComponentProps<typeof MetadataSection>> =
     onMetadataFieldDoubleClick: vi.fn(),
     showMetadataTooltip: false,
     metadataTooltipPosition: { x: 120, y: 120 },
+    metadataTooltipRef: createRef<HTMLDivElement>(),
     onUpdateLinkedPerson: vi.fn().mockResolvedValue(letter),
     onUpdateLinkedPlace: vi.fn().mockResolvedValue(letter),
     onRemoveLinkedPerson: vi.fn().mockResolvedValue(letter),

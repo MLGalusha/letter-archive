@@ -15,6 +15,7 @@ const buildProps = (overrides: Partial<ComponentProps<typeof ExtraContentSection
   isExtraContentEditing: false,
   showExtraContentTooltip: false,
   extraContentTooltipPosition: { x: 100, y: 100 },
+  extraContentTooltipRef: createRef<HTMLDivElement>(),
   saving: false,
   extraContentRef: createRef<DynamicEditorRef>(),
   onTranscribeExtras: vi.fn(),
@@ -30,7 +31,7 @@ describe("ExtraContentSection", () => {
   it("shows transcribe and verify controls for non-verified content", () => {
     render(<ExtraContentSection {...buildProps()} />);
 
-    expect(screen.getByRole("button", { name: "Transcribe" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Regenerate" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Verify" })).toBeInTheDocument();
   });
 

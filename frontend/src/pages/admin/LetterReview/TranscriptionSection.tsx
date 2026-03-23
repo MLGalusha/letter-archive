@@ -24,6 +24,7 @@ interface TranscriptionSectionProps {
   transcriptFontSize: string;
   showEditTooltip: boolean;
   tooltipPosition: { x: number; y: number };
+  editTooltipRef: RefObject<HTMLDivElement | null>;
   saving: boolean;
   editorRef: RefObject<HTMLDivElement | null>;
   onTranscribeLetter: (force?: boolean) => void;
@@ -46,6 +47,7 @@ export default function TranscriptionSection({
   transcriptFontSize,
   showEditTooltip,
   tooltipPosition,
+  editTooltipRef,
   saving,
   editorRef,
   onTranscribeLetter,
@@ -155,6 +157,7 @@ export default function TranscriptionSection({
 
       {showEditTooltip && (
         <div
+          ref={editTooltipRef}
           className="edit-tooltip"
           style={{
             left: Math.min(tooltipPosition.x, window.innerWidth - 280),

@@ -16,6 +16,7 @@ const buildProps = (overrides: Partial<ComponentProps<typeof TranscriptionSectio
   transcriptFontSize: "1rem",
   showEditTooltip: false,
   tooltipPosition: { x: 100, y: 100 },
+  editTooltipRef: createRef<HTMLDivElement>(),
   saving: false,
   editorRef: createRef<HTMLDivElement>(),
   onTranscribeLetter: vi.fn(),

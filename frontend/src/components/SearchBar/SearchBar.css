@@ -3,7 +3,6 @@
   padding: var(--spacing-lg);
   border-radius: var(--radius-lg);
   border: var(--border-card);
-  border-top: solid 1px var(--highlight);
   box-shadow: var(--shadow);
 }
 
@@ -50,7 +49,6 @@
   background: var(--bg-light);
   color: var(--text);
   border: var(--border-card);
-  border-top: solid 1px var(--highlight);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow);
   cursor: pointer;
@@ -168,13 +166,40 @@
 }
 
 @media (max-width: 640px) {
+  .search {
+    padding: var(--spacing-md);
+  }
+
+  /* Hide description text on mobile — search box is self-explanatory */
+  .search-description {
+    display: none;
+  }
+
+  /* Reduce title margin since description is gone */
+  .search-title {
+    margin-bottom: var(--spacing-xs);
+  }
+
   .search-input-wrapper {
     flex-direction: column;
+  }
+
+  .search-button {
+    min-height: 44px;
+  }
+
+  .filter-toggle,
+  .clear-filters {
+    min-height: 44px;
   }
 
   .radio-group {
     flex-direction: column;
     gap: var(--spacing-xs);
+  }
+
+  .radio-label {
+    min-height: 44px;
   }
 
   .date-range {

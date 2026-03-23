@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { isAuthenticated } from "../../api/auth";
 import { getErrorMessage } from "../../api/client";
 import { getAdminLetters, getFilteredLetterIds, deleteLetter } from "../../api/letters";
 import { toggleLetterFlag, publishLetter, hideLetter } from "../../api/admin/letters";
@@ -24,6 +25,7 @@ import {
   ConfirmDialog,
 } from "../../components/common";
 import { analyzeCollection, type CollectionAnalysisResult } from "../../api/collections";
+import { startEntityResolution } from "../../api/admin/processing";
 import AdminLayout from "../../components/AdminLayout";
 import Icon from "../../components/common/Icon";
 import { getRecentEdits, formatTimeAgo, type RecentEdit } from "../../utils/recentEdits";
@@ -46,7 +48,6 @@ import type {
   VisibilityFilter,
 } from "./AdminDashboard/types";
 import {
-  checkNeedsSync,
   formatDateRaw,
   getCombinedTranscriptStatus,
   isServerSortField,
@@ -300,6 +301,7 @@ export default function AdminDashboard() {
   const [showTranscribeConfirm, setShowTranscribeConfirm] = useState(false);
   const [showMetadataConfirm, setShowMetadataConfirm] = useState(false);
   const [showAnalyzeConfirm, setShowAnalyzeConfirm] = useState(false);
+  const [showResolveConfirm, setShowResolveConfirm] = useState(false);
 
   const fetchLetters = useCallback(async (showLoading = false, page = pagination.page) => {
     if (showLoading) setLoading(true);
@@ -362,8 +364,7 @@ export default function AdminDashboard() {
 
   // Auth check — runs once on mount
   useEffect(() => {
-    const isAuth = sessionStorage.getItem("adminAuth");
-    if (!isAuth) {
+    if (!isAuthenticated()) {
       navigate("/admin-login");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -371,8 +372,7 @@ export default function AdminDashboard() {
 
   // Fetch when filters change (reset to page 1) — also handles initial load
   useEffect(() => {
-    const isAuth = sessionStorage.getItem("adminAuth");
-    if (!isAuth) return; // Don't fetch if not authenticated
+    if (!isAuthenticated()) return; // Don't fetch if not authenticated
     fetchLetters(true, 1);
   }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
@@ -937,6 +937,21 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleResolveEntities = async () => {
+    if (collectionFilter === 'all') {
+      showToast('Select a collection filter to resolve entities', 'error');
+      return;
+    }
+    const normalizedCollectionCode = collectionFilter.padStart(3, '0');
+    try {
+      const result = await startEntityResolution(normalizedCollectionCode);
+      showToast(result.message, 'info');
+    } catch (err) {
+      console.error("Failed to start entity resolution:", err);
+      showToast(err instanceof Error ? err.message : "Failed to start entity resolution", 'error');
+    }
+  };
+
   const handlePauseProcessing = async () => {
     try {
       await pauseProcessing();
@@ -1093,15 +1108,15 @@ export default function AdminDashboard() {
         }
         setWasRunning(status.isRunning);
       } catch (err) {
-        console.error("Failed to fetch processing status:", err);
-        showToast(getErrorMessage(err, "Failed to fetch processing status"), "error");
+        // Silently ignore polling failures
+        console.debug("Processing status poll failed:", err);
       }
     };
 
     fetchStatus();
     const interval = setInterval(fetchStatus, 1000);
     return () => clearInterval(interval);
-  }, [wasRunning, lastCompletedAt, fetchLetters, showToast]);
+  }, [wasRunning, lastCompletedAt, fetchLetters]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -1470,7 +1485,6 @@ export default function AdminDashboard() {
           onCellClick={handleCellClick}
           formatDate={formatDate}
           formatDateRaw={formatDateRaw}
-          checkNeedsSync={checkNeedsSync}
           getCombinedTranscriptStatus={getCombinedTranscriptStatus}
           renderStatusIcon={(status, type) => <StatusIcon status={status} type={type} />}
           pagination={pagination}
@@ -1566,6 +1580,19 @@ export default function AdminDashboard() {
           handleAnalyzeCollection();
         }}
         onCancel={() => setShowAnalyzeConfirm(false)}
+      />
+
+      {/* Resolve Entities confirmation */}
+      <ConfirmDialog
+        isOpen={showResolveConfirm}
+        title="Resolve Entities"
+        message={`Run AI entity resolution on collection "${collectionFilter === 'all' ? collectionFilter : collectionFilter.padStart(3, '0')}"? This will merge duplicates, resolve generics, fill missing sender/recipients, and generate biographies.`}
+        confirmText="Resolve"
+        onConfirm={() => {
+          setShowResolveConfirm(false);
+          handleResolveEntities();
+        }}
+        onCancel={() => setShowResolveConfirm(false)}
       />
 
       {/* Floating edit toolbar with process actions */}
@@ -1668,6 +1695,13 @@ export default function AdminDashboard() {
                     disabled={collectionFilter === 'all'}
                   >
                     Analyze Collection
+                  </button>
+                  <button
+                    className="toolbar-process-btn"
+                    onClick={() => setShowResolveConfirm(true)}
+                    disabled={collectionFilter === 'all'}
+                  >
+                    Resolve Entities
                   </button>
                 </div>
               )}

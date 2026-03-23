@@ -1745,31 +1745,6 @@
   border: solid 1px #93c5fd;
 }
 
-/* Sync status indicator */
-.sync-cell {
-  text-align: center;
-}
-
-.sync-indicator {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  font-size: 14px;
-}
-
-.sync-indicator.synced {
-  color: #2e7d32;
-  background: #e8f5e9;
-}
-
-.sync-indicator.needs-sync {
-  color: #e65100;
-  background: #fff3e0;
-}
-
 /* Two-track stats in filter pills */
 .filter-stats {
   display: flex;

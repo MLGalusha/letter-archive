@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo } from "react";
 import "../ArchiveList/ArchiveList.css";
 
 interface LetterCardProps {
@@ -20,26 +20,11 @@ function LetterCard({
   hook,
   onClick,
 }: LetterCardProps) {
-  const tags = useMemo(() => {
-    const result: string[] = [];
-    const lower = hook?.toLowerCase();
-    if (!lower) return result;
+  const people = sender && recipient
+    ? `${sender} to ${recipient}`
+    : sender || recipient || null;
 
-    if (lower.includes("farm")) result.push("Farming");
-    if (lower.includes("family")) result.push("Family");
-    if (lower.includes("mine") || lower.includes("work")) result.push("Labor");
-    if (lower.includes("injury") || lower.includes("health")) result.push("Health");
-    if (lower.includes("cost") || lower.includes("expense")) result.push("Economy");
-    if (lower.includes("household") || lower.includes("domestic")) result.push("Domestic Life");
-    if (lower.includes("employment") || lower.includes("job")) result.push("Employment");
-    if (lower.includes("moving") || lower.includes("travel")) result.push("Migration");
-    if (lower.includes("bank") || lower.includes("savings")) result.push("Great Depression");
-    if (lower.includes("ration") || lower.includes("war")) result.push("Wartime");
-
-    return result.slice(0, 3);
-  }, [hook]);
-
-  const label = [sender, recipient].filter(Boolean).join(" to ") || "Unknown";
+  const label = people || "Unknown";
 
   return (
     <div
@@ -50,19 +35,14 @@ function LetterCard({
       aria-label={`Letter from ${label}, ${date || "unknown date"}`}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(id); } }}
     >
-      <div className="letter-date">{date || "Unknown Date"}</div>
-      <div className="letter-location">{location || "Unknown Location"}</div>
-      <div className="letter-people">
-        {sender && recipient ? `${sender} → ${recipient}` : sender || recipient || "Unknown"}
+      {hook && <div className="letter-hook">{hook}</div>}
+      <div className="letter-card-footer">
+        {people && <span className="letter-byline">{people}</span>}
+        <span className="letter-when">
+          {date || "Unknown date"}
+          {location && location !== "Unknown Location" && ` \u00b7 ${location}`}
+        </span>
       </div>
-      {hook && <div className="letter-summary">{hook}</div>}
-      {tags.length > 0 && (
-        <div className="letter-tags">
-          {tags.map((tag) => (
-            <span key={tag}>{tag}</span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

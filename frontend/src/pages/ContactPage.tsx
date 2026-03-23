@@ -1,10 +1,23 @@
 import { Link } from "react-router-dom";
+import SEO from "../components/SEO";
+import { useSiteSettings } from "../hooks/useSiteSettings";
 import Footer from "../components/Footer/Footer";
 import "./ContactPage.css";
 
 export default function ContactPage() {
+  const settings = useSiteSettings();
+  const generalEmail = settings?.contact_general_email || 'info@letterarchive.org';
+  const contributeEmail = settings?.contact_contribute_email || 'contribute@letterarchive.org';
+  const researchEmail = settings?.contact_research_email || 'research@letterarchive.org';
+  const volunteerEmail = settings?.contact_volunteer_email || 'volunteer@letterarchive.org';
+
   return (
     <div className="body-layout">
+      <SEO
+        title="Contact"
+        description="Get in touch with Letter Archive. Contribute letters, ask research questions, or volunteer to help preserve historical correspondence."
+        canonicalUrl="/contact"
+      />
       <div className="contact-page">
         {/* Hero */}
         <header className="contact-hero">
@@ -29,8 +42,8 @@ export default function ContactPage() {
                 Questions about the archive, how it works, or how to get involved?
                 This is the best place to start.
               </p>
-              <a href="mailto:info@letterarchive.org" className="contact-email">
-                info@letterarchive.org
+              <a href={`mailto:${generalEmail}`} className="contact-email">
+                {generalEmail}
               </a>
             </div>
           </div>
@@ -45,8 +58,8 @@ export default function ContactPage() {
               Old family correspondence, postcards, telegrams — we'll digitize and
               preserve them for future generations. You keep the originals.
             </p>
-            <a href="mailto:contribute@letterarchive.org" className="contact-email">
-              contribute@letterarchive.org
+            <a href={`mailto:${contributeEmail}`} className="contact-email">
+              {contributeEmail}
             </a>
           </section>
 
@@ -57,8 +70,8 @@ export default function ContactPage() {
               Historians, genealogists, and students are welcome. We can help locate
               letters relevant to your area of study.
             </p>
-            <a href="mailto:research@letterarchive.org" className="contact-email">
-              research@letterarchive.org
+            <a href={`mailto:${researchEmail}`} className="contact-email">
+              {researchEmail}
             </a>
           </section>
 
@@ -69,8 +82,8 @@ export default function ContactPage() {
               Help with transcription verification, metadata review, or digitization.
               No experience needed — just curiosity and care.
             </p>
-            <a href="mailto:volunteer@letterarchive.org" className="contact-email">
-              volunteer@letterarchive.org
+            <a href={`mailto:${volunteerEmail}`} className="contact-email">
+              {volunteerEmail}
             </a>
           </section>
         </div>

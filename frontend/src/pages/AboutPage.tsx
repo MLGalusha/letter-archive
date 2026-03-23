@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import SEO from "../components/SEO";
 import { listCollections, type CollectionInfo } from "../api/collections";
 import Footer from "../components/Footer/Footer";
 import "./AboutPage.css";
@@ -19,6 +20,11 @@ export default function AboutPage() {
 
   return (
     <div className="body-layout">
+      <SEO
+        title="About"
+        description="Learn about Letter Archive -- a project to digitize, transcribe, and preserve personal letters and historical correspondence for future generations."
+        canonicalUrl="/about"
+      />
       <div className="about-page">
         {/* Hero */}
         <header className="about-hero">

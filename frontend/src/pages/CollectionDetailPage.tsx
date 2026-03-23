@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import SEO from '../components/SEO';
 import { getCollectionByCode, type CollectionWithLetters } from '../api/collections';
 import LetterCard from '../components/LetterCard/LetterCard';
 import Breadcrumb from '../components/Breadcrumb';
@@ -141,8 +142,18 @@ export default function CollectionDetailPage() {
     );
   }
 
+  const seoTitle = collection.title || `Collection ${collection.collectionCode}`;
+  const seoDescription = collection.description
+    || `Browse ${collection.letterCount} letter${collection.letterCount !== 1 ? 's' : ''} in the ${seoTitle} collection.`;
+
   return (
     <div className="body-layout">
+      <SEO
+        title={seoTitle}
+        description={seoDescription}
+        canonicalUrl={`/collections/${collection.collectionCode}`}
+        ogType="article"
+      />
       <Breadcrumb
         items={[
           { label: 'Home', href: '/' },
@@ -151,147 +162,161 @@ export default function CollectionDetailPage() {
         ]}
       />
       <div className="collection-detail-public">
-        <div className="collection-header-info">
-          <span className="collection-code-display">{collection.collectionCode}</span>
+        {/* Header */}
+        <div className="cd-header">
+          <div className="cd-header-top">
+            <span className="cd-code-badge">{collection.collectionCode}</span>
+            <span className="cd-letter-count">
+              {collection.letterCount} letter{collection.letterCount !== 1 ? 's' : ''}
+            </span>
+          </div>
           <h1>{collection.title || `Collection ${collection.collectionCode}`}</h1>
+          {collection.description && (
+            <p className="cd-description">{collection.description}</p>
+          )}
         </div>
 
-        {collection.description && (
-          <p className="collection-description-text">{collection.description}</p>
-        )}
-
-        <p className="letter-count-text">{collection.letterCount} letters in this collection</p>
-
-        <div className="collection-insight-grid">
-          <div className="insight-card">
-            <span>Date Span</span>
-            <strong>
-              {dateRange ? `${dateRange.start} → ${dateRange.end}` : 'Unknown'}
-            </strong>
-          </div>
-          <div className="insight-card">
-            <span>Top Correspondents</span>
-            <strong>{topCorrespondents.length > 0 ? topCorrespondents.length : 0}</strong>
-          </div>
+        {/* At-a-glance stats */}
+        <div className="cd-stats-row">
+          {dateRange && (
+            <div className="cd-stat">
+              <span className="cd-stat-label">Date span</span>
+              <span className="cd-stat-value">{dateRange.start} &mdash; {dateRange.end}</span>
+            </div>
+          )}
+          {topCorrespondents.length > 0 && (
+            <div className="cd-stat">
+              <span className="cd-stat-label">Voices</span>
+              <span className="cd-stat-value">
+                {topCorrespondents.map((p) => p.name).join(', ')}
+              </span>
+            </div>
+          )}
         </div>
 
-        {topCorrespondents.length > 0 && (
-          <div className="top-correspondents">
-            <h3>Frequent Names in This Collection</h3>
-            <ul>
-              {topCorrespondents.map((person) => (
-                <li key={person.name}>
-                  <span>{person.name}</span>
-                  <small>{person.count} mentions</small>
-                </li>
+        {/* Story threads — the most engaging entry point */}
+        {facets.threads.length > 0 && (
+          <section className="cd-threads-section">
+            <div className="cd-section-header">
+              <h2>Story Threads</h2>
+              <p className="cd-section-hint">Follow a conversation between two people</p>
+            </div>
+            <div className="cd-thread-grid">
+              {facets.threads.map((thread) => (
+                <button
+                  key={thread.key}
+                  type="button"
+                  className={`cd-thread-card ${selectedThreadKey === thread.key ? 'active' : ''}`}
+                  onClick={() =>
+                    setSelectedThreadKey((current) => (current === thread.key ? null : thread.key))
+                  }
+                >
+                  <div className="cd-thread-names">
+                    {thread.sender} <span className="cd-thread-arrow">&rarr;</span> {thread.recipient}
+                  </div>
+                  <div className="cd-thread-meta">
+                    {thread.count} letter{thread.count !== 1 ? 's' : ''}
+                    {thread.latestDate && <> &middot; through {thread.latestDate}</>}
+                  </div>
+                  {thread.sampleHook && (
+                    <p className="cd-thread-hook">&ldquo;{thread.sampleHook}&rdquo;</p>
+                  )}
+                </button>
               ))}
-            </ul>
-          </div>
+            </div>
+          </section>
         )}
 
-        <section className="collection-explorer">
-          <div className="collection-explorer-header">
-            <h3>Explore Paths</h3>
-            {hasActiveFilters && (
-              <button type="button" onClick={clearFilters} className="clear-filters-btn">
-                Clear Filters
-              </button>
-            )}
+        {/* Explore Paths — themes and people */}
+        {(facets.topics.length > 0 || facets.correspondents.length > 0) && (
+          <section className="cd-explore-section">
+            <div className="cd-section-header">
+              <h2>Explore by</h2>
+              {hasActiveFilters && (
+                <button type="button" onClick={clearFilters} className="cd-clear-btn">
+                  Clear filters
+                </button>
+              )}
+            </div>
+
+            <div className="cd-explore-groups">
+              {facets.topics.length > 0 && (
+                <div className="cd-explore-group">
+                  <span className="cd-explore-label">Themes</span>
+                  <div className="cd-chip-list">
+                    {facets.topics.map((topic) => (
+                      <button
+                        key={topic.value}
+                        type="button"
+                        className={`cd-chip ${selectedTopic === topic.value ? 'active' : ''}`}
+                        onClick={() => setSelectedTopic((current) => (current === topic.value ? null : topic.value))}
+                      >
+                        {topic.value} <small>{topic.count}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {facets.correspondents.length > 0 && (
+                <div className="cd-explore-group">
+                  <span className="cd-explore-label">People</span>
+                  <div className="cd-chip-list">
+                    {facets.correspondents.map((correspondent) => (
+                      <button
+                        key={correspondent.value}
+                        type="button"
+                        className={`cd-chip ${selectedCorrespondent === correspondent.value ? 'active' : ''}`}
+                        onClick={() =>
+                          setSelectedCorrespondent((current) =>
+                            current === correspondent.value ? null : correspondent.value,
+                          )
+                        }
+                      >
+                        {correspondent.value} <small>{correspondent.count}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Letters */}
+        <div className="cd-letters-section">
+          <p className="cd-letters-count">
+            {hasActiveFilters
+              ? `${filteredLetters.length} of ${collection.letters.length} letters`
+              : `${collection.letters.length} letters`}
+          </p>
+
+          <div className="letter-grid">
+            {filteredLetters.map((letter) => (
+              <LetterCard
+                key={letter.id}
+                id={letter.id}
+                date={letter.metadata.date}
+                location={letter.metadata.location}
+                sender={letter.metadata.sender}
+                recipient={letter.metadata.recipient}
+                hook={letter.metadata.hook}
+                onClick={handleLetterClick}
+              />
+            ))}
           </div>
 
-          {facets.topics.length > 0 && (
-            <div className="explorer-group">
-              <span className="explorer-label">Themes</span>
-              <div className="chip-list">
-                {facets.topics.map((topic) => (
-                  <button
-                    key={topic.value}
-                    type="button"
-                    className={`filter-chip ${selectedTopic === topic.value ? 'active' : ''}`}
-                    onClick={() => setSelectedTopic((current) => (current === topic.value ? null : topic.value))}
-                  >
-                    {topic.value} <small>{topic.count}</small>
-                  </button>
-                ))}
-              </div>
+          {filteredLetters.length === 0 && (
+            <div className="no-results">
+              <p>No letters match the current filters.</p>
+              {hasActiveFilters && (
+                <button type="button" onClick={clearFilters} className="cd-clear-btn">
+                  Reset filters
+                </button>
+              )}
             </div>
           )}
-
-          {facets.correspondents.length > 0 && (
-            <div className="explorer-group">
-              <span className="explorer-label">People</span>
-              <div className="chip-list">
-                {facets.correspondents.map((correspondent) => (
-                  <button
-                    key={correspondent.value}
-                    type="button"
-                    className={`filter-chip ${selectedCorrespondent === correspondent.value ? 'active' : ''}`}
-                    onClick={() =>
-                      setSelectedCorrespondent((current) =>
-                        current === correspondent.value ? null : correspondent.value,
-                      )
-                    }
-                  >
-                    {correspondent.value} <small>{correspondent.count}</small>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {facets.threads.length > 0 && (
-            <div className="explorer-group">
-              <span className="explorer-label">Story Threads</span>
-              <div className="thread-list">
-                {facets.threads.map((thread) => (
-                  <button
-                    key={thread.key}
-                    type="button"
-                    className={`thread-card ${selectedThreadKey === thread.key ? 'active' : ''}`}
-                    onClick={() =>
-                      setSelectedThreadKey((current) => (current === thread.key ? null : thread.key))
-                    }
-                  >
-                    <strong>{thread.sender} → {thread.recipient}</strong>
-                    <span>{thread.count} letters</span>
-                    {thread.latestDate && <small>Latest: {thread.latestDate}</small>}
-                    {thread.sampleHook && <p>{thread.sampleHook}</p>}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
-
-        <p className="filtered-count-text">
-          Showing {filteredLetters.length} of {collection.letters.length} letters
-        </p>
-
-        <div className="letter-grid">
-          {filteredLetters.map((letter) => (
-            <LetterCard
-              key={letter.id}
-              id={letter.id}
-              date={letter.metadata.date}
-              location={letter.metadata.location}
-              sender={letter.metadata.sender}
-              recipient={letter.metadata.recipient}
-              hook={letter.metadata.hook}
-              onClick={handleLetterClick}
-            />
-          ))}
         </div>
-
-        {filteredLetters.length === 0 && (
-          <div className="no-results">
-            <p>No letters match the current filters.</p>
-            {hasActiveFilters && (
-              <button type="button" onClick={clearFilters} className="clear-filters-inline">
-                Reset filters
-              </button>
-            )}
-          </div>
-        )}
       </div>
       <Footer />
     </div>

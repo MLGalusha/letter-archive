@@ -13,15 +13,13 @@
 
 .letter-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: var(--spacing-md);
-  align-items: start;
 }
 
 .no-results {
   background: var(--bg-light);
   border: var(--border-card);
-  border-top: solid 1px var(--highlight);
   border-radius: var(--radius-lg);
   padding: var(--spacing-xl);
   text-align: center;
@@ -39,68 +37,89 @@
   margin: 0;
 }
 
+/* Letter card — fixed height, story-first */
 .letter-card {
   background: var(--bg-light);
   border: var(--border-card);
-  border-top: 1px solid var(--highlight);
   box-shadow: var(--shadow);
   border-radius: var(--radius-lg);
   padding: var(--spacing-md);
+  height: 220px;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
-  transition: all 0.2s ease;
+  justify-content: space-between;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
   text-decoration: none;
+  overflow: hidden;
+  position: relative;
 }
 
 .letter-card:hover {
-  background: var(--gradient-hover);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px hsla(0, 0%, 0%, 0.12);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px hsla(0, 0%, 0%, 0.12);
 }
 
-.letter-date {
-  font-size: 1.5rem;
+.letter-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The hook — lead with the story */
+.letter-hook {
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  color: var(--text);
+  font-weight: 400;
+  font-style: italic;
+  flex: 1;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  position: relative;
+}
+
+
+/* Footer — who, when, where */
+.letter-card-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: var(--spacing-xs);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.letter-byline {
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text);
-  line-height: 1.2;
-  margin: 0;
+  letter-spacing: 0.01em;
 }
 
-.letter-location {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--text-muted);
-  margin: 0;
-}
-
-.letter-people {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  margin: 0;
-}
-
-.letter-summary {
-  margin-top: var(--spacing-xs);
-  font-size: 0.85rem;
-  line-height: 1.35;
+.letter-when {
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
-.letter-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-xs);
-  margin-top: var(--spacing-xs);
-}
+@media (max-width: 640px) {
+  .letter-grid {
+    grid-template-columns: 1fr;
+  }
 
-.letter-tags span {
-  font-size: 0.7rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--text-muted);
-  white-space: nowrap;
-  border: solid 1px var(--border);
+  .letter-card {
+    height: 180px;
+  }
+
+  .letter-hook {
+    -webkit-line-clamp: 3;
+    font-size: 1rem;
+  }
+
+  /* Tighten card padding */
+  .letter-card {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
 }

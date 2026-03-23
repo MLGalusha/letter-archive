@@ -113,6 +113,17 @@ p {
     line-height: 1.6;
 }
 
+/* Responsive typography */
+@media (max-width: 640px) {
+    h1 {
+        font-size: 2rem;
+    }
+
+    h2 {
+        font-size: 1.5rem;
+    }
+}
+
 /* Font sizes */
 :root {
     --font-xs: 0.75rem;

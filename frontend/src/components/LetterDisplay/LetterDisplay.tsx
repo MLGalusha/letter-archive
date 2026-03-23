@@ -276,46 +276,6 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
                   </div>
                 )}
 
-                {/* Linked People */}
-                {letter.linkedPersons && letter.linkedPersons.length > 0 && (
-                  <div className="form-group-readonly">
-                    <span className="field-label">People</span>
-                    <div className="entity-list-readonly">
-                      {letter.linkedPersons.map((lp) => (
-                        <button
-                          key={lp.id}
-                          type="button"
-                          className="entity-item-readonly"
-                          onClick={() => navigate(`/people/${lp.personId}`)}
-                        >
-                          <span className="entity-name">{lp.canonicalName}</span>
-                          <span className={`entity-role role-${lp.role}`}>{lp.role}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Linked Places */}
-                {letter.linkedPlaces && letter.linkedPlaces.length > 0 && (
-                  <div className="form-group-readonly">
-                    <span className="field-label">Places</span>
-                    <div className="entity-list-readonly">
-                      {letter.linkedPlaces.map((lpl) => (
-                        <button
-                          key={lpl.id}
-                          type="button"
-                          className="entity-item-readonly"
-                          onClick={() => navigate(`/places/${lpl.placeId}`)}
-                        >
-                          <span className="entity-name">{lpl.canonicalName}</span>
-                          <span className={`entity-role role-${lpl.role}`}>{lpl.role}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Notable Quotes */}
                 {letter.metadata.notableQuotes && letter.metadata.notableQuotes.length > 0 && (
                   <div className="form-group-readonly">

@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import SEO from "../components/SEO";
 import LetterDisplay from "../components/LetterDisplay/LetterDisplay";
 import { getAdjacentLetters, getLetterById, type AdjacentLettersResponse } from "../api/letters";
 import type { Letter } from "../types/Letter";
@@ -40,6 +41,24 @@ export default function LetterDetailPage() {
     fetchLetter();
   }, [letterId]);
 
+  const seo = useMemo(() => {
+    if (!letter) return null;
+    const parts: string[] = [];
+    if (letter.metadata.sender) parts.push(`From ${letter.metadata.sender}`);
+    if (letter.metadata.recipient) parts.push(`to ${letter.metadata.recipient}`);
+    if (letter.metadata.date) parts.push(`(${letter.metadata.date})`);
+    const title = parts.length > 0 ? parts.join(" ") : `Letter ${letterId}`;
+
+    const transcript = letter.transcript?.fullText || "";
+    const description = transcript.length > 160
+      ? transcript.slice(0, 157) + "..."
+      : transcript || letter.metadata.hook || "Read this historical letter in the Letter Archive.";
+
+    const ogImage = letter.images?.[0]?.imageUrl || undefined;
+
+    return { title, description, ogImage };
+  }, [letter, letterId]);
+
   if (loading) {
     return (
       <div className="letter-detail-page">
@@ -62,6 +81,15 @@ export default function LetterDetailPage() {
 
   return (
     <div className="letter-detail-page">
+      {seo && (
+        <SEO
+          title={seo.title}
+          description={seo.description}
+          ogImage={seo.ogImage}
+          ogType="article"
+          canonicalUrl={`/letter/${letterId}`}
+        />
+      )}
       <div className="letter-detail-header">
         <div className="letter-top-actions">
           <button className="detail-action-btn" onClick={() => navigate(-1)}>
@@ -75,9 +103,6 @@ export default function LetterDetailPage() {
               Collection {letter.collectionCode}
             </button>
           )}
-          <button className="detail-action-btn" onClick={() => navigate("/explore")}>
-            Explore Graph
-          </button>
         </div>
 
         {adjacent && (

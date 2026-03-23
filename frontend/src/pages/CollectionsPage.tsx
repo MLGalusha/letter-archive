@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import SEO from '../components/SEO';
 import { listCollections, type CollectionInfo } from '../api/collections';
 import Footer from '../components/Footer/Footer';
 import './CollectionsPage.css';
@@ -16,7 +17,6 @@ export default function CollectionsPage() {
     async function fetchCollections() {
       try {
         const data = await listCollections();
-        // Filter to only show collections with published letters
         setCollections(data.filter((c) => (c.letterCount || 0) > 0));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load collections');
@@ -63,21 +63,26 @@ export default function CollectionsPage() {
 
   return (
     <div className="body-layout">
+      <SEO
+        title="Collections"
+        description="Browse collections of personal letters and historical correspondence. Each collection holds a bundle of letters -- a family's exchange, a wartime correspondence, a love story told across distance."
+        canonicalUrl="/collections"
+      />
       <div className="collections-browse-page">
-        <h1>Letter Collections</h1>
-        <p className="page-description">
-          Browse letters organized by collection. Each collection represents a family
-          correspondence or thematic grouping.
-        </p>
-
-        <div className="collections-summary">
-          <div className="summary-pill">
-            <span>Collections</span>
-            <strong>{collections.length}</strong>
-          </div>
-          <div className="summary-pill">
-            <span>Published Letters</span>
-            <strong>{totalLetters}</strong>
+        <div className="collections-hero">
+          <h1>Collections</h1>
+          <p className="collections-hero-sub">
+            Each collection holds a bundle of letters — a family's correspondence, a wartime exchange,
+            a love story told across distance. Pick one and step inside.
+          </p>
+          <div className="collections-summary">
+            <span className="summary-stat">
+              <strong>{collections.length}</strong> collection{collections.length !== 1 ? 's' : ''}
+            </span>
+            <span className="summary-divider">/</span>
+            <span className="summary-stat">
+              <strong>{totalLetters}</strong> letters
+            </span>
           </div>
         </div>
 
@@ -86,7 +91,7 @@ export default function CollectionsPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by title, code, or description..."
+            placeholder="Search collections..."
             aria-label="Search collections"
           />
           <select
@@ -99,7 +104,7 @@ export default function CollectionsPage() {
             <option value="title-asc">Title A-Z</option>
           </select>
           <button onClick={handleRandomCollection} disabled={visibleCollections.length === 0}>
-            Random Collection
+            Surprise me
           </button>
         </div>
 
@@ -113,12 +118,17 @@ export default function CollectionsPage() {
               className="public-collection-card"
               onClick={() => handleCollectionClick(collection.collectionCode)}
             >
-              <div className="collection-card-code">{collection.collectionCode}</div>
+              <div className="collection-card-top">
+                <span className="collection-card-code">{collection.collectionCode}</span>
+                <span className="collection-card-count">
+                  {collection.letterCount} letter{collection.letterCount !== 1 ? 's' : ''}
+                </span>
+              </div>
               <h3>{collection.title || `Collection ${collection.collectionCode}`}</h3>
               {collection.description && (
                 <p className="collection-card-description">{collection.description}</p>
               )}
-              <span className="collection-letter-count">{collection.letterCount} letters</span>
+              <span className="collection-card-cta">Read the letters &rarr;</span>
             </div>
           ))}
         </div>

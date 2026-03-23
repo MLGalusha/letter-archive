@@ -19,7 +19,7 @@ import {
   type ProcessingStatus,
 } from "../../api/admin";
 import { useToast } from "../../contexts/ToastContext";
-import type { Letter, ContentStatus } from "../../types/Letter";
+import type { Letter } from "../../types/Letter";
 import {
   Button,
   ConfirmDialog,
@@ -32,29 +32,24 @@ import { getRecentEdits, formatTimeAgo, type RecentEdit } from "../../utils/rece
 import RecentActivityTable from "./AdminDashboard/RecentActivityTable";
 import {
   ALL_COLUMNS,
-  COLUMN_STORAGE_KEY,
   DAY_OPTIONS,
-  DEFAULT_VISIBLE_COLUMNS,
   MONTH_OPTIONS,
   YEAR_OPTIONS,
 } from "./AdminDashboard/constants";
 import type {
-  ColumnId,
-  ContentFilterView,
-  DateMode,
-  ExtendedSortField,
   ServerSortField,
-  SortColumn,
-  VisibilityFilter,
 } from "./AdminDashboard/types";
 import {
   formatDateRaw,
   getCombinedTranscriptStatus,
   isServerSortField,
-  loadPersistedState,
   savePersistedState,
   StatusIcon,
 } from "./AdminDashboard/utils";
+import { useDashboardColumns } from "./AdminDashboard/useDashboardColumns";
+import { useDashboardFilters } from "./AdminDashboard/useDashboardFilters";
+import { useDashboardSelection } from "./AdminDashboard/useDashboardSelection";
+import { useDashboardSort } from "./AdminDashboard/useDashboardSort";
 import "./AdminDashboard.css";
 
 
@@ -75,114 +70,49 @@ export default function AdminDashboard() {
     metadataEmpty: 0, metadataAiDraft: 0, metadataEdited: 0, metadataVerified: 0,
   });
 
-  // Load persisted state on mount
-  const persistedState = useRef(loadPersistedState());
-
-  // Date dropdown state
-  const [showDateDropdown, setShowDateDropdown] = useState(false);
-  const [dateMode, setDateMode] = useState<DateMode>(
-    persistedState.current.dateMode ?? 'specific'
-  );
-  const dateDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Content status toggle (Transcript vs Metadata view)
-  const [contentFilterView, setContentFilterView] = useState<ContentFilterView>('transcript');
-
-  // Collection input for number-based filtering
-  const [collectionInput, setCollectionInput] = useState(
-    persistedState.current.collectionFilter === 'all' ? '' : persistedState.current.collectionFilter ?? ''
-  );
-
-  // Filters (initialized from localStorage)
-  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>(
-    persistedState.current.visibilityFilter ?? 'ALL'
-  );
-  // Content status filters (persisted to localStorage)
-  const [transcriptStatusFilters, setTranscriptStatusFilters] = useState<ContentStatus[]>(
-    (persistedState.current.transcriptStatusFilters as ContentStatus[]) ?? []
-  );
-  const [metadataStatusFilters, setMetadataStatusFilters] = useState<ContentStatus[]>(
-    (persistedState.current.metadataStatusFilters as ContentStatus[]) ?? []
-  );
-  const [collectionFilter, setCollectionFilter] = useState<string>(
-    persistedState.current.collectionFilter ?? "all"
-  );
-  // Date filters
-  const [yearFilter, setYearFilter] = useState<number | null>(
-    persistedState.current.year ?? null
-  );
-  const [monthFilter, setMonthFilter] = useState<number | null>(
-    persistedState.current.month ?? null
-  );
-  const [dayFilter, setDayFilter] = useState<number | null>(
-    persistedState.current.day ?? null
-  );
-  const [dateFromFilter, setDateFromFilter] = useState<string | null>(
-    persistedState.current.dateFrom ?? null
-  );
-  const [dateToFilter, setDateToFilter] = useState<string | null>(
-    persistedState.current.dateTo ?? null
-  );
-
-  // Debounced search - separate input state from query state
-  const [searchInput, setSearchInput] = useState(persistedState.current.searchQuery ?? "");
-  const [searchQuery, setSearchQuery] = useState(persistedState.current.searchQuery ?? "");
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Debounce search input
-  useEffect(() => {
-    if (searchDebounceRef.current) {
-      clearTimeout(searchDebounceRef.current);
-    }
-    searchDebounceRef.current = setTimeout(() => {
-      setSearchQuery(searchInput);
-    }, 300);
-    return () => {
-      if (searchDebounceRef.current) {
-        clearTimeout(searchDebounceRef.current);
-      }
-    };
-  }, [searchInput]);
-
-  // Multi-column sorting - array maintains priority order (first = highest priority)
-  const [sortColumns, setSortColumns] = useState<SortColumn[]>(
-    persistedState.current.sortColumns ?? []
-  );
-
-  // Column visibility state (persisted separately)
-  const [visibleColumns, setVisibleColumns] = useState<Set<ColumnId>>(() => {
-    try {
-      const saved = localStorage.getItem(COLUMN_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Support both legacy (ColumnId[]) and new ({ visible, known }) formats
-        let visible: ColumnId[];
-        let known: ColumnId[];
-        if (Array.isArray(parsed)) {
-          // Legacy format: just the visible list, no known tracking
-          visible = parsed;
-          known = parsed;
-        } else {
-          visible = parsed.visible ?? [];
-          known = parsed.known ?? [];
-        }
-        const savedSet = new Set(visible);
-        const knownSet = new Set(known);
-        // Auto-show new defaultVisible columns the user has never seen
-        for (const col of ALL_COLUMNS) {
-          if (col.defaultVisible && !knownSet.has(col.id)) {
-            savedSet.add(col.id);
-          }
-        }
-        return savedSet;
-      }
-    } catch (e) {
-      console.warn('Failed to load column visibility:', e);
-    }
-    return DEFAULT_VISIBLE_COLUMNS;
-  });
-  const [showColumnMenu, setShowColumnMenu] = useState(false);
-  const columnMenuRef = useRef<HTMLDivElement>(null);
+  const {
+    showDateDropdown,
+    setShowDateDropdown,
+    dateMode,
+    setDateMode,
+    dateDropdownRef,
+    contentFilterView,
+    setContentFilterView,
+    collectionInput,
+    handleCollectionInputChange,
+    visibilityFilter,
+    toggleVisibilityFilter,
+    transcriptStatusFilters,
+    toggleTranscriptFilter,
+    metadataStatusFilters,
+    toggleMetadataFilter,
+    collectionFilter,
+    yearFilter,
+    setYearFilter,
+    monthFilter,
+    setMonthFilter,
+    dayFilter,
+    setDayFilter,
+    dateFromFilter,
+    setDateFromFilter,
+    dateToFilter,
+    setDateToFilter,
+    searchInput,
+    setSearchInput,
+    searchQuery,
+    hasDateFilter,
+    clearDateFilters,
+    handleClearAllFilters,
+    initialSortColumns,
+  } = useDashboardFilters();
+  const { sortColumns, handleSort, getSortInfo } = useDashboardSort(initialSortColumns);
+  const {
+    visibleColumns,
+    showColumnMenu,
+    columnMenuRef,
+    toggleColumnVisibility,
+    toggleColumnMenu,
+  } = useDashboardColumns();
 
   // Recent edits state (moved from AdminLayout)
   const [recentEdits, setRecentEdits] = useState<RecentEdit[]>([]);
@@ -211,44 +141,6 @@ export default function AdminDashboard() {
     navigate(`/admin/letters/${id}`);
   };
 
-  // Save column visibility changes (with known columns to distinguish "removed" from "new")
-  useEffect(() => {
-    try {
-      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify({
-        visible: Array.from(visibleColumns),
-        known: ALL_COLUMNS.map(c => c.id),
-      }));
-    } catch (e) {
-      console.warn('Failed to save column visibility:', e);
-    }
-  }, [visibleColumns]);
-
-  // Close column menu when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (columnMenuRef.current && !columnMenuRef.current.contains(event.target as Node)) {
-        setShowColumnMenu(false);
-      }
-    }
-    if (showColumnMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [showColumnMenu]);
-
-  const toggleColumnVisibility = (columnId: ColumnId) => {
-    setVisibleColumns(prev => {
-      const next = new Set(prev);
-      if (next.has(columnId)) {
-        next.delete(columnId);
-      } else {
-        next.add(columnId);
-      }
-      return next;
-    });
-  };
-
-  // Persist state changes to localStorage
   useEffect(() => {
     savePersistedState({
       visibilityFilter,
@@ -268,8 +160,6 @@ export default function AdminDashboard() {
 
   // Edit mode
   const [editMode, setEditMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [allFilteredSelected, setAllFilteredSelected] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
@@ -472,36 +362,6 @@ export default function AdminDashboard() {
     }
   }, [editMode, handleMouseUp]);
 
-  // Multi-column sort handler
-  const handleSort = (field: ExtendedSortField) => {
-    setSortColumns((prev) => {
-      const existingIndex = prev.findIndex((col) => col.field === field);
-
-      if (existingIndex === -1) {
-        return [...prev, { field, direction: 'asc' }];
-      }
-
-      const existing = prev[existingIndex];
-      if (existing.direction === 'asc') {
-        const newColumns = [...prev];
-        newColumns[existingIndex] = { field, direction: 'desc' };
-        return newColumns;
-      }
-
-      return prev.filter((col) => col.field !== field);
-    });
-  };
-
-  const getSortInfo = (field: ExtendedSortField) => {
-    const index = sortColumns.findIndex((col) => col.field === field);
-    if (index === -1) return null;
-    return {
-      direction: sortColumns[index].direction,
-      priority: index + 1,
-      total: sortColumns.length,
-    };
-  };
-
   // Apply client-side sorting for computed columns
   const filteredLetters = useMemo(() => {
     const clientSortColumns = sortColumns.filter(col => !isServerSortField(col.field));
@@ -534,6 +394,19 @@ export default function AdminDashboard() {
       return 0;
     });
   }, [letters, sortColumns]);
+
+  const {
+    selectedIds,
+    setSelectedIds,
+    allFilteredSelected,
+    setAllFilteredSelected,
+    toggleSelection,
+    clearSelection,
+    allPageSelected,
+    somePageSelected,
+    handleSelectAllPage,
+    selectAllFiltered,
+  } = useDashboardSelection(filteredLetters);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString(undefined, {
@@ -570,36 +443,6 @@ export default function AdminDashboard() {
     }
   };
 
-  const toggleSelection = (id: string) => {
-    const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
-    setSelectedIds(newSelected);
-    setAllFilteredSelected(false);
-  };
-
-  // Select all on current page
-  const allPageSelected = filteredLetters.length > 0 && filteredLetters.every(l => selectedIds.has(l.id));
-  const somePageSelected = filteredLetters.some(l => selectedIds.has(l.id));
-
-  const handleSelectAllPage = () => {
-    if (allPageSelected) {
-      setSelectedIds(new Set());
-      setAllFilteredSelected(false);
-    } else {
-      // Add this page's items to existing selections
-      const newSelected = new Set(selectedIds);
-      for (const l of filteredLetters) {
-        newSelected.add(l.id);
-      }
-      setSelectedIds(newSelected);
-      setAllFilteredSelected(false);
-    }
-  };
-
   const handleSelectAllFiltered = async () => {
     try {
       const visibilityParam = visibilityFilter !== 'ALL' ? visibilityFilter : undefined;
@@ -618,8 +461,7 @@ export default function AdminDashboard() {
         transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(',') : undefined,
         metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(',') : undefined,
       });
-      setSelectedIds(new Set(allIds));
-      setAllFilteredSelected(true);
+      selectAllFiltered(allIds);
     } catch (err) {
       console.error('Failed to select all filtered:', err);
       showToast(getErrorMessage(err, 'Failed to select all filtered letters'), 'error');
@@ -692,8 +534,7 @@ export default function AdminDashboard() {
       showToast(`Updated ${pendingChanges.size} letter${pendingChanges.size === 1 ? '' : 's'}`, 'success');
 
       setEditMode(false);
-      setSelectedIds(new Set());
-      setAllFilteredSelected(false);
+      clearSelection();
       setPendingChanges(new Map());
       setCopyModeActive(false);
       setCopiedValue(null);
@@ -710,8 +551,7 @@ export default function AdminDashboard() {
 
   const exitEditMode = () => {
     setEditMode(false);
-    setSelectedIds(new Set());
-    setAllFilteredSelected(false);
+    clearSelection();
     setPendingChanges(new Map());
     setCopyModeActive(false);
     setCopiedValue(null);
@@ -729,7 +569,7 @@ export default function AdminDashboard() {
     const count = selectedIds.size;
     try {
       await Promise.all(Array.from(selectedIds).map((id) => deleteLetter(id)));
-      setSelectedIds(new Set());
+      clearSelection();
       setShowDeleteModal(false);
       setEditMode(false);
       showToast(`Deleted ${count} letter${count === 1 ? '' : 's'}`, 'success');
@@ -758,7 +598,7 @@ export default function AdminDashboard() {
     const count = selectedIds.size;
     try {
       await bulkClearTranscriptions(Array.from(selectedIds));
-      setSelectedIds(new Set());
+      clearSelection();
       setShowResetModal(false);
       showToast(`Cleared transcriptions for ${count} letter${count === 1 ? '' : 's'}`, 'success');
       await fetchLetters();
@@ -781,7 +621,7 @@ export default function AdminDashboard() {
     const count = selectedIds.size;
     try {
       await bulkClearMetadata(Array.from(selectedIds));
-      setSelectedIds(new Set());
+      clearSelection();
       setShowClearMetadataModal(false);
       showToast(`Cleared metadata for ${count} letter${count === 1 ? '' : 's'}`, 'success');
       await fetchLetters();
@@ -862,7 +702,7 @@ export default function AdminDashboard() {
           const verb = result.processing ? 'Processing' : 'Queued';
           showToast(`${verb} ${result.queued} letters for transcription`, 'success');
         }
-        setSelectedIds(new Set());
+        clearSelection();
         await fetchLetters();
       } else {
         const result = await startTranscription(buildProcessingFilters());
@@ -898,7 +738,7 @@ export default function AdminDashboard() {
           const verb = result.processing ? 'Processing' : 'Queued';
           showToast(`${verb} ${result.queued} letters for metadata extraction`, 'success');
         }
-        setSelectedIds(new Set());
+        clearSelection();
         await fetchLetters();
       } else {
         const result = await startMetadataExtraction(buildProcessingFilters());
@@ -982,62 +822,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // Toggle functions for inline filter pills
-  const toggleVisibilityFilter = (value: 'PUBLISHED' | 'HIDDEN') => {
-    setVisibilityFilter(current => current === value ? 'ALL' : value);
-  };
-
-  const toggleTranscriptFilter = (value: ContentStatus) => {
-    setTranscriptStatusFilters(prev =>
-      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
-    );
-  };
-
-  const toggleMetadataFilter = (value: ContentStatus) => {
-    setMetadataStatusFilters(prev =>
-      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
-    );
-  };
-
-  const handleCollectionInputChange = (value: string) => {
-    const cleaned = value.replace(/\D/g, '').slice(0, 3);
-    setCollectionInput(cleaned);
-    if (cleaned === '' || Number(cleaned) === 0) {
-      setCollectionFilter('all');
-    } else {
-      setCollectionFilter(cleaned);
-    }
-  };
-
-  // Clear all filters
-  const handleClearAllFilters = () => {
-    setVisibilityFilter('ALL');
-    setTranscriptStatusFilters([]);
-    setMetadataStatusFilters([]);
-    setCollectionFilter('all');
-    setCollectionInput('');
-    setSearchInput('');
-    setSearchQuery('');
-    setYearFilter(null);
-    setMonthFilter(null);
-    setDayFilter(null);
-    setDateFromFilter(null);
-    setDateToFilter(null);
-    setDateMode('specific');
-  };
-
-  // Date filter helpers
-  const hasDateFilter = yearFilter !== null || monthFilter !== null || dayFilter !== null ||
-                        dateFromFilter !== null || dateToFilter !== null;
-
-  const clearDateFilters = () => {
-    setYearFilter(null);
-    setMonthFilter(null);
-    setDayFilter(null);
-    setDateFromFilter(null);
-    setDateToFilter(null);
-  };
-
   const displayToDateRaw = (display: string): string | null => {
     if (!display) return null;
     const parts = display.split('/');
@@ -1117,19 +901,6 @@ export default function AdminDashboard() {
     const interval = setInterval(fetchStatus, 1000);
     return () => clearInterval(interval);
   }, [wasRunning, lastCompletedAt, fetchLetters]);
-
-  // Close dropdowns when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-
-      if (dateDropdownRef.current && !dateDropdownRef.current.contains(target)) {
-        setShowDateDropdown(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   if (loading && isInitialLoad) {
     return (
@@ -1493,7 +1264,7 @@ export default function AdminDashboard() {
           letterCountText={`${(pagination.page - 1) * pagination.limit + 1}–${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total}`}
           allColumns={ALL_COLUMNS}
           showColumnMenu={showColumnMenu}
-          onToggleColumnMenu={() => setShowColumnMenu(!showColumnMenu)}
+          onToggleColumnMenu={toggleColumnMenu}
           onToggleColumn={toggleColumnVisibility}
           columnMenuRef={columnMenuRef}
           onToggleFlag={handleToggleFlag}

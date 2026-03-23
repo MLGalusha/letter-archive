@@ -7,18 +7,18 @@ import {
   updateLetter,
   confirmTranscript,
   regenerateMetadata,
-  verifyTranscript,
-  unverifyTranscript,
-  verifyMetadata,
-  unverifyMetadata,
-  createVersion,
   transcribeExtras,
   updateExtraContent,
   verifyExtraContent,
   unverifyExtraContent,
   transcribeLetter,
 } from "../../api/admin";
-import { toggleLetterFlag, reExtractLetter, updateIdentity, updateNoteStatus, addNote } from "../../api/admin/letters";
+import {
+  toggleLetterFlag,
+  reExtractLetter,
+  updateNoteStatus,
+  addNote,
+} from "../../api/admin/letters";
 import LetterViewer from "../../components/LetterViewer/LetterViewer";
 import AdminLayout from "../../components/AdminLayout";
 import { useToast } from "../../contexts/ToastContext";
@@ -33,18 +33,19 @@ import {
 import { trackEdit } from "../../utils/recentEdits";
 import { highlightTranscriptMarkers } from "../../utils/transcriptHighlight";
 import { useTooltip } from "../../hooks/useTooltip";
-import type {
-  Letter,
-  LetterImage,
-  VisibilityState,
-  EmotionalTone,
-  RelationshipType,
-} from "../../types/Letter";
+import type { Letter, LetterImage, VisibilityState } from "../../types/Letter";
 import TranscriptionSection from "./LetterReview/TranscriptionSection";
 import { ExtraContentSection } from "./LetterReview/ExtraContentSection";
 import MetadataSection from "./LetterReview/MetadataSection";
 import EntitySection from "./LetterReview/EntitySection";
 import NotesSection from "./LetterReview/NotesSection";
+import {
+  type AutoSaveData,
+  useAutoSave,
+} from "./LetterReview/useAutoSave";
+import { useMetadataEditing } from "./LetterReview/useMetadataEditing";
+import { useTranscriptEditing } from "./LetterReview/useTranscriptEditing";
+import { useTranscriptFontSize } from "./LetterReview/useTranscriptFontSize";
 import LineReviewMode, {
   type LineReviewModeHandle,
 } from "../../components/LineReviewMode/LineReviewMode";
@@ -58,24 +59,7 @@ export default function LetterReviewPage() {
   const [letter, setLetter] = useState<Letter | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Form state
   const [transcript, setTranscript] = useState("");
-  const [sender, setSender] = useState("");
-  const [recipient, setRecipient] = useState("");
-  const [date, setDate] = useState("");
-  const [dateConfidence, setDateConfidence] = useState<
-    "exact" | "unknown" | "inferred"
-  >("unknown");
-  const [location, setLocation] = useState("");
-  const [hook, setHook] = useState("");
-  const [description, setDescription] = useState("");
-  const [notes, setNotes] = useState("");
-
-  // AI-extracted metadata state
-  const [emotionalTone, setEmotionalTone] = useState<EmotionalTone | "">("");
-  const [relationship, setRelationship] = useState<RelationshipType | "">("");
-  const [primaryTopics, setPrimaryTopics] = useState<string[]>([]);
-  const [topicsDropdownOpen, setTopicsDropdownOpen] = useState(false);
 
   // Extra content state
   const [extraContent, setExtraContent] = useState("");
@@ -84,10 +68,6 @@ export default function LetterReviewPage() {
 
   // Extra content refs
   const extraContentRef = useRef<DynamicEditorRef>(null);
-
-  // Track original identity values for re-sync detection
-  const [, setOriginalSender] = useState("");
-  const [, setOriginalRecipient] = useState("");
 
   // Metadata regeneration state
   const [regenerateState, setRegenerateState] = useState<
@@ -120,43 +100,11 @@ export default function LetterReviewPage() {
 
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [autoSaveStatus, setAutoSaveStatus] = useState<
-    "idle" | "saving" | "saved" | "error"
-  >("idle");
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Ref to track transient status-reset timeouts for cleanup on unmount
-  const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [transcriptFontSize, setTranscriptFontSize] = useState("1.1rem");
   const [currentFilename, setCurrentFilename] = useState<string | undefined>(
     undefined,
   );
   const editorRef = useRef<HTMLDivElement>(null);
   const lineReviewRef = useRef<LineReviewModeHandle>(null);
-
-  // Verified transcript editing flow state
-  const [isTranscriptEditing, setIsTranscriptEditing] = useState(false);
-  const [originalTranscriptText, setOriginalTranscriptText] = useState<
-    string | null
-  >(null);
-  const [originalTranscriptVerified, setOriginalTranscriptVerified] =
-    useState(false);
-  const [hasTranscriptChanges, setHasTranscriptChanges] = useState(false);
-  const {
-    show: showEditTooltip,
-    position: tooltipPosition,
-    ref: editTooltipRef,
-    showAt: showEditTooltipAt,
-    close: closeEditTooltip,
-  } = useTooltip();
-
-  // Verified metadata editing flow state
-  const {
-    show: showMetadataTooltip,
-    position: metadataTooltipPosition,
-    ref: metadataTooltipRef,
-    showAt: showMetadataTooltipAt,
-    close: closeMetadataTooltip,
-  } = useTooltip();
 
   // Verified extra content editing flow state
   const [isExtraContentEditing, setIsExtraContentEditing] = useState(false);
@@ -175,16 +123,89 @@ export default function LetterReviewPage() {
   const [reviewMode, setReviewMode] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
 
+  const transcriptFontSize = useTranscriptFontSize(
+    editorRef,
+    transcript,
+    reviewMode,
+  );
   const hookRef = useRef<HTMLTextAreaElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
-
-  // Cleanup transient status timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
-    };
-  }, []);
+  const {
+    applyLetterMetadata,
+    date,
+    dateConfidence,
+    description,
+    emotionalTone,
+    handleMetadataFieldClick,
+    handleMetadataFieldDoubleClick,
+    handleVerifyMetadata,
+    hook,
+    location,
+    metadataTooltipPosition,
+    metadataTooltipRef,
+    notes,
+    primaryTopics,
+    recipient,
+    relationship,
+    sender,
+    setDate,
+    setDateConfidence,
+    setDescription,
+    setEmotionalTone,
+    setHook,
+    setLocation,
+    setNotes,
+    setPrimaryTopics,
+    setRecipient,
+    setRelationship,
+    setSender,
+    setTopicsDropdownOpen,
+    showMetadataTooltip,
+    syncIdentityMetadata,
+    topicsDropdownOpen,
+  } = useMetadataEditing({
+    letterId,
+    letter,
+    setLetter,
+    setSaving,
+    showToast,
+  });
+  const {
+    autoSaveStatus,
+    scheduleDebouncedSave,
+    scheduleStatusReset,
+    triggerAutoSave,
+  } = useAutoSave({
+    letterId,
+    letter,
+    setLetter,
+    showToast,
+    syncIdentityMetadata,
+  });
+  const {
+    editTooltipRef,
+    handleTranscriptClick,
+    handleTranscriptDoubleClick,
+    handleTranscriptInput,
+    handleTranscriptRevert,
+    handleVerifyTranscript,
+    hasTranscriptChanges,
+    isTranscriptEditing,
+    originalTranscriptText,
+    showEditTooltip,
+    tooltipPosition,
+  } = useTranscriptEditing({
+    letterId,
+    letter,
+    transcript,
+    setLetter,
+    setSaving,
+    setTranscript,
+    showToast,
+    editorRef,
+    triggerAutoSave,
+  });
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -199,23 +220,7 @@ export default function LetterReviewPage() {
           const foundLetter = await getAdminLetterById(letterId!);
           setLetter(foundLetter);
           setTranscript(foundLetter.transcript.fullText);
-          setSender(foundLetter.metadata.sender || "");
-          setRecipient(foundLetter.metadata.recipient || "");
-          setDate(foundLetter.metadata.date || "");
-          setDateConfidence(foundLetter.metadata.dateConfidence || "unknown");
-          setLocation(foundLetter.metadata.location || "");
-          setHook(foundLetter.metadata.hook || "");
-          setDescription(foundLetter.metadata.description || "");
-          setNotes(foundLetter.metadata.notes || "");
-          // V2 metadata
-          setEmotionalTone(foundLetter.metadata.emotionalTone || "");
-          setRelationship(
-            foundLetter.metadata.senderRecipientRelationship || "",
-          );
-          setPrimaryTopics(foundLetter.metadata.primaryTopics || []);
-          // Store original values for AI sync detection
-          setOriginalSender(foundLetter.metadata.sender || "");
-          setOriginalRecipient(foundLetter.metadata.recipient || "");
+          applyLetterMetadata(foundLetter);
           // Extra content
           setExtraContent(foundLetter.extraContentTranscript || "");
           // Reset extra content editing state for new letter
@@ -229,7 +234,7 @@ export default function LetterReviewPage() {
       }
       fetchLetter();
     }
-  }, [letterId, navigate]);
+  }, [applyLetterMetadata, letterId, navigate]);
 
   useEffect(() => {
     if (!letter || !routeLocation.hash) return;
@@ -245,72 +250,6 @@ export default function LetterReviewPage() {
     return () => window.cancelAnimationFrame(frameId);
   }, [letter, routeLocation.hash]);
 
-  // Calculate font size based on longest line to prevent wrapping
-  const calculateFontSize = useCallback(() => {
-    const editor = editorRef.current;
-    if (!editor || !transcript) {
-      setTranscriptFontSize("1.1rem");
-      return;
-    }
-
-    // Get computed styles for padding and font
-    const computedStyle = window.getComputedStyle(editor);
-    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-    const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
-    const containerWidth = editor.clientWidth - paddingLeft - paddingRight;
-    const lines = transcript.split("\n");
-    const baseFontSize = 1.1; // rem
-
-    // Create canvas for measuring text
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Use computed font to match actual rendering
-    const fontFamily = computedStyle.fontFamily || "inherit";
-    ctx.font = `${baseFontSize * 16}px ${fontFamily}`; // Convert rem to px (assuming 16px base)
-
-    // Find the widest line
-    let maxWidth = 0;
-    for (const line of lines) {
-      if (line.trim()) {
-        const width = ctx.measureText(line).width;
-        if (width > maxWidth) maxWidth = width;
-      }
-    }
-
-    // Calculate scale factor (with a minimum to prevent text being too small)
-    if (maxWidth > containerWidth) {
-      const scale = Math.max(0.4, containerWidth / maxWidth); // Don't go below 40%
-      setTranscriptFontSize(`${baseFontSize * scale}rem`);
-    } else {
-      setTranscriptFontSize(`${baseFontSize}rem`);
-    }
-  }, [transcript]);
-
-  // Recalculate font size when transcript changes or on container resize
-  useEffect(() => {
-    calculateFontSize();
-
-    // Use ResizeObserver to detect container size changes (from split pane drag)
-    const editor = editorRef.current;
-    // Also observe the parent container which actually resizes with the split pane
-    const editorContainer = editor?.parentElement;
-
-    if (editor || editorContainer) {
-      const resizeObserver = new ResizeObserver(() => {
-        calculateFontSize();
-      });
-      if (editor) resizeObserver.observe(editor);
-      if (editorContainer) resizeObserver.observe(editorContainer);
-      return () => resizeObserver.disconnect();
-    }
-
-    // Fallback: window resize
-    window.addEventListener("resize", calculateFontSize);
-    return () => window.removeEventListener("resize", calculateFontSize);
-  }, [calculateFontSize]);
-
   // Keep the contenteditable DOM in sync when the editor mounts or when
   // transcript state changes outside direct typing (for example after exiting
   // line review). We only write when the DOM is actually out of sync to avoid
@@ -323,10 +262,8 @@ export default function LetterReviewPage() {
       if (currentContent !== transcript) {
         editor.innerHTML = highlightTranscriptMarkers(transcript);
       }
-      // Recalculate font size after content is set
-      calculateFontSize();
     }
-  }, [transcript, reviewMode, calculateFontSize]);
+  }, [transcript, reviewMode]);
 
   // Auto-resize textareas to fit content
   const autoResizeTextarea = (textarea: HTMLTextAreaElement | null, minHeight = 80) => {
@@ -371,8 +308,7 @@ export default function LetterReviewPage() {
           "success",
         );
 
-        // Clear done state after a moment
-        statusTimeoutRef.current = setTimeout(() => {
+        scheduleStatusReset(() => {
           setLetterTranscribeState("idle");
           setLetterTranscribeMessage(null);
         }, 3000);
@@ -386,7 +322,7 @@ export default function LetterReviewPage() {
         console.error("Letter transcription error:", err);
       }
     },
-    [letterId, letter, showToast],
+    [letterId, letter, scheduleStatusReset, showToast],
   );
 
   // Extra content transcription handler with confirmation
@@ -457,19 +393,7 @@ export default function LetterReviewPage() {
     try {
       const updated = await confirmTranscript(letterId);
       setLetter(updated);
-      // Populate form fields with extracted metadata
-      setSender(updated.metadata.sender || "");
-      setRecipient(updated.metadata.recipient || "");
-      setDate(updated.metadata.date || "");
-      setDateConfidence(updated.metadata.dateConfidence || "unknown");
-      setLocation(updated.metadata.location || "");
-      setHook(updated.metadata.hook || "");
-      setDescription(updated.metadata.description || "");
-      setEmotionalTone(updated.metadata.emotionalTone || "");
-      setRelationship(updated.metadata.senderRecipientRelationship || "");
-      setPrimaryTopics(updated.metadata.primaryTopics || []);
-      setOriginalSender(updated.metadata.sender || "");
-      setOriginalRecipient(updated.metadata.recipient || "");
+      applyLetterMetadata(updated, { includeNotes: false });
       showToast(
         "Transcript confirmed — metadata extracted",
         "success",
@@ -494,28 +418,16 @@ export default function LetterReviewPage() {
   // Execute metadata regeneration (metadata only)
   const executeMetadataRegenerate = async () => {
     if (!letterId) return;
-    setShowMetadataRegeneratePopup(false);
-    setRegenerateState("regenerating");
+      setShowMetadataRegeneratePopup(false);
+      setRegenerateState("regenerating");
     try {
       const updated = await regenerateMetadata(letterId);
       setLetter(updated);
-      // Update form fields with new metadata
-      setSender(updated.metadata.sender || "");
-      setRecipient(updated.metadata.recipient || "");
-      setDate(updated.metadata.date || "");
-      setDateConfidence(updated.metadata.dateConfidence || "unknown");
-      setLocation(updated.metadata.location || "");
-      setHook(updated.metadata.hook || "");
-      setDescription(updated.metadata.description || "");
-      setEmotionalTone(updated.metadata.emotionalTone || "");
-      setRelationship(updated.metadata.senderRecipientRelationship || "");
-      setPrimaryTopics(updated.metadata.primaryTopics || []);
-      setOriginalSender(updated.metadata.sender || "");
-      setOriginalRecipient(updated.metadata.recipient || "");
+      applyLetterMetadata(updated, { includeNotes: false });
       setRegenerateState("done");
       showToast("Metadata regenerated", "success");
 
-      statusTimeoutRef.current = setTimeout(() => {
+      scheduleStatusReset(() => {
         setRegenerateState("idle");
       }, 2000);
     } catch (err) {
@@ -558,34 +470,19 @@ export default function LetterReviewPage() {
         setLetter(updated);
 
         if (!isEntityOnly) {
-          // Update form fields with fresh metadata
-          setSender(updated.metadata.sender || "");
-          setRecipient(updated.metadata.recipient || "");
-          setDate(updated.metadata.date || "");
-          setDateConfidence(updated.metadata.dateConfidence || "unknown");
-          setLocation(updated.metadata.location || "");
-          setHook(updated.metadata.hook || "");
-          setDescription(updated.metadata.description || "");
-          setEmotionalTone(updated.metadata.emotionalTone || "");
-          setRelationship(
-            updated.metadata.senderRecipientRelationship || "",
-          );
-          setPrimaryTopics(updated.metadata.primaryTopics || []);
-          // Update original values so the notification bar dismisses
-          setOriginalSender(updated.metadata.sender || "");
-          setOriginalRecipient(updated.metadata.recipient || "");
+          applyLetterMetadata(updated, { includeNotes: false });
 
           setReExtractState("done");
           showToast("Metadata re-extracted with corrections", "success");
 
-          statusTimeoutRef.current = setTimeout(() => {
+          scheduleStatusReset(() => {
             setReExtractState("idle");
           }, 2000);
         } else {
           setEntityReExtractState("done");
           showToast("Entities re-extracted", "success");
 
-          statusTimeoutRef.current = setTimeout(() => {
+          scheduleStatusReset(() => {
             setEntityReExtractState("idle");
           }, 2000);
         }
@@ -609,170 +506,16 @@ export default function LetterReviewPage() {
         console.error("Re-extract error:", err);
       }
     },
-    [letterId, letter, sender, recipient, showToast],
+    [
+      applyLetterMetadata,
+      letterId,
+      letter,
+      recipient,
+      scheduleStatusReset,
+      sender,
+      showToast,
+    ],
   );
-
-  // Auto-save function (debounced)
-  const triggerAutoSave = useCallback(
-    async (data: {
-      transcriptionText?: string;
-      sender?: string | null;
-      recipient?: string | null;
-      locationWritten?: string | null;
-      hook?: string | null;
-      summary?: string | null;
-      notes?: string | null;
-    }) => {
-      if (!letterId || !letter) return;
-
-      // Clear existing timer
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
-
-      // Sender/recipient changes go through the smart identity endpoint IMMEDIATELY (no debounce)
-      const hasSenderChange = data.sender !== undefined;
-      const hasRecipientChange = data.recipient !== undefined;
-
-      if (hasSenderChange || hasRecipientChange) {
-        // Immediate identity update — no timer
-        setAutoSaveStatus("saving");
-        try {
-          const identityData: { sender?: string; recipient?: string } = {};
-          if (hasSenderChange) identityData.sender = data.sender || '';
-          if (hasRecipientChange) identityData.recipient = data.recipient || '';
-          const updated = await updateIdentity(letterId, identityData);
-          setLetter(updated);
-          // Refresh form state with propagated values
-          setSender(updated.metadata.sender || "");
-          setRecipient(updated.metadata.recipient || "");
-          setHook(updated.metadata.hook || "");
-          setDescription(updated.metadata.description || "");
-          setAutoSaveStatus("saved");
-          showToast("Name updated across metadata", "success");
-
-          // Also save any other fields that changed alongside
-          const otherData = { ...data };
-          delete otherData.sender;
-          delete otherData.recipient;
-          if (Object.keys(otherData).length > 0) {
-            await updateLetter(letterId, otherData);
-          }
-        } catch (err) {
-          setAutoSaveStatus("error");
-          showToast(getErrorMessage(err, "Failed to update name"), "error");
-        }
-        return;
-      }
-
-      // Set up debounced save for non-identity fields
-      autoSaveTimerRef.current = setTimeout(async () => {
-        setAutoSaveStatus("saving");
-        try {
-          const updated = await updateLetter(letterId, data);
-          setLetter(updated);
-
-          // Create version for transcript
-          if (data.transcriptionText !== undefined) {
-            await createVersion(
-              letterId,
-              "transcript",
-              data.transcriptionText,
-              "human",
-            );
-          }
-
-          // Create version for metadata (if any metadata field changed)
-          if (
-            data.sender !== undefined ||
-            data.recipient !== undefined ||
-            data.locationWritten !== undefined ||
-            data.hook !== undefined ||
-            data.summary !== undefined
-          ) {
-            await createVersion(
-              letterId,
-              "metadata",
-              {
-                sender: data.sender ?? letter.metadata.sender,
-                recipient: data.recipient ?? letter.metadata.recipient,
-                locationWritten:
-                  data.locationWritten ?? letter.metadata.location,
-                hook: data.hook ?? letter.metadata.hook,
-                summary: data.summary ?? letter.metadata.description,
-              },
-              "human",
-            );
-          }
-
-          setAutoSaveStatus("saved");
-
-          // Track edit
-          trackEdit({
-            id: updated.id,
-            metadata: updated.metadata,
-            collectionCode: updated.collectionCode,
-          });
-        } catch (err) {
-          setAutoSaveStatus("error");
-          console.error("Auto-save error:", err);
-          showToast(getErrorMessage(err, "Save failed"), "error");
-        }
-      }, 1500);
-    },
-    [letterId, letter, showToast],
-  );
-
-  // Cleanup timers on unmount
-  useEffect(() => {
-    return () => {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
-    };
-  }, []);
-
-  // Handlers for transcript verification
-  const handleVerifyTranscript = async () => {
-    if (!letterId) return;
-    setSaving(true);
-    try {
-      const updated = await verifyTranscript(letterId);
-      setLetter(updated);
-      // Reset editing state since we're now verified
-      setIsTranscriptEditing(false);
-      setOriginalTranscriptText(null);
-      setOriginalTranscriptVerified(false);
-      setHasTranscriptChanges(false);
-      showToast("Transcript verified", "success");
-    } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to verify transcript",
-        "error",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Handlers for metadata verification
-  const handleVerifyMetadata = async () => {
-    if (!letterId) return;
-
-    setSaving(true);
-    try {
-      const updated = await verifyMetadata(letterId);
-      setLetter(updated);
-      showToast("Metadata verified", "success");
-    } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to verify metadata",
-        "error",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleDelete = async () => {
     if (!letterId) return;
@@ -836,130 +579,6 @@ export default function LetterReviewPage() {
       setExtraContent(editor.innerText);
     }
   };
-
-  // Verified transcript editing flow handlers
-  const handleTranscriptClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (
-        !letter?.transcriptStatus ||
-        letter.transcriptStatus !== "VERIFIED" ||
-        isTranscriptEditing
-      )
-        return;
-
-      showEditTooltipAt(e.clientX, e.clientY);
-    },
-    [letter?.transcriptStatus, isTranscriptEditing, showEditTooltipAt],
-  );
-
-  const handleTranscriptDoubleClick = useCallback(async () => {
-    if (
-      !letter?.transcriptStatus ||
-      letter.transcriptStatus !== "VERIFIED" ||
-      !letterId
-    )
-      return;
-
-    closeEditTooltip();
-
-    // Store original state for potential revert
-    setOriginalTranscriptText(transcript);
-    setOriginalTranscriptVerified(true);
-
-    // Unverify via API
-    setSaving(true);
-    try {
-      const updated = await unverifyTranscript(letterId);
-      setLetter(updated);
-      setIsTranscriptEditing(true);
-      setHasTranscriptChanges(false);
-      showToast("Verification removed", "info");
-    } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to unverify transcript",
-        "error",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }, [letter?.transcriptStatus, letterId, transcript, showToast, closeEditTooltip]);
-
-  const handleTranscriptRevert = useCallback(async () => {
-    if (!letterId || originalTranscriptText === null) return;
-
-    // Show confirmation dialog
-    if (!window.confirm("Discard all changes since editing started?")) {
-      return;
-    }
-
-    setSaving(true);
-    try {
-      // Restore original text
-      const updated = await updateLetter(letterId, {
-        transcriptionText: originalTranscriptText,
-      });
-      setLetter(updated);
-      setTranscript(originalTranscriptText);
-
-      // Update contenteditable with highlighted markers
-      if (editorRef.current) {
-        editorRef.current.innerHTML = highlightTranscriptMarkers(originalTranscriptText);
-      }
-
-      // If was originally verified, re-verify
-      if (originalTranscriptVerified) {
-        const verifiedLetter = await verifyTranscript(letterId);
-        setLetter(verifiedLetter);
-        showToast("Changes reverted and verification restored", "success");
-      } else {
-        showToast("Changes reverted", "success");
-      }
-
-      // Reset editing state
-      setIsTranscriptEditing(false);
-      setOriginalTranscriptText(null);
-      setOriginalTranscriptVerified(false);
-      setHasTranscriptChanges(false);
-    } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to revert changes",
-        "error",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }, [letterId, originalTranscriptText, originalTranscriptVerified, showToast]);
-
-  // Verified metadata editing flow handlers
-  const handleMetadataFieldClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (letter?.metadataContentStatus !== "VERIFIED") return;
-
-      showMetadataTooltipAt(e.clientX, e.clientY);
-    },
-    [letter?.metadataContentStatus, showMetadataTooltipAt],
-  );
-
-  const handleMetadataFieldDoubleClick = useCallback(async () => {
-    if (letter?.metadataContentStatus !== "VERIFIED" || !letterId) return;
-
-    closeMetadataTooltip();
-
-    // Unverify via API
-    setSaving(true);
-    try {
-      const updated = await unverifyMetadata(letterId);
-      setLetter(updated);
-      showToast("Verification removed", "info");
-    } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to unverify metadata",
-        "error",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }, [letter?.metadataContentStatus, letterId, showToast, closeMetadataTooltip]);
 
   // Extra content verification handlers
   const handleVerifyExtraContent = useCallback(async () => {
@@ -1048,26 +667,20 @@ export default function LetterReviewPage() {
       setExtraContent(newContent);
       if (!letterId) return;
 
-      // Clear existing timer
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
-
-      // Set up debounced save
-      autoSaveTimerRef.current = setTimeout(async () => {
-        setAutoSaveStatus("saving");
-        try {
+      scheduleDebouncedSave(
+        async () => {
           const updated = await updateExtraContent(letterId, newContent);
           setLetter(updated);
-          setAutoSaveStatus("saved");
-        } catch (err) {
-          setAutoSaveStatus("error");
-          console.error("Extra content auto-save error:", err);
-          showToast(getErrorMessage(err, "Failed to save extra content"), "error");
-        }
-      }, 1500);
+        },
+        {
+          errorMessage: "Failed to save extra content",
+          onError: (error) => {
+            console.error("Extra content auto-save error:", error);
+          },
+        },
+      );
     },
-    [letterId, showToast],
+    [letterId, scheduleDebouncedSave],
   );
 
   // Structured note handlers
@@ -1272,7 +885,9 @@ export default function LetterReviewPage() {
             transcript={transcript}
             onTranscriptChange={(newText) => setTranscript(newText)}
             onExit={() => setReviewMode(false)}
-            onAutoSave={triggerAutoSave}
+            onAutoSave={(data) => {
+              void triggerAutoSave(data);
+            }}
             debugMode={debugMode}
             onDebugModeChange={setDebugMode}
           />
@@ -1376,14 +991,7 @@ export default function LetterReviewPage() {
                 onVerifyTranscript={handleVerifyTranscript}
                 onTranscriptClick={handleTranscriptClick}
                 onTranscriptDoubleClick={handleTranscriptDoubleClick}
-                onTranscriptInput={(newText) => {
-                  setTranscript(newText);
-                  setHasTranscriptChanges(
-                    originalTranscriptText !== null &&
-                      newText !== originalTranscriptText,
-                  );
-                  triggerAutoSave({ transcriptionText: newText });
-                }}
+                onTranscriptInput={handleTranscriptInput}
                 onEditorKeyDown={handleEditorKeyDown}
               />
             )}
@@ -1439,9 +1047,7 @@ export default function LetterReviewPage() {
               onPrimaryTopicsChange={setPrimaryTopics}
               onTopicsDropdownOpenChange={setTopicsDropdownOpen}
               onTriggerAutoSave={(updates) =>
-                triggerAutoSave(
-                  updates as Parameters<typeof triggerAutoSave>[0],
-                )
+                void triggerAutoSave(updates as AutoSaveData)
               }
               hookRef={hookRef}
               descriptionRef={descriptionRef}
@@ -1491,7 +1097,7 @@ export default function LetterReviewPage() {
                     value={notes}
                     onChange={(e) => {
                       setNotes(e.target.value);
-                      triggerAutoSave({ notes: e.target.value || null });
+                      void triggerAutoSave({ notes: e.target.value || null });
                     }}
                     placeholder="Personal notes (not shown publicly)"
                     readOnly={letter.metadataContentStatus === "VERIFIED"}

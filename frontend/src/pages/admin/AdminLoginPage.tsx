@@ -1,5 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { login, getAuthStatus, isAuthenticated } from "../../api/auth";
+import { ApiError } from "../../api/client";
 import "./AdminLoginPage.css";
 
 export default function AdminLoginPage() {
@@ -7,27 +9,66 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(true);
+  const [noAdmin, setNoAdmin] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated()) {
+      navigate("/admin");
+    }
+  }, [navigate]);
+
+  // Check if admin account exists (for first-time setup message)
+  useEffect(() => {
+    getAuthStatus()
+      .then((status) => {
+        setNoAdmin(!status.hasAdmin);
+      })
+      .catch(() => {})
+      .finally(() => setCheckingStatus(false));
+  }, []);
+
+  const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
-    // Mock authentication - hardcoded admin credentials
-    // Later this will be replaced with API call
-    if (email === "admin@letterarchive.com" && password === "admin123") {
-      // Store auth state in sessionStorage (mock)
-      sessionStorage.setItem("adminAuth", "true");
+    try {
+      await login(email, password);
       navigate("/admin");
-    } else {
-      setError("Invalid email or password");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.responseMessage);
+      } else {
+        setError("An unexpected error occurred");
+      }
+    } finally {
+      setLoading(false);
     }
   };
+
+  if (checkingStatus) {
+    return (
+      <div className="admin-login-page">
+        <div className="admin-login-container">
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-login-page">
       <div className="admin-login-container">
         <h1>Admin Login</h1>
-        <form onSubmit={handleSubmit} className="admin-login-form">
+        {noAdmin && (
+          <p className="setup-notice">
+            No admin accounts exist yet. Ask the site owner for an invite link.
+          </p>
+        )}
+        <form onSubmit={handleLogin} className="admin-login-form">
           <div className="form-group">
             <label htmlFor="email">Email</label>
             <input
@@ -51,8 +92,8 @@ export default function AdminLoginPage() {
             />
           </div>
           {error && <div className="error-message">{error}</div>}
-          <button type="submit" className="login-button">
-            Login
+          <button type="submit" className="login-button" disabled={loading}>
+            {loading ? "Please wait..." : "Login"}
           </button>
         </form>
       </div>

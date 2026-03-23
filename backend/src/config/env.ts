@@ -10,6 +10,8 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().optional(),
   PYTHON_VENV_PATH: z.string().default('./python/venv'),
   GOOGLE_APPLICATION_CREDENTIALS: z.string().optional(),
+  JWT_SECRET: z.string().default('change-me-in-production'),
+  JWT_EXPIRY: z.string().default('24h'),
 });
 
 export const env = envSchema.parse(process.env);

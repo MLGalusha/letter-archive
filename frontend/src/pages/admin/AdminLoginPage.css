@@ -82,6 +82,61 @@
   transition: all 0.2s ease;
 }
 
-.login-button:hover {
+.login-button:hover:not(:disabled) {
   transform: scale(1.025);
+}
+
+.login-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.setup-notice {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  margin: 0 0 var(--spacing-md) 0;
+}
+
+.switch-mode-link {
+  display: block;
+  width: 100%;
+  margin-top: var(--spacing-md);
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  text-align: center;
+  cursor: pointer;
+  text-decoration: underline;
+  transition: color 0.2s ease;
+}
+
+.switch-mode-link:hover {
+  color: var(--text);
+}
+
+/* ── Responsive ───────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .admin-login-page {
+    padding: var(--spacing-md);
+    align-items: flex-start;
+    padding-top: 15vh;
+  }
+
+  .admin-login-container {
+    padding: var(--spacing-md);
+  }
+
+  .login-button {
+    padding: 0.85rem 1.5rem;
+    min-height: 48px;
+  }
+
+  .form-group input {
+    min-height: 48px;
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
 }

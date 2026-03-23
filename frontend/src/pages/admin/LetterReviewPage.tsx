@@ -472,6 +472,7 @@ export default function LetterReviewPage() {
   // Regenerate metadata handler
   const handleRegenerateMetadata = async () => {
     if (!letterId) return;
+    if (!window.confirm("Re-extract all metadata from the transcript? This will overwrite the current metadata.")) return;
 
     setRegenerateState("regenerating");
     try {
@@ -512,6 +513,11 @@ export default function LetterReviewPage() {
   const handleReExtract = useCallback(
     async (mode: "full" | "metadata_only" | "entities_only") => {
       if (!letterId || !letter) return;
+
+      const confirmMsg = mode === "entities_only"
+        ? "Re-extract entities from the transcript? This will overwrite current entity data."
+        : "Re-extract all metadata and entities? This will overwrite current data.";
+      if (!window.confirm(confirmMsg)) return;
 
       const isEntityOnly = mode === "entities_only";
       if (isEntityOnly) {
@@ -1458,8 +1464,6 @@ export default function LetterReviewPage() {
               relationship={relationship}
               primaryTopics={primaryTopics}
               topicsDropdownOpen={topicsDropdownOpen}
-              originalSender={originalSender}
-              originalRecipient={originalRecipient}
               onSenderChange={setSender}
               onRecipientChange={setRecipient}
               onDateChange={setDate}
@@ -1479,8 +1483,6 @@ export default function LetterReviewPage() {
               hookRef={hookRef}
               descriptionRef={descriptionRef}
               regenerateState={regenerateState}
-              reExtractState={reExtractState}
-              onReExtract={handleReExtract}
               onVerifyMetadata={handleVerifyMetadata}
               onConfirmTranscript={handleConfirmTranscript}
               onRegenerateMetadata={handleRegenerateMetadata}

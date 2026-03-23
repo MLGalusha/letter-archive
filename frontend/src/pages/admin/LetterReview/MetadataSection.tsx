@@ -24,10 +24,6 @@ interface MetadataSectionProps {
   primaryTopics: string[];
   topicsDropdownOpen: boolean;
 
-  // Original AI-extracted values for change detection
-  originalSender: string;
-  originalRecipient: string;
-
   // Setter callbacks
   onSenderChange: (value: string) => void;
   onRecipientChange: (value: string) => void;
@@ -50,10 +46,6 @@ interface MetadataSectionProps {
 
   // Regenerate state
   regenerateState: string;
-
-  // Re-extraction state
-  reExtractState: "idle" | "extracting" | "done";
-  onReExtract: (mode: "full" | "metadata_only" | "entities_only") => void;
 
   // Verification and generation handlers
   onVerifyMetadata: () => void;
@@ -86,8 +78,6 @@ export default function MetadataSection({
   relationship,
   primaryTopics,
   topicsDropdownOpen,
-  originalSender,
-  originalRecipient,
   onSenderChange,
   onRecipientChange,
   onDateChange,
@@ -103,8 +93,6 @@ export default function MetadataSection({
   hookRef,
   descriptionRef,
   regenerateState,
-  reExtractState,
-  onReExtract,
   onVerifyMetadata,
   onConfirmTranscript,
   onRegenerateMetadata,
@@ -227,63 +215,6 @@ export default function MetadataSection({
             />
           </div>
         </div>
-
-        {/* Re-extraction notification bar — shown when sender or recipient has changed */}
-        {letter.metadataContentStatus !== "VERIFIED" &&
-          letter.metadataContentStatus !== "EMPTY" &&
-          (sender.trim() !== originalSender.trim() ||
-            recipient.trim() !== originalRecipient.trim()) && (
-            <div className="re-extract-bar">
-              <div className="re-extract-message">
-                <Icon name="refresh" size={14} />
-                <span>
-                  {sender.trim() !== originalSender.trim() &&
-                  recipient.trim() !== originalRecipient.trim()
-                    ? "Sender and recipient have been changed."
-                    : sender.trim() !== originalSender.trim()
-                      ? "Sender has been changed."
-                      : "Recipient has been changed."}
-                  {" "}Re-extract metadata with the corrected{" "}
-                  {sender.trim() !== originalSender.trim() &&
-                  recipient.trim() !== originalRecipient.trim()
-                    ? "identities"
-                    : "identity"}?
-                </span>
-              </div>
-              <div className="re-extract-actions">
-                <button
-                  className="re-extract-btn re-extract-btn-secondary"
-                  disabled={saving || reExtractState === "extracting"}
-                  title="Keep name changes without re-extracting metadata"
-                >
-                  Update Names Only
-                </button>
-                <button
-                  className="re-extract-btn re-extract-btn-primary"
-                  onClick={() => onReExtract("full")}
-                  disabled={saving || reExtractState === "extracting"}
-                  title="Re-extract all metadata using corrected sender/recipient"
-                >
-                  {reExtractState === "extracting" ? (
-                    <>
-                      <Icon name="process" size={14} className="spinning" />
-                      <span>Extracting...</span>
-                    </>
-                  ) : reExtractState === "done" ? (
-                    <>
-                      <Icon name="check" size={14} />
-                      <span>Done</span>
-                    </>
-                  ) : (
-                    <>
-                      <Icon name="refresh" size={14} />
-                      <span>Re-extract with Corrections</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
 
         <div className="form-row">
           <div className="form-group">

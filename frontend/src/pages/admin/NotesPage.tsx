@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
-import { Button } from '../../components/common';
 import Icon from '../../components/common/Icon';
 import { getErrorMessage } from '../../api/client';
 import { getNotes, type AggregatedNote, type NotesListResponse } from '../../api/admin/notes';
@@ -9,7 +8,8 @@ import './NotesPage.css';
 
 const PAGE_SIZE = 50;
 
-type StatusTab = 'all' | 'open' | 'resolved' | 'dismissed';
+type NoteTypeTab = 'all' | 'ai' | 'personal';
+type StatusFilter = 'all' | 'open' | 'resolved' | 'dismissed';
 
 const CATEGORY_OPTIONS = [
   'identity', 'date', 'transcription', 'relationship',
@@ -23,44 +23,86 @@ function formatCategory(cat: string): string {
 function formatLetterDate(dateStr: string | null): string {
   if (!dateStr) return 'Unknown date';
   try {
-    const d = new Date(dateStr + 'T00:00:00');
+    const d = new Date(`${dateStr}T00:00:00`);
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   } catch {
     return dateStr;
   }
 }
 
+function getSummaryText(activeTab: NoteTypeTab, counts: NotesListResponse['counts']): string {
+  if (activeTab === 'personal') {
+    return counts.personal > 0
+      ? `${counts.personal} personal note${counts.personal === 1 ? '' : 's'}`
+      : 'No personal notes';
+  }
+
+  if (activeTab === 'ai') {
+    const summaryParts = [`${counts.ai} AI note${counts.ai === 1 ? '' : 's'}`];
+    if (counts.open > 0) summaryParts.push(`${counts.open} open`);
+    if (counts.resolved > 0) summaryParts.push(`${counts.resolved} resolved`);
+    if (counts.dismissed > 0) summaryParts.push(`${counts.dismissed} dismissed`);
+    return summaryParts.join(' \u00B7 ');
+  }
+
+  const summaryParts: string[] = [];
+  if (counts.ai > 0) summaryParts.push(`${counts.ai} AI`);
+  if (counts.personal > 0) summaryParts.push(`${counts.personal} personal`);
+  if (counts.open > 0) summaryParts.push(`${counts.open} open`);
+  if (counts.resolved > 0) summaryParts.push(`${counts.resolved} resolved`);
+  if (counts.dismissed > 0) summaryParts.push(`${counts.dismissed} dismissed`);
+  return summaryParts.join(' \u00B7 ') || 'No notes';
+}
+
 export default function NotesPage() {
   const [notes, setNotes] = useState<AggregatedNote[]>([]);
   const [total, setTotal] = useState(0);
-  const [counts, setCounts] = useState<NotesListResponse['counts']>({ open: 0, resolved: 0, dismissed: 0 });
+  const [counts, setCounts] = useState<NotesListResponse['counts']>({
+    open: 0,
+    resolved: 0,
+    dismissed: 0,
+    ai: 0,
+    personal: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<StatusTab>('all');
+  const [activeTab, setActiveTab] = useState<NoteTypeTab>('all');
+  const [status, setStatus] = useState<StatusFilter>('all');
   const [priority, setPriority] = useState<string>('');
   const [category, setCategory] = useState<string>('');
   const [search, setSearch] = useState<string>('');
   const [debouncedSearch, setDebouncedSearch] = useState<string>('');
 
-  // Debounce search input
+  const showAiFilters = activeTab === 'ai';
+
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
   }, [search]);
 
+  useEffect(() => {
+    if (showAiFilters) return;
+    setStatus('all');
+    setPriority('');
+    setCategory('');
+  }, [showAiFilters]);
+
   const buildParams = useCallback(() => {
-    const params: Record<string, string | number | undefined> = {
+    const params: Parameters<typeof getNotes>[0] = {
       limit: PAGE_SIZE,
       offset: 0,
     };
-    if (activeTab !== 'all') params.status = activeTab;
-    if (priority) params.priority = priority;
-    if (category) params.category = category;
+
+    if (activeTab !== 'all') params.type = activeTab;
+    if (showAiFilters && status !== 'all') params.status = status;
+    if (showAiFilters && priority) params.priority = priority;
+    if (showAiFilters && category) params.category = category;
     if (debouncedSearch) params.search = debouncedSearch;
+
     return params;
-  }, [activeTab, priority, category, debouncedSearch]);
+  }, [activeTab, showAiFilters, status, priority, category, debouncedSearch]);
 
   const fetchNotes = useCallback(async (offset = 0, append = false) => {
     try {
@@ -71,7 +113,7 @@ export default function NotesPage() {
       const params = buildParams();
       params.offset = offset;
 
-      const data = await getNotes(params as Parameters<typeof getNotes>[0]);
+      const data = await getNotes(params);
 
       if (append) {
         setNotes(prev => [...prev, ...data.notes]);
@@ -96,19 +138,14 @@ export default function NotesPage() {
     fetchNotes(notes.length, true);
   };
 
-  const tabs: { key: StatusTab; label: string; count?: number }[] = useMemo(() => [
-    { key: 'all', label: 'All', count: counts.open + counts.resolved + counts.dismissed },
-    { key: 'open', label: 'Open', count: counts.open },
-    { key: 'resolved', label: 'Resolved', count: counts.resolved },
-    { key: 'dismissed', label: 'Dismissed', count: counts.dismissed },
+  const tabs: { key: NoteTypeTab; label: string; count: number }[] = useMemo(() => [
+    { key: 'all', label: 'All', count: counts.ai + counts.personal },
+    { key: 'ai', label: 'AI Notes', count: counts.ai },
+    { key: 'personal', label: 'Personal Notes', count: counts.personal },
   ], [counts]);
 
-  // Summary text
-  const summaryParts: string[] = [];
-  if (counts.open > 0) summaryParts.push(`${counts.open} open`);
-  if (counts.resolved > 0) summaryParts.push(`${counts.resolved} resolved`);
-  if (counts.dismissed > 0) summaryParts.push(`${counts.dismissed} dismissed`);
-  const summaryText = summaryParts.join(' \u00B7 ') || 'No notes';
+  const summaryText = useMemo(() => getSummaryText(activeTab, counts), [activeTab, counts]);
+  const hasFilters = Boolean(debouncedSearch || (showAiFilters && (status !== 'all' || priority || category)));
 
   if (loading) {
     return (
@@ -121,7 +158,6 @@ export default function NotesPage() {
   return (
     <AdminLayout>
       <div className="notes-page">
-        {/* Header */}
         <div className="notes-page-header">
           <div className="notes-page-header-top">
             <div className="notes-page-title-row">
@@ -130,7 +166,6 @@ export default function NotesPage() {
             <span className="notes-page-summary">{summaryText}</span>
           </div>
 
-          {/* Status tabs */}
           <div className="notes-tabs">
             {tabs.map(tab => (
               <button
@@ -139,41 +174,57 @@ export default function NotesPage() {
                 onClick={() => setActiveTab(tab.key)}
               >
                 {tab.label}
-                {tab.count != null && tab.count > 0 && (
+                {tab.count > 0 && (
                   <span className="notes-tab-count">{tab.count}</span>
                 )}
               </button>
             ))}
           </div>
 
-          {/* Filters row */}
           <div className="notes-filters-row">
-            <select
-              className="notes-filter-select"
-              value={priority}
-              onChange={e => setPriority(e.target.value)}
-            >
-              <option value="">All priorities</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
+            {showAiFilters && (
+              <>
+                <select
+                  className="notes-filter-select"
+                  value={status}
+                  onChange={e => setStatus(e.target.value as StatusFilter)}
+                >
+                  <option value="all">All statuses</option>
+                  <option value="open">Open</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="dismissed">Dismissed</option>
+                </select>
 
-            <select
-              className="notes-filter-select"
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-            >
-              <option value="">All categories</option>
-              {CATEGORY_OPTIONS.map(c => (
-                <option key={c} value={c}>{formatCategory(c)}</option>
-              ))}
-            </select>
+                <select
+                  className="notes-filter-select"
+                  value={priority}
+                  onChange={e => setPriority(e.target.value)}
+                >
+                  <option value="">All priorities</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+
+                <select
+                  className="notes-filter-select"
+                  value={category}
+                  onChange={e => setCategory(e.target.value)}
+                >
+                  <option value="">All categories</option>
+                  {CATEGORY_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {formatCategory(option)}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
 
             <input
               type="text"
               className="notes-search-input"
-              placeholder="Search notes..."
+              placeholder={activeTab === 'personal' ? 'Search personal notes...' : 'Search notes...'}
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -184,7 +235,6 @@ export default function NotesPage() {
           <div className="notes-error">{error}</div>
         )}
 
-        {/* Notes List */}
         {notes.length === 0 ? (
           <div className="notes-empty">
             <div className="notes-empty-icon">
@@ -192,30 +242,33 @@ export default function NotesPage() {
             </div>
             <p className="notes-empty-title">No notes found</p>
             <p className="notes-empty-desc">
-              {activeTab !== 'all' || priority || category || debouncedSearch
+              {hasFilters
                 ? 'Try adjusting your filters.'
-                : 'Notes will appear here after metadata extraction runs on letters.'}
+                : activeTab === 'personal'
+                  ? 'Personal notes appear here after you save them on a letter.'
+                  : activeTab === 'ai'
+                    ? 'AI notes appear here after metadata extraction runs on letters.'
+                    : 'AI and personal notes appear here after metadata extraction or manual note entry.'}
             </p>
           </div>
         ) : (
           <>
             <div className="notes-list">
               {notes.map(note => (
-                <NoteRow key={`${note.letterId}-${note.id}`} note={note} />
+                <NoteRow key={`${note.type}-${note.letterId}-${note.id}`} note={note} />
               ))}
             </div>
 
-            {/* Load More */}
             {notes.length < total && (
               <div className="notes-load-more">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  loading={loadingMore}
+                <button
+                  type="button"
+                  className="notes-load-more-btn"
                   onClick={handleLoadMore}
+                  disabled={loadingMore}
                 >
-                  Load more
-                </Button>
+                  {loadingMore ? 'Loading...' : 'Load more'}
+                </button>
                 <span className="notes-total">
                   {notes.length} of {total}
                 </span>
@@ -228,10 +281,11 @@ export default function NotesPage() {
   );
 }
 
-/* ── Note Row Component ──────────────────────────────── */
-
 function NoteRow({ note }: { note: AggregatedNote }) {
+  const isPersonal = note.type === 'personal';
+  const rowClass = isPersonal ? 'personal' : (note.status ?? 'open');
   const letterContext: string[] = [];
+
   if (note.letterDate) letterContext.push(formatLetterDate(note.letterDate));
   letterContext.push(`Collection ${note.collectionCode}`);
   if (note.sender || note.recipient) {
@@ -241,41 +295,46 @@ function NoteRow({ note }: { note: AggregatedNote }) {
   }
 
   return (
-    <div className={`notes-row ${note.status}`}>
-      {/* Badges */}
+    <div className={`notes-row ${rowClass}`}>
       <div className="notes-row-badges">
-        <span className={`notes-badge priority-${note.priority}`}>
-          {note.priority}
+        <span className={`notes-badge note-type-${note.type}`}>
+          {isPersonal ? 'Personal' : 'AI Note'}
         </span>
-        <span className={`notes-badge cat-${note.category}`}>
-          {formatCategory(note.category)}
-        </span>
+        {!isPersonal && note.priority && (
+          <span className={`notes-badge priority-${note.priority}`}>
+            {note.priority}
+          </span>
+        )}
+        {!isPersonal && note.category && (
+          <span className={`notes-badge cat-${note.category}`}>
+            {formatCategory(note.category)}
+          </span>
+        )}
       </div>
 
-      {/* Content */}
       <div className="notes-row-content">
         <p className="notes-row-text">{note.content}</p>
 
         <Link
-          to={`/admin/letters/${note.letterId}`}
+          to={`/admin/letters/${note.letterId}${isPersonal ? '#personal-notes-section' : '#ai-notes-section'}`}
           className="notes-row-letter"
           onClick={e => e.stopPropagation()}
         >
-          {letterContext.map((part, i) => (
-            <span key={i}>
-              {i > 0 && <span className="notes-row-letter-sep"> &middot; </span>}
+          {letterContext.map((part, index) => (
+            <span key={`${note.letterId}-${index}`}>
+              {index > 0 && <span className="notes-row-letter-sep"> &middot; </span>}
               {part}
             </span>
           ))}
         </Link>
 
-        {note.status === 'open' && note.resolves_when && (
+        {!isPersonal && note.status === 'open' && note.resolves_when && (
           <span className="notes-row-resolves">
             Auto-resolves when: {note.resolves_when}
           </span>
         )}
 
-        {note.status === 'resolved' && (
+        {!isPersonal && note.status === 'resolved' && (
           <div className="notes-row-resolved-info">
             <Icon name="check" size={12} />
             <span>Resolved{note.resolved_at ? ` ${formatRelativeTime(note.resolved_at)}` : ''}</span>
@@ -283,9 +342,11 @@ function NoteRow({ note }: { note: AggregatedNote }) {
         )}
       </div>
 
-      {/* Status dot */}
       <div className="notes-row-status">
-        <span className={`notes-status-dot ${note.status}`} title={note.status} />
+        <span
+          className={`notes-status-dot ${isPersonal ? 'personal' : note.status ?? 'open'}`}
+          title={isPersonal ? 'personal note' : note.status ?? 'open'}
+        />
       </div>
     </div>
   );

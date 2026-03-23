@@ -58,10 +58,9 @@ body.dark .notif-unread-badge {
 
 .notif-tabs {
   display: flex;
-  gap: 2px;
+  gap: 2px var(--spacing-xs);
   border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  flex-wrap: wrap;
 }
 
 .notif-tab {
@@ -352,7 +351,7 @@ body.dark .notif-row-icon.type-system { color: #b0bec5; }
   }
 
   .notif-tabs {
-    gap: 0;
+    gap: 0 var(--spacing-xs);
   }
 
   .notif-tab {

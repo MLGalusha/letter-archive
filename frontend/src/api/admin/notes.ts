@@ -3,13 +3,14 @@ import { apiGet } from '../client';
 export interface AggregatedNote {
   id: string;
   content: string;
-  category: string;
-  priority: 'high' | 'medium' | 'low';
-  status: 'open' | 'resolved' | 'dismissed';
+  type: 'ai' | 'personal';
+  category: string | null;
+  priority: 'high' | 'medium' | 'low' | null;
+  status: 'open' | 'resolved' | 'dismissed' | null;
   resolves_when: string | null;
   resolved_at: string | null;
   resolved_by: string | null;
-  source: 'ai' | 'admin';
+  source: 'ai' | 'admin' | 'personal';
   letterId: string;
   letterDate: string | null;
   collectionCode: string;
@@ -20,10 +21,17 @@ export interface AggregatedNote {
 export interface NotesListResponse {
   notes: AggregatedNote[];
   total: number;
-  counts: { open: number; resolved: number; dismissed: number };
+  counts: {
+    open: number;
+    resolved: number;
+    dismissed: number;
+    ai: number;
+    personal: number;
+  };
 }
 
 export function getNotes(params?: {
+  type?: 'ai' | 'personal';
   status?: string;
   priority?: string;
   category?: string;

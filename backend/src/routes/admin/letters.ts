@@ -1478,6 +1478,7 @@ router.post('/letters/pages/:pageId/detect-lines', async (req, res, next) => {
 // ============================================================================
 
 const notesQuerySchema = z.object({
+  type: z.enum(['ai', 'personal']).optional(),
   status: z.enum(['open', 'resolved', 'dismissed']).optional(),
   priority: z.enum(['high', 'medium', 'low']).optional(),
   category: z.string().optional(),
@@ -1499,19 +1500,22 @@ router.get('/notes', async (req, res, next) => {
         sender: letters.sender,
         recipient: letters.recipient,
         aiNotes: letters.aiNotes,
+        notes: letters.notes,
+        updatedAt: letters.updatedAt,
         collectionCode: collections.collectionCode,
       })
       .from(letters)
       .innerJoin(collections, eq(letters.collectionId, collections.id))
-      .where(sql`${letters.aiNotes} IS NOT NULL`);
+      .where(sql`${letters.aiNotes} IS NOT NULL OR ${letters.notes} IS NOT NULL`);
 
     // Flatten notes from all letters, handling legacy string/non-array gracefully
     interface AggregatedNote {
       id: string;
+      type: 'ai' | 'personal';
       content: string;
-      category: string;
-      priority: string;
-      status: string;
+      category: string | null;
+      priority: string | null;
+      status: string | null;
       resolves_when: string | null;
       resolved_at: string | null;
       resolved_by: string | null;
@@ -1521,11 +1525,34 @@ router.get('/notes', async (req, res, next) => {
       collectionCode: string;
       sender: string | null;
       recipient: string | null;
+      updatedAt: string | null;
     }
 
     const allNotes: AggregatedNote[] = [];
 
     for (const row of rows) {
+      const personalNote = typeof row.notes === 'string' ? row.notes.trim() : '';
+      if (personalNote) {
+        allNotes.push({
+          id: `personal-${row.id}`,
+          type: 'personal',
+          content: personalNote,
+          category: null,
+          priority: null,
+          status: null,
+          resolves_when: null,
+          resolved_at: null,
+          resolved_by: null,
+          source: 'personal',
+          letterId: row.id,
+          letterDate: row.letterDate,
+          collectionCode: row.collectionCode,
+          sender: row.sender,
+          recipient: row.recipient,
+          updatedAt: row.updatedAt?.toISOString() ?? null,
+        });
+      }
+
       const rawNotes = row.aiNotes;
 
       // Skip if not an array (legacy text format or malformed data)
@@ -1538,6 +1565,7 @@ router.get('/notes', async (req, res, next) => {
         const n = note as Record<string, unknown>;
         allNotes.push({
           id: String(n.id ?? ''),
+          type: 'ai',
           content: String(n.content ?? ''),
           category: String(n.category ?? 'context'),
           priority: String(n.priority ?? 'medium'),
@@ -1551,46 +1579,81 @@ router.get('/notes', async (req, res, next) => {
           collectionCode: row.collectionCode,
           sender: row.sender,
           recipient: row.recipient,
+          updatedAt: row.updatedAt?.toISOString() ?? null,
         });
       }
     }
 
     // Compute status counts from the full (unfiltered) set
     const counts = {
-      open: allNotes.filter(n => n.status === 'open').length,
-      resolved: allNotes.filter(n => n.status === 'resolved').length,
-      dismissed: allNotes.filter(n => n.status === 'dismissed').length,
+      open: allNotes.filter(n => n.type === 'ai' && n.status === 'open').length,
+      resolved: allNotes.filter(n => n.type === 'ai' && n.status === 'resolved').length,
+      dismissed: allNotes.filter(n => n.type === 'ai' && n.status === 'dismissed').length,
+      ai: allNotes.filter(n => n.type === 'ai').length,
+      personal: allNotes.filter(n => n.type === 'personal').length,
     };
 
     // Apply filters
     let filtered = allNotes;
 
+    if (query.type) {
+      filtered = filtered.filter(n => n.type === query.type);
+    }
     if (query.status) {
-      filtered = filtered.filter(n => n.status === query.status);
+      filtered = filtered.filter(n => n.type === 'ai' && n.status === query.status);
     }
     if (query.priority) {
-      filtered = filtered.filter(n => n.priority === query.priority);
+      filtered = filtered.filter(n => n.type === 'ai' && n.priority === query.priority);
     }
     if (query.category) {
-      filtered = filtered.filter(n => n.category === query.category);
+      filtered = filtered.filter(n => n.type === 'ai' && n.category === query.category);
     }
     if (query.search) {
       const lower = query.search.toLowerCase();
-      filtered = filtered.filter(n => n.content.toLowerCase().includes(lower));
+      filtered = filtered.filter((n) => {
+        const haystack = [
+          n.content,
+          n.category,
+          n.collectionCode,
+          n.sender,
+          n.recipient,
+          n.letterDate,
+        ].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(lower);
+      });
     }
 
-    // Sort: open first (high priority at top), then resolved, then dismissed
-    const STATUS_ORDER: Record<string, number> = { open: 0, resolved: 1, dismissed: 2 };
+    // Sort: open AI notes first, then personal notes, then resolved, then dismissed.
+    const STATUS_ORDER: Record<string, number> = { open: 0, personal: 1, resolved: 2, dismissed: 3 };
     const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
     filtered.sort((a, b) => {
-      const statusDiff = (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3);
-      if (statusDiff !== 0) return statusDiff;
-      return (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3);
+      const aBucket = STATUS_ORDER[a.type === 'personal' ? 'personal' : (a.status ?? 'dismissed')] ?? 4;
+      const bBucket = STATUS_ORDER[b.type === 'personal' ? 'personal' : (b.status ?? 'dismissed')] ?? 4;
+      if (aBucket !== bBucket) return aBucket - bBucket;
+
+      if (a.type === 'ai' && b.type === 'ai') {
+        const priorityDiff = (PRIORITY_ORDER[a.priority ?? 'low'] ?? 3) - (PRIORITY_ORDER[b.priority ?? 'low'] ?? 3);
+        if (priorityDiff !== 0) return priorityDiff;
+      }
+
+      if (a.updatedAt && b.updatedAt) {
+        const updatedAtDiff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        if (!Number.isNaN(updatedAtDiff) && updatedAtDiff !== 0) return updatedAtDiff;
+      }
+
+      if (a.letterDate && b.letterDate) {
+        const letterDateDiff = String(b.letterDate).localeCompare(String(a.letterDate));
+        if (letterDateDiff !== 0) return letterDateDiff;
+      }
+
+      return a.letterId.localeCompare(b.letterId);
     });
 
     const total = filtered.length;
-    const paginated = filtered.slice(query.offset, query.offset + query.limit);
+    const paginated = filtered
+      .slice(query.offset, query.offset + query.limit)
+      .map(({ updatedAt: _updatedAt, ...note }) => note);
 
     req.log.info({ total, returned: paginated.length }, 'Aggregate notes query completed');
 

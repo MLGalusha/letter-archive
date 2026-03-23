@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
 import { getErrorMessage } from "../../api/client";
 import { getAdminLetterById, deleteLetter } from "../../api/letters";
@@ -52,6 +52,7 @@ import "./LetterReviewPage.css";
 export default function LetterReviewPage() {
   const { letterId } = useParams<{ letterId: string }>();
   const navigate = useNavigate();
+  const routeLocation = useLocation();
   const { showToast } = useToast();
   const [letter, setLetter] = useState<Letter | null>(null);
   const [loading, setLoading] = useState(true);
@@ -224,6 +225,20 @@ export default function LetterReviewPage() {
       fetchLetter();
     }
   }, [letterId, navigate]);
+
+  useEffect(() => {
+    if (!letter || !routeLocation.hash) return;
+
+    const sectionId = routeLocation.hash.slice(1);
+    const frameId = window.requestAnimationFrame(() => {
+      document.getElementById(sectionId)?.scrollIntoView({
+        block: 'start',
+        behavior: 'smooth',
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [letter, routeLocation.hash]);
 
   // Calculate font size based on longest line to prevent wrapping
   const calculateFontSize = useCallback(() => {
@@ -1505,21 +1520,23 @@ export default function LetterReviewPage() {
             )}
 
             {/* AI Notes Section (structured) */}
-            <NotesSection
-              notes={letter.aiNotes as import("./LetterReview/NotesSection").StructuredNote[] | string | null}
-              letterId={letterId!}
-              onNoteStatusChange={handleNoteStatusChange}
-              onAddNote={handleAddNote}
-            />
+            <div id="ai-notes-section">
+              <NotesSection
+                notes={letter.aiNotes as import("./LetterReview/NotesSection").StructuredNote[] | string | null}
+                letterId={letterId!}
+                onNoteStatusChange={handleNoteStatusChange}
+                onAddNote={handleAddNote}
+              />
+            </div>
 
-            {/* Admin Notes Section */}
-            <div className="editor-section notes-section">
+            {/* Personal Notes Section */}
+            <div id="personal-notes-section" className="editor-section notes-section">
               <div className="notes-section-header">
-                <span className="help-text">Internal reference only</span>
+                <span className="help-text">Personal reference only</span>
               </div>
               <div className="notes-container">
                 <div className="form-group">
-                  <label htmlFor="notes">Admin Notes</label>
+                  <label htmlFor="notes">Personal Notes</label>
                   <textarea
                     ref={notesRef}
                     id="notes"
@@ -1528,7 +1545,7 @@ export default function LetterReviewPage() {
                       setNotes(e.target.value);
                       triggerAutoSave({ notes: e.target.value || null });
                     }}
-                    placeholder="Internal notes (not shown publicly)"
+                    placeholder="Personal notes (not shown publicly)"
                     readOnly={letter.metadataContentStatus === "VERIFIED"}
                     className={
                       letter.metadataContentStatus === "VERIFIED"

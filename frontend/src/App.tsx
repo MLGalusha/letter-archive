@@ -6,10 +6,11 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import HomePage from "./pages/HomePage";
 import LetterDetailPage from "./pages/LetterDetailPage";
 import AboutPage from "./pages/AboutPage";
-import ContactPage from "./pages/ContactPage";
 import SupportPage from "./pages/SupportPage";
 import CollectionsPage from "./pages/CollectionsPage";
 import CollectionDetailPage from "./pages/CollectionDetailPage";
+import UpdatesPage from "./pages/UpdatesPage";
+import UpdateDetailPage from "./pages/UpdateDetailPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import AdminLoginPage from "./pages/admin/AdminLoginPage";
 import AcceptInvitePage from "./pages/admin/AcceptInvitePage";
@@ -21,6 +22,8 @@ import SettingsPage from "./pages/admin/SettingsPage";
 import UsagePage from "./pages/admin/UsagePage";
 import NotificationsPage from "./pages/admin/NotificationsPage";
 import NotesPage from "./pages/admin/NotesPage";
+import ContentPage from "./pages/admin/ContentPage";
+import UpdateEditorPage from "./pages/admin/UpdateEditorPage";
 import "./App.css";
 
 function App() {
@@ -40,6 +43,9 @@ function App() {
         <Route path="/admin/processing" element={<ProcessingQueuePage />} />
         <Route path="/admin/letters/:letterId" element={<LetterReviewPage />} />
         <Route path="/admin/notes" element={<NotesPage />} />
+        <Route path="/admin/content" element={<ContentPage />} />
+        <Route path="/admin/content/updates/new" element={<UpdateEditorPage />} />
+        <Route path="/admin/content/updates/:id" element={<UpdateEditorPage />} />
         <Route path="/admin/usage" element={<UsagePage />} />
         <Route path="/admin/notifications" element={<NotificationsPage />} />
         <Route path="/admin/settings" element={<SettingsPage />} />
@@ -56,10 +62,11 @@ function App() {
               <Routes>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/about" element={<AboutPage />} />
-                <Route path="/contact" element={<ContactPage />} />
                 <Route path="/support" element={<SupportPage />} />
                 <Route path="/collections" element={<CollectionsPage />} />
                 <Route path="/collections/:collectionCode" element={<CollectionDetailPage />} />
+                <Route path="/updates" element={<UpdatesPage />} />
+                <Route path="/updates/:slug" element={<UpdateDetailPage />} />
                 <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </main>

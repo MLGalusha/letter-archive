@@ -276,4 +276,79 @@ export function getImageUrl(imageUrl: string): string {
   return `${API_BASE_URL}${imageUrl}`;
 }
 
+// ── Updates & Content types ──────────────────────────────────────────────────
+
+export interface UpdatePost {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  bodyMarkdown: string;
+  status: string;
+  category: string | null;
+  authorDisplayName: string | null;
+  authorRole: string | null;
+  heroImageUrl: string | null;
+  heroImageAlt: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  ctaLabel: string | null;
+  ctaUrl: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FeaturedLetter {
+  id: string;
+  hook: string | null;
+  summary: string | null;
+  sender: string | null;
+  recipient: string | null;
+  letterDate: string | null;
+  collectionCode: string;
+  collectionTitle: string | null;
+}
+
+export interface ContentPage {
+  slug: string;
+  title: string;
+  contentJson: Record<string, string>;
+  updatedAt: string;
+}
+
+// ── Updates & Content API ────────────────────────────────────────────────────
+
+export async function listUpdates(
+  params?: { limit?: number; offset?: number; category?: string },
+): Promise<{ updates: UpdatePost[]; total: number }> {
+  return apiGet<{ updates: UpdatePost[]; total: number }>('/updates', {
+    limit: params?.limit,
+    offset: params?.offset,
+    category: params?.category,
+  });
+}
+
+export async function getUpdate(slug: string): Promise<UpdatePost> {
+  return apiGet<UpdatePost>(`/updates/${encodeURIComponent(slug)}`);
+}
+
+export async function getFeaturedLetter(): Promise<FeaturedLetter | null> {
+  try {
+    return await apiGet<FeaturedLetter>('/content/featured-letter');
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+export async function getContentPage(slug: string): Promise<ContentPage | null> {
+  try {
+    return await apiGet<ContentPage>(`/content/pages/${encodeURIComponent(slug)}`);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
 export { API_BASE_URL };

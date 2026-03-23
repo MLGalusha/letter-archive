@@ -6,6 +6,7 @@ import collectionsRouter from './collections.js';
 import settingsRouter from './settings.js';
 import notificationsRouter from './notifications.js';
 import usageRouter from './usage.js';
+import contentRouter from './content.js';
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use('/collections', collectionsRouter);
 router.use(settingsRouter);
 router.use(notificationsRouter);
 router.use(usageRouter);
+router.use(contentRouter);
 
 export default router;

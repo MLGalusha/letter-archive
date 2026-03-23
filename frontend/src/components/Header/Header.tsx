@@ -47,11 +47,11 @@ export default function Header() {
         <Link to="/collections" className="page-selector" onClick={() => setMenuOpen(false)}>
           Collections
         </Link>
+        <Link to="/updates" className="page-selector" onClick={() => setMenuOpen(false)}>
+          Updates
+        </Link>
         <Link to="/about" className="page-selector" onClick={() => setMenuOpen(false)}>
           About
-        </Link>
-        <Link to="/contact" className="page-selector" onClick={() => setMenuOpen(false)}>
-          Contact
         </Link>
         <Link to="/support" className="page-selector" onClick={() => setMenuOpen(false)}>
           Support

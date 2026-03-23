@@ -524,6 +524,61 @@ export const entityReviewQueue = pgTable(
 );
 
 // ============================================================================
+// CONTENT PUBLISHING TABLES
+// ============================================================================
+
+/**
+ * Blog-style update posts for the public site
+ */
+export const updatePosts = pgTable(
+  'update_posts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    slug: text('slug').notNull().unique(),
+    title: text('title').notNull(),
+    excerpt: text('excerpt'),
+    bodyMarkdown: text('body_markdown').notNull(),
+    status: text('status').notNull().default('draft'),
+    category: text('category'),
+    authorDisplayName: text('author_display_name'),
+    authorRole: text('author_role'),
+    heroImageUrl: text('hero_image_url'),
+    heroImageAlt: text('hero_image_alt'),
+    seoTitle: text('seo_title'),
+    seoDescription: text('seo_description'),
+    ctaLabel: text('cta_label'),
+    ctaUrl: text('cta_url'),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('update_posts_slug_unique').on(table.slug),
+    index('idx_update_posts_status').on(table.status),
+    index('idx_update_posts_published_at').on(table.publishedAt),
+    index('idx_update_posts_created_at').on(table.createdAt),
+  ]
+);
+
+/**
+ * Structured content pages (about, contact, support)
+ */
+export const contentPages = pgTable(
+  'content_pages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    slug: text('slug').notNull().unique(),
+    title: text('title').notNull(),
+    contentJson: jsonb('content_json').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: text('updated_by'),
+  },
+  (table) => [
+    uniqueIndex('content_pages_slug_unique').on(table.slug),
+  ]
+);
+
+// ============================================================================
 // ADMIN AUTH TABLES
 // ============================================================================
 
@@ -775,3 +830,10 @@ export type NewAdminNotification = typeof adminNotifications.$inferInsert;
 // API usage log types
 export type ApiUsageLog = typeof apiUsageLogs.$inferSelect;
 export type NewApiUsageLog = typeof apiUsageLogs.$inferInsert;
+
+// Content publishing types
+export type UpdatePost = typeof updatePosts.$inferSelect;
+export type NewUpdatePost = typeof updatePosts.$inferInsert;
+
+export type ContentPage = typeof contentPages.$inferSelect;
+export type NewContentPage = typeof contentPages.$inferInsert;

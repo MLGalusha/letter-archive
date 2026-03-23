@@ -7,6 +7,8 @@ import collectionsRouter from './collections.js';
 import sitemapRouter from './sitemap.js';
 import adminRouter from './admin/index.js';
 import authRouter from './auth.js';
+import updatesRouter from './updates.js';
+import contentPagesRouter from './content-pages.js';
 
 const router = Router();
 
@@ -16,6 +18,8 @@ router.use(lettersRouter);
 router.use(imagesRouter);
 router.use(collectionsRouter);
 router.use(authRouter);
+router.use(updatesRouter);
+router.use(contentPagesRouter);
 router.use('/admin', adminRouter);
 
 // Public site settings (non-sensitive keys only)
@@ -28,6 +32,7 @@ const PUBLIC_SETTINGS_KEYS = [
   'contact_contribute_email',
   'contact_research_email',
   'contact_volunteer_email',
+  'featured_letter_id',
 ];
 
 router.get('/settings/public', async (_req, res) => {

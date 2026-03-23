@@ -23,7 +23,7 @@ export default function AboutPage() {
 
     let content: Record<string, string> | null = null;
     if (contentResult.status === 'fulfilled' && contentResult.value) {
-      content = contentResult.value.content_json;
+      content = contentResult.value.contentJson;
     }
 
     return { stats, content };

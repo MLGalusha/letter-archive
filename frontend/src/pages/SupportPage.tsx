@@ -1,32 +1,45 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import SEO from "../components/SEO";
+import { getContentPage } from "../api/client";
 import { useSiteSettings } from "../hooks/useSiteSettings";
 import Footer from "../components/Footer/Footer";
 import "./SupportPage.css";
 
 export default function SupportPage() {
   const settings = useSiteSettings();
+  const [content, setContent] = useState<Record<string, string> | null>(null);
+
+  useEffect(() => {
+    getContentPage('support')
+      .then((page) => { if (page) setContent(page.contentJson); })
+      .catch(() => {});
+  }, []);
+
+  const get = (key: string, fallback: string) => content?.[key] || fallback;
   const onetimeUrl = settings?.donate_onetime_url || '#donate-once';
   const monthlyUrl = settings?.donate_monthly_url || '#donate-monthly';
+  const generalEmail = settings?.contact_general_email || 'info@letterarchive.org';
+  const contributeEmail = settings?.contact_contribute_email || 'contribute@letterarchive.org';
+  const researchEmail = settings?.contact_research_email || 'research@letterarchive.org';
+  const volunteerEmail = settings?.contact_volunteer_email || 'volunteer@letterarchive.org';
 
   return (
     <div className="body-layout">
       <SEO
-        title="Support"
-        description="Help preserve personal letters and historical correspondence. Your support funds digitization, preservation, and public access to the Letter Archive."
+        title="Support & Contact"
+        description="Help preserve personal letters and historical correspondence. Your support funds digitization, preservation, and public access to the Letter Archive. Get in touch to contribute, research, or volunteer."
+        canonicalUrl="/support"
       />
       <div className="support-page">
         {/* Hero */}
         <header className="support-hero">
-          <p className="support-kicker">Support the Archive</p>
+          <p className="support-kicker">{get('hero_kicker', 'Support & Contact')}</p>
           <h1 className="support-headline">
-            Help us keep these<br />
-            voices alive
+            {get('hero_heading', 'Help us keep these voices alive')}
           </h1>
           <p className="support-subtitle">
-            Preserving handwritten letters takes real resources — scanning equipment,
-            archival storage, hosting, and countless hours of careful work. Your
-            generosity makes it possible to keep this history accessible to everyone.
+            {get('hero_subtitle', 'Preserving handwritten letters takes real resources — scanning equipment, archival storage, hosting, and countless hours of careful work. Your generosity makes it possible to keep this history accessible to everyone.')}
           </p>
         </header>
 
@@ -34,16 +47,13 @@ export default function SupportPage() {
         <section className="support-section support-section-featured">
           <div className="support-eyebrow">Why your support matters</div>
           <blockquote className="support-quote">
-            Every letter in this archive was written by someone who trusted that their
-            words would reach the people they loved. Keeping these letters alive is a
-            way of honoring that trust — across decades, across generations.
+            {get('quote_text', 'Every letter in this archive was written by someone who trusted that their words would reach the people they loved. Keeping these letters alive is a way of honoring that trust — across decades, across generations.')}
           </blockquote>
+          {get('quote_attribution', '') && (
+            <p className="support-quote-attribution">— {content!.quote_attribution}</p>
+          )}
           <p>
-            Letter Archive is a passion project born from one family's collection and
-            grown into something bigger. There are no corporate sponsors, no
-            institutional grants — just people who believe these voices deserve to be
-            heard. Your support, in any form, keeps the lights on and the scanners
-            running.
+            {get('impact_intro', 'Letter Archive is a passion project born from one family\'s collection and grown into something bigger. There are no corporate sponsors, no institutional grants — just people who believe these voices deserve to be heard. Your support, in any form, keeps the lights on and the scanners running.')}
           </p>
         </section>
 
@@ -84,7 +94,7 @@ export default function SupportPage() {
         {/* Donation options */}
         <section className="support-options">
           <div className="support-eyebrow">Ways to Give</div>
-          <h2>Choose how you'd like to help</h2>
+          <h2>{get('donation_heading', "Choose how you'd like to help")}</h2>
           <div className="support-options-cards">
             <div className="support-option-card">
               <div className="support-option-eyebrow">One-Time</div>
@@ -132,13 +142,74 @@ export default function SupportPage() {
                 volunteer your time, contribute letters from your own family, or
                 simply share the archive with someone who'd appreciate it.
               </p>
-              <Link
-                to="/contact"
+              <a
+                href={`mailto:${volunteerEmail}`}
                 className="support-action-btn btn-card"
                 aria-label="Get in touch about volunteering"
               >
                 Get in Touch
-              </Link>
+              </a>
+            </div>
+          </div>
+        </section>
+
+        {/* Contact section */}
+        <section className="support-contact" id="contact">
+          <div className="support-eyebrow">Get in Touch</div>
+          <h2>{get('contact_heading', "We'd love to hear from you")}</h2>
+          <p className="support-contact-intro">
+            {get('contact_intro', 'Whether you have letters to contribute, a research question, or just want to know more — every message matters to us.')}
+          </p>
+
+          <div className="support-contact-primary">
+            <div className="support-contact-icon">&#9993;</div>
+            <div className="support-contact-main">
+              <h3>General Inquiries</h3>
+              <p>
+                Questions about the archive, how it works, or how to get involved?
+                This is the best place to start.
+              </p>
+              <a href={`mailto:${generalEmail}`} className="support-email-btn">
+                {generalEmail}
+              </a>
+            </div>
+          </div>
+
+          <div className="support-contact-channels">
+            <div className="support-channel-card">
+              <div className="support-channel-eyebrow">Contribute</div>
+              <h3>Share your letters</h3>
+              <p>
+                Old family correspondence, postcards, telegrams — we'll digitize and
+                preserve them for future generations. You keep the originals.
+              </p>
+              <a href={`mailto:${contributeEmail}`} className="support-email-btn">
+                {contributeEmail}
+              </a>
+            </div>
+
+            <div className="support-channel-card">
+              <div className="support-channel-eyebrow">Research</div>
+              <h3>Academic access</h3>
+              <p>
+                Historians, genealogists, and students are welcome. We can help locate
+                letters relevant to your area of study.
+              </p>
+              <a href={`mailto:${researchEmail}`} className="support-email-btn">
+                {researchEmail}
+              </a>
+            </div>
+
+            <div className="support-channel-card">
+              <div className="support-channel-eyebrow">Volunteer</div>
+              <h3>Join the effort</h3>
+              <p>
+                Help with transcription verification, metadata review, or digitization.
+                No experience needed — just curiosity and care.
+              </p>
+              <a href={`mailto:${volunteerEmail}`} className="support-email-btn">
+                {volunteerEmail}
+              </a>
             </div>
           </div>
         </section>
@@ -147,10 +218,7 @@ export default function SupportPage() {
         <div className="support-thankyou">
           <div className="support-eyebrow">Thank You</div>
           <p className="support-thankyou-text">
-            Whether you give a dollar, an hour, or a letter — you become part of the
-            story. This archive exists because of people who care about preserving
-            the quiet, honest words of everyday life. From our family to yours,
-            thank you.
+            {get('thankyou_text', 'Whether you give a dollar, an hour, or a letter — you become part of the story. This archive exists because of people who care about preserving the quiet, honest words of everyday life. From our family to yours, thank you.')}
           </p>
           <div className="support-thankyou-links">
             <Link to="/about" className="btn-card support-thankyou-btn">

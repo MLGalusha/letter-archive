@@ -1,0 +1,10 @@
+node_modules
+dist
+npm-debug.log*
+.env
+.env.*
+.envrc
+.DS_Store
+coverage
+test-results
+*.log

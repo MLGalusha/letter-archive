@@ -1,0 +1,54 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build outputs
+dist
+**/dist
+build
+
+# Git
+.git
+.gitignore
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+!.env.production.example
+.envrc
+
+# Editor / IDE
+.vscode
+.idea
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage
+test-results
+**/test-results
+e2e
+.playwright-mcp
+
+# Claude
+CLAUDE.md
+.claude
+
+# Documentation / design artifacts
+*.md
+!README.md
+*.png
+*.jpg
+
+# Backend storage data (local dev only)
+backend/storage
+backend/uploads
+backend/python
+
+# Logs
+logs
+*.log

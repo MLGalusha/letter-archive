@@ -1,0 +1,17 @@
+node_modules
+dist
+npm-debug.log*
+.env
+.env.*
+!.env.example
+!.env.production.example
+.envrc
+.DS_Store
+coverage
+test-results
+*.log
+logs
+storage
+uploads
+python
+docker-compose.yml

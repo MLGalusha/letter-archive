@@ -44,7 +44,6 @@ describe("RecentActivityTable", () => {
           "extras",
           "transcript",
           "metadata",
-          "sync",
           "visibility",
           "created",
         ])}
@@ -61,7 +60,6 @@ describe("RecentActivityTable", () => {
         onCellClick={onCellClick}
         formatDate={() => "1/1/2025"}
         formatDateRaw={() => "03/14/1886"}
-        checkNeedsSync={() => false}
         getCombinedTranscriptStatus={() => "AI_DRAFT"}
         renderStatusIcon={(status, type) => <span>{`${type}:${status}`}</span>}
         pagination={{ page: 1, totalPages: 1 }}

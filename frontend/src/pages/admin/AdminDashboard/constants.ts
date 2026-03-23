@@ -41,7 +41,6 @@ export const ALL_COLUMNS: ColumnDef[] = [
   { id: "extras", label: "Extras", defaultVisible: true },
   { id: "transcript", label: "Transcript", defaultVisible: true },
   { id: "metadata", label: "Metadata", defaultVisible: true },
-  { id: "sync", label: "Sync", defaultVisible: true },
   { id: "visibility", label: "Visibility", defaultVisible: true },
   { id: "created", label: "Created", defaultVisible: true },
   { id: "updated", label: "Updated", defaultVisible: false },

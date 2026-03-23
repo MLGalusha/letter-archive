@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { isAuthenticated } from "../../api/auth";
 import { getErrorMessage } from "../../api/client";
 import { Button, Icon, Modal } from "../../components/common";
 import { useToast } from "../../contexts/ToastContext";
@@ -107,8 +108,7 @@ export default function PeoplePage() {
 
   // Auth check
   useEffect(() => {
-    const isAuth = sessionStorage.getItem("adminAuth");
-    if (!isAuth) {
+    if (!isAuthenticated()) {
       navigate("/admin-login");
     }
   }, [navigate]);

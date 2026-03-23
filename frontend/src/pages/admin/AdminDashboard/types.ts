@@ -40,8 +40,7 @@ export type ColumnId =
   | "visibility"
   | "created"
   | "updated"
-  | "lastOpened"
-  | "sync";
+  | "lastOpened";
 
 export interface ColumnDef {
   id: ColumnId;

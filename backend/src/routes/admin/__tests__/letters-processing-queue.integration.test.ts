@@ -164,8 +164,6 @@ vi.mock('../../../services/letter-operations.js', () => ({
   addLinkedPlace: vi.fn(),
   removeLinkedPerson: vi.fn(),
   removeLinkedPlace: vi.fn(),
-  resyncCheck: vi.fn(),
-  resyncLetterMetadata: vi.fn(),
 }));
 
 import lettersRouter from '../letters.js';

@@ -37,7 +37,6 @@ interface RecentActivityTableProps {
   ) => void;
   formatDate: (dateString: string) => string;
   formatDateRaw: (dateRaw: string | undefined) => string;
-  checkNeedsSync: (letter: Letter) => boolean;
   getCombinedTranscriptStatus: (
     transcriptStatus: ContentStatus,
     extraContentStatus: ContentStatus,
@@ -74,7 +73,6 @@ export default function RecentActivityTable({
   onCellClick,
   formatDate,
   formatDateRaw,
-  checkNeedsSync,
   getCombinedTranscriptStatus,
   renderStatusIcon,
   pagination,
@@ -260,11 +258,6 @@ export default function RecentActivityTable({
               )}
               {visibleColumns.has("transcript") && <th className="status-header">Transcript</th>}
               {visibleColumns.has("metadata") && <th className="status-header">Metadata</th>}
-              {visibleColumns.has("sync") && (
-                <th className="status-header" title="Identity/content sync status">
-                  Sync
-                </th>
-              )}
               {visibleColumns.has("visibility") && <th>Visibility</th>}
               {visibleColumns.has("created") && (
                 <th
@@ -438,23 +431,6 @@ export default function RecentActivityTable({
                   {visibleColumns.has("metadata") && (
                     <td className="status-cell">
                       {renderStatusIcon(letter.metadataContentStatus, "M")}
-                    </td>
-                  )}
-
-                  {visibleColumns.has("sync") && (
-                    <td className="status-cell sync-cell">
-                      {checkNeedsSync(letter) ? (
-                        <span
-                          className="sync-indicator needs-sync"
-                          title="Names may not match summary/hook"
-                        >
-                          ⚠
-                        </span>
-                      ) : (
-                        <span className="sync-indicator synced" title="Synced">
-                          ✓
-                        </span>
-                      )}
                     </td>
                   )}
 

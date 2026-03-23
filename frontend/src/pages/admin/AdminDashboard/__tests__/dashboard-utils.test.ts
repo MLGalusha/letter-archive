@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { Letter } from "../../../../types/Letter";
 import {
-  checkNeedsSync,
   formatDateRaw,
   getCombinedTranscriptStatus,
   isServerSortField,
@@ -44,16 +43,6 @@ describe("admin dashboard utils", () => {
   it("detects server-sortable fields", () => {
     expect(isServerSortField("createdAt")).toBe(true);
     expect(isServerSortField("letters")).toBe(false);
-  });
-
-  it("flags potential identity sync mismatch", () => {
-    expect(checkNeedsSync(makeLetter())).toBe(false);
-
-    const mismatched = makeLetter({
-      description: "Unknown sender wrote this.",
-      hook: "No recipient named.",
-    });
-    expect(checkNeedsSync(mismatched)).toBe(true);
   });
 
   it("combines transcript statuses for letter+extras correctly", () => {

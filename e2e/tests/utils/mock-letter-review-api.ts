@@ -91,16 +91,6 @@ interface MockAiNotesRequest {
   };
 }
 
-interface MockResyncRequest {
-  url: string;
-  body: {
-    oldSender?: string | null;
-    newSender?: string | null;
-    oldRecipient?: string | null;
-    newRecipient?: string | null;
-  };
-}
-
 interface MockApiFailure {
   status?: number;
   error: string;
@@ -324,8 +314,6 @@ export interface MockLetterReviewContext {
   updateAiNotesRequests: MockAiNotesRequest[];
   verifyExtraContentRequests: string[];
   unverifyExtraContentRequests: string[];
-  resyncCheckRequests: MockResyncRequest[];
-  resyncRequests: MockResyncRequest[];
   flagRequests: Array<{ url: string; body: unknown }>;
   detectLineRequests: string[];
   updateLetterRequests: MockUpdateLetterRequest[];
@@ -357,8 +345,6 @@ export async function installMockLetterReviewApi(
         | 'aiNotes'
         | 'verifyExtraContent'
         | 'unverifyExtraContent'
-        | 'resyncCheck'
-        | 'resync'
         | 'flag',
         MockApiFailure
       >
@@ -374,8 +360,6 @@ export async function installMockLetterReviewApi(
   const updateAiNotesRequests: MockAiNotesRequest[] = [];
   const verifyExtraContentRequests: string[] = [];
   const unverifyExtraContentRequests: string[] = [];
-  const resyncCheckRequests: MockResyncRequest[] = [];
-  const resyncRequests: MockResyncRequest[] = [];
   const flagRequests: Array<{ url: string; body: unknown }> = [];
   const detectLineRequests: string[] = [];
   const updateLetterRequests: MockUpdateLetterRequest[] = [];
@@ -678,85 +662,6 @@ export async function installMockLetterReviewApi(
     });
   });
 
-  await page.route(new RegExp(`${escapeRegex(letterPath)}/resync-check$`), async (route) => {
-    const body = route.request().postDataJSON() as MockResyncRequest['body'];
-    resyncCheckRequests.push({ url: route.request().url(), body });
-    if (routeFailures.resyncCheck) {
-      await fulfillFailure(route, routeFailures.resyncCheck);
-      return;
-    }
-
-    const needsResync =
-      body.oldSender !== body.newSender || body.oldRecipient !== body.newRecipient;
-
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        needsResync,
-        decision: {
-          shouldUpdateSummary: needsResync,
-          shouldUpdateHook: needsResync,
-          shouldCreateSenderPerson: Boolean(needsResync && body.newSender && body.oldSender !== body.newSender),
-          shouldCreateRecipientPerson: Boolean(
-            needsResync && body.newRecipient && body.oldRecipient !== body.newRecipient,
-          ),
-          shouldUpdateRelationship: false,
-          shouldUpdateQuoteContexts: false,
-          issues: needsResync ? ['Identity fields changed'] : [],
-          reason: needsResync ? 'Identity changed' : 'Already in sync',
-        },
-      }),
-    });
-  });
-
-  await page.route(new RegExp(`${escapeRegex(letterPath)}/resync$`), async (route) => {
-    const body = route.request().postDataJSON() as MockResyncRequest['body'];
-    resyncRequests.push({ url: route.request().url(), body });
-    if (routeFailures.resync) {
-      await fulfillFailure(route, routeFailures.resync);
-      return;
-    }
-
-    letter.metadata.sender = body.newSender ?? undefined;
-    letter.metadata.recipient = body.newRecipient ?? undefined;
-    letter.metadata.description = body.newRecipient
-      ? `${body.newSender ?? 'Unknown sender'} metadata synced for ${body.newRecipient}.`
-      : `${body.newSender ?? 'Unknown sender'} metadata synced for the review record.`;
-    letter.metadata.hook = body.newSender
-      ? `Synced metadata for ${body.newSender}.`
-      : 'Synced metadata.';
-
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        letter,
-        resync: {
-          wasUpdated: true,
-          updatedFields: {
-            summary: true,
-            hook: true,
-            senderPerson: Boolean(body.newSender && body.oldSender !== body.newSender),
-            recipientPerson: Boolean(body.newRecipient && body.oldRecipient !== body.newRecipient),
-            relationshipType: false,
-            quoteContexts: false,
-          },
-          decision: {
-            shouldUpdateSummary: true,
-            shouldUpdateHook: true,
-            shouldCreateSenderPerson: Boolean(body.newSender && body.oldSender !== body.newSender),
-            shouldCreateRecipientPerson: Boolean(body.newRecipient && body.oldRecipient !== body.newRecipient),
-            shouldUpdateRelationship: false,
-            shouldUpdateQuoteContexts: false,
-            issues: ['Identity fields changed'],
-            reason: 'Identity changed',
-          },
-        },
-      }),
-    });
-  });
-
   await page.route(new RegExp(`${escapeRegex(letterPath)}/flag$`), async (route) => {
     const body = route.request().postDataJSON() as { flagged?: boolean };
     flagRequests.push({ url: route.request().url(), body });
@@ -816,8 +721,6 @@ export async function installMockLetterReviewApi(
     updateAiNotesRequests,
     verifyExtraContentRequests,
     unverifyExtraContentRequests,
-    resyncCheckRequests,
-    resyncRequests,
     flagRequests,
     detectLineRequests,
     updateLetterRequests,

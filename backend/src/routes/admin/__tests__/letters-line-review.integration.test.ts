@@ -25,8 +25,6 @@ const {
   updateExtraContentMock,
   verifyExtraContentMock,
   unverifyExtraContentMock,
-  resyncCheckMock,
-  resyncLetterMetadataMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   dbInsertMock: vi.fn(),
@@ -51,8 +49,6 @@ const {
   updateExtraContentMock: vi.fn(),
   verifyExtraContentMock: vi.fn(),
   unverifyExtraContentMock: vi.fn(),
-  resyncCheckMock: vi.fn(),
-  resyncLetterMetadataMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -168,8 +164,6 @@ vi.mock('../../../services/letter-operations.js', () => ({
   addLinkedPlace: vi.fn(),
   removeLinkedPerson: vi.fn(),
   removeLinkedPlace: vi.fn(),
-  resyncCheck: resyncCheckMock,
-  resyncLetterMetadata: resyncLetterMetadataMock,
 }));
 
 import lettersRouter from '../letters.js';
@@ -526,143 +520,6 @@ describe('admin letters line review route integration', () => {
     expect(unverifyExtraContentMock).toHaveBeenCalledWith(LETTER_ID);
     expect(response.body).toEqual({
       error: 'Letter not found or not verified',
-      requestId: expect.any(String),
-    });
-    expect(response.headers['x-request-id']).toBe(
-      (response.body as { requestId: string }).requestId,
-    );
-  });
-
-  it('rejects malformed resync-check requests with a request-correlated 400', async () => {
-    const response = await invokeRouter(lettersRouter, {
-      method: 'POST',
-      url: `/letters/${LETTER_ID}/resync-check`,
-      path: `/letters/${LETTER_ID}/resync-check`,
-      body: { oldSender: 'Alice' },
-      headers: { 'content-type': 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.body).toEqual({
-      error: 'Invalid request body',
-      details: expect.any(Array),
-      requestId: expect.any(String),
-    });
-    expect(response.headers['x-request-id']).toBe(
-      (response.body as { requestId: string }).requestId,
-    );
-  });
-
-  it('returns resync-check suggestions for valid sender and recipient updates', async () => {
-    resyncCheckMock.mockResolvedValueOnce({
-      changesDetected: true,
-      affectedLetters: [
-        { id: LETTER_ID, changeType: 'sender', oldValue: 'Alice', newValue: 'Alicia' },
-      ],
-      summary: {
-        senderMatches: 1,
-        recipientMatches: 0,
-      },
-    });
-
-    const response = await invokeRouter(lettersRouter, {
-      method: 'POST',
-      url: `/letters/${LETTER_ID}/resync-check`,
-      path: `/letters/${LETTER_ID}/resync-check`,
-      body: {
-        oldSender: 'Alice',
-        newSender: 'Alicia',
-        oldRecipient: null,
-        newRecipient: null,
-      },
-      headers: { 'content-type': 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(resyncCheckMock).toHaveBeenCalledWith(LETTER_ID, {
-      oldSender: 'Alice',
-      newSender: 'Alicia',
-      oldRecipient: null,
-      newRecipient: null,
-    });
-    expect(response.body).toEqual({
-      changesDetected: true,
-      affectedLetters: [
-        { id: LETTER_ID, changeType: 'sender', oldValue: 'Alice', newValue: 'Alicia' },
-      ],
-      summary: {
-        senderMatches: 1,
-        recipientMatches: 0,
-      },
-    });
-  });
-
-  it('returns the refreshed DTO after a metadata resync', async () => {
-    resyncLetterMetadataMock.mockResolvedValueOnce({
-      linkedPersonsUpdated: 2,
-      linkedPlacesUpdated: 1,
-      notes: ['Updated sender links'],
-    });
-    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(
-      createLetterDto({
-        sender: 'Alicia',
-        recipient: 'Bob',
-      }),
-    );
-
-    const response = await invokeRouter(lettersRouter, {
-      method: 'POST',
-      url: `/letters/${LETTER_ID}/resync`,
-      path: `/letters/${LETTER_ID}/resync`,
-      body: {
-        oldSender: 'Alice',
-        newSender: 'Alicia',
-        oldRecipient: 'Robert',
-        newRecipient: 'Bob',
-      },
-      headers: { 'content-type': 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(resyncLetterMetadataMock).toHaveBeenCalledWith(LETTER_ID, {
-      oldSender: 'Alice',
-      newSender: 'Alicia',
-      oldRecipient: 'Robert',
-      newRecipient: 'Bob',
-    });
-    expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(LETTER_ID);
-    expect(response.body).toEqual({
-      linkedPersonsUpdated: 2,
-      linkedPlacesUpdated: 1,
-      notes: ['Updated sender links'],
-      letter: createLetterDto({
-        sender: 'Alicia',
-        recipient: 'Bob',
-      }),
-    });
-  });
-
-  it('returns a request-correlated 400 when resync raises a typed status error', async () => {
-    resyncLetterMetadataMock.mockRejectedValueOnce(
-      Object.assign(new Error('Nothing to resync'), { status: 400 }),
-    );
-
-    const response = await invokeRouter(lettersRouter, {
-      method: 'POST',
-      url: `/letters/${LETTER_ID}/resync`,
-      path: `/letters/${LETTER_ID}/resync`,
-      body: {
-        oldSender: 'Alice',
-        newSender: 'Alice',
-        oldRecipient: null,
-        newRecipient: null,
-      },
-      headers: { 'content-type': 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.body).toEqual({
-      error: 'Nothing to resync',
       requestId: expect.any(String),
     });
     expect(response.headers['x-request-id']).toBe(

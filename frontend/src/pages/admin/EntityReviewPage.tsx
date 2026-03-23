@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { isAuthenticated } from "../../api/auth";
 import { Button, Icon } from "../../components/common";
 import { useToast } from "../../contexts/ToastContext";
 import { getErrorMessage } from "../../api/client";
@@ -34,8 +35,7 @@ export default function EntityReviewPage() {
 
   // Auth check
   useEffect(() => {
-    const isAuth = sessionStorage.getItem("adminAuth");
-    if (!isAuth) {
+    if (!isAuthenticated()) {
       navigate("/admin-login");
     }
   }, [navigate]);

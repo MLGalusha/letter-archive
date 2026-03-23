@@ -53,17 +53,11 @@ const buildProps = (overrides: Partial<ComponentProps<typeof MetadataSection>> =
     onPrimaryTopicsChange: vi.fn(),
     onTopicsDropdownOpenChange: vi.fn(),
     onTriggerAutoSave: vi.fn(),
-    onStartSyncTimer: vi.fn(),
     hookRef: createRef<HTMLTextAreaElement>(),
     descriptionRef: createRef<HTMLTextAreaElement>(),
-    syncState: "idle",
-    syncMessage: null,
-    syncCountdown: null,
-    showCancelHint: false,
     regenerateState: "idle",
-    onAISync: vi.fn(),
-    onCountdownClick: vi.fn(),
-    onCountdownDoubleClick: vi.fn(),
+    reExtractState: "idle" as const,
+    onReExtract: vi.fn(),
     onVerifyMetadata: vi.fn(),
     onConfirmTranscript: vi.fn(),
     onRegenerateMetadata: vi.fn(),
@@ -100,36 +94,29 @@ describe("MetadataSection", () => {
 
     await user.click(screen.getByRole("button", { name: "Generate" }));
     expect(onConfirmTranscript).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("button", { name: "Sync" })).not.toBeInTheDocument();
   });
 
-  it("uses regenerate and sync actions when metadata exists", async () => {
+  it("uses regenerate action when metadata exists", async () => {
     const user = userEvent.setup();
     const onRegenerateMetadata = vi.fn();
-    const onAISync = vi.fn();
     const props = buildProps({
       letter: buildLetter({ metadataContentStatus: "EDITED" }),
       onRegenerateMetadata,
-      onAISync,
     });
 
     render(<MetadataSection {...props} />);
 
     await user.click(screen.getByRole("button", { name: "Regenerate" }));
-    await user.click(screen.getByRole("button", { name: "Sync" }));
 
     expect(onRegenerateMetadata).toHaveBeenCalledTimes(1);
-    expect(onAISync).toHaveBeenCalledTimes(1);
   });
 
-  it("triggers autosave and sync timer on sender change", async () => {
+  it("triggers autosave on sender change", async () => {
     const onSenderChange = vi.fn();
     const onTriggerAutoSave = vi.fn();
-    const onStartSyncTimer = vi.fn();
     const props = buildProps({
       onSenderChange,
       onTriggerAutoSave,
-      onStartSyncTimer,
     });
 
     render(<MetadataSection {...props} />);
@@ -138,39 +125,6 @@ describe("MetadataSection", () => {
 
     expect(onSenderChange).toHaveBeenCalledWith("Ada");
     expect(onTriggerAutoSave).toHaveBeenCalledWith({ sender: "Ada" });
-    expect(onStartSyncTimer).toHaveBeenCalled();
-  });
-
-  it("lets operators sync immediately while a countdown is active", async () => {
-    const user = userEvent.setup();
-    const onAISync = vi.fn();
-    const props = buildProps({
-      letter: buildLetter({ metadataContentStatus: "EDITED" }),
-      syncCountdown: 175,
-      onAISync,
-    });
-
-    render(<MetadataSection {...props} />);
-
-    const syncButton = screen.getByRole("button", { name: /2:55/i });
-    await user.click(syncButton);
-
-    expect(onAISync).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps double-click cancellation available while countdown is active", () => {
-    const onCountdownDoubleClick = vi.fn();
-    const props = buildProps({
-      letter: buildLetter({ metadataContentStatus: "EDITED" }),
-      syncCountdown: 175,
-      onCountdownDoubleClick,
-    });
-
-    render(<MetadataSection {...props} />);
-
-    fireEvent.doubleClick(screen.getByRole("button", { name: /2:55/i }));
-
-    expect(onCountdownDoubleClick).toHaveBeenCalledTimes(1);
   });
 
   it("shows verified metadata as read-only", () => {

@@ -254,20 +254,6 @@ test.describe('Letter Metadata', () => {
     });
   });
 
-  test.describe('Resync Feature', () => {
-    test('shows resync button when needed', async ({ page }) => {
-      // Look for resync button or sync indicator
-      const resyncBtn = page.locator('button:has-text("Resync"), button:has-text("Sync")');
-      const syncWarning = page.locator('[class*="sync-warning"], [class*="needs-sync"]');
-
-      const hasResync = await resyncBtn.isVisible().catch(() => false);
-      const hasWarning = await syncWarning.isVisible().catch(() => false);
-
-      // These may not always be visible
-      expect(true).toBe(true);
-    });
-  });
-
   test.describe('Visibility Toggle', () => {
     test('shows visibility controls', async ({ page }) => {
       const visibilityControl = page.locator('[class*="visibility"], button:has-text("Publish"), button:has-text("Hide")');

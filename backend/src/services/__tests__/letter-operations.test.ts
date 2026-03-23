@@ -10,8 +10,6 @@ const {
   deleteWhereMock,
   runTranscriptionMock,
   getLetterByIdMock,
-  auditMetadataMock,
-  resyncMetadataMock,
   syncLetterParticipantsFromMetadataMock,
   checkExtraContentForTextMock,
   transcribeExtraContentMock,
@@ -26,8 +24,6 @@ const {
   deleteWhereMock: vi.fn(),
   runTranscriptionMock: vi.fn(),
   getLetterByIdMock: vi.fn(),
-  auditMetadataMock: vi.fn(),
-  resyncMetadataMock: vi.fn(),
   syncLetterParticipantsFromMetadataMock: vi.fn(),
   checkExtraContentForTextMock: vi.fn(),
   transcribeExtraContentMock: vi.fn(),
@@ -108,11 +104,6 @@ vi.mock('../../pipeline/metadataV2.js', () => ({
   runEntityExtractionOnly: vi.fn(),
 }));
 
-vi.mock('../../ai/resync.js', () => ({
-  resyncMetadata: resyncMetadataMock,
-  auditMetadata: auditMetadataMock,
-}));
-
 vi.mock('../../ai/openai.js', () => ({
   checkExtraContentForText: checkExtraContentForTextMock,
   transcribeExtraContent: transcribeExtraContentMock,
@@ -151,8 +142,6 @@ import {
   buildLetterUpdates,
   normalizeRelationshipType,
   regenerateTranscription,
-  resyncCheck,
-  resyncLetterMetadata,
   transcribeExtras,
   transcribeLetterOnly,
   updateExtraContent,
@@ -325,145 +314,6 @@ describe('letter operations service', () => {
       extraContentVerifiedAt: null,
       extraContentVerifiedBy: null,
       updatedAt: expect.any(Date),
-    });
-  });
-
-  it('passes explicit null sender and recipient changes through metadata audit checks', async () => {
-    findFirstMock.mockResolvedValue({
-      id: 'letter-8',
-      sender: 'Alice',
-      recipient: 'Bob',
-      extractedDate: '1947-08-10',
-      summary: 'Alice writes to Bob.',
-      hook: 'Alice reaches out to Bob.',
-      senderRecipientRelationship: 'friend',
-      metadataV2Json: {
-        notable_quotes: [
-          { text: 'Hello there', context: 'Alice greets Bob.', position: 'opening' },
-        ],
-      },
-      persons: [
-        { role: 'sender', person: { canonicalName: 'Alice' } },
-        { role: 'recipient', person: { canonicalName: 'Bob' } },
-      ],
-    });
-    auditMetadataMock.mockResolvedValue({
-      shouldUpdateSummary: false,
-      shouldUpdateHook: false,
-      shouldCreateSenderPerson: false,
-      shouldCreateRecipientPerson: false,
-      shouldUpdateRelationship: false,
-      shouldUpdateQuoteContexts: false,
-      issues: [],
-      reason: 'No changes needed',
-    });
-
-    const result = await resyncCheck('letter-8', {
-      oldSender: 'Alice',
-      newSender: null,
-      oldRecipient: 'Bob',
-      newRecipient: null,
-    });
-
-    expect(auditMetadataMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sender: null,
-        recipient: null,
-        linkedPersons: [
-          { canonicalName: 'Alice', role: 'sender' },
-          { canonicalName: 'Bob', role: 'recipient' },
-        ],
-        quoteContexts: [
-          { text: 'Hello there', context: 'Alice greets Bob.', position: 'opening' },
-        ],
-      }),
-      {
-        oldSender: 'Alice',
-        newSender: null,
-        oldRecipient: 'Bob',
-        newRecipient: null,
-      },
-    );
-    expect(result).toEqual({
-      needsResync: false,
-      decision: expect.objectContaining({ reason: 'No changes needed' }),
-    });
-  });
-
-  it('syncs participants with cleared recipients during metadata resync', async () => {
-    findFirstMock.mockResolvedValue({
-      id: 'letter-9',
-      sender: 'Alice',
-      recipient: 'Bob',
-      transcriptionText: 'Original transcript',
-      extractedDate: '1947-08-10',
-      summary: 'Alice writes to Bob.',
-      hook: 'Alice reaches out to Bob.',
-      senderRecipientRelationship: 'friend',
-      metadataV2Json: { topics: ['war'] },
-      persons: [],
-    });
-    resyncMetadataMock.mockResolvedValue({
-      summary: 'Alice writes after the recipient was removed.',
-      hook: null,
-      senderPerson: null,
-      recipientPerson: null,
-      relationshipType: null,
-      updatedQuoteContexts: null,
-      wasUpdated: true,
-      decision: {
-        shouldUpdateSummary: true,
-        shouldUpdateHook: false,
-        shouldCreateSenderPerson: false,
-        shouldCreateRecipientPerson: false,
-        shouldUpdateRelationship: false,
-        shouldUpdateQuoteContexts: false,
-        issues: ['Recipient was removed'],
-        reason: 'Recipient cleared',
-      },
-    });
-
-    const result = await resyncLetterMetadata('letter-9', {
-      oldSender: 'Alice',
-      newSender: 'Alice',
-      oldRecipient: 'Bob',
-      newRecipient: null,
-    });
-
-    expect(resyncMetadataMock).toHaveBeenCalledWith({
-      transcript: 'Original transcript',
-      context: expect.objectContaining({
-        sender: 'Alice',
-        recipient: null,
-      }),
-      change: {
-        oldSender: 'Alice',
-        newSender: 'Alice',
-        oldRecipient: 'Bob',
-        newRecipient: null,
-      },
-    });
-    expect(updateSetMock).toHaveBeenCalledWith({
-      summary: 'Alice writes after the recipient was removed.',
-      updatedAt: expect.any(Date),
-    });
-    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenCalledWith({
-      letterId: 'letter-9',
-      sender: 'Alice',
-      recipient: null,
-      relationshipType: 'friend',
-    });
-    expect(result).toEqual({
-      wasUpdated: true,
-      updatedFields: {
-        summary: true,
-        hook: false,
-        senderPerson: false,
-        recipientPerson: false,
-        relationshipType: false,
-        quoteContexts: false,
-      },
-      decision: expect.objectContaining({ reason: 'Recipient cleared' }),
     });
   });
 

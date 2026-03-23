@@ -1,4 +1,4 @@
-import type { ContentStatus, Letter } from "../../../types/Letter";
+import type { ContentStatus } from "../../../types/Letter";
 import { SERVER_SORT_FIELDS, STORAGE_KEY } from "./constants";
 import type {
   ExtendedSortField,
@@ -10,23 +10,6 @@ export function isServerSortField(
   field: ExtendedSortField,
 ): field is ServerSortField {
   return (SERVER_SORT_FIELDS as readonly string[]).includes(field);
-}
-
-/**
- * Checks if a letter's derived fields (summary/hook) may be out of sync with identities.
- * Returns true if sender/recipient are set but don't appear in the summary or hook.
- */
-export function checkNeedsSync(letter: Letter): boolean {
-  const { sender, recipient, description, hook } = letter.metadata;
-
-  if (!sender && !recipient) return false;
-  if (!description && !hook) return false;
-
-  const combinedText = `${description || ""} ${hook || ""}`.toLowerCase();
-  const senderMissing = sender && !combinedText.includes(sender.toLowerCase());
-  const recipientMissing = recipient && !combinedText.includes(recipient.toLowerCase());
-
-  return Boolean(senderMissing || recipientMissing);
 }
 
 // Combine transcript + extra content status into a single status.

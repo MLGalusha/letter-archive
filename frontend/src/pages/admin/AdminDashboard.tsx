@@ -192,6 +192,9 @@ export default function AdminDashboard() {
   const [showMetadataConfirm, setShowMetadataConfirm] = useState(false);
   const [showAnalyzeConfirm, setShowAnalyzeConfirm] = useState(false);
   const [showResolveConfirm, setShowResolveConfirm] = useState(false);
+  // Overwrite/skip state for transcribe and metadata
+  const [transcribeExistingCount, setTranscribeExistingCount] = useState(0);
+  const [metadataExistingCount, setMetadataExistingCount] = useState(0);
 
   const fetchLetters = useCallback(async (showLoading = false, page = pagination.page) => {
     if (showLoading) setLoading(true);
@@ -760,20 +763,27 @@ export default function AdminDashboard() {
       showToast('Select a collection filter to analyze', 'error');
       return;
     }
+
     const normalizedCollectionCode = collectionFilter.padStart(3, '0');
+
     try {
       showToast(`Analyzing collection ${normalizedCollectionCode}...`, 'info');
-      const result: CollectionAnalysisResult = await analyzeCollection(normalizedCollectionCode);
+      const result: CollectionAnalysisResult = await analyzeCollection(
+        normalizedCollectionCode,
+      );
       const { stats } = result;
       showToast(
         `Analysis complete: ${stats.peopleFound} people, ${stats.placesFound} places, ` +
-        `${stats.relationshipsFound} relationships. Created ${stats.entitiesCreated}, ` +
-        `linked ${stats.entitiesLinked}, ${stats.itemsQueuedForReview} queued for review.`,
-        'success'
+          `${stats.relationshipsFound} relationships. Created ${stats.entitiesCreated}, ` +
+          `linked ${stats.entitiesLinked}, ${stats.itemsQueuedForReview} queued for review.`,
+        'success',
       );
     } catch (err) {
       console.error("Failed to analyze collection:", err);
-      showToast(err instanceof Error ? err.message : "Failed to analyze collection", 'error');
+      showToast(
+        err instanceof Error ? err.message : "Failed to analyze collection",
+        'error',
+      );
     }
   };
 
@@ -782,15 +792,23 @@ export default function AdminDashboard() {
       showToast('Select a collection filter to resolve entities', 'error');
       return;
     }
+
     const normalizedCollectionCode = collectionFilter.padStart(3, '0');
+
     try {
       const result = await startEntityResolution(normalizedCollectionCode);
       showToast(result.message, 'info');
     } catch (err) {
       console.error("Failed to start entity resolution:", err);
-      showToast(err instanceof Error ? err.message : "Failed to start entity resolution", 'error');
+      showToast(
+        err instanceof Error
+          ? err.message
+          : "Failed to start entity resolution",
+        'error',
+      );
     }
   };
+
 
   const handlePauseProcessing = async () => {
     try {
@@ -1366,6 +1384,7 @@ export default function AdminDashboard() {
         onCancel={() => setShowResolveConfirm(false)}
       />
 
+
       {/* Floating edit toolbar with process actions */}
       {editMode && (
         <div className="edit-toolbar visible">
@@ -1450,13 +1469,29 @@ export default function AdminDashboard() {
                 <div className="toolbar-process-actions">
                   <button
                     className="toolbar-process-btn"
-                    onClick={() => setShowTranscribeConfirm(true)}
+                    onClick={() => {
+                      if (selectedIds.size > 0) {
+                        const existing = letters.filter(l => selectedIds.has(l.id) && l.transcriptStatus !== 'EMPTY').length;
+                        setTranscribeExistingCount(existing);
+                      } else {
+                        setTranscribeExistingCount(0);
+                      }
+                      setShowTranscribeConfirm(true);
+                    }}
                   >
                     Transcribe{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
                   </button>
                   <button
                     className="toolbar-process-btn"
-                    onClick={() => setShowMetadataConfirm(true)}
+                    onClick={() => {
+                      if (selectedIds.size > 0) {
+                        const existing = letters.filter(l => selectedIds.has(l.id) && l.metadataContentStatus !== 'EMPTY').length;
+                        setMetadataExistingCount(existing);
+                      } else {
+                        setMetadataExistingCount(0);
+                      }
+                      setShowMetadataConfirm(true);
+                    }}
                   >
                     Extract Metadata{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
                   </button>

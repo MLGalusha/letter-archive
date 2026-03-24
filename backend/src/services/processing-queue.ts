@@ -9,6 +9,7 @@ import { resolveCollectionEntities, type ResolutionResult } from './entities/res
 import { getCollectionByCode } from './collections.js';
 import { createLogger } from '../utils/logger.js';
 import { createNotification } from './notifications.js';
+import { TRANSCRIBABLE_TYPES } from './letter/shared.js';
 
 const log = createLogger({ module: 'processing-queue' });
 
@@ -387,10 +388,10 @@ export async function getQueueStatus() {
     return jobs;
   });
 
-  // Queued transcription jobs
+  // Queued transcription jobs (all transcribable types, not just 'L')
   const queuedTranscription = await db.query.letters.findMany({
     where: and(
-      eq(letters.type, 'L'),
+      inArray(letters.type, [...TRANSCRIBABLE_TYPES]),
       eq(letters.workflow, 'UPLOADED'),
       eq(letters.transcriptionStatus, 'PENDING')
     ),
@@ -454,6 +455,8 @@ export async function getQueueStatus() {
 
   // Helper to check if a failure was an admin action (clear/remove from queue)
   const isAdminCleared = (error: string | null) => error?.includes('from queue by admin');
+  // Helper to check if metadata was bulk-cleared by admin
+  const isBulkCleared = (error: string | null) => error === 'Cleared by admin';
 
   for (const l of recentLetters) {
     const letterUpdatedAt = l.updatedAt?.toISOString() ?? now.toISOString();
@@ -480,8 +483,8 @@ export async function getQueueStatus() {
         letterTitle: l.dateRaw,
         collectionCode: l.collection.collectionCode,
         type: 'metadata',
-        status: l.metadataStatus,
-        error: l.metadataStatus === 'FAILED' ? (l.metadataError ?? undefined) : undefined,
+        status: isBulkCleared(l.metadataError) ? 'CLEARED' : l.metadataStatus,
+        error: l.metadataStatus === 'FAILED' && !isBulkCleared(l.metadataError) ? (l.metadataError ?? undefined) : undefined,
         completedAt: letterUpdatedAt,
       });
     }
@@ -491,8 +494,8 @@ export async function getQueueStatus() {
         letterTitle: l.dateRaw,
         collectionCode: l.collection.collectionCode,
         type: 'entity_extraction',
-        status: l.entityExtractionStatus,
-        error: l.entityExtractionStatus === 'FAILED' ? (l.entityExtractionError ?? undefined) : undefined,
+        status: isBulkCleared(l.entityExtractionError) ? 'CLEARED' : l.entityExtractionStatus,
+        error: l.entityExtractionStatus === 'FAILED' && !isBulkCleared(l.entityExtractionError) ? (l.entityExtractionError ?? undefined) : undefined,
         completedAt: letterUpdatedAt,
       });
     }
@@ -536,6 +539,7 @@ export async function getQueueStatus() {
       queuedEntityExtraction: queuedEntityExtraction.length,
       recentSuccessCount: recent.filter(r => r.status === 'SUCCESS').length,
       recentFailedCount: recent.filter(r => r.status === 'FAILED').length,
+      recentClearedCount: recent.filter(r => r.status === 'CLEARED').length,
     },
     onDemandProcessing: processingState,
     entityResolution: entityResolutionStatus,
@@ -550,9 +554,9 @@ export async function startTranscriptionProcessing(options: ProcessingFilterOpti
     throw new ProcessingError('Processing already in progress', 400);
   }
 
-  // Base conditions for transcription: type L, workflow UPLOADED, not deleted
+  // Base conditions for transcription: transcribable types, workflow UPLOADED, not deleted
   const baseConditions: ReturnType<typeof eq>[] = [
-    eq(letters.type, 'L'),
+    inArray(letters.type, [...TRANSCRIBABLE_TYPES]) as unknown as ReturnType<typeof eq>,
     eq(letters.workflow, 'UPLOADED')
   ];
 
@@ -920,7 +924,7 @@ export async function clearQueue(type: QueueJobType): Promise<{ message: string;
   if (type === 'transcription') {
     const queued = await db.query.letters.findMany({
       where: and(
-        eq(letters.type, 'L'),
+        inArray(letters.type, [...TRANSCRIBABLE_TYPES]),
         eq(letters.workflow, 'UPLOADED'),
         eq(letters.transcriptionStatus, 'PENDING')
       ),

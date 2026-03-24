@@ -12,8 +12,10 @@ import {
   resetProcessingState,
 } from '../processing-queue.js';
 import { syncLetterParticipantsFromMetadata } from '../entities/participant-sync.js';
-import { propagateName } from '../name-propagation.js';
+import { propagateName, propagatePlaceholderReplacement } from '../name-propagation.js';
+import { isPlaceholderValue } from '../../utils/placeholders.js';
 import {
+  isTranscribableType,
   log,
   type BulkClearResult,
   type BulkResult,
@@ -42,8 +44,8 @@ export async function bulkTranscribe(letterIds: string[]): Promise<BulkResult> {
   }
 
   for (const letter of allRequested) {
-    if (letter.type !== 'L') {
-      skipReasons.push({ letterId: letter.id, reason: `Type is '${letter.type}' (only type 'L' supported)` });
+    if (!isTranscribableType(letter.type)) {
+      skipReasons.push({ letterId: letter.id, reason: `Type '${letter.type}' is not transcribable` });
     } else if (letter.workflow !== 'UPLOADED') {
       skipReasons.push({ letterId: letter.id, reason: `Already past upload stage (workflow: ${letter.workflow})` });
     } else if (letter.pages.length === 0) {
@@ -108,8 +110,8 @@ export async function bulkExtractMetadata(
   }
 
   for (const letter of allRequested) {
-    if (letter.type !== 'L') {
-      skipReasons.push({ letterId: letter.id, reason: `Type is '${letter.type}' (only type 'L' supported)` });
+    if (!isTranscribableType(letter.type)) {
+      skipReasons.push({ letterId: letter.id, reason: `Type '${letter.type}' is not transcribable` });
     } else if (letter.workflow === 'UPLOADED') {
       skipReasons.push({ letterId: letter.id, reason: 'Needs transcription first (workflow: UPLOADED)' });
     } else if (letter.workflow !== 'TRANSCRIBED') {
@@ -251,21 +253,44 @@ export async function bulkUpdateFields(updates: BulkUpdateFieldEntry[]): Promise
 
     let didPropagate = false;
 
-    if (sender !== undefined && sender !== null && letter.sender && letter.sender !== sender) {
-      try {
-        await propagateName({ letterId: update.letterId, field: 'sender', oldName: letter.sender, newName: sender });
-        didPropagate = true;
-      } catch (err) {
-        log.warn({ letterId: update.letterId, err }, 'Bulk propagation failed for sender, using simple update');
+    // Mirror the individual identity update logic (PATCH /:letterId/identity):
+    // Path 1: placeholder/null → real name: use propagatePlaceholderReplacement
+    // Path 2: real name → different real name: use propagateName
+    // Path 3: real name → null: simple clear
+
+    if (sender !== undefined && sender !== null) {
+      if (isPlaceholderValue(letter.sender) || !letter.sender) {
+        try {
+          await propagatePlaceholderReplacement({ letterId: update.letterId, field: 'sender', newName: sender });
+          didPropagate = true;
+        } catch (err) {
+          log.warn({ letterId: update.letterId, err }, 'Bulk placeholder replacement failed for sender, using simple update');
+        }
+      } else if (letter.sender !== sender) {
+        try {
+          await propagateName({ letterId: update.letterId, field: 'sender', oldName: letter.sender, newName: sender });
+          didPropagate = true;
+        } catch (err) {
+          log.warn({ letterId: update.letterId, err }, 'Bulk propagation failed for sender, using simple update');
+        }
       }
     }
 
-    if (recipient !== undefined && recipient !== null && letter.recipient && letter.recipient !== recipient) {
-      try {
-        await propagateName({ letterId: update.letterId, field: 'recipient', oldName: letter.recipient, newName: recipient });
-        didPropagate = true;
-      } catch (err) {
-        log.warn({ letterId: update.letterId, err }, 'Bulk propagation failed for recipient, using simple update');
+    if (recipient !== undefined && recipient !== null) {
+      if (isPlaceholderValue(letter.recipient) || !letter.recipient) {
+        try {
+          await propagatePlaceholderReplacement({ letterId: update.letterId, field: 'recipient', newName: recipient });
+          didPropagate = true;
+        } catch (err) {
+          log.warn({ letterId: update.letterId, err }, 'Bulk placeholder replacement failed for recipient, using simple update');
+        }
+      } else if (letter.recipient !== recipient) {
+        try {
+          await propagateName({ letterId: update.letterId, field: 'recipient', oldName: letter.recipient, newName: recipient });
+          didPropagate = true;
+        } catch (err) {
+          log.warn({ letterId: update.letterId, err }, 'Bulk propagation failed for recipient, using simple update');
+        }
       }
     }
 

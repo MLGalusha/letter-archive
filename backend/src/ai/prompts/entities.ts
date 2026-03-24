@@ -120,6 +120,7 @@ quotes: Every quote or passage in the letter that references or discusses this p
   - text: The exact quote from the letter
   - context: Brief explanation of what this quote reveals about the person
 confidence: How confident you are this person exists based on the text
+source: Where this entity was primarily discovered. Use "letter" if from the main letter transcription. If from extra content, use the document type: "telegram", "cover/envelope", "ephemera", or "card". Use "multiple" if the entity appears significantly in both the letter and extra content.
 </people_instructions>
 
 <places_instructions>
@@ -135,6 +136,7 @@ why_mentioned: Why this place comes up in the letter (e.g., "Where the sender an
 descriptive_details: Any descriptions of the place from the letter (scenery, conditions, what it's like) or null if none
 associated_people: Names of people connected to this place in the letter
 confidence: How confident you are this place reference is correct
+source: Where this place was primarily discovered. Use "letter" if from the main letter transcription. If from extra content, use the document type: "telegram", "cover/envelope", "ephemera", or "card". Use "multiple" if the place appears significantly in both the letter and extra content.
 </places_instructions>
 
 <relationships_instructions>
@@ -187,7 +189,8 @@ Given a letter where the sender writes to "Dearest Molly" about visiting, mentio
         { "text": "Please, please give me one more month.", "context": "Desperate plea directed at Molly" },
         { "text": "George doesn't know you like I do.", "context": "Comparing his knowledge of Molly to rival" }
       ],
-      "confidence": 0.95
+      "confidence": 0.95,
+      "source": "letter"
     },
     {
       "name": "George",
@@ -202,7 +205,8 @@ Given a letter where the sender writes to "Dearest Molly" about visiting, mentio
       "quotes": [
         { "text": "George doesn't know you like I do.", "context": "Sender dismissing George as a lesser suitor" }
       ],
-      "confidence": 0.9
+      "confidence": 0.9,
+      "source": "letter"
     },
     {
       "name": "Barbara",
@@ -218,7 +222,8 @@ Given a letter where the sender writes to "Dearest Molly" about visiting, mentio
       "quotes": [
         { "text": "Tell Barbara I said hello. I hope she is doing well in school.", "context": "Shows sender's interest in Barbara's wellbeing" }
       ],
-      "confidence": 0.85
+      "confidence": 0.85,
+      "source": "letter"
     }
   ],
   "places": [
@@ -230,7 +235,8 @@ Given a letter where the sender writes to "Dearest Molly" about visiting, mentio
       "why_mentioned": "Location of a meaningful shared memory between sender and Molly",
       "descriptive_details": null,
       "associated_people": ["Molly"],
-      "confidence": 0.95
+      "confidence": 0.95,
+      "source": "letter"
     }
   ],
   "relationships": [
@@ -262,6 +268,7 @@ Before returning, verify:
 5. Relationship types match the controlled vocabulary exactly
 6. Person-place connection types match the controlled vocabulary exactly
 7. Confidence scores reflect actual certainty from the text
+8. Every person and place has a source field indicating where the entity was discovered ("letter", "telegram", "cover/envelope", "ephemera", "card", or "multiple")
 </verification>`;
 
 export function buildEntityExtractionUserPrompt(

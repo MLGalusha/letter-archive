@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { ApiError } from '../../../api/client';
 
 const {
@@ -82,6 +83,14 @@ import ProcessingQueuePage from '../ProcessingQueuePage';
 
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <ProcessingQueuePage />
+    </MemoryRouter>,
+  );
+}
+
 function createQueueStatus() {
   return {
     counts: {
@@ -91,6 +100,7 @@ function createQueueStatus() {
       queuedEntityExtraction: 0,
       recentSuccessCount: 1,
       recentFailedCount: 1,
+      recentClearedCount: 0,
     },
     active: [
       {
@@ -155,11 +165,11 @@ describe('ProcessingQueuePage', () => {
   });
 
   it('renders queue data after the initial load', async () => {
-    render(<ProcessingQueuePage />);
+    renderPage();
 
     expect(await screen.findByText('Processing Queue')).toBeInTheDocument();
-    expect(screen.getByText('Active')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Start Transcription (1)' })).toBeInTheDocument();
+    expect(screen.getByText('Active Jobs')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Start' })).toHaveLength(3);
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(screen.getByText('Retry')).toBeInTheDocument();
   });
@@ -169,13 +179,10 @@ describe('ProcessingQueuePage', () => {
       new ApiError(503, 'queue down', undefined, 'req-queue-load-503'),
     );
 
-    render(<ProcessingQueuePage />);
+    renderPage();
 
     expect(await screen.findByText('Unable to load queue status')).toBeInTheDocument();
-    expect(showToastMock).toHaveBeenCalledWith(
-      'queue down (Request ID: req-queue-load-503)',
-      'error',
-    );
+    expect(showToastMock).not.toHaveBeenCalled();
   });
 
   it('includes request ids in operator toasts when queue actions fail', async () => {
@@ -184,7 +191,7 @@ describe('ProcessingQueuePage', () => {
       new ApiError(500, 'Job queue stalled', undefined, 'req-queue-123'),
     );
 
-    render(<ProcessingQueuePage />);
+    renderPage();
 
     await screen.findByText('Processing Queue');
     await user.click(screen.getByRole('button', { name: 'Cancel' }));

@@ -328,6 +328,14 @@ body.dark .pq-status.failed {
   color: #ef9a9a;
 }
 
+.pq-status.cleared {
+  color: #6b7280;
+}
+
+body.dark .pq-status.cleared {
+  color: #9ca3af;
+}
+
 /* ── Error Details (expandable in recent activity) ────── */
 
 .pq-error-toggle {

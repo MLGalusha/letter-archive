@@ -65,6 +65,15 @@ export function normalizeRelationshipType(value: string | null | undefined): Rel
   return 'unknown';
 }
 
+/**
+ * Types that can be transcribed. Excludes P (Photo) and V (Voice).
+ */
+export const TRANSCRIBABLE_TYPES = ['L', 'T', 'C', 'E', 'N', 'A', 'D'] as const;
+
+export function isTranscribableType(type: string): boolean {
+  return (TRANSCRIBABLE_TYPES as readonly string[]).includes(type);
+}
+
 export function getDocumentTypeFromCode(type: string): string {
   switch (type) {
     case 'T':

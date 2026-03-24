@@ -7,6 +7,7 @@ import { getAbsoluteStoragePath } from '../storage.js';
 import {
   contentStatusValues,
   getDocumentTypeFromCode,
+  isTranscribableType,
   log,
   type TranscribeExtrasResult,
   type TranscribeLetterOnlyResult,
@@ -28,8 +29,8 @@ export async function regenerateTranscription(
 
   if (!letter) return null;
 
-  if (letter.type !== 'L') {
-    const err = new Error('Can only regenerate transcription for letter type (L)') as Error & { status: number };
+  if (!isTranscribableType(letter.type)) {
+    const err = new Error(`Cannot transcribe type '${letter.type}' (only letter, telegram, cover, ephemera, card, article, diary supported)`) as Error & { status: number };
     err.status = 400;
     throw err;
   }
@@ -40,7 +41,7 @@ export async function regenerateTranscription(
     throw err;
   }
 
-  log.info({ letterId, includeExtras }, 'Starting transcription regeneration');
+  log.info({ letterId, type: letter.type, includeExtras }, 'Starting transcription regeneration');
 
   await db.update(letters).set({
     workflow: 'UPLOADED',
@@ -159,8 +160,8 @@ export async function transcribeLetterOnly(
 
   if (!letter) return null;
 
-  if (letter.type !== 'L') {
-    const err = new Error('Can only transcribe letter type (L)') as Error & { status: number };
+  if (!isTranscribableType(letter.type)) {
+    const err = new Error(`Cannot transcribe type '${letter.type}'`) as Error & { status: number };
     err.status = 400;
     throw err;
   }
@@ -172,7 +173,7 @@ export async function transcribeLetterOnly(
     throw err;
   }
 
-  log.info({ letterId }, 'Starting letter-only transcription');
+  log.info({ letterId, type: letter.type }, 'Starting letter-only transcription');
 
   await db.update(letters).set({
     workflow: 'UPLOADED',
@@ -187,21 +188,52 @@ export async function transcribeLetterOnly(
 
   const pageTranscriptions: string[] = [];
 
-  for (const page of pages) {
-    const absolutePath = getAbsoluteStoragePath(page.storagePath);
+  if (letter.type === 'L') {
+    // Standard letter transcription
+    for (const page of pages) {
+      const absolutePath = getAbsoluteStoragePath(page.storagePath);
 
-    const result = await transcribeImage({
-      filePath: absolutePath,
-      letterId,
-      context: {
-        collectionCode: letter.collection.collectionCode,
-        dateRaw: letter.dateRaw,
-        pageNumber: page.pageNumber,
-        totalPages: pages.length,
-      },
-    });
+      const result = await transcribeImage({
+        filePath: absolutePath,
+        letterId,
+        context: {
+          collectionCode: letter.collection.collectionCode,
+          dateRaw: letter.dateRaw,
+          pageNumber: page.pageNumber,
+          totalPages: pages.length,
+        },
+      });
 
-    pageTranscriptions.push(result.text);
+      pageTranscriptions.push(result.text);
+    }
+  } else {
+    // Non-letter type: use extra content transcription prompt
+    const docType = getDocumentTypeFromCode(letter.type);
+    for (const page of pages) {
+      const absolutePath = getAbsoluteStoragePath(page.storagePath);
+
+      const checkResult = await checkExtraContentForText({
+        filePath: absolutePath,
+        letterId,
+        documentType: docType,
+      });
+
+      if (!checkResult.hasTranscribableText) continue;
+
+      const result = await transcribeExtraContent({
+        filePath: absolutePath,
+        letterId,
+        documentType: docType,
+        context: {
+          collectionCode: letter.collection.collectionCode,
+          dateRaw: letter.dateRaw,
+        },
+      });
+
+      if (result.text.trim()) {
+        pageTranscriptions.push(result.text.trim());
+      }
+    }
   }
 
   let combinedTranscription: string;

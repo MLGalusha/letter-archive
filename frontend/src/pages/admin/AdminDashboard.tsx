@@ -264,10 +264,15 @@ export default function AdminDashboard() {
     fetchLetters(true, 1);
   }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
-  const handleRowClick = (letterId: string, _index: number, _e: React.MouseEvent) => {
+  const handleRowClick = (letterId: string, index: number, e: React.MouseEvent) => {
     if (hasDragMoved) return;
     // If in copy mode, don't navigate
     if (copyModeActive) return;
+    // If in edit mode (rows selected or pending changes), toggle selection instead of navigating
+    if (selectedIds.size > 0 || pendingChanges.size > 0) {
+      handleCheckboxChange(letterId, index, e);
+      return;
+    }
     navigate(`/admin/letters/${letterId}`);
   };
 

@@ -174,13 +174,13 @@ describe('letter operations service', () => {
       expect.objectContaining({
         sender: null,
         recipient: null,
-        metadataStatus: 'PENDING',
-        metadataError: null,
+        metadataStatus: 'FAILED',
+        metadataError: 'Cleared by admin',
         metadataJson: null,
         metadataV2Json: null,
         entityExtractionJson: null,
-        entityExtractionStatus: 'PENDING',
-        entityExtractionError: null,
+        entityExtractionStatus: 'FAILED',
+        entityExtractionError: 'Cleared by admin',
         workflow: 'TRANSCRIBED',
         updatedAt: expect.any(Date),
       }),
@@ -380,10 +380,12 @@ describe('letter operations service', () => {
     );
     expect(checkExtraContentForTextMock).toHaveBeenCalledWith({
       filePath: 'collections/009/19470810/C01/009-19470810-C01-01.jpg',
+      letterId: 'letter-11',
       documentType: 'cover/envelope',
     });
     expect(transcribeExtraContentMock).toHaveBeenCalledWith({
       filePath: 'collections/009/19470810/C01/009-19470810-C01-01.jpg',
+      letterId: 'letter-11',
       documentType: 'cover/envelope',
       context: {
         collectionCode: '009',

@@ -2,6 +2,7 @@ import { runTranscription } from './transcription.js';
 import { runMetadataExtraction } from './metadata.js';
 import { runMetadataExtractionV2 } from './metadataV2.js';
 import { getLetterById } from '../services/letters.js';
+import { isTranscribableType } from '../services/letter/shared.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger({ module: 'processor' });
@@ -10,7 +11,7 @@ const log = createLogger({ module: 'processor' });
  * Processes a letter through the transcription phase only.
  * Metadata extraction is triggered separately after transcript confirmation.
  *
- * Only processes type='L' letters.
+ * Supports all transcribable types (L, T, C, E, N, A, D). Excludes P (Photo) and V (Voice).
  */
 export async function processLetter(letterId: string): Promise<void> {
   const letter = await getLetterById(letterId);
@@ -19,9 +20,8 @@ export async function processLetter(letterId: string): Promise<void> {
     throw new Error(`Letter not found: ${letterId}`);
   }
 
-  // Only process type='L' letters
-  if (letter.type !== 'L') {
-    log.debug({ letterId, letterType: letter.type }, 'Skipping non-letter type');
+  if (!isTranscribableType(letter.type)) {
+    log.debug({ letterId, letterType: letter.type }, 'Skipping non-transcribable type');
     return;
   }
 
@@ -46,8 +46,8 @@ export async function processMetadata(letterId: string): Promise<void> {
     throw new Error(`Letter not found: ${letterId}`);
   }
 
-  if (letter.type !== 'L') {
-    log.debug({ letterId, letterType: letter.type }, 'Skipping metadata for non-letter type');
+  if (!isTranscribableType(letter.type)) {
+    log.debug({ letterId, letterType: letter.type }, 'Skipping metadata for non-transcribable type');
     return;
   }
 

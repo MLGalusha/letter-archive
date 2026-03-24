@@ -723,9 +723,10 @@ export default function LetterReviewPage() {
   }, [reviewMode]);
 
   const handleImageClick = useCallback((pageIndex: number) => {
+    if (isTranscriptEditing || isExtraContentEditing) return;
     setViewerPageIndex(pageIndex);
     setReviewMode(true);
-  }, []);
+  }, [isTranscriptEditing, isExtraContentEditing]);
 
   // Line highlighting - update on cursor move
   useEffect(() => {

@@ -531,7 +531,7 @@ export default function ProcessingQueuePage() {
           <h3 className="pq-section-title">Recent Activity</h3>
           {queue.recent.length > 0 && (
             <span className="pq-recent-summary">
-              {counts.recentSuccessCount} done, {counts.recentFailedCount} failed
+              {counts.recentSuccessCount} done{counts.recentClearedCount > 0 ? `, ${counts.recentClearedCount} cleared` : ''}{counts.recentFailedCount > 0 ? `, ${counts.recentFailedCount} failed` : ''}
             </span>
           )}
         </div>
@@ -551,6 +551,7 @@ export default function ProcessingQueuePage() {
             <tbody>
               {queue.recent.map((job: QueueRecentJob, i: number) => {
                 const isFailed = job.status === 'FAILED';
+                const isCleared = job.status === 'CLEARED';
                 const isExpanded = expandedErrors.has(i);
                 return (
                   <tr
@@ -566,8 +567,8 @@ export default function ProcessingQueuePage() {
                     <td><span className="pq-type-badge">{jobTypeLabel(job.type)}</span></td>
                     <td>
                       <div className="pq-status-cell">
-                        <span className={`pq-status ${job.status === 'SUCCESS' ? 'success' : 'failed'}`}>
-                          {job.status === 'SUCCESS' ? 'Done' : 'Failed'}
+                        <span className={`pq-status ${job.status === 'SUCCESS' ? 'success' : isCleared ? 'cleared' : 'failed'}`}>
+                          {job.status === 'SUCCESS' ? 'Done' : isCleared ? 'Cleared' : 'Failed'}
                         </span>
                         {isFailed && job.error && (
                           <button

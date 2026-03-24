@@ -91,6 +91,7 @@ export interface QueueStatus {
     queuedEntityExtraction: number;
     recentSuccessCount: number;
     recentFailedCount: number;
+    recentClearedCount: number;
   };
   onDemandProcessing: ProcessingStatus;
   entityResolution: EntityResolutionStatus;

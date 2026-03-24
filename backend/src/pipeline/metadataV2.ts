@@ -6,6 +6,7 @@ import {
   updateEntityExtraction,
   updateLetterWorkflow,
   incrementMetadataAttempts,
+  claimJob,
 } from '../services/letters.js';
 import { processEntityExtraction } from '../services/entities.js';
 import { updateJobProgress, clearJobProgress } from '../services/processing-queue.js';
@@ -66,9 +67,13 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
     'Starting metadata extraction'
   );
 
-  // Update status to running
+  // Atomically claim the job — prevents worker and on-demand processing from double-running
+  const claimed = await claimJob(letterId, 'metadataStatus', 'PENDING');
+  if (!claimed) {
+    letterLog.info('Metadata job already claimed by another process — skipping');
+    return;
+  }
   await updateLetterWorkflow(letterId, 'METADATA_EXTRACTING');
-  await updateMetadataV2(letterId, 'RUNNING');
 
   const extractionContext = {
     collectionCode: letter.collection.collectionCode,
@@ -159,7 +164,13 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
   updateJobProgress(letterId, 'metadata', 1, 2, 'Extracting entities');
 
   try {
-    await updateEntityExtraction(letterId, 'RUNNING');
+    // Claim entity extraction atomically (within same pipeline, but still safe)
+    const entityClaimed = await claimJob(letterId, 'entityExtractionStatus', 'PENDING');
+    if (!entityClaimed) {
+      letterLog.info('Entity extraction already claimed — skipping Phase 2');
+      clearJobProgress(letterId, 'metadata');
+      return;
+    }
 
     const entityCorrections: ExtractionCorrections | undefined = options
       ? {
@@ -265,7 +276,12 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
     summary: letter.summary,
   };
 
-  await updateEntityExtraction(letterId, 'RUNNING');
+  // Atomically claim the entity extraction job
+  const claimed = await claimJob(letterId, 'entityExtractionStatus', 'PENDING');
+  if (!claimed) {
+    letterLog.info('Entity extraction job already claimed by another process — skipping');
+    return;
+  }
   updateJobProgress(letterId, 'entity_extraction', 0, 1, 'Extracting entities');
 
   const corrections: ExtractionCorrections | undefined = options

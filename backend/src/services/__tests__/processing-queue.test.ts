@@ -207,11 +207,14 @@ describe('processing queue service', () => {
     const result = await retryJob('letter-2', 'metadata');
 
     expect(result).toEqual({ message: 'Retrying metadata for letter letter-2' });
-    expect(updateSetMock).toHaveBeenCalledWith({
-      metadataStatus: 'PENDING',
-      metadataError: null,
-      updatedAt: expect.any(Date),
-    });
+    expect(updateSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadataStatus: 'PENDING',
+        metadataError: null,
+        metadataAttemptCount: 0,
+        updatedAt: expect.any(Date),
+      }),
+    );
   });
 
   it('cancels running transcription jobs and clears progress tracking', async () => {
@@ -225,14 +228,15 @@ describe('processing queue service', () => {
 
     expect(result).toEqual({ message: 'Job cancelled' });
     expect(updateSetMock).toHaveBeenCalledWith({
-      transcriptionStatus: 'PENDING',
+      transcriptionStatus: 'FAILED',
+      transcriptionError: 'Cancelled by admin',
       workflow: 'UPLOADED',
       updatedAt: expect.any(Date),
     });
     expect(getJobProgress('letter-3', 'transcription')).toBeUndefined();
   });
 
-  it('aborts the current transcription job and reverts it to pending', async () => {
+  it('aborts the current transcription job and marks it as failed', async () => {
     resetProcessingState(3);
     const state = getProcessingStatus();
     state.currentJob = { letterId: 'letter-4', type: 'transcription' };
@@ -242,7 +246,8 @@ describe('processing queue service', () => {
     expect(result).toEqual({ message: 'Processing aborted' });
     expect(state.shouldAbort).toBe(true);
     expect(updateSetMock).toHaveBeenCalledWith({
-      transcriptionStatus: 'PENDING',
+      transcriptionStatus: 'FAILED',
+      transcriptionError: 'Aborted by admin',
       workflow: 'UPLOADED',
       updatedAt: expect.any(Date),
     });

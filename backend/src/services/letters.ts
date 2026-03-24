@@ -83,6 +83,28 @@ export async function getLetterById(letterId: string): Promise<Letter | undefine
 }
 
 /**
+ * Atomically claim a job by transitioning its status from expectedStatus to RUNNING.
+ * Returns true if the claim succeeded (status was expectedStatus), false if someone else got it first.
+ * This prevents the worker and on-demand processing from double-processing the same item.
+ */
+export async function claimJob(
+  letterId: string,
+  field: 'transcriptionStatus' | 'metadataStatus' | 'entityExtractionStatus',
+  expectedStatus: JobStatus = 'PENDING',
+): Promise<boolean> {
+  const result = await db
+    .update(letters)
+    .set({
+      [field]: 'RUNNING' as JobStatus,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(letters.id, letterId), eq(letters[field], expectedStatus)))
+    .returning({ id: letters.id });
+
+  return result.length > 0;
+}
+
+/**
  * Updates letter workflow state.
  */
 export async function updateLetterWorkflow(

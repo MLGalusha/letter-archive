@@ -1,5 +1,5 @@
 import { transcribeImage, checkExtraContentForText, transcribeExtraContent } from '../ai/openai.js';
-import { getLetterWithPages, updateTranscriptionStatus, updateLetterWorkflow, incrementTranscriptionAttempts } from '../services/letters.js';
+import { getLetterWithPages, updateTranscriptionStatus, updateLetterWorkflow, incrementTranscriptionAttempts, claimJob } from '../services/letters.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
 import { detectAndStoreLinesForPages } from '../services/line-finder.js';
 import { createLogger } from '../utils/logger.js';
@@ -44,9 +44,13 @@ export async function runTranscription(letterId: string): Promise<void> {
 
   letterLog.info({ type: letter.type }, 'Starting transcription');
 
-  // Update status to running
+  // Atomically claim the job — prevents worker and on-demand processing from double-running
+  const claimed = await claimJob(letterId, 'transcriptionStatus', 'PENDING');
+  if (!claimed) {
+    letterLog.info('Transcription job already claimed by another process — skipping');
+    return;
+  }
   await updateLetterWorkflow(letterId, 'TRANSCRIBING');
-  await updateTranscriptionStatus(letterId, 'RUNNING');
 
   try {
     const pages = letter.pages;

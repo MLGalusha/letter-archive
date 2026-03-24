@@ -122,7 +122,16 @@ router.post('/:letterId/confirm-transcript', async (req, res, next) => {
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
 
-    await runMetadataExtractionV2(letterId);
+    // Only trigger metadata extraction if status is PENDING (first-time flow).
+    // Skip if metadata was previously cleared/failed/succeeded to avoid re-queuing.
+    if (letter.metadataStatus === 'PENDING') {
+      await runMetadataExtractionV2(letterId);
+    } else {
+      req.log.info(
+        { letterId, metadataStatus: letter.metadataStatus },
+        'Skipping metadata extraction — status is not PENDING',
+      );
+    }
     res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
   } catch (error) {
     next(error);
@@ -140,9 +149,13 @@ router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
       throw new BadRequestError('Metadata extraction is already in progress');
     }
 
+    // Reset status to PENDING so the atomic claim in runMetadataExtractionV2 succeeds
     await db.update(letters).set({
+      metadataStatus: 'PENDING',
       metadataAttemptCount: 0,
       metadataError: null,
+      entityExtractionStatus: 'PENDING',
+      entityExtractionError: null,
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
 
@@ -163,6 +176,13 @@ router.post('/:letterId/regenerate-entities', async (req, res, next) => {
     if (letter.entityExtractionStatus === 'RUNNING') {
       throw new BadRequestError('Entity extraction is already in progress');
     }
+
+    // Reset to PENDING so the atomic claim in runEntityExtractionOnly succeeds
+    await db.update(letters).set({
+      entityExtractionStatus: 'PENDING',
+      entityExtractionError: null,
+      updatedAt: new Date(),
+    }).where(eq(letters.id, letterId));
 
     await runEntityExtractionOnly(letterId);
     res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
@@ -198,14 +218,24 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
     );
 
     if (mode === 'full' || mode === 'metadata_only') {
+      // Reset to PENDING so the atomic claim succeeds
       await db.update(letters).set({
+        metadataStatus: 'PENDING',
         metadataAttemptCount: 0,
         metadataError: null,
+        entityExtractionStatus: 'PENDING',
+        entityExtractionError: null,
         updatedAt: new Date(),
       }).where(eq(letters.id, letterId));
 
       await runMetadataExtractionV2(letterId, extractionOptions);
     } else if (mode === 'entities_only') {
+      await db.update(letters).set({
+        entityExtractionStatus: 'PENDING',
+        entityExtractionError: null,
+        updatedAt: new Date(),
+      }).where(eq(letters.id, letterId));
+
       await runEntityExtractionOnly(letterId, extractionOptions);
     }
 

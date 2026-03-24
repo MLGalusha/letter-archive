@@ -453,8 +453,11 @@ export async function getQueueStatus() {
     completedAt: string;
   }> = [];
 
-  // Helper to check if a failure was an admin action (clear/remove from queue)
-  const isAdminCleared = (error: string | null) => error?.includes('from queue by admin');
+  // Helper to check if a failure was an admin action (clear/remove/cancel/abort)
+  const isAdminCleared = (error: string | null) =>
+    error?.includes('from queue by admin') ||
+    error === 'Cancelled by admin' ||
+    error === 'Aborted by admin';
   // Helper to check if metadata was bulk-cleared by admin
   const isBulkCleared = (error: string | null) => error === 'Cleared by admin';
 
@@ -837,24 +840,27 @@ export async function abortProcessing(): Promise<{ message: string }> {
     'Processing abort requested'
   );
 
-  // If currently processing, revert the current letter's status back to initial state
+  // If currently processing, mark the current job as failed so the worker doesn't re-pick it
   if (processingState.currentJob) {
     const { letterId, type } = processingState.currentJob;
-    log.info({ letterId, type }, 'Reverting in-progress job state');
+    log.info({ letterId, type }, 'Marking in-progress job as aborted');
     if (type === 'transcription') {
       await db.update(letters).set({
-        transcriptionStatus: 'PENDING',
+        transcriptionStatus: 'FAILED',
+        transcriptionError: 'Aborted by admin',
         workflow: 'UPLOADED',
         updatedAt: new Date(),
       }).where(eq(letters.id, letterId));
     } else if (type === 'entity_extraction') {
       await db.update(letters).set({
-        entityExtractionStatus: 'PENDING',
+        entityExtractionStatus: 'FAILED',
+        entityExtractionError: 'Aborted by admin',
         updatedAt: new Date(),
       }).where(eq(letters.id, letterId));
     } else {
       await db.update(letters).set({
-        metadataStatus: 'PENDING',
+        metadataStatus: 'FAILED',
+        metadataError: 'Aborted by admin',
         workflow: 'TRANSCRIBED',
         updatedAt: new Date(),
       }).where(eq(letters.id, letterId));
@@ -1041,7 +1047,8 @@ export async function cancelActiveJob(letterId: string, type: QueueJobType): Pro
       throw new ProcessingError(`Cannot cancel: transcription status is ${letter.transcriptionStatus}`, 400);
     }
     await db.update(letters).set({
-      transcriptionStatus: 'PENDING',
+      transcriptionStatus: 'FAILED',
+      transcriptionError: 'Cancelled by admin',
       workflow: 'UPLOADED',
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
@@ -1050,7 +1057,8 @@ export async function cancelActiveJob(letterId: string, type: QueueJobType): Pro
       throw new ProcessingError(`Cannot cancel: metadata status is ${letter.metadataStatus}`, 400);
     }
     await db.update(letters).set({
-      metadataStatus: 'PENDING',
+      metadataStatus: 'FAILED',
+      metadataError: 'Cancelled by admin',
       workflow: 'TRANSCRIBED',
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
@@ -1059,7 +1067,8 @@ export async function cancelActiveJob(letterId: string, type: QueueJobType): Pro
       throw new ProcessingError(`Cannot cancel: entity extraction status is ${letter.entityExtractionStatus}`, 400);
     }
     await db.update(letters).set({
-      entityExtractionStatus: 'PENDING',
+      entityExtractionStatus: 'FAILED',
+      entityExtractionError: 'Cancelled by admin',
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
   }

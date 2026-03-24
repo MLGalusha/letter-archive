@@ -67,7 +67,11 @@ export function parseFilename(filename: string): ParsedFilename | null {
     const month = parseInt(dateRaw.slice(4, 6), 10);
     const day = parseInt(dateRaw.slice(6, 8), 10);
 
-    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+    const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)) {
+      daysInMonth[1] = 29;
+    }
+    if (month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth[month - 1]) {
       letterDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       dateConfidence = 'exact';
     }
@@ -106,7 +110,7 @@ export function updateFilenameType(filename: string, newType: LetterType): strin
   const parsed = parseFilename(filename);
   if (!parsed) {
     // If can't parse, try to replace type character if pattern looks close
-    return filename.replace(/-[LPEVADCNT](\d{2})-/i, `-${newType}$1-`);
+    return filename.replace(/-[A-Z](\d{2})-/i, `-${newType}$1-`);
   }
 
   const ext = getFileExtension(filename);

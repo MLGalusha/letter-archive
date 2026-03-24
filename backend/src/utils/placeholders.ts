@@ -33,19 +33,15 @@ export function replacePlaceholder(text: string, placeholder: string, replacemen
   if (placeholder === PLACEHOLDERS.SENDER) {
     // Replace "the sender's" with possessive (check before "the sender" to avoid partial match)
     result = result.replace(/\bthe sender's\b/gi, `${replacement}'s`);
-    // Replace "the sender" / "The sender" with the name
-    result = result.replace(/\bthe sender\b/gi, (match) => {
-      return match[0] === 'T' ? replacement : replacement;
-    });
+    // Replace "the sender" / "The sender" with the name (keep original name casing — proper nouns)
+    result = result.replace(/\bthe sender\b/gi, replacement);
   }
 
   if (placeholder === PLACEHOLDERS.RECIPIENT) {
     // Replace "the recipient's" with possessive
     result = result.replace(/\bthe recipient's\b/gi, `${replacement}'s`);
-    // Replace "the recipient" / "The recipient"
-    result = result.replace(/\bthe recipient\b/gi, (match) => {
-      return match[0] === 'T' ? replacement : replacement;
-    });
+    // Replace "the recipient" / "The recipient" with the name (keep original name casing — proper nouns)
+    result = result.replace(/\bthe recipient\b/gi, replacement);
   }
 
   return result;

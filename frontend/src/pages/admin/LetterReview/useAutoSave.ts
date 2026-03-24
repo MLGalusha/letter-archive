@@ -125,7 +125,8 @@ export function useAutoSave({
             delete otherData.recipient;
 
             if (Object.keys(otherData).length > 0) {
-              await updateLetter(letterId, otherData);
+              const finalUpdated = await updateLetter(letterId, otherData);
+              setLetter(finalUpdated);
             }
           },
           {

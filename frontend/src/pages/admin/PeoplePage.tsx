@@ -567,6 +567,12 @@ export default function PeoplePage() {
       setMergeCompareB(null);
       await fetchPersons();
       setRefreshKey((k) => k + 1);
+      // Refresh selected person if it was the kept entity
+      if (selectedPerson) {
+        const refreshedList = await getAllPersons();
+        const updated = refreshedList.persons.find((p) => p.id === selectedPerson.id);
+        if (updated) setSelectedPerson(updated);
+      }
     } catch (err) {
       showToast(
         err instanceof Error ? err.message : "Failed to merge persons",

@@ -431,6 +431,12 @@ export default function PlacesPage() {
       setMergeCompareB(null);
       await fetchPlaces();
       setRefreshKey((k) => k + 1);
+      // Refresh selected place if it was the kept entity
+      if (selectedPlace) {
+        const refreshedList = await getAllPlaces();
+        const updated = refreshedList.places.find((p) => p.id === selectedPlace.id);
+        if (updated) setSelectedPlace(updated);
+      }
     } catch (err) {
       showToast(
         err instanceof Error ? err.message : "Failed to merge places",

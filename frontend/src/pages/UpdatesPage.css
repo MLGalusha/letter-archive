@@ -52,10 +52,12 @@
   border: var(--border-card);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
+  color: inherit;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   cursor: pointer;
+  text-decoration: none;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -167,7 +169,14 @@
 .updates-load-more {
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: var(--spacing-sm);
   padding: var(--spacing-sm) 0;
+}
+
+.updates-pagination-label {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
 }
 
 /* ── Tablet ─────────────────────────────────────────── */

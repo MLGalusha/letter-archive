@@ -70,6 +70,7 @@ router.get('/blog/:slug', async (req, res) => {
         and(
           eq(updatePosts.slug, slug),
           eq(updatePosts.status, 'published'),
+          lte(updatePosts.publishedAt, new Date()),
         )
       )
       .limit(1);

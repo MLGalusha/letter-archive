@@ -10,6 +10,7 @@ import {
   type FeaturedLetter,
   type BlogPost,
 } from "../api/client";
+import { buildHomeSeo } from "../utils/seo";
 import "./HomePage.css";
 
 function formatDate(dateStr: string): string {
@@ -18,6 +19,7 @@ function formatDate(dateStr: string): string {
 }
 
 export default function HomePage() {
+  const homeSeo = buildHomeSeo();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState<SearchFilters>({});
@@ -53,9 +55,10 @@ export default function HomePage() {
   return (
     <div className="body-layout">
       <SEO
-        title="Preserving Personal Correspondence"
-        description="A digital archive preserving personal letters and historical correspondence. Browse, search, and explore letters from across generations."
-        canonicalUrl="/"
+        title={homeSeo.title}
+        description={homeSeo.description}
+        canonicalUrl={homeSeo.canonicalPath}
+        jsonLd={homeSeo.jsonLd}
       />
       <SearchBar onSearch={handleSearch} />
 
@@ -99,17 +102,9 @@ export default function HomePage() {
       {latestBlogPost && (
         <section className="home-latest-update">
           <div className="section-eyebrow">Latest from the Blog</div>
-          <div
+          <Link
+            to={`/blog/${latestBlogPost.slug}`}
             className="latest-update-card"
-            onClick={() => navigate(`/blog/${latestBlogPost.slug}`)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                navigate(`/blog/${latestBlogPost.slug}`);
-              }
-            }}
           >
             <div className="latest-update-content">
               <h3 className="latest-update-title">{latestBlogPost.title}</h3>
@@ -123,7 +118,7 @@ export default function HomePage() {
                 <span className="latest-update-cta">Read more &rarr;</span>
               </div>
             </div>
-          </div>
+          </Link>
         </section>
       )}
 

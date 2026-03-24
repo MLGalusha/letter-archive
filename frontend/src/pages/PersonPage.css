@@ -148,9 +148,12 @@ body.dark .person-page .relationships-list a:hover {
 
 .letter-item {
   background: var(--bg-light);
+  color: inherit;
+  display: block;
   padding: var(--spacing-lg);
   border-radius: 8px;
   cursor: pointer;
+  text-decoration: none;
   transition: background 0.15s, transform 0.1s;
 }
 

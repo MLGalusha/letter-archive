@@ -74,9 +74,8 @@ describe("PlacePage", () => {
     getPlacePublicMock.mockResolvedValue(data);
   });
 
-  it("renders themes, description, stats, and navigates from letter items", async () => {
-    const user = userEvent.setup();
-    const { container } = renderPlacePage();
+  it("renders themes, description, stats, and letter links", async () => {
+    renderPlacePage();
 
     expect(await screen.findByRole("heading", { name: "Vienna" })).toBeInTheDocument();
     expect(screen.getByText("city")).toBeInTheDocument();
@@ -87,12 +86,10 @@ describe("PlacePage", () => {
     expect(screen.getByText("Cultural crossroads.")).toBeInTheDocument();
     expect(screen.getByText("Letters (1)")).toBeInTheDocument();
 
-    const letterItem = container.querySelector(".letter-item");
-    expect(letterItem).not.toBeNull();
-
-    await user.click(letterItem!);
-
-    expect(mockNavigate).toHaveBeenCalledWith("/letter/letter-1");
+    const letterLink = screen
+      .getAllByRole("link")
+      .find((link) => link.getAttribute("href") === "/letter/letter-1");
+    expect(letterLink).toBeTruthy();
   });
 
   it("shows an empty-state message when the place has no published letters", async () => {

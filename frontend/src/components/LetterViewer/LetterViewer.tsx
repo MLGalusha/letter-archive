@@ -33,6 +33,8 @@ interface LetterViewerProps {
   letterId?: string;
   showOnlyLetterPages?: boolean;
   onPageChange?: (index: number, image: LetterImage) => void;
+  onImageClick?: (pageIndex: number) => void;
+  getImageAlt?: (image: LetterImage) => string;
 }
 
 // ============================================================================
@@ -93,6 +95,8 @@ export default function LetterViewer({
   letterId,
   showOnlyLetterPages = false,
   onPageChange,
+  onImageClick,
+  getImageAlt,
 }: LetterViewerProps) {
   // Filter images if needed
   const displayImages = showOnlyLetterPages
@@ -118,6 +122,7 @@ export default function LetterViewer({
 
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const sliderTrackRef = useRef<HTMLDivElement>(null);
+  const mouseDownPos = useRef<{ x: number; y: number } | null>(null);
 
   // Use refs to avoid stale closures in event handlers
   const scaleRef = useRef(scale);
@@ -352,6 +357,7 @@ export default function LetterViewer({
   // ============================================================================
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    mouseDownPos.current = { x: e.clientX, y: e.clientY };
     if (scale === 1) return;
 
     setIsDragging(true);
@@ -370,8 +376,17 @@ export default function LetterViewer({
     });
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
     setIsDragging(false);
+    // Fire onImageClick if this was a click (not a drag) at 1x zoom
+    if (onImageClick && scale === 1 && mouseDownPos.current) {
+      const dx = e.clientX - mouseDownPos.current.x;
+      const dy = e.clientY - mouseDownPos.current.y;
+      if (Math.abs(dx) < 5 && Math.abs(dy) < 5) {
+        onImageClick(currentImageIndex);
+      }
+    }
+    mouseDownPos.current = null;
   };
 
   const handleMouseLeave = () => {
@@ -429,7 +444,7 @@ export default function LetterViewer({
       >
         <img
           src={getImageUrl(currentImage.imageUrl)}
-          alt={`${currentImage.type} ${currentImage.pageNumber || ""}`}
+          alt={getImageAlt ? getImageAlt(currentImage) : `${currentImage.type} ${currentImage.pageNumber || ""}`}
           className={`viewer-image ${isAnimating ? "animating" : ""}`}
           style={{
             transform: `scale(${scale}) translate(${position.x / scale}px, ${
@@ -439,7 +454,9 @@ export default function LetterViewer({
               ? isDragging
                 ? "grabbing"
                 : "grab"
-              : "default",
+              : onImageClick
+                ? "pointer"
+                : "default",
           }}
           draggable={false}
         />

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import SEO from '../components/SEO';
 import {
   getRelationshipGraph,
   getRelationshipGraphByCollection,
@@ -11,9 +12,11 @@ import RelationshipGraph from '../components/RelationshipGraph/RelationshipGraph
 import ConnectionFinder from '../components/ConnectionFinder/ConnectionFinder';
 import Footer from '../components/Footer/Footer';
 import { applyGraphFilters, buildDiscoveryPrompts, buildGraphInsights } from './explore-utils';
+import { buildExploreSeo } from '../utils/seo';
 import './ExplorePage.css';
 
 export default function ExplorePage() {
+  const seo = buildExploreSeo();
   const navigate = useNavigate();
   const [collections, setCollections] = useState<CollectionInfo[]>([]);
   const [selectedCollection, setSelectedCollection] = useState<string>('all');
@@ -161,6 +164,12 @@ export default function ExplorePage() {
 
   return (
     <div className="body-layout">
+      <SEO
+        title={seo.title}
+        description={seo.description}
+        canonicalUrl={seo.canonicalPath}
+        robots={seo.robots}
+      />
       <div className="explore-page">
         <div className="explore-header">
           <h1>Explore Relationships</h1>

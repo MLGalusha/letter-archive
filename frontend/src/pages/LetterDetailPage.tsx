@@ -4,6 +4,7 @@ import SEO from "../components/SEO";
 import LetterDisplay from "../components/LetterDisplay/LetterDisplay";
 import { getAdjacentLetters, getLetterById, type AdjacentLettersResponse } from "../api/letters";
 import type { Letter } from "../types/Letter";
+import { buildLetterSeo } from "../utils/seo";
 import "./LetterDetailPage.css";
 
 export default function LetterDetailPage() {
@@ -42,22 +43,8 @@ export default function LetterDetailPage() {
   }, [letterId]);
 
   const seo = useMemo(() => {
-    if (!letter) return null;
-    const parts: string[] = [];
-    if (letter.metadata.sender) parts.push(`From ${letter.metadata.sender}`);
-    if (letter.metadata.recipient) parts.push(`to ${letter.metadata.recipient}`);
-    if (letter.metadata.date) parts.push(`(${letter.metadata.date})`);
-    const title = parts.length > 0 ? parts.join(" ") : `Letter ${letterId}`;
-
-    const transcript = letter.transcript?.fullText || "";
-    const description = transcript.length > 160
-      ? transcript.slice(0, 157) + "..."
-      : transcript || letter.metadata.hook || "Read this historical letter in the Letter Archive.";
-
-    const ogImage = letter.images?.[0]?.imageUrl || undefined;
-
-    return { title, description, ogImage };
-  }, [letter, letterId]);
+    return letter ? buildLetterSeo(letter) : null;
+  }, [letter]);
 
   if (loading) {
     return (
@@ -86,8 +73,11 @@ export default function LetterDetailPage() {
           title={seo.title}
           description={seo.description}
           ogImage={seo.ogImage}
-          ogType="article"
-          canonicalUrl={`/letter/${letterId}`}
+          imageAlt={seo.imageAlt}
+          ogType={seo.ogType}
+          canonicalUrl={seo.canonicalPath}
+          modifiedTime={seo.modifiedTime}
+          jsonLd={seo.jsonLd}
         />
       )}
       <div className="letter-detail-header">

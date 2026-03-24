@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { getPersonPublic, type PublicPersonDetail } from '../api/entities';
+import SEO from '../components/SEO';
 import Breadcrumb from '../components/Breadcrumb';
 import Footer from '../components/Footer/Footer';
+import { buildPersonSeo } from '../utils/seo';
 import './PersonPage.css';
 
 export default function PersonPage() {
@@ -34,10 +36,6 @@ export default function PersonPage() {
     navigate(-1);
   };
 
-  const handleLetterClick = (letterId: string) => {
-    navigate(`/letter/${letterId}`);
-  };
-
   if (loading) {
     return (
       <div className="body-layout">
@@ -67,9 +65,16 @@ export default function PersonPage() {
   }
 
   const { person, relationships, stats, letters } = data;
+  const seo = buildPersonSeo(data);
 
   return (
     <div className="body-layout">
+      <SEO
+        title={seo.title}
+        description={seo.description}
+        canonicalUrl={seo.canonicalPath}
+        jsonLd={seo.jsonLd}
+      />
       <Breadcrumb
         items={[
           { label: 'Home', href: '/' },
@@ -143,10 +148,10 @@ export default function PersonPage() {
           ) : (
             <div className="letters-list">
               {letters.map((letter) => (
-                <div
+                <Link
                   key={letter.id}
+                  to={`/letter/${letter.id}`}
                   className="letter-item"
-                  onClick={() => handleLetterClick(letter.id)}
                 >
                   <div className="letter-meta">
                     <span className="letter-date">
@@ -161,7 +166,7 @@ export default function PersonPage() {
                     {letter.recipient && <span>To: {letter.recipient}</span>}
                   </div>
                   {letter.hook && <p className="letter-hook">{letter.hook}</p>}
-                </div>
+                </Link>
               ))}
             </div>
           )}

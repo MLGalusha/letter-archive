@@ -1,5 +1,4 @@
 import { useCallback, useRef, useState, useEffect, type CSSProperties } from "react";
-import { useNavigate } from "react-router-dom";
 import type { Letter, LetterImage } from "../../types/Letter";
 import LetterViewer from "../LetterViewer/LetterViewer";
 import { ResizableSplitPane } from "../common";
@@ -14,7 +13,6 @@ interface LetterDisplayProps {
 }
 
 export default function LetterDisplay({ letter }: LetterDisplayProps) {
-  const navigate = useNavigate();
   const transcriptRef = useRef<HTMLDivElement>(null);
   const [isTranscriptVisible, setIsTranscriptVisible] = useState(true);
   const [transcriptFontSize, setTranscriptFontSize] = useState("1.1rem");
@@ -110,6 +108,23 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
     });
   }, [isTranscriptVisible, letterPageCount]);
 
+  const buildImageAlt = useCallback((image: LetterImage) => {
+    const people = letter.metadata.sender && letter.metadata.recipient
+      ? `letter from ${letter.metadata.sender} to ${letter.metadata.recipient}`
+      : letter.metadata.sender
+        ? `letter from ${letter.metadata.sender}`
+        : letter.metadata.recipient
+          ? `letter to ${letter.metadata.recipient}`
+          : `${image.type} item`;
+    const pagePart = image.pageNumber ? `Page ${image.pageNumber} of ${people}` : people;
+    const datePart = letter.metadata.date ? `, ${letter.metadata.date}` : '';
+    return `${pagePart}${datePart}`;
+  }, [
+    letter.metadata.date,
+    letter.metadata.recipient,
+    letter.metadata.sender,
+  ]);
+
   return (
     <div className="letter-display">
       <div className="display-body">
@@ -125,6 +140,7 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
             letterId={letter.id}
             showOnlyLetterPages={false}
             onPageChange={handlePageChange}
+            getImageAlt={buildImageAlt}
           />
 
           {/* Right side: Read-only content */}

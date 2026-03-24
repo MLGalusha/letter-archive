@@ -113,6 +113,7 @@
   border: var(--border-card);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
+  color: inherit;
   padding: var(--spacing-md);
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -121,6 +122,7 @@
   height: 220px;
   overflow: hidden;
   position: relative;
+  text-decoration: none;
 }
 
 .public-collection-card:hover {

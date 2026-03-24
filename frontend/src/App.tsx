@@ -11,6 +11,9 @@ import CollectionsPage from "./pages/CollectionsPage";
 import CollectionDetailPage from "./pages/CollectionDetailPage";
 import BlogPage from "./pages/UpdatesPage";
 import BlogDetailPage from "./pages/UpdateDetailPage";
+import ExplorePage from "./pages/ExplorePage";
+import PersonPage from "./pages/PersonPage";
+import PlacePage from "./pages/PlacePage";
 import NotFoundPage from "./pages/NotFoundPage";
 import AdminLoginPage from "./pages/admin/AdminLoginPage";
 import AcceptInvitePage from "./pages/admin/AcceptInvitePage";
@@ -67,6 +70,9 @@ function App() {
                 <Route path="/collections/:collectionCode" element={<CollectionDetailPage />} />
                 <Route path="/blog" element={<BlogPage />} />
                 <Route path="/blog/:slug" element={<BlogDetailPage />} />
+                <Route path="/explore" element={<ExplorePage />} />
+                <Route path="/people/:personId" element={<PersonPage />} />
+                <Route path="/places/:placeId" element={<PlacePage />} />
                 <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </main>

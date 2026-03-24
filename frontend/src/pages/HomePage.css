@@ -105,8 +105,11 @@
   border-top: solid 1px var(--highlight);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
+  color: inherit;
+  display: block;
   padding: var(--spacing-lg);
   cursor: pointer;
+  text-decoration: none;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 

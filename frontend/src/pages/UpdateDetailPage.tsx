@@ -6,29 +6,12 @@ import remarkGfm from 'remark-gfm';
 import SEO from '../components/SEO';
 import { getBlogPost, type BlogPost } from '../api/client';
 import Footer from '../components/Footer/Footer';
+import { buildBlogPostSeo } from '../utils/seo';
 import './UpdateDetailPage.css';
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-}
-
-function deriveExcerpt(markdown: string): string {
-  const plain = markdown
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '$1')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
-    .replace(/^#{1,6}\s+/gm, '')
-    .replace(/^>\s?/gm, '')
-    .replace(/^[-*+]\s+/gm, '')
-    .replace(/^\d+\.\s+/gm, '')
-    .replace(/\|/g, ' ')
-    .replace(/\*\*|__|\*|_/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  return plain.slice(0, 220).trim();
 }
 
 export default function BlogDetailPage() {
@@ -82,19 +65,22 @@ export default function BlogDetailPage() {
     );
   }
 
-  const seoTitle = post.seoTitle || post.title;
-  const deck = post.excerpt || deriveExcerpt(post.bodyMarkdown);
-  const seoDescription = post.seoDescription || deck || `Read "${post.title}" on Letter Archive.`;
+  const seo = buildBlogPostSeo(post);
+  const deck = post.excerpt || seo.description;
   const publishedDate = post.publishedAt || post.createdAt;
 
   return (
     <div className="body-layout">
       <SEO
-        title={seoTitle}
-        description={seoDescription}
-        canonicalUrl={`/blog/${post.slug}`}
-        ogType="article"
-        ogImage={post.heroImageUrl || undefined}
+        title={seo.title}
+        description={seo.description}
+        canonicalUrl={seo.canonicalPath}
+        ogType={seo.ogType}
+        ogImage={seo.ogImage}
+        imageAlt={seo.imageAlt}
+        publishedTime={seo.publishedTime}
+        modifiedTime={seo.modifiedTime}
+        jsonLd={seo.jsonLd}
       />
       <article className="update-detail">
         <Link to="/blog" className="update-back-link">

@@ -9,6 +9,9 @@ import adminRouter from './admin/index.js';
 import authRouter from './auth.js';
 import blogRouter from './updates.js';
 import contentPagesRouter from './content-pages.js';
+import personsRouter from './persons.js';
+import placesRouter from './places.js';
+import relationshipsRouter from './relationships.js';
 
 const router = Router();
 
@@ -20,6 +23,9 @@ router.use(collectionsRouter);
 router.use(authRouter);
 router.use(blogRouter);
 router.use(contentPagesRouter);
+router.use(personsRouter);
+router.use(placesRouter);
+router.use(relationshipsRouter);
 router.use('/admin', adminRouter);
 
 // Public site settings (non-sensitive keys only)

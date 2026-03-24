@@ -81,9 +81,8 @@ describe("PersonPage", () => {
     getPersonPublicMock.mockResolvedValue(data);
   });
 
-  it("renders biography, relationship links, stats, and navigates from letter items", async () => {
-    const user = userEvent.setup();
-    const { container } = renderPersonPage();
+  it("renders biography, relationship links, stats, and letter links", async () => {
+    renderPersonPage();
 
     expect(await screen.findByRole("heading", { name: "Alice Smith" })).toBeInTheDocument();
     expect(screen.getByText("Also known as: Ally")).toBeInTheDocument();
@@ -96,12 +95,10 @@ describe("PersonPage", () => {
     expect(screen.getByText("Letters Sent")).toBeInTheDocument();
     expect(screen.getByText("Letters (1)")).toBeInTheDocument();
 
-    const letterItem = container.querySelector(".letter-item");
-    expect(letterItem).not.toBeNull();
-
-    await user.click(letterItem!);
-
-    expect(mockNavigate).toHaveBeenCalledWith("/letter/letter-1");
+    const letterLink = screen
+      .getAllByRole("link")
+      .find((link) => link.getAttribute("href") === "/letter/letter-1");
+    expect(letterLink).toBeTruthy();
   });
 
   it("shows an empty-state message when the person has no published letters", async () => {

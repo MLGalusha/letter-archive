@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { listCollections, type CollectionInfo } from '../api/collections';
 import Footer from '../components/Footer/Footer';
@@ -101,10 +101,10 @@ export default function CollectionsPage() {
 
         <div className="public-collections-grid">
           {visibleCollections.map((collection) => (
-            <div
+            <Link
               key={collection.id}
+              to={`/collections/${collection.collectionCode}`}
               className="public-collection-card"
-              onClick={() => handleCollectionClick(collection.collectionCode)}
             >
               <div className="collection-card-top">
                 <span className="collection-card-code">{collection.collectionCode}</span>
@@ -117,7 +117,7 @@ export default function CollectionsPage() {
                 <p className="collection-card-description">{collection.description}</p>
               )}
               <span className="collection-card-cta">Read the letters &rarr;</span>
-            </div>
+            </Link>
           ))}
         </div>
 

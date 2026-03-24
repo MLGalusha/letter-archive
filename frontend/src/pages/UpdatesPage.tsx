@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { listBlogPosts, type BlogPost } from '../api/client';
 import Footer from '../components/Footer/Footer';
+import { buildBlogIndexSeo, stripMarkdown, truncateText } from '../utils/seo';
 import './UpdatesPage.css';
 
 const PAGE_SIZE = 12;
@@ -12,38 +13,31 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-function deriveExcerpt(markdown: string): string {
-  const plain = markdown
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '$1')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
-    .replace(/^#{1,6}\s+/gm, '')
-    .replace(/^>\s?/gm, '')
-    .replace(/^[-*+]\s+/gm, '')
-    .replace(/^\d+\.\s+/gm, '')
-    .replace(/\|/g, ' ')
-    .replace(/\*\*|__|\*|_/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  return plain.slice(0, 150).trim();
-}
-
 export default function BlogPage() {
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentPageParam = Number(searchParams.get('page') || '1');
+  const currentPage =
+    Number.isFinite(currentPageParam) && currentPageParam > 0
+      ? Math.floor(currentPageParam)
+      : 1;
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const blogIndexSeo = buildBlogIndexSeo(currentPage);
 
   useEffect(() => {
     async function fetchBlogPosts() {
+      setLoading(true);
       try {
-        const data = await listBlogPosts({ limit: PAGE_SIZE, offset: 0 });
+        const data = await listBlogPosts({
+          limit: PAGE_SIZE,
+          offset: (currentPage - 1) * PAGE_SIZE,
+        });
         setPosts(data.posts);
         setTotal(data.total);
+        setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load blog posts');
       } finally {
@@ -52,31 +46,21 @@ export default function BlogPage() {
     }
 
     fetchBlogPosts();
-  }, []);
+  }, [currentPage]);
 
-  const handleLoadMore = async () => {
-    setLoadingMore(true);
-    try {
-      const data = await listBlogPosts({ limit: PAGE_SIZE, offset: posts.length });
-      setPosts((prev) => [...prev, ...data.posts]);
-      setTotal(data.total);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load more blog posts');
-    } finally {
-      setLoadingMore(false);
+  useEffect(() => {
+    if (!loading && total > 0 && currentPage > totalPages) {
+      setSearchParams(totalPages > 1 ? { page: String(totalPages) } : {});
     }
-  };
-
-  const handleBlogPostClick = (slug: string) => {
-    navigate(`/blog/${slug}`);
-  };
+  }, [currentPage, loading, setSearchParams, total, totalPages]);
 
   return (
     <div className="body-layout">
       <SEO
-        title="Blog"
-        description="Read field notes, collection highlights, and essays from Letter Archive as the project grows."
-        canonicalUrl="/blog"
+        title={blogIndexSeo.title}
+        description={blogIndexSeo.description}
+        canonicalUrl={blogIndexSeo.canonicalPath}
+        jsonLd={blogIndexSeo.jsonLd}
       />
       <div className="updates-page">
         <header className="updates-hero">
@@ -100,18 +84,10 @@ export default function BlogPage() {
         {posts.length > 0 && (
           <div className="updates-grid">
             {posts.map((post) => (
-              <article
+              <Link
                 key={post.id}
+                to={`/blog/${post.slug}`}
                 className="update-card"
-                onClick={() => handleBlogPostClick(post.slug)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleBlogPostClick(post.slug);
-                  }
-                }}
               >
                 {post.heroImageUrl && (
                   <div className="update-card-image">
@@ -132,7 +108,9 @@ export default function BlogPage() {
                     </span>
                   </div>
                   <h2 className="update-card-title">{post.title}</h2>
-                  <p className="update-card-excerpt">{post.excerpt || deriveExcerpt(post.bodyMarkdown)}</p>
+                  <p className="update-card-excerpt">
+                    {post.excerpt || truncateText(stripMarkdown(post.bodyMarkdown), 150)}
+                  </p>
                   <div className="update-card-footer">
                     {post.authorDisplayName && (
                       <span className="update-author">{post.authorDisplayName}</span>
@@ -140,20 +118,33 @@ export default function BlogPage() {
                     <span className="update-card-cta">Read more &rarr;</span>
                   </div>
                 </div>
-              </article>
+              </Link>
             ))}
           </div>
         )}
 
-        {posts.length < total && (
+        {totalPages > 1 && (
           <div className="updates-load-more">
-            <button
-              className="btn-card"
-              onClick={handleLoadMore}
-              disabled={loadingMore}
-            >
-              {loadingMore ? 'Loading...' : 'Load more posts'}
-            </button>
+            {currentPage > 1 ? (
+              <Link
+                className="btn-card"
+                to={currentPage === 2 ? '/blog' : `/blog?page=${currentPage - 1}`}
+              >
+                Newer posts
+              </Link>
+            ) : (
+              <span />
+            )}
+            <span className="updates-pagination-label">
+              Page {currentPage} of {totalPages}
+            </span>
+            {currentPage < totalPages ? (
+              <Link className="btn-card" to={`/blog?page=${currentPage + 1}`}>
+                Older posts
+              </Link>
+            ) : (
+              <span />
+            )}
           </div>
         )}
       </div>

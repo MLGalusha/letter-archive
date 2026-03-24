@@ -9,6 +9,7 @@ import {
   applyCollectionFilters,
   buildCollectionFacets,
 } from './collection-detail-utils';
+import { buildCollectionSeo } from '../utils/seo';
 import './CollectionDetailPage.css';
 
 export default function CollectionDetailPage() {
@@ -142,17 +143,16 @@ export default function CollectionDetailPage() {
     );
   }
 
-  const seoTitle = collection.title || `Collection ${collection.collectionCode}`;
-  const seoDescription = collection.description
-    || `Browse ${collection.letterCount} letter${collection.letterCount !== 1 ? 's' : ''} in the ${seoTitle} collection.`;
+  const seo = buildCollectionSeo(collection, dateRange, topCorrespondents);
 
   return (
     <div className="body-layout">
       <SEO
-        title={seoTitle}
-        description={seoDescription}
-        canonicalUrl={`/collections/${collection.collectionCode}`}
-        ogType="article"
+        title={seo.title}
+        description={seo.description}
+        canonicalUrl={seo.canonicalPath}
+        ogType={seo.ogType}
+        jsonLd={seo.jsonLd}
       />
       <Breadcrumb
         items={[

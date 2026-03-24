@@ -1,10 +1,20 @@
 import { Link } from "react-router-dom";
+import SEO from "../components/SEO";
 import Footer from "../components/Footer/Footer";
+import { buildNotFoundSeo } from "../utils/seo";
 import "./NotFoundPage.css";
 
 export default function NotFoundPage() {
+  const seo = buildNotFoundSeo();
+
   return (
     <div className="body-layout">
+      <SEO
+        title={seo.title}
+        description={seo.description}
+        canonicalUrl={seo.canonicalPath}
+        robots={seo.robots}
+      />
       <div className="notfound-page">
         <div className="notfound-code">404</div>
         <h1 className="notfound-heading">Page not found</h1>

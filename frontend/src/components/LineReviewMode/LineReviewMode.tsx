@@ -43,6 +43,7 @@ interface LineReviewModeProps {
   onAutoSave: (data: { transcriptionText: string }) => void;
   debugMode?: boolean;
   onDebugModeChange?: (debugMode: boolean) => void;
+  initialPageIndex?: number;
 }
 
 export interface LineReviewModeHandle {
@@ -299,20 +300,55 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   onAutoSave,
   debugMode: debugLines = false,
   onDebugModeChange,
+  initialPageIndex,
 }: LineReviewModeProps, ref) {
   const { showToast } = useToast();
-  // Filter to letter-type pages only
+
+  // All images (letter + extra content) for page navigation
+  const allPages = useMemo(() => letter.images, [letter.images]);
+
+  // Letter-only pages for transcript/line detection
   const letterPages = useMemo(
     () => letter.images.filter((img) => img.type === 'letter'),
     [letter.images],
   );
 
-  const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  // Set of allPages indices that are letter-type
+  const letterPageIndices = useMemo(() => {
+    const set = new Set<number>();
+    allPages.forEach((img, idx) => {
+      if (img.type === 'letter') set.add(idx);
+    });
+    return set;
+  }, [allPages]);
+
+  // Map allPages index → letter-page-only index (for transcript splitting)
+  const allToLetterIndex = useMemo(() => {
+    const map = new Map<number, number>();
+    let letterIdx = 0;
+    allPages.forEach((img, idx) => {
+      if (img.type === 'letter') {
+        map.set(idx, letterIdx);
+        letterIdx++;
+      }
+    });
+    return map;
+  }, [allPages]);
+
+  const isLetterPage = useCallback(
+    (idx: number) => letterPageIndices.has(idx),
+    [letterPageIndices],
+  );
+
+  const [currentPageIndex, setCurrentPageIndex] = useState(initialPageIndex ?? 0);
+  // Letter-page index for transcript/detection lookups (undefined for non-letter pages)
+  const currentLetterPageIndex = allToLetterIndex.get(currentPageIndex);
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
   const [imageNaturalSize, setImageNaturalSize] = useState({ width: 0, height: 0 });
   const [imageDisplaySize, setImageDisplaySize] = useState({ width: 0, height: 0 });
 
   // AI-detected line segments per page (cached across page switches)
+  // Keyed by letter-page index (not allPages index)
   // undefined = not attempted, null = in progress, LineSegment[] = done
   const [aiSegmentsMap, setAiSegmentsMap] = useState<Record<number, AlignmentInput[] | null | undefined>>(() => {
     const initial: Record<number, AlignmentInput[] | null | undefined> = {};
@@ -323,6 +359,16 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     });
     return initial;
   });
+
+  // Overlay toggle (dimmer + input strip)
+  const [overlayEnabled, setOverlayEnabled] = useState(true);
+  // Fit-height toggle
+  const [fitHeight, setFitHeight] = useState(false);
+  // Zoom + pan for fit-height mode
+  const [fitZoom, setFitZoom] = useState(1);
+  const [fitPan, setFitPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef({ x: 0, y: 0 });
 
   // Debug overlay layer toggles
   const [showKrakenLines, setShowKrakenLines] = useState(true);
@@ -382,10 +428,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   }, [pageRawTexts]);
 
   // Unified pipeline: attach words, constrained grouping, transcript matching
+  // Only runs for letter pages (non-letter pages have no detection data)
   const pipelineResult = useMemo(() => {
-    const rawSegments = krakenSegmentsMap[currentPageIndex] ?? [];
-    const wordBoxes = letterPages[currentPageIndex]?.ocrWordBoxes
-      ?? visionBoxesMap[currentPageIndex]
+    if (currentLetterPageIndex === undefined) return null;
+    const rawSegments = krakenSegmentsMap[currentLetterPageIndex] ?? [];
+    const wordBoxes = letterPages[currentLetterPageIndex]?.ocrWordBoxes
+      ?? visionBoxesMap[currentLetterPageIndex]
       ?? [];
 
     if (rawSegments.length === 0) return null;
@@ -397,77 +445,79 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const { lines: groupedLines, marginalSegments, visionRejections } = constrainedGrouping(enriched);
 
     // Phase 4-5: Match transcript to grouped lines
-    const transcriptLines = pageLineTexts[currentPageIndex] ?? [];
+    const transcriptLines = pageLineTexts[currentLetterPageIndex] ?? [];
     const matchResult = matchTranscriptToLines(transcriptLines, groupedLines, unassigned);
 
     return { enriched, unassigned, groupedLines, marginalSegments, matchResult, visionRejections };
-  }, [krakenSegmentsMap, currentPageIndex, letterPages, visionBoxesMap, pageLineTexts]);
+  }, [krakenSegmentsMap, currentLetterPageIndex, letterPages, visionBoxesMap, pageLineTexts]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const inputRef = useRef<HTMLDivElement>(null);
   const lastGlobalLineIndexRef = useRef<number | null>(null);
 
-  const currentPage = letterPages[currentPageIndex];
+  const currentPage = allPages[currentPageIndex];
 
-  // Reset image sizes when switching pages so overlay doesn't render
+  // Reset image sizes and zoom when switching pages so overlay doesn't render
   // at stale positions from the previous page's dimensions
   useEffect(() => {
     setImageNaturalSize({ width: 0, height: 0 });
     setImageDisplaySize({ width: 0, height: 0 });
+    setFitZoom(1);
+    setFitPan({ x: 0, y: 0 });
   }, [currentPageIndex]);
 
-  // Run line detection via backend API when a page loads.
+  // Run line detection via backend API when a letter page loads.
   // Triggers when: (a) no segments cached at all, or (b) segments cached
   // from DB but Vision boxes haven't been fetched yet for this page.
   useEffect(() => {
-    if (!currentPage) return;
+    if (!currentPage || currentLetterPageIndex === undefined) return;
 
-    const hasSegments = aiSegmentsMap[currentPageIndex] !== undefined;
+    const lpIdx = currentLetterPageIndex;
+    const hasSegments = aiSegmentsMap[lpIdx] !== undefined;
 
     // Stored segment data is enough to render reliably without
     // forcing another backend call on first load.
     if (hasSegments) return;
-    if (aiSegmentsMap[currentPageIndex] === null) return;
+    if (aiSegmentsMap[lpIdx] === null) return;
 
-    const pageText = pageLineTexts[currentPageIndex]?.join('\n') || '';
+    const pageText = pageLineTexts[lpIdx]?.join('\n') || '';
     if (!pageText.trim()) return;
 
     // Mark as in progress
-    setAiSegmentsMap(prev => ({ ...prev, [currentPageIndex]: null }));
+    setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: null }));
     setDetectionSteps([]);
 
     const pageId = currentPage.id;
-    const idx = currentPageIndex;
 
     detectPageLines(pageId, (label) => {
       setDetectionSteps(prev => [...prev, label]);
     })
       .then(result => {
-        setAiSegmentsMap(prev => ({ ...prev, [idx]: result.lineSegments }));
-        setVisionBoxesMap(prev => ({ ...prev, [idx]: result.ocrWordBoxes ?? [] }));
-        setKrakenSegmentsMap(prev => ({ ...prev, [idx]: result.lineSegments ?? [] }));
+        setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: result.lineSegments }));
+        setVisionBoxesMap(prev => ({ ...prev, [lpIdx]: result.ocrWordBoxes ?? [] }));
+        setKrakenSegmentsMap(prev => ({ ...prev, [lpIdx]: result.lineSegments ?? [] }));
         setDetectionSteps([]);
       })
       .catch((err) => {
-        setAiSegmentsMap(prev => ({ ...prev, [idx]: [] }));
+        setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: [] }));
         showToast(getErrorMessage(err, 'Line detection failed'), 'error');
         setDetectionSteps([]);
       });
-  }, [currentPage, currentPageIndex, aiSegmentsMap, pageLineTexts, showToast]);
+  }, [currentPage, currentLetterPageIndex, aiSegmentsMap, pageLineTexts, showToast]);
 
 
-  // Background pre-fetch: after current page finishes detecting, start
-  // detecting the next page that hasn't been fetched yet.
+  // Background pre-fetch: after current letter page finishes detecting, start
+  // detecting the next letter page that hasn't been fetched yet.
   useEffect(() => {
-    // Only pre-fetch once current page is done
-    if (aiSegmentsMap[currentPageIndex] === null || aiSegmentsMap[currentPageIndex] === undefined) return;
+    // Only pre-fetch once current page is done (or current page is non-letter)
+    if (currentLetterPageIndex !== undefined) {
+      if (aiSegmentsMap[currentLetterPageIndex] === null || aiSegmentsMap[currentLetterPageIndex] === undefined) return;
+    }
 
-    // Find next page that needs detection
+    // Find next letter page that needs detection
     for (let i = 0; i < letterPages.length; i++) {
-      // Prioritize pages after current, then wrap around
-      const idx = (currentPageIndex + 1 + i) % letterPages.length;
-      if (idx === currentPageIndex) continue;
+      const idx = (((currentLetterPageIndex ?? -1) + 1 + i) % letterPages.length);
 
       const hasSegments = aiSegmentsMap[idx] !== undefined;
       const inProgress = aiSegmentsMap[idx] === null;
@@ -494,20 +544,21 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       // Only start one at a time to avoid overloading the backend
       break;
     }
-  }, [aiSegmentsMap, visionBoxesMap, currentPageIndex, letterPages, pageLineTexts]);
+  }, [aiSegmentsMap, visionBoxesMap, currentLetterPageIndex, letterPages, pageLineTexts]);
 
-  // Whether we're still waiting for AI detection for the current page
-  const isDetecting = aiSegmentsMap[currentPageIndex] === null;
+  // Whether we're still waiting for AI detection for the current letter page
+  const isDetecting = currentLetterPageIndex !== undefined && aiSegmentsMap[currentLetterPageIndex] === null;
   const imageReady = imageNaturalSize.width > 0;
+  const onLetterPage = currentLetterPageIndex !== undefined;
 
-  // Compute aligned lines for current page
+  // Compute aligned lines for current page (empty for non-letter pages)
   const alignedLines: AlignedLine[] = useMemo(() => {
-    if (!currentPage) return [];
+    if (!currentPage || !onLetterPage || currentLetterPageIndex === undefined) return [];
     if (isDetecting) return []; // AI detection in progress — show spinner, no lines yet
-    const transcriptLines = pageLineTexts[currentPageIndex] ?? [];
+    const transcriptLines = pageLineTexts[currentLetterPageIndex] ?? [];
     const pageText = transcriptLines.join('\n');
 
-    const aiResult = aiSegmentsMap[currentPageIndex];
+    const aiResult = aiSegmentsMap[currentLetterPageIndex];
     if (aiResult && aiResult.length > 0) {
       const lines = alignTranscriptToVisualLines(pageText, aiResult);
       return lines.filter(l => l.transcriptLineIndex >= 0);
@@ -520,12 +571,14 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       return buildAlignedLinesFromEstimatedLayout(transcriptLines, imageNaturalSize);
     }
     return buildAlignedLinesFromDetected(transcriptLines, detectedLines);
-  }, [currentPage, currentPageIndex, pageLineTexts, aiSegmentsMap, isDetecting, imageReady]);
-  const hasTranscriptLinesOnPage = (pageLineTexts[currentPageIndex]?.length ?? 0) > 0;
+  }, [currentPage, currentLetterPageIndex, onLetterPage, pageLineTexts, aiSegmentsMap, isDetecting, imageReady]);
+  const hasTranscriptLinesOnPage = onLetterPage && currentLetterPageIndex !== undefined
+    && (pageLineTexts[currentLetterPageIndex]?.length ?? 0) > 0;
 
   // Only expose currentLine when the image for this page has loaded,
   // so overlays never render at positions scaled from a previous page's dimensions
   const currentLine = imageReady ? alignedLines[currentLineIndex] : undefined;
+  // Line counts per letter page (indexed by letter page index)
   const pageLineCounts = useMemo(
     () => letterPages.map((_page, idx) => {
       const pageText = pageLineTexts[idx]?.join('\n') || '';
@@ -540,7 +593,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
       return transcriptLineCount;
     }),
-    [letterPages, pageLineTexts, aiSegmentsMap, currentPageIndex],
+    [letterPages, pageLineTexts, aiSegmentsMap, currentLetterPageIndex],
   );
 
   const totalLines = useMemo(
@@ -549,12 +602,13 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   );
 
   const globalLineIndex = useMemo(() => {
+    if (currentLetterPageIndex === undefined) return 0;
     let sum = 0;
-    for (let i = 0; i < currentPageIndex; i++) {
+    for (let i = 0; i < currentLetterPageIndex; i++) {
       sum += pageLineCounts[i] || 0;
     }
     return sum + currentLineIndex + 1;
-  }, [currentPageIndex, currentLineIndex, pageLineCounts]);
+  }, [currentLetterPageIndex, currentLineIndex, pageLineCounts]);
 
   // Scale factor: displayed size vs natural image size
   const scaleFactor = imageNaturalSize.width > 0
@@ -590,9 +644,58 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     return () => observer.disconnect();
   }, [currentPageIndex]);
 
+  // Wheel zoom for fit-height mode (Ctrl/Cmd + scroll, smooth)
+  const fitZoomRef = useRef(fitZoom);
+  fitZoomRef.current = fitZoom;
+
+  useEffect(() => {
+    if (!fitHeight) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.metaKey || e.ctrlKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        // Proportional zoom — feels smooth at all zoom levels
+        const factor = e.deltaY > 0 ? 0.97 : 1.03;
+        setFitZoom(prev => {
+          const next = prev * factor;
+          const clamped = Math.min(5, Math.max(1, next));
+          // Reset pan when zooming back to 1x
+          if (clamped === 1) setFitPan({ x: 0, y: 0 });
+          return clamped;
+        });
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, [fitHeight]);
+
+  // Pan handlers for fit-height zoom
+  const handlePanMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!fitHeight || fitZoom <= 1) return;
+    e.preventDefault();
+    setIsPanning(true);
+    panStartRef.current = { x: e.clientX - fitPan.x, y: e.clientY - fitPan.y };
+  }, [fitHeight, fitZoom, fitPan]);
+
+  const handlePanMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isPanning) return;
+    setFitPan({
+      x: e.clientX - panStartRef.current.x,
+      y: e.clientY - panStartRef.current.y,
+    });
+  }, [isPanning]);
+
+  const handlePanMouseUp = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
   // Save current line text and trigger auto-save (only if user actually edited)
   const saveCurrentLine = useCallback(() => {
-    if (!inputRef.current) return;
+    if (!inputRef.current || currentLetterPageIndex === undefined) return;
     const currentAligned = alignedLines[currentLineIndex];
     if (!currentAligned) return;
 
@@ -609,13 +712,13 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const transcriptIdx = currentAligned.transcriptLineIndex;
     if (transcriptIdx < 0) return; // empty/unassigned line — nothing to save
 
-    const rawLineIndex = pageNonBlankMap[currentPageIndex]?.[transcriptIdx];
+    const rawLineIndex = pageNonBlankMap[currentLetterPageIndex]?.[transcriptIdx];
     if (rawLineIndex === undefined) return;
 
     const updated = [...pageRawTexts];
-    const rawLines = updated[currentPageIndex].split('\n');
+    const rawLines = updated[currentLetterPageIndex].split('\n');
     rawLines[rawLineIndex] = mergeEditedTextWithOriginalSpacing(originalText, newText);
-    updated[currentPageIndex] = rawLines.join('\n');
+    updated[currentLetterPageIndex] = rawLines.join('\n');
 
     setPageRawTexts(updated);
 
@@ -624,35 +727,61 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const fullText = reconstructTranscript(updated);
     onTranscriptChange(fullText);
     onAutoSave({ transcriptionText: fullText });
-  }, [currentPageIndex, currentLineIndex, alignedLines, pageNonBlankMap, onTranscriptChange, onAutoSave, pageRawTexts]);
+  }, [currentLetterPageIndex, currentLineIndex, alignedLines, pageNonBlankMap, onTranscriptChange, onAutoSave, pageRawTexts]);
 
-  // Navigate to next line
+  // Navigate to next line (cross-page: skips to next letter page)
   const goToNextLine = useCallback(() => {
     saveCurrentLine();
     if (currentLineIndex < alignedLines.length - 1) {
       setCurrentLineIndex(currentLineIndex + 1);
-    } else if (currentPageIndex < letterPages.length - 1) {
-      // Cross-page: next page, first line
-      setCurrentPageIndex(currentPageIndex + 1);
-      setCurrentLineIndex(0);
-      containerRef.current?.scrollTo({ top: 0 });
+    } else {
+      // Find next letter page in allPages
+      for (let i = currentPageIndex + 1; i < allPages.length; i++) {
+        if (letterPageIndices.has(i)) {
+          setCurrentPageIndex(i);
+          setCurrentLineIndex(0);
+          containerRef.current?.scrollTo({ top: 0 });
+          return;
+        }
+      }
     }
-  }, [saveCurrentLine, currentLineIndex, alignedLines.length, currentPageIndex, letterPages.length]);
+  }, [saveCurrentLine, currentLineIndex, alignedLines.length, currentPageIndex, allPages.length, letterPageIndices]);
 
-  // Navigate to previous line
+  // Navigate to previous line (cross-page: skips to prev letter page)
   const goToPrevLine = useCallback(() => {
     saveCurrentLine();
     if (currentLineIndex > 0) {
       setCurrentLineIndex(currentLineIndex - 1);
-    } else if (currentPageIndex > 0) {
-      // Cross-page: previous page, last line
-      const prevPageIdx = currentPageIndex - 1;
-      setCurrentPageIndex(prevPageIdx);
-      // We need to compute line count for prev page — set to a high number,
-      // it'll be clamped in the effect below
-      setCurrentLineIndex(999);
+    } else {
+      // Find previous letter page in allPages
+      for (let i = currentPageIndex - 1; i >= 0; i--) {
+        if (letterPageIndices.has(i)) {
+          setCurrentPageIndex(i);
+          // Set to high number — will be clamped in the effect below
+          setCurrentLineIndex(999);
+          return;
+        }
+      }
     }
-  }, [saveCurrentLine, currentLineIndex, currentPageIndex]);
+  }, [saveCurrentLine, currentLineIndex, currentPageIndex, letterPageIndices]);
+
+  // Navigate to next page (any type)
+  const goToNextPage = useCallback(() => {
+    if (currentPageIndex >= allPages.length - 1) return;
+    saveCurrentLine();
+    setCurrentPageIndex(currentPageIndex + 1);
+    setCurrentLineIndex(0);
+    containerRef.current?.scrollTo({ top: 0 });
+  }, [currentPageIndex, allPages.length, saveCurrentLine]);
+
+  // Navigate to previous page (any type)
+  const goToPrevPage = useCallback(() => {
+    if (currentPageIndex <= 0) return;
+    saveCurrentLine();
+    setCurrentPageIndex(currentPageIndex - 1);
+    setCurrentLineIndex(0);
+    containerRef.current?.scrollTo({ top: 0 });
+  }, [currentPageIndex, saveCurrentLine]);
 
   // Clamp line index when aligned lines change (e.g., after page switch)
   useEffect(() => {
@@ -663,7 +792,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   // Auto-scroll to keep current line visible (highlight + input region)
   useEffect(() => {
-    if (!currentLine || !containerRef.current) return;
+    if (!currentLine || !containerRef.current || fitHeight) return;
 
     // Visible region: from highlight top (bbox[1]) to bottom of input
     const lineInputH = computeLineInputHeight(currentLine.words, scaleFactor, pageFontSize);
@@ -704,7 +833,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       top: nextScrollTop,
       behavior: 'smooth',
     });
-  }, [currentLine, currentLineIndex, globalLineIndex, scaleFactor, pageFontSize]);
+  }, [currentLine, currentLineIndex, globalLineIndex, scaleFactor, pageFontSize, fitHeight]);
 
   // Build word-positioned content and focus when line changes
   useEffect(() => {
@@ -740,15 +869,15 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   // Re-run line detection for the current page (Kraken + Vision in parallel)
   const redetectLines = useCallback(() => {
-    if (!currentPage || isDetecting) return;
+    if (!currentPage || isDetecting || currentLetterPageIndex === undefined) return;
 
     const pageId = currentPage.id;
-    const idx = currentPageIndex;
+    const lpIdx = currentLetterPageIndex;
 
     // Immediately show spinner and clear stale data
-    setAiSegmentsMap(prev => ({ ...prev, [idx]: null }));
-    setVisionBoxesMap(prev => ({ ...prev, [idx]: undefined }));
-    setKrakenSegmentsMap(prev => ({ ...prev, [idx]: undefined }));
+    setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: null }));
+    setVisionBoxesMap(prev => ({ ...prev, [lpIdx]: undefined }));
+    setKrakenSegmentsMap(prev => ({ ...prev, [lpIdx]: undefined }));
     setCurrentLineIndex(0);
     setDetectionSteps([]);
 
@@ -756,17 +885,17 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       setDetectionSteps(prev => [...prev, label]);
     })
       .then(result => {
-        setAiSegmentsMap(prev => ({ ...prev, [idx]: result.lineSegments }));
-        setVisionBoxesMap(prev => ({ ...prev, [idx]: result.ocrWordBoxes ?? [] }));
-        setKrakenSegmentsMap(prev => ({ ...prev, [idx]: result.lineSegments ?? [] }));
+        setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: result.lineSegments }));
+        setVisionBoxesMap(prev => ({ ...prev, [lpIdx]: result.ocrWordBoxes ?? [] }));
+        setKrakenSegmentsMap(prev => ({ ...prev, [lpIdx]: result.lineSegments ?? [] }));
         setDetectionSteps([]);
       })
       .catch((err) => {
-        setAiSegmentsMap(prev => ({ ...prev, [idx]: [] }));
+        setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: [] }));
         showToast(getErrorMessage(err, 'Line detection failed'), 'error');
         setDetectionSteps([]);
       });
-  }, [currentPage, currentPageIndex, isDetecting, showToast]);
+  }, [currentPage, currentLetterPageIndex, isDetecting, showToast]);
 
   useImperativeHandle(ref, () => ({
     saveCurrentLine,
@@ -797,6 +926,32 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         return;
       }
 
+      // Page navigation: PageUp/PageDown always work, Left/Right on non-letter pages
+      if (e.key === 'PageDown') {
+        e.preventDefault();
+        goToNextPage();
+        return;
+      }
+      if (e.key === 'PageUp') {
+        e.preventDefault();
+        goToPrevPage();
+        return;
+      }
+
+      // On non-letter pages or when overlay is off, arrows navigate pages
+      if (!onLetterPage || !overlayEnabled) {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          goToNextPage();
+          return;
+        }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          goToPrevPage();
+          return;
+        }
+      }
+
       if (e.key === 'ArrowDown' || e.key === 'Enter') {
         e.preventDefault();
         goToNextLine();
@@ -814,7 +969,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [saveCurrentLine, onExit, goToNextLine, goToPrevLine, redetectLines, debugLines, onDebugModeChange]);
+  }, [saveCurrentLine, onExit, goToNextLine, goToPrevLine, goToNextPage, goToPrevPage, onLetterPage, overlayEnabled, redetectLines, debugLines, onDebugModeChange]);
 
   if (!currentPage) return null;
 
@@ -873,11 +1028,45 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     ];
   }, [pipelineResult]);
 
+  const handleContainerClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // Only exit when clicking directly on the dark background (not the image or overlays)
+    if (e.target === containerRef.current) {
+      saveCurrentLine();
+      onExit();
+    }
+  }, [saveCurrentLine, onExit]);
+
   return (
-    <div className="line-review-mode" ref={containerRef}>
+    <div
+      className={`line-review-mode${fitHeight ? ' line-review-fit-height' : ''}`}
+      ref={containerRef}
+      onClick={handleContainerClick}
+    >
+      {/* Close button */}
+      <button
+        className="line-review-close-btn"
+        onClick={() => { saveCurrentLine(); onExit(); }}
+        aria-label="Exit review mode"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M4 4L12 12M12 4L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
+      </button>
+
       <div
         className="line-review-image-container"
-        style={{ maxWidth: imageNaturalSize.width > 0 ? imageNaturalSize.width : undefined }}
+        style={{
+          maxWidth: imageNaturalSize.width > 0 ? imageNaturalSize.width : undefined,
+          transform: fitHeight && fitZoom !== 1
+            ? `scale(${fitZoom}) translate(${fitPan.x / fitZoom}px, ${fitPan.y / fitZoom}px)`
+            : undefined,
+          transformOrigin: 'center center',
+          cursor: fitHeight && fitZoom > 1 ? (isPanning ? 'grabbing' : 'grab') : undefined,
+        }}
+        onMouseDown={handlePanMouseDown}
+        onMouseMove={handlePanMouseMove}
+        onMouseUp={handlePanMouseUp}
+        onMouseLeave={handlePanMouseUp}
       >
         <img
           ref={imageRef}
@@ -888,7 +1077,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         />
 
         {/* Dimmer with polygon cutout — shadows everything except the active line */}
-        {currentLine && imgW > 0 && (
+        {overlayEnabled && currentLine && imgW > 0 && (
           <svg
             className="line-review-highlight-svg"
             width={imgW}
@@ -914,7 +1103,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         )}
 
         {/* Input overlay — positioned below the clear strip, sized to the line */}
-        {currentLine && (
+        {overlayEnabled && currentLine && (
           <div
             className="line-review-input-overlay"
             style={{
@@ -951,7 +1140,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
               zIndex: 5,
             }}
           >
-            {(krakenSegmentsMap[currentPageIndex] ?? []).map((seg, i) =>
+            {(currentLetterPageIndex !== undefined ? krakenSegmentsMap[currentLetterPageIndex] ?? [] : []).map((seg, i) =>
               seg.boundary && seg.boundary.length > 2 ? (
                 <polygon
                   key={`poly-${i}`}
@@ -987,7 +1176,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
               zIndex: 6,
             }}
           >
-            {(visionBoxesMap[currentPageIndex] ?? []).map((box, i) => (
+            {(currentLetterPageIndex !== undefined ? visionBoxesMap[currentLetterPageIndex] ?? [] : []).map((box, i) => (
               <rect
                 key={`vision-${i}`}
                 className={box.hasContent === false
@@ -1121,7 +1310,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
               zIndex: 8,
             }}
           >
-            {(krakenSegmentsMap[currentPageIndex] ?? []).map((seg, i) => {
+            {(currentLetterPageIndex !== undefined ? krakenSegmentsMap[currentLetterPageIndex] ?? [] : []).map((seg, i) => {
               const west = westEdgeY(seg);
               const east = eastEdgeY(seg);
               const lx = seg.bbox[0] * scaleFactor;
@@ -1309,18 +1498,23 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       </div>
 
       {/* Progress indicator */}
-      {totalLines > 0 && (
-        <div className="line-review-progress">
+      <div className="line-review-progress">
+        {onLetterPage && totalLines > 0 && (
           <span className="progress-line">
             <strong>Line {globalLineIndex}</strong> / {totalLines}
           </span>
-          {letterPages.length > 1 && (
-            <span className="progress-line">
-              Page {currentPageIndex + 1} / {letterPages.length}
-            </span>
-          )}
-        </div>
-      )}
+        )}
+        {!onLetterPage && (
+          <span className="progress-line" style={{ color: '#999' }}>
+            {currentPage.type.replace(/_/g, ' ')}
+          </span>
+        )}
+        {allPages.length > 1 && (
+          <span className="progress-line">
+            Page {currentPageIndex + 1} / {allPages.length}
+          </span>
+        )}
+      </div>
 
       {/* Debug legend — Detection Layers panel */}
       {debugLines && (
@@ -1364,9 +1558,73 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         </div>
       )}
 
+      {/* Fixed page navigation buttons */}
+      {allPages.length > 1 && (
+        <>
+          <button
+            className="line-review-page-nav line-review-page-nav-left"
+            onClick={goToPrevPage}
+            disabled={currentPageIndex === 0}
+            aria-label="Previous page"
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M12 4L6 10L12 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          <button
+            className="line-review-page-nav line-review-page-nav-right"
+            onClick={goToNextPage}
+            disabled={currentPageIndex === allPages.length - 1}
+            aria-label="Next page"
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M8 4L14 10L8 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </>
+      )}
+
+      {/* Bottom toolbar — overlay + fit-height toggles */}
+      <div className="line-review-toolbar">
+        <button
+          className={`line-review-toolbar-btn${overlayEnabled ? ' active' : ''}`}
+          onClick={() => setOverlayEnabled(v => !v)}
+          title={overlayEnabled ? 'Hide overlay' : 'Show overlay'}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            {overlayEnabled ? (
+              <path d="M8 3C4.5 3 1.5 8 1.5 8s3 5 6.5 5 6.5-5 6.5-5S11.5 3 8 3zm0 8a3 3 0 110-6 3 3 0 010 6z" stroke="currentColor" strokeWidth="1.5"/>
+            ) : (
+              <>
+                <path d="M8 3C4.5 3 1.5 8 1.5 8s3 5 6.5 5 6.5-5 6.5-5S11.5 3 8 3zm0 8a3 3 0 110-6 3 3 0 010 6z" stroke="currentColor" strokeWidth="1.5" opacity="0.4"/>
+                <path d="M2 14L14 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </>
+            )}
+          </svg>
+          Overlay
+        </button>
+        <span className="line-review-toolbar-divider" />
+        <button
+          className={`line-review-toolbar-btn${fitHeight ? ' active' : ''}`}
+          onClick={() => { setFitHeight(v => !v); setFitZoom(1); setFitPan({ x: 0, y: 0 }); }}
+          title={fitHeight ? 'Scroll mode' : 'Fit to height'}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M4 2H12M4 14H12M8 4V12M6 4L8 2L10 4M6 12L8 14L10 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          Fit Height
+        </button>
+        {fitHeight && fitZoom !== 1 && (
+          <>
+            <span className="line-review-toolbar-divider" />
+            <span className="line-review-toolbar-zoom">{Math.round(fitZoom * 100)}%</span>
+          </>
+        )}
+      </div>
+
       {/* Exit hint */}
       <div className="line-review-exit-hint">
-        <kbd>Esc</kbd> to exit
+        <kbd>Esc</kbd> or click outside to exit
       </div>
     </div>
   );

@@ -1,10 +1,13 @@
 .line-review-mode {
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: #1a1a1a;
-  width: 100%;
-  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+  z-index: 200;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.2) transparent;
 }
@@ -32,6 +35,26 @@
   display: block;
   width: 100%;
   height: auto;
+}
+
+/* Fit-height mode: image fits viewport, no vertical scroll */
+.line-review-fit-height {
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.line-review-fit-height .line-review-image-container {
+  width: auto;
+  position: relative;
+}
+
+.line-review-fit-height .line-review-image-container img {
+  display: block;
+  width: auto;
+  max-width: 100vw;
+  max-height: 100vh;
 }
 
 /* SVG highlight overlay */
@@ -185,6 +208,61 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Bottom toolbar — overlay and fit-height toggles */
+.line-review-toolbar {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  background: rgba(13, 18, 26, 0.88);
+  border-radius: 8px;
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+  user-select: none;
+}
+
+.line-review-toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  padding: 4px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.line-review-toolbar-btn:hover {
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.line-review-toolbar-btn.active {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.line-review-toolbar-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 2px;
+}
+
+.line-review-toolbar-zoom {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  padding: 0 4px;
+}
+
 /* Exit hint — sits just above the progress indicator */
 .line-review-exit-hint {
   position: fixed;
@@ -203,8 +281,8 @@
 /* Debug legend */
 .line-review-debug-legend {
   position: fixed;
-  top: 60px;
-  left: 228px;
+  top: 16px;
+  left: 16px;
   background: rgba(13, 18, 26, 0.85);
   color: #ccc;
   padding: 4px 10px;
@@ -212,17 +290,12 @@
   font-size: 11px;
   font-family: var(--font-mono, monospace);
   z-index: 100;
-  transition: left 0.2s ease;
   display: flex;
   flex-wrap: wrap;
   gap: 8px 12px;
   backdrop-filter: blur(4px);
   user-select: none;
   align-items: center;
-}
-
-.sidebar-collapsed .line-review-debug-legend {
-  left: 68px;
 }
 
 .debug-legend-item {
@@ -441,6 +514,73 @@
 
 .line-review-redetect-btn:hover {
   color: #ccc;
+}
+
+/* Close button */
+.line-review-close-btn {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 101;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(13, 18, 26, 0.6);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+  transition: background 0.15s, color 0.15s;
+  padding: 0;
+}
+
+.line-review-close-btn:hover {
+  background: rgba(13, 18, 26, 0.85);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Fixed page navigation buttons */
+.line-review-page-nav {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 100;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(13, 18, 26, 0.6);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+  opacity: 0.5;
+  padding: 0;
+}
+
+.line-review-page-nav:hover:not(:disabled) {
+  background: rgba(13, 18, 26, 0.85);
+  color: rgba(255, 255, 255, 0.9);
+  opacity: 1;
+}
+
+.line-review-page-nav:disabled {
+  opacity: 0.15;
+  cursor: default;
+}
+
+.line-review-page-nav-left {
+  left: 16px;
+}
+
+.line-review-page-nav-right {
+  right: 16px;
 }
 
 /* Resize handles */

@@ -232,7 +232,7 @@ describe('LineReviewMode', () => {
   it('shows exit hint with Esc key', async () => {
     render(<LineReviewMode {...defaultProps} />);
     await flushEffects();
-    expect(screen.getByText('to exit')).toBeTruthy();
+    expect(screen.getByText(/to exit/)).toBeTruthy();
   });
 
   it('calls onExit when Escape is pressed', async () => {

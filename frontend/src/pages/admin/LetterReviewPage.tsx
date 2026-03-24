@@ -122,6 +122,7 @@ export default function LetterReviewPage() {
   );
   const [reviewMode, setReviewMode] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
+  const [viewerPageIndex, setViewerPageIndex] = useState(0);
 
   const transcriptFontSize = useTranscriptFontSize(
     editorRef,
@@ -540,8 +541,9 @@ export default function LetterReviewPage() {
     }
   };
 
-  const handlePageChange = useCallback((_index: number, image: LetterImage) => {
+  const handlePageChange = useCallback((index: number, image: LetterImage) => {
     setCurrentFilename(image.originalFilename);
+    setViewerPageIndex(index);
   }, []);
 
   // Handle Tab key to insert spaces instead of changing focus (for transcript editor)
@@ -720,6 +722,11 @@ export default function LetterReviewPage() {
     setReviewMode((prev) => !prev);
   }, [reviewMode]);
 
+  const handleImageClick = useCallback((pageIndex: number) => {
+    setViewerPageIndex(pageIndex);
+    setReviewMode(true);
+  }, []);
+
   // Line highlighting - update on cursor move
   useEffect(() => {
     const isEditing =
@@ -838,14 +845,6 @@ export default function LetterReviewPage() {
           </button>
         )}
 
-        <button
-          className={`header-action review ${reviewMode ? "active" : ""}`}
-          onClick={handleToggleReviewMode}
-          data-tooltip={reviewMode ? "Switch to Edit Mode" : "Switch to Review Mode"}
-        >
-          <Icon name={reviewMode ? "edit" : "eye"} size={18} />
-        </button>
-
         {reviewMode && (
           <button
             className={`header-action debug ${debugMode ? "active" : ""}`}
@@ -890,6 +889,7 @@ export default function LetterReviewPage() {
             }}
             debugMode={debugMode}
             onDebugModeChange={setDebugMode}
+            initialPageIndex={viewerPageIndex}
           />
         ) : (
         <ResizableSplitPane
@@ -905,6 +905,7 @@ export default function LetterReviewPage() {
               letterId={letterId}
               showOnlyLetterPages={false}
               onPageChange={handlePageChange}
+              onImageClick={handleImageClick}
             />
           </div>
 

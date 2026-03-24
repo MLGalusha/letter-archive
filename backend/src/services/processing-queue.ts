@@ -425,7 +425,10 @@ export async function getQueueStatus() {
     limit: PAGINATION.QUEUE_BATCH_SIZE,
   });
 
-  // Recent completions/failures (last hour, limit 20)
+  // Recent completions/failures (last hour)
+  // Fetch extra rows to compensate for admin-cleared items that get filtered out in JS.
+  // Without this buffer, clearing a large batch from the queue pushes legitimate
+  // history entries (completed/failed) out of the result set.
   const recentLetters = await db.query.letters.findMany({
     where: and(
       sql`${letters.updatedAt} >= ${oneHourAgo.toISOString()}`,
@@ -440,7 +443,7 @@ export async function getQueueStatus() {
     ),
     with: { collection: true },
     orderBy: (l, { desc }) => [desc(l.updatedAt)],
-    limit: 30,
+    limit: 100,
   });
 
   const recent: Array<{

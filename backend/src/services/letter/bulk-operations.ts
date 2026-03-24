@@ -110,7 +110,9 @@ export async function bulkExtractMetadata(
   }
 
   for (const letter of allRequested) {
-    if (!isTranscribableType(letter.type)) {
+    if (letter.type !== 'L') {
+      skipReasons.push({ letterId: letter.id, reason: `Type '${letter.type}' does not support metadata extraction (only letters)` });
+    } else if (!isTranscribableType(letter.type)) {
       skipReasons.push({ letterId: letter.id, reason: `Type '${letter.type}' is not transcribable` });
     } else if (letter.workflow === 'UPLOADED') {
       skipReasons.push({ letterId: letter.id, reason: 'Needs transcription first (workflow: UPLOADED)' });

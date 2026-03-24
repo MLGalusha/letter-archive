@@ -259,9 +259,43 @@ export default function AdminDashboard() {
   }, [navigate]);
 
   // Fetch when filters change (reset to page 1) — also handles initial load
+  // Prune selections to only include items that still match the new filters
   useEffect(() => {
     if (!isAuthenticated()) return; // Don't fetch if not authenticated
     fetchLetters(true, 1);
+
+    // If there are selections, prune to only IDs that match the new filter set
+    if (selectedIds.size > 0) {
+      const visibilityParam = visibilityFilter !== 'ALL' ? visibilityFilter : undefined;
+      const serverSort = sortColumns.find(col => isServerSortField(col.field));
+      getFilteredLetterIds({
+        collection: collectionFilter === "all" ? undefined : collectionFilter,
+        visibility: visibilityParam,
+        search: searchQuery || undefined,
+        sort: serverSort ? (serverSort.field as ServerSortField) : 'createdAt',
+        sortOrder: serverSort ? serverSort.direction : 'desc',
+        year: yearFilter ?? undefined,
+        month: monthFilter ?? undefined,
+        day: dayFilter ?? undefined,
+        dateFrom: dateFromFilter ?? undefined,
+        dateTo: dateToFilter ?? undefined,
+        transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(',') : undefined,
+        metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(',') : undefined,
+      }).then(validIds => {
+        const validSet = new Set(validIds);
+        setSelectedIds(prev => {
+          const pruned = new Set([...prev].filter(id => validSet.has(id)));
+          if (pruned.size === prev.size) return prev; // no change
+          if (pruned.size === 0) setEditToolbarOpen(false);
+          return pruned;
+        });
+        setAllFilteredSelected(false);
+      }).catch(() => {
+        // If the ID fetch fails, clear selections as a safe fallback
+        clearSelection();
+        setEditToolbarOpen(false);
+      });
+    }
   }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
   const handleRowClick = (letterId: string, index: number, e: React.MouseEvent) => {
@@ -415,8 +449,16 @@ export default function AdminDashboard() {
     selectAllFiltered,
   } = useDashboardSelection(filteredLetters);
 
-  // Toolbar is visible whenever anything is selected (no manual toggle)
-  const editMode = selectedIds.size > 0 || copyModeActive || pendingChanges.size > 0;
+  // Toolbar visibility is manually controlled — opens on first selection, closes only via X button
+  const [editToolbarOpen, setEditToolbarOpen] = useState(false);
+  const editMode = editToolbarOpen || copyModeActive || pendingChanges.size > 0;
+
+  // Auto-open toolbar when items are selected
+  useEffect(() => {
+    if (selectedIds.size > 0 && !editToolbarOpen) {
+      setEditToolbarOpen(true);
+    }
+  }, [selectedIds.size, editToolbarOpen]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString(undefined, {
@@ -538,12 +580,7 @@ export default function AdminDashboard() {
 
       showToast(`Updated ${pendingChanges.size} letter${pendingChanges.size === 1 ? '' : 's'}`, 'success');
 
-
-      clearSelection();
-      setPendingChanges(new Map());
-      setCopyModeActive(false);
-      setCopiedValue(null);
-      setSourceCell(null);
+      exitEditMode();
 
       await fetchLetters();
     } catch (err) {
@@ -556,6 +593,7 @@ export default function AdminDashboard() {
 
   const exitEditMode = () => {
     clearSelection();
+    setEditToolbarOpen(false);
     setPendingChanges(new Map());
     setCopyModeActive(false);
     setCopiedValue(null);
@@ -573,7 +611,7 @@ export default function AdminDashboard() {
     const count = selectedIds.size;
     try {
       await Promise.all(Array.from(selectedIds).map((id) => deleteLetter(id)));
-      clearSelection();
+      exitEditMode();
       setShowDeleteModal(false);
 
       showToast(`Deleted ${count} letter${count === 1 ? '' : 's'}`, 'success');
@@ -602,7 +640,7 @@ export default function AdminDashboard() {
     const count = selectedIds.size;
     try {
       await bulkClearTranscriptions(Array.from(selectedIds));
-      clearSelection();
+      exitEditMode();
       setShowResetModal(false);
       showToast(`Cleared transcriptions for ${count} letter${count === 1 ? '' : 's'}`, 'success');
       await fetchLetters();
@@ -625,7 +663,7 @@ export default function AdminDashboard() {
     const count = selectedIds.size;
     try {
       await bulkClearMetadata(Array.from(selectedIds));
-      clearSelection();
+      exitEditMode();
       setShowClearMetadataModal(false);
       showToast(`Cleared metadata for ${count} letter${count === 1 ? '' : 's'}`, 'success');
       await fetchLetters();
@@ -714,7 +752,7 @@ export default function AdminDashboard() {
           const verb = result.processing ? 'Processing' : 'Queued';
           showToast(`${verb} ${result.queued} letters for transcription`, 'success');
         }
-        clearSelection();
+        exitEditMode();
         await fetchLetters();
       } else {
         const result = await startTranscription(buildProcessingFilters());
@@ -757,7 +795,7 @@ export default function AdminDashboard() {
           const verb = result.processing ? 'Processing' : 'Queued';
           showToast(`${verb} ${result.queued} letters for metadata extraction`, 'success');
         }
-        clearSelection();
+        exitEditMode();
         await fetchLetters();
       } else {
         const result = await startMetadataExtraction(buildProcessingFilters());
@@ -1370,25 +1408,31 @@ export default function AdminDashboard() {
           <div className="edit-toolbar-content">
             {/* Left section: select all, selection count, copy mode, hints, pending changes */}
             <div className="edit-toolbar-left">
-              <input
-                type="checkbox"
-                className="toolbar-select-all"
-                checked={allPageSelected}
-                ref={(el) => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
-                onChange={handleSelectAllPage}
-                title={allPageSelected ? "Deselect all" : "Select all on page"}
-              />
               <span className="toolbar-selection-count">
                 {selectedIds.size} selected
               </span>
-              {allPageSelected && pagination.total > filteredLetters.length && !allFilteredSelected && (
-                <button className="toolbar-select-all-filtered" onClick={handleSelectAllFiltered}>
-                  Select all {pagination.total}
-                </button>
-              )}
-              {allFilteredSelected && (
-                <span className="toolbar-all-selected-label">All {pagination.total} selected</span>
-              )}
+              <div className="toolbar-select-actions">
+                {!allPageSelected ? (
+                  <button className="toolbar-select-btn" onClick={handleSelectAllPage}>
+                    Page ({filteredLetters.length})
+                  </button>
+                ) : (
+                  <button className="toolbar-select-btn active" onClick={handleSelectAllPage}>
+                    Page ✓
+                  </button>
+                )}
+                {pagination.total > filteredLetters.length && (
+                  !allFilteredSelected ? (
+                    <button className="toolbar-select-btn" onClick={handleSelectAllFiltered}>
+                      All {pagination.total}
+                    </button>
+                  ) : (
+                    <button className="toolbar-select-btn active" onClick={() => { clearSelection(); }}>
+                      All {pagination.total} ✓
+                    </button>
+                  )
+                )}
+              </div>
               <div className="toolbar-divider" />
               <button
                 className={`toolbar-copy-btn ${copyModeActive ? 'active' : ''}`}

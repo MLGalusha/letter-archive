@@ -45,12 +45,16 @@ vi.mock('drizzle-orm', () => ({
   sql: sqlMock,
 }));
 
-vi.mock('../../dto/index.js', () => ({
-  transformLetterToDTO: transformLetterToDTOMock,
-  transformLettersToDTO: transformLettersToDTOMock,
-  transformLetterWithRelatedToDTO: transformLetterWithRelatedToDTOMock,
-  transformLettersWithRelatedToDTO: transformLettersWithRelatedToDTOMock,
-}));
+vi.mock('../../dto/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../dto/index.js')>();
+  return {
+    ...actual,
+    transformLetterToDTO: transformLetterToDTOMock,
+    transformLettersToDTO: transformLettersToDTOMock,
+    transformLetterWithRelatedToDTO: transformLetterWithRelatedToDTOMock,
+    transformLettersWithRelatedToDTO: transformLettersWithRelatedToDTOMock,
+  };
+});
 
 vi.mock('../../utils/logger.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../utils/logger.js')>();
@@ -237,6 +241,110 @@ describe('letters route integration', () => {
       total: 0,
     });
     expect(findLettersMock).not.toHaveBeenCalled();
+  });
+
+  it('returns lightweight shelf summaries for public archive browsing', async () => {
+    findLettersMock.mockResolvedValueOnce([
+      {
+        id: 'letter-primary',
+        collectionId: 'collection-9',
+        dateRaw: '19470810',
+        typeSequence: 1,
+        type: 'L',
+        workflow: 'REVIEWED',
+        visibility: 'PUBLISHED',
+        sender: 'Jimmie',
+        recipient: 'Molly',
+        locationWritten: 'New York',
+        hook: 'A short note about future plans.',
+        summary: 'Summary text',
+        transcriptionText: 'Full transcription text',
+        extraContentTranscript: null,
+        photoDescription: null,
+        metadataContentStatus: 'VERIFIED',
+        collection: {
+          title: 'Collection Nine',
+          collectionCode: '009',
+        },
+        pages: [
+          {
+            id: 'page-1',
+            pageNumber: 1,
+            checksumSha256: 'abcdef123456',
+          },
+          {
+            id: 'page-2',
+            pageNumber: 2,
+            checksumSha256: 'abcdef123456',
+          },
+        ],
+      },
+      {
+        id: 'letter-photo',
+        collectionId: 'collection-9',
+        dateRaw: '19470810',
+        typeSequence: 1,
+        type: 'P',
+        workflow: 'REVIEWED',
+        visibility: 'PUBLISHED',
+        sender: null,
+        recipient: null,
+        locationWritten: null,
+        hook: null,
+        summary: null,
+        transcriptionText: null,
+        extraContentTranscript: null,
+        photoDescription: 'Jimmy and Molly on a porch.',
+        metadataContentStatus: 'EMPTY',
+        collection: {
+          title: 'Collection Nine',
+          collectionCode: '009',
+        },
+        pages: [
+          {
+            id: 'photo-page',
+            pageNumber: 1,
+            checksumSha256: 'fedcba654321',
+          },
+        ],
+      },
+    ]);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters/summaries',
+      path: '/letters/summaries',
+      query: {
+        visibility: 'PUBLISHED',
+        page: '1',
+        limit: '20',
+      },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({
+      letters: [
+        {
+          id: 'letter-primary',
+          title: 'Letter from Jimmie to Molly',
+          imageUrl: '/images/page-1?v=abcdef12',
+          imageType: 'letter',
+          primaryChip: '2 pages',
+          sender: 'Jimmie',
+          recipient: 'Molly',
+          date: 'August 10th, 1947',
+          dateRaw: '19470810',
+          hook: 'A short note about future plans.',
+          location: 'New York',
+          verified: true,
+          searchText: 'Jimmie Molly New York A short note about future plans. Summary text Full transcription text Jimmy and Molly on a porch.',
+        },
+      ],
+      page: 1,
+      limit: 20,
+      total: 1,
+    });
   });
 
   it('returns a related-letter payload for a published letter detail request', async () => {

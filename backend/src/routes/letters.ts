@@ -3,6 +3,9 @@ import { eq, and, inArray, ilike, asc, desc, sql } from 'drizzle-orm';
 import { db, letters, collections } from '../db/index.js';
 import { letterQuerySchema } from '../schemas/letter.js';
 import {
+  formatLetterDate,
+  generateTitle,
+  mapTypeToImageType,
   transformLetterToDTO,
   transformLettersToDTO,
   transformLetterWithRelatedToDTO,
@@ -12,6 +15,46 @@ import {
 import { logIfSlow, TIMING_THRESHOLDS } from '../utils/logger.js';
 
 const router = Router();
+
+const MEDIA_COUNT_LABELS = {
+  letter: ['page', 'pages'],
+  photo: ['photo', 'photos'],
+  ephemera: ['piece', 'pieces'],
+  voice: ['recording', 'recordings'],
+  article: ['article', 'articles'],
+  diary: ['page', 'pages'],
+  cover: ['cover', 'covers'],
+  card: ['card', 'cards'],
+  telegram: ['telegram', 'telegrams'],
+} as const;
+
+type SummaryLetterWithRelations = {
+  id: string;
+  collectionId: string;
+  dateRaw: string;
+  typeSequence: number;
+  type: LetterWithRelations['type'];
+  workflow: LetterWithRelations['workflow'];
+  visibility: LetterWithRelations['visibility'];
+  sender: string | null;
+  recipient: string | null;
+  locationWritten: string | null;
+  hook: string | null;
+  summary: string | null;
+  transcriptionText: string | null;
+  extraContentTranscript: string | null;
+  photoDescription: string | null;
+  metadataContentStatus: LetterWithRelations['metadataContentStatus'];
+  collection: {
+    title: string | null;
+    collectionCode: string;
+  };
+  pages: Array<{
+    id: string;
+    pageNumber: number;
+    checksumSha256: string | null;
+  }>;
+};
 
 /**
  * GET /letters - List letters with optional filtering
@@ -152,6 +195,135 @@ router.get('/letters', async (req, res, next) => {
   }
 });
 
+router.get('/letters/summaries', async (req, res, next) => {
+  const start = Date.now();
+  try {
+    const query = letterQuerySchema.parse(req.query);
+    const conditions = [];
+
+    if (query.collection) {
+      const escapedCollection = query.collection.replace(/%/g, '\\%').replace(/_/g, '\\_');
+      const matchingCollections = await db.query.collections.findMany({
+        where: ilike(collections.collectionCode, `%${escapedCollection}`),
+      });
+      if (matchingCollections.length > 0) {
+        conditions.push(inArray(letters.collectionId, matchingCollections.map((collection) => collection.id)));
+      } else {
+        res.json({ letters: [], page: query.page, limit: query.limit, total: 0 });
+        return;
+      }
+    }
+
+    if (query.visibility) {
+      conditions.push(eq(letters.visibility, query.visibility));
+    }
+
+    const sortFn = query.sortOrder === 'asc' ? asc : desc;
+    const getSortExpression = () => {
+      switch (query.sort) {
+        case 'letterDate':
+          return sql`REPLACE(${letters.dateRaw}, 'X', '0')`;
+        case 'sender':
+          return letters.sender;
+        case 'workflow':
+          return letters.workflow;
+        case 'visibility':
+          return letters.visibility;
+        case 'createdAt':
+        default:
+          return letters.createdAt;
+      }
+    };
+
+    const results = await db.query.letters.findMany({
+      where: and(...conditions),
+      columns: {
+        id: true,
+        collectionId: true,
+        dateRaw: true,
+        typeSequence: true,
+        type: true,
+        workflow: true,
+        visibility: true,
+        sender: true,
+        recipient: true,
+        locationWritten: true,
+        hook: true,
+        summary: true,
+        transcriptionText: true,
+        extraContentTranscript: true,
+        photoDescription: true,
+        metadataContentStatus: true,
+      },
+      with: {
+        collection: {
+          columns: {
+            title: true,
+            collectionCode: true,
+          },
+        },
+        pages: {
+          columns: {
+            id: true,
+            pageNumber: true,
+            checksumSha256: true,
+          },
+          orderBy: (page, { asc: pageAsc }) => [pageAsc(page.pageNumber)],
+        },
+      },
+      orderBy: [sortFn(getSortExpression())],
+    });
+
+    const allResults = results as SummaryLetterWithRelations[];
+    const groupMap = new Map<string, SummaryLetterWithRelations[]>();
+    for (const letter of allResults) {
+      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
+      const group = groupMap.get(key) || [];
+      group.push(letter);
+      groupMap.set(key, group);
+    }
+
+    const filteredResults: SummaryLetterWithRelations[] = [];
+    for (const [, group] of groupMap) {
+      const lType = group.find((letter) => letter.type === 'L');
+      const primary = lType || [...group].sort((a, b) => a.type.localeCompare(b.type))[0];
+
+      if (query.workflow && primary.workflow !== query.workflow) {
+        continue;
+      }
+
+      filteredResults.push(primary);
+    }
+
+    const paginatedResults = filteredResults.slice(
+      (query.page - 1) * query.limit,
+      query.page * query.limit,
+    );
+
+    const transformedLetters = paginatedResults.map((letter) => {
+      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
+      const group = groupMap.get(key) || [];
+      return transformLetterSummary(letter, group.filter((item) => item.id !== letter.id));
+    });
+
+    const duration = Date.now() - start;
+    req.log.info(
+      { resultCount: transformedLetters.length, totalGroups: filteredResults.length, page: query.page, duration },
+      'Letters summary query completed',
+    );
+    logIfSlow(req.log, 'letters summary query', duration, TIMING_THRESHOLDS.DB_QUERY);
+
+    res.json({
+      letters: transformedLetters,
+      page: query.page,
+      limit: query.limit,
+      total: filteredResults.length,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 /**
  * GET /letters/:letterId - Get a single letter with pages
  * Also fetches related cards (C) and extras (E) for the same date/sequence
@@ -188,7 +360,7 @@ router.get('/letters/:letterId', async (req, res, next) => {
         eq(letters.dateRaw, letter.dateRaw),
         eq(letters.typeSequence, letter.typeSequence),
         sql`${letters.type} != ${letter.type}`, // Exclude the current letter's type
-
+        eq(letters.visibility, 'PUBLISHED'),
       ),
       with: {
         collection: true,
@@ -280,3 +452,61 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
 });
 
 export default router;
+
+function transformLetterSummary(
+  letter: SummaryLetterWithRelations,
+  relatedItems: SummaryLetterWithRelations[],
+) {
+  const primaryType = mapTypeToImageType(letter.type);
+  const [singular, plural] = MEDIA_COUNT_LABELS[primaryType];
+  const primaryCount = letter.pages.length;
+  const primaryPage = letter.pages[0];
+
+  return {
+    id: letter.id,
+    title: generateTitle(letter as never, letter.collection as never),
+    imageUrl: primaryPage
+      ? `/images/${primaryPage.id}${primaryPage.checksumSha256 ? `?v=${primaryPage.checksumSha256.slice(0, 8)}` : ''}`
+      : undefined,
+    imageType: primaryType,
+    primaryChip: primaryCount > 0
+      ? `${primaryCount} ${primaryCount === 1 ? singular : plural}`
+      : undefined,
+    sender: letter.sender || undefined,
+    recipient: letter.recipient || undefined,
+    date: formatLetterDate(letter as never),
+    dateRaw: letter.dateRaw,
+    hook: letter.hook || undefined,
+    location: letter.locationWritten || undefined,
+    verified: letter.metadataContentStatus === 'VERIFIED',
+    searchText: buildShelfSearchText(letter, relatedItems),
+  };
+}
+
+function buildShelfSearchText(
+  letter: SummaryLetterWithRelations,
+  relatedItems: SummaryLetterWithRelations[],
+): string {
+  return [
+    letter.sender,
+    letter.recipient,
+    letter.locationWritten,
+    letter.hook,
+    letter.summary,
+    letter.photoDescription,
+    letter.extraContentTranscript,
+    letter.transcriptionText,
+    ...relatedItems.flatMap((item) => [
+      item.sender,
+      item.recipient,
+      item.locationWritten,
+      item.hook,
+      item.summary,
+      item.photoDescription,
+      item.extraContentTranscript,
+      item.transcriptionText,
+    ]),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ');
+}

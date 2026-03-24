@@ -1,4 +1,9 @@
-import type { Letter, LetterImage, LetterImageType } from "../types/Letter";
+import type {
+  Letter,
+  LetterCardData,
+  LetterImage,
+  LetterImageType,
+} from "../types/Letter";
 
 const MEDIA_LABELS: Record<LetterImageType, string> = {
   letter: "Letter",
@@ -112,4 +117,22 @@ export function getLetterMediaChips(letter: Letter): string[] {
     const [singular, plural] = MEDIA_COUNT_LABELS[type];
     return `${count} ${count === 1 ? singular : plural}`;
   });
+}
+
+export function buildLetterCardData(letter: Letter): LetterCardData {
+  const primaryImage = getPrimaryImage(letter);
+  const primaryType = getPrimaryMediaType(letter);
+
+  return {
+    id: letter.id,
+    title: letter.title,
+    imageUrl: primaryImage?.imageUrl,
+    imageType: primaryType,
+    primaryChip: getLetterMediaChips(letter)[0],
+    sender: letter.metadata.sender,
+    recipient: letter.metadata.recipient,
+    date: letter.metadata.date,
+    dateRaw: letter.metadata.dateRaw,
+    hook: letter.metadata.hook,
+  };
 }

@@ -3,12 +3,19 @@
  */
 
 import { apiGet, apiDelete } from './client';
-import type { Letter, VisibilityState } from '../types/Letter';
+import type { ArchiveShelfItem, Letter, VisibilityState } from '../types/Letter';
 
 export interface LettersResponse {
   letters: Letter[];
   page: number;
   limit: number;
+}
+
+export interface ArchiveShelfResponse {
+  letters: ArchiveShelfItem[];
+  page: number;
+  limit: number;
+  total: number;
 }
 
 export interface AdminLettersResponse {
@@ -102,6 +109,19 @@ export async function getLetterById(id: string): Promise<Letter> {
  */
 export async function getPublishedLetters(params: Omit<LetterQueryParams, 'visibility'> = {}): Promise<LettersResponse> {
   return getLetters({ ...params, visibility: 'PUBLISHED' });
+}
+
+export async function getArchiveShelfItems(
+  params: Omit<LetterQueryParams, 'visibility'> = {},
+): Promise<ArchiveShelfResponse> {
+  return apiGet<ArchiveShelfResponse>('/letters/summaries', {
+    page: params.page,
+    limit: params.limit,
+    collection: params.collection,
+    sort: params.sort,
+    sortOrder: params.sortOrder,
+    visibility: 'PUBLISHED',
+  });
 }
 
 /**

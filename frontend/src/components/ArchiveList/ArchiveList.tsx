@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import "./ArchiveList.css";
 import LetterCard from "../LetterCard/LetterCard";
-import { getPublishedLetters } from "../../api/letters";
-import type { Letter } from "../../types/Letter";
+import { getArchiveShelfItems } from "../../api/letters";
+import type { ArchiveShelfItem } from "../../types/Letter";
 import type { SearchFilters } from "../SearchBar/SearchBar";
 
 interface ArchiveListProps {
@@ -16,9 +16,11 @@ export default function ArchiveList({
   searchQuery = "",
   filters = {},
 }: ArchiveListProps) {
-  const [letters, setLetters] = useState<Letter[]>([]);
+  const [letters, setLetters] = useState<ArchiveShelfItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(24);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   // Fetch letters from API
   useEffect(() => {
@@ -26,7 +28,7 @@ export default function ArchiveList({
       setLoading(true);
       setError(null);
       try {
-        const response = await getPublishedLetters({ limit: 100 });
+        const response = await getArchiveShelfItems({ limit: 100 });
         setLetters(response.letters);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load letters");
@@ -45,27 +47,14 @@ export default function ArchiveList({
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       results = results.filter((letter) => {
-        const searchableText = [
-          letter.metadata.sender,
-          letter.metadata.recipient,
-          letter.metadata.location,
-          letter.metadata.hook,
-          letter.metadata.description,
-          letter.photoDescription,
-          letter.extraContentTranscript,
-          letter.transcript.fullText,
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        return searchableText.includes(query);
+        return letter.searchText.toLowerCase().includes(query);
       });
     }
 
     // Filter by date range
     if (filters.dateRange?.start || filters.dateRange?.end) {
       results = results.filter((letter) => {
-        const dateStr = letter.metadata.date;
+        const dateStr = letter.date;
         if (!dateStr) return false;
 
         const yearMatch = dateStr.match(/\b(\d{4})\b/);
@@ -85,7 +74,7 @@ export default function ArchiveList({
     if (filters.location) {
       const locationQuery = filters.location.toLowerCase();
       results = results.filter((letter) => {
-        const location = letter.metadata.location;
+        const location = letter.location;
         return location && location.toLowerCase().includes(locationQuery);
       });
     }
@@ -93,12 +82,39 @@ export default function ArchiveList({
     // Filter by verification status
     if (filters.verified !== undefined && filters.verified !== null) {
       results = results.filter(
-        (letter) => letter.metadata.verified === filters.verified
+        (letter) => letter.verified === filters.verified
       );
     }
 
     return results;
   }, [letters, searchQuery, filters]);
+
+  useEffect(() => {
+    setVisibleCount(24);
+  }, [filteredLetters.length, searchQuery, filters]);
+
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node || visibleCount >= filteredLetters.length) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        setVisibleCount((current) => Math.min(current + 24, filteredLetters.length));
+      },
+      {
+        rootMargin: "900px 0px",
+      },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [filteredLetters.length, visibleCount]);
+
+  const visibleLetters = useMemo(
+    () => filteredLetters.slice(0, visibleCount),
+    [filteredLetters, visibleCount],
+  );
 
   if (loading) {
     return (
@@ -125,14 +141,17 @@ export default function ArchiveList({
             {filteredLetters.length === 1 ? "archive item" : "archive items"} found
           </p>
           <div className="letter-grid">
-            {filteredLetters.map((letter) => (
+            {visibleLetters.map((letter) => (
               <LetterCard
                 key={letter.id}
-                letter={letter}
+                card={letter}
                 onClick={onLetterClick}
               />
             ))}
           </div>
+          {visibleCount < filteredLetters.length && (
+            <div className="archive-load-more-sentinel" ref={loadMoreRef} aria-hidden="true" />
+          )}
         </>
       ) : (
         <div className="no-results">

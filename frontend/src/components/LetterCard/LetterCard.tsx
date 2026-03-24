@@ -1,39 +1,31 @@
 import { memo } from "react";
 import "../ArchiveList/ArchiveList.css";
-import type { Letter } from "../../types/Letter";
+import type { LetterCardData } from "../../types/Letter";
 import { getImageUrl } from "../../api/client";
-import {
-  getLetterMediaChips,
-  getMediaLabel,
-  getPrimaryImage,
-  getPrimaryMediaType,
-} from "../../utils/letterPreview";
+import { getMediaLabel } from "../../utils/letterPreview";
 
 interface LetterCardProps {
-  letter: Letter;
+  card: LetterCardData;
   onClick: (id: string) => void;
 }
 
-function getCorrespondentLine(letter: Letter): string | undefined {
-  const sender = letter.metadata.sender?.trim();
-  const recipient = letter.metadata.recipient?.trim();
+function getCorrespondentLine(card: LetterCardData): string | undefined {
+  const sender = card.sender?.trim();
+  const recipient = card.recipient?.trim();
   if (sender && recipient) return `${sender} \u2192 ${recipient}`;
   return sender || recipient || undefined;
 }
 
 function LetterCard({
-  letter,
+  card,
   onClick,
 }: LetterCardProps) {
-  const primaryImage = getPrimaryImage(letter);
-  const primaryType = getPrimaryMediaType(letter);
-  const mediaLabel = getMediaLabel(primaryType);
-  const mediaChips = getLetterMediaChips(letter);
-  const primaryChip = mediaChips[0];
-  const date = letter.metadata.date || letter.metadata.dateRaw;
-  const hook = letter.metadata.hook?.trim();
-  const peopleLine = getCorrespondentLine(letter);
-  const hasImage = Boolean(primaryImage?.imageUrl);
+  const mediaLabel = getMediaLabel(card.imageType);
+  const primaryChip = card.primaryChip;
+  const date = card.date || card.dateRaw;
+  const hook = card.hook?.trim();
+  const peopleLine = getCorrespondentLine(card);
+  const hasImage = Boolean(card.imageUrl);
   const fallbackLabel = date || mediaLabel;
   const ariaLabel = [
     mediaLabel,
@@ -46,16 +38,17 @@ function LetterCard({
   return (
     <button
       type="button"
-      className={`letter-card letter-card--${primaryType}`}
-      onClick={() => onClick(letter.id)}
-      aria-label={ariaLabel || `${mediaLabel}: ${letter.title || "Unknown item"}`}
+      className={`letter-card letter-card--${card.imageType}`}
+      onClick={() => onClick(card.id)}
+      aria-label={ariaLabel || `${mediaLabel}: ${card.title || "Unknown item"}`}
     >
       {hasImage ? (
         <img
           className="letter-card-image"
-          src={primaryImage ? getImageUrl(primaryImage.imageUrl) : undefined}
+          src={card.imageUrl ? getImageUrl(card.imageUrl, { width: 720 }) : undefined}
           alt=""
           loading="lazy"
+          decoding="async"
         />
       ) : (
         <div className="letter-card-fallback" aria-hidden="true">

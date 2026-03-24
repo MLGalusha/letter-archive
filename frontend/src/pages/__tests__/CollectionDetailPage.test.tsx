@@ -14,14 +14,14 @@ vi.mock("../../api/collections", () => ({
 
 vi.mock("../../components/LetterCard/LetterCard", () => ({
   default: ({
-    letter,
+    card,
     onClick,
   }: {
-    letter: Letter;
+    card: { id: string; hook?: string; date?: string; title?: string };
     onClick: (letterId: string) => void;
   }) => (
-    <button type="button" onClick={() => onClick(letter.id)}>
-      {letter.photoDescription || letter.metadata.hook || letter.metadata.date || letter.id}
+    <button type="button" onClick={() => onClick(card.id)}>
+      {card.hook || card.date || card.title || card.id}
     </button>
   ),
 }));

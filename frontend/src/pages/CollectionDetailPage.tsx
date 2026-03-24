@@ -19,6 +19,7 @@ import {
   getMediaLabel,
   getPrimaryImage,
   getPrimaryMediaType,
+  buildLetterCardData,
 } from '../utils/letterPreview';
 import './CollectionDetailPage.css';
 
@@ -397,7 +398,7 @@ export default function CollectionDetailPage() {
             {filteredLetters.map((letter) => (
               <LetterCard
                 key={letter.id}
-                letter={letter}
+                card={buildLetterCardData(letter)}
                 onClick={handleLetterClick}
               />
             ))}

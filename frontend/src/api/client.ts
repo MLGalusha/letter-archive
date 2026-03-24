@@ -267,16 +267,26 @@ export async function apiDelete<T>(path: string): Promise<T> {
 /**
  * Get full URL for an image
  */
-export function getImageUrl(imageUrl: string): string {
-  // If it's already a full URL, return as-is
-  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-    return imageUrl;
-  }
-  // Append admin token as query param so <img src> can access non-published images
+export function getImageUrl(
+  imageUrl: string,
+  options?: {
+    width?: number;
+  },
+): string {
+  const isAbsolute = imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
   const token = localStorage.getItem('adminToken');
-  if (!token) return `${API_BASE_URL}${imageUrl}`;
-  const separator = imageUrl.includes('?') ? '&' : '?';
-  return `${API_BASE_URL}${imageUrl}${separator}token=${encodeURIComponent(token)}`;
+  const baseUrl = isAbsolute ? imageUrl : `${API_BASE_URL}${imageUrl}`;
+  const url = new URL(baseUrl);
+
+  if (token) {
+    url.searchParams.set('token', token);
+  }
+
+  if (options?.width) {
+    url.searchParams.set('w', String(options.width));
+  }
+
+  return url.toString();
 }
 
 // ── Blog & Content types ─────────────────────────────────────────────────────

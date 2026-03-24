@@ -151,6 +151,25 @@ export interface LetterImage {
   ocrWordBoxes?: OcrWordBox[];
 }
 
+export interface LetterCardData {
+  id: string;
+  title?: string;
+  imageUrl?: string;
+  imageType: LetterImageType;
+  primaryChip?: string;
+  sender?: string;
+  recipient?: string;
+  date?: string;
+  dateRaw?: string;
+  hook?: string;
+}
+
+export interface ArchiveShelfItem extends LetterCardData {
+  location?: string;
+  verified: boolean;
+  searchText: string;
+}
+
 export interface LetterMetadata {
   sender?: string;
   recipient?: string;

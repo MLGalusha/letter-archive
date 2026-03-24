@@ -1,7 +1,17 @@
-import type { Letter } from "../types/Letter";
+import type { Letter, LetterImageType } from "../types/Letter";
+import {
+  getLetterPreviewText,
+  getPrimaryMediaType,
+} from "../utils/letterPreview";
 
 export interface CollectionFacet {
   value: string;
+  count: number;
+}
+
+export interface CollectionFormatFacet {
+  value: LetterImageType;
+  label: string;
   count: number;
 }
 
@@ -18,12 +28,14 @@ export interface CollectionFacets {
   topics: CollectionFacet[];
   correspondents: CollectionFacet[];
   threads: CollectionThread[];
+  formats: CollectionFormatFacet[];
 }
 
 export interface CollectionFilters {
   topic: string | null;
   correspondent: string | null;
   threadKey: string | null;
+  format: LetterImageType | null;
 }
 
 function normalizeValue(value: string): string {
@@ -55,6 +67,18 @@ export function buildCollectionFacets(letters: Letter[]): CollectionFacets {
   const topicCounts = new Map<string, { label: string; count: number }>();
   const correspondentCounts = new Map<string, { label: string; count: number }>();
   const threadMap = new Map<string, CollectionThread>();
+  const formatCounts = new Map<LetterImageType, number>();
+  const formatLabels: Record<LetterImageType, string> = {
+    letter: "Letters",
+    photo: "Photos",
+    ephemera: "Ephemera",
+    voice: "Voice",
+    article: "Articles",
+    diary: "Diary",
+    cover: "Covers",
+    card: "Cards",
+    telegram: "Telegrams",
+  };
 
   for (const letter of letters) {
     const letterTopics = new Set<string>();
@@ -113,17 +137,25 @@ export function buildCollectionFacets(letters: Letter[]): CollectionFacets {
         latestDate: letterDate,
         sampleHook: letter.metadata.hook || null,
       });
-      continue;
+    } else {
+      existingThread.count += 1;
+      if (
+        normalizeDateForCompare(letterDate) > normalizeDateForCompare(existingThread.latestDate)
+      ) {
+        existingThread.latestDate = letterDate;
+      }
+      if (!existingThread.sampleHook && letter.metadata.hook) {
+        existingThread.sampleHook = letter.metadata.hook;
+      }
     }
 
-    existingThread.count += 1;
-    if (
-      normalizeDateForCompare(letterDate) > normalizeDateForCompare(existingThread.latestDate)
-    ) {
-      existingThread.latestDate = letterDate;
-    }
-    if (!existingThread.sampleHook && letter.metadata.hook) {
-      existingThread.sampleHook = letter.metadata.hook;
+    const mediaTypes = new Set<LetterImageType>(
+      letter.images.length > 0
+        ? letter.images.map((image) => image.type)
+        : [getPrimaryMediaType(letter)],
+    );
+    for (const mediaType of mediaTypes) {
+      formatCounts.set(mediaType, (formatCounts.get(mediaType) || 0) + 1);
     }
   }
 
@@ -149,7 +181,16 @@ export function buildCollectionFacets(letters: Letter[]): CollectionFacets {
     })
     .slice(0, 8);
 
-  return { topics, correspondents, threads };
+  const formats = Array.from(formatCounts.entries())
+    .map(([value, count]) => ({
+      value,
+      label: formatLabels[value],
+      count,
+    }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+    .slice(0, 8);
+
+  return { topics, correspondents, threads, formats };
 }
 
 export function applyCollectionFilters(
@@ -159,6 +200,7 @@ export function applyCollectionFilters(
   const topic = normalizeOptionalValue(filters.topic);
   const correspondent = normalizeOptionalValue(filters.correspondent);
   const threadKey = filters.threadKey?.trim() || null;
+  const format = filters.format;
 
   return letters.filter((letter) => {
     if (topic) {
@@ -184,6 +226,49 @@ export function applyCollectionFilters(
       return false;
     }
 
+    if (format) {
+      const mediaTypes = new Set<LetterImageType>(
+        letter.images.length > 0
+          ? letter.images.map((image) => image.type)
+          : [getPrimaryMediaType(letter)],
+      );
+      if (!mediaTypes.has(format)) {
+        return false;
+      }
+    }
+
     return true;
   });
+}
+
+export function pickCollectionHighlights(letters: Letter[], limit = 4): Letter[] {
+  return [...letters]
+    .sort((a, b) => scoreHighlight(b) - scoreHighlight(a) || compareDatesDesc(a, b))
+    .slice(0, limit);
+}
+
+function scoreHighlight(letter: Letter): number {
+  const primaryType = getPrimaryMediaType(letter);
+  const previewText = getLetterPreviewText(letter);
+  const peopleLine = letter.metadata.sender || letter.metadata.recipient;
+  const tagsCount = (letter.metadata.tags?.length || 0) + (letter.metadata.primaryTopics?.length || 0);
+
+  let score = 0;
+
+  if (primaryType === "photo") score += 120;
+  if (primaryType === "telegram") score += 70;
+  if (primaryType === "cover" || primaryType === "card" || primaryType === "ephemera") score += 55;
+
+  score += Math.min(letter.images.length, 4) * 18;
+  if (previewText) score += 28;
+  if (peopleLine) score += 14;
+  if (tagsCount > 0) score += Math.min(tagsCount, 3) * 6;
+
+  return score;
+}
+
+function compareDatesDesc(a: Letter, b: Letter): number {
+  const aDate = normalizeDateForCompare(getLetterDateValue(a));
+  const bDate = normalizeDateForCompare(getLetterDateValue(b));
+  return bDate.localeCompare(aDate);
 }

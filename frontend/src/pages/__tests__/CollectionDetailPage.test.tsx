@@ -14,18 +14,14 @@ vi.mock("../../api/collections", () => ({
 
 vi.mock("../../components/LetterCard/LetterCard", () => ({
   default: ({
-    id,
-    hook,
-    date,
+    letter,
     onClick,
   }: {
-    id: string;
-    hook?: string;
-    date?: string;
+    letter: Letter;
     onClick: (letterId: string) => void;
   }) => (
-    <button type="button" onClick={() => onClick(id)}>
-      {hook || date || id}
+    <button type="button" onClick={() => onClick(letter.id)}>
+      {letter.photoDescription || letter.metadata.hook || letter.metadata.date || letter.id}
     </button>
   ),
 }));
@@ -56,7 +52,7 @@ function createLetter(
     id,
     title: id,
     collectionCode: "009",
-    images: [],
+    images: [{ id: `image-${id}`, type: "letter", imageUrl: `/images/${id}` }],
     transcript: {
       pages: [],
       fullText: "",
@@ -124,13 +120,13 @@ describe("CollectionDetailPage", () => {
           },
         }),
         createLetter("letter-3", {
+          images: [{ id: "photo-image", type: "photo", imageUrl: "/images/photo" }],
+          photoDescription: "A snapshot of Jimmy and Molly standing on a porch.",
           metadata: {
             date: "1947-08-12",
             dateRaw: "19470812",
-            sender: "Alice Smith",
-            recipient: "Bob Baker",
-            hook: "Encore from the road",
-            primaryTopics: ["Music"],
+            hook: "Summer porch portrait",
+            primaryTopics: ["Family"],
             verified: false,
           },
         }),
@@ -144,20 +140,24 @@ describe("CollectionDetailPage", () => {
     renderCollectionDetailPage();
 
     expect(await screen.findByRole("heading", { name: "Collection Nine" })).toBeInTheDocument();
-    expect(screen.getByText("3 letters in this collection")).toBeInTheDocument();
-    expect(screen.getByText("1947-08-10 → 1947-08-12")).toBeInTheDocument();
-    expect(screen.getByText("Frequent Names in This Collection")).toBeInTheDocument();
+    expect(screen.getByText("3 items", { selector: ".cd-letters-count" })).toBeInTheDocument();
+    expect(screen.getByText(/1947-08-10.*1947-08-12/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Visual Highlights" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Story Threads" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Explore by" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Photos 1/i }));
+    expect(screen.getByText("1 of 3 items")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Travel 1/i }));
-    await user.click(screen.getByRole("button", { name: /Cara Jones → Dan Stone/i }));
 
-    expect(screen.getByText("Showing 0 of 3 letters")).toBeInTheDocument();
-    expect(screen.getByText("No letters match the current filters.")).toBeInTheDocument();
+    expect(screen.getByText("0 of 3 items")).toBeInTheDocument();
+    expect(screen.getByText("No collection items match the current filters.")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Reset filters" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Showing 3 of 3 letters")).toBeInTheDocument();
+      expect(screen.queryByText("No collection items match the current filters.")).not.toBeInTheDocument();
     });
     expect(screen.getByRole("button", { name: "First travel note" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Music update" })).toBeInTheDocument();

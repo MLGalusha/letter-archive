@@ -2,14 +2,24 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { getCollectionByCode, type CollectionWithLetters } from '../api/collections';
+import { getImageUrl } from '../api/client';
 import LetterCard from '../components/LetterCard/LetterCard';
 import Breadcrumb from '../components/Breadcrumb';
 import Footer from '../components/Footer/Footer';
+import type { LetterImageType } from '../types/Letter';
 import {
   applyCollectionFilters,
   buildCollectionFacets,
+  pickCollectionHighlights,
 } from './collection-detail-utils';
 import { buildCollectionSeo } from '../utils/seo';
+import {
+  getLetterPeopleLine,
+  getLetterPreviewText,
+  getMediaLabel,
+  getPrimaryImage,
+  getPrimaryMediaType,
+} from '../utils/letterPreview';
 import './CollectionDetailPage.css';
 
 export default function CollectionDetailPage() {
@@ -22,6 +32,7 @@ export default function CollectionDetailPage() {
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [selectedCorrespondent, setSelectedCorrespondent] = useState<string | null>(null);
   const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null);
+  const [selectedFormat, setSelectedFormat] = useState<LetterImageType | null>(null);
   const collectionLetters = collection?.letters ?? [];
 
   const topCorrespondents = useMemo(() => {
@@ -61,12 +72,18 @@ export default function CollectionDetailPage() {
         topic: selectedTopic,
         correspondent: selectedCorrespondent,
         threadKey: selectedThreadKey,
+        format: selectedFormat,
       }),
-    [collectionLetters, selectedCorrespondent, selectedThreadKey, selectedTopic],
+    [collectionLetters, selectedCorrespondent, selectedFormat, selectedThreadKey, selectedTopic],
   );
 
   const hasActiveFilters = Boolean(
-    selectedTopic || selectedCorrespondent || selectedThreadKey,
+    selectedTopic || selectedCorrespondent || selectedThreadKey || selectedFormat,
+  );
+
+  const visualHighlights = useMemo(
+    () => pickCollectionHighlights(hasActiveFilters ? filteredLetters : collectionLetters),
+    [collectionLetters, filteredLetters, hasActiveFilters],
   );
 
   useEffect(() => {
@@ -99,7 +116,10 @@ export default function CollectionDetailPage() {
     if (selectedThreadKey && !facets.threads.some((thread) => thread.key === selectedThreadKey)) {
       setSelectedThreadKey(null);
     }
-  }, [facets, selectedCorrespondent, selectedThreadKey, selectedTopic]);
+    if (selectedFormat && !facets.formats.some((format) => format.value === selectedFormat)) {
+      setSelectedFormat(null);
+    }
+  }, [facets, selectedCorrespondent, selectedFormat, selectedThreadKey, selectedTopic]);
 
   const handleLetterClick = (letterId: string) => {
     navigate(`/letter/${letterId}`);
@@ -113,6 +133,7 @@ export default function CollectionDetailPage() {
     setSelectedTopic(null);
     setSelectedCorrespondent(null);
     setSelectedThreadKey(null);
+    setSelectedFormat(null);
   };
 
   if (loading) {
@@ -167,7 +188,7 @@ export default function CollectionDetailPage() {
           <div className="cd-header-top">
             <span className="cd-code-badge">{collection.collectionCode}</span>
             <span className="cd-letter-count">
-              {collection.letterCount} letter{collection.letterCount !== 1 ? 's' : ''}
+              {collection.letterCount} item{collection.letterCount !== 1 ? 's' : ''}
             </span>
           </div>
           <h1>{collection.title || `Collection ${collection.collectionCode}`}</h1>
@@ -193,6 +214,59 @@ export default function CollectionDetailPage() {
             </div>
           )}
         </div>
+
+        {visualHighlights.length > 0 && (
+          <section className="cd-visual-section">
+            <div className="cd-section-header">
+              <h2>Visual Highlights</h2>
+              <p className="cd-section-hint">
+                Start with the image-led pieces that give this collection its texture.
+              </p>
+            </div>
+            <div className="cd-visual-grid">
+              {visualHighlights.map((letter, index) => {
+                const image = getPrimaryImage(letter);
+                const mediaLabel = getMediaLabel(getPrimaryMediaType(letter));
+                const peopleLine = getLetterPeopleLine(letter);
+                const previewText = getLetterPreviewText(letter);
+                const displayDate = letter.metadata.date || letter.metadata.dateRaw;
+                const displayTitle = peopleLine || displayDate || letter.title;
+
+                return (
+                  <button
+                    key={letter.id}
+                    type="button"
+                    className={`cd-visual-card ${index === 0 ? 'lead' : ''}`}
+                    onClick={() => handleLetterClick(letter.id)}
+                  >
+                    {image ? (
+                      <img
+                        src={getImageUrl(image.imageUrl)}
+                        alt=""
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="cd-visual-fallback" aria-hidden="true">
+                        {mediaLabel}
+                      </div>
+                    )}
+                    <div className="cd-visual-overlay" />
+                    <div className="cd-visual-content">
+                      <div className="cd-visual-topline">
+                        <span className="cd-visual-badge">{mediaLabel}</span>
+                        {displayDate && (
+                          <span className="cd-visual-date">{displayDate}</span>
+                        )}
+                      </div>
+                      <h3>{displayTitle}</h3>
+                      {previewText && <p>{previewText}</p>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Story threads — the most engaging entry point */}
         {facets.threads.length > 0 && (
@@ -228,7 +302,7 @@ export default function CollectionDetailPage() {
         )}
 
         {/* Explore Paths — themes and people */}
-        {(facets.topics.length > 0 || facets.correspondents.length > 0) && (
+        {(facets.formats.length > 0 || facets.topics.length > 0 || facets.correspondents.length > 0) && (
           <section className="cd-explore-section">
             <div className="cd-section-header">
               <h2>Explore by</h2>
@@ -240,6 +314,28 @@ export default function CollectionDetailPage() {
             </div>
 
             <div className="cd-explore-groups">
+              {facets.formats.length > 0 && (
+                <div className="cd-explore-group">
+                  <span className="cd-explore-label">Formats</span>
+                  <div className="cd-chip-list">
+                    {facets.formats.map((format) => (
+                      <button
+                        key={format.value}
+                        type="button"
+                        className={`cd-chip ${selectedFormat === format.value ? 'active' : ''}`}
+                        onClick={() =>
+                          setSelectedFormat((current) =>
+                            current === format.value ? null : format.value,
+                          )
+                        }
+                      >
+                        {format.label} <small>{format.count}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {facets.topics.length > 0 && (
                 <div className="cd-explore-group">
                   <span className="cd-explore-label">Themes</span>
@@ -285,22 +381,23 @@ export default function CollectionDetailPage() {
 
         {/* Letters */}
         <div className="cd-letters-section">
+          <div className="cd-section-header">
+            <h2>Browse the Collection</h2>
+            <p className="cd-section-hint">
+              Move between letters, photographs, telegrams, and other surviving pieces.
+            </p>
+          </div>
           <p className="cd-letters-count">
             {hasActiveFilters
-              ? `${filteredLetters.length} of ${collection.letters.length} letters`
-              : `${collection.letters.length} letters`}
+              ? `${filteredLetters.length} of ${collection.letters.length} items`
+              : `${collection.letters.length} items`}
           </p>
 
-          <div className="letter-grid">
+          <div className="cd-letters-grid">
             {filteredLetters.map((letter) => (
               <LetterCard
                 key={letter.id}
-                id={letter.id}
-                date={letter.metadata.date}
-                location={letter.metadata.location}
-                sender={letter.metadata.sender}
-                recipient={letter.metadata.recipient}
-                hook={letter.metadata.hook}
+                letter={letter}
                 onClick={handleLetterClick}
               />
             ))}
@@ -308,7 +405,7 @@ export default function CollectionDetailPage() {
 
           {filteredLetters.length === 0 && (
             <div className="no-results">
-              <p>No letters match the current filters.</p>
+              <p>No collection items match the current filters.</p>
               {hasActiveFilters && (
                 <button type="button" onClick={clearFilters} className="cd-clear-btn">
                   Reset filters

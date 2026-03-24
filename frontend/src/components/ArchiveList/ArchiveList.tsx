@@ -49,7 +49,10 @@ export default function ArchiveList({
           letter.metadata.sender,
           letter.metadata.recipient,
           letter.metadata.location,
+          letter.metadata.hook,
           letter.metadata.description,
+          letter.photoDescription,
+          letter.extraContentTranscript,
           letter.transcript.fullText,
         ]
           .join(" ")
@@ -97,20 +100,6 @@ export default function ArchiveList({
     return results;
   }, [letters, searchQuery, filters]);
 
-  const letterSummaries = useMemo(
-    () =>
-      filteredLetters.map((letter) => ({
-        id: letter.id,
-        title: letter.title,
-        date: letter.metadata.date,
-        location: letter.metadata.location,
-        sender: letter.metadata.sender,
-        recipient: letter.metadata.recipient,
-        hook: letter.metadata.hook,
-      })),
-    [filteredLetters]
-  );
-
   if (loading) {
     return (
       <div className="archive-section">
@@ -129,22 +118,17 @@ export default function ArchiveList({
 
   return (
     <div className="archive-section">
-      {letterSummaries.length > 0 ? (
+      {filteredLetters.length > 0 ? (
         <>
           <p className="results-count">
-            {letterSummaries.length}{" "}
-            {letterSummaries.length === 1 ? "letter" : "letters"} found
+            {filteredLetters.length}{" "}
+            {filteredLetters.length === 1 ? "archive item" : "archive items"} found
           </p>
           <div className="letter-grid">
-            {letterSummaries.map((letter) => (
+            {filteredLetters.map((letter) => (
               <LetterCard
                 key={letter.id}
-                id={letter.id}
-                date={letter.date}
-                location={letter.location}
-                sender={letter.sender}
-                recipient={letter.recipient}
-                hook={letter.hook}
+                letter={letter}
                 onClick={onLetterClick}
               />
             ))}
@@ -152,7 +136,7 @@ export default function ArchiveList({
         </>
       ) : (
         <div className="no-results">
-          <p>No letters found matching your search criteria.</p>
+          <p>No archive items found matching your search criteria.</p>
           <p className="no-results-hint">
             Try adjusting your filters or search terms.
           </p>

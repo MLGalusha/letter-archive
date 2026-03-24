@@ -1,63 +1,68 @@
 .archive-section {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: 1rem;
 }
 
 .results-count {
-  font-size: 0.875rem;
-  color: var(--text-muted);
   margin: 0;
-  font-weight: 500;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .letter-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--spacing-md);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.95rem;
 }
 
 .no-results {
-  background: var(--bg-light);
-  border: var(--border-card);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-xl);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 250, 242, 0.94));
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  border-radius: 28px;
+  padding: 1.8rem;
   text-align: center;
+  box-shadow: var(--shadow-soft);
 }
 
 .no-results p {
+  margin-bottom: 0.5rem;
   font-size: 1rem;
   color: var(--text);
-  margin-bottom: var(--spacing-sm);
 }
 
 .no-results-hint {
-  font-size: 0.875rem;
-  color: var(--text-muted);
   margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
 }
 
-/* Letter card — fixed height, story-first */
 .letter-card {
-  background: var(--bg-light);
-  border: var(--border-card);
-  box-shadow: var(--shadow);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-md);
-  height: 220px;
+  appearance: none;
+  border: none;
+  background: transparent;
+  box-shadow: var(--shadow-soft);
+  border-radius: 26px;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  min-height: 312px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
   text-decoration: none;
   overflow: hidden;
   position: relative;
+  text-align: left;
 }
 
 .letter-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px hsla(0, 0%, 0%, 0.12);
+  transform: translateY(-2px);
+  box-shadow: 0 22px 42px rgba(29, 26, 20, 0.1);
 }
 
 .letter-card:focus-visible {
@@ -65,43 +70,120 @@
   outline-offset: 2px;
 }
 
-/* The hook — lead with the story */
-.letter-hook {
-  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
-  font-size: 1.05rem;
-  line-height: 1.45;
-  color: var(--text);
-  font-weight: 400;
-  font-style: italic;
-  flex: 1;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 5;
-  -webkit-box-orient: vertical;
-  position: relative;
+.letter-card-image,
+.letter-card-fallback {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
+.letter-card-image {
+  display: block;
+  object-fit: cover;
+  filter: saturate(0.92) contrast(1.03) brightness(0.88);
+}
 
-/* Footer — who, when, where */
-.letter-card-footer {
+.letter-card-fallback {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-top: var(--spacing-xs);
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 1rem;
+  background:
+    radial-gradient(circle at top left, rgba(31, 109, 122, 0.18), transparent 42%),
+    linear-gradient(160deg, rgba(250, 245, 237, 0.98), rgba(227, 216, 201, 0.88));
 }
 
-.letter-byline {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text);
+.letter-card-fallback span {
+  color: rgba(45, 36, 29, 0.74);
+  font-family: inherit;
+  font-size: 1.05rem;
+  font-weight: 500;
   letter-spacing: 0.01em;
 }
 
-.letter-when {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+.letter-card-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(20, 17, 14, 0.18), rgba(20, 17, 14, 0.2) 36%, rgba(20, 17, 14, 0.58) 74%, rgba(20, 17, 14, 0.84) 100%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 44%);
+}
+
+.letter-card-date,
+.letter-card-page-count {
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: none;
+}
+
+.letter-card-page-count {
+  position: absolute;
+  inset: 0.88rem 0.95rem auto auto;
+  z-index: 1;
+  color: rgba(255, 250, 242, 0.9);
+  text-shadow: 0 1px 10px rgba(14, 11, 8, 0.42);
+}
+
+.letter-card-content {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 0.76rem 0.84rem 0.78rem;
+  color: rgba(255, 250, 242, 0.96);
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  z-index: 1;
+}
+
+.letter-card-date {
+  color: rgba(255, 250, 242, 0.84);
+  line-height: 1.2;
+  text-shadow: 0 1px 10px rgba(14, 11, 8, 0.34);
+}
+
+.letter-hook {
+  margin: 0;
+  font-family: inherit;
+  font-size: clamp(0.94rem, 1.02vw, 1rem);
+  line-height: 1.27;
+  color: rgba(255, 250, 242, 0.97);
+  font-weight: 400;
+  letter-spacing: 0.005em;
+  font-style: normal;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  text-shadow: 0 2px 18px rgba(14, 11, 8, 0.38);
+}
+
+.letter-card-meta {
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.015em;
+  line-height: 1.2;
+  text-transform: none;
+  color: rgba(255, 250, 242, 0.9);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 10px rgba(14, 11, 8, 0.34);
+}
+
+@media (max-width: 1260px) {
+  .letter-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 920px) {
+  .letter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
@@ -110,16 +192,19 @@
   }
 
   .letter-card {
-    height: 180px;
+    min-height: 298px;
+    border-radius: 24px;
+  }
+
+  .letter-card-page-count {
+    inset: 0.78rem 0.85rem auto auto;
+  }
+
+  .letter-card-content {
+    padding: 0.72rem 0.8rem 0.78rem;
   }
 
   .letter-hook {
-    -webkit-line-clamp: 3;
-    font-size: 1rem;
-  }
-
-  /* Tighten card padding */
-  .letter-card {
-    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 0.94rem;
   }
 }

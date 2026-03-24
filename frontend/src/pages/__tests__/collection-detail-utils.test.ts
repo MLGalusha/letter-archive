@@ -37,6 +37,10 @@ describe("collection detail utils", () => {
   const letters: Letter[] = [
     makeLetter({
       id: "l1",
+      images: [
+        { id: "img-1", type: "letter", imageUrl: "/img/1" },
+        { id: "img-2", type: "photo", imageUrl: "/img/2" },
+      ],
       metadata: {
         sender: "Alice",
         recipient: "Bob",
@@ -49,6 +53,7 @@ describe("collection detail utils", () => {
     }),
     makeLetter({
       id: "l2",
+      images: [{ id: "img-3", type: "telegram", imageUrl: "/img/3" }],
       metadata: {
         sender: "Alice",
         recipient: "Bob",
@@ -61,6 +66,7 @@ describe("collection detail utils", () => {
     }),
     makeLetter({
       id: "l3",
+      images: [{ id: "img-4", type: "photo", imageUrl: "/img/4" }],
       metadata: {
         sender: "Cara",
         recipient: "Alice",
@@ -80,17 +86,18 @@ describe("collection detail utils", () => {
     expect(facets.threads[0].key).toBe("Alice -> Bob");
     expect(facets.threads[0].count).toBe(2);
     expect(facets.threads[0].latestDate).toBe("19320210");
+    expect(facets.formats[0]).toEqual({ value: "photo", label: "Photos", count: 2 });
   });
 
   it("filters letters by topic, correspondent, and thread", () => {
     expect(
-      applyCollectionFilters(letters, { topic: "family", correspondent: null, threadKey: null }).map(
+      applyCollectionFilters(letters, { topic: "family", correspondent: null, threadKey: null, format: null }).map(
         (letter) => letter.id,
       ),
     ).toEqual(["l1", "l3"]);
 
     expect(
-      applyCollectionFilters(letters, { topic: null, correspondent: "alice", threadKey: null }).map(
+      applyCollectionFilters(letters, { topic: null, correspondent: "alice", threadKey: null, format: null }).map(
         (letter) => letter.id,
       ),
     ).toEqual(["l1", "l2", "l3"]);
@@ -100,8 +107,18 @@ describe("collection detail utils", () => {
         topic: null,
         correspondent: null,
         threadKey: getThreadKey("Alice", "Bob"),
+        format: null,
       }).map((letter) => letter.id),
     ).toEqual(["l1", "l2"]);
+
+    expect(
+      applyCollectionFilters(letters, {
+        topic: null,
+        correspondent: null,
+        threadKey: null,
+        format: "photo",
+      }).map((letter) => letter.id),
+    ).toEqual(["l1", "l3"]);
   });
 
   it("builds stable thread keys with unknown fallbacks", () => {

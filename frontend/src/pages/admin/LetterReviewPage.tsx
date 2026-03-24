@@ -34,6 +34,10 @@ import { trackEdit } from "../../utils/recentEdits";
 import { highlightTranscriptMarkers } from "../../utils/transcriptHighlight";
 import { useTooltip } from "../../hooks/useTooltip";
 import type { Letter, LetterImage, VisibilityState } from "../../types/Letter";
+import {
+  hasPrimaryTranscriptContent,
+  hasRelatedExtraContent,
+} from "../../utils/letterContent";
 import TranscriptionSection from "./LetterReview/TranscriptionSection";
 import { ExtraContentSection } from "./LetterReview/ExtraContentSection";
 import MetadataSection from "./LetterReview/MetadataSection";
@@ -781,13 +785,8 @@ export default function LetterReviewPage() {
     );
   }
 
-  // Check if letter has letter-type images (for transcript section visibility)
-  const hasLetterPages = letter.images.some((img) => img.type === "letter");
-
-  // Types that produce transcribable extra content (photo is excluded — can't transcribe photos)
-  const hasExtras = Boolean(letter.images.some((img) =>
-    ["telegram", "cover", "ephemera"].includes(img.type)
-  ));
+  const showTranscriptSection = hasPrimaryTranscriptContent(letter);
+  const hasExtras = hasRelatedExtraContent(letter);
 
   const headerActions = (
     <>
@@ -975,7 +974,7 @@ export default function LetterReviewPage() {
             </div>
 
             {/* Transcription Editor - only shown when letter has letter-type images */}
-            {hasLetterPages && (
+            {showTranscriptSection && (
               <TranscriptionSection
                 letter={letter}
                 letterTranscribeState={letterTranscribeState}

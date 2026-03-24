@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, useEffect, type CSSProperties } from "re
 import type { Letter, LetterImage } from "../../types/Letter";
 import LetterViewer from "../LetterViewer/LetterViewer";
 import { ResizableSplitPane } from "../common";
+import { shouldShowPublicTranscript } from "../../utils/letterContent";
 import {
   EMOTIONAL_TONE_OPTIONS,
   METADATA_RELATIONSHIP_OPTIONS,
@@ -146,7 +147,7 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
           {/* Right side: Read-only content */}
           <div className="details-panel-content">
             {/* Transcript Section - only shown when letter has letter-type images */}
-            {letterPageCount > 0 && (
+            {shouldShowPublicTranscript(letter) && (
             <div className="transcript-section">
               <div className="section-header">
                 <h2>Transcript</h2>

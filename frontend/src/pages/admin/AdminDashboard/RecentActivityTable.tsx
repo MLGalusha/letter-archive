@@ -3,6 +3,10 @@ import { type RefObject, useRef, useState, useEffect } from "react";
 import { VisibilityBadge } from "../../../components/common";
 import { Icon } from "../../../components/common/Icon";
 import type { Letter, ContentStatus } from "../../../types/Letter";
+import {
+  hasPrimaryTranscriptContent,
+  hasRelatedExtraContent,
+} from "../../../utils/letterContent";
 import type { ColumnId, ExtendedSortField, PendingChange } from "./types";
 
 interface SortInfo {
@@ -430,10 +434,8 @@ export default function RecentActivityTable({
                         getCombinedTranscriptStatus(
                           letter.transcriptStatus,
                           letter.extraContentStatus,
-                          letter.images.some((img) => img.type === "letter"),
-                          letter.images.some((img) =>
-                            ["telegram", "cover", "ephemera"].includes(img.type),
-                          ),
+                          hasPrimaryTranscriptContent(letter),
+                          hasRelatedExtraContent(letter),
                         ),
                         "T",
                       )}

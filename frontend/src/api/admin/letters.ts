@@ -1,4 +1,4 @@
-import { apiPost, apiPut, apiPatch, API_BASE_URL } from "../client";
+import { apiPost, apiPut, apiPatch, API_BASE_URL, getAuthHeaders } from "../client";
 import type { Letter, LineSegment, OcrWordBox } from "../../types/Letter";
 
 export interface UpdateLetterData {
@@ -72,6 +72,7 @@ export async function detectPageLines(
   const response = await fetch(`${API_BASE_URL}/admin/letters/pages/${pageId}/detect-lines`, {
     method: 'POST',
     credentials: 'include',
+    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -97,16 +98,22 @@ export async function detectPageLines(
       const line = part.trim();
       if (!line.startsWith('data: ')) continue;
 
-      const data = JSON.parse(line.slice(6));
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(line.slice(6));
+      } catch {
+        console.warn('[detectPageLines] Malformed SSE data:', line);
+        continue;
+      }
       if (data.type === 'progress') {
-        onProgress?.(data.label);
+        onProgress?.(data.label as string);
       } else if (data.type === 'result') {
         result = {
-          lineSegments: data.lineSegments,
-          ocrWordBoxes: data.ocrWordBoxes,
+          lineSegments: data.lineSegments as LineSegment[],
+          ocrWordBoxes: data.ocrWordBoxes as OcrWordBox[] | null,
         };
       } else if (data.type === 'error') {
-        throw new Error(data.message);
+        throw new Error(data.message as string);
       }
     }
   }

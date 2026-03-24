@@ -1,0 +1,57 @@
+apiVersion: run.googleapis.com/v1
+kind: WorkerPool
+metadata:
+  name: letter-archive-worker
+  namespace: PROJECT_NUMBER
+  labels:
+    cloud.googleapis.com/location: REGION
+  annotations:
+    run.googleapis.com/launch-stage: BETA
+    run.googleapis.com/manualInstanceCount: "1"
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/cloudsql-instances: PROJECT_ID:REGION:CLOUD_SQL_INSTANCE
+    spec:
+      serviceAccountName: SERVICE_ACCOUNT_EMAIL
+      containers:
+        - image: BACKEND_IMAGE
+          command:
+            - node
+          args:
+            - dist/worker.js
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: DATABASE_URL
+              value: REPLACE_WITH_DATABASE_URL
+            - name: SITE_URL
+              value: https://YOUR_DOMAIN
+            - name: CORS_ORIGINS
+              value: https://YOUR_DOMAIN
+            - name: STORAGE_DIR
+              value: /mnt/archive
+            - name: LOG_TO_FILES
+              value: "false"
+            - name: ALLOW_ADMIN_SETUP
+              value: "false"
+            - name: SEED_DEV_ADMIN
+              value: "false"
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: archive-storage
+              mountPath: /mnt/archive
+      volumes:
+        - name: archive-storage
+          csi:
+            driver: gcsfuse.run.googleapis.com
+            readOnly: false
+            volumeAttributes:
+              bucketName: ARCHIVE_BUCKET
+  instanceSplits:
+    - percent: 100
+      latestRevision: true

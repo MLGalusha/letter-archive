@@ -1,0 +1,37 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: letter-archive-migrate
+  namespace: PROJECT_NUMBER
+  labels:
+    cloud.googleapis.com/location: REGION
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/cloudsql-instances: PROJECT_ID:REGION:CLOUD_SQL_INSTANCE
+    spec:
+      taskCount: 1
+      parallelism: 1
+      template:
+        spec:
+          maxRetries: 0
+          timeoutSeconds: 900
+          serviceAccountName: SERVICE_ACCOUNT_EMAIL
+          containers:
+            - image: BACKEND_IMAGE
+              command:
+                - node
+              args:
+                - dist/cli/migrate.js
+              env:
+                - name: NODE_ENV
+                  value: production
+                - name: DATABASE_URL
+                  value: REPLACE_WITH_DATABASE_URL
+                - name: LOG_TO_FILES
+                  value: "false"
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi

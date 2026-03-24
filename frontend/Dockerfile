@@ -1,5 +1,5 @@
 # ---- Stage 1: Install deps + build ----
-FROM node:20-slim AS build
+FROM node:20.20.1-slim AS build
 
 WORKDIR /app
 
@@ -11,6 +11,8 @@ COPY . .
 # VITE_API_URL must be set at build time (baked into the JS bundle)
 ARG VITE_API_URL
 ENV VITE_API_URL=${VITE_API_URL}
+ARG VITE_SITE_URL
+ENV VITE_SITE_URL=${VITE_SITE_URL}
 
 RUN npm run build
 
@@ -21,6 +23,7 @@ FROM nginx:alpine AS production
 RUN rm /etc/nginx/conf.d/default.conf
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY security-headers.conf /etc/nginx/security-headers.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
 # Cloud Run expects port 8080

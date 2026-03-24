@@ -354,4 +354,4 @@ export async function getContentPage(slug: string): Promise<ContentPage | null> 
   }
 }
 
-export { API_BASE_URL };
+export { API_BASE_URL, getAuthHeaders };

@@ -24,7 +24,7 @@ export function useSiteSettings(): SiteSettings | null {
         cachedSettings = data;
         setSettings(data);
       })
-      .catch(() => {});
+      .catch((err) => console.warn('[SiteSettings] Failed to load:', err));
   }, []);
 
   return settings;

@@ -829,7 +829,7 @@ export function resumeProcessing(): { message: string } {
 /**
  * Abort the current processing batch. Reverts the in-progress job state if applicable.
  */
-export async function abortProcessing(): Promise<{ message: string }> {
+export function abortProcessing(): { message: string } {
   if (!processingState.isRunning) {
     throw new ProcessingError('No processing in progress', 400);
   }
@@ -840,34 +840,10 @@ export async function abortProcessing(): Promise<{ message: string }> {
     'Processing abort requested'
   );
 
-  // If currently processing, mark the current job as failed so the worker doesn't re-pick it
-  if (processingState.currentJob) {
-    const { letterId, type } = processingState.currentJob;
-    log.info({ letterId, type }, 'Marking in-progress job as aborted');
-    if (type === 'transcription') {
-      await db.update(letters).set({
-        transcriptionStatus: 'FAILED',
-        transcriptionError: 'Aborted by admin',
-        workflow: 'UPLOADED',
-        updatedAt: new Date(),
-      }).where(eq(letters.id, letterId));
-    } else if (type === 'entity_extraction') {
-      await db.update(letters).set({
-        entityExtractionStatus: 'FAILED',
-        entityExtractionError: 'Aborted by admin',
-        updatedAt: new Date(),
-      }).where(eq(letters.id, letterId));
-    } else {
-      await db.update(letters).set({
-        metadataStatus: 'FAILED',
-        metadataError: 'Aborted by admin',
-        workflow: 'TRANSCRIBED',
-        updatedAt: new Date(),
-      }).where(eq(letters.id, letterId));
-    }
-  }
+  // The current job (if any) will finish naturally — abort stops the batch
+  // after the current job completes. Use cancelActiveJob() to cancel a specific running job.
 
-  return { message: 'Processing aborted' };
+  return { message: 'Processing aborted — batch will stop after current job finishes' };
 }
 
 // ============================================================================
@@ -1004,6 +980,7 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
       transcriptionStatus: 'PENDING',
       transcriptionError: null,
       transcriptionAttemptCount: 0,
+      workflow: 'UPLOADED',
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
   } else if (type === 'metadata') {
@@ -1014,6 +991,7 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
       metadataStatus: 'PENDING',
       metadataError: null,
       metadataAttemptCount: 0,
+      workflow: 'TRANSCRIBED',
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
   } else if (type === 'entity_extraction') {

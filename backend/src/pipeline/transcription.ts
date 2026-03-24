@@ -184,6 +184,17 @@ export async function runTranscription(letterId: string): Promise<void> {
         .join('\n\n');
     }
 
+    // Check if the job was cancelled while we were processing
+    const currentState = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+      columns: { transcriptionStatus: true },
+    });
+    if (currentState?.transcriptionStatus === 'FAILED') {
+      letterLog.info('Transcription was cancelled during processing — discarding result');
+      clearJobProgress(letterId, 'transcription');
+      return;
+    }
+
     // Update letter with transcription - all status updates in one operation
     // to avoid inconsistent state if the process crashes between updates
     await db.update(letters).set({

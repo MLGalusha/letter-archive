@@ -1,8 +1,9 @@
 import 'dotenv/config';
-import { eq, and, isNotNull } from 'drizzle-orm';
+import { eq, and, isNotNull, inArray } from 'drizzle-orm';
 import { db, letters } from './db/index.js';
 import { processLetter, processMetadata } from './pipeline/processor.js';
 import { createLogger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
+import { TRANSCRIBABLE_TYPES } from './services/letter/shared.js';
 
 const log = createLogger({ module: 'worker' });
 
@@ -15,7 +16,7 @@ const BATCH_SIZE = 5;
 async function findLettersNeedingTranscription() {
   return db.query.letters.findMany({
     where: and(
-      eq(letters.type, 'L'),
+      inArray(letters.type, [...TRANSCRIBABLE_TYPES]),
       eq(letters.transcriptionStatus, 'PENDING'),
       eq(letters.workflow, 'UPLOADED'),
     ),

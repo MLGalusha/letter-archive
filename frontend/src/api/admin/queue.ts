@@ -34,7 +34,7 @@ export interface QueueRecentJob {
   letterTitle: string;
   collectionCode: string;
   type: QueueJobType;
-  status: "SUCCESS" | "FAILED";
+  status: "SUCCESS" | "FAILED" | "CLEARED";
   error?: string;
   completedAt: string;
 }

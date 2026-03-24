@@ -236,20 +236,16 @@ describe('processing queue service', () => {
     expect(getJobProgress('letter-3', 'transcription')).toBeUndefined();
   });
 
-  it('aborts the current transcription job and marks it as failed', async () => {
+  it('aborts the batch and lets the current job finish naturally', () => {
     resetProcessingState(3);
     const state = getProcessingStatus();
     state.currentJob = { letterId: 'letter-4', type: 'transcription' };
 
-    const result = await abortProcessing();
+    const result = abortProcessing();
 
-    expect(result).toEqual({ message: 'Processing aborted' });
+    expect(result).toEqual({ message: 'Processing aborted — batch will stop after current job finishes' });
     expect(state.shouldAbort).toBe(true);
-    expect(updateSetMock).toHaveBeenCalledWith({
-      transcriptionStatus: 'FAILED',
-      transcriptionError: 'Aborted by admin',
-      workflow: 'UPLOADED',
-      updatedAt: expect.any(Date),
-    });
+    // Abort no longer writes to DB — the current job finishes naturally
+    expect(updateSetMock).not.toHaveBeenCalled();
   });
 });

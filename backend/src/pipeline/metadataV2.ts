@@ -12,6 +12,8 @@ import { processEntityExtraction } from '../services/entities.js';
 import { updateJobProgress, clearJobProgress } from '../services/processing-queue.js';
 import { createLogger } from '../utils/logger.js';
 import { createNotification } from '../services/notifications.js';
+import { db, letters } from '../db/index.js';
+import { eq } from 'drizzle-orm';
 
 const log = createLogger({ module: 'metadata-v2-pipeline' });
 export interface ExtractionOptions {
@@ -105,6 +107,17 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
       context: extractionContext,
       corrections,
     });
+
+    // Check if the job was cancelled while we were processing
+    const currentState = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+      columns: { metadataStatus: true },
+    });
+    if (currentState?.metadataStatus === 'FAILED') {
+      letterLog.info('Metadata extraction was cancelled during processing — discarding result');
+      clearJobProgress(letterId, 'metadata');
+      return;
+    }
 
     // Store basic metadata
     await updateMetadataV2(letterId, 'SUCCESS', metadataResult.metadata, null);
@@ -306,6 +319,17 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
       },
       corrections,
     });
+
+    // Check if the job was cancelled while we were processing
+    const entityState = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+      columns: { entityExtractionStatus: true },
+    });
+    if (entityState?.entityExtractionStatus === 'FAILED') {
+      letterLog.info('Entity extraction was cancelled during processing — discarding result');
+      clearJobProgress(letterId, 'entity_extraction');
+      return;
+    }
 
     await updateEntityExtraction(letterId, 'SUCCESS', entityResult.entities, null);
 

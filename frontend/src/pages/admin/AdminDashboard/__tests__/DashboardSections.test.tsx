@@ -52,6 +52,7 @@ describe("RecentActivityTable", () => {
         onRowClick={vi.fn()}
         onRowMouseDown={vi.fn()}
         onRowMouseEnter={vi.fn()}
+        onCheckboxChange={vi.fn()}
         selectedIds={new Set()}
         editMode={false}
         copyModeActive

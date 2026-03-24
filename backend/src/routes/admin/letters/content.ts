@@ -7,6 +7,7 @@ import { detectAndStorePageLines } from '../../../services/line-finder.js';
 import {
   buildLetterUpdates,
   createVersion,
+  describePhoto,
   getVersions,
   regenerateTranscription,
   restoreVersion,
@@ -14,6 +15,7 @@ import {
   transcribeLetterOnly,
   updateAiNotes,
   updateExtraContent,
+  updatePhotoDescription,
   type UpdateLetterInput,
 } from '../../../services/letter-operations.js';
 import { resetLetterForProcessing } from '../../../services/letters.js';
@@ -462,6 +464,25 @@ router.post('/:letterId/transcribe-extras', async (req, res, next) => {
   }
 });
 
+router.post('/:letterId/describe-photo', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+    const { photoDescriptionContext } = (req.body ?? {}) as {
+      photoDescriptionContext?: string | null;
+    };
+    const result = await describePhoto(letterId, photoDescriptionContext ?? null);
+    if (!result) throw new NotFoundError('Letter not found');
+
+    res.json({
+      letter: await requireLetterDto(letterId, 'Failed to fetch updated letter', 500),
+      describedCount: result.describedCount,
+      photoDescriptionStatus: result.photoDescriptionStatus,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.put('/:letterId/extra-content', async (req, res, next) => {
   try {
     const { letterId } = req.params;
@@ -476,6 +497,29 @@ router.put('/:letterId/extra-content', async (req, res, next) => {
     }
 
     const result = await updateExtraContent(letterId, nextExtraContent);
+    if (!result) throw new NotFoundError('Letter not found');
+    res.json(await requireLetterDto(letterId));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put('/:letterId/photo-description', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+    const { photoDescription, photoDescriptionContext } = (req.body ?? {}) as {
+      photoDescription?: string | null;
+      photoDescriptionContext?: string | null;
+    };
+
+    if (photoDescription === undefined) {
+      throw new BadRequestError('photoDescription field required');
+    }
+
+    const result = await updatePhotoDescription(letterId, {
+      photoDescription,
+      photoDescriptionContext,
+    });
     if (!result) throw new NotFoundError('Letter not found');
     res.json(await requireLetterDto(letterId));
   } catch (error) {

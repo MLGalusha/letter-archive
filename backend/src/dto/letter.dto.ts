@@ -155,6 +155,12 @@ export interface FrontendLetter {
   extraContentStatus: ContentStatus;
   extraContentVerifiedAt?: string;
   extraContentVerifiedBy?: string;
+  // Photo description workflow
+  photoDescription?: string;
+  photoDescriptionStatus: ContentStatus;
+  photoDescriptionVerifiedAt?: string;
+  photoDescriptionVerifiedBy?: string;
+  photoDescriptionContext?: string;
   // AI notes (structured observations, suggestions)
   aiNotes?: unknown;
   // Legacy field kept for backward compat
@@ -468,6 +474,11 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
     extraContentStatus: letter.extraContentStatus,
     extraContentVerifiedAt: letter.extraContentVerifiedAt?.toISOString(),
     extraContentVerifiedBy: letter.extraContentVerifiedBy || undefined,
+    photoDescription: letter.photoDescription || undefined,
+    photoDescriptionStatus: letter.photoDescriptionStatus,
+    photoDescriptionVerifiedAt: letter.photoDescriptionVerifiedAt?.toISOString(),
+    photoDescriptionVerifiedBy: letter.photoDescriptionVerifiedBy || undefined,
+    photoDescriptionContext: letter.photoDescriptionContext || undefined,
     // AI notes
     aiNotes: letter.aiNotes || undefined,
     // Entity extraction (Prompt 2)

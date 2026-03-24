@@ -6,11 +6,15 @@ import { getAdminLetterById, deleteLetter } from "../../api/letters";
 import {
   updateLetter,
   confirmTranscript,
+  describePhoto,
   regenerateMetadata,
   transcribeExtras,
   updateExtraContent,
+  updatePhotoDescription,
   verifyExtraContent,
+  verifyPhotoDescription,
   unverifyExtraContent,
+  unverifyPhotoDescription,
   transcribeLetter,
 } from "../../api/admin";
 import {
@@ -24,6 +28,7 @@ import AdminLayout from "../../components/AdminLayout";
 import { useToast } from "../../contexts/ToastContext";
 import {
   Icon,
+  Modal,
   WorkflowBadge,
   ResizableSplitPane,
   Dropdown,
@@ -37,9 +42,12 @@ import type { Letter, LetterImage, VisibilityState } from "../../types/Letter";
 import {
   hasPrimaryTranscriptContent,
   hasRelatedExtraContent,
+  shouldShowPhotoDescriptionWorkflow,
+  shouldShowMetadataWorkflow,
 } from "../../utils/letterContent";
 import TranscriptionSection from "./LetterReview/TranscriptionSection";
 import { ExtraContentSection } from "./LetterReview/ExtraContentSection";
+import { PhotoDescriptionSection } from "./LetterReview/PhotoDescriptionSection";
 import MetadataSection from "./LetterReview/MetadataSection";
 import EntitySection from "./LetterReview/EntitySection";
 import NotesSection from "./LetterReview/NotesSection";
@@ -65,10 +73,20 @@ export default function LetterReviewPage() {
 
   const [transcript, setTranscript] = useState("");
 
+  // Photo description state
+  const [photoDescription, setPhotoDescription] = useState("");
+  const [photoDescriptionContext, setPhotoDescriptionContext] = useState("");
+  const [draftPhotoDescriptionContext, setDraftPhotoDescriptionContext] = useState("");
+  const [photoDescriptionGenerating, setPhotoDescriptionGenerating] =
+    useState(false);
+
   // Extra content state
   const [extraContent, setExtraContent] = useState("");
   const [extraContentTranscribing, setExtraContentTranscribing] =
     useState(false);
+
+  // Photo description refs
+  const photoDescriptionRef = useRef<DynamicEditorRef>(null);
 
   // Extra content refs
   const extraContentRef = useRef<DynamicEditorRef>(null);
@@ -99,6 +117,7 @@ export default function LetterReviewPage() {
   // Regenerate popup state
   const [showTranscriptRegeneratePopup, setShowTranscriptRegeneratePopup] = useState(false);
   const [showMetadataRegeneratePopup, setShowMetadataRegeneratePopup] = useState(false);
+  const [showPhotoContextModal, setShowPhotoContextModal] = useState(false);
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
@@ -109,6 +128,16 @@ export default function LetterReviewPage() {
   );
   const editorRef = useRef<HTMLDivElement>(null);
   const lineReviewRef = useRef<LineReviewModeHandle>(null);
+
+  // Verified photo description editing flow state
+  const [isPhotoDescriptionEditing, setIsPhotoDescriptionEditing] = useState(false);
+  const {
+    show: showPhotoDescriptionTooltip,
+    position: photoDescriptionTooltipPosition,
+    ref: photoDescriptionTooltipRef,
+    showAt: showPhotoDescriptionTooltipAt,
+    close: closePhotoDescriptionTooltip,
+  } = useTooltip();
 
   // Verified extra content editing flow state
   const [isExtraContentEditing, setIsExtraContentEditing] = useState(false);
@@ -226,6 +255,10 @@ export default function LetterReviewPage() {
           setLetter(foundLetter);
           setTranscript(foundLetter.transcript.fullText);
           applyLetterMetadata(foundLetter);
+          setPhotoDescription(foundLetter.photoDescription || "");
+          setPhotoDescriptionContext(foundLetter.photoDescriptionContext || "");
+          setDraftPhotoDescriptionContext(foundLetter.photoDescriptionContext || "");
+          setIsPhotoDescriptionEditing(false);
           // Extra content
           setExtraContent(foundLetter.extraContentTranscript || "");
           // Reset extra content editing state for new letter
@@ -329,6 +362,48 @@ export default function LetterReviewPage() {
     },
     [letterId, letter, scheduleStatusReset, showToast],
   );
+
+  const handleOpenPhotoContextModal = useCallback(() => {
+    if (!letter) return;
+    setDraftPhotoDescriptionContext(letter.photoDescriptionContext || "");
+    setShowPhotoContextModal(true);
+  }, [letter]);
+
+  const handleClosePhotoContextModal = useCallback(() => {
+    if (photoDescriptionGenerating) return;
+    setShowPhotoContextModal(false);
+  }, [photoDescriptionGenerating]);
+
+  const handleDescribePhoto = useCallback(async () => {
+    if (!letterId) return;
+
+    setPhotoDescriptionGenerating(true);
+    try {
+      const result = await describePhoto(letterId, draftPhotoDescriptionContext);
+      setLetter(result.letter);
+      setPhotoDescription(result.letter.photoDescription || "");
+      setPhotoDescriptionContext(result.letter.photoDescriptionContext || "");
+      setDraftPhotoDescriptionContext(result.letter.photoDescriptionContext || "");
+      setShowPhotoContextModal(false);
+      setIsPhotoDescriptionEditing(false);
+
+      if (result.describedCount > 0) {
+        showToast(
+          `Generated ${result.describedCount} photo description draft(s)`,
+          "success",
+        );
+      } else {
+        showToast("No photo description was generated", "info");
+      }
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to describe photo",
+        "error",
+      );
+    } finally {
+      setPhotoDescriptionGenerating(false);
+    }
+  }, [draftPhotoDescriptionContext, letterId, showToast]);
 
   // Extra content transcription handler with confirmation
   const handleTranscribeExtrasWithConfirm = useCallback(
@@ -586,6 +661,134 @@ export default function LetterReviewPage() {
     }
   };
 
+  const handlePhotoDescriptionKeyDown = (
+    e: React.KeyboardEvent<HTMLDivElement>,
+  ) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const editor = e.currentTarget;
+      if (document.activeElement !== editor) {
+        editor.focus();
+      }
+
+      document.execCommand("insertText", false, "    ");
+      setPhotoDescription(editor.innerText);
+    }
+  };
+
+  const handleVerifyPhotoDescription = useCallback(async () => {
+    if (!letterId) return;
+    setSaving(true);
+    try {
+      const updated = await verifyPhotoDescription(letterId);
+      setLetter(updated);
+      setIsPhotoDescriptionEditing(false);
+      showToast("Photo description verified", "success");
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to verify photo description",
+        "error",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [letterId, showToast]);
+
+  const handleUnverifyPhotoDescription = useCallback(async () => {
+    if (!letterId || !letter) return;
+    if (letter.photoDescriptionStatus !== "VERIFIED") return;
+
+    setSaving(true);
+    try {
+      const updated = await unverifyPhotoDescription(letterId);
+      setLetter(updated);
+      setIsPhotoDescriptionEditing(true);
+      showToast("Photo description verification removed", "info");
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to unverify photo description",
+        "error",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [letter, letterId, showToast]);
+
+  const handlePhotoDescriptionClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (
+        !letter?.photoDescriptionStatus ||
+        letter.photoDescriptionStatus !== "VERIFIED" ||
+        isPhotoDescriptionEditing
+      ) {
+        return;
+      }
+
+      showPhotoDescriptionTooltipAt(e.clientX, e.clientY);
+    },
+    [
+      isPhotoDescriptionEditing,
+      letter?.photoDescriptionStatus,
+      showPhotoDescriptionTooltipAt,
+    ],
+  );
+
+  const handlePhotoDescriptionDoubleClick = useCallback(async () => {
+    if (
+      !letter?.photoDescriptionStatus ||
+      letter.photoDescriptionStatus !== "VERIFIED" ||
+      !letterId
+    ) {
+      return;
+    }
+
+    closePhotoDescriptionTooltip();
+
+    setSaving(true);
+    try {
+      const updated = await unverifyPhotoDescription(letterId);
+      setLetter(updated);
+      setIsPhotoDescriptionEditing(true);
+      showToast("Photo description verification removed", "info");
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to unverify photo description",
+        "error",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [
+    closePhotoDescriptionTooltip,
+    letter?.photoDescriptionStatus,
+    letterId,
+    showToast,
+  ]);
+
+  const handlePhotoDescriptionChange = useCallback(
+    (newContent: string) => {
+      setPhotoDescription(newContent);
+      if (!letterId) return;
+
+      scheduleDebouncedSave(
+        async () => {
+          const updated = await updatePhotoDescription(letterId, newContent);
+          setLetter(updated);
+          setPhotoDescriptionContext(updated.photoDescriptionContext || "");
+        },
+        {
+          errorMessage: "Failed to save photo description",
+          onError: (error) => {
+            console.error("Photo description auto-save error:", error);
+          },
+        },
+      );
+    },
+    [letterId, scheduleDebouncedSave],
+  );
+
   // Extra content verification handlers
   const handleVerifyExtraContent = useCallback(async () => {
     if (!letterId) return;
@@ -718,19 +921,19 @@ export default function LetterReviewPage() {
     [letterId, showToast],
   );
 
-  const handleToggleReviewMode = useCallback(() => {
-    if (reviewMode) {
-      lineReviewRef.current?.saveCurrentLine();
-    }
-
-    setReviewMode((prev) => !prev);
-  }, [reviewMode]);
-
   const handleImageClick = useCallback((pageIndex: number) => {
-    if (isTranscriptEditing || isExtraContentEditing) return;
+    if (
+      !letter ||
+      !hasPrimaryTranscriptContent(letter) ||
+      isTranscriptEditing ||
+      isPhotoDescriptionEditing ||
+      isExtraContentEditing
+    ) {
+      return;
+    }
     setViewerPageIndex(pageIndex);
     setReviewMode(true);
-  }, [isTranscriptEditing, isExtraContentEditing]);
+  }, [isExtraContentEditing, isPhotoDescriptionEditing, isTranscriptEditing, letter]);
 
   // Line highlighting - update on cursor move
   useEffect(() => {
@@ -786,7 +989,9 @@ export default function LetterReviewPage() {
   }
 
   const showTranscriptSection = hasPrimaryTranscriptContent(letter);
+  const showPhotoDescriptionSection = shouldShowPhotoDescriptionWorkflow(letter);
   const hasExtras = hasRelatedExtraContent(letter);
+  const showMetadataSections = shouldShowMetadataWorkflow(letter);
 
   const headerActions = (
     <>
@@ -997,6 +1202,30 @@ export default function LetterReviewPage() {
               />
             )}
 
+            {showPhotoDescriptionSection && (
+              <PhotoDescriptionSection
+                letter={letter}
+                photoDescription={photoDescription}
+                photoDescriptionGenerating={photoDescriptionGenerating}
+                isPhotoDescriptionEditing={isPhotoDescriptionEditing}
+                showPhotoDescriptionTooltip={showPhotoDescriptionTooltip}
+                photoDescriptionTooltipPosition={photoDescriptionTooltipPosition}
+                photoDescriptionTooltipRef={photoDescriptionTooltipRef}
+                saving={saving}
+                photoDescriptionRef={photoDescriptionRef}
+                onDescribePhoto={handleOpenPhotoContextModal}
+                onVerifyPhotoDescription={
+                  letter.photoDescriptionStatus === "VERIFIED"
+                    ? handleUnverifyPhotoDescription
+                    : handleVerifyPhotoDescription
+                }
+                onPhotoDescriptionChange={handlePhotoDescriptionChange}
+                onPhotoDescriptionKeyDown={handlePhotoDescriptionKeyDown}
+                onPhotoDescriptionClick={handlePhotoDescriptionClick}
+                onPhotoDescriptionDoubleClick={handlePhotoDescriptionDoubleClick}
+              />
+            )}
+
             {/* Extra Content Section - only shown when letter has transcribable extras */}
             {hasExtras ? (
               <ExtraContentSection
@@ -1022,51 +1251,53 @@ export default function LetterReviewPage() {
               />
             ) : null}
 
-            <MetadataSection
-              letter={letter}
-              letterId={letterId!}
-              sender={sender}
-              recipient={recipient}
-              date={date}
-              dateConfidence={dateConfidence}
-              location={location}
-              hook={hook}
-              description={description}
-              emotionalTone={emotionalTone}
-              relationship={relationship}
-              primaryTopics={primaryTopics}
-              topicsDropdownOpen={topicsDropdownOpen}
-              onSenderChange={setSender}
-              onRecipientChange={setRecipient}
-              onDateChange={setDate}
-              onDateConfidenceChange={setDateConfidence}
-              onLocationChange={setLocation}
-              onHookChange={setHook}
-              onDescriptionChange={setDescription}
-              onEmotionalToneChange={setEmotionalTone}
-              onRelationshipChange={setRelationship}
-              onPrimaryTopicsChange={setPrimaryTopics}
-              onTopicsDropdownOpenChange={setTopicsDropdownOpen}
-              onTriggerAutoSave={(updates) =>
-                void triggerAutoSave(updates as AutoSaveData)
-              }
-              hookRef={hookRef}
-              descriptionRef={descriptionRef}
-              regenerateState={regenerateState}
-              onVerifyMetadata={handleVerifyMetadata}
-              onConfirmTranscript={handleConfirmTranscript}
-              onRegenerateMetadata={handleRegenerateMetadata}
-              onMetadataFieldClick={handleMetadataFieldClick}
-              onMetadataFieldDoubleClick={handleMetadataFieldDoubleClick}
-              showMetadataTooltip={showMetadataTooltip}
-              metadataTooltipPosition={metadataTooltipPosition}
-              metadataTooltipRef={metadataTooltipRef}
-              saving={saving}
-              showToast={showToast}
-            />
+            {showMetadataSections && (
+              <MetadataSection
+                letter={letter}
+                letterId={letterId!}
+                sender={sender}
+                recipient={recipient}
+                date={date}
+                dateConfidence={dateConfidence}
+                location={location}
+                hook={hook}
+                description={description}
+                emotionalTone={emotionalTone}
+                relationship={relationship}
+                primaryTopics={primaryTopics}
+                topicsDropdownOpen={topicsDropdownOpen}
+                onSenderChange={setSender}
+                onRecipientChange={setRecipient}
+                onDateChange={setDate}
+                onDateConfidenceChange={setDateConfidence}
+                onLocationChange={setLocation}
+                onHookChange={setHook}
+                onDescriptionChange={setDescription}
+                onEmotionalToneChange={setEmotionalTone}
+                onRelationshipChange={setRelationship}
+                onPrimaryTopicsChange={setPrimaryTopics}
+                onTopicsDropdownOpenChange={setTopicsDropdownOpen}
+                onTriggerAutoSave={(updates) =>
+                  void triggerAutoSave(updates as AutoSaveData)
+                }
+                hookRef={hookRef}
+                descriptionRef={descriptionRef}
+                regenerateState={regenerateState}
+                onVerifyMetadata={handleVerifyMetadata}
+                onConfirmTranscript={handleConfirmTranscript}
+                onRegenerateMetadata={handleRegenerateMetadata}
+                onMetadataFieldClick={handleMetadataFieldClick}
+                onMetadataFieldDoubleClick={handleMetadataFieldDoubleClick}
+                showMetadataTooltip={showMetadataTooltip}
+                metadataTooltipPosition={metadataTooltipPosition}
+                metadataTooltipRef={metadataTooltipRef}
+                saving={saving}
+                showToast={showToast}
+              />
+            )}
 
             {/* Entity Extraction Section */}
-            {letter.entityExtractionJson ? (
+            {showMetadataSections && letter.entityExtractionJson ? (
               <EntitySection
                 entityExtractionJson={letter.entityExtractionJson}
                 reExtractState={entityReExtractState}
@@ -1075,14 +1306,16 @@ export default function LetterReviewPage() {
             ) : null}
 
             {/* AI Notes Section (structured) */}
-            <div id="ai-notes-section">
-              <NotesSection
-                notes={letter.aiNotes as import("./LetterReview/NotesSection").StructuredNote[] | string | null}
-                letterId={letterId!}
-                onNoteStatusChange={handleNoteStatusChange}
-                onAddNote={handleAddNote}
-              />
-            </div>
+            {showMetadataSections && (
+              <div id="ai-notes-section">
+                <NotesSection
+                  notes={letter.aiNotes as import("./LetterReview/NotesSection").StructuredNote[] | string | null}
+                  letterId={letterId!}
+                  onNoteStatusChange={handleNoteStatusChange}
+                  onAddNote={handleAddNote}
+                />
+              </div>
+            )}
 
             {/* Personal Notes Section */}
             <div id="personal-notes-section" className="editor-section notes-section">
@@ -1236,6 +1469,65 @@ export default function LetterReviewPage() {
           </div>
         </div>
       )}
+
+      <Modal
+        isOpen={showPhotoContextModal}
+        onClose={handleClosePhotoContextModal}
+        title={photoDescription.trim() ? "Regenerate Photo Description" : "Describe Photo"}
+        subtitle="Optional AI context helps the model interpret uncertain people, places, or scenes."
+        size="md"
+        actions={
+          <>
+            <button
+              className="btn-cancel"
+              onClick={handleClosePhotoContextModal}
+              disabled={photoDescriptionGenerating}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn-confirm photo-context-confirm"
+              onClick={() => void handleDescribePhoto()}
+              disabled={photoDescriptionGenerating}
+            >
+              {photoDescriptionGenerating
+                ? "Describing..."
+                : photoDescription.trim()
+                  ? "Regenerate Description"
+                  : "Describe Photo"}
+            </button>
+          </>
+        }
+      >
+        <div className="photo-context-modal">
+          <p className="photo-context-copy">
+            Add optional context that should be sent to the model with this image.
+            Leave it blank if the photo should be described on its own.
+          </p>
+          <div className="photo-context-examples">
+            <span>Examples:</span>
+            <span className="photo-context-chip">This is likely Jimmy and Molly.</span>
+            <span className="photo-context-chip">Family porch snapshot, probably at home in Ohio.</span>
+          </div>
+          {photoDescriptionContext && (
+            <p className="photo-context-copy photo-context-saved">
+              Current saved context will be replaced when you run this action.
+            </p>
+          )}
+          <label className="photo-context-label" htmlFor="photo-description-context">
+            AI Context
+          </label>
+          <textarea
+            id="photo-description-context"
+            className="photo-context-textarea"
+            value={draftPhotoDescriptionContext}
+            onChange={(e) => setDraftPhotoDescriptionContext(e.target.value)}
+            placeholder="Add optional context for the AI model"
+            rows={6}
+            disabled={photoDescriptionGenerating}
+          />
+        </div>
+      </Modal>
 
     </div>
     </AdminLayout>

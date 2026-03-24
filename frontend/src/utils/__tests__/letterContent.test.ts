@@ -4,6 +4,10 @@ import {
   getPrimaryImageType,
   hasPrimaryTranscriptContent,
   hasRelatedExtraContent,
+  isPrimaryPhotoRecord,
+  isStandalonePhotoRecord,
+  shouldShowPhotoDescriptionWorkflow,
+  shouldShowMetadataWorkflow,
   shouldShowPublicTranscript,
 } from "../letterContent";
 
@@ -62,6 +66,10 @@ describe("letter content helpers", () => {
 
     expect(hasPrimaryTranscriptContent(letter)).toBe(false);
     expect(hasRelatedExtraContent(letter)).toBe(false);
+    expect(isPrimaryPhotoRecord(letter)).toBe(true);
+    expect(isStandalonePhotoRecord(letter)).toBe(true);
+    expect(shouldShowMetadataWorkflow(letter)).toBe(false);
+    expect(shouldShowPhotoDescriptionWorkflow(letter)).toBe(true);
     expect(shouldShowPublicTranscript(letter)).toBe(false);
   });
 
@@ -71,6 +79,23 @@ describe("letter content helpers", () => {
     });
 
     expect(hasPrimaryTranscriptContent(letter)).toBe(true);
+    expect(isStandalonePhotoRecord(letter)).toBe(false);
+    expect(shouldShowMetadataWorkflow(letter)).toBe(true);
+    expect(shouldShowPublicTranscript(letter)).toBe(false);
+  });
+
+  it("hides metadata for photo-primary records even when related letter pages exist", () => {
+    const letter = buildLetter({
+      images: [
+        { id: "img-photo-1", type: "photo", imageUrl: "/images/photo-1" },
+        { id: "img-letter-1", type: "letter", imageUrl: "/images/letter-1" },
+      ],
+    });
+
+    expect(isPrimaryPhotoRecord(letter)).toBe(true);
+    expect(isStandalonePhotoRecord(letter)).toBe(false);
+    expect(shouldShowMetadataWorkflow(letter)).toBe(false);
+    expect(shouldShowPhotoDescriptionWorkflow(letter)).toBe(true);
     expect(shouldShowPublicTranscript(letter)).toBe(false);
   });
 });

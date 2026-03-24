@@ -54,7 +54,7 @@ export function loadPersistedState(): Partial<PersistedState> {
       const parsed = JSON.parse(saved) as Partial<PersistedState>;
       // Filter out any unknown sort fields that may be stale in localStorage
       if (parsed.sortColumns) {
-        const validFields = new Set([...SERVER_SORT_FIELDS, 'letters', 'extras']);
+        const validFields = new Set([...SERVER_SORT_FIELDS, 'letters', 'extras', 'photos']);
         parsed.sortColumns = parsed.sortColumns.filter(
           sc => validFields.has(sc.field)
         );

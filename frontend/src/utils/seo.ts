@@ -203,7 +203,6 @@ export function buildBlogPostSeo(post: BlogPost): SeoPayload {
     truncateText(stripMarkdown(post.bodyMarkdown), 160) ||
     `Read "${post.title}" on ${SITE_NAME}.`;
   const canonicalPath = `/blog/${post.slug}`;
-  const authorName = post.authorDisplayName || SITE_NAME;
   const breadcrumb = buildBreadcrumbJsonLd([
     { label: 'Home', href: '/' },
     { label: 'Blog', href: '/blog' },
@@ -401,7 +400,6 @@ export function buildPersonSeo(data: PublicPersonDetail): SeoPayload {
   const canonicalPath = `/people/${data.person.id}`;
   const breadcrumb = buildBreadcrumbJsonLd([
     { label: 'Home', href: '/' },
-    { label: 'Explore', href: '/explore' },
     { label: title, href: canonicalPath },
   ]);
 
@@ -433,7 +431,6 @@ export function buildPlaceSeo(data: PublicPlaceDetail): SeoPayload {
   const canonicalPath = `/places/${data.place.id}`;
   const breadcrumb = buildBreadcrumbJsonLd([
     { label: 'Home', href: '/' },
-    { label: 'Explore', href: '/explore' },
     { label: title, href: canonicalPath },
   ]);
 
@@ -452,16 +449,6 @@ export function buildPlaceSeo(data: PublicPlaceDetail): SeoPayload {
       },
       ...(breadcrumb ? [breadcrumb] : []),
     ],
-  };
-}
-
-export function buildExploreSeo(): SeoPayload {
-  return {
-    title: 'Explore Relationships',
-    description:
-      'Browse relationships across the archive and move from connected people into the letters that link them.',
-    canonicalPath: '/explore',
-    robots: 'noindex,follow',
   };
 }
 

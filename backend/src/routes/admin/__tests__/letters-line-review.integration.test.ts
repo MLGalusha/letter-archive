@@ -22,9 +22,13 @@ const {
   regenerateTranscriptionMock,
   transcribeLetterOnlyMock,
   transcribeExtrasMock,
+  describePhotoMock,
   updateExtraContentMock,
+  updatePhotoDescriptionMock,
   verifyExtraContentMock,
+  verifyPhotoDescriptionMock,
   unverifyExtraContentMock,
+  unverifyPhotoDescriptionMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   dbInsertMock: vi.fn(),
@@ -46,9 +50,13 @@ const {
   regenerateTranscriptionMock: vi.fn(),
   transcribeLetterOnlyMock: vi.fn(),
   transcribeExtrasMock: vi.fn(),
+  describePhotoMock: vi.fn(),
   updateExtraContentMock: vi.fn(),
+  updatePhotoDescriptionMock: vi.fn(),
   verifyExtraContentMock: vi.fn(),
+  verifyPhotoDescriptionMock: vi.fn(),
   unverifyExtraContentMock: vi.fn(),
+  unverifyPhotoDescriptionMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -154,9 +162,13 @@ vi.mock('../../../services/letter-operations.js', () => ({
   regenerateTranscription: regenerateTranscriptionMock,
   transcribeLetterOnly: transcribeLetterOnlyMock,
   transcribeExtras: transcribeExtrasMock,
+  describePhoto: describePhotoMock,
   updateExtraContent: updateExtraContentMock,
+  updatePhotoDescription: updatePhotoDescriptionMock,
   verifyExtraContent: verifyExtraContentMock,
+  verifyPhotoDescription: verifyPhotoDescriptionMock,
   unverifyExtraContent: unverifyExtraContentMock,
+  unverifyPhotoDescription: unverifyPhotoDescriptionMock,
   updateAiNotes: vi.fn(),
   updateLinkedPerson: vi.fn(),
   updateLinkedPlace: vi.fn(),
@@ -455,6 +467,91 @@ describe('admin letters line review route integration', () => {
     );
   });
 
+  it('describes a photo and returns the refreshed letter DTO', async () => {
+    describePhotoMock.mockResolvedValueOnce({
+      describedCount: 1,
+      photoDescriptionStatus: 'AI_DRAFT',
+    });
+    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(
+      createLetterDto({
+        photoDescription: 'A small snapshot showing two children beside a porch railing.',
+        photoDescriptionStatus: 'AI_DRAFT',
+        photoDescriptionContext: 'Likely Jimmy and Molly',
+      }),
+    );
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/describe-photo`,
+      path: `/letters/${LETTER_ID}/describe-photo`,
+      body: { photoDescriptionContext: 'Likely Jimmy and Molly' },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(describePhotoMock).toHaveBeenCalledWith(LETTER_ID, 'Likely Jimmy and Molly');
+    expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(response.body).toEqual({
+      letter: createLetterDto({
+        photoDescription: 'A small snapshot showing two children beside a porch railing.',
+        photoDescriptionStatus: 'AI_DRAFT',
+        photoDescriptionContext: 'Likely Jimmy and Molly',
+      }),
+      describedCount: 1,
+      photoDescriptionStatus: 'AI_DRAFT',
+    });
+  });
+
+  it('injects requestId into manual photo-description validation errors', async () => {
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PUT',
+      url: `/letters/${LETTER_ID}/photo-description`,
+      path: `/letters/${LETTER_ID}/photo-description`,
+      body: {},
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toEqual({
+      error: 'photoDescription field required',
+      requestId: expect.any(String),
+    });
+    expect(response.headers['x-request-id']).toBe(
+      (response.body as { requestId: string }).requestId,
+    );
+  });
+
+  it('updates photo description and returns the refreshed letter DTO', async () => {
+    updatePhotoDescriptionMock.mockResolvedValueOnce(true);
+    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(
+      createLetterDto({
+        photoDescription: 'A corrected porch snapshot description.',
+        photoDescriptionStatus: 'EDITED',
+      }),
+    );
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PUT',
+      url: `/letters/${LETTER_ID}/photo-description`,
+      path: `/letters/${LETTER_ID}/photo-description`,
+      body: { photoDescription: 'A corrected porch snapshot description.' },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(updatePhotoDescriptionMock).toHaveBeenCalledWith(LETTER_ID, {
+      photoDescription: 'A corrected porch snapshot description.',
+      photoDescriptionContext: undefined,
+    });
+    expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(response.body).toEqual(
+      createLetterDto({
+        photoDescription: 'A corrected porch snapshot description.',
+        photoDescriptionStatus: 'EDITED',
+      }),
+    );
+  });
+
   it('accepts legacy extraContentTranscript payloads for extra-content updates', async () => {
     updateExtraContentMock.mockResolvedValueOnce(true);
     fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(
@@ -510,6 +607,34 @@ describe('admin letters line review route integration', () => {
     );
   });
 
+  it('verifies photo description through the admin letters route', async () => {
+    verifyPhotoDescriptionMock.mockResolvedValueOnce({ previousStatus: 'EDITED' });
+    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(
+      createLetterDto({
+        photoDescriptionStatus: 'VERIFIED',
+        photoDescriptionVerifiedBy: 'admin',
+        photoDescriptionVerifiedAt: '2026-03-09T12:20:00.000Z',
+      }),
+    );
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/verify-photo-description`,
+      path: `/letters/${LETTER_ID}/verify-photo-description`,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(verifyPhotoDescriptionMock).toHaveBeenCalledWith(LETTER_ID, 'admin');
+    expect(response.body).toEqual(
+      createLetterDto({
+        photoDescriptionStatus: 'VERIFIED',
+        photoDescriptionVerifiedBy: 'admin',
+        photoDescriptionVerifiedAt: '2026-03-09T12:20:00.000Z',
+      }),
+    );
+  });
+
   it('returns a request-correlated 404 when unverify-extra-content cannot find a verified draft', async () => {
     unverifyExtraContentMock.mockResolvedValueOnce(null);
 
@@ -522,6 +647,27 @@ describe('admin letters line review route integration', () => {
 
     expect(response.statusCode).toBe(404);
     expect(unverifyExtraContentMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(response.body).toEqual({
+      error: 'Letter not found or not verified',
+      requestId: expect.any(String),
+    });
+    expect(response.headers['x-request-id']).toBe(
+      (response.body as { requestId: string }).requestId,
+    );
+  });
+
+  it('returns a request-correlated 404 when unverify-photo-description cannot find a verified draft', async () => {
+    unverifyPhotoDescriptionMock.mockResolvedValueOnce(null);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/unverify-photo-description`,
+      path: `/letters/${LETTER_ID}/unverify-photo-description`,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(unverifyPhotoDescriptionMock).toHaveBeenCalledWith(LETTER_ID);
     expect(response.body).toEqual({
       error: 'Letter not found or not verified',
       requestId: expect.any(String),

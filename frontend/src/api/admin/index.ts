@@ -5,5 +5,6 @@ export * from "./bulk";
 export * from "./processing";
 export * from "./queue";
 export * from "./extras";
+export * from "./photoDescriptions";
 export * from "./transcription";
 export * from "./linked-entities";

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   TRANSCRIPTION_SYSTEM_PROMPT,
+  PHOTO_DESCRIPTION_SYSTEM_PROMPT,
   METADATA_V2_SYSTEM_PROMPT,
   ENTITY_EXTRACTION_SYSTEM_PROMPT,
   buildTranscriptionUserPrompt,
+  buildPhotoDescriptionPrompt,
   buildMetadataV2UserPrompt,
   buildEntityExtractionUserPrompt,
 } from '../prompts.js';
@@ -28,6 +30,25 @@ describe('AI prompt builders', () => {
     expect(METADATA_V2_SYSTEM_PROMPT).toContain('"fiancé/fiancée"');
     expect(METADATA_V2_SYSTEM_PROMPT).toContain('"spouse"');
     expect(METADATA_V2_SYSTEM_PROMPT).toContain('COMMON MISTAKES TO AVOID');
+  });
+
+  it('builds photo description prompts with reviewer and linked-letter context blocks', () => {
+    const prompt = buildPhotoDescriptionPrompt({
+      collectionCode: '009',
+      dateRaw: '19470000',
+      photoNumber: 1,
+      totalPhotos: 1,
+      linkedLetterContext: 'Sender: Alice\nRecipient: Bob',
+      reviewerContext: 'Likely Jimmy and Molly',
+    });
+
+    expect(prompt).toContain('<task>');
+    expect(prompt).toContain('Collection: 009');
+    expect(prompt).toContain('Date from filename: 19470000');
+    expect(prompt).toContain('<linked_letter_context>');
+    expect(prompt).toContain('Sender: Alice');
+    expect(prompt).toContain('<reviewer_context>');
+    expect(prompt).toContain('Likely Jimmy and Molly');
   });
 
   it('enforces truth-first hook and summary rules in metadata v2 prompt', () => {
@@ -81,6 +102,7 @@ describe('AI prompt builders', () => {
 
   it('exposes hard safety rules in system prompts', () => {
     expect(TRANSCRIPTION_SYSTEM_PROMPT).toContain('DO NOT fabricate');
+    expect(PHOTO_DESCRIPTION_SYSTEM_PROMPT).toContain('Do NOT invent');
     expect(ENTITY_EXTRACTION_SYSTEM_PROMPT).toContain('NEVER fabricate information');
   });
 });

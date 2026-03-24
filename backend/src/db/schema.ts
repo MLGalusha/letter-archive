@@ -207,6 +207,13 @@ export const letters = pgTable(
     extraContentVerifiedAt: timestamp('extra_content_verified_at', { withTimezone: true }),
     extraContentVerifiedBy: text('extra_content_verified_by'),
 
+    // Photo description workflow
+    photoDescription: text('photo_description'),
+    photoDescriptionStatus: contentStatusEnum('photo_description_status').notNull().default('EMPTY'),
+    photoDescriptionVerifiedAt: timestamp('photo_description_verified_at', { withTimezone: true }),
+    photoDescriptionVerifiedBy: text('photo_description_verified_by'),
+    photoDescriptionContext: text('photo_description_context'),
+
     // AI notes (structured observations, suggestions, hunches)
     aiNotes: jsonb('ai_notes'),
 

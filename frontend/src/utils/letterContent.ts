@@ -23,6 +23,15 @@ export function getPrimaryImageType(letter: LetterWithImages): LetterImageType |
   return letter.images[0]?.type;
 }
 
+export function isStandalonePhotoRecord(letter: LetterWithImages): boolean {
+  const primaryType = getPrimaryImageType(letter);
+  return primaryType === "photo" && letter.images.every((image) => image.type === "photo");
+}
+
+export function isPrimaryPhotoRecord(letter: LetterWithImages): boolean {
+  return getPrimaryImageType(letter) === "photo";
+}
+
 export function hasPrimaryTranscriptContent(letter: LetterWithImages): boolean {
   const primaryType = getPrimaryImageType(letter);
   return primaryType ? PRIMARY_TRANSCRIPT_TYPES.has(primaryType) : false;
@@ -45,4 +54,12 @@ export function shouldShowPublicTranscript(letter: LetterWithTranscript): boolea
     letter.images.some((image) => image.type === "letter") ||
     letter.transcript.fullText.trim().length > 0
   );
+}
+
+export function shouldShowMetadataWorkflow(letter: LetterWithImages): boolean {
+  return !isPrimaryPhotoRecord(letter);
+}
+
+export function shouldShowPhotoDescriptionWorkflow(letter: LetterWithImages): boolean {
+  return isPrimaryPhotoRecord(letter);
 }

@@ -12,6 +12,7 @@ const {
   getLetterByIdMock,
   syncLetterParticipantsFromMetadataMock,
   checkExtraContentForTextMock,
+  describePhotoMock,
   transcribeExtraContentMock,
   getAbsoluteStoragePathMock,
 } = vi.hoisted(() => ({
@@ -26,6 +27,7 @@ const {
   getLetterByIdMock: vi.fn(),
   syncLetterParticipantsFromMetadataMock: vi.fn(),
   checkExtraContentForTextMock: vi.fn(),
+  describePhotoMock: vi.fn(),
   transcribeExtraContentMock: vi.fn(),
   getAbsoluteStoragePathMock: vi.fn((value: string) => value),
 }));
@@ -106,6 +108,7 @@ vi.mock('../../pipeline/metadataV2.js', () => ({
 
 vi.mock('../../ai/openai.js', () => ({
   checkExtraContentForText: checkExtraContentForTextMock,
+  describePhoto: describePhotoMock,
   transcribeExtraContent: transcribeExtraContentMock,
   transcribeImage: vi.fn(),
 }));
@@ -140,11 +143,13 @@ vi.mock('../entities/participant-sync.js', () => ({
 import {
   bulkClearMetadata,
   buildLetterUpdates,
+  describePhoto as describePhotoWorkflow,
   normalizeRelationshipType,
   regenerateTranscription,
   transcribeExtras,
   transcribeLetterOnly,
   updateExtraContent,
+  updatePhotoDescription,
 } from '../letter-operations.js';
 
 describe('letter operations service', () => {
@@ -317,6 +322,46 @@ describe('letter operations service', () => {
     });
   });
 
+  it('marks manual photo-description edits as edited when content is added from an empty state', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'photo-1',
+      type: 'P',
+      photoDescriptionStatus: 'EMPTY',
+    });
+
+    const result = await updatePhotoDescription('photo-1', {
+      photoDescription: 'Two children standing on a porch.',
+    });
+
+    expect(result).toBe(true);
+    expect(updateSetMock).toHaveBeenCalledWith({
+      photoDescription: 'Two children standing on a porch.',
+      photoDescriptionStatus: 'EDITED',
+      updatedAt: expect.any(Date),
+    });
+  });
+
+  it('resets photo-description verification metadata when content is removed', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'photo-2',
+      type: 'P',
+      photoDescriptionStatus: 'VERIFIED',
+    });
+
+    const result = await updatePhotoDescription('photo-2', {
+      photoDescription: '   ',
+    });
+
+    expect(result).toBe(true);
+    expect(updateSetMock).toHaveBeenCalledWith({
+      photoDescription: null,
+      photoDescriptionStatus: 'EMPTY',
+      photoDescriptionVerifiedAt: null,
+      photoDescriptionVerifiedBy: null,
+      updatedAt: expect.any(Date),
+    });
+  });
+
   it('clears extra-content verification metadata when no related items exist to transcribe', async () => {
     findFirstMock.mockResolvedValue({
       id: 'letter-10',
@@ -402,6 +447,65 @@ describe('letter operations service', () => {
     expect(result).toEqual({
       transcribedCount: 1,
       extraContentStatus: 'AI_DRAFT',
+    });
+  });
+
+  it('generates photo descriptions with reviewer and linked-letter context', async () => {
+    findFirstMock
+      .mockResolvedValueOnce({
+        id: 'photo-3',
+        type: 'P',
+        collectionId: 'collection-1',
+        dateRaw: '19470810',
+        typeSequence: 1,
+        collection: { collectionCode: '009' },
+        pages: [
+          {
+            id: 'photo-page-1',
+            pageNumber: 1,
+            storagePath: 'collections/009/19470810/P01/009-19470810-P01-01.jpg',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        sender: 'Alice',
+        recipient: 'Bob',
+        summary: 'Family snapshot',
+        transcriptionText: 'Jimmy and Molly are standing by the porch.',
+      });
+    describePhotoMock.mockResolvedValue({
+      text: 'A small outdoor snapshot showing two children posed beside a porch railing.',
+      isStub: false,
+    });
+
+    const result = await describePhotoWorkflow('photo-3', 'Likely Jimmy and Molly');
+
+    expect(getAbsoluteStoragePathMock).toHaveBeenCalledWith(
+      'collections/009/19470810/P01/009-19470810-P01-01.jpg',
+    );
+    expect(describePhotoMock).toHaveBeenCalledWith({
+      filePath: 'collections/009/19470810/P01/009-19470810-P01-01.jpg',
+      letterId: 'photo-3',
+      context: {
+        collectionCode: '009',
+        dateRaw: '19470810',
+        photoNumber: 1,
+        totalPhotos: 1,
+        linkedLetterContext: expect.stringContaining('Sender: Alice'),
+        reviewerContext: 'Likely Jimmy and Molly',
+      },
+    });
+    expect(updateSetMock).toHaveBeenCalledWith({
+      photoDescription: 'A small outdoor snapshot showing two children posed beside a porch railing.',
+      photoDescriptionStatus: 'AI_DRAFT',
+      photoDescriptionVerifiedAt: null,
+      photoDescriptionVerifiedBy: null,
+      photoDescriptionContext: 'Likely Jimmy and Molly',
+      updatedAt: expect.any(Date),
+    });
+    expect(result).toEqual({
+      describedCount: 1,
+      photoDescriptionStatus: 'AI_DRAFT',
     });
   });
 });

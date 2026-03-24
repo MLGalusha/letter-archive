@@ -4,9 +4,11 @@ import {
   TRANSCRIPTION_SYSTEM_PROMPT,
   EXTRA_CONTENT_CHECK_SYSTEM_PROMPT,
   EXTRA_CONTENT_TRANSCRIPTION_SYSTEM_PROMPT,
+  PHOTO_DESCRIPTION_SYSTEM_PROMPT,
   buildTranscriptionUserPrompt,
   buildExtraContentCheckPrompt,
   buildExtraContentTranscriptionPrompt,
+  buildPhotoDescriptionPrompt,
 } from '../prompts.js';
 import { logIfSlow, TIMING_THRESHOLDS } from '../../utils/logger.js';
 import { log, openai } from './client.js';
@@ -304,6 +306,24 @@ export interface TranscribeExtraContentResult {
   isStub: boolean;
 }
 
+export interface DescribePhotoParams {
+  filePath: string;
+  letterId?: string;
+  context?: {
+    collectionCode?: string;
+    dateRaw?: string;
+    photoNumber?: number;
+    totalPhotos?: number;
+    linkedLetterContext?: string;
+    reviewerContext?: string | null;
+  };
+}
+
+export interface DescribePhotoResult {
+  text: string;
+  isStub: boolean;
+}
+
 export async function transcribeExtraContent(
   params: TranscribeExtraContentParams,
 ): Promise<TranscribeExtraContentResult> {
@@ -401,6 +421,120 @@ File: ${params.filePath}
   } catch (error) {
     const duration = Date.now() - start;
     log.error({ ...context, duration, err: error }, 'Extra content transcription failed');
+    throw error;
+  }
+}
+
+export async function describePhoto(
+  params: DescribePhotoParams,
+): Promise<DescribePhotoResult> {
+  const context = {
+    letterId: params.letterId,
+    filePath: params.filePath,
+    collectionCode: params.context?.collectionCode,
+    dateRaw: params.context?.dateRaw,
+    photoNumber: params.context?.photoNumber,
+    totalPhotos: params.context?.totalPhotos,
+    hasLinkedLetterContext: Boolean(params.context?.linkedLetterContext?.trim()),
+    hasReviewerContext: Boolean(params.context?.reviewerContext?.trim()),
+  };
+
+  if (!hasOpenAI || !openai) {
+    log.debug(context, 'Using stub photo description (no API key)');
+    const contextNotes = [
+      params.context?.reviewerContext?.trim()
+        ? `Reviewer context: ${params.context.reviewerContext.trim()}`
+        : null,
+      params.context?.linkedLetterContext?.trim()
+        ? 'Linked letter context is available.'
+        : null,
+    ].filter(Boolean);
+
+    return {
+      text: `[STUB PHOTO DESCRIPTION]
+
+A historical photograph or visual image from the archive. ${contextNotes.join(' ') || 'No additional context was supplied.'}
+
+[This is placeholder text. Set OPENAI_API_KEY for a real photo description.]`,
+      isStub: true,
+    };
+  }
+
+  log.debug(context, 'Starting photo description');
+  const start = Date.now();
+
+  try {
+    const imageBuffer = await readFile(params.filePath);
+    const base64Image = imageBuffer.toString('base64');
+    const imageSizeKb = Math.round(imageBuffer.length / 1024);
+
+    log.debug({ ...context, imageSizeKb }, 'Image loaded for photo description');
+
+    const ext = params.filePath.toLowerCase().split('.').pop();
+    const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+
+    const response = await openai.chat.completions.create({
+      model: env.OPENAI_MODEL,
+      messages: [
+        { role: 'system', content: PHOTO_DESCRIPTION_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: buildPhotoDescriptionPrompt({
+                collectionCode: params.context?.collectionCode,
+                dateRaw: params.context?.dateRaw,
+                photoNumber: params.context?.photoNumber,
+                totalPhotos: params.context?.totalPhotos,
+                linkedLetterContext: params.context?.linkedLetterContext,
+                reviewerContext: params.context?.reviewerContext,
+              }),
+            },
+            {
+              type: 'image_url',
+              image_url: { url: `data:${mimeType};base64,${base64Image}` },
+            },
+          ],
+        },
+      ],
+      max_completion_tokens: 1024,
+    });
+
+    const duration = Date.now() - start;
+    const text = response.choices[0]?.message?.content ?? '';
+    const usage = response.usage;
+
+    log.info(
+      {
+        ...context,
+        duration,
+        model: env.OPENAI_MODEL,
+        textLength: text.length,
+        promptTokens: usage?.prompt_tokens,
+        completionTokens: usage?.completion_tokens,
+      },
+      'Photo description completed',
+    );
+
+    logIfSlow(log, 'OpenAI photo description', duration, TIMING_THRESHOLDS.OPENAI_API, context);
+
+    logApiUsage({
+      letterId: params.letterId,
+      callType: 'photo_description',
+      model: env.OPENAI_MODEL,
+      inputTokens: usage?.prompt_tokens ?? 0,
+      outputTokens: usage?.completion_tokens ?? 0,
+      durationMs: duration,
+    });
+
+    return {
+      text: text.trim(),
+      isStub: false,
+    };
+  } catch (error) {
+    const duration = Date.now() - start;
+    log.error({ ...context, duration, err: error }, 'Photo description failed');
     throw error;
   }
 }

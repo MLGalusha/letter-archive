@@ -6,6 +6,7 @@ import type { Letter, ContentStatus } from "../../../types/Letter";
 import {
   hasPrimaryTranscriptContent,
   hasRelatedExtraContent,
+  shouldShowPhotoDescriptionWorkflow,
 } from "../../../utils/letterContent";
 import type { ColumnId, ExtendedSortField, PendingChange } from "./types";
 
@@ -263,6 +264,26 @@ export default function RecentActivityTable({
                   </span>
                 </th>
               )}
+              {visibleColumns.has("photos") && (
+                <th
+                  className={`sortable-header ${getSortInfo("photos") ? "sorted" : ""}`}
+                  onClick={() => onSort("photos")}
+                >
+                  <span className="header-content">
+                    Photos
+                    {getSortInfo("photos") && (
+                      <span className="sort-indicator">
+                        <span className="sort-arrow">
+                          {getSortInfo("photos")?.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                        {getSortInfo("photos")!.total > 1 && (
+                          <span className="sort-priority">{getSortInfo("photos")?.priority}</span>
+                        )}
+                      </span>
+                    )}
+                  </span>
+                </th>
+              )}
               {visibleColumns.has("transcript") && <th className="status-header">Transcript</th>}
               {visibleColumns.has("metadata") && <th className="status-header">Metadata</th>}
               {visibleColumns.has("visibility") && <th>Visibility</th>}
@@ -356,7 +377,18 @@ export default function RecentActivityTable({
               const extrasCount =
                 letter.extrasCount ??
                 letter.images.filter((img) => img.type !== "letter").length;
+              const photosCount =
+                letter.photosCount ??
+                letter.images.filter((img) => img.type === "photo").length;
               const formattedDate = formatDateRaw(letter.metadata.dateRaw);
+              const contentStatus = shouldShowPhotoDescriptionWorkflow(letter)
+                ? (letter.photoDescriptionStatus ?? "EMPTY")
+                : getCombinedTranscriptStatus(
+                    letter.transcriptStatus,
+                    letter.extraContentStatus,
+                    hasPrimaryTranscriptContent(letter),
+                    hasRelatedExtraContent(letter),
+                  );
 
               return (
                 <tr
@@ -427,18 +459,11 @@ export default function RecentActivityTable({
                   {visibleColumns.has("collection") && <td>{letter.collectionCode || "—"}</td>}
                   {visibleColumns.has("letters") && <td className="count-cell">{pageCount || "—"}</td>}
                   {visibleColumns.has("extras") && <td className="count-cell">{extrasCount || "—"}</td>}
+                  {visibleColumns.has("photos") && <td className="count-cell">{photosCount || "—"}</td>}
 
                   {visibleColumns.has("transcript") && (
                     <td className="status-cell">
-                      {renderStatusIcon(
-                        getCombinedTranscriptStatus(
-                          letter.transcriptStatus,
-                          letter.extraContentStatus,
-                          hasPrimaryTranscriptContent(letter),
-                          hasRelatedExtraContent(letter),
-                        ),
-                        "T",
-                      )}
+                      {renderStatusIcon(contentStatus, "T")}
                     </td>
                   )}
 

@@ -1599,7 +1599,8 @@
    EXTRA CONTENT SECTION STYLES
    ============================================================================ */
 
-.extra-content-section {
+.extra-content-section,
+.photo-description-section {
   background: var(--bg-light);
   border: var(--border-card);
   border-top: solid 1px var(--highlight);
@@ -1607,6 +1608,19 @@
   box-shadow: var(--shadow);
   overflow: visible;
   min-width: 0;
+}
+
+.photo-context-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.6rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(21, 101, 192, 0.12);
+  color: #1565c0;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .extra-content-header {
@@ -1724,6 +1738,79 @@
 .notes-container {
   padding: var(--spacing-sm);
   min-width: 0;
+}
+
+.photo-context-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.photo-context-copy {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.photo-context-saved {
+  color: #1565c0;
+}
+
+.photo-context-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+
+.photo-context-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(230, 81, 0, 0.08);
+  border: 1px solid rgba(230, 81, 0, 0.16);
+  color: #a34900;
+}
+
+.photo-context-label {
+  font-weight: 600;
+  font-size: var(--font-sm);
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.photo-context-textarea {
+  width: 100%;
+  min-height: 150px;
+  padding: 0.85rem 1rem;
+  border: solid 1px var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  line-height: 1.6;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.photo-context-textarea:focus {
+  outline: none;
+  border-color: #e65100;
+  box-shadow: 0 0 0 3px rgba(230, 81, 0, 0.12);
+}
+
+.photo-context-confirm {
+  background: #e65100;
+  color: white;
+}
+
+.photo-context-confirm:hover:not(:disabled) {
+  background: #bf4500;
 }
 
 .ai-notes-editor {

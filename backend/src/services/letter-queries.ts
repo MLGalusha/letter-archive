@@ -137,6 +137,7 @@ export interface AdminLettersResponse {
   letters: Array<ReturnType<typeof transformLetterToDTO> & {
     lettersCount: number;
     extrasCount: number;
+    photosCount: number;
     lastOpenedAt?: string;
   }>;
   pagination: {
@@ -449,10 +450,11 @@ export async function queryAdminLetters(
     }
   }
 
-  // Count pages for each letter group - both L-type (letters) and non-L-type (extras)
+  // Count pages for each letter group, keeping photos available as a subset of extras.
   // All items in a group share collectionId, dateRaw, typeSequence
   const lettersCountMap = new Map<string, number>();
   const extrasCountMap = new Map<string, number>();
+  const photosCountMap = new Map<string, number>();
   if (results.length > 0) {
     // Build conditions for all items in each group (any type)
     const groupConditions = results.map(letter =>
@@ -463,13 +465,13 @@ export async function queryAdminLetters(
       )
     );
 
-    // Query to count pages grouped by key and whether type='L'
+    // Query to count pages grouped by key and type
     const pageCounts = await db
       .select({
         collectionId: letters.collectionId,
         dateRaw: letters.dateRaw,
         typeSequence: letters.typeSequence,
-        isLType: sql<boolean>`${letters.type} = 'L'`,
+        type: letters.type,
         pageCount: count(),
       })
       .from(letters)
@@ -479,21 +481,24 @@ export async function queryAdminLetters(
         letters.collectionId,
         letters.dateRaw,
         letters.typeSequence,
-        sql`${letters.type} = 'L'`
+        letters.type
       );
 
     // Build lookup maps: key = "collectionId:dateRaw:typeSequence" -> count
     for (const row of pageCounts) {
       const key = `${row.collectionId}:${row.dateRaw}:${row.typeSequence}`;
-      if (row.isLType) {
+      if (row.type === 'L') {
         lettersCountMap.set(key, row.pageCount);
       } else {
         extrasCountMap.set(key, (extrasCountMap.get(key) || 0) + row.pageCount);
+        if (row.type === 'P') {
+          photosCountMap.set(key, (photosCountMap.get(key) || 0) + row.pageCount);
+        }
       }
     }
   }
 
-  // Transform to DTOs with letters count and extras count
+  // Transform to DTOs with letters count, extras count, and photo count
   const transformedLetters = (results as LetterWithRelations[]).map(letter => {
     const dto = transformLetterToDTO(letter);
     const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
@@ -501,6 +506,7 @@ export async function queryAdminLetters(
       ...dto,
       lettersCount: lettersCountMap.get(key) || 0,
       extrasCount: extrasCountMap.get(key) || 0,
+      photosCount: photosCountMap.get(key) || 0,
       lastOpenedAt: viewMap.get(letter.id),
     };
   });

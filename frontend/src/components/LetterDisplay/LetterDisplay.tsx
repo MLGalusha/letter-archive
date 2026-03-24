@@ -2,7 +2,11 @@ import { useCallback, useRef, useState, useEffect, type CSSProperties } from "re
 import type { Letter, LetterImage } from "../../types/Letter";
 import LetterViewer from "../LetterViewer/LetterViewer";
 import { ResizableSplitPane } from "../common";
-import { shouldShowPublicTranscript } from "../../utils/letterContent";
+import {
+  shouldShowPhotoDescriptionWorkflow,
+  shouldShowMetadataWorkflow,
+  shouldShowPublicTranscript,
+} from "../../utils/letterContent";
 import {
   EMOTIONAL_TONE_OPTIONS,
   METADATA_RELATIONSHIP_OPTIONS,
@@ -181,6 +185,20 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
             </div>
             )}
 
+            {shouldShowPhotoDescriptionWorkflow(letter) && letter.photoDescription && (
+              <div className="photo-description-section">
+                <div className="section-header">
+                  <h2>Photo Description</h2>
+                  {letter.photoDescriptionStatus === "VERIFIED" && (
+                    <span className="verified-badge">Verified</span>
+                  )}
+                </div>
+                <div className="section-content">
+                  <p className="photo-description-text">{letter.photoDescription}</p>
+                </div>
+              </div>
+            )}
+
             {/* Extra Content Section - shown for telegrams, covers, ephemera */}
             {letter.extraContentTranscript && (
               <div className="extra-content-section">
@@ -197,6 +215,7 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
             )}
 
             {/* Metadata Section - mirrors admin layout */}
+            {shouldShowMetadataWorkflow(letter) && (
             <div className="metadata-section">
               <div className="section-header">
                 <h2>Details</h2>
@@ -309,6 +328,7 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
                 )}
               </div>
             </div>
+            )}
           </div>
         </ResizableSplitPane>
       </div>

@@ -161,3 +161,9 @@ export interface TranscribeExtrasResult {
   extraContentStatus: string;
   message?: string;
 }
+
+export interface DescribePhotoResult {
+  describedCount: number;
+  photoDescriptionStatus: string;
+  message?: string;
+}

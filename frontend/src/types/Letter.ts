@@ -207,6 +207,12 @@ export interface Letter {
   extraContentStatus: ContentStatus;
   extraContentVerifiedAt?: string;
   extraContentVerifiedBy?: string;
+  // Photo description workflow
+  photoDescription?: string;
+  photoDescriptionStatus?: ContentStatus;
+  photoDescriptionVerifiedAt?: string;
+  photoDescriptionVerifiedBy?: string;
+  photoDescriptionContext?: string;
   // AI notes (observations, suggestions)
   aiNotes?: string;
   // Entity extraction (Prompt 2)
@@ -227,5 +233,7 @@ export interface Letter {
   lettersCount?: number;
   // Count of related items (envelopes, photos, etc.) - only in list responses
   extrasCount?: number;
+  // Count of photo pages across the letter group - only in list responses
+  photosCount?: number;
   lastOpenedAt?: string;
 }

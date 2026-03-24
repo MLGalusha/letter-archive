@@ -56,6 +56,34 @@ HANDLING UNCERTAINTY:
 OUTPUT FORMAT:
 Return ONLY the transcription text, nothing else. No headers, no explanations, no "Here is the transcription:" - just the transcribed text.`;
 
+export const PHOTO_DESCRIPTION_SYSTEM_PROMPT = `You are an expert archivist describing historical photographs and other purely visual archival images.
+
+<guidelines>
+- Describe only what is visibly present in the image.
+- Use concise, neutral archival language.
+- If an identification is uncertain, label it clearly as uncertain.
+- Do NOT invent names, dates, locations, events, relationships, or historical context.
+- If reviewer context or linked letter context is provided, use it only to guide interpretation when it matches the visible evidence.
+- Mention notable visual details when they matter: people, pose, clothing, objects, setting, photographic format, inscriptions, damage, or studio backdrop.
+- If there is readable text inside the image, mention it briefly only when it materially helps identify the scene; do not switch into full transcription mode.
+</guidelines>
+
+<example>
+Input:
+- Image shows two children standing beside a porch railing.
+- Reviewer context says they may be Jimmy and Molly.
+
+Output:
+A small black-and-white snapshot showing two children posed beside a wooden porch railing. The reviewer context suggests they may be Jimmy and Molly, but the identification is not confirmed by the image alone.
+</example>
+
+<verification>
+Before returning, verify:
+1. Every factual claim is grounded in the image or explicitly marked as context-based.
+2. Uncertainties stay uncertain.
+3. The response is plain description text only, with no headings or bullet points.
+</verification>`;
+
 export function buildExtraContentCheckPrompt(context?: {
   documentType?: string;
 }): string {
@@ -93,6 +121,55 @@ export function buildExtraContentTranscriptionPrompt(context?: {
   }
 
   return prompt;
+}
+
+export function buildPhotoDescriptionPrompt(context?: {
+  collectionCode?: string;
+  dateRaw?: string;
+  photoNumber?: number;
+  totalPhotos?: number;
+  linkedLetterContext?: string;
+  reviewerContext?: string | null;
+}): string {
+  const blocks: string[] = [
+    '<task>\nDescribe this archival image for public browsing.\n</task>',
+  ];
+
+  const contextLines: string[] = [];
+  if (context?.collectionCode) {
+    contextLines.push(`Collection: ${context.collectionCode}`);
+  }
+  if (context?.dateRaw) {
+    contextLines.push(`Date from filename: ${context.dateRaw}`);
+  }
+  if (context?.photoNumber !== undefined) {
+    const photoInfo = context.totalPhotos
+      ? `Image ${context.photoNumber} of ${context.totalPhotos}`
+      : `Image ${context.photoNumber}`;
+    contextLines.push(photoInfo);
+  }
+
+  if (contextLines.length > 0) {
+    blocks.push(`<context>\n${contextLines.join('\n')}\n</context>`);
+  }
+
+  if (context?.linkedLetterContext?.trim()) {
+    blocks.push(
+      `<linked_letter_context>\nUse this only as supporting context for the image if it matches the visible evidence.\n\n${context.linkedLetterContext.trim()}\n</linked_letter_context>`,
+    );
+  }
+
+  if (context?.reviewerContext?.trim()) {
+    blocks.push(
+      `<reviewer_context>\nUse this only as supporting context if it matches the visible evidence.\n\n${context.reviewerContext.trim()}\n</reviewer_context>`,
+    );
+  }
+
+  blocks.push(
+    '<instructions>\nReturn a short archival description in plain prose only. Do not add headings, XML tags, or bullet points.\n</instructions>',
+  );
+
+  return blocks.join('\n\n');
 }
 
 export const TRANSCRIPTION_SYSTEM_PROMPT = `You are an expert archivist specializing in historical document transcription. Your task is to accurately transcribe handwritten letters from images.

@@ -1,5 +1,4 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { Letter } from "../../../../types/Letter";
 import {
   formatDateRaw,
   getCombinedTranscriptStatus,
@@ -7,33 +6,6 @@ import {
   loadPersistedState,
   savePersistedState,
 } from "../utils";
-
-function makeLetter(overrides: Partial<Letter["metadata"]> = {}): Letter {
-  return {
-    id: "letter-1",
-    title: "Test Letter",
-    collectionCode: "001",
-    images: [],
-    transcript: { pages: [], fullText: "", verified: false },
-    metadata: {
-      sender: "Alice",
-      recipient: "Bob",
-      description: "Alice wrote to Bob about travel.",
-      hook: "Alice and Bob reconnect.",
-      dateRaw: "18860314",
-      verified: false,
-      ...overrides,
-    },
-    status: "uploaded",
-    workflowState: "UPLOADED",
-    visibility: "HIDDEN",
-    transcriptStatus: "AI_DRAFT",
-    metadataContentStatus: "AI_DRAFT",
-    extraContentStatus: "EMPTY",
-    flagged: false,
-    createdAt: "2025-01-01T00:00:00.000Z",
-  };
-}
 
 describe("admin dashboard utils", () => {
   beforeEach(() => {

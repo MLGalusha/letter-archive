@@ -16,7 +16,7 @@ export type ServerSortField =
   | "collection"
   | "flagged";
 
-export type ClientSortField = "letters" | "extras";
+export type ClientSortField = "letters" | "extras" | "photos";
 
 export type ExtendedSortField = ServerSortField | ClientSortField;
 
@@ -35,6 +35,7 @@ export type ColumnId =
   | "collection"
   | "letters"
   | "extras"
+  | "photos"
   | "transcript"
   | "metadata"
   | "visibility"

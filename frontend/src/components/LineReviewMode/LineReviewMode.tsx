@@ -335,11 +335,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     return map;
   }, [allPages]);
 
-  const isLetterPage = useCallback(
-    (idx: number) => letterPageIndices.has(idx),
-    [letterPageIndices],
-  );
-
   const [currentPageIndex, setCurrentPageIndex] = useState(initialPageIndex ?? 0);
   // Letter-page index for transcript/detection lookups (undefined for non-letter pages)
   const currentLetterPageIndex = allToLetterIndex.get(currentPageIndex);

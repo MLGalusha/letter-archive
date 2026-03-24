@@ -387,6 +387,11 @@ export default function AdminDashboard() {
             const bExtras = b.extrasCount ?? b.images.filter(img => img.type !== 'letter').length;
             comparison = aExtras - bExtras;
             break;
+          case 'photos':
+            const aPhotos = a.photosCount ?? a.images.filter(img => img.type === 'photo').length;
+            const bPhotos = b.photosCount ?? b.images.filter(img => img.type === 'photo').length;
+            comparison = aPhotos - bPhotos;
+            break;
         }
 
         if (comparison !== 0) {

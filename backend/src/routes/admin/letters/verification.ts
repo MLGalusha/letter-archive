@@ -2,9 +2,11 @@ import { Router } from 'express';
 import {
   unverifyExtraContent,
   unverifyMetadata,
+  unverifyPhotoDescription,
   unverifyTranscript,
   verifyExtraContent,
   verifyMetadata,
+  verifyPhotoDescription,
   verifyTranscript,
 } from '../../../services/letter-operations.js';
 import { NotFoundError } from '../../../utils/response-helpers.js';
@@ -76,6 +78,30 @@ router.post('/:letterId/unverify-extra-content', async (req, res, next) => {
   try {
     const { letterId } = req.params;
     const result = await unverifyExtraContent(letterId);
+    if (!result) throw new NotFoundError('Letter not found or not verified');
+    const letterDTO = await requireLetterDto(letterId);
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/:letterId/verify-photo-description', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+    const result = await verifyPhotoDescription(letterId, getUserId(req));
+    if (!result) throw new NotFoundError('Letter not found');
+    const letterDTO = await requireLetterDto(letterId);
+    res.json(letterDTO);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/:letterId/unverify-photo-description', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+    const result = await unverifyPhotoDescription(letterId);
     if (!result) throw new NotFoundError('Letter not found or not verified');
     const letterDTO = await requireLetterDto(letterId);
     res.json(letterDTO);

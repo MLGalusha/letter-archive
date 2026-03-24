@@ -167,7 +167,30 @@ export interface LetterCardData {
 export interface ArchiveShelfItem extends LetterCardData {
   location?: string;
   verified: boolean;
-  searchText: string;
+  searchText?: string;
+}
+
+export interface ArchiveFacetValue {
+  value: string;
+  count: number;
+}
+
+export interface ArchiveFormatFacet {
+  value: LetterImageType;
+  label: string;
+  count: number;
+}
+
+export interface ArchiveYearFacet {
+  value: number;
+  count: number;
+}
+
+export interface ArchiveSearchFacets {
+  formats: ArchiveFormatFacet[];
+  correspondents: ArchiveFacetValue[];
+  places: ArchiveFacetValue[];
+  years: ArchiveYearFacet[];
 }
 
 export interface LetterMetadata {

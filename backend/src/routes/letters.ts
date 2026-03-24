@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { eq, and, inArray, ilike, asc, desc, sql } from 'drizzle-orm';
-import { db, letters, collections } from '../db/index.js';
-import { letterQuerySchema } from '../schemas/letter.js';
+import { db, letters, collections, letterPages } from '../db/index.js';
+import { archiveSearchQuerySchema, letterQuerySchema, type ArchiveSearchQuery } from '../schemas/letter.js';
 import {
   formatLetterDate,
   generateTitle,
@@ -12,6 +12,7 @@ import {
   transformLettersWithRelatedToDTO,
   type LetterWithRelations,
 } from '../dto/index.js';
+import { getRows } from '../services/letter-queries.js';
 import { logIfSlow, TIMING_THRESHOLDS } from '../utils/logger.js';
 
 const router = Router();
@@ -55,6 +56,54 @@ type SummaryLetterWithRelations = {
     checksumSha256: string | null;
   }>;
 };
+
+type ArchiveFacetValue = {
+  value: string;
+  count: number;
+};
+
+type ArchiveFormatFacet = ArchiveFacetValue & {
+  label: string;
+};
+
+type ArchiveYearFacet = {
+  value: number;
+  count: number;
+};
+
+type ArchiveSearchRow = {
+  id: string;
+  collectionId: string;
+  collectionCode: string;
+  collectionTitle: string | null;
+  dateRaw: string;
+  primaryType: LetterWithRelations['type'];
+  primaryPageCount: number;
+  sender: string | null;
+  recipient: string | null;
+  location: string | null;
+  hook: string | null;
+  metadataVerified: boolean;
+  pageId: string | null;
+  checksumSha256: string | null;
+};
+
+type ArchiveFacetRow = {
+  value: string | number | null;
+  count: number | string | bigint;
+};
+
+const ARCHIVE_FORMAT_LABELS = {
+  letter: 'Letters',
+  photo: 'Photos',
+  ephemera: 'Ephemera',
+  voice: 'Voice',
+  article: 'Articles',
+  diary: 'Diary',
+  cover: 'Covers',
+  card: 'Cards',
+  telegram: 'Telegrams',
+} as const;
 
 /**
  * GET /letters - List letters with optional filtering
@@ -324,6 +373,31 @@ router.get('/letters/summaries', async (req, res, next) => {
   }
 });
 
+router.get('/letters/search', async (req, res, next) => {
+  const start = Date.now();
+  try {
+    const query = archiveSearchQuerySchema.parse(req.query);
+    const response = await searchArchiveSummaries(query);
+    const duration = Date.now() - start;
+
+    req.log.info(
+      {
+        search: query.search,
+        collection: query.collection,
+        total: response.total,
+        page: response.page,
+        duration,
+      },
+      'Archive search completed',
+    );
+    logIfSlow(req.log, 'archive search query', duration, TIMING_THRESHOLDS.DB_QUERY);
+
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
+});
+
 /**
  * GET /letters/:letterId - Get a single letter with pages
  * Also fetches related cards (C) and extras (E) for the same date/sequence
@@ -509,4 +583,570 @@ function buildShelfSearchText(
   ]
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
     .join(' ');
+}
+
+async function searchArchiveSummaries(query: ArchiveSearchQuery) {
+  const collectionIds = await resolveArchiveCollectionIds(query.collection);
+  if (query.collection && collectionIds.length === 0) {
+    return emptyArchiveSearchResponse(query.page, query.limit);
+  }
+
+  const ctes = buildArchiveSearchCtes(query, collectionIds);
+  const orderBy = buildArchiveSearchOrderBy(query);
+  const offset = (query.page - 1) * query.limit;
+
+  const [rowsResult, totalResult, formatsResult, correspondentsResult, placesResult, yearsResult] =
+    await Promise.all([
+      db.execute(sql`
+        ${ctes}
+        , primary_page_counts AS (
+          SELECT
+            sg."collectionId",
+            sg."dateRaw",
+            sg."typeSequence",
+            COUNT(${letterPages.id})::int AS "primaryPageCount"
+          FROM scoped_groups sg
+          INNER JOIN letters l
+            ON l.collection_id = sg."collectionId"
+            AND l.date_raw = sg."dateRaw"
+            AND l.type_sequence = sg."typeSequence"
+            AND l.type = sg."primaryType"
+            AND l.visibility = 'PUBLISHED'
+          INNER JOIN letter_pages ON letter_pages.letter_id = l.id
+          GROUP BY sg."collectionId", sg."dateRaw", sg."typeSequence"
+        )
+        , display_pages AS (
+          SELECT DISTINCT ON (sg."collectionId", sg."dateRaw", sg."typeSequence")
+            sg."collectionId",
+            sg."dateRaw",
+            sg."typeSequence",
+            letter_pages.id AS "pageId",
+            letter_pages.checksum_sha256 AS "checksumSha256"
+          FROM scoped_groups sg
+          INNER JOIN letters l
+            ON l.collection_id = sg."collectionId"
+            AND l.date_raw = sg."dateRaw"
+            AND l.type_sequence = sg."typeSequence"
+            AND l.type = sg."primaryType"
+            AND l.visibility = 'PUBLISHED'
+          INNER JOIN letter_pages ON letter_pages.letter_id = l.id
+          ORDER BY
+            sg."collectionId",
+            sg."dateRaw",
+            sg."typeSequence",
+            letter_pages.page_number ASC
+        )
+        SELECT
+          sg.id,
+          sg."collectionId",
+          sg."collectionCode",
+          sg."collectionTitle",
+          sg."dateRaw",
+          sg."primaryType",
+          COALESCE(ppc."primaryPageCount", 0) AS "primaryPageCount",
+          sg.sender,
+          sg.recipient,
+          sg.location,
+          sg.hook,
+          sg."metadataVerified",
+          dp."pageId",
+          dp."checksumSha256"
+        FROM scoped_groups sg
+        LEFT JOIN primary_page_counts ppc
+          ON ppc."collectionId" = sg."collectionId"
+          AND ppc."dateRaw" = sg."dateRaw"
+          AND ppc."typeSequence" = sg."typeSequence"
+        LEFT JOIN display_pages dp
+          ON dp."collectionId" = sg."collectionId"
+          AND dp."dateRaw" = sg."dateRaw"
+          AND dp."typeSequence" = sg."typeSequence"
+        ORDER BY ${orderBy}
+        LIMIT ${query.limit}
+        OFFSET ${offset}
+      `),
+      db.execute(sql`
+        ${ctes}
+        SELECT COUNT(*)::int AS count
+        FROM scoped_groups
+      `),
+      db.execute(sql`
+        ${ctes}
+        SELECT format AS value, COUNT(*)::int AS count
+        FROM (
+          SELECT DISTINCT
+            sg."collectionId",
+            sg."dateRaw",
+            sg."typeSequence",
+            UNNEST(sg.formats) AS format
+          FROM scoped_groups sg
+        ) grouped_formats
+        GROUP BY format
+        ORDER BY COUNT(*) DESC, format ASC
+        LIMIT 6
+      `),
+      db.execute(sql`
+        ${ctes}
+        SELECT value, COUNT(*)::int AS count
+        FROM (
+          SELECT DISTINCT
+            sg."collectionId",
+            sg."dateRaw",
+            sg."typeSequence",
+            person_name AS value
+          FROM scoped_groups sg
+          CROSS JOIN LATERAL UNNEST(
+            COALESCE(sg.senders, ARRAY[]::text[]) || COALESCE(sg.recipients, ARRAY[]::text[])
+          ) AS person_name
+          WHERE person_name IS NOT NULL AND person_name <> ''
+        ) grouped_people
+        GROUP BY value
+        ORDER BY COUNT(*) DESC, value ASC
+        LIMIT 8
+      `),
+      db.execute(sql`
+        ${ctes}
+        SELECT value, COUNT(*)::int AS count
+        FROM (
+          SELECT DISTINCT
+            sg."collectionId",
+            sg."dateRaw",
+            sg."typeSequence",
+            place_name AS value
+          FROM scoped_groups sg
+          CROSS JOIN LATERAL UNNEST(COALESCE(sg.places, ARRAY[]::text[])) AS place_name
+          WHERE place_name IS NOT NULL AND place_name <> ''
+        ) grouped_places
+        GROUP BY value
+        ORDER BY COUNT(*) DESC, value ASC
+        LIMIT 8
+      `),
+      db.execute(sql`
+        ${ctes}
+        SELECT SUBSTRING("dateRaw", 1, 4)::int AS value, COUNT(*)::int AS count
+        FROM scoped_groups
+        WHERE SUBSTRING("dateRaw", 1, 4) ~ '^[0-9]{4}$'
+        GROUP BY SUBSTRING("dateRaw", 1, 4)
+        ORDER BY SUBSTRING("dateRaw", 1, 4) DESC
+        LIMIT 8
+      `),
+    ]);
+
+  const rows = getRows<ArchiveSearchRow>(rowsResult);
+  const totalRows = getRows<{ count: number | string | bigint }>(totalResult);
+
+  return {
+    letters: rows.map((row) => transformArchiveSearchRow(row)),
+    page: query.page,
+    limit: query.limit,
+    total: Number(totalRows[0]?.count || 0),
+    facets: {
+      formats: mapArchiveFormatFacets(getRows<ArchiveFacetRow>(formatsResult)),
+      correspondents: mapArchiveTextFacets(getRows<ArchiveFacetRow>(correspondentsResult)),
+      places: mapArchiveTextFacets(getRows<ArchiveFacetRow>(placesResult)),
+      years: mapArchiveYearFacets(getRows<ArchiveFacetRow>(yearsResult)),
+    },
+  };
+}
+
+async function resolveArchiveCollectionIds(collectionQuery?: string) {
+  if (!collectionQuery) return [];
+
+  const escapedCollection = collectionQuery.replace(/%/g, '\\%').replace(/_/g, '\\_');
+  const matchingCollections = await db.query.collections.findMany({
+    where: ilike(collections.collectionCode, `%${escapedCollection}`),
+    columns: { id: true },
+  });
+
+  return matchingCollections.map((collection) => collection.id);
+}
+
+function emptyArchiveSearchResponse(page: number, limit: number) {
+  return {
+    letters: [],
+    page,
+    limit,
+    total: 0,
+    facets: {
+      formats: [] as ArchiveFormatFacet[],
+      correspondents: [] as ArchiveFacetValue[],
+      places: [] as ArchiveFacetValue[],
+      years: [] as ArchiveYearFacet[],
+    },
+  };
+}
+
+function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string[]) {
+  const rowFilters = [sql`l.visibility = 'PUBLISHED'`];
+
+  if (collectionIds.length > 0) {
+    rowFilters.push(
+      sql`l.collection_id = ANY(ARRAY[${sql.join(collectionIds.map((id) => sql`${id}`), sql`, `)}]::uuid[])`,
+    );
+  }
+
+  const trimmedSearch = query.search?.trim();
+  const fieldSimilarity = trimmedSearch
+    ? buildArchiveFieldSimilaritySql(trimmedSearch)
+    : sql`0::real`;
+  if (trimmedSearch) {
+    const likeNeedle = `%${trimmedSearch}%`;
+    rowFilters.push(
+      sql`(
+        ${buildArchiveSearchVectorSql()} @@ websearch_to_tsquery('simple', ${trimmedSearch})
+        OR ${buildArchiveSearchTextSql()} ILIKE ${likeNeedle}
+        OR similarity(lower(${buildArchiveFuzzyTextSql()}), lower(${trimmedSearch})) > 0.22
+        OR ${fieldSimilarity} > 0.46
+      )`,
+    );
+  }
+
+  const scopedFilters = [sql`TRUE`];
+  if (query.format) {
+    scopedFilters.push(sql`${query.format} = ANY(gf.formats)`);
+  }
+  if (query.person) {
+    const personNeedle = `%${query.person}%`;
+    scopedFilters.push(sql`EXISTS (
+      SELECT 1
+      FROM UNNEST(COALESCE(gf.senders, ARRAY[]::text[]) || COALESCE(gf.recipients, ARRAY[]::text[])) AS person_name
+      WHERE person_name ILIKE ${personNeedle}
+    )`);
+  }
+  if (query.place) {
+    const placeNeedle = `%${query.place}%`;
+    scopedFilters.push(sql`EXISTS (
+      SELECT 1
+      FROM UNNEST(COALESCE(gf.places, ARRAY[]::text[])) AS place_name
+      WHERE place_name ILIKE ${placeNeedle}
+    )`);
+  }
+  if (query.year) {
+    const yearText = String(query.year);
+    scopedFilters.push(sql`SUBSTRING(mg."dateRaw", 1, 4) = ${yearText}`);
+  }
+  if (query.yearFrom !== undefined) {
+    scopedFilters.push(sql`SUBSTRING(mg."dateRaw", 1, 4)::int >= ${query.yearFrom}`);
+  }
+  if (query.yearTo !== undefined) {
+    scopedFilters.push(sql`SUBSTRING(mg."dateRaw", 1, 4)::int <= ${query.yearTo}`);
+  }
+  if (query.verified !== undefined) {
+    scopedFilters.push(sql`pr."metadataVerified" = ${query.verified}`);
+  }
+
+  const searchRank = trimmedSearch
+    ? sql`GREATEST(
+        ts_rank_cd(${buildArchiveSearchVectorSql()}, websearch_to_tsquery('simple', ${trimmedSearch})),
+        CASE WHEN ${buildArchiveSearchTextSql()} ILIKE ${`%${trimmedSearch}%`} THEN 0.08 ELSE 0 END,
+        similarity(lower(${buildArchiveFuzzyTextSql()}), lower(${trimmedSearch})),
+        ${fieldSimilarity}
+      )`
+    : sql`0::real`;
+
+  return sql`
+    WITH filtered_rows AS (
+      SELECT
+        l.collection_id AS "collectionId",
+        l.date_raw AS "dateRaw",
+        l.type_sequence AS "typeSequence",
+        ${searchRank} AS "searchRank"
+      FROM letters l
+      INNER JOIN collections c ON c.id = l.collection_id
+      WHERE ${sql.join(rowFilters, sql` AND `)}
+    ),
+    matching_groups AS (
+      SELECT
+        "collectionId",
+        "dateRaw",
+        "typeSequence",
+        MAX("searchRank") AS "searchRank"
+      FROM filtered_rows
+      GROUP BY "collectionId", "dateRaw", "typeSequence"
+    ),
+    group_filters AS (
+      SELECT
+        mg."collectionId",
+        mg."dateRaw",
+        mg."typeSequence",
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${buildArchiveMediaTypeSql()}), NULL) AS formats,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.sender), '')), NULL) AS senders,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.recipient), '')), NULL) AS recipients,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.location_written), '')), NULL) AS places
+      FROM matching_groups mg
+      INNER JOIN letters l
+        ON l.collection_id = mg."collectionId"
+        AND l.date_raw = mg."dateRaw"
+        AND l.type_sequence = mg."typeSequence"
+        AND l.visibility = 'PUBLISHED'
+      GROUP BY mg."collectionId", mg."dateRaw", mg."typeSequence"
+    ),
+    primary_rows AS (
+      SELECT DISTINCT ON (l.collection_id, l.date_raw, l.type_sequence)
+        l.id,
+        l.collection_id AS "collectionId",
+        l.date_raw AS "dateRaw",
+        l.type_sequence AS "typeSequence",
+        l.type AS "primaryType",
+        l.sender,
+        l.recipient,
+        l.location_written AS location,
+        l.hook,
+        (l.metadata_content_status = 'VERIFIED') AS "metadataVerified",
+        c.collection_code AS "collectionCode",
+        c.title AS "collectionTitle",
+        l.created_at AS "createdAt"
+      FROM letters l
+      INNER JOIN collections c ON c.id = l.collection_id
+      INNER JOIN matching_groups mg
+        ON mg."collectionId" = l.collection_id
+        AND mg."dateRaw" = l.date_raw
+        AND mg."typeSequence" = l.type_sequence
+      WHERE l.visibility = 'PUBLISHED'
+      ORDER BY
+        l.collection_id,
+        l.date_raw,
+        l.type_sequence,
+        CASE WHEN l.type = 'L' THEN 0 ELSE 1 END,
+        l.type ASC
+    ),
+    scoped_groups AS (
+      SELECT
+        mg."collectionId",
+        mg."dateRaw",
+        mg."typeSequence",
+        mg."searchRank",
+        gf.formats,
+        gf.senders,
+        gf.recipients,
+        gf.places,
+        pr.id,
+        pr."primaryType",
+        pr.sender,
+        pr.recipient,
+        pr.location,
+        pr.hook,
+        pr."metadataVerified",
+        pr."collectionCode",
+        pr."collectionTitle",
+        pr."createdAt"
+      FROM matching_groups mg
+      INNER JOIN group_filters gf
+        ON gf."collectionId" = mg."collectionId"
+        AND gf."dateRaw" = mg."dateRaw"
+        AND gf."typeSequence" = mg."typeSequence"
+      INNER JOIN primary_rows pr
+        ON pr."collectionId" = mg."collectionId"
+        AND pr."dateRaw" = mg."dateRaw"
+        AND pr."typeSequence" = mg."typeSequence"
+      WHERE ${sql.join(scopedFilters, sql` AND `)}
+    )
+  `;
+}
+
+function buildArchiveSearchVectorSql() {
+  return sql`(
+    setweight(
+      to_tsvector(
+        'simple',
+        TRIM(CONCAT_WS(
+          ' ',
+          COALESCE(l.sender, ''),
+          COALESCE(l.recipient, ''),
+          c.collection_code,
+          COALESCE(c.title, '')
+        ))
+      ),
+      'A'
+    )
+    ||
+    setweight(
+      to_tsvector(
+        'simple',
+        TRIM(CONCAT_WS(
+          ' ',
+          l.date_raw,
+          ${buildArchiveMediaTypeSql()},
+          COALESCE(l.location_written, ''),
+          COALESCE(l.hook, ''),
+          COALESCE(l.summary, ''),
+          ARRAY_TO_STRING(COALESCE(l.tags, ARRAY[]::text[]), ' '),
+          ARRAY_TO_STRING(COALESCE(l.primary_topics, ARRAY[]::text[]), ' ')
+        ))
+      ),
+      'B'
+    )
+    ||
+    setweight(
+      to_tsvector(
+        'simple',
+        TRIM(CONCAT_WS(
+          ' ',
+          COALESCE(l.photo_description, ''),
+          COALESCE(l.extra_content_transcript, '')
+        ))
+      ),
+      'C'
+    )
+    ||
+    setweight(
+      to_tsvector('simple', TRIM(COALESCE(l.transcription_text, ''))),
+      'D'
+    )
+  )`;
+}
+
+function buildArchiveSearchTextSql() {
+  return sql`TRIM(CONCAT_WS(
+    ' ',
+    c.collection_code,
+    COALESCE(c.title, ''),
+    l.date_raw,
+    ${buildArchiveMediaTypeSql()},
+    COALESCE(l.sender, ''),
+    COALESCE(l.recipient, ''),
+    COALESCE(l.location_written, ''),
+    COALESCE(l.hook, ''),
+    COALESCE(l.summary, ''),
+    ARRAY_TO_STRING(COALESCE(l.tags, ARRAY[]::text[]), ' '),
+    ARRAY_TO_STRING(COALESCE(l.primary_topics, ARRAY[]::text[]), ' '),
+    COALESCE(l.photo_description, ''),
+    COALESCE(l.extra_content_transcript, ''),
+    COALESCE(l.transcription_text, '')
+  ))`;
+}
+
+function buildArchiveFuzzyTextSql() {
+  return sql`TRIM(CONCAT_WS(
+    ' ',
+    c.collection_code,
+    COALESCE(c.title, ''),
+    ${buildArchiveMediaTypeSql()},
+    COALESCE(l.sender, ''),
+    COALESCE(l.recipient, ''),
+    COALESCE(l.location_written, ''),
+    COALESCE(l.hook, ''),
+    COALESCE(l.summary, '')
+  ))`;
+}
+
+function buildArchiveFieldSimilaritySql(searchTerm: string) {
+  return sql`GREATEST(
+    word_similarity(lower(COALESCE(l.sender, '')), lower(${searchTerm})),
+    word_similarity(lower(COALESCE(l.recipient, '')), lower(${searchTerm})),
+    word_similarity(lower(COALESCE(l.location_written, '')), lower(${searchTerm})),
+    word_similarity(lower(c.collection_code), lower(${searchTerm})),
+    word_similarity(lower(COALESCE(c.title, '')), lower(${searchTerm})),
+    word_similarity(lower(COALESCE(${buildArchiveMediaTypeSql()}, '')), lower(${searchTerm})),
+    word_similarity(lower(ARRAY_TO_STRING(COALESCE(l.tags, ARRAY[]::text[]), ' ')), lower(${searchTerm})),
+    word_similarity(lower(ARRAY_TO_STRING(COALESCE(l.primary_topics, ARRAY[]::text[]), ' ')), lower(${searchTerm}))
+  )`;
+}
+
+function buildArchiveMediaTypeSql() {
+  return sql`CASE
+    WHEN l.type = 'L' THEN 'letter'
+    WHEN l.type = 'P' THEN 'photo'
+    WHEN l.type = 'E' THEN 'ephemera'
+    WHEN l.type = 'V' THEN 'voice'
+    WHEN l.type = 'A' THEN 'article'
+    WHEN l.type = 'D' THEN 'diary'
+    WHEN l.type = 'C' THEN 'cover'
+    WHEN l.type = 'N' THEN 'card'
+    WHEN l.type = 'T' THEN 'telegram'
+    ELSE 'letter'
+  END`;
+}
+
+function buildArchiveSearchOrderBy(query: ArchiveSearchQuery) {
+  const hasSearch = Boolean(query.search?.trim());
+  const resolvedSort = query.sort === 'relevance' && !hasSearch ? 'createdAt' : query.sort;
+
+  if (resolvedSort === 'letterDate') {
+    return query.sortOrder === 'asc'
+      ? sql`REPLACE(sg."dateRaw", 'X', '0') ASC, sg."createdAt" DESC`
+      : sql`REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC`;
+  }
+
+  if (resolvedSort === 'createdAt') {
+    return query.sortOrder === 'asc'
+      ? sql`sg."createdAt" ASC, REPLACE(sg."dateRaw", 'X', '0') ASC`
+      : sql`sg."createdAt" DESC, REPLACE(sg."dateRaw", 'X', '0') DESC`;
+  }
+
+  return sql`sg."searchRank" DESC, REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC`;
+}
+
+function transformArchiveSearchRow(row: ArchiveSearchRow) {
+  const primaryImageType = mapTypeToImageType(row.primaryType);
+  const [singular, plural] = MEDIA_COUNT_LABELS[primaryImageType];
+  const pseudoLetter = {
+    type: row.primaryType,
+    sender: row.sender,
+    recipient: row.recipient,
+    dateRaw: row.dateRaw,
+  };
+  const pseudoCollection = {
+    title: row.collectionTitle,
+    collectionCode: row.collectionCode,
+  };
+
+  return {
+    id: row.id,
+    title: generateTitle(pseudoLetter as never, pseudoCollection as never),
+    imageUrl: row.pageId
+      ? `/images/${row.pageId}${row.checksumSha256 ? `?v=${row.checksumSha256.slice(0, 8)}` : ''}`
+      : undefined,
+    imageType: primaryImageType,
+    primaryChip: row.primaryPageCount > 0
+      ? `${row.primaryPageCount} ${row.primaryPageCount === 1 ? singular : plural}`
+      : undefined,
+    sender: row.sender || undefined,
+    recipient: row.recipient || undefined,
+    date: formatLetterDate({ dateRaw: row.dateRaw } as never),
+    dateRaw: row.dateRaw,
+    hook: row.hook || undefined,
+    location: row.location || undefined,
+    verified: row.metadataVerified,
+  };
+}
+
+function mapArchiveFormatFacets(rows: ArchiveFacetRow[]): ArchiveFormatFacet[] {
+  const facets: ArchiveFormatFacet[] = [];
+
+  for (const row of rows) {
+    const value = typeof row.value === 'string' ? row.value : null;
+    if (!value || !(value in ARCHIVE_FORMAT_LABELS)) continue;
+    facets.push({
+      value,
+      label: ARCHIVE_FORMAT_LABELS[value as keyof typeof ARCHIVE_FORMAT_LABELS],
+      count: Number(row.count || 0),
+    });
+  }
+
+  return facets;
+}
+
+function mapArchiveTextFacets(rows: ArchiveFacetRow[]): ArchiveFacetValue[] {
+  return rows
+    .map((row) => {
+      if (typeof row.value !== 'string' || row.value.trim().length === 0) return null;
+      return {
+        value: row.value,
+        count: Number(row.count || 0),
+      };
+    })
+    .filter((row): row is ArchiveFacetValue => row !== null);
+}
+
+function mapArchiveYearFacets(rows: ArchiveFacetRow[]): ArchiveYearFacet[] {
+  return rows
+    .map((row) => {
+      const value = Number(row.value);
+      if (!Number.isFinite(value)) return null;
+      return {
+        value,
+        count: Number(row.count || 0),
+      };
+    })
+    .filter((row): row is ArchiveYearFacet => row !== null);
 }

@@ -5,6 +5,7 @@ const {
   findCollectionsMock,
   findLettersMock,
   findFirstLetterMock,
+  executeMock,
   transformLettersWithRelatedToDTOMock,
   transformLetterWithRelatedToDTOMock,
   transformLetterToDTOMock,
@@ -17,10 +18,12 @@ const {
   ascMock,
   descMock,
   sqlMock,
+  sqlJoinMock,
 } = vi.hoisted(() => ({
   findCollectionsMock: vi.fn(),
   findLettersMock: vi.fn(),
   findFirstLetterMock: vi.fn(),
+  executeMock: vi.fn(),
   transformLettersWithRelatedToDTOMock: vi.fn(),
   transformLetterWithRelatedToDTOMock: vi.fn(),
   transformLetterToDTOMock: vi.fn(),
@@ -33,6 +36,7 @@ const {
   ascMock: vi.fn(),
   descMock: vi.fn(),
   sqlMock: vi.fn(),
+  sqlJoinMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -42,7 +46,7 @@ vi.mock('drizzle-orm', () => ({
   ilike: ilikeMock,
   asc: ascMock,
   desc: descMock,
-  sql: sqlMock,
+  sql: Object.assign(sqlMock, { join: sqlJoinMock }),
 }));
 
 vi.mock('../../dto/index.js', async (importOriginal) => {
@@ -70,6 +74,7 @@ vi.mock('../../utils/logger.js', async (importOriginal) => {
 
 vi.mock('../../db/index.js', () => ({
   db: {
+    execute: executeMock,
     query: {
       collections: {
         findMany: findCollectionsMock,
@@ -90,6 +95,9 @@ vi.mock('../../db/index.js', () => ({
     createdAt: 'letters.createdAt',
     type: 'letters.type',
   },
+  letterPages: {
+    id: 'letter_pages.id',
+  },
   collections: {
     collectionCode: 'collections.collectionCode',
   },
@@ -108,6 +116,7 @@ describe('letters route integration', () => {
     ascMock.mockImplementation((value) => ({ direction: 'asc', value }));
     descMock.mockImplementation((value) => ({ direction: 'desc', value }));
     sqlMock.mockImplementation((strings, ...values) => ({ strings, values }));
+    sqlJoinMock.mockImplementation((values, separator) => ({ values, separator }));
 
     transformLettersWithRelatedToDTOMock.mockImplementation((groups) =>
       groups.map(
@@ -433,5 +442,94 @@ describe('letters route integration', () => {
       position: null,
       total: 2,
     });
+  });
+
+  it('returns archive search results from the dedicated search route', async () => {
+    executeMock
+      .mockResolvedValueOnce([
+        {
+          id: 'letter-primary',
+          collectionId: 'collection-9',
+          collectionCode: '009',
+          collectionTitle: 'Collection Nine',
+          dateRaw: '19470810',
+          primaryType: 'L',
+          primaryPageCount: 2,
+          sender: 'Jimmie',
+          recipient: 'Molly',
+          location: 'Overland Park, Kans.',
+          hook: 'Jimmie pleads for a reply.',
+          metadataVerified: true,
+          pageId: 'page-1',
+          checksumSha256: 'abcdef123456',
+        },
+      ])
+      .mockResolvedValueOnce([{ count: 1 }])
+      .mockResolvedValueOnce([{ value: 'letter', count: 1 }])
+      .mockResolvedValueOnce([{ value: 'Jimmie', count: 1 }])
+      .mockResolvedValueOnce([{ value: 'Overland Park, Kans.', count: 1 }])
+      .mockResolvedValueOnce([{ value: 1947, count: 1 }]);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters/search',
+      path: '/letters/search',
+      query: {
+        search: 'Molly',
+        limit: '5',
+      },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({
+      letters: [
+        {
+          id: 'letter-primary',
+          title: 'Letter from Jimmie to Molly',
+          imageUrl: '/images/page-1?v=abcdef12',
+          imageType: 'letter',
+          primaryChip: '2 pages',
+          sender: 'Jimmie',
+          recipient: 'Molly',
+          date: 'August 10th, 1947',
+          dateRaw: '19470810',
+          hook: 'Jimmie pleads for a reply.',
+          location: 'Overland Park, Kans.',
+          verified: true,
+        },
+      ],
+      page: 1,
+      limit: 5,
+      total: 1,
+      facets: {
+        formats: [
+          {
+            value: 'letter',
+            label: 'Letters',
+            count: 1,
+          },
+        ],
+        correspondents: [
+          {
+            value: 'Jimmie',
+            count: 1,
+          },
+        ],
+        places: [
+          {
+            value: 'Overland Park, Kans.',
+            count: 1,
+          },
+        ],
+        years: [
+          {
+            value: 1947,
+            count: 1,
+          },
+        ],
+      },
+    });
+    expect(executeMock).toHaveBeenCalledTimes(6);
   });
 });

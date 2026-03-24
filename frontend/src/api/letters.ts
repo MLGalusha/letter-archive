@@ -3,7 +3,13 @@
  */
 
 import { apiGet, apiDelete } from './client';
-import type { ArchiveShelfItem, Letter, VisibilityState } from '../types/Letter';
+import type {
+  ArchiveSearchFacets,
+  ArchiveShelfItem,
+  Letter,
+  LetterImageType,
+  VisibilityState,
+} from '../types/Letter';
 
 export interface LettersResponse {
   letters: Letter[];
@@ -16,6 +22,26 @@ export interface ArchiveShelfResponse {
   page: number;
   limit: number;
   total: number;
+}
+
+export interface ArchiveSearchResponse extends ArchiveShelfResponse {
+  facets: ArchiveSearchFacets;
+}
+
+export interface ArchiveSearchParams {
+  page?: number;
+  limit?: number;
+  collection?: string;
+  search?: string;
+  format?: LetterImageType | null;
+  person?: string | null;
+  place?: string | null;
+  year?: number | null;
+  yearFrom?: number | null;
+  yearTo?: number | null;
+  verified?: boolean | null;
+  sort?: 'relevance' | 'createdAt' | 'letterDate';
+  sortOrder?: SortOrder;
 }
 
 export interface AdminLettersResponse {
@@ -121,6 +147,28 @@ export async function getArchiveShelfItems(
     sort: params.sort,
     sortOrder: params.sortOrder,
     visibility: 'PUBLISHED',
+  });
+}
+
+export async function searchArchiveShelf(
+  params: ArchiveSearchParams = {},
+): Promise<ArchiveSearchResponse> {
+  return apiGet<ArchiveSearchResponse>('/letters/search', {
+    page: params.page,
+    limit: params.limit,
+    collection: params.collection,
+    search: params.search,
+    format: params.format || undefined,
+    person: params.person || undefined,
+    place: params.place || undefined,
+    year: params.year || undefined,
+    yearFrom: params.yearFrom || undefined,
+    yearTo: params.yearTo || undefined,
+    verified: params.verified === null || params.verified === undefined
+      ? undefined
+      : params.verified ? 'true' : 'false',
+    sort: params.sort,
+    sortOrder: params.sortOrder,
   });
 }
 

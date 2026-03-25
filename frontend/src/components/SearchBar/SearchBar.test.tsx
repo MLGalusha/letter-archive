@@ -1,7 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import SearchBar, { type SearchFilters } from "./SearchBar";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("SearchBar", () => {
   it("renders archive facets and notifies callers when a facet is selected", async () => {
@@ -101,5 +105,94 @@ describe("SearchBar", () => {
     );
 
     expect(screen.getByRole("button", { name: /Best Match/i })).toBeInTheDocument();
+  });
+
+  it("uses refine wording for the compact sticky-search controls", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <SearchBar
+        query="Molly"
+        filters={{}}
+        facets={{
+          formats: [{ value: "letter", label: "Letters", count: 12 }],
+          correspondents: [],
+          places: [],
+          years: [],
+        }}
+        total={12}
+        loading={false}
+        variant="compact"
+        embedded
+        onQueryChange={vi.fn()}
+        onFiltersChange={vi.fn()}
+      />,
+    );
+
+    const refineButton = screen.getByRole("button", { name: "Open archive refine controls" });
+    expect(refineButton).toHaveTextContent("Refine");
+
+    await user.click(refineButton);
+
+    expect(screen.getByText('12 results for "Molly"')).toBeInTheDocument();
+  });
+
+  it("gives the compact refine flyout a hover grace period and allows click pinning", async () => {
+    vi.useFakeTimers();
+
+    render(
+      <SearchBar
+        query="Molly"
+        filters={{}}
+        facets={{
+          formats: [{ value: "letter", label: "Letters", count: 12 }],
+          correspondents: [],
+          places: [],
+          years: [],
+        }}
+        total={12}
+        loading={false}
+        variant="compact"
+        embedded
+        onQueryChange={vi.fn()}
+        onFiltersChange={vi.fn()}
+      />,
+    );
+
+    const refineButton = screen.getByRole("button", { name: "Open archive refine controls" });
+
+    fireEvent.mouseEnter(refineButton);
+    expect(screen.getByText('12 results for "Molly"')).toBeInTheDocument();
+
+    fireEvent.mouseLeave(refineButton);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(650);
+    });
+    expect(screen.getByText('12 results for "Molly"')).toBeInTheDocument();
+
+    const flyout = screen.getByText('12 results for "Molly"').closest(".search-compact-flyout") as HTMLElement;
+    fireEvent.mouseEnter(flyout);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(650);
+    });
+    expect(screen.getByText('12 results for "Molly"')).toBeInTheDocument();
+
+    fireEvent.mouseLeave(flyout);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(screen.queryByText('12 results for "Molly"')).not.toBeInTheDocument();
+
+    fireEvent.click(refineButton);
+    expect(screen.getByText('12 results for "Molly"')).toBeInTheDocument();
+
+    fireEvent.mouseLeave(refineButton);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(screen.getByText('12 results for "Molly"')).toBeInTheDocument();
+
+    fireEvent.click(refineButton);
+    expect(screen.queryByText('12 results for "Molly"')).not.toBeInTheDocument();
   });
 });

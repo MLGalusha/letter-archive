@@ -139,12 +139,6 @@ export default function ArchiveList({
       >
         {total > 0 ? (
           <>
-            <p className="results-count">
-              {letters.length < total
-                ? `Showing ${letters.length} of ${total} archive items`
-                : `${total} ${total === 1 ? "archive item" : "archive items"}`}
-              {loading ? " · updating..." : loadingMore ? " · loading more..." : ""}
-            </p>
             <div className="letter-grid">
               {letters.map((letter) => (
                 <LetterCard

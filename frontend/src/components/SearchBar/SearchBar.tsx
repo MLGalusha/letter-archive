@@ -36,6 +36,8 @@ const SORT_OPTIONS: Array<{
   { label: "Earliest Date", sort: "letterDate", sortOrder: "asc" },
 ];
 
+const COMPACT_REFINE_CLOSE_DELAY_MS = 900;
+
 function getResolvedSort(query: string, filters: SearchFilters) {
   const hasQuery = Boolean(query.trim());
   return {
@@ -51,10 +53,6 @@ function sameSort(
 ): boolean {
   const resolved = getResolvedSort(query, filters);
   return resolved.sort === option.sort && resolved.sortOrder === option.sortOrder;
-}
-
-function normalizeExampleText(value: string): string {
-  return value.replace(/^[,\s]+|[,\s]+$/g, "").trim();
 }
 
 export default function SearchBar({
@@ -80,10 +78,43 @@ export default function SearchBar({
       || filters.verified !== undefined && filters.verified !== null,
   );
   const [showFilters, setShowFilters] = useState(isCompact ? false : hasRefinementFilters);
+  const [compactFiltersPinned, setCompactFiltersPinned] = useState(false);
   const [startYearInput, setStartYearInput] = useState(filters.dateRange?.start?.toString() || "");
   const [endYearInput, setEndYearInput] = useState(filters.dateRange?.end?.toString() || "");
   const searchIdBase = useId().replace(/:/g, "");
   const compactPanelRef = useRef<HTMLDivElement | null>(null);
+  const compactCloseTimerRef = useRef<number | null>(null);
+
+  const clearCompactCloseTimer = () => {
+    if (compactCloseTimerRef.current !== null) {
+      window.clearTimeout(compactCloseTimerRef.current);
+      compactCloseTimerRef.current = null;
+    }
+  };
+
+  const openCompactFilters = (options?: { pin?: boolean }) => {
+    clearCompactCloseTimer();
+    if (options?.pin) {
+      setCompactFiltersPinned(true);
+    }
+    setShowFilters(true);
+  };
+
+  const closeCompactFilters = () => {
+    clearCompactCloseTimer();
+    setCompactFiltersPinned(false);
+    setShowFilters(false);
+  };
+
+  const scheduleCompactFiltersClose = () => {
+    clearCompactCloseTimer();
+    if (compactFiltersPinned) return;
+
+    compactCloseTimerRef.current = window.setTimeout(() => {
+      setShowFilters(false);
+      compactCloseTimerRef.current = null;
+    }, COMPACT_REFINE_CLOSE_DELAY_MS);
+  };
 
   useEffect(() => {
     if (!isCompact && hasRefinementFilters) {
@@ -102,13 +133,15 @@ export default function SearchBar({
     const handlePointerDown = (event: PointerEvent) => {
       if (!(event.target instanceof Node)) return;
       if (!compactPanelRef.current?.contains(event.target)) {
-        setShowFilters(false);
+        closeCompactFilters();
       }
     };
 
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [isCompact, showFilters]);
+
+  useEffect(() => () => clearCompactCloseTimer(), []);
 
   const hasActiveFilters = Boolean(
     query.trim()
@@ -133,20 +166,6 @@ export default function SearchBar({
     }
     return `${total} published archive item${total === 1 ? "" : "s"}`;
   }, [hasActiveFilters, hasQuery, loading, query, total]);
-
-  const quickExamples = useMemo(() => {
-    const values = [
-      facets.correspondents[0]?.value,
-      facets.correspondents[1]?.value,
-      facets.places[0]?.value,
-      facets.years[0] ? String(facets.years[0].value) : undefined,
-    ]
-      .filter((value): value is string => Boolean(value))
-      .map((value) => normalizeExampleText(value))
-      .filter((value, index, all) => value.length > 0 && all.indexOf(value) === index);
-
-    return values.slice(0, 4);
-  }, [facets]);
 
   const availableSortOptions = useMemo(
     () => (hasQuery ? SORT_OPTIONS : SORT_OPTIONS.filter((option) => option.sort !== "relevance")),
@@ -233,7 +252,7 @@ export default function SearchBar({
     onQueryChange("");
     onFiltersChange({});
     if (isCompact) {
-      setShowFilters(false);
+      closeCompactFilters();
     }
   };
 
@@ -417,26 +436,47 @@ export default function SearchBar({
             onChange={(event) => onQueryChange(event.target.value)}
           />
 
-          <div
-            className="search-compact-filter-wrap"
-            onMouseEnter={() => setShowFilters(true)}
-            onMouseLeave={() => setShowFilters(false)}
-          >
+          <div className="search-compact-filter-wrap">
             <button
               type="button"
               className={`filter-toggle search-compact-filter-toggle${showFilters ? " active" : ""}`}
-              aria-label="Open archive filters"
+              aria-label="Open archive refine controls"
               aria-expanded={showFilters}
-              onClick={() => setShowFilters((current) => !current)}
+              onMouseEnter={() => openCompactFilters()}
+              onMouseLeave={scheduleCompactFiltersClose}
+              onFocus={() => openCompactFilters()}
+              onBlur={() => {
+                if (!compactFiltersPinned) {
+                  scheduleCompactFiltersClose();
+                }
+              }}
+              onClick={() => {
+                if (!showFilters) {
+                  openCompactFilters({ pin: true });
+                  return;
+                }
+
+                if (compactFiltersPinned) {
+                  closeCompactFilters();
+                  return;
+                }
+
+                setCompactFiltersPinned(true);
+                clearCompactCloseTimer();
+              }}
             >
-              Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+              Refine{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
             </button>
 
             {showFilters && (
-              <div className="search-compact-flyout" onMouseLeave={() => setShowFilters(false)}>
+              <div
+                className="search-compact-flyout"
+                onMouseEnter={() => openCompactFilters()}
+                onMouseLeave={scheduleCompactFiltersClose}
+              >
                 <div className="search-compact-flyout-header">
                   <div className="search-compact-flyout-copy">
-                    <span className="search-facet-label">Refine the archive</span>
+                    <span className="search-facet-label">Refine</span>
                     <p className="search-compact-flyout-status">{searchStatus}</p>
                   </div>
                   {hasActiveFilters && (
@@ -497,22 +537,6 @@ export default function SearchBar({
           onChange={(event) => onQueryChange(event.target.value)}
         />
       </div>
-
-      {quickExamples.length > 0 && !hasQuery && !hasActiveFilters && (
-        <div className="search-examples">
-          <span className="search-examples-label">Try</span>
-          {quickExamples.map((value) => (
-            <button
-              key={value}
-              type="button"
-              className="search-inline-chip"
-              onClick={() => onQueryChange(value)}
-            >
-              {value}
-            </button>
-          ))}
-        </div>
-      )}
 
       {formatFacetRow}
 

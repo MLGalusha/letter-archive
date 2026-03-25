@@ -31,15 +31,6 @@
   font-size: 0.98rem;
 }
 
-.results-count {
-  margin: 0;
-  font-size: 0.76rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
 .letter-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

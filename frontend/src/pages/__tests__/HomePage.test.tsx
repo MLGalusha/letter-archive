@@ -97,7 +97,7 @@ describe("HomePage archive browsing", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Showing 24 of 30 archive items")).toBeInTheDocument();
+      expect(screen.getByText("Scroll to continue through the archive. 6 more items still below.")).toBeInTheDocument();
     });
 
     await user.click(screen.getByRole("button", { name: "Load next 6" }));

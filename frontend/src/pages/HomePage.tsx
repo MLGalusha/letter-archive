@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import SEO from "../components/SEO";
 import SearchBar, { type SearchFilters } from "../components/SearchBar/SearchBar";
@@ -40,6 +40,24 @@ function pickHeroLetter(items: ArchiveShelfItem[]): ArchiveShelfItem | null {
   return pool[index] || null;
 }
 
+const ARCHIVE_PAGE_SIZE = 24;
+
+function mergeArchiveItems(
+  current: ArchiveShelfItem[],
+  incoming: ArchiveShelfItem[],
+): ArchiveShelfItem[] {
+  const seen = new Set(current.map((item) => item.id));
+  const next = [...current];
+
+  for (const item of incoming) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    next.push(item);
+  }
+
+  return next;
+}
+
 export default function HomePage() {
   const homeSeo = buildHomeSeo();
   const navigate = useNavigate();
@@ -77,7 +95,10 @@ export default function HomePage() {
     },
   });
   const [archiveLoading, setArchiveLoading] = useState(true);
+  const [archiveLoadingMore, setArchiveLoadingMore] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archiveLoadMoreError, setArchiveLoadMoreError] = useState<string | null>(null);
+  const requestVersionRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -129,7 +150,7 @@ export default function HomePage() {
 
   const requestParams = useMemo(
     () => ({
-      limit: 24,
+      limit: ARCHIVE_PAGE_SIZE,
       search: searchQuery.trim() || undefined,
       format: filters.format || undefined,
       person: filters.person || undefined,
@@ -146,21 +167,25 @@ export default function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
+    const requestVersion = ++requestVersionRef.current;
     const delay = searchQuery.trim() || filters.person?.trim() || filters.place?.trim() ? 180 : 0;
     const timer = window.setTimeout(() => {
       setArchiveLoading(true);
+      setArchiveLoadingMore(false);
       setArchiveError(null);
-      searchArchiveShelf(requestParams)
+      setArchiveLoadMoreError(null);
+      searchArchiveShelf({ ...requestParams, page: 1 })
         .then((response) => {
-          if (cancelled) return;
+          if (cancelled || requestVersion !== requestVersionRef.current) return;
           setArchiveResults(response);
+          setArchiveLoadMoreError(null);
         })
         .catch((error) => {
-          if (cancelled) return;
+          if (cancelled || requestVersion !== requestVersionRef.current) return;
           setArchiveError(error instanceof Error ? error.message : "Failed to load archive results");
         })
         .finally(() => {
-          if (cancelled) return;
+          if (cancelled || requestVersion !== requestVersionRef.current) return;
           setArchiveLoading(false);
         });
     }, delay);
@@ -170,6 +195,35 @@ export default function HomePage() {
       window.clearTimeout(timer);
     };
   }, [requestParams, searchQuery]);
+
+  const handleArchiveLoadMore = async () => {
+    if (archiveLoading || archiveLoadingMore) return;
+    if (archiveResults.letters.length >= archiveResults.total) return;
+
+    const requestVersion = requestVersionRef.current;
+    const nextPage = archiveResults.page + 1;
+
+    setArchiveLoadingMore(true);
+    setArchiveLoadMoreError(null);
+
+    try {
+      const response = await searchArchiveShelf({ ...requestParams, page: nextPage });
+      if (requestVersion !== requestVersionRef.current) return;
+
+      setArchiveResults((current) => ({
+        ...response,
+        letters: mergeArchiveItems(current.letters, response.letters),
+      }));
+    } catch (error) {
+      if (requestVersion !== requestVersionRef.current) return;
+      setArchiveLoadMoreError(
+        error instanceof Error ? error.message : "Failed to load more archive results",
+      );
+    } finally {
+      if (requestVersion !== requestVersionRef.current) return;
+      setArchiveLoadingMore(false);
+    }
+  };
 
   const handleLetterClick = (letterId: string) => {
     navigate(`/letter/${letterId}`);
@@ -299,7 +353,11 @@ export default function HomePage() {
             letters={archiveResults.letters}
             total={archiveResults.total}
             loading={archiveLoading}
+            loadingMore={archiveLoadingMore}
             error={archiveError}
+            loadMoreError={archiveLoadMoreError}
+            hasMore={archiveResults.letters.length < archiveResults.total}
+            onLoadMore={handleArchiveLoadMore}
           />
         </section>
       </section>

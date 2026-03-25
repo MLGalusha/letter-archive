@@ -98,6 +98,53 @@
   height: 1px;
 }
 
+.archive-load-more,
+.archive-complete-message {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding-top: 0.2rem;
+}
+
+.archive-progress-message,
+.archive-complete-message {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.archive-progress-message--error {
+  color: #8d4d31;
+}
+
+.archive-load-more-button {
+  flex-shrink: 0;
+  appearance: none;
+  border: 1px solid rgba(24, 88, 99, 0.22);
+  border-radius: 999px;
+  background: rgba(24, 88, 99, 0.08);
+  color: var(--accent-strong);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.55rem 0.9rem;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.archive-load-more-button:hover:not(:disabled) {
+  background: rgba(24, 88, 99, 0.12);
+  border-color: rgba(24, 88, 99, 0.32);
+}
+
+.archive-load-more-button:disabled {
+  cursor: progress;
+  opacity: 0.74;
+}
+
 .letter-card-fallback {
   display: flex;
   align-items: flex-end;
@@ -203,6 +250,12 @@
 @media (max-width: 640px) {
   .letter-grid {
     grid-template-columns: 1fr;
+  }
+
+  .archive-load-more,
+  .archive-complete-message {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .letter-card {

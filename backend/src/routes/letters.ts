@@ -86,11 +86,31 @@ type ArchiveSearchRow = {
   metadataVerified: boolean;
   pageId: string | null;
   checksumSha256: string | null;
+  formats: string[] | null;
+  senders: string[] | null;
+  recipients: string[] | null;
+  places: string[] | null;
+  hooks: string[] | null;
+  summaries: string[] | null;
+  photoDescriptions: string[] | null;
+  extraContentTranscripts: string[] | null;
+  transcriptionTexts: string[] | null;
 };
 
 type ArchiveFacetRow = {
   value: string | number | null;
   count: number | string | bigint;
+};
+
+type ArchiveSearchHighlightRange = {
+  start: number;
+  end: number;
+};
+
+type ArchiveSearchPreview = {
+  excerpt: string;
+  matchCount: number;
+  highlightRanges: ArchiveSearchHighlightRange[];
 };
 
 const ARCHIVE_FORMAT_LABELS = {
@@ -650,7 +670,16 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
           sg.hook,
           sg."metadataVerified",
           dp."pageId",
-          dp."checksumSha256"
+          dp."checksumSha256",
+          sg.formats,
+          sg.senders,
+          sg.recipients,
+          sg.places,
+          sg.hooks,
+          sg.summaries,
+          sg."photoDescriptions",
+          sg."extraContentTranscripts",
+          sg."transcriptionTexts"
         FROM scoped_groups sg
         LEFT JOIN primary_page_counts ppc
           ON ppc."collectionId" = sg."collectionId"
@@ -735,7 +764,7 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
   const totalRows = getRows<{ count: number | string | bigint }>(totalResult);
 
   return {
-    letters: rows.map((row) => transformArchiveSearchRow(row)),
+    letters: rows.map((row) => transformArchiveSearchRow(row, query)),
     page: query.page,
     limit: query.limit,
     total: Number(totalRows[0]?.count || 0),
@@ -871,7 +900,12 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${buildArchiveMediaTypeSql()}), NULL) AS formats,
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.sender), '')), NULL) AS senders,
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.recipient), '')), NULL) AS recipients,
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.location_written), '')), NULL) AS places
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.location_written), '')), NULL) AS places,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.hook), '')), NULL) AS hooks,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.summary), '')), NULL) AS summaries,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.photo_description), '')), NULL) AS "photoDescriptions",
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.extra_content_transcript), '')), NULL) AS "extraContentTranscripts",
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.transcription_text), '')), NULL) AS "transcriptionTexts"
       FROM matching_groups mg
       INNER JOIN letters l
         ON l.collection_id = mg."collectionId"
@@ -919,6 +953,11 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         gf.senders,
         gf.recipients,
         gf.places,
+        gf.hooks,
+        gf.summaries,
+        gf."photoDescriptions",
+        gf."extraContentTranscripts",
+        gf."transcriptionTexts",
         pr.id,
         pr."primaryType",
         pr.sender,
@@ -1076,9 +1115,10 @@ function buildArchiveSearchOrderBy(query: ArchiveSearchQuery) {
   return sql`sg."searchRank" DESC, REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC`;
 }
 
-function transformArchiveSearchRow(row: ArchiveSearchRow) {
+function transformArchiveSearchRow(row: ArchiveSearchRow, query: ArchiveSearchQuery) {
   const primaryImageType = mapTypeToImageType(row.primaryType);
   const [singular, plural] = MEDIA_COUNT_LABELS[primaryImageType];
+  const formattedDate = formatLetterDate({ dateRaw: row.dateRaw } as never) || row.dateRaw;
   const pseudoLetter = {
     type: row.primaryType,
     sender: row.sender,
@@ -1102,12 +1142,437 @@ function transformArchiveSearchRow(row: ArchiveSearchRow) {
       : undefined,
     sender: row.sender || undefined,
     recipient: row.recipient || undefined,
-    date: formatLetterDate({ dateRaw: row.dateRaw } as never),
+    date: formattedDate,
     dateRaw: row.dateRaw,
     hook: row.hook || undefined,
     location: row.location || undefined,
     verified: row.metadataVerified,
+    searchPreview: buildArchiveSearchPreview(row, query, formattedDate),
   };
+}
+
+function buildArchiveSearchPreview(
+  row: ArchiveSearchRow,
+  query: ArchiveSearchQuery,
+  formattedDate: string,
+): ArchiveSearchPreview | undefined {
+  const search = query.search?.trim();
+  if (!search) return undefined;
+
+  const searchTerms = getArchiveSearchTerms(search);
+  const prioritizedGroups = [
+    dedupeArchivePreviewValues([
+      ...(row.transcriptionTexts || []),
+      ...(row.extraContentTranscripts || []),
+      ...(row.photoDescriptions || []),
+    ]),
+    dedupeArchivePreviewValues([
+      ...(row.summaries || []),
+      ...(row.hooks || []),
+    ]),
+    dedupeArchivePreviewValues([
+      formattedDate,
+      ...(row.places || []),
+      ...(row.senders || []),
+      ...(row.recipients || []),
+      row.collectionTitle || '',
+      row.collectionCode,
+      ...(row.formats || []).map((format) => getArchiveFormatDisplayLabel(format)),
+    ]),
+  ];
+
+  for (let groupIndex = 0; groupIndex < prioritizedGroups.length; groupIndex += 1) {
+    const groupValues = prioritizedGroups[groupIndex];
+    const candidates = groupValues
+      .map((value) => scoreArchivePreviewValue(value, search, searchTerms))
+      .filter((candidate): candidate is ArchivePreviewCandidate => candidate !== null);
+
+    if (candidates.length === 0) continue;
+
+    candidates.sort((left, right) => right.score - left.score || right.totalMatches - left.totalMatches);
+    const bestCandidate = candidates[0];
+    const matchCount = Math.max(
+      candidates.reduce((sum, candidate) => sum + candidate.totalMatches, 0),
+      bestCandidate.highlightRanges.length,
+      1,
+    );
+
+    return {
+      excerpt: bestCandidate.excerpt,
+      highlightRanges: bestCandidate.highlightRanges,
+      matchCount,
+    };
+  }
+
+  return undefined;
+}
+
+type ArchivePreviewCandidate = {
+  excerpt: string;
+  highlightRanges: ArchiveSearchHighlightRange[];
+  score: number;
+  totalMatches: number;
+};
+
+function dedupeArchivePreviewValues(values: string[]) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => prepareArchivePreviewText(value))
+        .filter((value): value is string => value.length > 0),
+    ),
+  );
+}
+
+function getArchiveSearchTerms(search: string) {
+  const normalized = normalizeArchiveSearchText(search);
+  const terms = normalized
+    .split(' ')
+    .map((term) => term.trim())
+    .filter((term) => term.length >= 2);
+
+  return Array.from(new Set(terms));
+}
+
+function normalizeArchiveSearchText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function collapseArchiveWhitespace(value: string) {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function prepareArchivePreviewText(value: string) {
+  return collapseArchiveWhitespace(
+    value
+      .replace(/---\s*Page\s+\d+\s*---/gi, ' ')
+      .replace(/\r\n/g, '\n'),
+  );
+}
+
+function splitArchivePreviewSegments(value: string) {
+  const segments = value
+    .split(/\n+|(?<=[.!?])\s+(?=[A-Z0-9"'(])/g)
+    .map((segment) => collapseArchiveWhitespace(segment))
+    .filter((segment) => segment.length > 0);
+
+  return segments.length > 0 ? segments : [value];
+}
+
+function scoreArchivePreviewValue(
+  value: string,
+  rawSearch: string,
+  searchTerms: string[],
+): ArchivePreviewCandidate | null {
+  const segments = splitArchivePreviewSegments(value);
+  let bestCandidate: ArchivePreviewCandidate | null = null;
+  let totalMatches = 0;
+
+  for (const segment of segments) {
+    const exactRanges = collectArchiveExactMatchRanges(segment, rawSearch, searchTerms);
+
+    if (exactRanges.length > 0) {
+      totalMatches += exactRanges.length;
+      const excerptResult = buildArchiveExcerptWithHighlights(segment, exactRanges);
+      const score =
+        exactRanges.length * 10 +
+        getArchivePhraseMatchBonus(segment, rawSearch) +
+        countArchiveMatchedTerms(segment, searchTerms) * 2;
+
+      if (
+        !bestCandidate ||
+        score > bestCandidate.score ||
+        (score === bestCandidate.score && exactRanges.length > bestCandidate.totalMatches)
+      ) {
+        bestCandidate = {
+          excerpt: excerptResult.excerpt,
+          highlightRanges: excerptResult.highlightRanges,
+          score,
+          totalMatches: exactRanges.length,
+        };
+      }
+
+      continue;
+    }
+
+    if (bestCandidate) {
+      continue;
+    }
+
+    const fuzzyCandidate = buildArchiveFuzzyPreviewCandidate(segment, searchTerms, rawSearch);
+    if (fuzzyCandidate) {
+      bestCandidate = fuzzyCandidate;
+    }
+  }
+
+  if (!bestCandidate) {
+    return null;
+  }
+
+  return {
+    ...bestCandidate,
+    totalMatches: totalMatches > 0 ? totalMatches : 1,
+  };
+}
+
+function collectArchiveExactMatchRanges(
+  value: string,
+  rawSearch: string,
+  searchTerms: string[],
+) {
+  const loweredValue = value.toLowerCase();
+  const rawNeedle = rawSearch.trim().toLowerCase();
+  const needles = Array.from(
+    new Set([rawNeedle, ...searchTerms.map((term) => term.toLowerCase())].filter((needle) => needle.length > 1)),
+  );
+  const ranges: ArchiveSearchHighlightRange[] = [];
+
+  for (const needle of needles) {
+    let fromIndex = 0;
+
+    while (fromIndex < loweredValue.length) {
+      const foundIndex = loweredValue.indexOf(needle, fromIndex);
+      if (foundIndex === -1) break;
+
+      ranges.push({
+        start: foundIndex,
+        end: foundIndex + needle.length,
+      });
+      fromIndex = foundIndex + Math.max(needle.length, 1);
+    }
+  }
+
+  return mergeArchiveHighlightRanges(ranges);
+}
+
+function mergeArchiveHighlightRanges(ranges: ArchiveSearchHighlightRange[]) {
+  if (ranges.length === 0) return [];
+
+  const sortedRanges = [...ranges].sort((left, right) => left.start - right.start || left.end - right.end);
+  const mergedRanges: ArchiveSearchHighlightRange[] = [sortedRanges[0]];
+
+  for (let index = 1; index < sortedRanges.length; index += 1) {
+    const currentRange = sortedRanges[index];
+    const previousRange = mergedRanges[mergedRanges.length - 1];
+
+    if (currentRange.start <= previousRange.end) {
+      previousRange.end = Math.max(previousRange.end, currentRange.end);
+      continue;
+    }
+
+    mergedRanges.push({ ...currentRange });
+  }
+
+  return mergedRanges;
+}
+
+function buildArchiveExcerptWithHighlights(
+  value: string,
+  ranges: ArchiveSearchHighlightRange[],
+) {
+  const maxLength = 108;
+  const preferredLead = 18;
+  const firstRange = ranges[0];
+  const shouldWindowExcerpt =
+    value.length > maxLength ||
+    (firstRange && firstRange.start > preferredLead + 20);
+
+  if (!shouldWindowExcerpt) {
+    return {
+      excerpt: value,
+      highlightRanges: ranges,
+    };
+  }
+
+  const window = chooseArchiveExcerptWindow(value, ranges, maxLength, preferredLead);
+  const excerptSource = value.slice(window.start, window.end);
+  const leadingTrim = excerptSource.length - excerptSource.trimStart().length;
+  const trailingTrim = excerptSource.length - excerptSource.trimEnd().length;
+  const trimmedStart = window.start + leadingTrim;
+  const trimmedEnd = window.end - trailingTrim;
+  const excerptBody = value.slice(trimmedStart, trimmedEnd);
+  const prefix = trimmedStart > 0 ? '…' : '';
+  const suffix = trimmedEnd < value.length ? '…' : '';
+
+  return {
+    excerpt: `${prefix}${excerptBody}${suffix}`,
+    highlightRanges: ranges
+      .filter((range) => range.end > trimmedStart && range.start < trimmedEnd)
+      .map((range) => ({
+        start: Math.max(range.start, trimmedStart) - trimmedStart + prefix.length,
+        end: Math.min(range.end, trimmedEnd) - trimmedStart + prefix.length,
+      })),
+  };
+}
+
+function chooseArchiveExcerptWindow(
+  value: string,
+  ranges: ArchiveSearchHighlightRange[],
+  maxLength: number,
+  preferredLead: number,
+) {
+  let bestWindow = {
+    start: 0,
+    end: Math.min(value.length, maxLength),
+    score: -1,
+  };
+
+  for (const range of ranges) {
+    let start = Math.max(0, range.start - preferredLead);
+    let end = Math.min(value.length, start + maxLength);
+
+    while (start > 0 && value[start - 1] !== ' ') {
+      start -= 1;
+    }
+
+    while (end < value.length && value[end] !== ' ') {
+      end += 1;
+    }
+
+    const overlappingRanges = ranges.filter((candidate) => candidate.end > start && candidate.start < end);
+    const overlapCount = overlappingRanges.length;
+    const overlapChars = overlappingRanges.reduce(
+      (sum, candidate) => sum + Math.min(candidate.end, end) - Math.max(candidate.start, start),
+      0,
+    );
+    const firstVisibleMatchOffset = overlapCount > 0
+      ? overlappingRanges[0]!.start - start
+      : maxLength;
+    const distanceFromPreferredLead = Math.abs(firstVisibleMatchOffset - preferredLead);
+    const windowScore =
+      overlapCount * 1000 +
+      overlapChars * 25 -
+      distanceFromPreferredLead * 4 -
+      start * 0.05;
+
+    if (windowScore > bestWindow.score) {
+      bestWindow = { start, end, score: windowScore };
+    }
+  }
+
+  return bestWindow;
+}
+
+function buildArchiveFuzzyPreviewCandidate(
+  value: string,
+  searchTerms: string[],
+  rawSearch: string,
+): ArchivePreviewCandidate | null {
+  const tokens = Array.from(value.matchAll(/[A-Za-z0-9']+/g));
+  const normalizedTerms = searchTerms.length > 0 ? searchTerms : [normalizeArchiveSearchText(rawSearch)];
+  let bestTokenMatch:
+    | {
+        range: ArchiveSearchHighlightRange;
+        score: number;
+      }
+    | null = null;
+
+  for (const token of tokens) {
+    const tokenText = token[0];
+    const tokenStart = token.index ?? 0;
+    const normalizedToken = normalizeArchiveSearchText(tokenText);
+    if (normalizedToken.length < 3) continue;
+
+    for (const searchTerm of normalizedTerms) {
+      if (searchTerm.length < 3) continue;
+      const score = getArchiveTokenSimilarity(normalizedToken, searchTerm);
+
+      if (score < 0.76) continue;
+
+      if (!bestTokenMatch || score > bestTokenMatch.score) {
+        bestTokenMatch = {
+          score,
+          range: {
+            start: tokenStart,
+            end: tokenStart + tokenText.length,
+          },
+        };
+      }
+    }
+  }
+
+  if (!bestTokenMatch) {
+    return null;
+  }
+
+  const excerptResult = buildArchiveExcerptWithHighlights(value, [bestTokenMatch.range]);
+  return {
+    excerpt: excerptResult.excerpt,
+    highlightRanges: excerptResult.highlightRanges,
+    score: 4 + bestTokenMatch.score,
+    totalMatches: 1,
+  };
+}
+
+function getArchivePhraseMatchBonus(value: string, rawSearch: string) {
+  const phrase = rawSearch.trim().toLowerCase();
+  if (phrase.length < 2) return 0;
+  return value.toLowerCase().includes(phrase) ? 6 : 0;
+}
+
+function countArchiveMatchedTerms(value: string, searchTerms: string[]) {
+  const loweredValue = value.toLowerCase();
+  return searchTerms.filter((term) => loweredValue.includes(term.toLowerCase())).length;
+}
+
+function getArchiveTokenSimilarity(left: string, right: string) {
+  if (left === right) return 1;
+
+  let sharedPrefix = 0;
+  while (
+    sharedPrefix < left.length &&
+    sharedPrefix < right.length &&
+    left[sharedPrefix] === right[sharedPrefix]
+  ) {
+    sharedPrefix += 1;
+  }
+
+  if (sharedPrefix >= 4 && Math.abs(left.length - right.length) <= 2) {
+    return 0.84;
+  }
+
+  const distance = getLevenshteinDistance(left, right);
+  return 1 - distance / Math.max(left.length, right.length, 1);
+}
+
+function getLevenshteinDistance(left: string, right: string) {
+  const matrix = Array.from({ length: left.length + 1 }, () =>
+    new Array<number>(right.length + 1).fill(0),
+  );
+
+  for (let leftIndex = 0; leftIndex <= left.length; leftIndex += 1) {
+    matrix[leftIndex][0] = leftIndex;
+  }
+
+  for (let rightIndex = 0; rightIndex <= right.length; rightIndex += 1) {
+    matrix[0][rightIndex] = rightIndex;
+  }
+
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const substitutionCost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1;
+      matrix[leftIndex][rightIndex] = Math.min(
+        matrix[leftIndex - 1][rightIndex] + 1,
+        matrix[leftIndex][rightIndex - 1] + 1,
+        matrix[leftIndex - 1][rightIndex - 1] + substitutionCost,
+      );
+    }
+  }
+
+  return matrix[left.length][right.length];
+}
+
+function getArchiveFormatDisplayLabel(format: string) {
+  const normalizedFormat = format.toLowerCase();
+  if (normalizedFormat in ARCHIVE_FORMAT_LABELS) {
+    return ARCHIVE_FORMAT_LABELS[normalizedFormat as keyof typeof ARCHIVE_FORMAT_LABELS];
+  }
+
+  return format;
 }
 
 function mapArchiveFormatFacets(rows: ArchiveFacetRow[]): ArchiveFormatFacet[] {

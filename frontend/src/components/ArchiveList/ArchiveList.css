@@ -74,6 +74,11 @@
   justify-content: center;
 }
 
+.letter-card-shell {
+  position: relative;
+  width: 100%;
+}
+
 .letter-card {
   appearance: none;
   border: none;
@@ -92,8 +97,13 @@
   overflow: hidden;
   position: relative;
   text-align: left;
+  width: 100%;
   content-visibility: auto;
   contain-intrinsic-size: 312px;
+}
+
+.letter-card-shell--has-search-match .letter-card {
+  padding-left: 0;
 }
 
 .letter-card:hover {
@@ -196,6 +206,7 @@
   background:
     linear-gradient(180deg, rgba(20, 17, 14, 0.18), rgba(20, 17, 14, 0.2) 36%, rgba(20, 17, 14, 0.58) 74%, rgba(20, 17, 14, 0.84) 100%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 44%);
+  transition: background 0.22s ease;
 }
 
 .letter-card-date,
@@ -215,6 +226,55 @@
   text-shadow: 0 1px 10px rgba(14, 11, 8, 0.42);
 }
 
+.letter-card-search-toggle {
+  position: absolute;
+  inset: 0.76rem auto auto 0.78rem;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border: 1px solid rgba(255, 250, 242, 0.18);
+  border-radius: 999px;
+  background: rgba(20, 17, 14, 0.44);
+  color: rgba(255, 250, 242, 0.88);
+  box-shadow: 0 10px 22px rgba(8, 7, 6, 0.14);
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease,
+    opacity 0.18s ease;
+  opacity: 0.8;
+}
+
+.letter-card-search-toggle:hover,
+.letter-card-search-toggle:focus-visible,
+.letter-card-search-toggle.is-active {
+  background: rgba(20, 17, 14, 0.72);
+  border-color: rgba(255, 250, 242, 0.32);
+  color: rgba(255, 250, 242, 0.98);
+  opacity: 1;
+}
+
+.letter-card-search-toggle:focus-visible {
+  outline: 2px solid rgba(255, 227, 130, 0.8);
+  outline-offset: 2px;
+}
+
+.letter-card-search-toggle-icon {
+  width: 1rem;
+  height: 1rem;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .letter-card-content {
   position: absolute;
   inset: auto 0 0;
@@ -224,6 +284,67 @@
   flex-direction: column;
   gap: 0.18rem;
   z-index: 1;
+  transition: opacity 0.18s ease, transform 0.22s ease;
+}
+
+.letter-card-search-match {
+  position: absolute;
+  inset: auto 0.75rem 0.75rem;
+  z-index: 2;
+  padding: 0.58rem 0.72rem 0.62rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 250, 242, 0.18);
+  background:
+    linear-gradient(180deg, rgba(17, 14, 11, 0.92), rgba(17, 14, 11, 0.84)),
+    linear-gradient(135deg, rgba(223, 241, 245, 0.1), transparent 60%);
+  box-shadow: 0 18px 30px rgba(8, 7, 6, 0.2);
+  color: rgba(255, 250, 242, 0.96);
+  opacity: 0;
+  transform: translateY(0.5rem);
+  transition: opacity 0.18s ease, transform 0.22s ease;
+  pointer-events: none;
+}
+
+.letter-card-search-match-count {
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: rgba(255, 250, 242, 0.72);
+}
+
+.letter-card-search-match-excerpt {
+  margin-top: 0.28rem;
+  font-size: 0.72rem;
+  line-height: 1.32;
+  color: rgba(255, 250, 242, 0.92);
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.letter-card-search-match-highlight {
+  background: rgba(255, 227, 130, 0.92);
+  color: rgba(17, 14, 11, 0.96);
+  border-radius: 0.3em;
+  padding: 0.02em 0.05em;
+  box-shadow: 0 0 0 1px rgba(255, 227, 130, 0.08);
+}
+
+.letter-card--search-preview-visible .letter-card-search-match {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.letter-card--search-preview-visible .letter-card-content {
+  opacity: 0.12;
+  transform: translateY(0.2rem);
+}
+
+.letter-card--search-preview-visible .letter-card-overlay {
+  background:
+    linear-gradient(180deg, rgba(20, 17, 14, 0.28), rgba(20, 17, 14, 0.36) 34%, rgba(20, 17, 14, 0.72) 74%, rgba(20, 17, 14, 0.92) 100%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 44%);
 }
 
 .letter-card-date {
@@ -292,6 +413,12 @@
 
   .letter-card-page-count {
     inset: 0.78rem 0.85rem auto auto;
+  }
+
+  .letter-card-search-toggle {
+    inset: 0.7rem auto auto 0.72rem;
+    width: 2rem;
+    height: 2rem;
   }
 
   .letter-card-content {

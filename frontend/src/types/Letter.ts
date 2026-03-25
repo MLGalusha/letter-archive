@@ -162,12 +162,24 @@ export interface LetterCardData {
   date?: string;
   dateRaw?: string;
   hook?: string;
+  searchPreview?: ArchiveSearchPreview;
 }
 
 export interface ArchiveShelfItem extends LetterCardData {
   location?: string;
   verified: boolean;
   searchText?: string;
+}
+
+export interface ArchiveSearchHighlightRange {
+  start: number;
+  end: number;
+}
+
+export interface ArchiveSearchPreview {
+  excerpt: string;
+  matchCount: number;
+  highlightRanges: ArchiveSearchHighlightRange[];
 }
 
 export interface ArchiveFacetValue {

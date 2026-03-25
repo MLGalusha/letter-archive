@@ -458,10 +458,19 @@ describe('letters route integration', () => {
           sender: 'Jimmie',
           recipient: 'Molly',
           location: 'Overland Park, Kans.',
-          hook: 'Jimmie pleads for a reply.',
+          hook: 'Jimmie pleads with Molly for a reply.',
           metadataVerified: true,
           pageId: 'page-1',
           checksumSha256: 'abcdef123456',
+          formats: ['letter'],
+          senders: ['Jimmie'],
+          recipients: ['Molly'],
+          places: ['Overland Park, Kans.'],
+          hooks: ['Jimmie pleads with Molly for a reply.'],
+          summaries: [],
+          photoDescriptions: [],
+          extraContentTranscripts: [],
+          transcriptionTexts: ['Dear Molly, please write soon because I still love you dearly.'],
         },
       ])
       .mockResolvedValueOnce([{ count: 1 }])
@@ -494,9 +503,19 @@ describe('letters route integration', () => {
           recipient: 'Molly',
           date: 'August 10th, 1947',
           dateRaw: '19470810',
-          hook: 'Jimmie pleads for a reply.',
+          hook: 'Jimmie pleads with Molly for a reply.',
           location: 'Overland Park, Kans.',
           verified: true,
+          searchPreview: {
+            excerpt: 'Dear Molly, please write soon because I still love you dearly.',
+            matchCount: 1,
+            highlightRanges: [
+              {
+                start: 5,
+                end: 10,
+              },
+            ],
+          },
         },
       ],
       page: 1,
@@ -531,5 +550,76 @@ describe('letters route integration', () => {
       },
     });
     expect(executeMock).toHaveBeenCalledTimes(6);
+  });
+
+  it('centers long search previews around the visible match', async () => {
+    executeMock
+      .mockResolvedValueOnce([
+        {
+          id: 'letter-primary',
+          collectionId: 'collection-9',
+          collectionCode: '009',
+          collectionTitle: 'Collection Nine',
+          dateRaw: '19470810',
+          primaryType: 'L',
+          primaryPageCount: 2,
+          sender: 'Jimmie',
+          recipient: 'Molly',
+          location: 'Overland Park, Kans.',
+          hook: 'Jimmie pleads with Molly for a reply.',
+          metadataVerified: true,
+          pageId: 'page-1',
+          checksumSha256: 'abcdef123456',
+          formats: ['letter'],
+          senders: ['Jimmie'],
+          recipients: ['Molly'],
+          places: ['Overland Park, Kans.'],
+          hooks: ['Jimmie pleads with Molly for a reply.'],
+          summaries: [],
+          photoDescriptions: [],
+          extraContentTranscripts: [],
+          transcriptionTexts: [
+            'Jimmie spends the first part of the letter talking about delayed trains, long shifts at work, money worries, and the weather before finally asking Molly to write soon.',
+          ],
+        },
+      ])
+      .mockResolvedValueOnce([{ count: 1 }])
+      .mockResolvedValueOnce([{ value: 'letter', count: 1 }])
+      .mockResolvedValueOnce([{ value: 'Jimmie', count: 1 }])
+      .mockResolvedValueOnce([{ value: 'Overland Park, Kans.', count: 1 }])
+      .mockResolvedValueOnce([{ value: 1947, count: 1 }]);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters/search',
+      path: '/letters/search',
+      query: {
+        search: 'Molly',
+        limit: '5',
+      },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const searchPreview = (response.body as {
+      letters: Array<{
+        searchPreview: {
+          excerpt: string;
+          highlightRanges: Array<{ start: number; end: number }>;
+        };
+      }>;
+    }).letters[0]?.searchPreview;
+
+    expect(searchPreview).toBeDefined();
+    expect(searchPreview.excerpt.startsWith('…')).toBe(true);
+    expect(searchPreview.excerpt.indexOf('Molly')).toBeGreaterThanOrEqual(0);
+    expect(searchPreview.excerpt.indexOf('Molly')).toBeLessThanOrEqual(28);
+    expect(
+      searchPreview.excerpt.slice(
+        searchPreview.highlightRanges[0]!.start,
+        searchPreview.highlightRanges[0]!.end,
+      ),
+    ).toBe('Molly');
   });
 });

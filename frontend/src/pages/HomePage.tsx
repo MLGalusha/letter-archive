@@ -12,6 +12,7 @@ import {
 } from "../api/letters";
 import type { ArchiveShelfItem } from "../types/Letter";
 import { buildHomeSeo } from "../utils/seo";
+import { EMPTY_DOCK, useHeaderDock } from "../contexts/HeaderDockContext";
 import "./HomePage.css";
 
 function formatDate(dateStr: string): string {
@@ -61,6 +62,7 @@ function mergeArchiveItems(
 export default function HomePage() {
   const homeSeo = buildHomeSeo();
   const navigate = useNavigate();
+  const { setDock } = useHeaderDock();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") || "");
   const [filters, setFilters] = useState<SearchFilters>(() => ({
@@ -99,6 +101,9 @@ export default function HomePage() {
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [archiveLoadMoreError, setArchiveLoadMoreError] = useState<string | null>(null);
   const requestVersionRef = useRef(0);
+  const archiveSearchRef = useRef<HTMLElement | null>(null);
+  const searchDockTriggerRef = useRef<HTMLDivElement | null>(null);
+  const [stickyDockActive, setStickyDockActive] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -195,6 +200,68 @@ export default function HomePage() {
       window.clearTimeout(timer);
     };
   }, [requestParams, searchQuery]);
+
+  useEffect(() => {
+    let ticking = false;
+
+    const updateStickyDock = () => {
+      ticking = false;
+
+      const header = document.querySelector(".header") as HTMLElement | null;
+      const headerHeight = header?.getBoundingClientRect().height || 0;
+      const triggerRect = searchDockTriggerRef.current?.getBoundingClientRect();
+      const fallbackTop = archiveSearchRef.current?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY;
+      const shouldActivate = triggerRect
+        ? triggerRect.bottom <= headerHeight + 18
+        : fallbackTop <= headerHeight + 18;
+      setStickyDockActive(shouldActivate);
+    };
+
+    const handleScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(updateStickyDock);
+    };
+
+    updateStickyDock();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll);
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    setDock({
+      content: (
+        <SearchBar
+          query={searchQuery}
+          filters={filters}
+          facets={archiveResults.facets}
+          total={archiveResults.total}
+          loading={archiveLoading}
+          embedded
+          variant="compact"
+          onQueryChange={setSearchQuery}
+          onFiltersChange={setFilters}
+        />
+      ),
+      active: stickyDockActive,
+      visible: stickyDockActive,
+    });
+  }, [
+    archiveLoading,
+    archiveResults.facets,
+    archiveResults.total,
+    filters,
+    searchQuery,
+    setDock,
+    stickyDockActive,
+  ]);
+
+  useEffect(() => () => setDock(EMPTY_DOCK), [setDock]);
 
   const handleArchiveLoadMore = async () => {
     if (archiveLoading || archiveLoadingMore) return;
@@ -331,18 +398,20 @@ export default function HomePage() {
         </section>
       )}
 
-      <section id="archive-search" className="home-archive-surface">
+      <section id="archive-search" className="home-archive-surface" ref={archiveSearchRef}>
         <div className="home-search-panel">
-          <SearchBar
-            query={searchQuery}
-            filters={filters}
-            facets={archiveResults.facets}
-            total={archiveResults.total}
-            loading={archiveLoading}
-            embedded
-            onQueryChange={setSearchQuery}
-            onFiltersChange={setFilters}
-          />
+        <SearchBar
+          query={searchQuery}
+          filters={filters}
+          facets={archiveResults.facets}
+          total={archiveResults.total}
+          loading={archiveLoading}
+          embedded
+          variant="full"
+          dockTriggerRef={searchDockTriggerRef}
+          onQueryChange={setSearchQuery}
+          onFiltersChange={setFilters}
+        />
         </div>
 
         <div className="home-surface-divider" aria-hidden="true" />

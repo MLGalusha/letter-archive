@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type Ref } from "react";
 import type { ArchiveSearchFacets, LetterImageType } from "../../types/Letter";
 import "./SearchBar.css";
 
@@ -9,6 +9,8 @@ interface SearchBarProps {
   total: number;
   loading: boolean;
   embedded?: boolean;
+  variant?: "full" | "compact";
+  dockTriggerRef?: Ref<HTMLDivElement>;
   onQueryChange: (query: string) => void;
   onFiltersChange: (filters: SearchFilters) => void;
 }
@@ -62,9 +64,12 @@ export default function SearchBar({
   total,
   loading,
   embedded = false,
+  variant = "full",
+  dockTriggerRef,
   onQueryChange,
   onFiltersChange,
 }: SearchBarProps) {
+  const isCompact = variant === "compact";
   const hasQuery = Boolean(query.trim());
   const hasRefinementFilters = Boolean(
     filters.person
@@ -74,20 +79,36 @@ export default function SearchBar({
       || filters.dateRange?.end
       || filters.verified !== undefined && filters.verified !== null,
   );
-  const [showFilters, setShowFilters] = useState(hasRefinementFilters);
+  const [showFilters, setShowFilters] = useState(isCompact ? false : hasRefinementFilters);
   const [startYearInput, setStartYearInput] = useState(filters.dateRange?.start?.toString() || "");
   const [endYearInput, setEndYearInput] = useState(filters.dateRange?.end?.toString() || "");
+  const searchIdBase = useId().replace(/:/g, "");
+  const compactPanelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (hasRefinementFilters) {
+    if (!isCompact && hasRefinementFilters) {
       setShowFilters(true);
     }
-  }, [hasRefinementFilters]);
+  }, [hasRefinementFilters, isCompact]);
 
   useEffect(() => {
     setStartYearInput(filters.dateRange?.start?.toString() || "");
     setEndYearInput(filters.dateRange?.end?.toString() || "");
   }, [filters.dateRange?.end, filters.dateRange?.start]);
+
+  useEffect(() => {
+    if (!isCompact || !showFilters) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return;
+      if (!compactPanelRef.current?.contains(event.target)) {
+        setShowFilters(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isCompact, showFilters]);
 
   const hasActiveFilters = Boolean(
     query.trim()
@@ -193,6 +214,8 @@ export default function SearchBar({
     return pills;
   }, [facets.formats, filters, updateFilter]);
 
+  const activeFilterCount = activePills.length;
+
   const applyDateRange = () => {
     const start = startYearInput ? Number(startYearInput) : undefined;
     const end = endYearInput ? Number(endYearInput) : undefined;
@@ -209,7 +232,243 @@ export default function SearchBar({
     setEndYearInput("");
     onQueryChange("");
     onFiltersChange({});
+    if (isCompact) {
+      setShowFilters(false);
+    }
   };
+
+  const correspondentFilterId = `${searchIdBase}-person`;
+  const placeFilterId = `${searchIdBase}-place`;
+  const startYearFilterId = `${searchIdBase}-year-start`;
+
+  const formatFacetRow = facets.formats.length > 0 ? (
+    <FacetRow
+      label="Browse by format"
+      items={facets.formats.map((facet) => ({
+        key: facet.value,
+        label: facet.label,
+        count: facet.count,
+        active: filters.format === facet.value,
+        onClick: () => updateFilter({ format: filters.format === facet.value ? null : facet.value }),
+      }))}
+    />
+  ) : null;
+
+  const renderActivePills = (compactLayout = false) => {
+    if (activePills.length === 0) return null;
+
+    return (
+      <div
+        className={`search-active-pills${compactLayout ? " search-active-pills-compact" : ""}`}
+        aria-label="Active archive filters"
+      >
+        {activePills.map((pill) => (
+          <button
+            key={pill.key}
+            type="button"
+            className="search-active-pill"
+            onClick={pill.onClear}
+          >
+            <span>{pill.label}</span>
+            <span aria-hidden="true">×</span>
+          </button>
+        ))}
+      </div>
+    );
+  };
+
+  const refinementFields = (
+    <div className={`filters${isCompact ? " filters-compact" : ""}`}>
+      <div className="filter-group">
+        <label className="filter-label" htmlFor={correspondentFilterId}>Correspondent</label>
+        <input
+          id={correspondentFilterId}
+          type="text"
+          className="filter-input"
+          placeholder="Sender or recipient"
+          value={filters.person || ""}
+          onChange={(event) => updateFilter({ person: event.target.value || null })}
+        />
+        {facets.correspondents.length > 0 && (
+          <div className="filter-suggestion-row">
+            {facets.correspondents.slice(0, 6).map((facet) => (
+              <button
+                key={facet.value}
+                type="button"
+                className={`search-facet-chip ${filters.person === facet.value ? "active" : ""}`}
+                onClick={() => updateFilter({ person: filters.person === facet.value ? null : facet.value })}
+              >
+                <span>{facet.value}</span>
+                <span className="search-facet-count">{facet.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="filter-group">
+        <label className="filter-label" htmlFor={placeFilterId}>Place</label>
+        <input
+          id={placeFilterId}
+          type="text"
+          className="filter-input"
+          placeholder="Town, city, or country"
+          value={filters.place || ""}
+          onChange={(event) => updateFilter({ place: event.target.value || null })}
+        />
+        {facets.places.length > 0 && (
+          <div className="filter-suggestion-row">
+            {facets.places.slice(0, 6).map((facet) => (
+              <button
+                key={facet.value}
+                type="button"
+                className={`search-facet-chip ${filters.place === facet.value ? "active" : ""}`}
+                onClick={() => updateFilter({ place: filters.place === facet.value ? null : facet.value })}
+              >
+                <span>{facet.value}</span>
+                <span className="search-facet-count">{facet.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="filter-group">
+        <label className="filter-label" htmlFor={startYearFilterId}>Year Range</label>
+        {facets.years.length > 0 && (
+          <div className="filter-suggestion-row">
+            {facets.years.slice(0, 6).map((facet) => (
+              <button
+                key={facet.value}
+                type="button"
+                className={`search-facet-chip ${filters.year === facet.value ? "active" : ""}`}
+                onClick={() => updateFilter({
+                  year: filters.year === facet.value ? null : facet.value,
+                  dateRange: undefined,
+                })}
+              >
+                <span>{facet.value}</span>
+                <span className="search-facet-count">{facet.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="date-range">
+          <input
+            id={startYearFilterId}
+            type="number"
+            className="filter-input"
+            placeholder="From"
+            value={startYearInput}
+            onChange={(event) => setStartYearInput(event.target.value)}
+            onBlur={applyDateRange}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") applyDateRange();
+            }}
+          />
+          <span className="date-separator">to</span>
+          <input
+            type="number"
+            className="filter-input"
+            placeholder="To"
+            value={endYearInput}
+            onChange={(event) => setEndYearInput(event.target.value)}
+            onBlur={applyDateRange}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") applyDateRange();
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="filter-group">
+        <span className="filter-label">Verification</span>
+        <div className="radio-group">
+          {[
+            { label: "All Items", value: null },
+            { label: "Verified Only", value: true },
+            { label: "Unverified", value: false },
+          ].map((option) => (
+            <button
+              key={option.label}
+              type="button"
+              className={`radio-label ${filters.verified === option.value ? "active" : ""}`}
+              onClick={() => updateFilter({ verified: option.value })}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  if (isCompact) {
+    return (
+      <div className={`search search-compact${embedded ? " search-embedded" : ""}`} ref={compactPanelRef}>
+        <div className="search-input-wrapper search-input-wrapper-compact">
+          <input
+            type="search"
+            className="search-input"
+            placeholder='Search names, places, dates, or phrases...'
+            aria-label="Search the archive"
+            enterKeyHint="search"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+          />
+
+          <div
+            className="search-compact-filter-wrap"
+            onMouseEnter={() => setShowFilters(true)}
+            onMouseLeave={() => setShowFilters(false)}
+          >
+            <button
+              type="button"
+              className={`filter-toggle search-compact-filter-toggle${showFilters ? " active" : ""}`}
+              aria-label="Open archive filters"
+              aria-expanded={showFilters}
+              onClick={() => setShowFilters((current) => !current)}
+            >
+              Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+            </button>
+
+            {showFilters && (
+              <div className="search-compact-flyout" onMouseLeave={() => setShowFilters(false)}>
+                <div className="search-compact-flyout-header">
+                  <div className="search-compact-flyout-copy">
+                    <span className="search-facet-label">Refine the archive</span>
+                    <p className="search-compact-flyout-status">{searchStatus}</p>
+                  </div>
+                  {hasActiveFilters && (
+                    <button type="button" className="clear-filters" onClick={clearAll}>
+                      Clear All
+                    </button>
+                  )}
+                </div>
+                {formatFacetRow}
+                <div className="search-toolbar search-toolbar-compact">
+                  <div className="search-sort-group" role="group" aria-label="Sort archive results">
+                    {availableSortOptions.map((option) => (
+                      <button
+                        key={`${option.sort}-${option.sortOrder}`}
+                        type="button"
+                        className={`search-sort-chip ${sameSort(query, filters, option) ? "active" : ""}`}
+                        onClick={() => updateFilter({ sort: option.sort, sortOrder: option.sortOrder })}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {renderActivePills(true)}
+                {refinementFields}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`search${embedded ? " search-embedded" : ""}`}>
@@ -227,13 +486,7 @@ export default function SearchBar({
         </div>
       </div>
 
-      <form
-        className="search-input-wrapper"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onQueryChange(query.trim());
-        }}
-      >
+      <div className="search-input-wrapper" ref={dockTriggerRef}>
         <input
           type="search"
           className="search-input"
@@ -243,13 +496,7 @@ export default function SearchBar({
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
         />
-        <button
-          type="submit"
-          className="search-button"
-        >
-          Search
-        </button>
-      </form>
+      </div>
 
       {quickExamples.length > 0 && !hasQuery && !hasActiveFilters && (
         <div className="search-examples">
@@ -267,18 +514,7 @@ export default function SearchBar({
         </div>
       )}
 
-      {facets.formats.length > 0 && (
-        <FacetRow
-          label="Browse by format"
-          items={facets.formats.map((facet) => ({
-            key: facet.value,
-            label: facet.label,
-            count: facet.count,
-            active: filters.format === facet.value,
-            onClick: () => updateFilter({ format: filters.format === facet.value ? null : facet.value }),
-          }))}
-        />
-      )}
+      {formatFacetRow}
 
       <div className="search-toolbar">
         <div className="search-sort-group" role="group" aria-label="Sort archive results">
@@ -312,147 +548,9 @@ export default function SearchBar({
         </div>
       </div>
 
-      {activePills.length > 0 && (
-        <div className="search-active-pills" aria-label="Active archive filters">
-          {activePills.map((pill) => (
-            <button
-              key={pill.key}
-              type="button"
-              className="search-active-pill"
-              onClick={pill.onClear}
-            >
-              <span>{pill.label}</span>
-              <span aria-hidden="true">×</span>
-            </button>
-          ))}
-        </div>
-      )}
+      {renderActivePills()}
 
-      {showFilters && (
-        <div className="filters">
-          <div className="filter-group">
-            <label className="filter-label" htmlFor="archive-person-filter">Correspondent</label>
-            <input
-              id="archive-person-filter"
-              type="text"
-              className="filter-input"
-              placeholder="Sender or recipient"
-              value={filters.person || ""}
-              onChange={(event) => updateFilter({ person: event.target.value || null })}
-            />
-            {facets.correspondents.length > 0 && (
-              <div className="filter-suggestion-row">
-                {facets.correspondents.slice(0, 6).map((facet) => (
-                  <button
-                    key={facet.value}
-                    type="button"
-                    className={`search-facet-chip ${filters.person === facet.value ? "active" : ""}`}
-                    onClick={() => updateFilter({ person: filters.person === facet.value ? null : facet.value })}
-                  >
-                    <span>{facet.value}</span>
-                    <span className="search-facet-count">{facet.count}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="filter-group">
-            <label className="filter-label" htmlFor="archive-place-filter">Place</label>
-            <input
-              id="archive-place-filter"
-              type="text"
-              className="filter-input"
-              placeholder="Town, city, or country"
-              value={filters.place || ""}
-              onChange={(event) => updateFilter({ place: event.target.value || null })}
-            />
-            {facets.places.length > 0 && (
-              <div className="filter-suggestion-row">
-                {facets.places.slice(0, 6).map((facet) => (
-                  <button
-                    key={facet.value}
-                    type="button"
-                    className={`search-facet-chip ${filters.place === facet.value ? "active" : ""}`}
-                    onClick={() => updateFilter({ place: filters.place === facet.value ? null : facet.value })}
-                  >
-                    <span>{facet.value}</span>
-                    <span className="search-facet-count">{facet.count}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="filter-group">
-            <label className="filter-label" htmlFor="archive-start-year">Year Range</label>
-            {facets.years.length > 0 && (
-              <div className="filter-suggestion-row">
-                {facets.years.slice(0, 6).map((facet) => (
-                  <button
-                    key={facet.value}
-                    type="button"
-                    className={`search-facet-chip ${filters.year === facet.value ? "active" : ""}`}
-                    onClick={() => updateFilter({
-                      year: filters.year === facet.value ? null : facet.value,
-                      dateRange: undefined,
-                    })}
-                  >
-                    <span>{facet.value}</span>
-                    <span className="search-facet-count">{facet.count}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="date-range">
-              <input
-                id="archive-start-year"
-                type="number"
-                className="filter-input"
-                placeholder="From"
-                value={startYearInput}
-                onChange={(event) => setStartYearInput(event.target.value)}
-                onBlur={applyDateRange}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") applyDateRange();
-                }}
-              />
-              <span className="date-separator">to</span>
-              <input
-                type="number"
-                className="filter-input"
-                placeholder="To"
-                value={endYearInput}
-                onChange={(event) => setEndYearInput(event.target.value)}
-                onBlur={applyDateRange}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") applyDateRange();
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="filter-group">
-            <span className="filter-label">Verification</span>
-            <div className="radio-group">
-              {[
-                { label: "All Items", value: null },
-                { label: "Verified Only", value: true },
-                { label: "Unverified", value: false },
-              ].map((option) => (
-                <button
-                  key={option.label}
-                  type="button"
-                  className={`radio-label ${filters.verified === option.value ? "active" : ""}`}
-                  onClick={() => updateFilter({ verified: option.value })}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {showFilters && refinementFields}
     </div>
   );
 }

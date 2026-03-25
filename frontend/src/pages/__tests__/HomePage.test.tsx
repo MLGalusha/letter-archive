@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import HomePage from "../HomePage";
+import { HeaderDockProvider } from "../../contexts/HeaderDockContext";
 import type { ArchiveShelfItem } from "../../types/Letter";
 
 const listBlogPostsMock = vi.fn();
@@ -89,7 +90,9 @@ describe("HomePage archive browsing", () => {
 
     render(
       <MemoryRouter>
-        <HomePage />
+        <HeaderDockProvider>
+          <HomePage />
+        </HeaderDockProvider>
       </MemoryRouter>,
     );
 

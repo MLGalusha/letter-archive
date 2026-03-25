@@ -4,6 +4,26 @@
   gap: 1rem;
 }
 
+.archive-section-content {
+  transition: opacity 0.22s ease;
+  overflow-anchor: none;
+}
+
+.archive-collapse-spacer {
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.archive-section-content--loading {
+  opacity: 0.92;
+}
+
+.archive-section-content--sparse {
+  min-height: clamp(26rem, 62vh, 38rem);
+}
+
 .loading-message,
 .error-message {
   margin: 0;
@@ -45,6 +65,13 @@
   margin: 0;
   font-size: 0.9rem;
   color: var(--text-muted);
+}
+
+.archive-section-content--sparse .no-results {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .letter-card {

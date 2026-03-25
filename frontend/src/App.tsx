@@ -1,33 +1,43 @@
+import { Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import Header from "./components/Header/Header";
 import ScrollToTop from "./components/ScrollToTop";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import HomePage from "./pages/HomePage";
-import LetterDetailPage from "./pages/LetterDetailPage";
-import AboutPage from "./pages/AboutPage";
-import SupportPage from "./pages/SupportPage";
-import CollectionsPage from "./pages/CollectionsPage";
-import CollectionDetailPage from "./pages/CollectionDetailPage";
-import BlogPage from "./pages/UpdatesPage";
-import BlogDetailPage from "./pages/UpdateDetailPage";
-import ExplorePage from "./pages/ExplorePage";
-import PersonPage from "./pages/PersonPage";
-import PlacePage from "./pages/PlacePage";
-import NotFoundPage from "./pages/NotFoundPage";
-import AdminLoginPage from "./pages/admin/AdminLoginPage";
-import AcceptInvitePage from "./pages/admin/AcceptInvitePage";
-import AdminDashboard from "./pages/admin/AdminDashboard";
-import UploadLetterPage from "./pages/admin/UploadLetterPage";
-import LetterReviewPage from "./pages/admin/LetterReviewPage";
-import ProcessingQueuePage from "./pages/admin/ProcessingQueuePage";
-import SettingsPage from "./pages/admin/SettingsPage";
-import UsagePage from "./pages/admin/UsagePage";
-import NotificationsPage from "./pages/admin/NotificationsPage";
-import NotesPage from "./pages/admin/NotesPage";
-import ContentPage from "./pages/admin/ContentPage";
-import BlogEditorPage from "./pages/admin/UpdateEditorPage";
+import { HeaderDockProvider } from "./contexts/HeaderDockContext";
 import "./App.css";
+
+const HomePage = lazy(() => import("./pages/HomePage"));
+const LetterDetailPage = lazy(() => import("./pages/LetterDetailPage"));
+const AboutPage = lazy(() => import("./pages/AboutPage"));
+const SupportPage = lazy(() => import("./pages/SupportPage"));
+const CollectionsPage = lazy(() => import("./pages/CollectionsPage"));
+const CollectionDetailPage = lazy(() => import("./pages/CollectionDetailPage"));
+const BlogPage = lazy(() => import("./pages/UpdatesPage"));
+const BlogDetailPage = lazy(() => import("./pages/UpdateDetailPage"));
+const PersonPage = lazy(() => import("./pages/PersonPage"));
+const PlacePage = lazy(() => import("./pages/PlacePage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
+const AdminLoginPage = lazy(() => import("./pages/admin/AdminLoginPage"));
+const AcceptInvitePage = lazy(() => import("./pages/admin/AcceptInvitePage"));
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
+const UploadLetterPage = lazy(() => import("./pages/admin/UploadLetterPage"));
+const LetterReviewPage = lazy(() => import("./pages/admin/LetterReviewPage"));
+const ProcessingQueuePage = lazy(() => import("./pages/admin/ProcessingQueuePage"));
+const SettingsPage = lazy(() => import("./pages/admin/SettingsPage"));
+const UsagePage = lazy(() => import("./pages/admin/UsagePage"));
+const NotificationsPage = lazy(() => import("./pages/admin/NotificationsPage"));
+const NotesPage = lazy(() => import("./pages/admin/NotesPage"));
+const ContentPage = lazy(() => import("./pages/admin/ContentPage"));
+const BlogEditorPage = lazy(() => import("./pages/admin/UpdateEditorPage"));
+
+function RouteLoading() {
+  return (
+    <div className="body-layout">
+      <p className="loading-message">Loading...</p>
+    </div>
+  );
+}
 
 function App() {
   return (
@@ -35,50 +45,60 @@ function App() {
     <ErrorBoundary>
     <Router>
       <ScrollToTop />
-      <Routes>
-        {/* Admin login + invite - no layout */}
-        <Route path="/admin-login" element={<AdminLoginPage />} />
-        <Route path="/admin-invite" element={<AcceptInvitePage />} />
+      <Suspense fallback={<RouteLoading />}>
+        <Routes>
+          {/* Admin login + invite - no layout */}
+          <Route path="/admin-login" element={<AdminLoginPage />} />
+          <Route path="/admin-invite" element={<AcceptInvitePage />} />
 
-        {/* Admin routes - with sidebar layout */}
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/admin/upload" element={<UploadLetterPage />} />
-        <Route path="/admin/processing" element={<ProcessingQueuePage />} />
-        <Route path="/admin/letters/:letterId" element={<LetterReviewPage />} />
-        <Route path="/admin/notes" element={<NotesPage />} />
-        <Route path="/admin/content" element={<ContentPage />} />
-        <Route path="/admin/content/blog/new" element={<BlogEditorPage />} />
-        <Route path="/admin/content/blog/:id" element={<BlogEditorPage />} />
-        <Route path="/admin/usage" element={<UsagePage />} />
-        <Route path="/admin/notifications" element={<NotificationsPage />} />
-        <Route path="/admin/settings" element={<SettingsPage />} />
+          {/* Admin routes - with sidebar layout */}
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/upload" element={<UploadLetterPage />} />
+          <Route path="/admin/processing" element={<ProcessingQueuePage />} />
+          <Route path="/admin/letters/:letterId" element={<LetterReviewPage />} />
+          <Route path="/admin/notes" element={<NotesPage />} />
+          <Route path="/admin/content" element={<ContentPage />} />
+          <Route path="/admin/content/blog/new" element={<BlogEditorPage />} />
+          <Route path="/admin/content/blog/:id" element={<BlogEditorPage />} />
+          <Route path="/admin/usage" element={<UsagePage />} />
+          <Route path="/admin/notifications" element={<NotificationsPage />} />
+          <Route path="/admin/settings" element={<SettingsPage />} />
 
-        {/* Letter detail - no main header (has its own header) */}
-        <Route path="/letter/:letterId" element={<LetterDetailPage />} />
+          {/* Letter detail - no main header (has its own header) */}
+          <Route
+            path="/letter/:letterId"
+            element={
+              <div className="public-letter-shell">
+                <LetterDetailPage />
+              </div>
+            }
+          />
 
-        {/* Public routes - with header */}
-        <Route
-          path="/*"
-          element={
-            <main className="main-page-layout">
-              <Header />
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/about" element={<AboutPage />} />
-                <Route path="/support" element={<SupportPage />} />
-                <Route path="/collections" element={<CollectionsPage />} />
-                <Route path="/collections/:collectionCode" element={<CollectionDetailPage />} />
-                <Route path="/blog" element={<BlogPage />} />
-                <Route path="/blog/:slug" element={<BlogDetailPage />} />
-                <Route path="/explore" element={<ExplorePage />} />
-                <Route path="/people/:personId" element={<PersonPage />} />
-                <Route path="/places/:placeId" element={<PlacePage />} />
-                <Route path="*" element={<NotFoundPage />} />
-              </Routes>
-            </main>
-          }
-        />
-      </Routes>
+          {/* Public routes - with header */}
+          <Route
+            path="/*"
+            element={
+              <main className="main-page-layout public-site-shell">
+                <HeaderDockProvider>
+                  <Header />
+                  <Routes>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/about" element={<AboutPage />} />
+                    <Route path="/support" element={<SupportPage />} />
+                    <Route path="/collections" element={<CollectionsPage />} />
+                    <Route path="/collections/:collectionCode" element={<CollectionDetailPage />} />
+                    <Route path="/blog" element={<BlogPage />} />
+                    <Route path="/blog/:slug" element={<BlogDetailPage />} />
+                    <Route path="/people/:personId" element={<PersonPage />} />
+                    <Route path="/places/:placeId" element={<PlacePage />} />
+                    <Route path="*" element={<NotFoundPage />} />
+                  </Routes>
+                </HeaderDockProvider>
+              </main>
+            }
+          />
+        </Routes>
+      </Suspense>
     </Router>
     </ErrorBoundary>
     </HelmetProvider>

@@ -17,9 +17,8 @@
   padding: 0.95rem 1rem;
   border-radius: 28px;
   border: 1px solid rgba(217, 207, 191, 0.95);
-  background: rgba(255, 250, 242, 0.82);
+  background: rgba(255, 250, 242, 0.94);
   box-shadow: 0 18px 42px rgba(29, 26, 20, 0.08);
-  backdrop-filter: blur(16px);
 }
 
 .header-brand-slot {
@@ -232,3 +231,4 @@
     justify-content: center;
   }
 }
+

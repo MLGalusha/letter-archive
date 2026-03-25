@@ -129,13 +129,7 @@
 }
 
 .home-hero-feature-card .letter-card-overlay {
-  background:
-    linear-gradient(180deg, rgba(20, 17, 14, 0.28), rgba(20, 17, 14, 0.34) 34%, rgba(20, 17, 14, 0.62) 72%, rgba(20, 17, 14, 0.9) 100%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 42%);
-}
-
-.home-hero-feature-card .letter-card-image {
-  filter: saturate(0.94) contrast(1.04) brightness(0.84);
+  background: linear-gradient(180deg, rgba(20, 17, 14, 0.28), rgba(20, 17, 14, 0.34) 34%, rgba(20, 17, 14, 0.62) 72%, rgba(20, 17, 14, 0.9) 100%);
 }
 
 .home-hero-feature-label,
@@ -148,7 +142,6 @@
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: rgba(255, 250, 242, 0.9);
-  text-shadow: 0 1px 12px rgba(14, 11, 8, 0.45);
 }
 
 .home-hero-feature-card .letter-card-page-count {
@@ -219,10 +212,7 @@
   padding: 1.45rem;
   border-radius: 34px;
   border: 1px solid rgba(217, 207, 191, 0.95);
-  background:
-    radial-gradient(circle at top left, rgba(223, 241, 245, 0.5), transparent 22%),
-    radial-gradient(circle at 85% 10%, rgba(246, 231, 206, 0.44), transparent 24%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 250, 242, 0.99));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 250, 242, 0.99));
   box-shadow: var(--shadow);
 }
 

@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import SEO from "../components/SEO";
 import SearchBar, { type SearchFilters } from "../components/SearchBar/SearchBar";
@@ -256,38 +256,48 @@ export default function HomePage() {
   }, [requestParams, searchQuery]);
 
   useEffect(() => {
+    const trigger = searchDockTriggerRef.current || archiveSearchRef.current;
+    if (!trigger) return;
+
+    const header = document.querySelector(".header") as HTMLElement | null;
+    let threshold = (header?.offsetHeight || 80) + 18;
+    // Cache trigger's absolute position — avoids getBoundingClientRect on every frame
+    let triggerOffsetBottom = trigger.getBoundingClientRect().bottom + window.scrollY;
     let ticking = false;
 
-    const updateStickyDock = () => {
+    const check = () => {
       ticking = false;
-
-      const header = document.querySelector(".header") as HTMLElement | null;
-      const headerHeight = header?.getBoundingClientRect().height || 0;
-      const triggerRect = searchDockTriggerRef.current?.getBoundingClientRect();
-      const fallbackTop = archiveSearchRef.current?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY;
-      const shouldActivate = triggerRect
-        ? triggerRect.bottom <= headerHeight + 18
-        : fallbackTop <= headerHeight + 18;
-      setStickyDockActive(shouldActivate);
+      // window.scrollY is cheap — no forced reflow
+      setStickyDockActive(triggerOffsetBottom <= window.scrollY + threshold);
     };
 
     const handleScroll = () => {
       if (ticking) return;
       ticking = true;
-      window.requestAnimationFrame(updateStickyDock);
+      window.requestAnimationFrame(check);
     };
 
-    updateStickyDock();
+    const handleResize = () => {
+      threshold = (header?.offsetHeight || 80) + 18;
+      triggerOffsetBottom = trigger.getBoundingClientRect().bottom + window.scrollY;
+      check();
+    };
+
+    check();
     window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("resize", handleScroll);
+    window.addEventListener("resize", handleResize);
 
     return () => {
       window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("resize", handleScroll);
+      window.removeEventListener("resize", handleResize);
     };
   }, []);
 
   useEffect(() => {
+    if (!stickyDockActive) {
+      setDock(EMPTY_DOCK);
+      return;
+    }
     setDock({
       content: (
         <SearchBar
@@ -309,8 +319,8 @@ export default function HomePage() {
           onFiltersChange={setFilters}
         />
       ),
-      active: stickyDockActive,
-      visible: stickyDockActive,
+      active: true,
+      visible: true,
     });
   }, [
     archiveLoading,
@@ -360,9 +370,9 @@ export default function HomePage() {
     }
   };
 
-  const handleLetterClick = (letterId: string) => {
+  const handleLetterClick = useCallback((letterId: string) => {
     navigate(`/letter/${letterId}`);
-  };
+  }, [navigate]);
 
   const resolvedArchiveSort = getResolvedArchiveSort(searchQuery, filters);
   const archiveSortCueField = resolvedArchiveSort === "createdAt" || resolvedArchiveSort === "collection"

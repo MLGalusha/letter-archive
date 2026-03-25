@@ -212,7 +212,6 @@
 .cd-visual-card img {
   display: block;
   object-fit: cover;
-  filter: saturate(0.9) contrast(1.03);
 }
 
 .cd-visual-fallback {

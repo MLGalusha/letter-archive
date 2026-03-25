@@ -19,7 +19,10 @@ const SEARCH_PREVIEW_COOLDOWN_KEY = "letter-card-search-preview-cooldowns";
 
 type SearchPreviewCooldowns = Record<string, number>;
 
+let cooldownCache: SearchPreviewCooldowns | null = null;
+
 function writeSearchPreviewCooldowns(cooldowns: SearchPreviewCooldowns) {
+  cooldownCache = cooldowns;
   if (typeof window === "undefined") return;
 
   try {
@@ -30,14 +33,20 @@ function writeSearchPreviewCooldowns(cooldowns: SearchPreviewCooldowns) {
 }
 
 function readSearchPreviewCooldowns(): SearchPreviewCooldowns {
+  if (cooldownCache !== null) return cooldownCache;
+
   if (typeof window === "undefined") return {};
 
   try {
     const rawValue = window.localStorage.getItem(SEARCH_PREVIEW_COOLDOWN_KEY);
-    if (!rawValue) return {};
+    if (!rawValue) {
+      cooldownCache = {};
+      return {};
+    }
 
     const parsedValue = JSON.parse(rawValue);
     if (!parsedValue || typeof parsedValue !== "object" || Array.isArray(parsedValue)) {
+      cooldownCache = {};
       return {};
     }
 
@@ -51,22 +60,27 @@ function readSearchPreviewCooldowns(): SearchPreviewCooldowns {
 
     if (Object.keys(activeCooldowns).length !== Object.keys(parsedValue).length) {
       writeSearchPreviewCooldowns(activeCooldowns);
+    } else {
+      cooldownCache = activeCooldowns;
     }
 
     return activeCooldowns;
   } catch {
+    cooldownCache = {};
     return {};
   }
 }
 
 function isSearchPreviewCoolingDown(cardId: string): boolean {
-  return Boolean(readSearchPreviewCooldowns()[cardId]);
+  const expiresAt = readSearchPreviewCooldowns()[cardId];
+  if (!expiresAt) return false;
+  return Date.now() < expiresAt;
 }
 
 function rememberSearchPreviewCooldown(cardId: string) {
   if (typeof window === "undefined") return;
 
-  const cooldowns = readSearchPreviewCooldowns();
+  const cooldowns = { ...readSearchPreviewCooldowns() };
   cooldowns[cardId] = Date.now() + SEARCH_PREVIEW_COOLDOWN_MS;
   writeSearchPreviewCooldowns(cooldowns);
 }

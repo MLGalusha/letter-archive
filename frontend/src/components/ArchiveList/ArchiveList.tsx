@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import "./ArchiveList.css";
 import LetterCard from "../LetterCard/LetterCard";
 import type { ArchiveShelfItem } from "../../types/Letter";
@@ -46,6 +46,22 @@ export default function ArchiveList({
   const previousHeightRef = useRef<number | null>(null);
   const collapseAnimationFrameRef = useRef<number | null>(null);
   const isSparseResultSet = !loading && !loadingMore && !error && total <= 8;
+
+  const sortCueMap = useMemo(() => {
+    if (!sortCueField) return null;
+    const map = new Map<string, { label: string; value: string }>();
+    for (const letter of letters) {
+      if (sortCueField === "collection" && letter.collectionCode) {
+        map.set(letter.id, { label: "Collection", value: letter.collectionCode });
+      } else if (sortCueField === "createdAt") {
+        const publishedLabel = formatArchiveSortCueDate(letter.createdAt);
+        if (publishedLabel) {
+          map.set(letter.id, { label: "Published", value: publishedLabel });
+        }
+      }
+    }
+    return map;
+  }, [letters, sortCueField]);
 
   useEffect(() => {
     loadMoreHandlerRef.current = onLoadMore;
@@ -157,20 +173,7 @@ export default function ArchiveList({
                 <LetterCard
                   key={letter.id}
                   card={letter}
-                  sortCue={(() => {
-                    if (sortCueField === "collection" && letter.collectionCode) {
-                      return { label: "Collection", value: letter.collectionCode };
-                    }
-
-                    if (sortCueField === "createdAt") {
-                      const publishedLabel = formatArchiveSortCueDate(letter.createdAt);
-                      if (publishedLabel) {
-                        return { label: "Published", value: publishedLabel };
-                      }
-                    }
-
-                    return null;
-                  })()}
+                  sortCue={sortCueMap?.get(letter.id) ?? null}
                   onClick={onLetterClick}
                 />
               ))}

@@ -7,6 +7,10 @@ import { getMediaLabel } from "../../utils/letterPreview";
 interface LetterCardProps {
   card: LetterCardData;
   onClick: (id: string) => void;
+  sortCue?: {
+    label: string;
+    value: string;
+  } | null;
 }
 
 const SEARCH_PREVIEW_AUTO_HIDE_MS = 1600;
@@ -114,6 +118,7 @@ function renderHighlightedExcerpt(
 function LetterCard({
   card,
   onClick,
+  sortCue = null,
 }: LetterCardProps) {
   const searchPreview = card.searchPreview;
   const hasSearchPreview = Boolean(searchPreview?.excerpt);
@@ -217,6 +222,15 @@ function LetterCard({
           </div>
         )}
         <div className="letter-card-overlay" />
+        {sortCue && (
+          <div
+            className={`letter-card-sort-cue${hasSearchPreview ? " letter-card-sort-cue--stacked" : ""}`}
+            aria-hidden="true"
+          >
+            <span className="letter-card-sort-cue-label">{sortCue.label}</span>
+            <span className="letter-card-sort-cue-value">{sortCue.value}</span>
+          </div>
+        )}
         {primaryChip && <div className="letter-card-page-count">{primaryChip}</div>}
         {hasSearchPreview && searchPreview && (
           <div className="letter-card-search-match" aria-hidden="true">

@@ -66,9 +66,13 @@ describe("HomePage archive browsing", () => {
         total: 30,
         facets: {
           formats: [],
+          collections: [],
           correspondents: [],
           places: [],
           years: [],
+          topics: [],
+          tones: [],
+          relationships: [],
         },
       })
       .mockResolvedValueOnce({
@@ -78,9 +82,13 @@ describe("HomePage archive browsing", () => {
         total: 30,
         facets: {
           formats: [],
+          collections: [],
           correspondents: [],
           places: [],
           years: [],
+          topics: [],
+          tones: [],
+          relationships: [],
         },
       });
   });

@@ -8,6 +8,8 @@
 .header-inner {
   width: min(1240px, 100%);
   margin: 0 auto;
+  position: relative;
+  overflow: visible;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -45,6 +47,10 @@
   transform: translateY(-0.35rem);
 }
 
+.header-brand-slot.has-active-dock {
+  z-index: 2;
+}
+
 .header-brand-slot.has-active-dock .main-title * {
   pointer-events: none;
 }
@@ -56,7 +62,8 @@
   align-items: center;
   width: 100%;
   min-width: 0;
-  z-index: 1;
+  overflow: visible;
+  z-index: 3;
   opacity: 0;
   pointer-events: none;
   transform: translateY(-0.35rem);
@@ -116,6 +123,13 @@
 
 .header-dock .search-compact-filter-wrap {
   justify-self: end;
+}
+
+.header-dock .search-compact-flyout {
+  left: 0;
+  right: auto;
+  width: var(--refine-panel-width);
+  max-width: calc(100vw - 3rem);
 }
 
 .page-selector,

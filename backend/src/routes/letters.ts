@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, and, inArray, ilike, asc, desc, sql } from 'drizzle-orm';
+import { eq, and, or, inArray, ilike, asc, desc, sql } from 'drizzle-orm';
 import { db, letters, collections, letterPages } from '../db/index.js';
 import { archiveSearchQuerySchema, letterQuerySchema, type ArchiveSearchQuery } from '../schemas/letter.js';
 import {
@@ -33,6 +33,7 @@ type SummaryLetterWithRelations = {
   id: string;
   collectionId: string;
   dateRaw: string;
+  createdAt: Date | string;
   typeSequence: number;
   type: LetterWithRelations['type'];
   workflow: LetterWithRelations['workflow'];
@@ -66,9 +67,19 @@ type ArchiveFormatFacet = ArchiveFacetValue & {
   label: string;
 };
 
+type ArchiveCollectionFacet = ArchiveFacetValue & {
+  label: string;
+};
+
 type ArchiveYearFacet = {
   value: number;
   count: number;
+};
+
+type ArchiveLabeledFacetRow = {
+  value: string;
+  label: string;
+  count: number | string | bigint;
 };
 
 type ArchiveSearchRow = {
@@ -77,6 +88,7 @@ type ArchiveSearchRow = {
   collectionCode: string;
   collectionTitle: string | null;
   dateRaw: string;
+  createdAt: Date | string;
   primaryType: LetterWithRelations['type'];
   primaryPageCount: number;
   sender: string | null;
@@ -92,6 +104,9 @@ type ArchiveSearchRow = {
   places: string[] | null;
   hooks: string[] | null;
   summaries: string[] | null;
+  topics: string[] | null;
+  tones: string[] | null;
+  relationships: string[] | null;
   photoDescriptions: string[] | null;
   extraContentTranscripts: string[] | null;
   transcriptionTexts: string[] | null;
@@ -310,6 +325,7 @@ router.get('/letters/summaries', async (req, res, next) => {
         id: true,
         collectionId: true,
         dateRaw: true,
+        createdAt: true,
         typeSequence: true,
         type: true,
         workflow: true,
@@ -568,6 +584,8 @@ function transformLetterSummary(
       : undefined,
     sender: letter.sender || undefined,
     recipient: letter.recipient || undefined,
+    collectionCode: letter.collection.collectionCode,
+    createdAt: toIsoDateString(letter.createdAt),
     date: formatLetterDate(letter as never),
     dateRaw: letter.dateRaw,
     hook: letter.hook || undefined,
@@ -615,7 +633,18 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
   const orderBy = buildArchiveSearchOrderBy(query);
   const offset = (query.page - 1) * query.limit;
 
-  const [rowsResult, totalResult, formatsResult, correspondentsResult, placesResult, yearsResult] =
+  const [
+    rowsResult,
+    totalResult,
+    formatsResult,
+    collectionsResult,
+    correspondentsResult,
+    placesResult,
+    yearsResult,
+    topicsResult,
+    tonesResult,
+    relationshipsResult,
+  ] =
     await Promise.all([
       db.execute(sql`
         ${ctes}
@@ -662,6 +691,7 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
           sg."collectionCode",
           sg."collectionTitle",
           sg."dateRaw",
+          sg."createdAt",
           sg."primaryType",
           COALESCE(ppc."primaryPageCount", 0) AS "primaryPageCount",
           sg.sender,
@@ -677,6 +707,9 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
           sg.places,
           sg.hooks,
           sg.summaries,
+          sg.topics,
+          sg.tones,
+          sg.relationships,
           sg."photoDescriptions",
           sg."extraContentTranscripts",
           sg."transcriptionTexts"
@@ -703,15 +736,26 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
         SELECT format AS value, COUNT(*)::int AS count
         FROM (
           SELECT DISTINCT
-            sg."collectionId",
-            sg."dateRaw",
-            sg."typeSequence",
-            UNNEST(sg.formats) AS format
-          FROM scoped_groups sg
+            bsg."collectionId",
+            bsg."dateRaw",
+            bsg."typeSequence",
+            UNNEST(bsg.formats) AS format
+          FROM base_scoped_groups bsg
         ) grouped_formats
         GROUP BY format
         ORDER BY COUNT(*) DESC, format ASC
         LIMIT 6
+      `),
+      db.execute(sql`
+        ${ctes}
+        SELECT
+          sg."collectionCode" AS value,
+          COALESCE(NULLIF(sg."collectionTitle", ''), sg."collectionCode") AS label,
+          COUNT(*)::int AS count
+        FROM scoped_groups sg
+        GROUP BY sg."collectionCode", sg."collectionTitle"
+        ORDER BY COUNT(*) DESC, sg."collectionCode" ASC
+        LIMIT 8
       `),
       db.execute(sql`
         ${ctes}
@@ -758,6 +802,57 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
         ORDER BY SUBSTRING("dateRaw", 1, 4) DESC
         LIMIT 8
       `),
+      db.execute(sql`
+        ${ctes}
+        SELECT value, COUNT(*)::int AS count
+        FROM (
+          SELECT DISTINCT
+            sg."collectionId",
+            sg."dateRaw",
+            sg."typeSequence",
+            topic_name AS value
+          FROM scoped_groups sg
+          CROSS JOIN LATERAL UNNEST(COALESCE(sg.topics, ARRAY[]::text[])) AS topic_name
+          WHERE topic_name IS NOT NULL AND topic_name <> ''
+        ) grouped_topics
+        GROUP BY value
+        ORDER BY COUNT(*) DESC, value ASC
+        LIMIT 10
+      `),
+      db.execute(sql`
+        ${ctes}
+        SELECT value, COUNT(*)::int AS count
+        FROM (
+          SELECT DISTINCT
+            sg."collectionId",
+            sg."dateRaw",
+            sg."typeSequence",
+            tone_name AS value
+          FROM scoped_groups sg
+          CROSS JOIN LATERAL UNNEST(COALESCE(sg.tones, ARRAY[]::text[])) AS tone_name
+          WHERE tone_name IS NOT NULL AND tone_name <> ''
+        ) grouped_tones
+        GROUP BY value
+        ORDER BY COUNT(*) DESC, value ASC
+        LIMIT 8
+      `),
+      db.execute(sql`
+        ${ctes}
+        SELECT value, COUNT(*)::int AS count
+        FROM (
+          SELECT DISTINCT
+            sg."collectionId",
+            sg."dateRaw",
+            sg."typeSequence",
+            relationship_name AS value
+          FROM scoped_groups sg
+          CROSS JOIN LATERAL UNNEST(COALESCE(sg.relationships, ARRAY[]::text[])) AS relationship_name
+          WHERE relationship_name IS NOT NULL AND relationship_name <> ''
+        ) grouped_relationships
+        GROUP BY value
+        ORDER BY COUNT(*) DESC, value ASC
+        LIMIT 8
+      `),
     ]);
 
   const rows = getRows<ArchiveSearchRow>(rowsResult);
@@ -770,9 +865,13 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
     total: Number(totalRows[0]?.count || 0),
     facets: {
       formats: mapArchiveFormatFacets(getRows<ArchiveFacetRow>(formatsResult)),
+      collections: mapArchiveCollectionFacets(getRows<ArchiveLabeledFacetRow>(collectionsResult)),
       correspondents: mapArchiveTextFacets(getRows<ArchiveFacetRow>(correspondentsResult)),
       places: mapArchiveTextFacets(getRows<ArchiveFacetRow>(placesResult)),
       years: mapArchiveYearFacets(getRows<ArchiveFacetRow>(yearsResult)),
+      topics: mapArchiveTextFacets(getRows<ArchiveFacetRow>(topicsResult)),
+      tones: mapArchiveTextFacets(getRows<ArchiveFacetRow>(tonesResult)),
+      relationships: mapArchiveTextFacets(getRows<ArchiveFacetRow>(relationshipsResult)),
     },
   };
 }
@@ -782,7 +881,10 @@ async function resolveArchiveCollectionIds(collectionQuery?: string) {
 
   const escapedCollection = collectionQuery.replace(/%/g, '\\%').replace(/_/g, '\\_');
   const matchingCollections = await db.query.collections.findMany({
-    where: ilike(collections.collectionCode, `%${escapedCollection}`),
+    where: or(
+      ilike(collections.collectionCode, `%${escapedCollection}%`),
+      ilike(collections.title, `%${escapedCollection}%`),
+    ),
     columns: { id: true },
   });
 
@@ -797,9 +899,13 @@ function emptyArchiveSearchResponse(page: number, limit: number) {
     total: 0,
     facets: {
       formats: [] as ArchiveFormatFacet[],
+      collections: [] as ArchiveCollectionFacet[],
       correspondents: [] as ArchiveFacetValue[],
       places: [] as ArchiveFacetValue[],
       years: [] as ArchiveYearFacet[],
+      topics: [] as ArchiveFacetValue[],
+      tones: [] as ArchiveFacetValue[],
+      relationships: [] as ArchiveFacetValue[],
     },
   };
 }
@@ -829,39 +935,87 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
     );
   }
 
-  const scopedFilters = [sql`TRUE`];
-  if (query.format) {
-    scopedFilters.push(sql`${query.format} = ANY(gf.formats)`);
-  }
+  const baseScopedFilters = [sql`TRUE`];
   if (query.person) {
     const personNeedle = `%${query.person}%`;
-    scopedFilters.push(sql`EXISTS (
+    if (query.personRole === 'sender') {
+      baseScopedFilters.push(sql`EXISTS (
+        SELECT 1
+        FROM UNNEST(COALESCE(gf.senders, ARRAY[]::text[])) AS person_name
+        WHERE person_name ILIKE ${personNeedle}
+      )`);
+    } else if (query.personRole === 'recipient') {
+      baseScopedFilters.push(sql`EXISTS (
+        SELECT 1
+        FROM UNNEST(COALESCE(gf.recipients, ARRAY[]::text[])) AS person_name
+        WHERE person_name ILIKE ${personNeedle}
+      )`);
+    } else {
+      baseScopedFilters.push(sql`EXISTS (
+        SELECT 1
+        FROM UNNEST(COALESCE(gf.senders, ARRAY[]::text[]) || COALESCE(gf.recipients, ARRAY[]::text[])) AS person_name
+        WHERE person_name ILIKE ${personNeedle}
+      )`);
+    }
+  }
+  if (query.sender) {
+    const senderNeedle = `%${query.sender}%`;
+    baseScopedFilters.push(sql`EXISTS (
       SELECT 1
-      FROM UNNEST(COALESCE(gf.senders, ARRAY[]::text[]) || COALESCE(gf.recipients, ARRAY[]::text[])) AS person_name
-      WHERE person_name ILIKE ${personNeedle}
+      FROM UNNEST(COALESCE(gf.senders, ARRAY[]::text[])) AS sender_name
+      WHERE sender_name ILIKE ${senderNeedle}
+    )`);
+  }
+  if (query.recipient) {
+    const recipientNeedle = `%${query.recipient}%`;
+    baseScopedFilters.push(sql`EXISTS (
+      SELECT 1
+      FROM UNNEST(COALESCE(gf.recipients, ARRAY[]::text[])) AS recipient_name
+      WHERE recipient_name ILIKE ${recipientNeedle}
     )`);
   }
   if (query.place) {
     const placeNeedle = `%${query.place}%`;
-    scopedFilters.push(sql`EXISTS (
+    baseScopedFilters.push(sql`EXISTS (
       SELECT 1
       FROM UNNEST(COALESCE(gf.places, ARRAY[]::text[])) AS place_name
       WHERE place_name ILIKE ${placeNeedle}
     )`);
   }
+  if (query.topic) {
+    const topicNeedle = `%${query.topic}%`;
+    baseScopedFilters.push(sql`EXISTS (
+      SELECT 1
+      FROM UNNEST(COALESCE(gf.topics, ARRAY[]::text[])) AS topic_name
+      WHERE topic_name ILIKE ${topicNeedle}
+    )`);
+  }
+  if (query.tone) {
+    baseScopedFilters.push(sql`${query.tone} = ANY(COALESCE(gf.tones, ARRAY[]::text[]))`);
+  }
+  if (query.relationship) {
+    baseScopedFilters.push(sql`${query.relationship} = ANY(COALESCE(gf.relationships, ARRAY[]::text[]))`);
+  }
   if (query.year) {
     const yearText = String(query.year);
-    scopedFilters.push(sql`SUBSTRING(mg."dateRaw", 1, 4) = ${yearText}`);
+    baseScopedFilters.push(sql`SUBSTRING(mg."dateRaw", 1, 4) = ${yearText}`);
   }
   if (query.yearFrom !== undefined) {
-    scopedFilters.push(sql`SUBSTRING(mg."dateRaw", 1, 4)::int >= ${query.yearFrom}`);
+    baseScopedFilters.push(sql`SUBSTRING(mg."dateRaw", 1, 4)::int >= ${query.yearFrom}`);
   }
   if (query.yearTo !== undefined) {
-    scopedFilters.push(sql`SUBSTRING(mg."dateRaw", 1, 4)::int <= ${query.yearTo}`);
+    baseScopedFilters.push(sql`SUBSTRING(mg."dateRaw", 1, 4)::int <= ${query.yearTo}`);
   }
   if (query.verified !== undefined) {
-    scopedFilters.push(sql`pr."metadataVerified" = ${query.verified}`);
+    baseScopedFilters.push(sql`pr."metadataVerified" = ${query.verified}`);
   }
+
+  const formatFilter = query.format?.length
+    ? sql`COALESCE(bsg.formats, ARRAY[]::text[]) && ARRAY[${sql.join(
+      query.format.map((format) => sql`${format}`),
+      sql`, `,
+    )}]::text[]`
+    : sql`TRUE`;
 
   const searchRank = trimmedSearch
     ? sql`GREATEST(
@@ -903,6 +1057,9 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.location_written), '')), NULL) AS places,
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.hook), '')), NULL) AS hooks,
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.summary), '')), NULL) AS summaries,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(topic_name), '')), NULL) AS topics,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.emotional_tone::text), '')), NULL) AS tones,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.sender_recipient_relationship::text), '')), NULL) AS relationships,
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.photo_description), '')), NULL) AS "photoDescriptions",
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.extra_content_transcript), '')), NULL) AS "extraContentTranscripts",
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.transcription_text), '')), NULL) AS "transcriptionTexts"
@@ -912,6 +1069,7 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         AND l.date_raw = mg."dateRaw"
         AND l.type_sequence = mg."typeSequence"
         AND l.visibility = 'PUBLISHED'
+      LEFT JOIN LATERAL UNNEST(COALESCE(l.primary_topics, ARRAY[]::text[])) AS topic_name ON TRUE
       GROUP BY mg."collectionId", mg."dateRaw", mg."typeSequence"
     ),
     primary_rows AS (
@@ -943,7 +1101,7 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         CASE WHEN l.type = 'L' THEN 0 ELSE 1 END,
         l.type ASC
     ),
-    scoped_groups AS (
+    base_scoped_groups AS (
       SELECT
         mg."collectionId",
         mg."dateRaw",
@@ -955,6 +1113,9 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         gf.places,
         gf.hooks,
         gf.summaries,
+        gf.topics,
+        gf.tones,
+        gf.relationships,
         gf."photoDescriptions",
         gf."extraContentTranscripts",
         gf."transcriptionTexts",
@@ -977,7 +1138,12 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         ON pr."collectionId" = mg."collectionId"
         AND pr."dateRaw" = mg."dateRaw"
         AND pr."typeSequence" = mg."typeSequence"
-      WHERE ${sql.join(scopedFilters, sql` AND `)}
+      WHERE ${sql.join(baseScopedFilters, sql` AND `)}
+    ),
+    scoped_groups AS (
+      SELECT *
+      FROM base_scoped_groups bsg
+      WHERE ${formatFilter}
     )
   `;
 }
@@ -1009,7 +1175,9 @@ function buildArchiveSearchVectorSql() {
           COALESCE(l.hook, ''),
           COALESCE(l.summary, ''),
           ARRAY_TO_STRING(COALESCE(l.tags, ARRAY[]::text[]), ' '),
-          ARRAY_TO_STRING(COALESCE(l.primary_topics, ARRAY[]::text[]), ' ')
+          ARRAY_TO_STRING(COALESCE(l.primary_topics, ARRAY[]::text[]), ' '),
+          COALESCE(l.emotional_tone::text, ''),
+          COALESCE(l.sender_recipient_relationship::text, '')
         ))
       ),
       'B'
@@ -1048,6 +1216,8 @@ function buildArchiveSearchTextSql() {
     COALESCE(l.summary, ''),
     ARRAY_TO_STRING(COALESCE(l.tags, ARRAY[]::text[]), ' '),
     ARRAY_TO_STRING(COALESCE(l.primary_topics, ARRAY[]::text[]), ' '),
+    COALESCE(l.emotional_tone::text, ''),
+    COALESCE(l.sender_recipient_relationship::text, ''),
     COALESCE(l.photo_description, ''),
     COALESCE(l.extra_content_transcript, ''),
     COALESCE(l.transcription_text, '')
@@ -1064,7 +1234,9 @@ function buildArchiveFuzzyTextSql() {
     COALESCE(l.recipient, ''),
     COALESCE(l.location_written, ''),
     COALESCE(l.hook, ''),
-    COALESCE(l.summary, '')
+    COALESCE(l.summary, ''),
+    COALESCE(l.emotional_tone::text, ''),
+    COALESCE(l.sender_recipient_relationship::text, '')
   ))`;
 }
 
@@ -1077,7 +1249,9 @@ function buildArchiveFieldSimilaritySql(searchTerm: string) {
     word_similarity(lower(COALESCE(c.title, '')), lower(${searchTerm})),
     word_similarity(lower(COALESCE(${buildArchiveMediaTypeSql()}, '')), lower(${searchTerm})),
     word_similarity(lower(ARRAY_TO_STRING(COALESCE(l.tags, ARRAY[]::text[]), ' ')), lower(${searchTerm})),
-    word_similarity(lower(ARRAY_TO_STRING(COALESCE(l.primary_topics, ARRAY[]::text[]), ' ')), lower(${searchTerm}))
+    word_similarity(lower(ARRAY_TO_STRING(COALESCE(l.primary_topics, ARRAY[]::text[]), ' ')), lower(${searchTerm})),
+    word_similarity(lower(COALESCE(l.emotional_tone::text, '')), lower(${searchTerm})),
+    word_similarity(lower(COALESCE(l.sender_recipient_relationship::text, '')), lower(${searchTerm}))
   )`;
 }
 
@@ -1112,6 +1286,24 @@ function buildArchiveSearchOrderBy(query: ArchiveSearchQuery) {
       : sql`sg."createdAt" DESC, REPLACE(sg."dateRaw", 'X', '0') DESC`;
   }
 
+  if (resolvedSort === 'sender') {
+    return query.sortOrder === 'asc'
+      ? sql`LOWER(NULLIF(sg.sender, '')) ASC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') ASC, sg."createdAt" DESC`
+      : sql`LOWER(NULLIF(sg.sender, '')) DESC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC`;
+  }
+
+  if (resolvedSort === 'recipient') {
+    return query.sortOrder === 'asc'
+      ? sql`LOWER(NULLIF(sg.recipient, '')) ASC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') ASC, sg."createdAt" DESC`
+      : sql`LOWER(NULLIF(sg.recipient, '')) DESC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC`;
+  }
+
+  if (resolvedSort === 'collection') {
+    return query.sortOrder === 'asc'
+      ? sql`LOWER(NULLIF(sg."collectionCode", '')) ASC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') ASC, sg."createdAt" DESC`
+      : sql`LOWER(NULLIF(sg."collectionCode", '')) DESC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC`;
+  }
+
   return sql`sg."searchRank" DESC, REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC`;
 }
 
@@ -1142,6 +1334,8 @@ function transformArchiveSearchRow(row: ArchiveSearchRow, query: ArchiveSearchQu
       : undefined,
     sender: row.sender || undefined,
     recipient: row.recipient || undefined,
+    collectionCode: row.collectionCode,
+    createdAt: toIsoDateString(row.createdAt),
     date: formattedDate,
     dateRaw: row.dateRaw,
     hook: row.hook || undefined,
@@ -1222,6 +1416,13 @@ function dedupeArchivePreviewValues(values: string[]) {
         .filter((value): value is string => value.length > 0),
     ),
   );
+}
+
+function toIsoDateString(value: Date | string) {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  return value;
 }
 
 function getArchiveSearchTerms(search: string) {
@@ -1589,6 +1790,23 @@ function mapArchiveFormatFacets(rows: ArchiveFacetRow[]): ArchiveFormatFacet[] {
   }
 
   return facets;
+}
+
+function mapArchiveCollectionFacets(rows: ArchiveLabeledFacetRow[]): ArchiveCollectionFacet[] {
+  return rows
+    .map((row) => {
+      if (typeof row.value !== 'string' || row.value.trim().length === 0) return null;
+      const label = typeof row.label === 'string' && row.label.trim().length > 0
+        ? row.label
+        : row.value;
+
+      return {
+        value: row.value,
+        label,
+        count: Number(row.count || 0),
+      };
+    })
+    .filter((row): row is ArchiveCollectionFacet => row !== null);
 }
 
 function mapArchiveTextFacets(rows: ArchiveFacetRow[]): ArchiveFacetValue[] {

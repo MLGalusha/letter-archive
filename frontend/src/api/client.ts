@@ -200,12 +200,21 @@ async function performRequest<T>(
  */
 export async function apiGet<T>(
   path: string,
-  params?: Record<string, string | number | undefined>
+  params?: Record<string, string | number | boolean | Array<string | number | boolean> | undefined>
 ): Promise<T> {
   const url = new URL(path, API_BASE_URL);
 
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        value.forEach((item) => {
+          if (item !== undefined && item !== "" && item !== null) {
+            url.searchParams.append(key, String(item));
+          }
+        });
+        return;
+      }
+
       if (value !== undefined && value !== '' && value !== null) {
         url.searchParams.set(key, String(value));
       }

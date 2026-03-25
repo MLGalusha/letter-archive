@@ -13,6 +13,7 @@ const {
   logIfSlowMock,
   eqMock,
   andMock,
+  orMock,
   inArrayMock,
   ilikeMock,
   ascMock,
@@ -31,6 +32,7 @@ const {
   logIfSlowMock: vi.fn(),
   eqMock: vi.fn(),
   andMock: vi.fn(),
+  orMock: vi.fn(),
   inArrayMock: vi.fn(),
   ilikeMock: vi.fn(),
   ascMock: vi.fn(),
@@ -42,6 +44,7 @@ const {
 vi.mock('drizzle-orm', () => ({
   eq: eqMock,
   and: andMock,
+  or: orMock,
   inArray: inArrayMock,
   ilike: ilikeMock,
   asc: ascMock,
@@ -100,6 +103,7 @@ vi.mock('../../db/index.js', () => ({
   },
   collections: {
     collectionCode: 'collections.collectionCode',
+    title: 'collections.title',
   },
 }));
 
@@ -111,6 +115,7 @@ describe('letters route integration', () => {
 
     eqMock.mockImplementation((left, right) => ({ op: 'eq', left, right }));
     andMock.mockImplementation((...conditions) => ({ op: 'and', conditions }));
+    orMock.mockImplementation((...conditions) => ({ op: 'or', conditions }));
     inArrayMock.mockImplementation((left, right) => ({ op: 'inArray', left, right }));
     ilikeMock.mockImplementation((left, right) => ({ op: 'ilike', left, right }));
     ascMock.mockImplementation((value) => ({ direction: 'asc', value }));
@@ -155,6 +160,7 @@ describe('letters route integration', () => {
         id: 'letter-primary',
         collectionId: 'collection-9',
         dateRaw: '19470810',
+        createdAt: '2026-03-09T12:00:00.000Z',
         typeSequence: 1,
         type: 'L',
         workflow: 'UPLOADED',
@@ -211,6 +217,7 @@ describe('letters route integration', () => {
           id: 'letter-primary',
           collectionId: 'collection-9',
           dateRaw: '19470810',
+          createdAt: '2026-03-09T12:00:00.000Z',
           typeSequence: 1,
           type: 'L',
           workflow: 'UPLOADED',
@@ -258,6 +265,7 @@ describe('letters route integration', () => {
         id: 'letter-primary',
         collectionId: 'collection-9',
         dateRaw: '19470810',
+        createdAt: '2026-03-09T12:00:00.000Z',
         typeSequence: 1,
         type: 'L',
         workflow: 'REVIEWED',
@@ -292,6 +300,7 @@ describe('letters route integration', () => {
         id: 'letter-photo',
         collectionId: 'collection-9',
         dateRaw: '19470810',
+        createdAt: '2026-03-09T12:00:00.000Z',
         typeSequence: 1,
         type: 'P',
         workflow: 'REVIEWED',
@@ -342,6 +351,8 @@ describe('letters route integration', () => {
           primaryChip: '2 pages',
           sender: 'Jimmie',
           recipient: 'Molly',
+          collectionCode: '009',
+          createdAt: '2026-03-09T12:00:00.000Z',
           date: 'August 10th, 1947',
           dateRaw: '19470810',
           hook: 'A short note about future plans.',
@@ -453,6 +464,7 @@ describe('letters route integration', () => {
           collectionCode: '009',
           collectionTitle: 'Collection Nine',
           dateRaw: '19470810',
+          createdAt: '2026-03-09T12:00:00.000Z',
           primaryType: 'L',
           primaryPageCount: 2,
           sender: 'Jimmie',
@@ -463,21 +475,28 @@ describe('letters route integration', () => {
           pageId: 'page-1',
           checksumSha256: 'abcdef123456',
           formats: ['letter'],
-          senders: ['Jimmie'],
-          recipients: ['Molly'],
-          places: ['Overland Park, Kans.'],
-          hooks: ['Jimmie pleads with Molly for a reply.'],
-          summaries: [],
-          photoDescriptions: [],
-          extraContentTranscripts: [],
-          transcriptionTexts: ['Dear Molly, please write soon because I still love you dearly.'],
-        },
-      ])
+        senders: ['Jimmie'],
+        recipients: ['Molly'],
+        places: ['Overland Park, Kans.'],
+        hooks: ['Jimmie pleads with Molly for a reply.'],
+        summaries: [],
+        topics: ['family/marriage'],
+        tones: ['hopeful'],
+        relationships: ['romantic-partner'],
+        photoDescriptions: [],
+        extraContentTranscripts: [],
+        transcriptionTexts: ['Dear Molly, please write soon because I still love you dearly.'],
+      },
+    ])
       .mockResolvedValueOnce([{ count: 1 }])
       .mockResolvedValueOnce([{ value: 'letter', count: 1 }])
+      .mockResolvedValueOnce([{ value: '009', label: 'Collection Nine', count: 1 }])
       .mockResolvedValueOnce([{ value: 'Jimmie', count: 1 }])
       .mockResolvedValueOnce([{ value: 'Overland Park, Kans.', count: 1 }])
-      .mockResolvedValueOnce([{ value: 1947, count: 1 }]);
+      .mockResolvedValueOnce([{ value: 1947, count: 1 }])
+      .mockResolvedValueOnce([{ value: 'family/marriage', count: 1 }])
+      .mockResolvedValueOnce([{ value: 'hopeful', count: 1 }])
+      .mockResolvedValueOnce([{ value: 'romantic-partner', count: 1 }]);
 
     const response = await invokeRouter(lettersRouter, {
       method: 'GET',
@@ -501,6 +520,8 @@ describe('letters route integration', () => {
           primaryChip: '2 pages',
           sender: 'Jimmie',
           recipient: 'Molly',
+          collectionCode: '009',
+          createdAt: '2026-03-09T12:00:00.000Z',
           date: 'August 10th, 1947',
           dateRaw: '19470810',
           hook: 'Jimmie pleads with Molly for a reply.',
@@ -529,6 +550,13 @@ describe('letters route integration', () => {
             count: 1,
           },
         ],
+        collections: [
+          {
+            value: '009',
+            label: 'Collection Nine',
+            count: 1,
+          },
+        ],
         correspondents: [
           {
             value: 'Jimmie',
@@ -547,9 +575,60 @@ describe('letters route integration', () => {
             count: 1,
           },
         ],
+        topics: [
+          {
+            value: 'family/marriage',
+            count: 1,
+          },
+        ],
+        tones: [
+          {
+            value: 'hopeful',
+            count: 1,
+          },
+        ],
+        relationships: [
+          {
+            value: 'romantic-partner',
+            count: 1,
+          },
+        ],
       },
     });
-    expect(executeMock).toHaveBeenCalledTimes(6);
+    expect(executeMock).toHaveBeenCalledTimes(10);
+  });
+
+  it('accepts repeated format filters on archive search', async () => {
+    executeMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ count: 0 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters/search',
+      path: '/letters/search',
+      query: {
+        format: ['photo', 'letter'],
+        limit: '5',
+      },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      letters: [],
+      total: 0,
+      limit: 5,
+    });
+    expect(executeMock).toHaveBeenCalledTimes(10);
   });
 
   it('centers long search previews around the visible match', async () => {
@@ -561,6 +640,7 @@ describe('letters route integration', () => {
           collectionCode: '009',
           collectionTitle: 'Collection Nine',
           dateRaw: '19470810',
+          createdAt: '2026-03-09T12:00:00.000Z',
           primaryType: 'L',
           primaryPageCount: 2,
           sender: 'Jimmie',
@@ -576,6 +656,9 @@ describe('letters route integration', () => {
           places: ['Overland Park, Kans.'],
           hooks: ['Jimmie pleads with Molly for a reply.'],
           summaries: [],
+          topics: ['family/marriage'],
+          tones: ['hopeful'],
+          relationships: ['romantic-partner'],
           photoDescriptions: [],
           extraContentTranscripts: [],
           transcriptionTexts: [
@@ -585,9 +668,13 @@ describe('letters route integration', () => {
       ])
       .mockResolvedValueOnce([{ count: 1 }])
       .mockResolvedValueOnce([{ value: 'letter', count: 1 }])
+      .mockResolvedValueOnce([{ value: '009', label: 'Collection Nine', count: 1 }])
       .mockResolvedValueOnce([{ value: 'Jimmie', count: 1 }])
       .mockResolvedValueOnce([{ value: 'Overland Park, Kans.', count: 1 }])
-      .mockResolvedValueOnce([{ value: 1947, count: 1 }]);
+      .mockResolvedValueOnce([{ value: 1947, count: 1 }])
+      .mockResolvedValueOnce([{ value: 'family/marriage', count: 1 }])
+      .mockResolvedValueOnce([{ value: 'hopeful', count: 1 }])
+      .mockResolvedValueOnce([{ value: 'romantic-partner', count: 1 }]);
 
     const response = await invokeRouter(lettersRouter, {
       method: 'GET',

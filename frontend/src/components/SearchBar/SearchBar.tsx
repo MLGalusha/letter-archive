@@ -10,33 +10,82 @@ interface SearchBarProps {
   loading: boolean;
   embedded?: boolean;
   variant?: "full" | "compact";
+  refineOpen?: boolean;
   dockTriggerRef?: Ref<HTMLDivElement>;
+  onRefineOpenChange?: (open: boolean) => void;
   onQueryChange: (query: string) => void;
   onFiltersChange: (filters: SearchFilters) => void;
 }
 
 export interface SearchFilters {
-  format?: LetterImageType | null;
+  format?: LetterImageType[] | null;
+  collection?: string | null;
   person?: string | null;
+  personRole?: "any" | "sender" | "recipient" | null;
+  sender?: string | null;
+  recipient?: string | null;
   place?: string | null;
+  topic?: string | null;
+  tone?: string | null;
+  relationship?: string | null;
   year?: number | null;
   dateRange?: { start?: number; end?: number };
   verified?: boolean | null;
-  sort?: "relevance" | "createdAt" | "letterDate";
+  sort?: "relevance" | "createdAt" | "letterDate" | "sender" | "recipient" | "collection";
   sortOrder?: "asc" | "desc";
 }
 
-const SORT_OPTIONS: Array<{
+type SortFieldOption = {
+  value: NonNullable<SearchFilters["sort"]>;
   label: string;
-  sort: NonNullable<SearchFilters["sort"]>;
-  sortOrder: NonNullable<SearchFilters["sortOrder"]>;
-}> = [
-  { label: "Best Match", sort: "relevance", sortOrder: "desc" },
-  { label: "Newest Added", sort: "createdAt", sortOrder: "desc" },
-  { label: "Earliest Date", sort: "letterDate", sortOrder: "asc" },
+  defaultOrder: NonNullable<SearchFilters["sortOrder"]>;
+};
+
+type FilterSuggestion = {
+  display: string;
+  applyValue: string;
+  count: number;
+};
+
+type FilterChoiceOption = {
+  value: string;
+  label: string;
+  count?: number;
+  aliases?: string[];
+};
+
+const SORT_FIELD_OPTIONS: SortFieldOption[] = [
+  { label: "Best Match", value: "relevance", defaultOrder: "desc" },
+  { label: "Publish Date", value: "createdAt", defaultOrder: "desc" },
+  { label: "Letter Date", value: "letterDate", defaultOrder: "desc" },
+  { label: "Sender", value: "sender", defaultOrder: "asc" },
+  { label: "Recipient", value: "recipient", defaultOrder: "asc" },
+  { label: "Collection", value: "collection", defaultOrder: "asc" },
 ];
 
-const COMPACT_REFINE_CLOSE_DELAY_MS = 900;
+const REFINE_CLOSE_DELAY_MS = 350;
+const ARCHIVE_FORMAT_ORDER: LetterImageType[] = [
+  "letter",
+  "photo",
+  "telegram",
+  "cover",
+  "card",
+  "ephemera",
+  "article",
+  "diary",
+  "voice",
+];
+const ARCHIVE_FORMAT_LABELS: Record<LetterImageType, string> = {
+  letter: "Letters",
+  photo: "Photos",
+  telegram: "Telegrams",
+  cover: "Covers",
+  card: "Cards",
+  ephemera: "Ephemera",
+  article: "Articles",
+  diary: "Diary",
+  voice: "Voice",
+};
 
 function getResolvedSort(query: string, filters: SearchFilters) {
   const hasQuery = Boolean(query.trim());
@@ -46,13 +95,139 @@ function getResolvedSort(query: string, filters: SearchFilters) {
   };
 }
 
-function sameSort(
-  query: string,
-  filters: SearchFilters,
-  option: (typeof SORT_OPTIONS)[number],
-): boolean {
-  const resolved = getResolvedSort(query, filters);
-  return resolved.sort === option.sort && resolved.sortOrder === option.sortOrder;
+function getSortValue(option: SortFieldOption) {
+  return option.value;
+}
+
+function getAvailableSortFields(hasQuery: boolean) {
+  return hasQuery ? SORT_FIELD_OPTIONS : SORT_FIELD_OPTIONS.filter((option) => option.value !== "relevance");
+}
+
+function parseSortValue(value: string, options: SortFieldOption[]) {
+  return options.find((option) => option.value === value) || null;
+}
+
+function getSortDirectionAriaLabel(
+  sort: NonNullable<SearchFilters["sort"]>,
+  sortOrder: NonNullable<SearchFilters["sortOrder"]>,
+) {
+  switch (sort) {
+    case "letterDate":
+      return sortOrder === "asc" ? "Oldest letter first" : "Newest letter first";
+    case "createdAt":
+      return sortOrder === "asc" ? "Oldest published first" : "Newest published first";
+    case "sender":
+    case "recipient":
+    case "collection":
+      return sortOrder === "asc" ? "A to Z" : "Z to A";
+    case "relevance":
+    default:
+      return "Best match";
+  }
+}
+
+function getSortDirectionDisplayLabel(
+  sort: NonNullable<SearchFilters["sort"]>,
+  sortOrder: NonNullable<SearchFilters["sortOrder"]>,
+) {
+  switch (sort) {
+    case "sender":
+    case "recipient":
+    case "collection":
+      return sortOrder === "asc" ? "A \u2192 Z" : "Z \u2192 A";
+    case "letterDate":
+    case "createdAt":
+      return sortOrder === "asc" ? "\u2191" : "\u2193";
+    case "relevance":
+    default:
+      return "\u2014";
+  }
+}
+
+function toTitleCase(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function formatFacetLabel(value: string) {
+  return value
+    .split("/")
+    .map((part) => toTitleCase(part.replace(/[-_]+/g, " ").trim()))
+    .join(" / ");
+}
+
+function normalizeSuggestionText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function scoreSuggestionText(needle: string, alias: string) {
+  const normalizedNeedle = normalizeSuggestionText(needle);
+  const normalizedAlias = normalizeSuggestionText(alias);
+  if (!normalizedNeedle || !normalizedAlias) return 0;
+  if (normalizedAlias === normalizedNeedle) return 500;
+  if (normalizedAlias.startsWith(normalizedNeedle)) return 420 - normalizedAlias.length;
+  const wordMatch = normalizedAlias
+    .split(" ")
+    .some((part) => part.startsWith(normalizedNeedle));
+  if (wordMatch) return 320;
+  if (normalizedAlias.includes(normalizedNeedle)) return 220;
+  return 0;
+}
+
+function getBestSuggestion(
+  inputValue: string | null | undefined,
+  candidates: Array<{ value: string; display: string; count: number; aliases?: string[] }>,
+): FilterSuggestion | null {
+  if (!inputValue?.trim()) return null;
+
+  let bestMatch: (FilterSuggestion & { score: number }) | null = null;
+
+  for (const candidate of candidates) {
+    const aliases = [candidate.display, candidate.value, ...(candidate.aliases || [])];
+    const score = Math.max(...aliases.map((alias) => scoreSuggestionText(inputValue, alias)));
+    if (score <= 0) continue;
+
+    if (
+      !bestMatch
+      || score > bestMatch.score
+      || (score === bestMatch.score && candidate.count > bestMatch.count)
+    ) {
+      bestMatch = {
+        display: candidate.display,
+        applyValue: candidate.value,
+        count: candidate.count,
+        score,
+      };
+    }
+  }
+
+  if (!bestMatch) return null;
+  return {
+    display: bestMatch.display,
+    applyValue: bestMatch.applyValue,
+    count: bestMatch.count,
+  };
+}
+
+function getCollectionLabel(value: string, facets: ArchiveSearchFacets) {
+  return facets.collections.find((facet) => facet.value === value)?.label || value;
+}
+
+function filterChoiceOptions(options: FilterChoiceOption[], query: string) {
+  const needle = normalizeSuggestionText(query);
+  if (!needle) return options;
+
+  return options.filter((option) => {
+    const haystacks = [option.label, option.value, ...(option.aliases || [])];
+    return haystacks.some((haystack) => normalizeSuggestionText(haystack).includes(needle));
+  });
+}
+
+function normalizeYearInput(value: string) {
+  return value.replace(/\D+/g, "").slice(0, 4);
 }
 
 export default function SearchBar({
@@ -63,64 +238,87 @@ export default function SearchBar({
   loading,
   embedded = false,
   variant = "full",
+  refineOpen,
   dockTriggerRef,
+  onRefineOpenChange,
   onQueryChange,
   onFiltersChange,
 }: SearchBarProps) {
   const isCompact = variant === "compact";
   const hasQuery = Boolean(query.trim());
-  const hasRefinementFilters = Boolean(
-    filters.person
+  const selectedFormats = filters.format || null;
+  const hasAdvancedRefinementFilters = Boolean(
+    filters.collection
+      || filters.person
+      || filters.sender
+      || filters.recipient
       || filters.place
+      || filters.topic
+      || filters.tone
+      || filters.relationship
       || filters.year
       || filters.dateRange?.start
       || filters.dateRange?.end
       || filters.verified !== undefined && filters.verified !== null,
   );
-  const [showFilters, setShowFilters] = useState(isCompact ? false : hasRefinementFilters);
-  const [compactFiltersPinned, setCompactFiltersPinned] = useState(false);
+  const [internalShowFilters, setInternalShowFilters] = useState(
+    isCompact ? false : hasAdvancedRefinementFilters,
+  );
+  const [filtersPinned, setFiltersPinned] = useState(false);
+  const [openChoiceField, setOpenChoiceField] = useState<string | null>(null);
   const [startYearInput, setStartYearInput] = useState(filters.dateRange?.start?.toString() || "");
   const [endYearInput, setEndYearInput] = useState(filters.dateRange?.end?.toString() || "");
   const searchIdBase = useId().replace(/:/g, "");
-  const compactPanelRef = useRef<HTMLDivElement | null>(null);
-  const compactCloseTimerRef = useRef<number | null>(null);
+  const searchRootRef = useRef<HTMLDivElement | null>(null);
+  const refineCloseTimerRef = useRef<number | null>(null);
+  const showFilters = refineOpen ?? internalShowFilters;
 
-  const clearCompactCloseTimer = () => {
-    if (compactCloseTimerRef.current !== null) {
-      window.clearTimeout(compactCloseTimerRef.current);
-      compactCloseTimerRef.current = null;
+  const setRefineOpen = (next: boolean) => {
+    if (refineOpen === undefined) {
+      setInternalShowFilters(next);
+    }
+    if (!next) {
+      setFiltersPinned(false);
+      setOpenChoiceField(null);
+    }
+    onRefineOpenChange?.(next);
+  };
+
+  const clearRefineCloseTimer = () => {
+    if (refineCloseTimerRef.current !== null) {
+      window.clearTimeout(refineCloseTimerRef.current);
+      refineCloseTimerRef.current = null;
     }
   };
 
-  const openCompactFilters = (options?: { pin?: boolean }) => {
-    clearCompactCloseTimer();
+  const openFilters = (options?: { pin?: boolean }) => {
+    clearRefineCloseTimer();
     if (options?.pin) {
-      setCompactFiltersPinned(true);
+      setFiltersPinned(true);
     }
-    setShowFilters(true);
+    setRefineOpen(true);
   };
 
-  const closeCompactFilters = () => {
-    clearCompactCloseTimer();
-    setCompactFiltersPinned(false);
-    setShowFilters(false);
+  const closeFilters = () => {
+    clearRefineCloseTimer();
+    setRefineOpen(false);
   };
 
-  const scheduleCompactFiltersClose = () => {
-    clearCompactCloseTimer();
-    if (compactFiltersPinned) return;
+  const scheduleFiltersClose = () => {
+    clearRefineCloseTimer();
+    if (filtersPinned) return;
 
-    compactCloseTimerRef.current = window.setTimeout(() => {
-      setShowFilters(false);
-      compactCloseTimerRef.current = null;
-    }, COMPACT_REFINE_CLOSE_DELAY_MS);
+    refineCloseTimerRef.current = window.setTimeout(() => {
+      setRefineOpen(false);
+      refineCloseTimerRef.current = null;
+    }, REFINE_CLOSE_DELAY_MS);
   };
 
   useEffect(() => {
-    if (!isCompact && hasRefinementFilters) {
-      setShowFilters(true);
+    if (!isCompact && hasAdvancedRefinementFilters && !showFilters) {
+      setRefineOpen(true);
     }
-  }, [hasRefinementFilters, isCompact]);
+  }, [hasAdvancedRefinementFilters, isCompact, showFilters]);
 
   useEffect(() => {
     setStartYearInput(filters.dateRange?.start?.toString() || "");
@@ -128,12 +326,12 @@ export default function SearchBar({
   }, [filters.dateRange?.end, filters.dateRange?.start]);
 
   useEffect(() => {
-    if (!isCompact || !showFilters) return;
+    if (!showFilters) return;
 
     const handlePointerDown = (event: PointerEvent) => {
       if (!(event.target instanceof Node)) return;
-      if (!compactPanelRef.current?.contains(event.target)) {
-        closeCompactFilters();
+      if (!searchRootRef.current?.contains(event.target)) {
+        closeFilters();
       }
     };
 
@@ -141,13 +339,25 @@ export default function SearchBar({
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [isCompact, showFilters]);
 
-  useEffect(() => () => clearCompactCloseTimer(), []);
+  useEffect(() => () => clearRefineCloseTimer(), []);
+
+  useEffect(() => {
+    if (!showFilters) {
+      setOpenChoiceField(null);
+    }
+  }, [showFilters]);
 
   const hasActiveFilters = Boolean(
     query.trim()
-      || filters.format
+      || selectedFormats?.length
+      || filters.collection
       || filters.person
+      || filters.sender
+      || filters.recipient
       || filters.place
+      || filters.topic
+      || filters.tone
+      || filters.relationship
       || filters.year
       || filters.dateRange?.start
       || filters.dateRange?.end
@@ -156,7 +366,7 @@ export default function SearchBar({
 
   const searchStatus = useMemo(() => {
     if (loading && hasQuery) return `Searching for "${query.trim()}"...`;
-    if (loading && hasActiveFilters) return "Refreshing filtered archive...";
+    if (loading && hasActiveFilters) return "Refreshing refined archive...";
     if (loading) return "Refreshing archive browse...";
     if (hasQuery) {
       return `${total} result${total === 1 ? "" : "s"} for "${query.trim()}"`;
@@ -167,8 +377,8 @@ export default function SearchBar({
     return `${total} published archive item${total === 1 ? "" : "s"}`;
   }, [hasActiveFilters, hasQuery, loading, query, total]);
 
-  const availableSortOptions = useMemo(
-    () => (hasQuery ? SORT_OPTIONS : SORT_OPTIONS.filter((option) => option.sort !== "relevance")),
+  const availableSortFields = useMemo(
+    () => getAvailableSortFields(hasQuery),
     [hasQuery],
   );
 
@@ -182,26 +392,60 @@ export default function SearchBar({
   const activePills = useMemo(() => {
     const pills: Array<{ key: string; label: string; onClear: () => void }> = [];
 
-    if (filters.format) {
-      const label = facets.formats.find((facet) => facet.value === filters.format)?.label || filters.format;
+    if (filters.collection) {
       pills.push({
-        key: `format-${filters.format}`,
-        label,
-        onClear: () => updateFilter({ format: null }),
+        key: `collection-${filters.collection}`,
+        label: `Collection: ${getCollectionLabel(filters.collection, facets)}`,
+        onClear: () => updateFilter({ collection: null }),
       });
     }
     if (filters.person) {
       pills.push({
         key: `person-${filters.person}`,
-        label: filters.person,
-        onClear: () => updateFilter({ person: null }),
+        label: `Sender or recipient: ${filters.person}`,
+        onClear: () => updateFilter({ person: null, personRole: null }),
+      });
+    }
+    if (filters.sender) {
+      pills.push({
+        key: `sender-${filters.sender}`,
+        label: `From: ${filters.sender}`,
+        onClear: () => updateFilter({ sender: null }),
+      });
+    }
+    if (filters.recipient) {
+      pills.push({
+        key: `recipient-${filters.recipient}`,
+        label: `To: ${filters.recipient}`,
+        onClear: () => updateFilter({ recipient: null }),
       });
     }
     if (filters.place) {
       pills.push({
         key: `place-${filters.place}`,
-        label: filters.place,
+        label: `Place: ${filters.place}`,
         onClear: () => updateFilter({ place: null }),
+      });
+    }
+    if (filters.topic) {
+      pills.push({
+        key: `topic-${filters.topic}`,
+        label: `Topic: ${formatFacetLabel(filters.topic)}`,
+        onClear: () => updateFilter({ topic: null }),
+      });
+    }
+    if (filters.tone) {
+      pills.push({
+        key: `tone-${filters.tone}`,
+        label: `Tone: ${formatFacetLabel(filters.tone)}`,
+        onClear: () => updateFilter({ tone: null }),
+      });
+    }
+    if (filters.relationship) {
+      pills.push({
+        key: `relationship-${filters.relationship}`,
+        label: `Relationship: ${formatFacetLabel(filters.relationship)}`,
+        onClear: () => updateFilter({ relationship: null }),
       });
     }
     if (filters.year) {
@@ -231,9 +475,124 @@ export default function SearchBar({
     }
 
     return pills;
-  }, [facets.formats, filters, updateFilter]);
+  }, [facets, filters, selectedFormats]);
 
   const activeFilterCount = activePills.length;
+  const resolvedSort = getResolvedSort(query, filters);
+  const resolvedSortField = availableSortFields.find((option) => option.value === resolvedSort.sort)
+    || availableSortFields[0]
+    || SORT_FIELD_OPTIONS[0];
+  const sortChoiceOptions = useMemo<FilterChoiceOption[]>(
+    () => availableSortFields.map((option) => ({
+      value: getSortValue(option),
+      label: option.label,
+    })),
+    [availableSortFields],
+  );
+  const sortDirectionLabel = getSortDirectionAriaLabel(resolvedSort.sort, resolvedSort.sortOrder);
+  const sortDirectionDisplayLabel = getSortDirectionDisplayLabel(resolvedSort.sort, resolvedSort.sortOrder);
+  const canToggleSortDirection = resolvedSort.sort !== "relevance";
+  const toneChoiceOptions = useMemo<FilterChoiceOption[]>(
+    () => facets.tones.map((facet) => ({
+      value: facet.value,
+      label: formatFacetLabel(facet.value),
+      count: facet.count,
+    })),
+    [facets.tones],
+  );
+  const relationshipChoiceOptions = useMemo<FilterChoiceOption[]>(
+    () => facets.relationships.map((facet) => ({
+      value: facet.value,
+      label: formatFacetLabel(facet.value),
+      count: facet.count,
+    })),
+    [facets.relationships],
+  );
+  const verificationChoiceOptions = useMemo<FilterChoiceOption[]>(
+    () => [
+      { value: "all", label: "All items" },
+      { value: "true", label: "Verified only" },
+      { value: "false", label: "Unverified" },
+    ],
+    [],
+  );
+  const collectionSuggestion = useMemo(
+    () => getBestSuggestion(
+      filters.collection,
+      facets.collections.map((facet) => ({
+        value: facet.label,
+        display: facet.label === facet.value ? facet.label : `${facet.label} (${facet.value})`,
+        count: facet.count,
+        aliases: [facet.value],
+      })),
+    ),
+    [facets.collections, filters.collection],
+  );
+  const correspondentSuggestion = useMemo(
+    () => getBestSuggestion(
+      filters.person,
+      facets.correspondents.map((facet) => ({
+        value: facet.value,
+        display: facet.value,
+        count: facet.count,
+      })),
+    ),
+    [facets.correspondents, filters.person],
+  );
+  const senderSuggestion = useMemo(
+    () => getBestSuggestion(
+      filters.sender,
+      facets.correspondents.map((facet) => ({
+        value: facet.value,
+        display: facet.value,
+        count: facet.count,
+      })),
+    ),
+    [facets.correspondents, filters.sender],
+  );
+  const recipientSuggestion = useMemo(
+    () => getBestSuggestion(
+      filters.recipient,
+      facets.correspondents.map((facet) => ({
+        value: facet.value,
+        display: facet.value,
+        count: facet.count,
+      })),
+    ),
+    [facets.correspondents, filters.recipient],
+  );
+  const placeSuggestion = useMemo(
+    () => getBestSuggestion(
+      filters.place,
+      facets.places.map((facet) => ({
+        value: facet.value,
+        display: facet.value,
+        count: facet.count,
+      })),
+    ),
+    [facets.places, filters.place],
+  );
+  const topicSuggestion = useMemo(
+    () => getBestSuggestion(
+      filters.topic,
+      facets.topics.map((facet) => ({
+        value: facet.value,
+        display: formatFacetLabel(facet.value),
+        count: facet.count,
+      })),
+    ),
+    [facets.topics, filters.topic],
+  );
+
+  const toggleFormatFilter = (format: LetterImageType) => {
+    const nextFormats = selectedFormats?.includes(format)
+      ? selectedFormats.filter((value) => value !== format)
+      : [...(selectedFormats || []), format];
+
+    updateFilter({
+      format: nextFormats.length > 0 ? nextFormats : null,
+    });
+  };
 
   const applyDateRange = () => {
     const start = startYearInput ? Number(startYearInput) : undefined;
@@ -252,25 +611,60 @@ export default function SearchBar({
     onQueryChange("");
     onFiltersChange({});
     if (isCompact) {
-      closeCompactFilters();
+      closeFilters();
     }
   };
 
+  const collectionFilterId = `${searchIdBase}-collection`;
   const correspondentFilterId = `${searchIdBase}-person`;
+  const senderFilterId = `${searchIdBase}-sender`;
+  const recipientFilterId = `${searchIdBase}-recipient`;
   const placeFilterId = `${searchIdBase}-place`;
+  const topicFilterId = `${searchIdBase}-topic`;
+  const sortFilterId = `${searchIdBase}-sort`;
+  const sortDirectionLabelId = `${searchIdBase}-sort-direction`;
   const startYearFilterId = `${searchIdBase}-year-start`;
 
-  const formatFacetRow = facets.formats.length > 0 ? (
+  const formatFacetItems = useMemo(() => {
+    const formatCounts = new Map(
+      facets.formats.map((facet) => [facet.value, facet.count] as const),
+    );
+    const availableFormats = new Set<LetterImageType>([
+      ...facets.formats.map((facet) => facet.value),
+      ...(selectedFormats || []),
+    ]);
+
+    return ARCHIVE_FORMAT_ORDER
+      .filter((format) => availableFormats.has(format))
+      .map((format) => ({
+        key: format,
+        label: ARCHIVE_FORMAT_LABELS[format],
+        count: formatCounts.get(format) || 0,
+        active: selectedFormats?.includes(format) || false,
+        onClick: () => toggleFormatFilter(format),
+      }));
+  }, [facets.formats, filters, selectedFormats]);
+
+  const formatFacetRow = formatFacetItems.length > 0 ? (
     <FacetRow
       label="Browse by format"
-      items={facets.formats.map((facet) => ({
-        key: facet.value,
-        label: facet.label,
-        count: facet.count,
-        active: filters.format === facet.value,
-        onClick: () => updateFilter({ format: filters.format === facet.value ? null : facet.value }),
-      }))}
+      items={formatFacetItems}
     />
+  ) : null;
+  const formatFacetToolbar = formatFacetItems.length > 0 ? (
+    <div className="search-toolbar-format-group" role="group" aria-label="Browse by format">
+      {formatFacetItems.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          className={`search-facet-chip ${item.active ? "active" : ""}`}
+          onClick={item.onClick}
+        >
+          <span>{item.label}</span>
+          <span className="search-facet-count">{item.count}</span>
+        </button>
+      ))}
+    </div>
   ) : null;
 
   const renderActivePills = (compactLayout = false) => {
@@ -298,31 +692,109 @@ export default function SearchBar({
 
   const refinementFields = (
     <div className={`filters${isCompact ? " filters-compact" : ""}`}>
+      <div className="filter-group filter-group-sort">
+        <label className="filter-label" htmlFor={sortFilterId}>Sort</label>
+        <div className="filter-sort-row">
+          <FilterChoiceField
+            id={sortFilterId}
+            label="Sort archive results"
+            value={resolvedSortField.value}
+            placeholder="Choose sort"
+            options={sortChoiceOptions}
+            open={openChoiceField === sortFilterId}
+            onOpenChange={(open) => setOpenChoiceField(open ? sortFilterId : null)}
+            onChange={(value) => {
+              const option = parseSortValue(value, availableSortFields);
+              if (!option) return;
+              updateFilter({ sort: option.value, sortOrder: option.defaultOrder });
+            }}
+          />
+          <button
+            id={sortDirectionLabelId}
+            type="button"
+            className={`filter-toggle filter-sort-direction${canToggleSortDirection ? "" : " is-disabled"}`}
+            aria-label={canToggleSortDirection ? `Toggle sort direction, currently ${sortDirectionLabel}` : "Best match does not have a direction"}
+            disabled={!canToggleSortDirection}
+            onClick={() => {
+              if (!canToggleSortDirection) return;
+              updateFilter({ sortOrder: resolvedSort.sortOrder === "asc" ? "desc" : "asc" });
+            }}
+          >
+            {canToggleSortDirection ? sortDirectionDisplayLabel : "\u2014"}
+          </button>
+        </div>
+      </div>
+
       <div className="filter-group">
-        <label className="filter-label" htmlFor={correspondentFilterId}>Correspondent</label>
+        <label className="filter-label" htmlFor={collectionFilterId}>Collection</label>
+        <input
+          id={collectionFilterId}
+          type="text"
+          className="filter-input"
+          placeholder="Collection"
+          value={filters.collection || ""}
+          onChange={(event) => updateFilter({ collection: event.target.value || null })}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || !collectionSuggestion) return;
+            event.preventDefault();
+            updateFilter({ collection: collectionSuggestion.applyValue });
+          }}
+        />
+        <SuggestionHint suggestion={collectionSuggestion} />
+      </div>
+
+      <div className="filter-group">
+        <label className="filter-label" htmlFor={correspondentFilterId}>Sender or Recipient</label>
         <input
           id={correspondentFilterId}
           type="text"
           className="filter-input"
-          placeholder="Sender or recipient"
+          placeholder="Any sender or recipient"
           value={filters.person || ""}
-          onChange={(event) => updateFilter({ person: event.target.value || null })}
+          onChange={(event) => updateFilter({ person: event.target.value || null, personRole: null })}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || !correspondentSuggestion) return;
+            event.preventDefault();
+            updateFilter({ person: correspondentSuggestion.applyValue, personRole: null });
+          }}
         />
-        {facets.correspondents.length > 0 && (
-          <div className="filter-suggestion-row">
-            {facets.correspondents.slice(0, 6).map((facet) => (
-              <button
-                key={facet.value}
-                type="button"
-                className={`search-facet-chip ${filters.person === facet.value ? "active" : ""}`}
-                onClick={() => updateFilter({ person: filters.person === facet.value ? null : facet.value })}
-              >
-                <span>{facet.value}</span>
-                <span className="search-facet-count">{facet.count}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        <SuggestionHint suggestion={correspondentSuggestion} />
+      </div>
+
+      <div className="filter-group">
+        <label className="filter-label" htmlFor={senderFilterId}>Sender</label>
+        <input
+          id={senderFilterId}
+          type="text"
+          className="filter-input"
+          placeholder="Sender name"
+          value={filters.sender || ""}
+          onChange={(event) => updateFilter({ sender: event.target.value || null })}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || !senderSuggestion) return;
+            event.preventDefault();
+            updateFilter({ sender: senderSuggestion.applyValue });
+          }}
+        />
+        <SuggestionHint suggestion={senderSuggestion} />
+      </div>
+
+      <div className="filter-group">
+        <label className="filter-label" htmlFor={recipientFilterId}>Recipient</label>
+        <input
+          id={recipientFilterId}
+          type="text"
+          className="filter-input"
+          placeholder="Recipient name"
+          value={filters.recipient || ""}
+          onChange={(event) => updateFilter({ recipient: event.target.value || null })}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || !recipientSuggestion) return;
+            event.preventDefault();
+            updateFilter({ recipient: recipientSuggestion.applyValue });
+          }}
+        />
+        <SuggestionHint suggestion={recipientSuggestion} />
       </div>
 
       <div className="filter-group">
@@ -331,55 +803,29 @@ export default function SearchBar({
           id={placeFilterId}
           type="text"
           className="filter-input"
-          placeholder="Town, city, or country"
+          placeholder="Place"
           value={filters.place || ""}
           onChange={(event) => updateFilter({ place: event.target.value || null })}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || !placeSuggestion) return;
+            event.preventDefault();
+            updateFilter({ place: placeSuggestion.applyValue });
+          }}
         />
-        {facets.places.length > 0 && (
-          <div className="filter-suggestion-row">
-            {facets.places.slice(0, 6).map((facet) => (
-              <button
-                key={facet.value}
-                type="button"
-                className={`search-facet-chip ${filters.place === facet.value ? "active" : ""}`}
-                onClick={() => updateFilter({ place: filters.place === facet.value ? null : facet.value })}
-              >
-                <span>{facet.value}</span>
-                <span className="search-facet-count">{facet.count}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        <SuggestionHint suggestion={placeSuggestion} />
       </div>
 
       <div className="filter-group">
         <label className="filter-label" htmlFor={startYearFilterId}>Year Range</label>
-        {facets.years.length > 0 && (
-          <div className="filter-suggestion-row">
-            {facets.years.slice(0, 6).map((facet) => (
-              <button
-                key={facet.value}
-                type="button"
-                className={`search-facet-chip ${filters.year === facet.value ? "active" : ""}`}
-                onClick={() => updateFilter({
-                  year: filters.year === facet.value ? null : facet.value,
-                  dateRange: undefined,
-                })}
-              >
-                <span>{facet.value}</span>
-                <span className="search-facet-count">{facet.count}</span>
-              </button>
-            ))}
-          </div>
-        )}
         <div className="date-range">
           <input
             id={startYearFilterId}
-            type="number"
+            type="text"
+            inputMode="numeric"
             className="filter-input"
-            placeholder="From"
+            placeholder="From year"
             value={startYearInput}
-            onChange={(event) => setStartYearInput(event.target.value)}
+            onChange={(event) => setStartYearInput(normalizeYearInput(event.target.value))}
             onBlur={applyDateRange}
             onKeyDown={(event) => {
               if (event.key === "Enter") applyDateRange();
@@ -387,49 +833,99 @@ export default function SearchBar({
           />
           <span className="date-separator">to</span>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
             className="filter-input"
-            placeholder="To"
+            placeholder="To year"
             value={endYearInput}
-            onChange={(event) => setEndYearInput(event.target.value)}
+            onChange={(event) => setEndYearInput(normalizeYearInput(event.target.value))}
             onBlur={applyDateRange}
             onKeyDown={(event) => {
               if (event.key === "Enter") applyDateRange();
             }}
           />
         </div>
+        <p className="filter-empty-copy">Use one year or both. Press Enter to apply.</p>
       </div>
 
       <div className="filter-group">
-        <span className="filter-label">Verification</span>
-        <div className="radio-group">
-          {[
-            { label: "All Items", value: null },
-            { label: "Verified Only", value: true },
-            { label: "Unverified", value: false },
-          ].map((option) => (
-            <button
-              key={option.label}
-              type="button"
-              className={`radio-label ${filters.verified === option.value ? "active" : ""}`}
-              onClick={() => updateFilter({ verified: option.value })}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <label className="filter-label" htmlFor={topicFilterId}>Topic</label>
+        <input
+          id={topicFilterId}
+          type="text"
+          className="filter-input"
+          placeholder="Topic"
+          value={filters.topic || ""}
+          onChange={(event) => updateFilter({ topic: event.target.value || null })}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || !topicSuggestion) return;
+            event.preventDefault();
+            updateFilter({ topic: topicSuggestion.applyValue });
+          }}
+        />
+        <SuggestionHint suggestion={topicSuggestion} />
+      </div>
+
+      <div className="filter-group">
+        <label className="filter-label" htmlFor={`${searchIdBase}-tone`}>Tone</label>
+        <FilterChoiceField
+          id={`${searchIdBase}-tone`}
+          label="Tone"
+          value={filters.tone || ""}
+          placeholder="Any tone"
+          options={toneChoiceOptions}
+          allowClear
+          clearLabel="Any tone"
+          searchable={toneChoiceOptions.length > 6}
+          open={openChoiceField === `${searchIdBase}-tone`}
+          onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-tone` : null)}
+          onChange={(value) => updateFilter({ tone: value || null })}
+        />
+      </div>
+
+      <div className="filter-group">
+        <label className="filter-label" htmlFor={`${searchIdBase}-relationship`}>Relationship</label>
+        <FilterChoiceField
+          id={`${searchIdBase}-relationship`}
+          label="Relationship"
+          value={filters.relationship || ""}
+          placeholder="Any relationship"
+          options={relationshipChoiceOptions}
+          allowClear
+          clearLabel="Any relationship"
+          searchable
+          open={openChoiceField === `${searchIdBase}-relationship`}
+          onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-relationship` : null)}
+          onChange={(value) => updateFilter({ relationship: value || null })}
+        />
+      </div>
+
+      <div className="filter-group">
+        <label className="filter-label" htmlFor={`${searchIdBase}-verified`}>Verification</label>
+        <FilterChoiceField
+          id={`${searchIdBase}-verified`}
+          label="Verification"
+          value={filters.verified === null || filters.verified === undefined ? "all" : filters.verified ? "true" : "false"}
+          placeholder="All items"
+          options={verificationChoiceOptions}
+          open={openChoiceField === `${searchIdBase}-verified`}
+          onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-verified` : null)}
+          onChange={(value) => updateFilter({
+            verified: value === "all" ? null : value === "true",
+          })}
+        />
       </div>
     </div>
   );
 
   if (isCompact) {
     return (
-      <div className={`search search-compact${embedded ? " search-embedded" : ""}`} ref={compactPanelRef}>
+      <div className={`search search-compact${embedded ? " search-embedded" : ""}`} ref={searchRootRef}>
         <div className="search-input-wrapper search-input-wrapper-compact">
           <input
             type="search"
             className="search-input"
-            placeholder='Search names, places, dates, or phrases...'
+            placeholder="Search archive..."
             aria-label="Search the archive"
             enterKeyHint="search"
             value={query}
@@ -439,67 +935,64 @@ export default function SearchBar({
           <div className="search-compact-filter-wrap">
             <button
               type="button"
-              className={`filter-toggle search-compact-filter-toggle${showFilters ? " active" : ""}`}
+              className={`filter-toggle search-refine-toggle search-compact-filter-toggle${showFilters ? " active" : ""}${filtersPinned ? " is-pinned" : ""}`}
               aria-label="Open archive refine controls"
               aria-expanded={showFilters}
-              onMouseEnter={() => openCompactFilters()}
-              onMouseLeave={scheduleCompactFiltersClose}
-              onFocus={() => openCompactFilters()}
+              aria-pressed={filtersPinned}
+              onMouseEnter={() => openFilters()}
+              onMouseLeave={scheduleFiltersClose}
+              onFocus={() => openFilters()}
               onBlur={() => {
-                if (!compactFiltersPinned) {
-                  scheduleCompactFiltersClose();
+                if (!filtersPinned) {
+                  scheduleFiltersClose();
                 }
               }}
               onClick={() => {
                 if (!showFilters) {
-                  openCompactFilters({ pin: true });
+                  openFilters({ pin: true });
                   return;
                 }
 
-                if (compactFiltersPinned) {
-                  closeCompactFilters();
+                if (filtersPinned) {
+                  closeFilters();
                   return;
                 }
 
-                setCompactFiltersPinned(true);
-                clearCompactCloseTimer();
+                setFiltersPinned(true);
+                clearRefineCloseTimer();
               }}
             >
-              Refine{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+              <span>Refine{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}</span>
             </button>
 
             {showFilters && (
               <div
-                className="search-compact-flyout"
-                onMouseEnter={() => openCompactFilters()}
-                onMouseLeave={scheduleCompactFiltersClose}
+                className={`search-compact-flyout search-refine-flyout${filtersPinned ? " is-pinned" : ""}`}
+                onMouseEnter={() => openFilters()}
+                onMouseLeave={scheduleFiltersClose}
               >
                 <div className="search-compact-flyout-header">
-                  <div className="search-compact-flyout-copy">
-                    <span className="search-facet-label">Refine</span>
-                    <p className="search-compact-flyout-status">{searchStatus}</p>
-                  </div>
-                  {hasActiveFilters && (
-                    <button type="button" className="clear-filters" onClick={clearAll}>
+                  <div className="search-compact-flyout-header-row">
+                    <div className="search-compact-flyout-copy">
+                      <span className="search-facet-label">Refine</span>
+                      <p className="search-compact-flyout-status">{searchStatus}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="clear-filters"
+                      onClick={clearAll}
+                      disabled={!hasActiveFilters}
+                    >
                       Clear All
                     </button>
+                  </div>
+                  {filtersPinned && (
+                    <div className="search-compact-flyout-center">
+                      <span className="search-compact-pin-indicator">Pinned open</span>
+                    </div>
                   )}
                 </div>
                 {formatFacetRow}
-                <div className="search-toolbar search-toolbar-compact">
-                  <div className="search-sort-group" role="group" aria-label="Sort archive results">
-                    {availableSortOptions.map((option) => (
-                      <button
-                        key={`${option.sort}-${option.sortOrder}`}
-                        type="button"
-                        className={`search-sort-chip ${sameSort(query, filters, option) ? "active" : ""}`}
-                        onClick={() => updateFilter({ sort: option.sort, sortOrder: option.sortOrder })}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
                 {renderActivePills(true)}
                 {refinementFields}
               </div>
@@ -511,7 +1004,7 @@ export default function SearchBar({
   }
 
   return (
-    <div className={`search${embedded ? " search-embedded" : ""}`}>
+    <div className={`search${embedded ? " search-embedded" : ""}`} ref={searchRootRef}>
       <div className="search-heading">
         <div className="search-heading-copy">
           <p className="search-kicker">Archive-Wide Search</p>
@@ -530,7 +1023,7 @@ export default function SearchBar({
         <input
           type="search"
           className="search-input"
-          placeholder='Try "Molly", "Kansas", "George", or "marry"...'
+          placeholder="Search names, places, dates..."
           aria-label="Search the archive"
           enterKeyHint="search"
           value={query}
@@ -538,43 +1031,75 @@ export default function SearchBar({
         />
       </div>
 
-      {formatFacetRow}
-
       <div className="search-toolbar">
-        <div className="search-sort-group" role="group" aria-label="Sort archive results">
-          {availableSortOptions.map((option) => (
-            <button
-              key={`${option.sort}-${option.sortOrder}`}
-              type="button"
-              className={`search-sort-chip ${sameSort(query, filters, option) ? "active" : ""}`}
-              onClick={() => updateFilter({ sort: option.sort, sortOrder: option.sortOrder })}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-
+        {formatFacetToolbar}
         <div className="search-toolbar-actions">
           <button
             type="button"
-            className="filter-toggle"
-            aria-label="Toggle advanced search filters"
+            className={`filter-toggle search-refine-toggle search-full-filter-toggle${showFilters ? " active" : ""}${filtersPinned ? " is-pinned" : ""}`}
+            aria-label="Open archive refine controls"
             aria-expanded={showFilters}
-            onClick={() => setShowFilters((current) => !current)}
+            aria-pressed={filtersPinned}
+            onMouseEnter={() => openFilters()}
+            onMouseLeave={scheduleFiltersClose}
+            onFocus={() => openFilters()}
+            onBlur={() => {
+              if (!filtersPinned) {
+                scheduleFiltersClose();
+              }
+            }}
+            onClick={() => {
+              if (!showFilters) {
+                openFilters({ pin: true });
+                return;
+              }
+
+              if (filtersPinned) {
+                closeFilters();
+                return;
+              }
+
+              setFiltersPinned(true);
+              clearRefineCloseTimer();
+            }}
           >
-            {showFilters ? "Hide Refinements" : "Refine Results"}
+            Refine
           </button>
-          {hasActiveFilters && (
-            <button type="button" className="clear-filters" onClick={clearAll}>
-              Clear All
-            </button>
-          )}
         </div>
       </div>
 
       {renderActivePills()}
 
-      {showFilters && refinementFields}
+      {showFilters && (
+        <div
+          className={`search-full-flyout search-refine-flyout${filtersPinned ? " is-pinned" : ""}`}
+          onMouseEnter={() => openFilters()}
+          onMouseLeave={scheduleFiltersClose}
+        >
+          <div className="search-compact-flyout-header">
+            <div className="search-compact-flyout-header-row">
+              <div className="search-compact-flyout-copy">
+                <span className="search-facet-label">Refine</span>
+                <p className="search-compact-flyout-status">{searchStatus}</p>
+              </div>
+              <button
+                type="button"
+                className="clear-filters"
+                onClick={clearAll}
+                disabled={!hasActiveFilters}
+              >
+                Clear All
+              </button>
+            </div>
+            {filtersPinned && (
+              <div className="search-compact-flyout-center">
+                <span className="search-compact-pin-indicator">Pinned open</span>
+              </div>
+            )}
+          </div>
+          {refinementFields}
+        </div>
+      )}
     </div>
   );
 }
@@ -610,6 +1135,151 @@ function FacetRow({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function SuggestionHint({ suggestion }: { suggestion: FilterSuggestion | null }) {
+  if (!suggestion) return null;
+
+  return (
+    <p className="filter-suggestion-hint">
+      Press Enter to use <strong>{suggestion.display}</strong>
+      <span> · {suggestion.count} item{suggestion.count === 1 ? "" : "s"}</span>
+    </p>
+  );
+}
+
+function FilterChoiceField({
+  id,
+  label,
+  value,
+  placeholder,
+  options,
+  open,
+  searchable = false,
+  allowClear = false,
+  clearLabel = "Any",
+  onChange,
+  onOpenChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  placeholder: string;
+  options: FilterChoiceOption[];
+  open: boolean;
+  searchable?: boolean;
+  allowClear?: boolean;
+  clearLabel?: string;
+  onChange: (value: string) => void;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [panelDirection, setPanelDirection] = useState<"down" | "up">("down");
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const selectedOption = options.find((option) => option.value === value) || null;
+  const filteredOptions = useMemo(
+    () => filterChoiceOptions(options, searchTerm),
+    [options, searchTerm],
+  );
+
+  useEffect(() => {
+    if (open && searchable) {
+      window.requestAnimationFrame(() => searchInputRef.current?.focus());
+    }
+    if (!open) {
+      setSearchTerm("");
+    }
+  }, [open, searchable]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const measureDirection = () => {
+      const triggerRect = triggerRef.current?.getBoundingClientRect();
+      const panelRect = panelRef.current?.getBoundingClientRect();
+      if (!triggerRect || !panelRect) return;
+
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - triggerRect.bottom;
+      const spaceAbove = triggerRect.top;
+      const nextDirection = panelRect.height > spaceBelow && spaceAbove > spaceBelow ? "up" : "down";
+      setPanelDirection(nextDirection);
+    };
+
+    measureDirection();
+    window.addEventListener("resize", measureDirection);
+    return () => window.removeEventListener("resize", measureDirection);
+  }, [filteredOptions.length, open]);
+
+  const hasSearch = searchable && options.length > 6;
+
+  return (
+    <div className={`filter-choice${open ? " is-open" : ""}`}>
+      <button
+        ref={triggerRef}
+        id={id}
+        type="button"
+        className={`filter-choice-trigger${selectedOption ? " has-value" : ""}`}
+        aria-label={label}
+        aria-expanded={open}
+        onClick={() => onOpenChange(!open)}
+      >
+        <span className="filter-choice-value">{selectedOption?.label || placeholder}</span>
+        <span className="filter-choice-caret" aria-hidden="true">▾</span>
+      </button>
+
+      {open && (
+        <div ref={panelRef} className={`filter-choice-panel${panelDirection === "up" ? " filter-choice-panel-up" : ""}`}>
+          {hasSearch && (
+            <input
+              ref={searchInputRef}
+              type="search"
+              className="filter-input filter-choice-search"
+              placeholder={`Find ${label.toLowerCase()}`}
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          )}
+          <div className="filter-choice-options" role="listbox" aria-label={label}>
+            {allowClear && (
+              <button
+                type="button"
+                className={`filter-choice-option${!selectedOption ? " active" : ""}`}
+                onClick={() => {
+                  onChange("");
+                  onOpenChange(false);
+                }}
+              >
+                <span>{clearLabel}</span>
+              </button>
+            )}
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`filter-choice-option${option.value === value ? " active" : ""}`}
+                  onClick={() => {
+                    onChange(option.value);
+                    onOpenChange(false);
+                  }}
+                >
+                  <span>{option.label}</span>
+                  {typeof option.count === "number" && (
+                    <span className="filter-choice-count">{option.count}</span>
+                  )}
+                </button>
+              ))
+            ) : (
+              <div className="filter-choice-empty">No matches</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -133,4 +133,29 @@ describe("LetterCard", () => {
     fireEvent.mouseEnter(shell);
     expect(button).toHaveClass("letter-card--search-preview-visible");
   });
+
+  it("renders a subtle sort cue when the archive is sorted by a hidden field", () => {
+    render(
+      <LetterCard
+        card={{
+          id: "letter-3",
+          imageType: "letter",
+          imageUrl: "/images/page-3.jpg",
+          primaryChip: "1 page",
+          sender: "Jimmie",
+          recipient: "Molly",
+          date: "August 12th, 1947",
+          hook: "A brief note.",
+        }}
+        sortCue={{
+          label: "Collection",
+          value: "009",
+        }}
+        onClick={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("Collection")).toBeInTheDocument();
+    expect(screen.getByText("009")).toBeInTheDocument();
+  });
 });

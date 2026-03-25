@@ -43,6 +43,19 @@ function pickHeroLetter(items: ArchiveShelfItem[]): ArchiveShelfItem | null {
 
 const ARCHIVE_PAGE_SIZE = 24;
 
+function getInitialFormats(searchParams: URLSearchParams): SearchFilters["format"] {
+  const repeatedFormats = searchParams.getAll("format") as NonNullable<SearchFilters["format"]>;
+  if (repeatedFormats.length > 0) return repeatedFormats;
+
+  const legacyFormat = searchParams.get("format") as NonNullable<SearchFilters["format"]>[number] | null;
+  return legacyFormat ? [legacyFormat] : null;
+}
+
+function getResolvedArchiveSort(query: string, filters: SearchFilters) {
+  const hasQuery = Boolean(query.trim());
+  return filters.sort || (hasQuery ? "relevance" : "createdAt");
+}
+
 function mergeArchiveItems(
   current: ArchiveShelfItem[],
   incoming: ArchiveShelfItem[],
@@ -66,9 +79,16 @@ export default function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") || "");
   const [filters, setFilters] = useState<SearchFilters>(() => ({
-    format: (searchParams.get("format") as SearchFilters["format"]) || null,
+    format: getInitialFormats(searchParams),
+    collection: searchParams.get("collection") || null,
     person: searchParams.get("person") || null,
+    personRole: (searchParams.get("personRole") as SearchFilters["personRole"]) || null,
+    sender: searchParams.get("sender") || null,
+    recipient: searchParams.get("recipient") || null,
     place: searchParams.get("place") || null,
+    topic: searchParams.get("topic") || null,
+    tone: searchParams.get("tone") || null,
+    relationship: searchParams.get("relationship") || null,
     year: searchParams.get("year") ? Number(searchParams.get("year")) : null,
     dateRange: searchParams.get("yearFrom") || searchParams.get("yearTo")
       ? {
@@ -91,9 +111,13 @@ export default function HomePage() {
     total: 0,
     facets: {
       formats: [],
+      collections: [],
       correspondents: [],
       places: [],
       years: [],
+      topics: [],
+      tones: [],
+      relationships: [],
     },
   });
   const [archiveLoading, setArchiveLoading] = useState(true);
@@ -104,6 +128,8 @@ export default function HomePage() {
   const archiveSearchRef = useRef<HTMLElement | null>(null);
   const searchDockTriggerRef = useRef<HTMLDivElement | null>(null);
   const [stickyDockActive, setStickyDockActive] = useState(false);
+  const [pageRefineOpen, setPageRefineOpen] = useState(false);
+  const [compactRefineOpen, setCompactRefineOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,9 +156,20 @@ export default function HomePage() {
   useEffect(() => {
     const nextParams = new URLSearchParams();
     if (searchQuery.trim()) nextParams.set("q", searchQuery.trim());
-    if (filters.format) nextParams.set("format", filters.format);
+    if (filters.format?.length) {
+      filters.format.forEach((format) => nextParams.append("format", format));
+    }
+    if (filters.collection) nextParams.set("collection", filters.collection);
     if (filters.person) nextParams.set("person", filters.person);
+    if (filters.person && filters.personRole && filters.personRole !== "any") {
+      nextParams.set("personRole", filters.personRole);
+    }
+    if (filters.sender) nextParams.set("sender", filters.sender);
+    if (filters.recipient) nextParams.set("recipient", filters.recipient);
     if (filters.place) nextParams.set("place", filters.place);
+    if (filters.topic) nextParams.set("topic", filters.topic);
+    if (filters.tone) nextParams.set("tone", filters.tone);
+    if (filters.relationship) nextParams.set("relationship", filters.relationship);
     if (filters.year) nextParams.set("year", String(filters.year));
     if (filters.dateRange?.start) nextParams.set("yearFrom", String(filters.dateRange.start));
     if (filters.dateRange?.end) nextParams.set("yearTo", String(filters.dateRange.end));
@@ -157,9 +194,18 @@ export default function HomePage() {
     () => ({
       limit: ARCHIVE_PAGE_SIZE,
       search: searchQuery.trim() || undefined,
-      format: filters.format || undefined,
+      format: filters.format?.length ? filters.format : undefined,
+      collection: filters.collection || undefined,
       person: filters.person || undefined,
+      personRole: filters.person && filters.personRole && filters.personRole !== "any"
+        ? filters.personRole
+        : undefined,
+      sender: filters.sender || undefined,
+      recipient: filters.recipient || undefined,
       place: filters.place || undefined,
+      topic: filters.topic || undefined,
+      tone: filters.tone || undefined,
+      relationship: filters.relationship || undefined,
       year: filters.year || undefined,
       yearFrom: filters.dateRange?.start,
       yearTo: filters.dateRange?.end,
@@ -173,7 +219,15 @@ export default function HomePage() {
   useEffect(() => {
     let cancelled = false;
     const requestVersion = ++requestVersionRef.current;
-    const delay = searchQuery.trim() || filters.person?.trim() || filters.place?.trim() ? 180 : 0;
+    const delay = searchQuery.trim()
+      || filters.collection?.trim()
+      || filters.person?.trim()
+      || filters.sender?.trim()
+      || filters.recipient?.trim()
+      || filters.place?.trim()
+      || filters.topic?.trim()
+      ? 180
+      : 0;
     const timer = window.setTimeout(() => {
       setArchiveLoading(true);
       setArchiveLoadingMore(false);
@@ -244,6 +298,13 @@ export default function HomePage() {
           loading={archiveLoading}
           embedded
           variant="compact"
+          refineOpen={compactRefineOpen}
+          onRefineOpenChange={(open) => {
+            setCompactRefineOpen(open);
+            if (open) {
+              setPageRefineOpen(false);
+            }
+          }}
           onQueryChange={setSearchQuery}
           onFiltersChange={setFilters}
         />
@@ -255,6 +316,7 @@ export default function HomePage() {
     archiveLoading,
     archiveResults.facets,
     archiveResults.total,
+    compactRefineOpen,
     filters,
     searchQuery,
     setDock,
@@ -262,6 +324,12 @@ export default function HomePage() {
   ]);
 
   useEffect(() => () => setDock(EMPTY_DOCK), [setDock]);
+
+  useEffect(() => {
+    if (!stickyDockActive) {
+      setCompactRefineOpen(false);
+    }
+  }, [stickyDockActive]);
 
   const handleArchiveLoadMore = async () => {
     if (archiveLoading || archiveLoadingMore) return;
@@ -295,6 +363,11 @@ export default function HomePage() {
   const handleLetterClick = (letterId: string) => {
     navigate(`/letter/${letterId}`);
   };
+
+  const resolvedArchiveSort = getResolvedArchiveSort(searchQuery, filters);
+  const archiveSortCueField = resolvedArchiveSort === "createdAt" || resolvedArchiveSort === "collection"
+    ? resolvedArchiveSort
+    : null;
 
   const heroPeopleLine = heroLetter ? getCorrespondentLine(heroLetter) : null;
   const heroDate = heroLetter?.date || heroLetter?.dateRaw || null;
@@ -408,7 +481,14 @@ export default function HomePage() {
           loading={archiveLoading}
           embedded
           variant="full"
+          refineOpen={pageRefineOpen}
           dockTriggerRef={searchDockTriggerRef}
+          onRefineOpenChange={(open) => {
+            setPageRefineOpen(open);
+            if (open) {
+              setCompactRefineOpen(false);
+            }
+          }}
           onQueryChange={setSearchQuery}
           onFiltersChange={setFilters}
         />
@@ -427,6 +507,7 @@ export default function HomePage() {
             loadMoreError={archiveLoadMoreError}
             hasMore={archiveResults.letters.length < archiveResults.total}
             onLoadMore={handleArchiveLoadMore}
+            sortCueField={archiveSortCueField}
           />
         </section>
       </section>

@@ -159,6 +159,8 @@ export interface LetterCardData {
   primaryChip?: string;
   sender?: string;
   recipient?: string;
+  collectionCode?: string;
+  createdAt?: string;
   date?: string;
   dateRaw?: string;
   hook?: string;
@@ -193,6 +195,12 @@ export interface ArchiveFormatFacet {
   count: number;
 }
 
+export interface ArchiveCollectionFacet {
+  value: string;
+  label: string;
+  count: number;
+}
+
 export interface ArchiveYearFacet {
   value: number;
   count: number;
@@ -200,9 +208,13 @@ export interface ArchiveYearFacet {
 
 export interface ArchiveSearchFacets {
   formats: ArchiveFormatFacet[];
+  collections: ArchiveCollectionFacet[];
   correspondents: ArchiveFacetValue[];
   places: ArchiveFacetValue[];
   years: ArchiveYearFacet[];
+  topics: ArchiveFacetValue[];
+  tones: ArchiveFacetValue[];
+  relationships: ArchiveFacetValue[];
 }
 
 export interface LetterMetadata {

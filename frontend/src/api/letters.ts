@@ -33,14 +33,20 @@ export interface ArchiveSearchParams {
   limit?: number;
   collection?: string;
   search?: string;
-  format?: LetterImageType | null;
+  format?: LetterImageType[] | null;
   person?: string | null;
+  personRole?: 'any' | 'sender' | 'recipient' | null;
+  sender?: string | null;
+  recipient?: string | null;
   place?: string | null;
+  topic?: string | null;
+  tone?: string | null;
+  relationship?: string | null;
   year?: number | null;
   yearFrom?: number | null;
   yearTo?: number | null;
   verified?: boolean | null;
-  sort?: 'relevance' | 'createdAt' | 'letterDate';
+  sort?: 'relevance' | 'createdAt' | 'letterDate' | 'sender' | 'recipient' | 'collection';
   sortOrder?: SortOrder;
 }
 
@@ -158,9 +164,15 @@ export async function searchArchiveShelf(
     limit: params.limit,
     collection: params.collection,
     search: params.search,
-    format: params.format || undefined,
+    format: params.format?.length ? params.format : undefined,
     person: params.person || undefined,
+    personRole: params.personRole || undefined,
+    sender: params.sender || undefined,
+    recipient: params.recipient || undefined,
     place: params.place || undefined,
+    topic: params.topic || undefined,
+    tone: params.tone || undefined,
+    relationship: params.relationship || undefined,
     year: params.year || undefined,
     yearFrom: params.yearFrom || undefined,
     yearTo: params.yearTo || undefined,

@@ -33,14 +33,35 @@ const archiveMediaTypes = [
   'telegram',
 ] as const;
 
+const archivePersonRoles = ['any', 'sender', 'recipient'] as const;
+
+const archiveSearchSorts = [
+  'relevance',
+  'createdAt',
+  'letterDate',
+  'sender',
+  'recipient',
+  'collection',
+] as const;
+
 export const archiveSearchQuerySchema = z.object({
   collection: z.string().optional(),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(24),
   search: z.string().trim().max(200).optional(),
-  format: z.enum(archiveMediaTypes).optional(),
+  format: z.preprocess((value) => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string' && value.trim().length > 0) return [value];
+    return undefined;
+  }, z.array(z.enum(archiveMediaTypes)).min(1).optional()),
   person: z.string().trim().max(120).optional(),
+  personRole: z.enum(archivePersonRoles).default('any'),
+  sender: z.string().trim().max(120).optional(),
+  recipient: z.string().trim().max(120).optional(),
   place: z.string().trim().max(120).optional(),
+  topic: z.string().trim().max(120).optional(),
+  tone: z.string().trim().max(80).optional(),
+  relationship: z.string().trim().max(80).optional(),
   year: z.coerce.number().int().min(0).max(9999).optional(),
   yearFrom: z.coerce.number().int().min(0).max(9999).optional(),
   yearTo: z.coerce.number().int().min(0).max(9999).optional(),
@@ -48,7 +69,7 @@ export const archiveSearchQuerySchema = z.object({
     .enum(['true', 'false'])
     .transform((value) => value === 'true')
     .optional(),
-  sort: z.enum(['relevance', 'createdAt', 'letterDate']).default('relevance'),
+  sort: z.enum(archiveSearchSorts).default('relevance'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 

@@ -12,7 +12,19 @@ interface ArchiveListProps {
   loadMoreError?: string | null;
   hasMore?: boolean;
   onLoadMore?: () => void;
+  sortCueField?: "createdAt" | "collection" | null;
   onLetterClick: (letterId: string) => void;
+}
+
+function formatArchiveSortCueDate(value?: string) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 export default function ArchiveList({
@@ -24,6 +36,7 @@ export default function ArchiveList({
   loadMoreError = null,
   hasMore = false,
   onLoadMore,
+  sortCueField = null,
   onLetterClick,
 }: ArchiveListProps) {
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -144,6 +157,20 @@ export default function ArchiveList({
                 <LetterCard
                   key={letter.id}
                   card={letter}
+                  sortCue={(() => {
+                    if (sortCueField === "collection" && letter.collectionCode) {
+                      return { label: "Collection", value: letter.collectionCode };
+                    }
+
+                    if (sortCueField === "createdAt") {
+                      const publishedLabel = formatArchiveSortCueDate(letter.createdAt);
+                      if (publishedLabel) {
+                        return { label: "Published", value: publishedLabel };
+                      }
+                    }
+
+                    return null;
+                  })()}
                   onClick={onLetterClick}
                 />
               ))}

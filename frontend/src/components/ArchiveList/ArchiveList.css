@@ -217,6 +217,37 @@
   text-shadow: 0 1px 10px rgba(14, 11, 8, 0.42);
 }
 
+.letter-card-sort-cue {
+  position: absolute;
+  inset: 0.84rem auto auto 0.88rem;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  max-width: min(62%, 12rem);
+  color: rgba(255, 250, 242, 0.94);
+  text-shadow: 0 1px 12px rgba(14, 11, 8, 0.42);
+}
+
+.letter-card-sort-cue--stacked {
+  inset-block-start: 3.18rem;
+}
+
+.letter-card-sort-cue-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 250, 242, 0.7);
+}
+
+.letter-card-sort-cue-value {
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.15;
+  color: rgba(255, 250, 242, 0.94);
+}
+
 .letter-card-search-toggle {
   position: absolute;
   inset: 0.76rem auto auto 0.78rem;
@@ -410,6 +441,15 @@
     inset: 0.7rem auto auto 0.72rem;
     width: 2rem;
     height: 2rem;
+  }
+
+  .letter-card-sort-cue {
+    inset: 0.76rem auto auto 0.8rem;
+    max-width: min(68%, 11rem);
+  }
+
+  .letter-card-sort-cue--stacked {
+    inset-block-start: 3rem;
   }
 
   .letter-card-content {

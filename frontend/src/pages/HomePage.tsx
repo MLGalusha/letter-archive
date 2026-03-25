@@ -197,14 +197,14 @@ export default function HomePage() {
       />
       <section className="home-hero">
         <div className="home-hero-copy">
-          <p className="home-kicker">Two Ways Into the Archive</p>
+          <p className="home-kicker">Real Letters, Real Lives</p>
           <h1 className="home-headline">
-            Search for a specific letter, or enter through a collection.
+            Follow real lives through letters, telegrams, photographs, and the paper trail they left behind.
           </h1>
           <p className="home-subtitle">
-            Use archive search when you know a name, place, date, or remembered phrase.
-            Use collections when you want to stay inside one family thread, one moment,
-            or one body of material.
+            Search names, places, dates, and remembered phrases across the archive,
+            or open a collection to stay inside one family, one romance, or one moment
+            at a time.
           </p>
           <div className="home-hero-actions">
             <a href="#archive-search" className="btn-card home-primary-action">

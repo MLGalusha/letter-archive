@@ -4,8 +4,8 @@
 
 .home-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.95fr);
-  gap: 1.2rem;
+  grid-template-columns: minmax(0, 1.75fr) minmax(320px, 0.92fr);
+  gap: 1rem;
   align-items: stretch;
 }
 
@@ -17,7 +17,7 @@
 }
 
 .home-hero-copy {
-  padding: 2rem;
+  padding: 1.45rem 1.55rem 1.6rem;
   border-radius: 36px;
 }
 
@@ -33,19 +33,19 @@
 
 .home-headline {
   margin: 0;
-  max-width: 11ch;
+  max-width: 14ch;
   font-family: "Playfair Display", Georgia, "Times New Roman", serif;
-  font-size: clamp(3.25rem, 7vw, 5.5rem);
-  line-height: 0.94;
+  font-size: clamp(2.45rem, 5vw, 4.2rem);
+  line-height: 0.97;
   letter-spacing: -0.05em;
   color: var(--text);
 }
 
 .home-subtitle {
-  margin: 1.2rem 0 0;
-  max-width: 34rem;
-  font-size: 1.1rem;
-  line-height: 1.8;
+  margin: 0.95rem 0 0;
+  max-width: 31rem;
+  font-size: 0.98rem;
+  line-height: 1.55;
   color: var(--text-muted);
 }
 
@@ -54,13 +54,14 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 0.9rem;
-  margin-top: 1.5rem;
+  margin-top: 1.25rem;
 }
 
 .home-text-link {
   font-size: 0.96rem;
   font-weight: 700;
   letter-spacing: 0.05em;
+  color: var(--text);
   text-decoration: none;
 }
 
@@ -69,7 +70,7 @@
   text-decoration: none;
 }
 
-.home-primary-action {
+.public-site-shell .home-primary-action.btn-card {
   background: linear-gradient(180deg, rgba(37, 114, 126, 0.98), rgba(24, 88, 99, 0.98));
   border-color: rgba(24, 88, 99, 0.96);
   color: rgba(255, 250, 242, 0.98);
@@ -82,13 +83,38 @@
   box-shadow: 0 20px 36px rgba(24, 88, 99, 0.26);
 }
 
-.home-secondary-action {
-  background: rgba(255, 255, 255, 0.72);
+.public-site-shell .home-primary-action.btn-card:active:not(:disabled) {
+  color: rgba(255, 250, 242, 0.98);
+}
+
+.public-site-shell .home-secondary-action.btn-card {
+  background: linear-gradient(180deg, rgba(255, 248, 238, 0.98), rgba(246, 235, 218, 0.98));
+  border-color: rgba(215, 199, 175, 0.98);
+  color: var(--text);
+  box-shadow: 0 14px 28px rgba(29, 26, 20, 0.08);
+}
+
+.public-site-shell .home-secondary-action.btn-card:hover:not(:disabled) {
+  color: var(--text);
+  border-color: rgba(186, 166, 138, 0.98);
+  box-shadow: 0 18px 34px rgba(29, 26, 20, 0.1);
+}
+
+.public-site-shell .home-secondary-action.btn-card:active:not(:disabled) {
+  color: var(--text);
+}
+
+.home-text-link:hover {
+  color: var(--accent-strong);
 }
 
 .home-hero-feature-card {
   position: relative;
-  min-height: 33rem;
+  min-height: 27rem;
+  max-width: 25rem;
+  width: 100%;
+  justify-self: end;
+  align-self: stretch;
   border-radius: 34px;
   overflow: hidden;
   box-shadow: 0 28px 54px rgba(29, 26, 20, 0.14);
@@ -131,24 +157,24 @@
 }
 
 .home-hero-feature-card .letter-card-content {
-  padding: 1.05rem 1.15rem 1.15rem;
+  padding: 0.95rem 1rem 1.02rem;
   gap: 0.24rem;
 }
 
 .home-hero-feature-card .letter-card-meta {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 500;
   letter-spacing: 0.02em;
 }
 
 .home-hero-feature-card .letter-card-date {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
 }
 
 .home-hero-feature-card .letter-hook {
-  font-size: clamp(1.08rem, 1.28vw, 1.22rem);
-  line-height: 1.28;
-  -webkit-line-clamp: 6;
+  font-size: clamp(0.98rem, 1.08vw, 1.1rem);
+  line-height: 1.3;
+  -webkit-line-clamp: 5;
 }
 
 .home-hero-feature-card--placeholder {
@@ -156,7 +182,11 @@
   flex-direction: column;
   justify-content: flex-end;
   padding: 1.35rem;
-  min-height: 33rem;
+  min-height: 27rem;
+  max-width: 25rem;
+  width: 100%;
+  justify-self: end;
+  align-self: stretch;
   border-radius: 34px;
   background:
     radial-gradient(circle at top left, rgba(37, 114, 126, 0.18), transparent 34%),
@@ -276,6 +306,12 @@
   .home-headline {
     max-width: none;
   }
+
+  .home-hero-feature-card,
+  .home-hero-feature-card--placeholder {
+    max-width: none;
+    justify-self: stretch;
+  }
 }
 
 @media (max-width: 640px) {
@@ -292,17 +328,17 @@
 
   .home-hero-feature-card,
   .home-hero-feature-card--placeholder {
-    min-height: 25rem;
+    min-height: 21rem;
     border-radius: 24px;
   }
 
   .home-headline {
-    font-size: clamp(2.45rem, 15vw, 3.4rem);
+    font-size: clamp(2.2rem, 13vw, 3.15rem);
   }
 
   .home-subtitle {
     font-size: 0.95rem;
-    line-height: 1.65;
+    line-height: 1.58;
   }
 
   .home-hero-feature-card .letter-card-content {

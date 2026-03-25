@@ -1,11 +1,21 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import SEO from '../components/SEO';
-import { getCollectionByCode, type CollectionWithLetters } from '../api/collections';
+import { getCollectionByCode, getCollectionProfile, type CollectionWithLetters, type CollectionProfile } from '../api/collections';
 import { getImageUrl } from '../api/client';
 import LetterCard from '../components/LetterCard/LetterCard';
 import Breadcrumb from '../components/Breadcrumb';
 import Footer from '../components/Footer/Footer';
+import {
+  NarrativeSection,
+  StartHereCard,
+  SentimentArcChart,
+  TopicEvolutionChart,
+  KeyPeopleSection,
+  CorrespondenceNetwork,
+  ReadingPathsSection,
+  OnThisDaySpotlight,
+} from '../components/CollectionProfile';
 import type { LetterImageType } from '../types/Letter';
 import {
   applyCollectionFilters,
@@ -28,6 +38,7 @@ export default function CollectionDetailPage() {
   const { collectionCode } = useParams<{ collectionCode: string }>();
 
   const [collection, setCollection] = useState<CollectionWithLetters | null>(null);
+  const [profile, setProfile] = useState<CollectionProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -92,8 +103,12 @@ export default function CollectionDetailPage() {
 
     async function fetchCollection() {
       try {
-        const data = await getCollectionByCode(collectionCode!);
+        const [data, profileData] = await Promise.all([
+          getCollectionByCode(collectionCode!),
+          getCollectionProfile(collectionCode!).catch(() => null),
+        ]);
         setCollection(data);
+        setProfile(profileData);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Collection not found');
       } finally {
@@ -215,6 +230,74 @@ export default function CollectionDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Profile sections — AI-generated + computed */}
+        {profile?.narrative && (
+          <NarrativeSection
+            narrative={profile.narrative}
+            status={profile.profileStatus}
+          />
+        )}
+
+        {profile?.startHere && (
+          <StartHereCard
+            letterId={profile.startHere.letterId}
+            reason={profile.startHere.reason}
+            hook={profile.startHere.hook}
+            date={profile.startHere.date}
+          />
+        )}
+
+        {profile && profile.sentimentArc.length >= 2 && (
+          <section className="cd-profile-section">
+            <div className="cd-section-header">
+              <h2>Emotional Arc</h2>
+              <p className="cd-section-hint">
+                How the mood of the correspondence shifts over time.
+              </p>
+            </div>
+            <SentimentArcChart data={profile.sentimentArc} />
+          </section>
+        )}
+
+        {profile && profile.keyPeople.length > 0 && (
+          <KeyPeopleSection people={profile.keyPeople} />
+        )}
+
+        {profile && profile.correspondenceNetwork.nodes.length >= 2 && (
+          <section className="cd-profile-section">
+            <div className="cd-section-header">
+              <h2>Correspondence Network</h2>
+              <p className="cd-section-hint">
+                Who wrote to whom and how often.
+              </p>
+            </div>
+            <CorrespondenceNetwork
+              nodes={profile.correspondenceNetwork.nodes}
+              edges={profile.correspondenceNetwork.edges}
+            />
+          </section>
+        )}
+
+        {profile && profile.topicEvolution.length >= 2 && (
+          <section className="cd-profile-section">
+            <div className="cd-section-header">
+              <h2>Topics Over Time</h2>
+              <p className="cd-section-hint">
+                What the letters talked about and how it changed.
+              </p>
+            </div>
+            <TopicEvolutionChart data={profile.topicEvolution} />
+          </section>
+        )}
+
+        {profile && profile.readingPaths.length > 0 && (
+          <ReadingPathsSection paths={profile.readingPaths} />
+        )}
+
+        {profile && profile.onThisDay.length > 0 && (
+          <OnThisDaySpotlight entries={profile.onThisDay} />
+        )}
 
         {visualHighlights.length > 0 && (
           <section className="cd-visual-section">

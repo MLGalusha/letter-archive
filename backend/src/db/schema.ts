@@ -134,6 +134,16 @@ export const collections = pgTable('collections', {
   title: text('title'),
   description: text('description'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+
+  // AI-generated collection profile
+  profileNarrative: text('profile_narrative'),
+  profileStartHereLetterId: uuid('profile_start_here_letter_id'), // FK to letters(id) added in migration
+  profileStartHereReason: text('profile_start_here_reason'),
+  profileReadingPaths: jsonb('profile_reading_paths'), // Array<{ title, description, letterIds[] }>
+  profileGapAnalysis: jsonb('profile_gap_analysis'),   // Array<{ startDate, endDate, description }>
+  profileThemes: jsonb('profile_themes'),               // Array<{ name, description, letterIds[] }>
+  profileStatus: contentStatusEnum('profile_status').notNull().default('EMPTY'),
+  profileGeneratedAt: timestamp('profile_generated_at', { withTimezone: true }),
 });
 
 // Letters table

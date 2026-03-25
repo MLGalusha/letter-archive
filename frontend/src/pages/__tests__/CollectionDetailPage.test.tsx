@@ -7,9 +7,11 @@ import type { Letter } from "../../types/Letter";
 
 const mockNavigate = vi.fn();
 const getCollectionByCodeMock = vi.fn();
+const getCollectionProfileMock = vi.fn();
 
 vi.mock("../../api/collections", () => ({
   getCollectionByCode: (...args: unknown[]) => getCollectionByCodeMock(...args),
+  getCollectionProfile: (...args: unknown[]) => getCollectionProfileMock(...args),
 }));
 
 vi.mock("../../components/LetterCard/LetterCard", () => ({
@@ -32,6 +34,17 @@ vi.mock("../../components/Breadcrumb", () => ({
 
 vi.mock("../../components/Footer/Footer", () => ({
   default: () => <footer>Footer</footer>,
+}));
+
+vi.mock("../../components/CollectionProfile", () => ({
+  NarrativeSection: () => null,
+  StartHereCard: () => null,
+  SentimentArcChart: () => null,
+  TopicEvolutionChart: () => null,
+  KeyPeopleSection: () => null,
+  CorrespondenceNetwork: () => null,
+  ReadingPathsSection: () => null,
+  OnThisDaySpotlight: () => null,
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -88,6 +101,9 @@ function renderCollectionDetailPage() {
 describe("CollectionDetailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Profile returns null by default (no profile generated)
+    getCollectionProfileMock.mockResolvedValue(null);
 
     getCollectionByCodeMock.mockResolvedValue({
       id: "collection-9",

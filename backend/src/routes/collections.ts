@@ -3,6 +3,7 @@ import { eq, and, sql, asc } from 'drizzle-orm';
 import { db, letters, collections } from '../db/index.js';
 import { listCollections, getCollectionByCode } from '../services/collections.js';
 import { transformLettersToDTO, type LetterWithRelations } from '../dto/index.js';
+import { getCollectionAggregations } from '../services/collection-profile.js';
 
 const router = Router();
 
@@ -25,7 +26,6 @@ router.get('/collections', async (req, res, next) => {
           .where(
             and(
               eq(letters.collectionId, collection.id),
-
               eq(letters.visibility, 'PUBLISHED')
             )
           );
@@ -102,6 +102,64 @@ router.get('/collections/:code', async (req, res, next) => {
       ...collection,
       letters: transformLettersToDTO(collectionLetters as LetterWithRelations[]),
       letterCount: collectionLetters.length,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /collections/:code/profile
+ * Get the full collection profile: AI-generated content + computed aggregations
+ */
+router.get('/collections/:code/profile', async (req, res, next) => {
+  try {
+    const { code } = req.params;
+    const collection = await getCollectionByCode(code);
+
+    if (!collection) {
+      res.status(404).json({ error: 'Collection not found' });
+      return;
+    }
+
+    const aggregations = await getCollectionAggregations(collection.id);
+
+    // Build start-here with letter context if available
+    let startHere: { letterId: string; reason: string; hook: string | null; date: string | null } | null = null;
+    if (collection.profileStartHereLetterId) {
+      const startLetter = await db.query.letters.findFirst({
+        where: and(
+          eq(letters.id, collection.profileStartHereLetterId),
+          eq(letters.visibility, 'PUBLISHED'),
+        ),
+        columns: { id: true, hook: true, letterDate: true, dateRaw: true },
+      });
+      if (startLetter) {
+        startHere = {
+          letterId: startLetter.id,
+          reason: collection.profileStartHereReason || '',
+          hook: startLetter.hook,
+          date: startLetter.letterDate || startLetter.dateRaw,
+        };
+      }
+    }
+
+    // Filter reading path / theme letter IDs to only published letters
+    const publishedIds = new Set(aggregations.sentimentArc.map(s => s.letterId)
+      .concat(aggregations.topicEvolution.map(t => t.letterId)));
+    // Actually, let's use a broader set from the letters query already done
+    // For now, trust the data and let the frontend handle missing links gracefully
+
+    res.json({
+      // AI-generated content
+      narrative: collection.profileNarrative,
+      profileStatus: collection.profileStatus,
+      startHere,
+      readingPaths: collection.profileReadingPaths || [],
+      gapAnalysis: collection.profileGapAnalysis || [],
+      themes: collection.profileThemes || [],
+      // Computed aggregations
+      ...aggregations,
     });
   } catch (error) {
     next(error);

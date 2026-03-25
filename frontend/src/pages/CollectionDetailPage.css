@@ -4,6 +4,15 @@
   gap: 1.3rem;
 }
 
+/* Profile section wrappers */
+.cd-profile-section {
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 250, 242, 0.98));
+  border-radius: 28px;
+  padding: 1.8rem 2rem;
+  box-shadow: var(--shadow-soft);
+}
+
 .back-link {
   background: none;
   border: none;

@@ -6,3 +6,4 @@ export * from './biography.js';
 export * from './collection.js';
 export * from './metadata-update.js';
 export * from './entity-resolution.js';
+export * from './collection-profile.js';

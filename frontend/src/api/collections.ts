@@ -174,3 +174,148 @@ export interface EntityResolutionResult {
 export async function resolveCollectionEntities(code: string): Promise<EntityResolutionResult> {
   return apiPost<EntityResolutionResult>(`/admin/collections/${code}/resolve-entities`);
 }
+
+// ============================================================================
+// COLLECTION PROFILE
+// ============================================================================
+
+export interface CollectionCompleteness {
+  totalLetters: number;
+  publishedLetters: number;
+  withTranscripts: number;
+  withMetadata: number;
+  withEmotionalTone: number;
+  withTopics: number;
+  completenessScore: number;
+  warnings: string[];
+}
+
+export interface ReadingPath {
+  title: string;
+  description: string;
+  letterIds: string[];
+}
+
+export interface GapAnalysis {
+  startDate: string;
+  endDate: string;
+  description: string;
+}
+
+export interface ThemeGroup {
+  name: string;
+  description: string;
+  letterIds: string[];
+}
+
+export interface SentimentPoint {
+  date: string;
+  tone: string;
+  letterId: string;
+}
+
+export interface TopicPoint {
+  date: string;
+  topics: string[];
+  letterId: string;
+}
+
+export interface NetworkNode {
+  id: string;
+  name: string;
+  letterCount: number;
+  biography: string | null;
+}
+
+export interface NetworkEdge {
+  source: string;
+  target: string;
+  count: number;
+  type: string | null;
+}
+
+export interface OnThisDayEntry {
+  letterId: string;
+  date: string;
+  hook: string | null;
+  sender: string | null;
+  recipient: string | null;
+  yearsAgo: number;
+}
+
+export interface KeyPerson {
+  id: string;
+  name: string;
+  biography: string | null;
+  letterCount: number;
+  roles: { sender: number; recipient: number };
+}
+
+export interface FormatCount {
+  type: string;
+  label: string;
+  count: number;
+}
+
+export type ContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+
+export interface CollectionProfile {
+  // AI-generated
+  narrative: string | null;
+  profileStatus: ContentStatus;
+  startHere: { letterId: string; reason: string; hook: string | null; date: string | null } | null;
+  readingPaths: ReadingPath[];
+  gapAnalysis: GapAnalysis[];
+  themes: ThemeGroup[];
+  // Computed aggregations
+  sentimentArc: SentimentPoint[];
+  topicEvolution: TopicPoint[];
+  correspondenceNetwork: { nodes: NetworkNode[]; edges: NetworkEdge[] };
+  onThisDay: OnThisDayEntry[];
+  keyPeople: KeyPerson[];
+  formatBreakdown: FormatCount[];
+  dateRange: { start: string; end: string } | null;
+  letterCount: number;
+}
+
+export interface GenerateProfileResult {
+  narrative: string;
+  startHereLetterId: string | null;
+  startHereReason: string;
+  readingPaths: ReadingPath[];
+  gapAnalysis: GapAnalysis[];
+  themes: ThemeGroup[];
+  profileStatus: ContentStatus;
+  isStub: boolean;
+}
+
+/** Get data completeness before generating profile */
+export async function getCollectionCompleteness(code: string): Promise<CollectionCompleteness> {
+  return apiGet<CollectionCompleteness>(`/admin/collections/${code}/profile/completeness`);
+}
+
+/** Generate (or regenerate) a collection profile via AI */
+export async function generateCollectionProfile(code: string, force = false): Promise<GenerateProfileResult> {
+  return apiPost<GenerateProfileResult>(`/admin/collections/${code}/generate-profile`, { force });
+}
+
+/** Update profile content and/or status */
+export async function updateCollectionProfile(
+  code: string,
+  data: {
+    profileNarrative?: string;
+    profileStartHereLetterId?: string | null;
+    profileStartHereReason?: string;
+    profileReadingPaths?: ReadingPath[];
+    profileGapAnalysis?: GapAnalysis[];
+    profileThemes?: ThemeGroup[];
+    profileStatus?: 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+  },
+): Promise<AdminCollectionInfo> {
+  return apiPut<AdminCollectionInfo>(`/admin/collections/${code}/profile`, data);
+}
+
+/** Get the full public collection profile (AI + aggregations) */
+export async function getCollectionProfile(code: string): Promise<CollectionProfile> {
+  return apiGet<CollectionProfile>(`/collections/${code}/profile`);
+}

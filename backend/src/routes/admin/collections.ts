@@ -7,6 +7,10 @@ import { transformLettersToDTO, type LetterWithRelations } from '../../dto/index
 import { getRows } from '../../services/letter-queries.js';
 import { analyzeCollection } from '../../ai/analyze-collection.js';
 import { resolveCollectionEntities } from '../../services/entities/resolution.js';
+import {
+  assessCollectionCompleteness,
+  generateCollectionProfile,
+} from '../../ai/generate-collection-profile.js';
 
 const router = Router();
 
@@ -199,6 +203,159 @@ router.post('/:code/resolve-entities', async (req, res, next) => {
 
     const result = await resolveCollectionEntities(collection.id);
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================================
+// COLLECTION PROFILE ENDPOINTS
+// ============================================================================
+
+/**
+ * GET /admin/collections/:code/profile/completeness
+ * Check data completeness before generating a profile
+ */
+router.get('/:code/profile/completeness', async (req, res, next) => {
+  try {
+    const { code } = req.params;
+    const collection = await getCollectionByCode(code);
+
+    if (!collection) {
+      res.status(404).json({ error: 'Collection not found' });
+      return;
+    }
+
+    const completeness = await assessCollectionCompleteness(collection.id);
+    res.json(completeness);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const generateProfileSchema = z.object({
+  force: z.boolean().optional(),
+});
+
+/**
+ * POST /admin/collections/:code/generate-profile
+ * Generate an AI collection profile (or regenerate with force: true)
+ */
+router.post('/:code/generate-profile', async (req, res, next) => {
+  try {
+    const { code } = req.params;
+    const collection = await getCollectionByCode(code);
+
+    if (!collection) {
+      res.status(404).json({ error: 'Collection not found' });
+      return;
+    }
+
+    const body = generateProfileSchema.parse(req.body || {});
+
+    // Check if profile already exists
+    if (collection.profileStatus !== 'EMPTY' && !body.force) {
+      res.status(409).json({
+        error: 'Profile already exists',
+        message: 'Use force: true to regenerate',
+        profileStatus: collection.profileStatus,
+      });
+      return;
+    }
+
+    const result = await generateCollectionProfile(collection.id);
+
+    // Store results
+    await db.update(collections).set({
+      profileNarrative: result.narrative,
+      profileStartHereLetterId: result.startHereLetterId,
+      profileStartHereReason: result.startHereReason,
+      profileReadingPaths: result.readingPaths,
+      profileGapAnalysis: result.gapAnalysis,
+      profileThemes: result.themes,
+      profileStatus: 'AI_DRAFT',
+      profileGeneratedAt: new Date(),
+    }).where(eq(collections.id, collection.id));
+
+    res.json({
+      ...result,
+      profileStatus: 'AI_DRAFT',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const updateProfileSchema = z.object({
+  profileNarrative: z.string().max(10000).optional(),
+  profileStartHereLetterId: z.string().uuid().nullable().optional(),
+  profileStartHereReason: z.string().max(500).optional(),
+  profileReadingPaths: z.array(z.object({
+    title: z.string(),
+    description: z.string(),
+    letterIds: z.array(z.string().uuid()),
+  })).optional(),
+  profileGapAnalysis: z.array(z.object({
+    startDate: z.string(),
+    endDate: z.string(),
+    description: z.string(),
+  })).optional(),
+  profileThemes: z.array(z.object({
+    name: z.string(),
+    description: z.string(),
+    letterIds: z.array(z.string().uuid()),
+  })).optional(),
+  profileStatus: z.enum(['AI_DRAFT', 'EDITED', 'VERIFIED']).optional(),
+});
+
+/**
+ * PUT /admin/collections/:code/profile
+ * Update profile content and/or status
+ */
+router.put('/:code/profile', async (req, res, next) => {
+  try {
+    const { code } = req.params;
+    const collection = await getCollectionByCode(code);
+
+    if (!collection) {
+      res.status(404).json({ error: 'Collection not found' });
+      return;
+    }
+
+    const parseResult = updateProfileSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({
+        error: 'Invalid request body',
+        details: parseResult.error.errors,
+      });
+      return;
+    }
+
+    const updates: Record<string, unknown> = {};
+    const data = parseResult.data;
+
+    if (data.profileNarrative !== undefined) updates.profileNarrative = data.profileNarrative;
+    if (data.profileStartHereLetterId !== undefined) updates.profileStartHereLetterId = data.profileStartHereLetterId;
+    if (data.profileStartHereReason !== undefined) updates.profileStartHereReason = data.profileStartHereReason;
+    if (data.profileReadingPaths !== undefined) updates.profileReadingPaths = data.profileReadingPaths;
+    if (data.profileGapAnalysis !== undefined) updates.profileGapAnalysis = data.profileGapAnalysis;
+    if (data.profileThemes !== undefined) updates.profileThemes = data.profileThemes;
+    if (data.profileStatus !== undefined) updates.profileStatus = data.profileStatus;
+
+    // Auto-upgrade status from AI_DRAFT to EDITED if content changes (but not if status is explicitly set)
+    if (!data.profileStatus && collection.profileStatus === 'AI_DRAFT' && Object.keys(updates).length > 0) {
+      updates.profileStatus = 'EDITED';
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await db.update(collections).set(updates).where(eq(collections.id, collection.id));
+    }
+
+    const updated = await db.query.collections.findFirst({
+      where: eq(collections.id, collection.id),
+    });
+
+    res.json(updated);
   } catch (error) {
     next(error);
   }

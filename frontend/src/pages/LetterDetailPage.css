@@ -159,7 +159,7 @@
   transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94),
               opacity 0.35s ease;
   transform-origin: center center;
-  will-change: transform, opacity;
+  /* will-change removed: transition already promotes during animation */
 }
 
 /* The image IS the card — wraps tightly, no extra background */
@@ -435,10 +435,9 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   color: rgba(255, 250, 242, 0.95);
-  background: rgba(20, 17, 14, 0.6);
+  background: rgba(20, 17, 14, 0.75);
   padding: 0.2rem 0.5rem 0.25rem;
   border-radius: 0 0 6px 6px;
-  backdrop-filter: blur(4px);
   white-space: nowrap;
   line-height: 1;
 }

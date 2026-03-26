@@ -307,18 +307,17 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.45);
   color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
-  backdrop-filter: blur(8px);
 }
 
 .viewer-nav:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.6);
   color: white;
   transform: translateY(-50%) scale(1.08);
 }
@@ -342,10 +341,9 @@
   font-size: 0.72rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.7);
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.55);
   padding: 0.25rem 0.7rem;
   border-radius: 999px;
-  backdrop-filter: blur(8px);
   pointer-events: none;
   letter-spacing: 0.04em;
 }
@@ -360,11 +358,10 @@
   font-size: 0.68rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.5);
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.5);
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
   pointer-events: none;
-  backdrop-filter: blur(8px);
 }
 
 /* ── Minimap (visible when zoomed) ───────────────────────────── */

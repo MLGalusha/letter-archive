@@ -191,7 +191,7 @@ export default function LetterViewer({
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       saveCurrentImageState();
-    }, 100);
+    }, 300);
     return () => clearTimeout(timeoutId);
   }, [scale, position, saveCurrentImageState]);
 

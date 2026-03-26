@@ -471,8 +471,12 @@ function analyzeWordBox(
 
     // Overall descender extent (for backwards compat)
     if (descenderBoxes.length > 0) {
-      descenderLeft = Math.min(...descenderBoxes.map(b => b.left));
-      descenderRight = Math.max(...descenderBoxes.map(b => b.right));
+      descenderLeft = Infinity;
+      descenderRight = -Infinity;
+      for (const b of descenderBoxes) {
+        if (b.left < descenderLeft) descenderLeft = b.left;
+        if (b.right > descenderRight) descenderRight = b.right;
+      }
     }
   }
 

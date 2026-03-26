@@ -73,6 +73,9 @@ describe('collections route integration', () => {
     ascMock.mockImplementation((value) => ({ direction: 'asc', value }));
     sqlMock.mockImplementation((strings, ...values) => ({ strings, values }));
 
+    countWhereMock.mockReturnValue({
+      groupBy: vi.fn().mockResolvedValue([]),
+    });
     selectFromMock.mockReturnValue({
       where: countWhereMock,
     });
@@ -99,9 +102,12 @@ describe('collections route integration', () => {
   });
 
   it('returns public collections with published letter counts', async () => {
-    countWhereMock
-      .mockResolvedValueOnce([{ count: 3 }])
-      .mockResolvedValueOnce([{ count: 0 }]);
+    // Single grouped query returns counts for all collections at once
+    countWhereMock.mockReturnValue({
+      groupBy: vi.fn().mockResolvedValue([
+        { collectionId: 'collection-9', count: 3 },
+      ]),
+    });
 
     const response = await invokeRouter(collectionsRouter, {
       method: 'GET',
@@ -127,7 +133,8 @@ describe('collections route integration', () => {
         letterCount: 0,
       },
     ]);
-    expect(countWhereMock).toHaveBeenCalledTimes(2);
+    // Now a single batched query instead of N+1
+    expect(countWhereMock).toHaveBeenCalledTimes(1);
     expect(response.headers['x-request-id']).toEqual(expect.any(String));
   });
 

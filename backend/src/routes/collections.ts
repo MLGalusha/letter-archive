@@ -17,25 +17,21 @@ router.get('/collections', async (req, res, next) => {
   try {
     const allCollections = await listCollections();
 
-    // Get letter counts for each collection (published only for public API)
-    const collectionsWithCounts = await Promise.all(
-      allCollections.map(async (collection) => {
-        const [countResult] = await db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(letters)
-          .where(
-            and(
-              eq(letters.collectionId, collection.id),
-              eq(letters.visibility, 'PUBLISHED')
-            )
-          );
-
-        return {
-          ...collection,
-          letterCount: countResult?.count || 0,
-        };
+    // Get all letter counts in a single grouped query instead of N+1
+    const letterCounts = await db
+      .select({
+        collectionId: letters.collectionId,
+        count: sql<number>`count(*)::int`,
       })
-    );
+      .from(letters)
+      .where(eq(letters.visibility, 'PUBLISHED'))
+      .groupBy(letters.collectionId);
+
+    const countMap = new Map(letterCounts.map(r => [r.collectionId, r.count]));
+    const collectionsWithCounts = allCollections.map(collection => ({
+      ...collection,
+      letterCount: countMap.get(collection.id) || 0,
+    }));
 
     req.log.debug({ collectionCount: collectionsWithCounts.length }, 'Collections list fetched');
     res.json(collectionsWithCounts);

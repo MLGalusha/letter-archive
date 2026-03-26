@@ -1,11 +1,13 @@
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import pino from 'pino';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const isDev = process.env.NODE_ENV !== 'production';
+const isProduction = process.env.NODE_ENV === 'production';
+const isDev = !isProduction;
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const PROCESS_LOGGING_FLAG = Symbol.for('letter-archive.process-logging-installed');
 
@@ -37,6 +39,16 @@ export function getLogRetentionHours(): number {
     return Math.floor(raw);
   }
   return DEFAULT_LOG_RETENTION_HOURS;
+}
+
+function shouldLogToFiles(): boolean {
+  if (process.env.LOG_TO_FILES === 'true') {
+    return true;
+  }
+  if (process.env.LOG_TO_FILES === 'false') {
+    return false;
+  }
+  return !isProduction;
 }
 
 export function formatLogFileHour(date: Date): string {
@@ -94,6 +106,33 @@ export function purgeExpiredLogs(
   return removed;
 }
 
+/**
+ * Async version of purgeExpiredLogs — avoids blocking the event loop.
+ * Use this from runtime code; the sync version is kept for startup/tests.
+ */
+export async function purgeExpiredLogsAsync(
+  logDir: string,
+  now: Date = new Date(),
+  retentionHours: number = getLogRetentionHours(),
+): Promise<string[]> {
+  await fsp.mkdir(logDir, { recursive: true });
+
+  const cutoff = now.getTime() - (retentionHours * ONE_HOUR_MS);
+  const removed: string[] = [];
+  const entries = await fsp.readdir(logDir);
+
+  for (const entry of entries) {
+    const timestamp = parseLogFilenameTimestamp(entry);
+    if (timestamp === null || timestamp >= cutoff) continue;
+
+    const absolutePath = path.join(logDir, entry);
+    await fsp.rm(absolutePath, { force: true });
+    removed.push(absolutePath);
+  }
+
+  return removed;
+}
+
 class HourlyRotatingLogStream extends Writable {
   private currentHourKey: string | null = null;
   private currentStream: fs.WriteStream | null = null;
@@ -129,14 +168,13 @@ class HourlyRotatingLogStream extends Writable {
   }
 
   private runCleanup(): void {
-    try {
-      purgeExpiredLogs(this.logDir, this.now(), this.retentionHours);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`[logger] failed to purge expired logs: ${message}`);
-    } finally {
-      this.nextCleanupAt = this.now().getTime() + ONE_HOUR_MS;
-    }
+    this.nextCleanupAt = this.now().getTime() + ONE_HOUR_MS;
+    purgeExpiredLogsAsync(this.logDir, this.now(), this.retentionHours).catch(
+      (error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[logger] failed to purge expired logs: ${message}`);
+      },
+    );
   }
 
   override _write(
@@ -169,7 +207,10 @@ class HourlyRotatingLogStream extends Writable {
 }
 
 const retentionHours = getLogRetentionHours();
-const fileStream = new HourlyRotatingLogStream(LOG_DIR, retentionHours);
+const enableFileLogging = shouldLogToFiles();
+const fileStream = enableFileLogging
+  ? new HourlyRotatingLogStream(LOG_DIR, retentionHours)
+  : null;
 
 // Multi-destination: both console and hourly-rotated JSON log files.
 export const logger = pino({
@@ -191,7 +232,7 @@ export const logger = pino({
         })
       : process.stdout,
   },
-  { stream: fileStream },
+  ...(fileStream ? [{ stream: fileStream }] : []),
 ]));
 
 // Create child loggers for different areas of the application.

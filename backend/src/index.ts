@@ -31,8 +31,13 @@ app.use((_req, _res, next) => {
   totalRequests++;
   inFlight++;
   if (inFlight > peakInFlight) peakInFlight = inFlight;
-  _res.on('finish', () => { inFlight--; });
-  _res.on('close', () => { inFlight--; });
+  const onComplete = () => {
+    inFlight--;
+    _res.removeListener('finish', onComplete);
+    _res.removeListener('close', onComplete);
+  };
+  _res.on('finish', onComplete);
+  _res.on('close', onComplete);
   next();
 });
 

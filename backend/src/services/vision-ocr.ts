@@ -32,8 +32,13 @@ export async function runVisionWordDetection(
 ): Promise<OcrWordBox[] | null> {
   try {
     onProgress?.('Running word detection (Vision OCR)');
-    // Apply EXIF orientation so Vision sees the image as displayed
-    const correctedBuffer = await sharp(imagePath).rotate().toBuffer();
+    // Apply EXIF orientation so Vision sees the image as displayed.
+    // Get corrected buffer + metadata in one pass to avoid re-parsing later.
+    const rotated = sharp(imagePath).rotate();
+    const [correctedBuffer, imgMeta] = await Promise.all([
+      rotated.toBuffer(),
+      rotated.metadata(),
+    ]);
 
     const { ImageAnnotatorClient } = await import('@google-cloud/vision');
     const client = new ImageAnnotatorClient();
@@ -86,7 +91,7 @@ export async function runVisionWordDetection(
 
     // Analyze pixels inside each box to classify content vs empty/bleed
     onProgress?.('Analyzing pixel content');
-    await analyzeBoxPixels(correctedBuffer, wordBoxes);
+    await analyzeBoxPixels(correctedBuffer, wordBoxes, imgMeta);
 
     return wordBoxes;
   } catch (error) {
@@ -110,12 +115,13 @@ export async function runVisionWordDetection(
 async function analyzeBoxPixels(
   correctedBuffer: Buffer,
   wordBoxes: OcrWordBox[],
+  cachedMeta?: { width?: number; height?: number },
 ): Promise<void> {
   if (wordBoxes.length === 0) return;
 
-  const imgMeta = await sharp(correctedBuffer).metadata();
-  const imgWidth = imgMeta.width ?? 0;
-  const imgHeight = imgMeta.height ?? 0;
+  // Reuse metadata from caller if available, avoiding a redundant sharp parse
+  const imgWidth = cachedMeta?.width ?? (await sharp(correctedBuffer).metadata()).width ?? 0;
+  const imgHeight = cachedMeta?.height ?? (await sharp(correctedBuffer).metadata()).height ?? 0;
   if (imgWidth === 0 || imgHeight === 0) return;
 
   // Convert to single-channel grayscale for pixel analysis

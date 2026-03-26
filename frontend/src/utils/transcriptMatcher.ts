@@ -61,35 +61,38 @@ function wordOverlap(a: string, b: string): number {
 
   let fuzzyMatches = 0;
   for (const a of unmatchedA) {
+    if (a.length <= 2) continue;
     for (const b of unmatchedB) {
-      if (a.length > 2 && b.length > 2) {
-        // Simple containment or high similarity
-        if (a.includes(b) || b.includes(a)) {
-          fuzzyMatches += 0.7;
-          break;
+      if (b.length <= 2) continue;
+      // Skip pairs with very different lengths — no chance of matching
+      const maxLen = Math.max(a.length, b.length);
+      const minLen = Math.min(a.length, b.length);
+      if (minLen / maxLen < 0.4) continue;
+      // Simple containment or high similarity
+      if (a.includes(b) || b.includes(a)) {
+        fuzzyMatches += 0.7;
+        break;
+      }
+      // Prefix similarity: if edit distance is small relative to length
+      if (minLen / maxLen >= 0.6) {
+        let commonPrefix = 0;
+        for (let i = 0; i < minLen; i++) {
+          if (a[i] === b[i]) commonPrefix++;
+          else break;
         }
-        // Levenshtein-like: if edit distance is small relative to length
-        const maxLen = Math.max(a.length, b.length);
-        const minLen = Math.min(a.length, b.length);
-        if (minLen / maxLen >= 0.6) {
-          let commonPrefix = 0;
-          for (let i = 0; i < minLen; i++) {
-            if (a[i] === b[i]) commonPrefix++;
-            else break;
-          }
-          if (commonPrefix / maxLen >= 0.5) {
-            fuzzyMatches += 0.5;
-            break;
-          }
+        if (commonPrefix / maxLen >= 0.5) {
+          fuzzyMatches += 0.5;
+          break;
         }
       }
     }
   }
 
   const effectiveIntersection = intersection + fuzzyMatches;
-  const union = new Set([...setA, ...setB]).size;
+  // Union = |A| + |B| - |intersection| (avoid creating a merged set)
+  const union = setA.size + setB.size - intersection;
 
-  return effectiveIntersection / union;
+  return union > 0 ? effectiveIntersection / union : 0;
 }
 
 /**
@@ -108,14 +111,19 @@ function findVisionFallback(
     .filter(Boolean);
   if (transcriptTokens.length === 0) return null;
 
+  // Precompute median height once instead of per-comparison
+  let heightSum = 0;
+  for (const w of unassignedWords) {
+    heightSum += w.bbox[3] - w.bbox[1];
+  }
+  const medH = unassignedWords.length > 0
+    ? heightSum / unassignedWords.length
+    : 20;
+
   // Sort unassigned words by reading order (top-to-bottom, left-to-right)
   const sorted = [...unassignedWords].sort((a, b) => {
     const ay = (a.bbox[1] + a.bbox[3]) / 2;
     const by = (b.bbox[1] + b.bbox[3]) / 2;
-    const heights = unassignedWords.map((w) => w.bbox[3] - w.bbox[1]);
-    const medH = heights.length > 0
-      ? heights.reduce((s, h) => s + h, 0) / heights.length
-      : 20;
     if (Math.abs(ay - by) < medH * 0.5) {
       return a.bbox[0] - b.bbox[0];
     }
@@ -145,12 +153,14 @@ function findVisionFallback(
   if (bestScore < 0.3 || bestStart < 0) return null;
 
   const matchedWords = sorted.slice(bestStart, bestEnd);
-  const bbox: [number, number, number, number] = [
-    Math.min(...matchedWords.map((w) => w.bbox[0])),
-    Math.min(...matchedWords.map((w) => w.bbox[1])),
-    Math.max(...matchedWords.map((w) => w.bbox[2])),
-    Math.max(...matchedWords.map((w) => w.bbox[3])),
-  ];
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const w of matchedWords) {
+    if (w.bbox[0] < minX) minX = w.bbox[0];
+    if (w.bbox[1] < minY) minY = w.bbox[1];
+    if (w.bbox[2] > maxX) maxX = w.bbox[2];
+    if (w.bbox[3] > maxY) maxY = w.bbox[3];
+  }
+  const bbox: [number, number, number, number] = [minX, minY, maxX, maxY];
 
   return { bbox, confidence: bestScore };
 }
@@ -214,11 +224,8 @@ export function matchTranscriptToLines(
 
   if (bodyLines.length <= transcriptLines.length) {
     // Fewer or equal body lines than transcript lines — each body line gets a transcript line.
-    // Distribute transcript lines across body lines proportionally.
+    // Mark every body line as eligible for sequential assignment.
     for (let bIdx = 0; bIdx < bodyLines.length; bIdx++) {
-      // Map body line index to transcript line index proportionally
-      const tIdx = Math.round((bIdx / Math.max(1, bodyLines.length - 1)) * (transcriptLines.length - 1));
-      // But we need 1:1 — so just assign sequentially, allowing gaps
       matchedBodyIndices.add(bIdx);
     }
 

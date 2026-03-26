@@ -29,65 +29,65 @@ router.get('/', async (_req, res, next) => {
       orderBy: (cols, { asc }) => [asc(cols.collectionCode)],
     });
 
-    const collectionsWithStats = await Promise.all(
-      allCollections.map(async (collection) => {
-        // Use DISTINCT ON to count unique letter groups, not individual type rows
-        // Each group is identified by (collection_id, date_raw, type_sequence)
-        // We pick the L-type representative if available
-        const statsResult = await db.execute(sql`
-          WITH unique_groups AS (
-            SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
-              workflow, visibility, transcript_status, metadata_content_status, date_raw
-            FROM letters
-            WHERE collection_id = ${collection.id}
-            ORDER BY collection_id, date_raw, type_sequence,
-              CASE WHEN type = 'L' THEN 0 ELSE 1 END, type
-          )
-          SELECT
-            count(*)::int as total,
-            count(*) filter (where visibility = 'PUBLISHED')::int as published,
-            count(*) filter (where visibility = 'HIDDEN')::int as hidden,
-            count(*) filter (where workflow = 'UPLOADED')::int as uploaded,
-            count(*) filter (where workflow = 'TRANSCRIBED')::int as transcribed,
-            count(*) filter (where workflow = 'METADATA_DRAFTED')::int as metadata_ready,
-            count(*) filter (where workflow = 'REVIEWED')::int as reviewed,
-            count(*) filter (where transcript_status = 'VERIFIED' AND metadata_content_status = 'VERIFIED')::int as verified,
-            min(date_raw) as min_date,
-            max(date_raw) as max_date
-          FROM unique_groups
-        `);
-        const statsRows = getRows<Record<string, number | string | bigint | null>>(statsResult);
-        const stats = statsRows[0] || {};
+    // Batch stats query — one query for ALL collections instead of N+1
+    const statsResult = await db.execute(sql`
+      WITH unique_groups AS (
+        SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
+          collection_id, workflow, visibility, transcript_status, metadata_content_status, date_raw
+        FROM letters
+        ORDER BY collection_id, date_raw, type_sequence,
+          CASE WHEN type = 'L' THEN 0 ELSE 1 END, type
+      )
+      SELECT
+        collection_id,
+        count(*)::int as total,
+        count(*) filter (where visibility = 'PUBLISHED')::int as published,
+        count(*) filter (where visibility = 'HIDDEN')::int as hidden,
+        count(*) filter (where workflow = 'UPLOADED')::int as uploaded,
+        count(*) filter (where workflow = 'TRANSCRIBED')::int as transcribed,
+        count(*) filter (where workflow = 'METADATA_DRAFTED')::int as metadata_ready,
+        count(*) filter (where workflow = 'REVIEWED')::int as reviewed,
+        count(*) filter (where transcript_status = 'VERIFIED' AND metadata_content_status = 'VERIFIED')::int as verified,
+        min(date_raw) as min_date,
+        max(date_raw) as max_date
+      FROM unique_groups
+      GROUP BY collection_id
+    `);
+    const statsRows = getRows<Record<string, number | string | bigint | null>>(statsResult);
+    const statsMap = new Map(statsRows.map(r => [r.collection_id as string, r]));
 
-        // Count letter pages and extra content pages
-        const [pageCounts] = await db
-          .select({
-            letterPageCount: sql<number>`count(*) filter (where ${letters.type} = 'L')::int`,
-            extraContentCount: sql<number>`count(*) filter (where ${letters.type} != 'L')::int`,
-          })
-          .from(letterPages)
-          .innerJoin(letters, eq(letterPages.letterId, letters.id))
-          .where(
-            eq(letters.collectionId, collection.id)
-          );
-
-        return {
-          ...collection,
-          letterCount: Number(stats?.total || 0),
-          publishedCount: Number(stats?.published || 0),
-          hiddenCount: Number(stats?.hidden || 0),
-          uploadedCount: Number(stats?.uploaded || 0),
-          transcribedCount: Number(stats?.transcribed || 0),
-          metadataReadyCount: Number(stats?.metadata_ready || 0),
-          reviewedCount: Number(stats?.reviewed || 0),
-          verifiedCount: Number(stats?.verified || 0),
-          minDate: stats?.min_date || null,
-          maxDate: stats?.max_date || null,
-          letterPageCount: pageCounts?.letterPageCount || 0,
-          extraContentCount: pageCounts?.extraContentCount || 0,
-        };
+    // Batch page counts query — one query for ALL collections
+    const pageCountRows = await db
+      .select({
+        collectionId: letters.collectionId,
+        letterPageCount: sql<number>`count(*) filter (where ${letters.type} = 'L')::int`,
+        extraContentCount: sql<number>`count(*) filter (where ${letters.type} != 'L')::int`,
       })
-    );
+      .from(letterPages)
+      .innerJoin(letters, eq(letterPages.letterId, letters.id))
+      .groupBy(letters.collectionId);
+    const pageCountMap = new Map(pageCountRows.map(r => [r.collectionId, r]));
+
+    const collectionsWithStats = allCollections.map((collection) => {
+      const stats = statsMap.get(collection.id) || {};
+      const pageCounts = pageCountMap.get(collection.id);
+
+      return {
+        ...collection,
+        letterCount: Number(stats?.total || 0),
+        publishedCount: Number(stats?.published || 0),
+        hiddenCount: Number(stats?.hidden || 0),
+        uploadedCount: Number(stats?.uploaded || 0),
+        transcribedCount: Number(stats?.transcribed || 0),
+        metadataReadyCount: Number(stats?.metadata_ready || 0),
+        reviewedCount: Number(stats?.reviewed || 0),
+        verifiedCount: Number(stats?.verified || 0),
+        minDate: stats?.min_date || null,
+        maxDate: stats?.max_date || null,
+        letterPageCount: pageCounts?.letterPageCount || 0,
+        extraContentCount: pageCounts?.extraContentCount || 0,
+      };
+    });
 
     res.json(collectionsWithStats);
   } catch (error) {

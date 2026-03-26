@@ -101,11 +101,12 @@ describe('admin collections route integration', () => {
     ascMock.mockImplementation((value) => ({ direction: 'asc', value }));
     sqlMock.mockImplementation((strings, ...values) => ({ strings, values }));
 
-    selectFromMock.mockReturnValue({
-      innerJoin: innerJoinMock,
-    });
     innerJoinMock.mockReturnValue({
       where: selectWhereMock,
+      groupBy: vi.fn().mockResolvedValue([]),
+    });
+    selectFromMock.mockReturnValue({
+      innerJoin: innerJoinMock,
     });
     selectMock.mockReturnValue({
       from: selectFromMock,
@@ -139,41 +140,30 @@ describe('admin collections route integration', () => {
         description: 'Tenth set',
       },
     ]);
-    executeMock
-      .mockResolvedValueOnce({ rows: 'stats-1' })
-      .mockResolvedValueOnce({ rows: 'stats-2' });
-    getRowsMock
-      .mockReturnValueOnce([
-        {
-          total: 4,
-          published: 3,
-          hidden: 1,
-          uploaded: 1,
-          transcribed: 1,
-          metadata_ready: 1,
-          reviewed: 1,
-          verified: 2,
-          min_date: '19470810',
-          max_date: '19470812',
-        },
-      ])
-      .mockReturnValueOnce([
-        {
-          total: 0,
-          published: 0,
-          hidden: 0,
-          uploaded: 0,
-          transcribed: 0,
-          metadata_ready: 0,
-          reviewed: 0,
-          verified: 0,
-          min_date: null,
-          max_date: null,
-        },
-      ]);
-    selectWhereMock
-      .mockResolvedValueOnce([{ letterPageCount: 7, extraContentCount: 2 }])
-      .mockResolvedValueOnce([{ letterPageCount: 0, extraContentCount: 0 }]);
+    // Single batched execute for stats across all collections
+    executeMock.mockResolvedValueOnce({ rows: 'all-stats' });
+    getRowsMock.mockReturnValueOnce([
+      {
+        collection_id: 'collection-9',
+        total: 4,
+        published: 3,
+        hidden: 1,
+        uploaded: 1,
+        transcribed: 1,
+        metadata_ready: 1,
+        reviewed: 1,
+        verified: 2,
+        min_date: '19470810',
+        max_date: '19470812',
+      },
+      // collection-10 has no rows — defaults to 0
+    ]);
+    // Single batched groupBy for page counts across all collections
+    innerJoinMock.mockReturnValue({
+      groupBy: vi.fn().mockResolvedValue([
+        { collectionId: 'collection-9', letterPageCount: 7, extraContentCount: 2 },
+      ]),
+    });
 
     const response = await invokeRouter(adminCollectionsRouter, {
       method: 'GET',

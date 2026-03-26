@@ -62,13 +62,11 @@ export async function bulkTranscribe(letterIds: string[]): Promise<BulkResult> {
     return { queued: 0, skipped: skipReasons.length, skipReasons, processing: false };
   }
 
-  for (const letter of eligible) {
-    await db.update(letters).set({
-      transcriptionStatus: 'PENDING',
-      transcriptionError: null,
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letter.id));
-  }
+  await db.update(letters).set({
+    transcriptionStatus: 'PENDING',
+    transcriptionError: null,
+    updatedAt: new Date(),
+  }).where(inArray(letters.id, eligible.map(l => l.id)));
 
   if (getProcessingStatus().isRunning) {
     log.info(
@@ -148,13 +146,11 @@ export async function bulkExtractMetadata(
     };
   }
 
-  for (const letter of eligible) {
-    await db.update(letters).set({
-      metadataStatus: 'PENDING',
-      metadataError: null,
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letter.id));
-  }
+  await db.update(letters).set({
+    metadataStatus: 'PENDING',
+    metadataError: null,
+    updatedAt: new Date(),
+  }).where(inArray(letters.id, eligible.map(l => l.id)));
 
   if (getProcessingStatus().isRunning) {
     return {

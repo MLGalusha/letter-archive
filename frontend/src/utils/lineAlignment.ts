@@ -317,7 +317,10 @@ function filterWordsForTranscript(
     score: scoreRunAgainstTranscript(run, transcriptText),
   }));
 
-  const bestScore = Math.max(...scoredRuns.map((entry) => entry.score));
+  let bestScore = 0;
+  for (const entry of scoredRuns) {
+    if (entry.score > bestScore) bestScore = entry.score;
+  }
   const acceptedRuns = scoredRuns
     .filter((entry) => entry.score >= 0.45 && entry.score >= bestScore - 0.18)
     .flatMap((entry) => entry.run);
@@ -338,10 +341,13 @@ function buildFilteredSegment(
     };
   }
 
-  const left = Math.min(...filteredWords.map((word) => word.bbox[0]));
-  const top = Math.min(...filteredWords.map((word) => word.bbox[1]));
-  const right = Math.max(...filteredWords.map((word) => word.bbox[2]));
-  const bottom = Math.max(...filteredWords.map((word) => word.bbox[3]));
+  let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+  for (const word of filteredWords) {
+    if (word.bbox[0] < left) left = word.bbox[0];
+    if (word.bbox[1] < top) top = word.bbox[1];
+    if (word.bbox[2] > right) right = word.bbox[2];
+    if (word.bbox[3] > bottom) bottom = word.bbox[3];
+  }
 
   return {
     ...segment,
@@ -716,8 +722,16 @@ export function detectImageLines(img: HTMLImageElement): DetectedLine[] {
     for (let y = band.start + 1; y < band.end - 1; y++) {
       if (smoothed[y] <= smoothed[y - 1] && smoothed[y] <= smoothed[y + 1]) {
         // Check if this is a significant dip: compare to neighbors' max
-        const leftMax = Math.max(...Array.from(smoothed.slice(Math.max(band.start, y - Math.round(bandLen * 0.1)), y)));
-        const rightMax = Math.max(...Array.from(smoothed.slice(y + 1, Math.min(band.end, y + 1 + Math.round(bandLen * 0.1)))));
+        const lookback = Math.round(bandLen * 0.1);
+        let leftMax = -Infinity;
+        for (let i = Math.max(band.start, y - lookback); i < y; i++) {
+          if (smoothed[i] > leftMax) leftMax = smoothed[i];
+        }
+        let rightMax = -Infinity;
+        const rightEnd = Math.min(band.end, y + 1 + lookback);
+        for (let i = y + 1; i < rightEnd; i++) {
+          if (smoothed[i] > rightMax) rightMax = smoothed[i];
+        }
         const neighborAvg = (leftMax + rightMax) / 2;
         // Valley must dip at least 20% below the neighbor average
         if (neighborAvg > 0 && smoothed[y] < neighborAvg * 0.8) {
@@ -835,8 +849,11 @@ export function buildAlignedLinesFromDetected(
   bands.push(currentBand);
 
   // Step 2: Compute constant width across all detected lines
-  const constantLeft = Math.min(...sorted.map(d => d.x1));
-  const constantRight = Math.max(...sorted.map(d => d.x2));
+  let constantLeft = Infinity, constantRight = -Infinity;
+  for (const d of sorted) {
+    if (d.x1 < constantLeft) constantLeft = d.x1;
+    if (d.x2 > constantRight) constantRight = d.x2;
+  }
 
   // Step 3: Distribute transcript lines across bands proportionally by height
   const totalTextHeight = bands.reduce((s, b) => s + (b.y2 - b.y1), 0);

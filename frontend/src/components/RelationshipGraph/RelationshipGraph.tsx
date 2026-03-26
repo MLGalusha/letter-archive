@@ -1,15 +1,28 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import * as d3 from 'd3';
+import {
+  select,
+  zoom,
+  zoomIdentity,
+  forceSimulation,
+  forceLink,
+  forceManyBody,
+  forceCenter,
+  forceCollide,
+  drag,
+  type Simulation,
+  type SimulationNodeDatum,
+  type SimulationLinkDatum,
+} from 'd3';
 import type { GraphNode, GraphEdge, PersonRelationshipType } from '../../api/entities';
 import './RelationshipGraph.css';
 
-interface SimulationNode extends d3.SimulationNodeDatum {
+interface SimulationNode extends SimulationNodeDatum {
   id: string;
   name: string;
   letterCount: number;
 }
 
-interface SimulationLink extends d3.SimulationLinkDatum<SimulationNode> {
+interface SimulationLink extends SimulationLinkDatum<SimulationNode> {
   id: string;
   relationshipType: PersonRelationshipType;
   confidence: number;
@@ -73,34 +86,34 @@ export function RelationshipGraph({
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoveredNode, setHoveredNode] = useState<SimulationNode | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
-  const simulationRef = useRef<d3.Simulation<SimulationNode, SimulationLink> | null>(null);
+  const simulationRef = useRef<Simulation<SimulationNode, SimulationLink> | null>(null);
 
   const handleZoomIn = useCallback(() => {
     if (!svgRef.current) return;
-    const svg = d3.select(svgRef.current);
-    const zoom = d3.zoom<SVGSVGElement, unknown>();
+    const svg = select(svgRef.current);
+    const zoom = zoom<SVGSVGElement, unknown>();
     svg.transition().duration(300).call(zoom.scaleBy, 1.3);
   }, []);
 
   const handleZoomOut = useCallback(() => {
     if (!svgRef.current) return;
-    const svg = d3.select(svgRef.current);
-    const zoom = d3.zoom<SVGSVGElement, unknown>();
+    const svg = select(svgRef.current);
+    const zoom = zoom<SVGSVGElement, unknown>();
     svg.transition().duration(300).call(zoom.scaleBy, 0.7);
   }, []);
 
   const handleResetZoom = useCallback(() => {
     if (!svgRef.current) return;
-    const svg = d3.select(svgRef.current);
-    const zoom = d3.zoom<SVGSVGElement, unknown>();
-    svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity);
+    const svg = select(svgRef.current);
+    const zoom = zoom<SVGSVGElement, unknown>();
+    svg.transition().duration(300).call(zoom.transform, zoomIdentity);
   }, []);
 
   useEffect(() => {
     if (!svgRef.current || nodes.length === 0) return;
 
     // Clear previous content
-    const svg = d3.select(svgRef.current);
+    const svg = select(svgRef.current);
     svg.selectAll('*').remove();
 
     // Create simulation data
@@ -120,7 +133,7 @@ export function RelationshipGraph({
     const g = svg.append('g').attr('class', 'graph-container');
 
     // Setup zoom behavior
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
+    const zoom = zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 4])
       .on('zoom', (event) => {
         g.attr('transform', event.transform);
@@ -129,13 +142,13 @@ export function RelationshipGraph({
     svg.call(zoom);
 
     // Create force simulation
-    const simulation = d3.forceSimulation<SimulationNode>(simNodes)
-      .force('link', d3.forceLink<SimulationNode, SimulationLink>(simLinks)
+    const simulation = forceSimulation<SimulationNode>(simNodes)
+      .force('link', forceLink<SimulationNode, SimulationLink>(simLinks)
         .id((d) => d.id)
         .distance(100))
-      .force('charge', d3.forceManyBody().strength(-300))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(40));
+      .force('charge', forceManyBody().strength(-300))
+      .force('center', forceCenter(width / 2, height / 2))
+      .force('collision', forceCollide().radius(40));
 
     simulationRef.current = simulation;
 
@@ -164,7 +177,7 @@ export function RelationshipGraph({
       .attr('class', 'node');
 
     // Add drag behavior
-    const dragBehavior = d3.drag<SVGGElement, SimulationNode>()
+    const dragBehavior = drag<SVGGElement, SimulationNode>()
       .on('start', (event, d) => {
         if (!event.active) simulation.alphaTarget(0.3).restart();
         d.fx = d.x;

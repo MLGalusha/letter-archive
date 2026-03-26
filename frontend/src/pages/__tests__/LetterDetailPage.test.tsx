@@ -140,27 +140,6 @@ describe("LetterDetailPage", () => {
 
     // Transcript
     expect(screen.getByText(/My dearest friend/)).toBeInTheDocument();
-
-    // Filmstrip
-    expect(screen.getByText("Letter 2 of 3")).toBeInTheDocument();
-
-    // Teasers — unicode arrows in text
-    expect(screen.getByText(/Previous Letter/)).toBeInTheDocument();
-    expect(screen.getByText(/Next Letter/)).toBeInTheDocument();
-  });
-
-  it("renders teaser cards with correct links", async () => {
-    renderLetterDetailPage();
-
-    await screen.findByText(/A bright dispatch/);
-
-    const prevLink = screen.getByText(/Previous Letter/).closest("a");
-    expect(prevLink).toHaveAttribute("href", "/letter/letter-0");
-
-    const nextLink = screen.getByText(/Next Letter/).closest("a");
-    expect(nextLink).toHaveAttribute("href", "/letter/letter-2");
-
-    expect(screen.getByText("Tomorrow we leave for Salzburg")).toBeInTheDocument();
   });
 
   it("keeps the page usable when adjacent letter lookup fails", async () => {
@@ -169,8 +148,6 @@ describe("LetterDetailPage", () => {
     renderLetterDetailPage();
 
     expect(await screen.findByText(/A bright dispatch/)).toBeInTheDocument();
-    expect(screen.queryByText(/Letter 2 of 3/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Previous Letter/)).not.toBeInTheDocument();
   });
 
   it("shows the fallback error state when the letter cannot be loaded", async () => {
@@ -200,7 +177,7 @@ describe("LetterDetailPage", () => {
     renderLetterDetailPage();
 
     // Page loads without crashing on minimal data
-    await screen.findByText("Letter 2 of 3");
+    await screen.findByRole("article");
     // No hero narrative
     expect(screen.queryByText(/Written by/)).not.toBeInTheDocument();
     // No scan image
@@ -221,25 +198,4 @@ describe("LetterDetailPage", () => {
     expect(placeChip).toHaveAttribute("href", "/places/place-1");
   });
 
-  it("shows wrap-around labels at collection boundaries", async () => {
-    getAdjacentLettersMock.mockResolvedValue({
-      prev: { id: "letter-last", dateRaw: "19471231", date: "December 31, 1947", sender: "Alice Smith" },
-      next: { id: "letter-2", dateRaw: "19470811", date: "August 11, 1947" },
-      prevWraps: true,
-      nextWraps: false,
-      position: 1,
-      total: 5,
-      collectionCode: "009",
-      collectionTitle: "The Smith Letters",
-    });
-
-    renderLetterDetailPage();
-
-    await screen.findByText(/A bright dispatch/);
-
-    // First letter: prev wraps to last
-    expect(screen.getByText(/Last in Collection/)).toBeInTheDocument();
-    // Next is normal
-    expect(screen.getByText(/Next Letter/)).toBeInTheDocument();
-  });
 });

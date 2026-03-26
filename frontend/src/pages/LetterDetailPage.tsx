@@ -15,8 +15,6 @@ import { useHeaderDock, EMPTY_DOCK } from "../contexts/HeaderDockContext";
 import LetterHeaderDock from "../components/LetterHeaderDock/LetterHeaderDock";
 import "./LetterDetailPage.css";
 
-const FILMSTRIP_DOT_LIMIT = 30;
-
 /* ── helpers ─────────────────────────────────────────────── */
 
 function correspondentLine(m: Letter["metadata"]): string {
@@ -636,76 +634,6 @@ export default function LetterDetailPage() {
           </section>
         )}
 
-        {/* ── 7. Collection Nav ────────────────────────────── */}
-        {adjacent && adjacent.total > 1 && (
-          <nav className="letter-nav-section">
-            <div className="collection-filmstrip">
-              <div className="filmstrip-label">
-                {adjacent.position != null
-                  ? `Letter ${adjacent.position} of ${adjacent.total}`
-                  : `${adjacent.total} letters in this collection`}
-              </div>
-              <div className="filmstrip-track">
-                <button
-                  type="button"
-                  className="filmstrip-arrow"
-                  onClick={() => adjacent.prev && navigate(`/letter/${adjacent.prev.id}`)}
-                  aria-label={adjacent.prevWraps ? "Jump to last letter" : "Previous letter"}
-                >&#8592;</button>
-                {adjacent.total <= FILMSTRIP_DOT_LIMIT ? (
-                  <div className="filmstrip-dots">
-                    {Array.from({ length: adjacent.total }, (_, i) => (
-                      <span key={i} className={`filmstrip-dot${i + 1 === adjacent.position ? " active" : ""}`} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="filmstrip-progress">
-                    <div className="filmstrip-progress-fill" style={{ width: `${((adjacent.position ?? 1) / adjacent.total) * 100}%` }} />
-                  </div>
-                )}
-                <button
-                  type="button"
-                  className="filmstrip-arrow"
-                  onClick={() => adjacent.next && navigate(`/letter/${adjacent.next.id}`)}
-                  aria-label={adjacent.nextWraps ? "Jump to first letter" : "Next letter"}
-                >&#8594;</button>
-              </div>
-            </div>
-
-            {(adjacent.prev || adjacent.next) && (
-              <div className="adjacent-teasers">
-                {adjacent.prev && (
-                  <Link to={`/letter/${adjacent.prev.id}`} className={`teaser-card${adjacent.prevWraps ? " teaser-wraps" : ""}`}>
-                    <span className="teaser-direction">
-                      {adjacent.prevWraps ? "\u2190 Last in Collection" : "\u2190 Previous Letter"}
-                    </span>
-                    {adjacent.prev.date && <span className="teaser-date">{adjacent.prev.date}</span>}
-                    {(adjacent.prev.sender || adjacent.prev.recipient) && (
-                      <span className="teaser-people">
-                        {[adjacent.prev.sender, adjacent.prev.recipient].filter(Boolean).join(" \u2192 ")}
-                      </span>
-                    )}
-                    {adjacent.prev.hook && <p className="teaser-hook">{adjacent.prev.hook}</p>}
-                  </Link>
-                )}
-                {adjacent.next && (
-                  <Link to={`/letter/${adjacent.next.id}`} className={`teaser-card${adjacent.nextWraps ? " teaser-wraps" : ""}`}>
-                    <span className="teaser-direction">
-                      {adjacent.nextWraps ? "First in Collection \u2192" : "Next Letter \u2192"}
-                    </span>
-                    {adjacent.next.date && <span className="teaser-date">{adjacent.next.date}</span>}
-                    {(adjacent.next.sender || adjacent.next.recipient) && (
-                      <span className="teaser-people">
-                        {[adjacent.next.sender, adjacent.next.recipient].filter(Boolean).join(" \u2192 ")}
-                      </span>
-                    )}
-                    {adjacent.next.hook && <p className="teaser-hook">{adjacent.next.hook}</p>}
-                  </Link>
-                )}
-              </div>
-            )}
-          </nav>
-        )}
       </article>
 
       {/* ── Image Viewer Modal ─────────────────────────────── */}

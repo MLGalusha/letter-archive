@@ -224,8 +224,8 @@ export default function LetterDetailPage() {
   const [viewerStartPage, setViewerStartPage] = useState(0);
 
   // Scan carousel
-  const [scanPage, setScanPage] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
+  const carouselDraggedRef = useRef(false);
 
   // Transcript view mode: "reading" (reflowed) or "original" (1:1 line match)
   const [transcriptMode, setTranscriptMode] = useState<"reading" | "original">("reading");
@@ -234,18 +234,18 @@ export default function LetterDetailPage() {
   const { setDock } = useHeaderDock();
 
   useEffect(() => {
-    setScanPage(0);
-    // Also reset carousel scroll position
     if (carouselRef.current) carouselRef.current.scrollLeft = 0;
   }, [letterId]);
 
-  // Scroll-driven scaling: scale slides based on distance from carousel center
+  // Scroll-driven scaling + mouse-drag scrolling
   useEffect(() => {
     const carousel = carouselRef.current;
     if (!carousel) return;
 
     const MIN_SCALE = 0.82;
     let rafId: number | null = null;
+
+    let currentClosest = -1;
 
     const updateScales = () => {
       rafId = null;
@@ -262,7 +262,7 @@ export default function LetterDetailPage() {
         const slideCenter = slideRect.left + slideRect.width / 2;
         const dist = Math.abs(slideCenter - center);
         const maxDist = carouselRect.width * 0.5;
-        const t = Math.min(dist / maxDist, 1); // 0 = centered, 1 = edge
+        const t = Math.min(dist / maxDist, 1);
         const scale = 1 - t * (1 - MIN_SCALE);
         const opacity = 1 - t * 0.3;
 
@@ -275,19 +275,219 @@ export default function LetterDetailPage() {
         }
       });
 
-      setScanPage(closestIdx);
+      // Update dot indicators via DOM directly to avoid re-render during drag
+      if (closestIdx !== currentClosest) {
+        currentClosest = closestIdx;
+        const dots = carousel.parentElement?.querySelectorAll<HTMLElement>(".scan-dot");
+        dots?.forEach((dot, i) => {
+          dot.classList.toggle("active", i === closestIdx);
+        });
+      }
     };
 
+    // ── Mouse drag-to-scroll with momentum glide ──
+    let isDragging = false;
+    let startX = 0;
+    let scrollStart = 0;
+    let dragDirection = 0; // +1 = dragged right (scrolled left), -1 = dragged left (scrolled right)
+    let glideRaf: number | null = null;
+    let scrollEndTimer: ReturnType<typeof setTimeout> | null = null;
+    let isGliding = false;
+
+    // Smoothed velocity: keep a buffer of recent samples and average them
+    const velocitySamples: { dx: number; dt: number }[] = [];
+    const MAX_SAMPLES = 5;
+
+    const getSmoothedVelocity = (): number => {
+      if (velocitySamples.length === 0) return 0;
+      // Weight recent samples more heavily
+      let totalDx = 0;
+      let totalDt = 0;
+      for (const s of velocitySamples) {
+        totalDx += s.dx;
+        totalDt += s.dt;
+      }
+      if (totalDt === 0) return 0;
+      return (totalDx / totalDt) * 16; // normalize to ~60fps
+    };
+
+    const stopGlide = () => {
+      if (glideRaf != null) {
+        cancelAnimationFrame(glideRaf);
+        glideRaf = null;
+      }
+      isGliding = false;
+    };
+
+    // Gentle ease-out: slow deceleration at the end
+    const easeOutQuart = (t: number) => 1 - (1 - t) ** 4;
+
+    // Get scroll offset that would centre a slide
+    const getSlideCenterScroll = (slide: HTMLElement): number => {
+      const slideLeft = slide.offsetLeft;
+      const slideWidth = slide.offsetWidth;
+      const viewWidth = carousel.offsetWidth;
+      return slideLeft - (viewWidth - slideWidth) / 2;
+    };
+
+    // Single smooth animation from current position to target slide
+    const glideTo = (targetScroll: number, durationMs: number) => {
+      stopGlide();
+      const from = carousel.scrollLeft;
+      const delta = targetScroll - from;
+      if (Math.abs(delta) < 1) return;
+
+      isGliding = true;
+      const start = performance.now();
+
+      const tick = (now: number) => {
+        const elapsed = now - start;
+        const t = Math.min(elapsed / durationMs, 1);
+        carousel.scrollLeft = from + delta * easeOutQuart(t);
+
+        if (t < 1) {
+          glideRaf = requestAnimationFrame(tick);
+        } else {
+          glideRaf = null;
+          isGliding = false;
+        }
+      };
+
+      glideRaf = requestAnimationFrame(tick);
+    };
+
+    // Find nearest slide, using direction as tiebreaker
+    const findNearestSlide = (projectedScroll: number, tiebreakDir: number): HTMLElement | null => {
+      const slides = carousel.querySelectorAll<HTMLElement>(".scan-slide");
+      if (slides.length === 0) return null;
+
+      const slideData: { el: HTMLElement; center: number; dist: number }[] = [];
+      slides.forEach((slide) => {
+        const center = getSlideCenterScroll(slide);
+        slideData.push({ el: slide, center, dist: Math.abs(projectedScroll - center) });
+      });
+      slideData.sort((a, b) => a.dist - b.dist);
+
+      // If top two are very close (near-tie), use direction to break it
+      if (slideData.length >= 2 && slideData[0].dist > 0) {
+        const ratio = slideData[1].dist / slideData[0].dist;
+        if (ratio < 1.15) {
+          if (tiebreakDir !== 0) {
+            const prefer = tiebreakDir > 0
+              ? slideData.find((s) => s.center <= projectedScroll) || slideData[0]
+              : slideData.find((s) => s.center >= projectedScroll) || slideData[0];
+            return prefer.el;
+          }
+        }
+      }
+
+      return slideData[0]?.el ?? null;
+    };
+
+    // Settle to nearest slide — called after any scroll stops
+    const settleToNearest = (dir: number) => {
+      const target = findNearestSlide(carousel.scrollLeft, dir);
+      if (target) {
+        const targetScroll = getSlideCenterScroll(target);
+        const dist = Math.abs(carousel.scrollLeft - targetScroll);
+        if (dist > 1) {
+          const duration = Math.min(800, Math.max(350, dist * 0.8));
+          glideTo(targetScroll, duration);
+        }
+      }
+    };
+
+    const onMouseDown = (e: MouseEvent) => {
+      e.preventDefault(); // suppress native image/text drag
+      stopGlide();
+      if (scrollEndTimer) { clearTimeout(scrollEndTimer); scrollEndTimer = null; }
+      isDragging = true;
+      carouselDraggedRef.current = false;
+      startX = e.clientX;
+      dragDirection = 0;
+      velocitySamples.length = 0;
+      scrollStart = carousel.scrollLeft;
+      carousel.style.cursor = "grabbing";
+    };
+
+    let lastMoveX = 0;
+    let lastMoveTime = 0;
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      e.preventDefault(); // suppress native drag during scroll
+      const dx = e.clientX - startX;
+      if (Math.abs(dx) > 3) carouselDraggedRef.current = true;
+      carousel.scrollLeft = scrollStart - dx;
+
+      // Track velocity samples for smoothing
+      const now = Date.now();
+      if (lastMoveTime > 0) {
+        const dt = now - lastMoveTime;
+        const moveDx = e.clientX - lastMoveX;
+        if (dt > 0) {
+          velocitySamples.push({ dx: moveDx, dt });
+          if (velocitySamples.length > MAX_SAMPLES) velocitySamples.shift();
+          if (Math.abs(moveDx) > 1) {
+            dragDirection = moveDx > 0 ? 1 : -1;
+          }
+        }
+      }
+      lastMoveX = e.clientX;
+      lastMoveTime = now;
+    };
+
+    const onMouseUp = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      carousel.style.cursor = "";
+
+      // Use smoothed velocity for momentum projection
+      const velocity = getSmoothedVelocity();
+      const FRICTION = 0.94;
+      const projectedDelta = -velocity * FRICTION / (1 - FRICTION);
+      const projectedScroll = carousel.scrollLeft + projectedDelta;
+
+      const target = findNearestSlide(projectedScroll, dragDirection);
+      if (target) {
+        const targetScroll = getSlideCenterScroll(target);
+        const dist = Math.abs(carousel.scrollLeft - targetScroll);
+        // Longer, gentler glide — scales with distance
+        const duration = Math.min(900, Math.max(350, dist * 0.9));
+        glideTo(targetScroll, duration);
+      }
+    };
+
+    // Scroll-end detector: catches trackpad/touch scrolls and always settles
     const onScroll = () => {
       if (rafId == null) rafId = requestAnimationFrame(updateScales);
+
+      // Don't interfere with active drag or our own glide animation
+      if (isDragging || isGliding) return;
+
+      if (scrollEndTimer) clearTimeout(scrollEndTimer);
+      scrollEndTimer = setTimeout(() => {
+        scrollEndTimer = null;
+        if (!isDragging && !isGliding) {
+          settleToNearest(0);
+        }
+      }, 150);
     };
 
     carousel.addEventListener("scroll", onScroll, { passive: true });
-    // Initial scale on mount
+    carousel.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+
     requestAnimationFrame(updateScales);
 
     return () => {
       carousel.removeEventListener("scroll", onScroll);
+      carousel.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      stopGlide();
+      if (scrollEndTimer) clearTimeout(scrollEndTimer);
       if (rafId != null) cancelAnimationFrame(rafId);
     };
   });
@@ -463,8 +663,8 @@ export default function LetterDetailPage() {
   const dateline = [m.date, m.location].filter(Boolean).join(" \u2014 ");
 
   const letterTypeImages = letter.images.filter((img) => img.type === "letter");
-  // Primary scan images: letter pages if available, otherwise all images (photos, covers, etc.)
-  const primaryImages = letterTypeImages.length > 0 ? letterTypeImages : letter.images;
+  // Carousel shows ALL images — letter pages, telegrams, covers, etc.
+  const carouselImages = letter.images;
   const extraContentImages = letter.images.filter((img) => EXTRA_CONTENT_TYPES.includes(img.type));
   const extraContentImage = letterTypeImages.length > 0 ? (extraContentImages[0] ?? null) : null;
   const extraContentLabel = getExtraContentLabel(letter.images);
@@ -520,58 +720,59 @@ export default function LetterDetailPage() {
         )}
 
         {/* ── 3. Scan Image Carousel ──────────────────────── */}
-        {primaryImages.length > 0 && (
+        {carouselImages.length > 0 && (
           <figure className="letter-scan-figure">
             <div className="scan-carousel" ref={carouselRef}>
-              {primaryImages.map((img, idx) => (
-                <button
-                  key={img.id ?? idx}
-                  type="button"
-                  className="scan-slide"
-                  data-index={idx}
-                  onClick={() => openViewer(idx)}
-                  aria-label={`View page ${img.pageNumber ?? idx + 1} full size`}
-                >
-                  <img
-                    src={getImageUrl(img.imageUrl, { width: 1200 })}
-                    alt={`Page ${img.pageNumber ?? idx + 1} of letter`}
-                    className="scan-slide-img"
-                    draggable={false}
-                  />
-                </button>
-              ))}
+              {carouselImages.map((img, idx) => {
+                const isLetter = img.type === "letter";
+                const typeLabel = isLetter
+                  ? undefined
+                  : img.type.charAt(0).toUpperCase() + img.type.slice(1);
+                return (
+                  <div
+                    key={img.id ?? idx}
+                    className="scan-slide"
+                    data-index={idx}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => { if (!carouselDraggedRef.current) openViewer(idx); }}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openViewer(idx); } }}
+                    aria-label={
+                      isLetter
+                        ? `View page ${img.pageNumber ?? idx + 1} full size`
+                        : `View ${typeLabel} full size`
+                    }
+                  >
+                    <img
+                      src={getImageUrl(img.imageUrl, { width: 1200 })}
+                      alt={
+                        isLetter
+                          ? `Page ${img.pageNumber ?? idx + 1} of letter`
+                          : `${typeLabel}`
+                      }
+                      className="scan-slide-img"
+                      draggable={false}
+                    />
+                    {typeLabel && (
+                      <span className="scan-slide-type-label">{typeLabel}</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
-            {primaryImages.length > 1 && (
-              <>
-                <button
-                  type="button"
-                  className={`scan-arrow scan-arrow-prev${scanPage === 0 ? " hidden" : ""}`}
-                  onClick={() => scrollToSlide(scanPage - 1)}
-                  aria-label="Previous page"
-                >
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </button>
-                <button
-                  type="button"
-                  className={`scan-arrow scan-arrow-next${scanPage === primaryImages.length - 1 ? " hidden" : ""}`}
-                  onClick={() => scrollToSlide(scanPage + 1)}
-                  aria-label="Next page"
-                >
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </button>
-                <div className="scan-dots">
-                  {primaryImages.map((_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      className={`scan-dot${i === scanPage ? " active" : ""}`}
-                      onClick={() => scrollToSlide(i)}
-                      aria-label={`Go to page ${i + 1}`}
-                    />
-                  ))}
-                </div>
-              </>
+            {carouselImages.length > 1 && (
+              <div className="scan-dots">
+                {carouselImages.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className={`scan-dot${i === 0 ? " active" : ""}`}
+                    onClick={() => scrollToSlide(i)}
+                    aria-label={`Go to page ${i + 1}`}
+                  />
+                ))}
+              </div>
             )}
           </figure>
         )}
@@ -597,7 +798,7 @@ export default function LetterDetailPage() {
             {letter.transcript.pages.length > 0 ? (
               <div className="transcript-pages">
                 {letter.transcript.pages.map((page, idx) => {
-                  const pageImage = primaryImages.find((img) => img.pageNumber === page.pageNumber);
+                  const pageImage = letterTypeImages.find((img) => img.pageNumber === page.pageNumber);
                   const side = idx % 2 === 0 ? "left" : "right";
                   const isOriginal = transcriptMode === "original";
 
@@ -608,7 +809,7 @@ export default function LetterDetailPage() {
                         <button
                           type="button"
                           className={`page-thumb page-thumb-${side}`}
-                          onClick={() => openViewer(primaryImages.indexOf(pageImage))}
+                          onClick={() => openViewer(allImages.indexOf(pageImage))}
                           aria-label={`View page ${page.pageNumber}`}
                         >
                           <span className="page-thumb-inner">

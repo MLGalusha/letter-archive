@@ -127,33 +127,30 @@
   overflow: hidden;
 }
 
-/* Horizontal snap-scroll track */
+/* Horizontal scroll track — drag to scroll with momentum */
 .scan-carousel {
   display: flex;
   overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
   gap: 1rem;
   /* Side padding centres the first/last slide */
   padding: 1.5rem calc(50% - min(22rem, 38vw));
   scrollbar-width: none;
   -ms-overflow-style: none;
   align-items: center;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .scan-carousel::-webkit-scrollbar {
   display: none;
 }
 
-/* Each slide — snap target with fixed width, but content shrink-wraps the image */
+/* Each slide — the "card" that wraps tightly around the image */
 .scan-slide {
   flex: 0 0 min(44rem, 76vw);
-  scroll-snap-align: center;
-  appearance: none;
-  border: none;
-  background: none;
   padding: 0;
-  cursor: zoom-in;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -165,19 +162,23 @@
   will-change: transform, opacity;
 }
 
-/* The image IS the card — wraps tightly, no background peeking through */
+/* The image IS the card — wraps tightly, no extra background */
+.scan-slide-img,
+.scan-slide img {
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
 .scan-slide-img {
   display: block;
   width: auto;
   height: auto;
   max-width: 100%;
   max-height: 72vh;
-  border-radius: 16px;
+  border-radius: 14px;
   box-shadow:
     0 6px 28px rgba(29, 26, 20, 0.12),
-    0 0 0 1px rgba(217, 207, 191, 0.25),
-    /* Subtle inner glow for a soft "glass lens" feel at the edges */
-    inset 0 0 40px rgba(255, 255, 255, 0.12);
+    0 0 0 1px rgba(217, 207, 191, 0.25);
   transition: box-shadow 0.3s ease;
   user-select: none;
   background: transparent;
@@ -186,54 +187,25 @@
 .scan-slide:hover .scan-slide-img {
   box-shadow:
     0 10px 40px rgba(29, 26, 20, 0.18),
-    0 0 0 1px rgba(31, 109, 122, 0.2),
-    inset 0 0 50px rgba(255, 255, 255, 0.18);
+    0 0 0 1px rgba(31, 109, 122, 0.2);
 }
 
-/* Overlay arrows — glassmorphic, appear on figure hover */
-.scan-arrow {
-  appearance: none;
-  border: none;
+/* Type label for non-letter images (telegram, cover, etc.) */
+.scan-slide-type-label {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 2;
-  width: 2.8rem;
-  height: 2.8rem;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow:
-    0 2px 12px rgba(29, 26, 20, 0.1),
-    0 0 0 1px rgba(217, 207, 191, 0.4);
-  color: var(--text);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.25s ease, background 0.15s ease, box-shadow 0.15s ease;
-}
-
-.letter-scan-figure:hover .scan-arrow:not(.hidden) {
-  opacity: 1;
-}
-
-.scan-arrow:hover {
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow:
-    0 4px 16px rgba(29, 26, 20, 0.14),
-    0 0 0 1px rgba(31, 109, 122, 0.3);
-}
-
-.scan-arrow.hidden {
-  opacity: 0 !important;
+  bottom: 0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(29, 26, 20, 0.7);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
   pointer-events: none;
 }
-
-.scan-arrow-prev { left: max(1rem, calc(50% - min(24rem, 40vw))); }
-.scan-arrow-next { right: max(1rem, calc(50% - min(24rem, 40vw))); }
 
 /* Dot indicators */
 .scan-dots {
@@ -402,7 +374,7 @@
   border: none;
   background: none;
   padding: 0;
-  cursor: zoom-in;
+  cursor: pointer;
   position: absolute;
   top: 0.5rem;
   will-change: transform;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import SEO from "../components/SEO";
-import Breadcrumb from "../components/Breadcrumb/Breadcrumb";
+
 import LetterViewer from "../components/LetterViewer/LetterViewer";
 import { getAdjacentLetters, getLetterById, type AdjacentLettersResponse } from "../api/letters";
 import type { Letter, LetterImage, LetterImageType } from "../types/Letter";
@@ -11,10 +11,6 @@ import {
   shouldShowPublicTranscript,
   shouldShowPhotoDescriptionWorkflow,
 } from "../utils/letterContent";
-import {
-  EMOTIONAL_TONE_OPTIONS,
-  METADATA_RELATIONSHIP_OPTIONS,
-} from "../constants/enums";
 import { useHeaderDock, EMPTY_DOCK } from "../contexts/HeaderDockContext";
 import LetterHeaderDock from "../components/LetterHeaderDock/LetterHeaderDock";
 import "./LetterDetailPage.css";
@@ -30,12 +26,6 @@ function correspondentLine(m: Letter["metadata"]): string {
   return "";
 }
 
-function toneLabel(v: string) {
-  return EMOTIONAL_TONE_OPTIONS.find((o) => o.value === v)?.label ?? v;
-}
-function relLabel(v: string) {
-  return METADATA_RELATIONSHIP_OPTIONS.find((o) => o.value === v)?.label ?? v;
-}
 
 /**
  * Smart reflow: only join lines that were broken by the typewriter margin.
@@ -313,6 +303,9 @@ export default function LetterDetailPage() {
         : 0;
       const STICKY_TOP = headerBottom + 16; // 16px breathing room below header
 
+      const viewportH = window.innerHeight;
+      const viewportCenter = viewportH / 2;
+
       const thumbs = document.querySelectorAll<HTMLElement>(".page-thumb");
       thumbs.forEach((thumb) => {
         const section = thumb.parentElement;
@@ -324,13 +317,17 @@ export default function LetterDetailPage() {
         const maxTravel = sr.height - thumbH - naturalTop - 16;
         if (maxTravel <= 0) { thumb.style.transform = ""; return; }
 
-        const scrollInto = STICKY_TOP - sr.top - naturalTop;
-        const raw = Math.max(0, Math.min(1, scrollInto / maxTravel));
-        const eased = smoothstep(raw);
+        // Target: center of viewport, but stay below header, stay in section
+        const idealY = viewportCenter - thumbH / 2 - sr.top - naturalTop;
+        const minFromHeader = Math.max(0, STICKY_TOP - sr.top - naturalTop);
+        const y = Math.min(Math.max(idealY, minFromHeader), maxTravel);
 
-        const y = eased * maxTravel;
+        // Progress through section (0→1) for zigzag
+        const progress = maxTravel > 0 ? y / maxTravel : 0;
+
+        // Zigzag S-curve
         const amp = Math.min(18, Math.max(8, sr.height * 0.012));
-        const x = Math.sin(raw * Math.PI * 2) * amp;
+        const x = Math.sin(progress * Math.PI * 2) * amp;
 
         thumb.style.transform = `translate(${x}px, ${y}px)`;
       });
@@ -364,18 +361,6 @@ export default function LetterDetailPage() {
 
   const seo = useMemo(() => (letter ? buildLetterSeo(letter) : null), [letter]);
 
-  const breadcrumbItems = useMemo(() => {
-    if (!letter) return [];
-    const items = [{ label: "Home", href: "/" }];
-    if (letter.collectionCode) {
-      items.push({
-        label: adjacent?.collectionTitle || `Collection ${letter.collectionCode}`,
-        href: `/collections/${letter.collectionCode}`,
-      });
-    }
-    items.push({ label: letter.metadata.date || "Letter" });
-    return items;
-  }, [letter, adjacent?.collectionTitle]);
 
   const openViewer = useCallback((pageIndex: number) => {
     setViewerStartPage(pageIndex);
@@ -401,9 +386,6 @@ export default function LetterDetailPage() {
   const m = letter.metadata;
   const byline = correspondentLine(m);
   const dateline = [m.date, m.location].filter(Boolean).join(" \u2014 ");
-  const showTone = m.emotionalTone && m.emotionalTone !== "neutral";
-  const showRel = m.senderRecipientRelationship && m.senderRecipientRelationship !== "unknown";
-  const hasBadges = showTone || showRel || (m.primaryTopics && m.primaryTopics.length > 0);
 
   const letterImages = letter.images.filter((img) => img.type === "letter");
   const extraContentImages = letter.images.filter((img) => EXTRA_CONTENT_TYPES.includes(img.type));
@@ -434,12 +416,10 @@ export default function LetterDetailPage() {
 
         {/* ── 1. Hero ──────────────────────────────────────── */}
         <header className="letter-hero-section">
-          <Breadcrumb items={breadcrumbItems} />
-
           {m.hook && (
-            <blockquote className="letter-headline-hook">
-              <p>&ldquo;{m.hook}&rdquo;</p>
-            </blockquote>
+            <div className="letter-headline-hook">
+              <p>{m.hook}</p>
+            </div>
           )}
 
           {byline && <p className="letter-byline">{byline}</p>}
@@ -453,19 +433,6 @@ export default function LetterDetailPage() {
             </p>
           )}
 
-          {hasBadges && (
-            <div className="letter-badges">
-              {showTone && (
-                <span className="badge badge-tone">{toneLabel(m.emotionalTone!)}</span>
-              )}
-              {showRel && (
-                <span className="badge badge-rel">{relLabel(m.senderRecipientRelationship!)}</span>
-              )}
-              {m.primaryTopics?.map((t) => (
-                <span key={t} className="badge badge-topic">{t.replace("/", " / ")}</span>
-              ))}
-            </div>
-          )}
         </header>
 
         {/* ── 2. Summary ───────────────────────────────────── */}
@@ -620,7 +587,6 @@ export default function LetterDetailPage() {
                     className="page-thumb-img"
                     loading="lazy"
                   />
-                  <span className="page-thumb-label">{extraContentLabel}</span>
                 </button>
               )}
               <div className="supporting-label">{extraContentLabel}</div>

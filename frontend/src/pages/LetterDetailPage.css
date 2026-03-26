@@ -85,44 +85,6 @@
   opacity: 0.7;
 }
 
-.letter-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-top: 0.9rem;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.28rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.badge-tone {
-  background: rgba(223, 241, 245, 0.78);
-  color: var(--accent-strong);
-  border: 1px solid rgba(31, 109, 122, 0.18);
-}
-
-.badge-rel {
-  background: rgba(243, 232, 214, 0.95);
-  color: #8a5a28;
-  border: 1px solid rgba(186, 166, 138, 0.4);
-}
-
-.badge-topic {
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(217, 207, 191, 0.95);
-  color: var(--text);
-  text-transform: capitalize;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
 
 /* ──────────────────────────────────────────────────────────── */
 /* 2. Summary Section                                          */
@@ -397,27 +359,32 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0;
   will-change: transform;
-  transition: opacity 0.2s ease, scale 0.2s ease;
-}
-
-.page-thumb:hover {
-  opacity: 0.8;
-  scale: 1.04;
+  filter: brightness(0.85);
+  transition: filter 0.25s ease, scale 0.25s ease;
 }
 
 .page-thumb-left {
-  right: calc(100% + 1rem);
+  right: calc(100% + 2.2rem);
+  transform-origin: center center;
+  rotate: -1.5deg;
 }
 
 .page-thumb-right {
-  left: calc(100% + 1rem);
+  left: calc(100% + 2.2rem);
+  transform-origin: center center;
+  rotate: 1.5deg;
+}
+
+.page-thumb:hover {
+  filter: brightness(1);
+  scale: 1.15;
 }
 
 .page-thumb-img {
-  max-width: 120px;
-  max-height: 160px;
+  max-width: 150px;
+  max-height: 200px;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -428,11 +395,20 @@
 }
 
 .page-thumb-label {
-  font-size: 0.58rem;
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100%);
+  font-size: 0.54rem;
   font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  color: rgba(255, 250, 242, 0.95);
+  background: rgba(20, 17, 14, 0.6);
+  padding: 0.2rem 0.5rem 0.25rem;
+  border-radius: 0 0 6px 6px;
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+  line-height: 1;
 }
 
 /* ──────────────────────────────────────────────────────────── */
@@ -827,11 +803,6 @@
     border-radius: 14px;
   }
 
-  .sticky-letter-nav {
-    top: 0.4rem;
-    padding: 0.35rem 0.45rem;
-  }
-
   /* No gutter space for floating thumbs — hide them */
   .page-thumb {
     display: none;
@@ -852,11 +823,6 @@
 
   .letter-headline-hook p {
     font-size: clamp(1.2rem, 6vw, 1.6rem);
-  }
-
-  .badge {
-    font-size: 0.64rem;
-    padding: 0.2rem 0.48rem;
   }
 
   .transcript-text {

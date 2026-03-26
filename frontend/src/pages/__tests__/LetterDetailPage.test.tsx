@@ -141,9 +141,6 @@ describe("LetterDetailPage", () => {
     // Transcript
     expect(screen.getByText(/My dearest friend/)).toBeInTheDocument();
 
-    // Breadcrumb
-    expect(screen.getByText("The Smith Letters")).toBeInTheDocument();
-
     // Filmstrip
     expect(screen.getByText("Letter 2 of 3")).toBeInTheDocument();
 
@@ -202,8 +199,8 @@ describe("LetterDetailPage", () => {
 
     renderLetterDetailPage();
 
-    // Breadcrumb still renders
-    expect(await screen.findByText("The Smith Letters")).toBeInTheDocument();
+    // Page loads without crashing on minimal data
+    await screen.findByText("Letter 2 of 3");
     // No hero narrative
     expect(screen.queryByText(/Written by/)).not.toBeInTheDocument();
     // No scan image

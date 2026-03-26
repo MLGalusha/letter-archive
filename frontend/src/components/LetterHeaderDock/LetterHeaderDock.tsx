@@ -1,11 +1,12 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { AdjacentLettersResponse } from "../../api/letters";
 import useCollectionLetters from "./useCollectionLetters";
 import LetterPickerPopover from "./LetterPickerPopover";
 import "./LetterHeaderDock.css";
 
-const HEADER_DOT_LIMIT = 20;
+/** Max dots visible at once — odd so current dot can be centered */
+const WINDOW_SIZE = 17;
 
 interface LetterHeaderDockProps {
   adjacent: AdjacentLettersResponse;
@@ -21,12 +22,23 @@ export default function LetterHeaderDock({ adjacent, letterId }: LetterHeaderDoc
   const pos = adjacent.position ?? 1;
   const total = adjacent.total;
 
-  const goToIndex = useCallback(
-    (i: number) => {
-      if (!letters || i < 0 || i >= letters.length) return;
-      navigate(`/letter/${letters[i].id}`);
+  // Find current letter in the fetched array to anchor navigation.
+  // The shelf API may sort slightly differently than the adjacent API,
+  // so we anchor on the known letter and compute offsets.
+  const currentIdx = useMemo(
+    () => (letters ? letters.findIndex((l) => l.id === letterId) : -1),
+    [letters, letterId],
+  );
+
+  const goToPosition = useCallback(
+    (targetPos: number) => {
+      if (!letters || currentIdx === -1) return;
+      const targetIdx = currentIdx + (targetPos - pos);
+      if (targetIdx >= 0 && targetIdx < letters.length) {
+        navigate(`/letter/${letters[targetIdx].id}`);
+      }
     },
-    [letters, navigate],
+    [letters, currentIdx, pos, navigate],
   );
 
   const handleBarClick = useCallback(
@@ -34,25 +46,41 @@ export default function LetterHeaderDock({ adjacent, letterId }: LetterHeaderDoc
       if (!barRef.current || !letters) return;
       const rect = barRef.current.getBoundingClientRect();
       const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      const idx = Math.round(pct * (letters.length - 1));
-      goToIndex(idx);
+      const targetPos = Math.round(pct * (total - 1)) + 1;
+      goToPosition(targetPos);
     },
-    [letters, goToIndex],
+    [letters, total, goToPosition],
   );
+
+  // Compute the visible window of dot positions (1-based)
+  const { startPos, endPos } = useMemo(() => {
+    if (total <= WINDOW_SIZE) return { startPos: 1, endPos: total };
+    const half = Math.floor(WINDOW_SIZE / 2);
+    let s = pos - half;
+    let e = pos + half;
+    if (s < 1) { s = 1; e = WINDOW_SIZE; }
+    if (e > total) { e = total; s = total - WINDOW_SIZE + 1; }
+    return { startPos: s, endPos: e };
+  }, [pos, total]);
+
+  const showLeftFade = startPos > 1;
+  const showRightFade = endPos < total;
 
   return (
     <div className="letter-header-dock">
-      <Link
-        to={`/collections/${adjacent.collectionCode}`}
-        className="letter-dock-collection"
-      >
-        {adjacent.collectionTitle || `Collection ${adjacent.collectionCode}`}
-      </Link>
+      <div className="dock-strip">
+        <Link
+          to={`/collections/${adjacent.collectionCode}`}
+          className="dock-strip-collection"
+        >
+          {adjacent.collectionTitle || `Collection ${adjacent.collectionCode}`}
+        </Link>
 
-      <div className="letter-dock-nav">
+        <div className="dock-strip-divider" />
+
         <button
           type="button"
-          className="letter-dock-arrow"
+          className="dock-strip-arrow"
           onClick={() => adjacent.prev && navigate(`/letter/${adjacent.prev.id}`)}
           disabled={!adjacent.prev}
           aria-label={adjacent.prevWraps ? "Last in collection" : "Previous letter"}
@@ -60,55 +88,41 @@ export default function LetterHeaderDock({ adjacent, letterId }: LetterHeaderDoc
           &#8592;
         </button>
 
-        <div className="letter-dock-filmstrip-wrap">
-          {total <= HEADER_DOT_LIMIT ? (
-            <div className="dock-filmstrip-dots">
-              {Array.from({ length: total }, (_, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  className={`dock-filmstrip-dot${i + 1 === pos ? " active" : ""}`}
-                  onClick={() => goToIndex(i)}
-                  aria-label={`Letter ${i + 1}`}
-                />
-              ))}
-            </div>
-          ) : (
-            <div
-              className="dock-filmstrip-bar"
-              ref={barRef}
-              role="slider"
-              aria-valuenow={pos}
-              aria-valuemin={1}
-              aria-valuemax={total}
-              aria-label="Letter position"
-              tabIndex={0}
-              onClick={handleBarClick}
-            >
-              <div
-                className="dock-filmstrip-bar-fill"
-                style={{ width: `${(pos / total) * 100}%` }}
-              />
-              <div
-                className="dock-filmstrip-bar-thumb"
-                style={{ left: `${(pos / total) * 100}%` }}
-              />
-            </div>
-          )}
+        <div className="dock-strip-track">
+          {showLeftFade && <span className="dock-track-fade dock-track-fade-left" />}
 
-          <button
-            type="button"
-            className="dock-filmstrip-label"
-            onClick={() => setPickerOpen((v) => !v)}
-            aria-label="Open letter picker"
-          >
-            {pos}<span className="dock-filmstrip-label-sep">/</span>{total}
-          </button>
+          <div className="dock-strip-dots">
+            {Array.from({ length: endPos - startPos + 1 }, (_, i) => {
+              const dotPos = startPos + i;
+              const isActive = dotPos === pos;
+              return (
+                <button
+                  key={dotPos}
+                  type="button"
+                  className={`dock-strip-dot${isActive ? " active" : ""}`}
+                  onClick={() => !isActive && goToPosition(dotPos)}
+                  aria-label={`Letter ${dotPos}`}
+                  title={`Letter ${dotPos}`}
+                />
+              );
+            })}
+          </div>
+
+          {showRightFade && <span className="dock-track-fade dock-track-fade-right" />}
         </div>
 
         <button
           type="button"
-          className="letter-dock-arrow"
+          className="dock-strip-pos"
+          onClick={() => setPickerOpen((v) => !v)}
+          aria-label="Open letter picker"
+        >
+          {pos}<span className="dock-strip-pos-sep">/</span>{total}
+        </button>
+
+        <button
+          type="button"
+          className="dock-strip-arrow"
           onClick={() => adjacent.next && navigate(`/letter/${adjacent.next.id}`)}
           disabled={!adjacent.next}
           aria-label={adjacent.nextWraps ? "First in collection" : "Next letter"}

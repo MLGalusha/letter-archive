@@ -537,6 +537,7 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
         sender: true,
         recipient: true,
         hook: true,
+        photoDescription: true,
       },
       with: {
         pages: { columns: { id: true } },
@@ -599,7 +600,7 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
         date: l.dateRaw ? formatPartialDate(l.dateRaw) : undefined,
         sender: l.sender || undefined,
         recipient: l.recipient || undefined,
-        hook: l.hook || undefined,
+        hook: l.hook || l.photoDescription || undefined,
         contentLabels: contentLabels.length > 0 ? contentLabels : undefined,
       };
     }
@@ -666,7 +667,7 @@ function transformLetterSummary(
     createdAt: toIsoDateString(letter.createdAt),
     date: formatLetterDate(letter as never),
     dateRaw: letter.dateRaw,
-    hook: letter.hook || undefined,
+    hook: letter.hook || letter.photoDescription || undefined,
     location: letter.locationWritten || undefined,
     verified: letter.metadataContentStatus === 'VERIFIED',
     searchText: buildShelfSearchText(letter, relatedItems),
@@ -1416,7 +1417,7 @@ function transformArchiveSearchRow(row: ArchiveSearchRow, query: ArchiveSearchQu
     createdAt: toIsoDateString(row.createdAt),
     date: formattedDate,
     dateRaw: row.dateRaw,
-    hook: row.hook || undefined,
+    hook: row.hook || row.photoDescriptions?.[0] || undefined,
     location: row.location || undefined,
     verified: row.metadataVerified,
     searchPreview: buildArchiveSearchPreview(row, query, formattedDate),

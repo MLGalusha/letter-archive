@@ -656,12 +656,17 @@ export function transformLetterWithRelatedToDTO(
       );
       const transcript = sectionIdx >= 0 ? sections.splice(sectionIdx, 1)[0].text : '';
 
-      extraContentItems.push({
-        type: imageType,
-        label,
-        transcript,
-        imageIds: item.pages.map((p) => p.id),
-      });
+      // Only include items that have transcript text — if the admin deleted
+      // the transcript, the item won't appear in the transcript section
+      // (its image still shows in the carousel)
+      if (transcript) {
+        extraContentItems.push({
+          type: imageType,
+          label,
+          transcript,
+          imageIds: item.pages.map((p) => p.id),
+        });
+      }
     }
   } else if (combinedTranscript && relatedItems.length === 0) {
     // No related items but has extra content — show as a single block

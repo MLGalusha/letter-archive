@@ -671,6 +671,9 @@ export default function LetterDetailPage() {
   const hasExtraContent = extraContentItems.length > 0 || !!letter.extraContentTranscript;
   const uniquePersons = dedupePersons(letter.linkedPersons);
   const hasEntities = uniquePersons.length > 0 || (letter.linkedPlaces && letter.linkedPlaces.length > 0);
+  const isPhotoRecord = shouldShowPhotoDescriptionWorkflow(letter);
+  // Use photoDescription as the hook if no explicit hook exists
+  const heroHook = m.hook || letter.photoDescription || undefined;
 
   return (
     <>
@@ -690,21 +693,16 @@ export default function LetterDetailPage() {
 
         {/* ── 1. Hero ──────────────────────────────────────── */}
         <header className="letter-hero-section">
-          {m.hook && (
+          {heroHook && (
             <div className="letter-headline-hook">
-              <p>{m.hook}</p>
+              <p>{heroHook}</p>
             </div>
           )}
 
           {byline && <p className="letter-byline">{byline}</p>}
 
           {dateline && (
-            <p className="letter-dateline">
-              {dateline}
-              {m.dateConfidence && m.dateConfidence !== "exact" && (
-                <span className="date-approx"> (approximate)</span>
-              )}
-            </p>
+            <p className="letter-dateline">{dateline}</p>
           )}
 
         </header>
@@ -850,7 +848,7 @@ export default function LetterDetailPage() {
         )}
 
         {/* ── 5. Photo Description / Extra Content ─────────── */}
-        {shouldShowPhotoDescriptionWorkflow(letter) && letter.photoDescription && (
+        {isPhotoRecord && letter.photoDescription && m.hook && (
           <section className="letter-supporting-section">
             <div className="supporting-label">Photo Description</div>
             <p className="supporting-text">{letter.photoDescription}</p>

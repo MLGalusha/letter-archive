@@ -133,6 +133,6 @@ export function buildLetterCardData(letter: Letter): LetterCardData {
     recipient: letter.metadata.recipient,
     date: letter.metadata.date,
     dateRaw: letter.metadata.dateRaw,
-    hook: letter.metadata.hook,
+    hook: letter.metadata.hook || letter.photoDescription || undefined,
   };
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import SEO from "../components/SEO";
 import Breadcrumb from "../components/Breadcrumb/Breadcrumb";
@@ -80,6 +80,98 @@ function reflowTranscript(text: string): string {
   }
 
   return result.join("\n");
+}
+
+/**
+ * Determine the "virtual page width" in characters — the max line length
+ * in the original monospace text. Used to convert space-based positioning
+ * (from the monospace admin editor) into percentage-based CSS indentation
+ * that works with any font.
+ */
+function computeReferenceWidth(text: string): number {
+  const lines = text.split("\n").filter((l) => l.trim().length > 0);
+  if (lines.length === 0) return 78; // fallback to standard typewriter width
+  return Math.max(...lines.map((l) => l.length));
+}
+
+/**
+ * Render transcript text with proportional CSS-based positioning.
+ *
+ * Short positioned lines (dates, closings, signatures) preserve their
+ * RIGHT-EDGE position from the monospace original using text-align: right
+ * with proportional right padding. This matches the visual position in the
+ * admin editor regardless of font.
+ *
+ * Paragraph text preserves its left-edge indent using text-indent.
+ */
+function renderTranscriptLines(
+  text: string,
+  referenceWidth: number,
+): JSX.Element[] {
+  const lines = text.split("\n");
+  const elements: JSX.Element[] = [];
+  const MIN_SPACES = 3;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (line.trim() === "") {
+      elements.push(<div key={i} className="transcript-blank" />);
+      continue;
+    }
+
+    const leadingSpaces = line.match(/^( *)/)?.[1].length ?? 0;
+
+    if (leadingSpaces >= MIN_SPACES && referenceWidth > 0) {
+      const content = line.trimStart();
+      const contentLen = content.length;
+
+      // Short positioned line (date, closing, signature):
+      // content fills < 60% of the reference width → preserve RIGHT edge
+      const isShortPositioned = contentLen < referenceWidth * 0.6;
+
+      if (isShortPositioned) {
+        // Where the right edge of the text falls in the monospace original
+        const rightEdgeChar = leadingSpaces + contentLen;
+        const rightPaddingPct = Math.max(
+          ((referenceWidth - rightEdgeChar) / referenceWidth) * 100,
+          0,
+        );
+        elements.push(
+          <div
+            key={i}
+            className="transcript-line transcript-line-positioned"
+            style={{ paddingRight: `${rightPaddingPct}%` }}
+          >
+            {content}
+          </div>,
+        );
+      } else {
+        // Paragraph text: preserve left-edge indent
+        const indentPct = Math.min(
+          (leadingSpaces / referenceWidth) * 100,
+          90,
+        );
+        elements.push(
+          <div
+            key={i}
+            className="transcript-line"
+            style={{ textIndent: `${indentPct}%` }}
+          >
+            {content}
+          </div>,
+        );
+      }
+    } else {
+      elements.push(
+        <div key={i} className="transcript-line">
+          {line}
+        </div>,
+      );
+    }
+  }
+
+  return elements;
 }
 
 function dedupePersons(persons: Letter["linkedPersons"]) {
@@ -184,34 +276,15 @@ export default function LetterDetailPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [adjacent, navigate, viewerOpen]);
 
-  // Auto-scale original formatting so text fills ~75% of container width
   const transcriptSectionRef = useRef<HTMLElement>(null);
-  useLayoutEffect(() => {
-    if (transcriptMode !== "original" || !transcriptSectionRef.current) return;
 
-    const els = transcriptSectionRef.current.querySelectorAll<HTMLElement>(".transcript-original");
-    if (els.length === 0) return;
-
-    // Reset to base size for measurement
-    els.forEach((el) => { el.style.fontSize = ""; });
-
-    let maxTextWidth = 0;
-    let containerWidth = 0;
-    els.forEach((el) => {
-      maxTextWidth = Math.max(maxTextWidth, el.offsetWidth);
-      if (el.parentElement) containerWidth = Math.max(containerWidth, el.parentElement.clientWidth);
-    });
-
-    if (maxTextWidth <= 0 || containerWidth <= 0) return;
-
-    const targetWidth = containerWidth * 0.75;
-    if (maxTextWidth < targetWidth) {
-      const baseSizeRem = 1.08;
-      const scale = targetWidth / maxTextWidth;
-      const newSize = Math.min(baseSizeRem * scale, 2.4);
-      els.forEach((el) => { el.style.fontSize = `${newSize}rem`; });
-    }
-  }, [transcriptMode, letter?.id]);
+  // Reference width for proportional spacing: max line length in the original text
+  const referenceWidth = useMemo(() => {
+    if (!letter?.transcript?.fullText && !letter?.transcript?.pages?.length) return 78;
+    const rawText = letter.transcript.fullText
+      || letter.transcript.pages.map((p) => p.text).join("\n");
+    return computeReferenceWidth(rawText);
+  }, [letter]);
 
   const seo = useMemo(() => (letter ? buildLetterSeo(letter) : null), [letter]);
 
@@ -440,19 +513,25 @@ export default function LetterDetailPage() {
                         <div className="page-marker">Page {page.pageNumber}</div>
                       )}
 
-                      <p className={`transcript-text${isOriginal ? " transcript-original" : ""}`}>
-                        {isOriginal ? page.text : reflowTranscript(page.text)}
-                      </p>
+                      {isOriginal ? (
+                        <pre className="transcript-text transcript-original">{page.text}</pre>
+                      ) : (
+                        <div className="transcript-text">
+                          {renderTranscriptLines(reflowTranscript(page.text), referenceWidth)}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
+            ) : transcriptMode === "original" ? (
+              <pre className="transcript-text transcript-original">
+                {letter.transcript.fullText}
+              </pre>
             ) : (
-              <p className={`transcript-text${transcriptMode === "original" ? " transcript-original" : ""}`}>
-                {transcriptMode === "original"
-                  ? letter.transcript.fullText
-                  : reflowTranscript(letter.transcript.fullText)}
-              </p>
+              <div className="transcript-text">
+                {renderTranscriptLines(reflowTranscript(letter.transcript.fullText), referenceWidth)}
+              </div>
             )}
           </section>
         )}

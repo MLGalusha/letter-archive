@@ -418,20 +418,27 @@
   font-size: 1.08rem;
   line-height: 1.85;
   color: var(--text);
-  white-space: pre-wrap;
+}
+
+.transcript-line {
   word-break: break-word;
 }
 
-/* Original formatting mode — 1:1 line match, block centered */
+/* Short positioned lines (dates, closings) — right-aligned with proportional right padding */
+.transcript-line-positioned {
+  text-align: right;
+}
+
+/* Blank line between paragraphs */
+.transcript-blank {
+  height: 1.85em; /* matches line-height for a natural paragraph gap */
+}
+
+/* Original formatting mode — 1:1 line match with admin */
 .transcript-original {
+  font-family: Georgia, "Times New Roman", serif;
   white-space: pre-wrap;
-  text-align: left;
-  hyphens: none;
-  -webkit-hyphens: none;
-  width: fit-content;
-  max-width: 100%;
-  margin: 0 auto;
-  line-height: 2;
+  line-height: 1.85;
 }
 
 /* ── Floating side page thumbnails ───────────────────────── */

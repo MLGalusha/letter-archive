@@ -524,15 +524,15 @@
   min-width: 0; /* Allow shrinking */
 }
 
-/* Transcript editor - contenteditable div with monospace font for accurate spacing */
+/* Transcript editor - contenteditable div with serif font for readability */
 .transcript-editor {
   width: 100%;
   padding: var(--spacing-md);
   border: solid 1px var(--border); /* Subtle border for visual separation */
   border-radius: var(--radius-md);
-  font-family: 'Courier New', Courier, monospace;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: var(--transcript-font-size, 1rem);
-  line-height: 1.6;
+  line-height: 1.75;
   background: var(--bg);
   color: var(--text);
   min-height: 400px;

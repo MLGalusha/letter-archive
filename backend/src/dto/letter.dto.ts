@@ -282,7 +282,7 @@ function getOrdinalSuffix(day: number): string {
  *   XXXX0914 → "September 14th"
  *   XXXXXXXX → "Unknown"
  */
-function formatPartialDate(dateRaw: string): string {
+export function formatPartialDate(dateRaw: string): string {
   const yearPart = dateRaw.slice(0, 4);
   const monthPart = dateRaw.slice(4, 6);
   const dayPart = dateRaw.slice(6, 8);

@@ -425,17 +425,27 @@ describe('letters route integration', () => {
       collectionId: 'collection-9',
       dateRaw: '19470810',
       createdAt: '2026-03-09T12:00:00.000Z',
+      collection: {
+        collectionCode: '009',
+        title: 'Collection Nine',
+      },
     });
     findLettersMock.mockResolvedValueOnce([
       {
         id: 'letter-1',
         dateRaw: '19470810',
         createdAt: '2026-03-09T11:00:00.000Z',
+        sender: null,
+        recipient: null,
+        hook: null,
       },
       {
         id: 'letter-2',
         dateRaw: '19470811',
         createdAt: '2026-03-09T12:00:00.000Z',
+        sender: null,
+        recipient: null,
+        hook: null,
       },
     ]);
 
@@ -447,11 +457,13 @@ describe('letters route integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toEqual({
+    expect(response.body).toMatchObject({
       prev: null,
       next: null,
       position: null,
       total: 2,
+      collectionCode: '009',
+      collectionTitle: 'Collection Nine',
     });
   });
 

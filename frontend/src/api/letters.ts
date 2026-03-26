@@ -255,13 +255,29 @@ export async function deleteLetter(id: string): Promise<void> {
 }
 
 /**
- * Adjacent letters response
+ * Preview data for an adjacent letter
+ */
+export interface AdjacentLetterPreview {
+  id: string;
+  dateRaw: string;
+  date?: string;
+  sender?: string;
+  recipient?: string;
+  hook?: string;
+}
+
+/**
+ * Adjacent letters response with preview data
  */
 export interface AdjacentLettersResponse {
-  prev: string | null;
-  next: string | null;
+  prev: AdjacentLetterPreview | null;
+  next: AdjacentLetterPreview | null;
+  prevWraps?: boolean;
+  nextWraps?: boolean;
   position: number | null;
   total: number;
+  collectionCode: string;
+  collectionTitle: string | null;
 }
 
 /**

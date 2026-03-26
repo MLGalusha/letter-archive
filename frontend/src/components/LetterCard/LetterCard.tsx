@@ -288,4 +288,12 @@ function LetterCard({
   );
 }
 
-export default memo(LetterCard);
+export default memo(LetterCard, (prev, next) => {
+  if (prev.card !== next.card) return false;
+  if (prev.onClick !== next.onClick) return false;
+  const pCue = prev.sortCue;
+  const nCue = next.sortCue;
+  if (pCue === nCue) return true;
+  if (!pCue || !nCue) return false;
+  return pCue.label === nCue.label && pCue.value === nCue.value;
+});

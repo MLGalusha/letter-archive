@@ -4,6 +4,7 @@ import { db, letters, collections, letterPages } from '../db/index.js';
 import { archiveSearchQuerySchema, letterQuerySchema, type ArchiveSearchQuery } from '../schemas/letter.js';
 import {
   formatLetterDate,
+  formatPartialDate,
   generateTitle,
   mapTypeToImageType,
   transformLetterToDTO,
@@ -491,17 +492,16 @@ router.get('/letters/:letterId', async (req, res, next) => {
 
 /**
  * GET /letters/:letterId/adjacent - Get prev/next letters in the same collection
- * Returns the adjacent letter IDs and the current position within the collection
+ * Returns adjacent letter previews and the current position within the collection
  */
 router.get('/letters/:letterId/adjacent', async (req, res, next) => {
   try {
     const { letterId } = req.params;
 
-    // Find the current letter
+    // Find the current letter with its collection info
     const letter = await db.query.letters.findFirst({
       where: and(
         eq(letters.id, letterId),
-
         eq(letters.visibility, 'PUBLISHED')
       ),
       columns: {
@@ -509,6 +509,14 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
         collectionId: true,
         dateRaw: true,
         createdAt: true,
+      },
+      with: {
+        collection: {
+          columns: {
+            collectionCode: true,
+            title: true,
+          },
+        },
       },
     });
 
@@ -523,18 +531,31 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
         eq(letters.collectionId, letter.collectionId),
         eq(letters.type, 'L'),
         eq(letters.visibility, 'PUBLISHED'),
-
       ),
       columns: {
         id: true,
         dateRaw: true,
         createdAt: true,
+        sender: true,
+        recipient: true,
+        hook: true,
       },
       orderBy: [asc(letters.dateRaw), asc(letters.createdAt)],
     });
 
     // Find current position
     const currentIndex = collectionLetters.findIndex(l => l.id === letterId);
+
+    function buildPreview(l: typeof collectionLetters[number]) {
+      return {
+        id: l.id,
+        dateRaw: l.dateRaw,
+        date: l.dateRaw ? formatPartialDate(l.dateRaw) : undefined,
+        sender: l.sender || undefined,
+        recipient: l.recipient || undefined,
+        hook: l.hook || undefined,
+      };
+    }
 
     if (currentIndex === -1) {
       // Letter exists but not in L-type list (might be a cover)
@@ -543,18 +564,28 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
         next: null,
         position: null,
         total: collectionLetters.length,
+        collectionCode: letter.collection.collectionCode,
+        collectionTitle: letter.collection.title || null,
       });
       return;
     }
 
-    const prev = currentIndex > 0 ? collectionLetters[currentIndex - 1].id : null;
-    const next = currentIndex < collectionLetters.length - 1 ? collectionLetters[currentIndex + 1].id : null;
+    // Wrap around: first letter's prev = last letter, last letter's next = first letter
+    const lastIdx = collectionLetters.length - 1;
+    const prevIdx = currentIndex > 0 ? currentIndex - 1 : lastIdx;
+    const nextIdx = currentIndex < lastIdx ? currentIndex + 1 : 0;
+    const prev = collectionLetters.length > 1 ? buildPreview(collectionLetters[prevIdx]) : null;
+    const next = collectionLetters.length > 1 ? buildPreview(collectionLetters[nextIdx]) : null;
 
     res.json({
       prev,
       next,
+      prevWraps: currentIndex === 0,
+      nextWraps: currentIndex === lastIdx,
       position: currentIndex + 1,
       total: collectionLetters.length,
+      collectionCode: letter.collection.collectionCode,
+      collectionTitle: letter.collection.title || null,
     });
   } catch (error) {
     next(error);

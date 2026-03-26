@@ -13,6 +13,7 @@ import {
 import type { MetadataV2, StructuredNote, AiNoteOutput } from '../ai/schemas/metadataV2.js';
 import type { EntityExtraction } from '../ai/schemas/entityExtraction.js';
 import { createNotification } from './notifications.js';
+import { isPlaceholderValue } from '../utils/placeholders.js';
 
 export interface LetterIdentity {
   collectionId: string;
@@ -281,6 +282,37 @@ export async function updateMetadataV2(
     updates.extractedDateConfidence = metadata.extracted_date_confidence;
     // Generate tags from topics for V1 compatibility
     updates.tags = metadata.primary_topics;
+
+    // Clean up stray "the sender"/"the recipient" prose in hook and summary
+    // when the AI identified actual names but still used generic phrases in text
+    const senderName = metadata.sender.name;
+    const recipientName = metadata.recipient.name;
+    if (senderName && !isPlaceholderValue(senderName)) {
+      const firstName = senderName.split(' ')[0];
+      if (updates.hook) {
+        updates.hook = updates.hook
+          .replace(/\bthe sender's\b/gi, `${firstName}'s`)
+          .replace(/\bthe sender\b/gi, firstName);
+      }
+      if (updates.summary) {
+        updates.summary = updates.summary
+          .replace(/\bthe sender's\b/gi, `${senderName}'s`)
+          .replace(/\bthe sender\b/gi, senderName);
+      }
+    }
+    if (recipientName && !isPlaceholderValue(recipientName)) {
+      const firstName = recipientName.split(' ')[0];
+      if (updates.hook) {
+        updates.hook = updates.hook
+          .replace(/\bthe recipient's\b/gi, `${firstName}'s`)
+          .replace(/\bthe recipient\b/gi, firstName);
+      }
+      if (updates.summary) {
+        updates.summary = updates.summary
+          .replace(/\bthe recipient's\b/gi, `${recipientName}'s`)
+          .replace(/\bthe recipient\b/gi, recipientName);
+      }
+    }
 
     // V2 specific fields
     updates.emotionalTone = metadata.emotional_tone as EmotionalTone | null;

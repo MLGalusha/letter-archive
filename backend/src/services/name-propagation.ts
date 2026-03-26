@@ -351,14 +351,24 @@ function propagateInMetadataV2(
     updated[field] = { ...nameObj, name: applyVariantsToString(nameObj.name, variants, newName, collisionNames) };
   }
 
+  // Phrase patterns for "the sender"/"the recipient" cleanup
+  const phraseKey = field === 'sender' ? 'sender' : 'recipient';
+  const newFirstName = getFirstName(newName);
+
   // Update summary
   if (typeof updated.summary === 'string') {
-    updated.summary = applyVariantsToString(updated.summary, variants, newName, collisionNames);
+    let s = applyVariantsToString(updated.summary, variants, newName, collisionNames);
+    s = s.replace(new RegExp(`\\bthe ${phraseKey}'s\\b`, 'gi'), `${newName}'s`);
+    s = s.replace(new RegExp(`\\bthe ${phraseKey}\\b`, 'gi'), newName);
+    updated.summary = s;
   }
 
   // Update hook (use first name for brevity)
   if (typeof updated.hook === 'string') {
-    updated.hook = applyVariantsToHook(updated.hook, variants, newName, collisionNames);
+    let h = applyVariantsToHook(updated.hook, variants, newName, collisionNames);
+    h = h.replace(new RegExp(`\\bthe ${phraseKey}'s\\b`, 'gi'), `${newFirstName}'s`);
+    h = h.replace(new RegExp(`\\bthe ${phraseKey}\\b`, 'gi'), newFirstName);
+    updated.hook = h;
   }
 
   // Update ai_notes (structured array in metadataV2Json)
@@ -590,18 +600,33 @@ export async function propagateName(params: PropagateNameParams): Promise<Propag
   dbUpdates[field] = newName;
   fieldsUpdated.push(field);
 
-  // 2. Update summary
+  // 2. Update summary (also replace stray "the sender"/"the recipient" phrases)
   if (letter.summary) {
-    const updated = applyVariantsToString(letter.summary, variants, newName, collisionNames);
+    let updated = applyVariantsToString(letter.summary, variants, newName, collisionNames);
+    if (field === 'sender') {
+      updated = updated.replace(/\bthe sender's\b/gi, `${newName}'s`);
+      updated = updated.replace(/\bthe sender\b/gi, newName);
+    } else {
+      updated = updated.replace(/\bthe recipient's\b/gi, `${newName}'s`);
+      updated = updated.replace(/\bthe recipient\b/gi, newName);
+    }
     if (updated !== letter.summary) {
       dbUpdates.summary = updated;
       fieldsUpdated.push('summary');
     }
   }
 
-  // 3. Update hook (first name only)
+  // 3. Update hook (first name only; also replace stray "the sender"/"the recipient" phrases)
   if (letter.hook) {
-    const updated = applyVariantsToHook(letter.hook, variants, newName, collisionNames);
+    const newFirstName = getFirstName(newName);
+    let updated = applyVariantsToHook(letter.hook, variants, newName, collisionNames);
+    if (field === 'sender') {
+      updated = updated.replace(/\bthe sender's\b/gi, `${newFirstName}'s`);
+      updated = updated.replace(/\bthe sender\b/gi, newFirstName);
+    } else {
+      updated = updated.replace(/\bthe recipient's\b/gi, `${newFirstName}'s`);
+      updated = updated.replace(/\bthe recipient\b/gi, newFirstName);
+    }
     if (updated !== letter.hook) {
       dbUpdates.hook = updated;
       fieldsUpdated.push('hook');

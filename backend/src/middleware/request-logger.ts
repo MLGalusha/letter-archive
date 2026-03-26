@@ -30,12 +30,22 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
   const isQuietPath = QUIET_PATHS.includes(req.path);
   const isSkipPath = SKIP_PATHS.includes(req.path);
 
+  // Cloud Trace header: extract trace ID for log correlation in Cloud Logging.
+  // Format: "X-Cloud-Trace-Context: TRACE_ID/SPAN_ID;o=TRACE_TRUE"
+  const traceHeader = req.get('x-cloud-trace-context');
+  const traceId = traceHeader?.split('/')[0];
+  const gcpProject = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
+  const traceContext = traceId && gcpProject
+    ? { 'logging.googleapis.com/trace': `projects/${gcpProject}/traces/${traceId}` }
+    : {};
+
   // Create a child logger with request context
   const log = createLogger({
     requestId,
     method: req.method,
     path: req.path,
     userAgent: req.get('user-agent'),
+    ...traceContext,
   });
 
   // Attach to request for use in route handlers

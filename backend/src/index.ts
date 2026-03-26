@@ -102,7 +102,7 @@ app.use(routes);
 app.use(errorHandler);
 
 // Start server
-app.listen(env.PORT, () => {
+const server = app.listen(env.PORT, () => {
   logger.info(
     {
       port: env.PORT,
@@ -136,3 +136,27 @@ app.listen(env.PORT, () => {
       });
   }
 });
+
+/* ── Graceful shutdown (Cloud Run sends SIGTERM, gives 10s) ── */
+let shuttingDown = false;
+
+function gracefulShutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info({ signal }, 'Graceful shutdown initiated');
+
+  // Stop accepting new connections and drain in-flight requests
+  server.close(() => {
+    logger.info('All connections drained, exiting');
+    process.exit(0);
+  });
+
+  // Force exit after 8s (Cloud Run gives 10s, leave buffer)
+  setTimeout(() => {
+    logger.warn({ inFlight }, 'Forced shutdown after timeout');
+    process.exit(1);
+  }, 8_000).unref();
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

@@ -1,5 +1,5 @@
 # ---- Stage 1: Install dependencies ----
-FROM node:20-slim AS deps
+FROM node:20.20.1-slim AS deps
 
 WORKDIR /app
 
@@ -7,7 +7,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci --ignore-scripts=false
 
 # ---- Stage 2: Build TypeScript ----
-FROM node:20-slim AS build
+FROM node:20.20.1-slim AS build
 
 WORKDIR /app
 
@@ -18,10 +18,14 @@ COPY src ./src
 RUN npm run build
 
 # ---- Stage 3: Production image ----
-FROM node:20-slim AS production
+FROM node:20.20.1-slim AS production
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    python3 \
+    python3-venv \
+    python3-pip \
+    bash \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -32,6 +36,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev --ignore-scripts=false
 
 COPY --from=build /app/dist ./dist
+COPY python ./python
 
 # Drizzle migrations are compiled into dist/db/migrations by tsc,
 # but drizzle-kit at runtime needs the raw SQL files + meta journal.
@@ -40,12 +45,15 @@ COPY src/db/migrations ./src/db/migrations
 # Drizzle config is needed if running migrations at startup
 COPY drizzle.config.ts ./
 
+# Install the optional Python OCR runtime used by line detection.
+RUN bash ./python/setup.sh
+
 # Create storage directory (can be overridden with a volume mount)
 RUN mkdir -p /app/storage
 
-# Cloud Run injects PORT; default to 3002 for local use
+# Cloud Run injects PORT=8080; default to 3002 for local use
 ENV PORT=3002
-EXPOSE ${PORT}
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:${PORT}/health || exit 1

@@ -27,10 +27,14 @@ spec:
               env:
                 - name: NODE_ENV
                   value: production
-                - name: DATABASE_URL
-                  value: REPLACE_WITH_DATABASE_URL
                 - name: LOG_TO_FILES
                   value: "false"
+                # Secret from Secret Manager
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: database-url
+                      key: latest
               resources:
                 limits:
                   cpu: "1"

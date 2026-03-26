@@ -24,8 +24,6 @@ spec:
           env:
             - name: NODE_ENV
               value: production
-            - name: DATABASE_URL
-              value: REPLACE_WITH_DATABASE_URL
             - name: SITE_URL
               value: https://YOUR_DOMAIN
             - name: CORS_ORIGINS
@@ -38,6 +36,19 @@ spec:
               value: "false"
             - name: SEED_DEV_ADMIN
               value: "false"
+            - name: GOOGLE_CLOUD_PROJECT
+              value: PROJECT_ID
+            # Secrets from Secret Manager
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-url
+                  key: latest
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openai-api-key
+                  key: latest
           resources:
             limits:
               cpu: "1"

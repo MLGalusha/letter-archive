@@ -212,13 +212,37 @@ const fileStream = enableFileLogging
   ? new HourlyRotatingLogStream(LOG_DIR, retentionHours)
   : null;
 
+// Cloud Logging severity mapping — maps pino numeric levels to GCP severity strings.
+// Only applied in production; dev uses pino-pretty which shows level names natively.
+const PINO_TO_SEVERITY: Record<number, string> = {
+  10: 'DEBUG',    // trace
+  20: 'DEBUG',    // debug
+  30: 'INFO',     // info
+  40: 'WARNING',  // warn
+  50: 'ERROR',    // error
+  60: 'CRITICAL', // fatal
+};
+
 // Multi-destination: both console and hourly-rotated JSON log files.
 export const logger = pino({
   level: getLogLevel(),
+  // Cloud Logging reads "message" by default; pino uses "msg".
+  messageKey: isProduction ? 'message' : 'msg',
   base: {
     env: process.env.NODE_ENV || 'development',
     service: process.env.LOG_SERVICE || 'backend',
   },
+  formatters: {
+    level(label, number) {
+      // In production, emit "severity" for Cloud Logging instead of numeric level
+      if (isProduction) {
+        return { severity: PINO_TO_SEVERITY[number] || 'DEFAULT' };
+      }
+      return { level: number };
+    },
+  },
+  // Omit pid/hostname in production — Cloud Run already provides instance metadata
+  ...(isProduction ? { base: { service: process.env.LOG_SERVICE || 'backend' } } : {}),
 }, pino.multistream([
   {
     stream: isDev

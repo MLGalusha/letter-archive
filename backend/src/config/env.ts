@@ -20,4 +20,8 @@ const envSchema = z.object({
 export const env = envSchema.parse(process.env);
 
 export const hasOpenAI = Boolean(env.OPENAI_API_KEY);
-export const hasGoogleVision = Boolean(env.GOOGLE_APPLICATION_CREDENTIALS);
+// On Cloud Run, ADC (Application Default Credentials) is available automatically
+// without GOOGLE_APPLICATION_CREDENTIALS. Only gate on the env var for local dev
+// where explicit credentials are needed.
+export const hasGoogleVision = Boolean(env.GOOGLE_APPLICATION_CREDENTIALS) ||
+  process.env.NODE_ENV === 'production';

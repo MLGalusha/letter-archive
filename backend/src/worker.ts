@@ -123,8 +123,11 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Main worker loop.
+ * Main worker loop. Exits cleanly when a shutdown signal is received,
+ * finishing the current job before stopping.
  */
+let shuttingDown = false;
+
 async function main() {
   log.info(
     {
@@ -136,28 +139,37 @@ async function main() {
     'Background worker starting'
   );
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  while (!shuttingDown) {
     try {
       await processPendingJobs();
     } catch (error) {
       log.error({ err: error }, 'Error in processing cycle');
     }
 
-    await sleep(POLL_INTERVAL);
+    if (!shuttingDown) {
+      await sleep(POLL_INTERVAL);
+    }
   }
+
+  log.info('Worker loop exited cleanly');
+  process.exit(0);
 }
 
-// Handle graceful shutdown
-process.on('SIGINT', () => {
-  log.info('Received SIGINT, shutting down');
-  process.exit(0);
-});
+// Handle graceful shutdown — let the current job finish, then exit
+function gracefulShutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log.info({ signal }, 'Shutdown signal received, finishing current job');
 
-process.on('SIGTERM', () => {
-  log.info('Received SIGTERM, shutting down');
-  process.exit(0);
-});
+  // Force exit after 25s if a job is stuck (Cloud Run default termination is 30s)
+  setTimeout(() => {
+    log.warn('Forced worker shutdown after timeout');
+    process.exit(1);
+  }, 25_000).unref();
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 main().catch((error) => {
   log.fatal({ err: error }, 'Fatal error in worker');

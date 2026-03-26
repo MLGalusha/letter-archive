@@ -260,37 +260,26 @@ export default function HomePage() {
     if (!trigger) return;
 
     const header = document.querySelector(".header") as HTMLElement | null;
-    let threshold = (header?.offsetHeight || 80) + 18;
-    // Cache trigger's absolute position — avoids getBoundingClientRect on every frame
-    let triggerOffsetBottom = trigger.getBoundingClientRect().bottom + window.scrollY;
-    let ticking = false;
+    const headerHeight = header?.offsetHeight || 80;
 
-    const check = () => {
-      ticking = false;
-      // window.scrollY is cheap — no forced reflow
-      setStickyDockActive(triggerOffsetBottom <= window.scrollY + threshold);
-    };
+    // IntersectionObserver with negative top margin equal to header height.
+    // When not intersecting we check whether the trigger scrolled *above* the
+    // header (activate) vs still being *below* the viewport (don't activate).
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setStickyDockActive(false);
+        } else {
+          // bottom <= headerHeight means the trigger has scrolled under the header
+          setStickyDockActive(entry.boundingClientRect.bottom <= headerHeight);
+        }
+      },
+      { rootMargin: `-${headerHeight}px 0px 0px 0px`, threshold: 0 },
+    );
 
-    const handleScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      window.requestAnimationFrame(check);
-    };
+    observer.observe(trigger);
 
-    const handleResize = () => {
-      threshold = (header?.offsetHeight || 80) + 18;
-      triggerOffsetBottom = trigger.getBoundingClientRect().bottom + window.scrollY;
-      check();
-    };
-
-    check();
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("resize", handleResize);
-    };
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {

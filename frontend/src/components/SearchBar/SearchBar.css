@@ -256,7 +256,7 @@
   justify-content: center;
   min-width: 9.25rem;
   padding: 0.46rem 0.9rem 0.44rem;
-  border: 2px solid rgba(31, 109, 122, 0.5);
+  border: 3px solid rgb(31, 109, 122);
   border-top: none;
   border-radius: 0 0 16px 16px;
   background:
@@ -313,12 +313,18 @@
 }
 
 .search-refine-flyout.is-pinned {
-  border-width: 2px;
-  border-color: rgba(31, 109, 122, 0.5);
-  padding-top: 2rem;
-  box-shadow:
-    0 0 0 1px rgba(31, 109, 122, 0.08),
-    0 30px 70px rgba(29, 26, 20, 0.18);
+  border-color: transparent;
+  box-shadow: 0 30px 70px rgba(29, 26, 20, 0.18);
+}
+
+.search-refine-flyout.is-pinned::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 3px solid rgb(31, 109, 122);
+  border-radius: 26px;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .search-compact-flyout-header {
@@ -343,7 +349,7 @@
 
 .search-compact-flyout-center {
   position: absolute;
-  top: 0;
+  top: -1px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1;
@@ -404,7 +410,14 @@
 }
 
 .search-full-filter-toggle {
-  min-width: 7.2rem;
+  min-width: 6rem;
+}
+
+.search-full-filter-toggle:hover,
+.search-full-filter-toggle.active {
+  background: rgba(223, 241, 245, 0.9);
+  border-color: rgba(31, 109, 122, 0.28);
+  color: var(--text);
 }
 
 .search-facet-count {
@@ -699,10 +712,6 @@
     transform: none;
     max-height: min(76vh, 36rem);
     overflow: auto;
-  }
-
-  .search-refine-flyout.is-pinned {
-    padding-top: 1.7rem;
   }
 
   .search-compact-pin-indicator {

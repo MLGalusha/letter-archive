@@ -954,7 +954,7 @@ export default function SearchBar({
                 }
 
                 if (filtersPinned) {
-                  closeFilters();
+                  setFiltersPinned(false);
                   return;
                 }
 
@@ -1055,7 +1055,7 @@ export default function SearchBar({
               }
 
               if (filtersPinned) {
-                closeFilters();
+                setFiltersPinned(false);
                 return;
               }
 

@@ -132,8 +132,8 @@ export async function getLetters(params: LetterQueryParams = {}): Promise<Letter
 /**
  * Fetch a single letter by ID
  */
-export async function getLetterById(id: string): Promise<Letter> {
-  return apiGet<Letter>(`/letters/${id}`);
+export async function getLetterById(id: string, signal?: AbortSignal): Promise<Letter> {
+  return apiGet<Letter>(`/letters/${id}`, undefined, signal);
 }
 
 /**
@@ -283,6 +283,6 @@ export interface AdjacentLettersResponse {
 /**
  * Get adjacent (prev/next) letters in the same collection
  */
-export async function getAdjacentLetters(id: string): Promise<AdjacentLettersResponse> {
-  return apiGet<AdjacentLettersResponse>(`/letters/${id}/adjacent`);
+export async function getAdjacentLetters(id: string, signal?: AbortSignal): Promise<AdjacentLettersResponse> {
+  return apiGet<AdjacentLettersResponse>(`/letters/${id}/adjacent`, undefined, signal);
 }

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import LetterDetailPage from "../LetterDetailPage";
+import { HeaderDockProvider } from "../../contexts/HeaderDockContext";
 import type { Letter } from "../../types/Letter";
 
 const mockNavigate = vi.fn();
@@ -88,9 +89,11 @@ function createLetter(overrides: Partial<Letter> = {}): Letter {
 function renderLetterDetailPage() {
   return render(
     <MemoryRouter initialEntries={["/letter/letter-1"]}>
-      <Routes>
-        <Route path="/letter/:letterId" element={<LetterDetailPage />} />
-      </Routes>
+      <HeaderDockProvider>
+        <Routes>
+          <Route path="/letter/:letterId" element={<LetterDetailPage />} />
+        </Routes>
+      </HeaderDockProvider>
     </MemoryRouter>,
   );
 }

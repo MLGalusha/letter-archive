@@ -4,7 +4,7 @@ import SEO from "../components/SEO";
 import Breadcrumb from "../components/Breadcrumb/Breadcrumb";
 import LetterViewer from "../components/LetterViewer/LetterViewer";
 import { getAdjacentLetters, getLetterById, type AdjacentLettersResponse } from "../api/letters";
-import type { Letter, LetterImage } from "../types/Letter";
+import type { Letter, LetterImage, LetterImageType } from "../types/Letter";
 import { getImageUrl } from "../api/client";
 import { buildLetterSeo } from "../utils/seo";
 import {
@@ -15,6 +15,8 @@ import {
   EMOTIONAL_TONE_OPTIONS,
   METADATA_RELATIONSHIP_OPTIONS,
 } from "../constants/enums";
+import { useHeaderDock, EMPTY_DOCK } from "../contexts/HeaderDockContext";
+import LetterHeaderDock from "../components/LetterHeaderDock/LetterHeaderDock";
 import "./LetterDetailPage.css";
 
 const FILMSTRIP_DOT_LIMIT = 30;
@@ -184,34 +186,27 @@ function dedupePersons(persons: Letter["linkedPersons"]) {
   return [...map.values()];
 }
 
-/* ── smart sticky nav hook ───────────────────────────────── */
+/* ── parallax helpers ─────────────────────────────────────── */
 
-function useScrollDirection() {
-  const [visible, setVisible] = useState(true);
-  const lastY = useRef(0);
-  const ticking = useRef(false);
+function smoothstep(t: number): number {
+  const c = Math.max(0, Math.min(1, t));
+  return c * c * (3 - 2 * c);
+}
 
-  useEffect(() => {
-    const onScroll = () => {
-      if (ticking.current) return;
-      ticking.current = true;
-      requestAnimationFrame(() => {
-        const y = window.scrollY;
-        // Show when scrolling up or near top
-        if (y < 80 || y < lastY.current - 4) {
-          setVisible(true);
-        } else if (y > lastY.current + 4) {
-          setVisible(false);
-        }
-        lastY.current = y;
-        ticking.current = false;
-      });
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+const EXTRA_CONTENT_TYPES: LetterImageType[] = [
+  "telegram", "ephemera", "cover", "card", "article", "diary", "voice",
+];
 
-  return visible;
+function getExtraContentLabel(images: LetterImage[]): string {
+  const types = [
+    ...new Set(
+      images
+        .filter((img) => EXTRA_CONTENT_TYPES.includes(img.type))
+        .map((img) => img.type),
+    ),
+  ];
+  if (types.length === 0) return "Additional Content";
+  return types.map((t) => t.charAt(0).toUpperCase() + t.slice(1)).join(" & ");
 }
 
 /* ── component ───────────────────────────────────────────── */
@@ -234,31 +229,36 @@ export default function LetterDetailPage() {
   // Transcript view mode: "reading" (reflowed) or "original" (1:1 line match)
   const [transcriptMode, setTranscriptMode] = useState<"reading" | "original">("reading");
 
-  // Smart sticky nav
-  const navVisible = useScrollDirection();
+  // Header dock integration
+  const { setDock } = useHeaderDock();
 
   useEffect(() => { setScanPage(0); }, [letterId]);
 
   useEffect(() => {
     if (!letterId) { setLoading(false); return; }
+    const controller = new AbortController();
     async function fetchLetter() {
       setLoading(true);
       setError(null);
       try {
         const [data, adj] = await Promise.all([
-          getLetterById(letterId!),
-          getAdjacentLetters(letterId!).catch(() => null),
+          getLetterById(letterId!, controller.signal),
+          getAdjacentLetters(letterId!, controller.signal).catch(() => null),
         ]);
-        setLetter(data);
-        setAdjacent(adj);
+        if (!controller.signal.aborted) {
+          setLetter(data);
+          setAdjacent(adj);
+        }
       } catch (err) {
+        if (controller.signal.aborted) return;
         setError(err instanceof Error ? err.message : "Letter not found");
         console.error("Failed to fetch letter:", err);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
     fetchLetter();
+    return () => controller.abort();
   }, [letterId]);
 
   // Keyboard nav
@@ -275,7 +275,84 @@ export default function LetterDetailPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [adjacent, navigate, viewerOpen]);
 
+  // Set header dock content when adjacent data loads.
+  // Use a ref for letterId so the effect only fires when adjacent changes
+  // (not on every rapid navigation before the fetch completes).
+  const letterIdRef = useRef(letterId);
+  letterIdRef.current = letterId;
+
+  useEffect(() => {
+    if (!adjacent || adjacent.total <= 1) return;
+    setDock({
+      content: <LetterHeaderDock adjacent={adjacent} letterId={letterIdRef.current!} />,
+      active: true,
+      visible: true,
+      scrollReveal: true,
+    });
+  }, [adjacent, setDock]);
+
+  // Clear dock on unmount
+  useEffect(() => () => setDock(EMPTY_DOCK), [setDock]);
+
   const transcriptSectionRef = useRef<HTMLElement>(null);
+
+  // Scroll-driven parallax + zigzag for side thumbnails (desktop only)
+  useEffect(() => {
+    if (!letter || typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia("(min-width: 769px)");
+    if (!mq.matches) return;
+
+    let rafId: number | null = null;
+
+    const tick = () => {
+      rafId = null;
+      // Measure header so thumbs never sit behind it
+      const headerEl = document.querySelector<HTMLElement>(".header");
+      const headerBottom = headerEl
+        ? headerEl.getBoundingClientRect().bottom
+        : 0;
+      const STICKY_TOP = headerBottom + 16; // 16px breathing room below header
+
+      const thumbs = document.querySelectorAll<HTMLElement>(".page-thumb");
+      thumbs.forEach((thumb) => {
+        const section = thumb.parentElement;
+        if (!section) return;
+
+        const sr = section.getBoundingClientRect();
+        const thumbH = thumb.offsetHeight;
+        const naturalTop = 8; // initial CSS top ~0.5rem
+        const maxTravel = sr.height - thumbH - naturalTop - 16;
+        if (maxTravel <= 0) { thumb.style.transform = ""; return; }
+
+        const scrollInto = STICKY_TOP - sr.top - naturalTop;
+        const raw = Math.max(0, Math.min(1, scrollInto / maxTravel));
+        const eased = smoothstep(raw);
+
+        const y = eased * maxTravel;
+        const amp = Math.min(18, Math.max(8, sr.height * 0.012));
+        const x = Math.sin(raw * Math.PI * 2) * amp;
+
+        thumb.style.transform = `translate(${x}px, ${y}px)`;
+      });
+    };
+
+    const onScroll = () => { if (rafId == null) rafId = requestAnimationFrame(tick); };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+
+    const onMq = (e: MediaQueryListEvent) => {
+      if (!e.matches) {
+        document.querySelectorAll<HTMLElement>(".page-thumb").forEach((t) => { t.style.transform = ""; });
+      }
+    };
+    mq.addEventListener("change", onMq);
+
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      mq.removeEventListener("change", onMq);
+      if (rafId != null) cancelAnimationFrame(rafId);
+    };
+  }, [letter]);
 
   // Reference width for proportional spacing: max line length in the original text
   const referenceWidth = useMemo(() => {
@@ -329,41 +406,18 @@ export default function LetterDetailPage() {
   const hasBadges = showTone || showRel || (m.primaryTopics && m.primaryTopics.length > 0);
 
   const letterImages = letter.images.filter((img) => img.type === "letter");
+  const extraContentImages = letter.images.filter((img) => EXTRA_CONTENT_TYPES.includes(img.type));
+  const extraContentImage = extraContentImages[0] ?? null;
+  const extraContentLabel = getExtraContentLabel(letter.images);
   const allImages = letter.images;
   const currentScanImage = letterImages[scanPage] || letterImages[0];
   const hasTranscript = shouldShowPublicTranscript(letter);
+  const hasExtraContent = !!letter.extraContentTranscript;
   const uniquePersons = dedupePersons(letter.linkedPersons);
   const hasEntities = uniquePersons.length > 0 || (letter.linkedPlaces && letter.linkedPlaces.length > 0);
 
   return (
     <>
-      {/* ── Smart Sticky Nav ──────────────────────────────── */}
-      {adjacent && adjacent.total > 1 && (
-        <div className={`sticky-letter-nav${navVisible ? "" : " hidden"}`}>
-          <button
-            type="button"
-            className="sticky-nav-arrow"
-            onClick={() => adjacent.prev && navigate(`/letter/${adjacent.prev.id}`)}
-            aria-label={adjacent.prevWraps ? "Last in collection" : "Previous letter"}
-          >
-            &#8592;
-          </button>
-          <span className="sticky-nav-label">
-            {adjacent.position != null
-              ? `${adjacent.position} / ${adjacent.total}`
-              : `${adjacent.total} letters`}
-          </span>
-          <button
-            type="button"
-            className="sticky-nav-arrow"
-            onClick={() => adjacent.next && navigate(`/letter/${adjacent.next.id}`)}
-            aria-label={adjacent.nextWraps ? "First in collection" : "Next letter"}
-          >
-            &#8594;
-          </button>
-        </div>
-      )}
-
       <article className="letter-article">
         {seo && (
           <SEO
@@ -543,11 +597,36 @@ export default function LetterDetailPage() {
           </section>
         )}
 
-        {letter.extraContentTranscript && (
-          <section className="letter-supporting-section">
-            <div className="supporting-label">Additional Materials</div>
-            <p className="supporting-text">{letter.extraContentTranscript}</p>
-          </section>
+        {hasExtraContent && (
+          <>
+            {hasTranscript && (
+              <div className="content-type-divider">
+                <div className="divider-rule" />
+                <span className="divider-type-label">{extraContentLabel}</span>
+                <div className="divider-rule" />
+              </div>
+            )}
+            <section className="letter-supporting-section supporting-with-thumb">
+              {extraContentImage && (
+                <button
+                  type="button"
+                  className="page-thumb page-thumb-left"
+                  onClick={() => openViewer(allImages.indexOf(extraContentImage))}
+                  aria-label={`View ${extraContentLabel.toLowerCase()}`}
+                >
+                  <img
+                    src={getImageUrl(extraContentImage.imageUrl, { width: 300 })}
+                    alt={extraContentLabel}
+                    className="page-thumb-img"
+                    loading="lazy"
+                  />
+                  <span className="page-thumb-label">{extraContentLabel}</span>
+                </button>
+              )}
+              <div className="supporting-label">{extraContentLabel}</div>
+              <p className="supporting-text">{letter.extraContentTranscript}</p>
+            </section>
+          </>
         )}
 
         {/* ── 6. People & Places ───────────────────────────── */}

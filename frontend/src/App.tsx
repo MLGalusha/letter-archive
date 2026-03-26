@@ -64,16 +64,6 @@ function App() {
           <Route path="/admin/notifications" element={<NotificationsPage />} />
           <Route path="/admin/settings" element={<SettingsPage />} />
 
-          {/* Letter detail - no main header (has its own header) */}
-          <Route
-            path="/letter/:letterId"
-            element={
-              <div className="public-letter-shell">
-                <LetterDetailPage />
-              </div>
-            }
-          />
-
           {/* Public routes - with header */}
           <Route
             path="/*"
@@ -91,6 +81,7 @@ function App() {
                     <Route path="/blog/:slug" element={<BlogDetailPage />} />
                     <Route path="/people/:personId" element={<PersonPage />} />
                     <Route path="/places/:placeId" element={<PlacePage />} />
+                    <Route path="/letter/:letterId" element={<LetterDetailPage />} />
                     <Route path="*" element={<NotFoundPage />} />
                   </Routes>
                 </HeaderDockProvider>

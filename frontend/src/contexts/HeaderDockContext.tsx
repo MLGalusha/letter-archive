@@ -4,6 +4,7 @@ interface HeaderDockState {
   content: ReactNode | null;
   active: boolean;
   visible: boolean;
+  scrollReveal?: boolean;
 }
 
 interface HeaderDockContextValue {

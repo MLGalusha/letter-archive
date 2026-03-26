@@ -6,15 +6,26 @@ import rateLimit from 'express-rate-limit';
  */
 export const globalRateLimit = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  limit: 100,
+  limit: 500,
   standardHeaders: 'draft-7', // RateLimit-* headers (IETF draft-7)
   legacyHeaders: false, // Disable X-RateLimit-* headers
   message: {
     error: 'Too many requests, please try again later.',
   },
   skip: (req) => {
-    // Don't rate limit admin or auth routes — only public API
-    return req.path.startsWith('/admin') || req.path.startsWith('/auth');
+    // Admin endpoints have their own stricter limiter below.
+    // Images are static assets served with immutable cache headers.
+    return req.path.startsWith('/admin') || req.path.startsWith('/images/');
+  },
+});
+
+export const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: {
+    error: 'Too many authentication attempts, please try again later.',
   },
 });
 

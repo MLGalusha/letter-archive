@@ -1,0 +1,110 @@
+.letter-picker-popover {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  width: min(22rem, calc(100vw - 2rem));
+  max-height: min(26rem, 60vh);
+  display: flex;
+  flex-direction: column;
+  border-radius: 22px;
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  background: rgba(255, 250, 242, 0.97);
+  box-shadow: 0 22px 54px rgba(29, 26, 20, 0.14);
+  z-index: 100;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+}
+
+.letter-picker-header {
+  padding: 0.7rem 0.9rem 0.55rem;
+  border-bottom: 1px solid rgba(217, 207, 191, 0.6);
+}
+
+.letter-picker-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.letter-picker-list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.35rem;
+}
+
+.letter-picker-loading {
+  padding: 1.2rem 0.9rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.letter-picker-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  transition: background 0.12s ease;
+}
+
+.letter-picker-item:hover {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.letter-picker-item.is-active {
+  background: rgba(31, 109, 122, 0.1);
+}
+
+.letter-picker-item.is-active:hover {
+  background: rgba(31, 109, 122, 0.15);
+}
+
+.letter-picker-item-num {
+  flex-shrink: 0;
+  width: 1.6rem;
+  text-align: right;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.letter-picker-item.is-active .letter-picker-item-num {
+  color: var(--accent-strong);
+}
+
+.letter-picker-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.letter-picker-item-date {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.letter-picker-item-people {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

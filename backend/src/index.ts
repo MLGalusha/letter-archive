@@ -7,11 +7,60 @@ import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { env, hasOpenAI } from './config/env.js';
 import { logger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
+import { securityHeaders } from './middleware/security.js';
 import { recoverOrphanedJobs } from './services/processing-queue.js';
-import { db, adminUsers } from './db/index.js';
+import { db, sql, adminUsers } from './db/index.js';
 import { hashPassword } from './auth/jwt.js';
 
+/* ── Process-level error monitoring ─────────────────────── */
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err }, 'UNCAUGHT EXCEPTION');
+});
+process.on('unhandledRejection', (reason) => {
+  logger.error({ reason }, 'UNHANDLED REJECTION');
+});
+
 const app = express();
+
+/* ── Request flight tracking ────────────────────────────── */
+let totalRequests = 0;
+let inFlight = 0;
+let peakInFlight = 0;
+
+app.use((_req, _res, next) => {
+  totalRequests++;
+  inFlight++;
+  if (inFlight > peakInFlight) peakInFlight = inFlight;
+  _res.on('finish', () => { inFlight--; });
+  _res.on('close', () => { inFlight--; });
+  next();
+});
+
+/* ── Health / debug endpoint (no auth) ──────────────────── */
+app.get('/debug/health', async (_req, res) => {
+  const mem = process.memoryUsage();
+  let pgStat: Record<string, unknown> = {};
+  try {
+    const [row] = await sql`SELECT numbackends, xact_commit, xact_rollback, blks_hit, blks_read, tup_returned, tup_fetched FROM pg_stat_database WHERE datname = current_database()`;
+    pgStat = row ?? {};
+  } catch (e) {
+    pgStat = { error: String(e) };
+  }
+  res.json({
+    uptime: process.uptime(),
+    requests: { total: totalRequests, inFlight, peakInFlight },
+    memory: {
+      rss: `${(mem.rss / 1024 / 1024).toFixed(1)} MB`,
+      heapUsed: `${(mem.heapUsed / 1024 / 1024).toFixed(1)} MB`,
+      heapTotal: `${(mem.heapTotal / 1024 / 1024).toFixed(1)} MB`,
+      external: `${(mem.external / 1024 / 1024).toFixed(1)} MB`,
+    },
+    pg: pgStat,
+  });
+});
+
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
 
 // Request logging (must be first to capture all requests)
 app.use(requestLogger);
@@ -19,6 +68,7 @@ app.use(requestLogger);
 // Rate limiting
 import { globalRateLimit } from './middleware/rate-limit.js';
 app.use(globalRateLimit);
+app.use(securityHeaders);
 
 // Middleware
 const corsOrigins = env.CORS_ORIGINS
@@ -64,8 +114,8 @@ app.listen(env.PORT, () => {
     logger.error({ err }, 'Failed to recover orphaned jobs');
   });
 
-  // Seed dev admin account in non-production environments
-  if (process.env.NODE_ENV !== 'production') {
+  // Seed a dev admin only when explicitly requested.
+  if (env.SEED_DEV_ADMIN) {
     const DEV_EMAIL = 'dev@localhost.test';
     const DEV_PASSWORD = 'dev';
     db.select().from(adminUsers).where(eq(adminUsers.email, DEV_EMAIL)).limit(1)

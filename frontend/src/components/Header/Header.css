@@ -188,6 +188,21 @@
   text-transform: uppercase;
 }
 
+/* ── Scroll-reveal mode (letter detail page) ──────────── */
+
+.header--scroll-reveal {
+  position: fixed;
+  left: 0;
+  right: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.header--scroll-reveal.header--hidden {
+  opacity: 0;
+  transform: translateY(-110%);
+  pointer-events: none;
+}
+
 @media (max-width: 900px) {
   .header {
     padding: 0.8rem 1rem 0;

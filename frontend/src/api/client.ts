@@ -151,6 +151,7 @@ async function performRequest<T>(
   path: string,
   input: string,
   init: RequestInit,
+  signal?: AbortSignal,
 ): Promise<T> {
   const startTime = Date.now();
 
@@ -158,6 +159,7 @@ async function performRequest<T>(
     const response = await fetch(input, {
       ...mergeHeaders(init),
       credentials: 'include',
+      signal,
     });
 
     // Handle 401 by clearing token and redirecting to login
@@ -200,7 +202,8 @@ async function performRequest<T>(
  */
 export async function apiGet<T>(
   path: string,
-  params?: Record<string, string | number | boolean | Array<string | number | boolean> | undefined>
+  params?: Record<string, string | number | boolean | Array<string | number | boolean> | undefined>,
+  signal?: AbortSignal,
 ): Promise<T> {
   const url = new URL(path, API_BASE_URL);
 
@@ -222,7 +225,7 @@ export async function apiGet<T>(
   }
 
   log.debug('GET request', { path, params });
-  return performRequest<T>('GET', path, url.toString(), {});
+  return performRequest<T>('GET', path, url.toString(), {}, signal);
 }
 
 /**

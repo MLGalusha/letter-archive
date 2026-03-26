@@ -2,14 +2,23 @@ import "./Header.css";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useHeaderDock } from "../../contexts/HeaderDockContext";
+import useScrollDirection from "../../hooks/useScrollDirection";
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { dock } = useHeaderDock();
   const hasDock = Boolean(dock.content);
+  const isScrollReveal = dock.scrollReveal ?? false;
+  const scrollVisible = useScrollDirection(isScrollReveal);
+
+  const headerClass = [
+    "header",
+    isScrollReveal && "header--scroll-reveal",
+    isScrollReveal && !scrollVisible && "header--hidden",
+  ].filter(Boolean).join(" ");
 
   return (
-    <header className="header">
+    <header className={headerClass}>
       <div className="header-inner">
         <div className={`header-brand-slot${dock.active ? " has-active-dock" : ""}`}>
           <Link to="/" className="main-title" onClick={() => setMenuOpen(false)}>

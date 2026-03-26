@@ -356,30 +356,38 @@
   cursor: zoom-in;
   position: absolute;
   top: 0.5rem;
+  will-change: transform;
+}
+
+.page-thumb-left {
+  right: calc(100% + 4rem);
+}
+
+.page-thumb-right {
+  left: calc(100% + 4rem);
+}
+
+.page-thumb-inner {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0;
-  will-change: transform;
+  position: relative;
   filter: brightness(0.85);
-  transition: filter 0.25s ease, scale 0.25s ease;
+  transition: filter 0.25s ease, transform 0.25s ease;
 }
 
-.page-thumb-left {
-  right: calc(100% + 2.2rem);
-  transform-origin: center center;
+.page-thumb-left .page-thumb-inner {
   rotate: -1.5deg;
 }
 
-.page-thumb-right {
-  left: calc(100% + 2.2rem);
-  transform-origin: center center;
+.page-thumb-right .page-thumb-inner {
   rotate: 1.5deg;
 }
 
-.page-thumb:hover {
+.page-thumb:hover .page-thumb-inner {
   filter: brightness(1);
-  scale: 1.15;
+  transform: scale(1.15);
 }
 
 .page-thumb-img {

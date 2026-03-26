@@ -519,13 +519,15 @@ export default function LetterDetailPage() {
                           onClick={() => openViewer(letterImages.indexOf(pageImage))}
                           aria-label={`View page ${page.pageNumber}`}
                         >
-                          <img
-                            src={getImageUrl(pageImage.imageUrl, { width: 300 })}
-                            alt={`Page ${page.pageNumber}`}
-                            className="page-thumb-img"
-                            loading="lazy"
-                          />
-                          <span className="page-thumb-label">Page {page.pageNumber}</span>
+                          <span className="page-thumb-inner">
+                            <img
+                              src={getImageUrl(pageImage.imageUrl, { width: 300 })}
+                              alt={`Page ${page.pageNumber}`}
+                              className="page-thumb-img"
+                              loading="lazy"
+                            />
+                            <span className="page-thumb-label">Page {page.pageNumber}</span>
+                          </span>
                         </button>
                       )}
 
@@ -581,12 +583,14 @@ export default function LetterDetailPage() {
                   onClick={() => openViewer(allImages.indexOf(extraContentImage))}
                   aria-label={`View ${extraContentLabel.toLowerCase()}`}
                 >
-                  <img
-                    src={getImageUrl(extraContentImage.imageUrl, { width: 300 })}
-                    alt={extraContentLabel}
-                    className="page-thumb-img"
-                    loading="lazy"
-                  />
+                  <span className="page-thumb-inner">
+                    <img
+                      src={getImageUrl(extraContentImage.imageUrl, { width: 300 })}
+                      alt={extraContentLabel}
+                      className="page-thumb-img"
+                      loading="lazy"
+                    />
+                  </span>
                 </button>
               )}
               <div className="supporting-label">{extraContentLabel}</div>

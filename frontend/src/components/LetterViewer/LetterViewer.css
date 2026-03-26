@@ -41,7 +41,11 @@
   height: auto;
   object-fit: contain;
   user-select: none;
-  transition: transform 0.1s ease-out;
+  /* No base transition — panning must be immediate.
+     The .animating class adds a transition for zoom clicks. */
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 /* Single compact bottom overlay */
@@ -272,4 +276,135 @@
   align-items: center;
   justify-content: center;
   height: 24px;
+}
+
+/* ============================================================================
+   LIGHTBOX VARIANT
+   ============================================================================ */
+
+.letter-viewer--lightbox {
+  background: transparent;
+  border: none;
+  border-top: none;
+  border-radius: 0;
+  box-shadow: none;
+  position: relative;
+}
+
+.letter-viewer--lightbox .viewer-container {
+  background: transparent;
+}
+
+/* ── Floating side navigation arrows ─────────────────────────── */
+
+.viewer-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  appearance: none;
+  border: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.viewer-nav:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: white;
+  transform: translateY(-50%) scale(1.08);
+}
+
+.viewer-nav--prev {
+  left: 1rem;
+}
+
+.viewer-nav--next {
+  right: 1rem;
+}
+
+/* ── Page counter pill ───────────────────────────────────────── */
+
+.viewer-page-counter {
+  position: absolute;
+  bottom: 1.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.35);
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  letter-spacing: 0.04em;
+}
+
+/* ── Zoom percentage badge ───────────────────────────────────── */
+
+.viewer-zoom-badge {
+  position: absolute;
+  bottom: 1.2rem;
+  left: 1rem;
+  z-index: 5;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+/* ── Minimap (visible when zoomed) ───────────────────────────── */
+
+.viewer-minimap {
+  position: absolute;
+  bottom: 1.2rem;
+  right: 1rem;
+  z-index: 5;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: crosshair;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.viewer-minimap:hover {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.minimap-thumb {
+  display: block;
+  max-width: 140px;
+  max-height: 100px;
+  width: auto;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.minimap-viewport {
+  position: absolute;
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+  box-sizing: border-box;
+  border-radius: 1px;
 }

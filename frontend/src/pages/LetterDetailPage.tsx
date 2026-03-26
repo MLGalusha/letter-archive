@@ -642,6 +642,26 @@ export default function LetterDetailPage() {
     setViewerOpen(true);
   }, []);
 
+  // Lock body scroll while viewer is open
+  useEffect(() => {
+    if (viewerOpen) {
+      const scrollY = window.scrollY;
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.left = "0";
+      document.body.style.right = "0";
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.position = "";
+        document.body.style.top = "";
+        document.body.style.left = "";
+        document.body.style.right = "";
+        document.body.style.overflow = "";
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [viewerOpen]);
+
   if (loading) {
     return <div className="letter-article"><p className="letter-loading">Loading letter...</p></div>;
   }
@@ -1017,8 +1037,23 @@ export default function LetterDetailPage() {
 
       {/* ── Image Viewer Modal ─────────────────────────────── */}
       {viewerOpen && (
-        <div className="viewer-backdrop" onClick={() => setViewerOpen(false)}>
-          <div className="viewer-modal" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="viewer-backdrop"
+          onMouseDown={(e) => {
+            // Only close if mousedown started directly on the backdrop (not on viewer content)
+            if (e.target === e.currentTarget) {
+              (e.currentTarget as HTMLElement).dataset.backdropMousedown = "1";
+            }
+          }}
+          onMouseUp={(e) => {
+            const el = e.currentTarget as HTMLElement;
+            if (el.dataset.backdropMousedown === "1" && e.target === e.currentTarget) {
+              setViewerOpen(false);
+            }
+            delete el.dataset.backdropMousedown;
+          }}
+        >
+          <div className="viewer-modal">
             <button
               type="button"
               className="viewer-close"
@@ -1028,9 +1063,12 @@ export default function LetterDetailPage() {
               &times;
             </button>
             <LetterViewer
+              key={viewerStartPage}
               images={allImages}
               letterId={letter.id}
               showOnlyLetterPages={false}
+              variant="lightbox"
+              initialIndex={viewerStartPage}
             />
           </div>
         </div>

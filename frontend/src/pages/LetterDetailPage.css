@@ -670,22 +670,18 @@
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(15, 12, 10, 0.88);
+  background: rgba(15, 12, 10, 0.92);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem;
+  padding: 1rem;
 }
 
 .viewer-modal {
   position: relative;
   width: 100%;
-  max-width: 1200px;
-  height: 85vh;
-  background: var(--bg);
-  border-radius: 20px;
+  height: 100%;
   overflow: hidden;
-  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
 }
@@ -766,11 +762,6 @@
 
   .viewer-backdrop {
     padding: 0.5rem;
-  }
-
-  .viewer-modal {
-    height: 92vh;
-    border-radius: 14px;
   }
 
   /* No gutter space for floating thumbs — hide them */

@@ -10,7 +10,7 @@ import "./LetterViewer.css";
 
 const STORAGE_KEY = "letterViewerState";
 const MIN_SCALE = 1;
-const MAX_SCALE = 5;
+const MAX_SCALE = 50;
 const ZOOM_TRANSITION_MS = 150;
 
 // ============================================================================
@@ -35,6 +35,8 @@ interface LetterViewerProps {
   onPageChange?: (index: number, image: LetterImage) => void;
   onImageClick?: (pageIndex: number) => void;
   getImageAlt?: (image: LetterImage) => string;
+  variant?: "panel" | "lightbox";
+  initialIndex?: number;
 }
 
 // ============================================================================
@@ -97,13 +99,15 @@ export default function LetterViewer({
   onPageChange,
   onImageClick,
   getImageAlt,
+  variant = "panel",
+  initialIndex = 0,
 }: LetterViewerProps) {
   // Filter images if needed
   const displayImages = showOnlyLetterPages
     ? images.filter((img) => img.type === "letter")
     : images;
 
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [currentImageIndex, setCurrentImageIndex] = useState(initialIndex);
 
   // Initialize scale and position from localStorage synchronously to prevent flash
   const [scale, setScale] = useState(() => {
@@ -124,6 +128,7 @@ export default function LetterViewer({
   const sliderTrackRef = useRef<HTMLDivElement>(null);
   const mouseDownPos = useRef<{ x: number; y: number } | null>(null);
   const mouseDownOnImage = useRef(false);
+  const imageRef = useRef<HTMLImageElement>(null);
 
   // Use refs to avoid stale closures in event handlers
   const scaleRef = useRef(scale);
@@ -320,9 +325,10 @@ export default function LetterViewer({
         e.preventDefault();
         e.stopPropagation();
 
-        const delta = e.deltaY * -0.01;
+        // Multiplicative zoom: speed increases proportionally with current scale
+        const factor = Math.pow(1.01, -e.deltaY);
         const currentScale = scaleRef.current;
-        const newScale = Math.min(Math.max(MIN_SCALE, currentScale + delta), MAX_SCALE);
+        const newScale = Math.min(Math.max(MIN_SCALE, currentScale * factor), MAX_SCALE);
 
         applyZoom(newScale, false);
       }
@@ -423,6 +429,67 @@ export default function LetterViewer({
   };
 
   // ============================================================================
+  // LIGHTBOX: DOUBLE-CLICK ZOOM + MINIMAP
+  // ============================================================================
+
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (variant !== "lightbox") return;
+      if (scaleRef.current > 1) {
+        applyZoom(1, true);
+      } else {
+        const container = imageContainerRef.current;
+        if (!container) return;
+        const rect = container.getBoundingClientRect();
+        const clickX = e.clientX - rect.left - rect.width / 2;
+        const clickY = e.clientY - rect.top - rect.height / 2;
+        const newScale = 2.5;
+        setIsAnimating(true);
+        setTimeout(() => setIsAnimating(false), ZOOM_TRANSITION_MS);
+        setScale(newScale);
+        setPosition({
+          x: clickX * (1 - newScale),
+          y: clickY * (1 - newScale),
+        });
+      }
+    },
+    [variant, applyZoom]
+  );
+
+  const handleMinimapMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const minimapEl = e.currentTarget;
+
+      const pan = (clientX: number, clientY: number) => {
+        const img = imageRef.current;
+        if (!img) return;
+        const rect = minimapEl.getBoundingClientRect();
+        const nx = (clientX - rect.left) / rect.width;
+        const ny = (clientY - rect.top) / rect.height;
+        const dw = img.clientWidth;
+        const dh = img.clientHeight;
+        setPosition({
+          x: -scaleRef.current * (nx - 0.5) * dw,
+          y: -scaleRef.current * (ny - 0.5) * dh,
+        });
+      };
+
+      pan(e.clientX, e.clientY);
+
+      const onMove = (me: MouseEvent) => pan(me.clientX, me.clientY);
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    },
+    []
+  );
+
+  // ============================================================================
   // RENDER
   // ============================================================================
 
@@ -430,11 +497,44 @@ export default function LetterViewer({
     return <div className="letter-viewer-empty">No images available</div>;
   }
 
-  // Calculate slider fill percentage (0% at 1x, 100% at 5x)
+  const isLightbox = variant === "lightbox";
+
+  // Panel mode: slider fill percentage
   const sliderPercent = ((scale - MIN_SCALE) / (MAX_SCALE - MIN_SCALE)) * 100;
 
+  // Lightbox mode: minimap viewport rect (percentage-based)
+  let minimapVp: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null = null;
+  if (
+    isLightbox &&
+    scale > 1 &&
+    imageRef.current &&
+    imageContainerRef.current
+  ) {
+    const dw = imageRef.current.clientWidth;
+    const dh = imageRef.current.clientHeight;
+    const cw = imageContainerRef.current.clientWidth;
+    const ch = imageContainerRef.current.clientHeight;
+    if (dw > 0 && dh > 0) {
+      minimapVp = {
+        left:
+          Math.max(0, 0.5 - (cw / 2 + position.x) / (scale * dw)) * 100,
+        top:
+          Math.max(0, 0.5 - (ch / 2 + position.y) / (scale * dh)) * 100,
+        width: Math.min(100, (cw / (scale * dw)) * 100),
+        height: Math.min(100, (ch / (scale * dh)) * 100),
+      };
+    }
+  }
+
   return (
-    <div className="letter-viewer">
+    <div
+      className={`letter-viewer${isLightbox ? " letter-viewer--lightbox" : ""}`}
+    >
       <div
         ref={imageContainerRef}
         className={`viewer-container ${isDragging ? "dragging" : ""}`}
@@ -445,76 +545,139 @@ export default function LetterViewer({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onDoubleClick={isLightbox ? handleDoubleClick : undefined}
       >
         <img
+          ref={imageRef}
           src={getImageUrl(currentImage.imageUrl)}
-          alt={getImageAlt ? getImageAlt(currentImage) : `${currentImage.type} ${currentImage.pageNumber || ""}`}
+          alt={
+            getImageAlt
+              ? getImageAlt(currentImage)
+              : `${currentImage.type} ${currentImage.pageNumber || ""}`
+          }
           className={`viewer-image ${isAnimating ? "animating" : ""}`}
           style={{
             transform: `scale(${scale}) translate(${position.x / scale}px, ${
               position.y / scale
             }px)`,
-            cursor: scale > 1
-              ? isDragging
-                ? "grabbing"
-                : "grab"
-              : onImageClick
-                ? "pointer"
-                : "default",
+            cursor:
+              scale > 1
+                ? isDragging
+                  ? "grabbing"
+                  : "grab"
+                : isLightbox
+                  ? "zoom-in"
+                  : onImageClick
+                    ? "pointer"
+                    : "default",
           }}
           draggable={false}
         />
 
-        {/* Single bottom overlay - all controls */}
-        <div className="viewer-overlay">
-          {/* Left: Zoom slider */}
-          <div className="overlay-left">
-            {/* Zoom slider */}
-            <div className="zoom-slider-container">
-              <div
-                ref={sliderTrackRef}
-                className="zoom-slider-track"
-                onClick={handleSliderClick}
-                onMouseDown={handleSliderMouseDown}
-              >
+        {/* Panel mode: bottom overlay bar */}
+        {!isLightbox && (
+          <div className="viewer-overlay">
+            <div className="overlay-left">
+              <div className="zoom-slider-container">
                 <div
-                  className={`zoom-slider-fill ${isAnimating ? "animating" : ""}`}
-                  style={{ width: `${sliderPercent}%` }}
-                />
-                <div
-                  className={`zoom-slider-handle ${isAnimating ? "animating" : ""}`}
-                  style={{ left: `${sliderPercent}%` }}
-                />
+                  ref={sliderTrackRef}
+                  className="zoom-slider-track"
+                  onClick={handleSliderClick}
+                  onMouseDown={handleSliderMouseDown}
+                >
+                  <div
+                    className={`zoom-slider-fill ${isAnimating ? "animating" : ""}`}
+                    style={{ width: `${sliderPercent}%` }}
+                  />
+                  <div
+                    className={`zoom-slider-handle ${isAnimating ? "animating" : ""}`}
+                    style={{ left: `${sliderPercent}%` }}
+                  />
+                </div>
+                <span className="zoom-percentage">
+                  {Math.round(scale * 100)}%
+                </span>
               </div>
-              <span className="zoom-percentage">{Math.round(scale * 100)}%</span>
+            </div>
+
+            <div className="overlay-center">
+              {displayImages.length > 1 && (
+                <>
+                  <button onClick={prevImage} className="nav-button">
+                    <Icon name="arrow-left" size={14} />
+                  </button>
+                  <span className="image-counter">
+                    {currentImageIndex + 1} / {displayImages.length}
+                  </span>
+                  <button onClick={nextImage} className="nav-button">
+                    <Icon name="arrow-right" size={14} />
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="overlay-right">
+              <span className="image-type-label">
+                {currentImage.type.replace(/_/g, " ")}
+              </span>
             </div>
           </div>
-
-          {/* Center: Navigation */}
-          <div className="overlay-center">
-            {displayImages.length > 1 && (
-              <>
-                <button onClick={prevImage} className="nav-button">
-                  <Icon name="arrow-left" size={14} />
-                </button>
-                <span className="image-counter">
-                  {currentImageIndex + 1} / {displayImages.length}
-                </span>
-                <button onClick={nextImage} className="nav-button">
-                  <Icon name="arrow-right" size={14} />
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* Right: Page type */}
-          <div className="overlay-right">
-            <span className="image-type-label">
-              {currentImage.type.replace(/_/g, " ")}
-            </span>
-          </div>
-        </div>
+        )}
       </div>
+
+      {/* Lightbox mode: floating controls */}
+      {isLightbox && (
+        <>
+          {displayImages.length > 1 && (
+            <>
+              <button
+                type="button"
+                className="viewer-nav viewer-nav--prev"
+                onClick={prevImage}
+              >
+                <Icon name="arrow-left" size={20} />
+              </button>
+              <button
+                type="button"
+                className="viewer-nav viewer-nav--next"
+                onClick={nextImage}
+              >
+                <Icon name="arrow-right" size={20} />
+              </button>
+              <div className="viewer-page-counter">
+                {currentImageIndex + 1} / {displayImages.length}
+              </div>
+            </>
+          )}
+
+          <div className="viewer-zoom-badge">
+            {Math.round(scale * 100)}%
+          </div>
+
+          {minimapVp && (
+            <div
+              className="viewer-minimap"
+              onMouseDown={handleMinimapMouseDown}
+            >
+              <img
+                src={getImageUrl(currentImage.imageUrl, { width: 200 })}
+                alt=""
+                className="minimap-thumb"
+                draggable={false}
+              />
+              <div
+                className="minimap-viewport"
+                style={{
+                  left: `${minimapVp.left}%`,
+                  top: `${minimapVp.top}%`,
+                  width: `${minimapVp.width}%`,
+                  height: `${minimapVp.height}%`,
+                }}
+              />
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

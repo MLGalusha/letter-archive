@@ -133,6 +133,13 @@ export interface FrontendLetterTranscript {
   verified: boolean;
 }
 
+export interface FrontendExtraContentItem {
+  type: FrontendLetterImageType;
+  label: string;
+  transcript: string;
+  imageIds: string[];
+}
+
 export interface FrontendLetter {
   id: string;
   title: string;
@@ -152,6 +159,7 @@ export interface FrontendLetter {
   metadataVerifiedBy?: string;
   // Extra content transcription (telegrams, covers, ephemera)
   extraContentTranscript?: string;
+  extraContentItems?: FrontendExtraContentItem[];
   extraContentStatus: ContentStatus;
   extraContentVerifiedAt?: string;
   extraContentVerifiedBy?: string;
@@ -627,8 +635,96 @@ export function transformLetterWithRelatedToDTO(
     }
   }
 
+  // Build per-item extra content by parsing the combined extraContentTranscript
+  // and matching each section to its related item by type.
+  // The combined field uses headers like "--- Telegram 1 ---" or "--- Cover ---".
+  const extraContentItems: FrontendExtraContentItem[] = [];
+  const combinedTranscript = baseDTO.extraContentTranscript?.trim();
+
+  if (combinedTranscript && relatedItems.length > 0) {
+    // Parse sections from the combined transcript
+    const sections = parseExtraContentSections(combinedTranscript);
+
+    // Build items in image order (others first, covers last) to match image array
+    for (const item of [...others, ...covers]) {
+      const imageType = mapTypeToImageType(item.type);
+      const label = imageType.charAt(0).toUpperCase() + imageType.slice(1);
+
+      // Find matching transcript section by type name
+      const sectionIdx = sections.findIndex(
+        (s) => s.type.toLowerCase() === imageType.toLowerCase()
+      );
+      const transcript = sectionIdx >= 0 ? sections.splice(sectionIdx, 1)[0].text : '';
+
+      extraContentItems.push({
+        type: imageType,
+        label,
+        transcript,
+        imageIds: item.pages.map((p) => p.id),
+      });
+    }
+  } else if (combinedTranscript && relatedItems.length === 0) {
+    // No related items but has extra content — show as a single block
+    extraContentItems.push({
+      type: 'letter',
+      label: 'Additional Content',
+      transcript: combinedTranscript,
+      imageIds: [],
+    });
+  }
+
   return {
     ...baseDTO,
     images: [...baseDTO.images, ...additionalImages],
+    ...(extraContentItems.length > 0 ? { extraContentItems } : {}),
   };
+}
+
+/**
+ * Parse the combined extraContentTranscript into individual sections.
+ * The format uses headers like "--- Telegram 1 ---" or "--- Cover ---".
+ */
+function parseExtraContentSections(text: string): { type: string; index: number; text: string }[] {
+  const headerPattern = /^---\s+(\w+)(?:\s+(\d+))?\s+---$/;
+  const lines = text.split('\n');
+  const sections: { type: string; index: number; text: string }[] = [];
+
+  let currentType = '';
+  let currentIndex = 1;
+  let currentLines: string[] = [];
+
+  for (const line of lines) {
+    const match = line.match(headerPattern);
+    if (match) {
+      // Save previous section if any
+      if (currentType) {
+        sections.push({
+          type: currentType,
+          index: currentIndex,
+          text: currentLines.join('\n').trim(),
+        });
+      }
+      currentType = match[1];
+      currentIndex = match[2] ? parseInt(match[2], 10) : 1;
+      currentLines = [];
+    } else {
+      currentLines.push(line);
+    }
+  }
+
+  // Save last section
+  if (currentType) {
+    sections.push({
+      type: currentType,
+      index: currentIndex,
+      text: currentLines.join('\n').trim(),
+    });
+  }
+
+  // If no headers found, treat the whole text as a single section
+  if (sections.length === 0 && text.trim()) {
+    sections.push({ type: 'extra', index: 1, text: text.trim() });
+  }
+
+  return sections;
 }

@@ -105,6 +105,13 @@ export type LetterImageType =
   | 'card'
   | 'telegram';
 
+export interface ExtraContentItem {
+  type: LetterImageType;
+  label: string;
+  transcript: string;
+  imageIds: string[];
+}
+
 export interface LineSegmentWord {
   text: string;
   bbox: [number, number, number, number];
@@ -270,6 +277,7 @@ export interface Letter {
   metadataVerifiedBy?: string;
   // Extra content transcription (telegrams, covers, ephemera)
   extraContentTranscript?: string;
+  extraContentItems?: ExtraContentItem[];
   extraContentStatus: ContentStatus;
   extraContentVerifiedAt?: string;
   extraContentVerifiedBy?: string;

@@ -236,7 +236,13 @@ export async function runTranscription(letterId: string): Promise<void> {
           const typeCounters: Record<string, number> = {};
           const transcriptions: { type: string; index: number; text: string }[] = [];
 
-          for (const item of relatedItems) {
+          // Process in image order: supplementary items first, covers (C) last
+          const orderedItems = [
+            ...relatedItems.filter((i) => i.type !== 'C'),
+            ...relatedItems.filter((i) => i.type === 'C'),
+          ];
+
+          for (const item of orderedItems) {
             const docType = getDocumentTypeFromCode(item.type);
             typeCounters[item.type] = (typeCounters[item.type] || 0) + 1;
             const typeIndex = typeCounters[item.type];

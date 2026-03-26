@@ -133,9 +133,9 @@ export async function buildLetterUpdates(
       ne(letters.id, letterId),
     ));
 
-    if (companionUpdated.rowCount && companionUpdated.rowCount > 0) {
+    if (companionUpdated.length > 0) {
       log.info(
-        { letterId, companions: companionUpdated.rowCount, visibility: updates.visibility },
+        { letterId, companions: companionUpdated.length, visibility: updates.visibility },
         'Companion types visibility synced',
       );
     }

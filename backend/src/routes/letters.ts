@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { eq, and, or, inArray, ilike, asc, desc, sql } from 'drizzle-orm';
-import { db, letters, collections, letterPages } from '../db/index.js';
+import { db, letters, collections, letterPages, type LetterType } from '../db/index.js';
 import { archiveSearchQuerySchema, letterQuerySchema, type ArchiveSearchQuery } from '../schemas/letter.js';
 import {
   formatLetterDate,

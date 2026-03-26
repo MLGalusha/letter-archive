@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import SEO from "../components/SEO";
 
@@ -665,12 +665,10 @@ export default function LetterDetailPage() {
   const letterTypeImages = letter.images.filter((img) => img.type === "letter");
   // Carousel shows ALL images — letter pages, telegrams, covers, etc.
   const carouselImages = letter.images;
-  const extraContentImages = letter.images.filter((img) => EXTRA_CONTENT_TYPES.includes(img.type));
-  const extraContentImage = letterTypeImages.length > 0 ? (extraContentImages[0] ?? null) : null;
-  const extraContentLabel = getExtraContentLabel(letter.images);
   const allImages = letter.images;
   const hasTranscript = shouldShowPublicTranscript(letter);
-  const hasExtraContent = !!letter.extraContentTranscript;
+  const extraContentItems = letter.extraContentItems ?? [];
+  const hasExtraContent = extraContentItems.length > 0 || !!letter.extraContentTranscript;
   const uniquePersons = dedupePersons(letter.linkedPersons);
   const hasEntities = uniquePersons.length > 0 || (letter.linkedPlaces && letter.linkedPlaces.length > 0);
 
@@ -859,38 +857,80 @@ export default function LetterDetailPage() {
           </section>
         )}
 
-        {hasExtraContent && (
-          <>
-            {hasTranscript && (
-              <div className="content-type-divider">
-                <div className="divider-rule" />
-                <span className="divider-type-label">{extraContentLabel}</span>
-                <div className="divider-rule" />
-              </div>
-            )}
-            <section className="letter-supporting-section supporting-with-thumb">
-              {extraContentImage && (
-                <button
-                  type="button"
-                  className="page-thumb page-thumb-left"
-                  onClick={() => openViewer(allImages.indexOf(extraContentImage))}
-                  aria-label={`View ${extraContentLabel.toLowerCase()}`}
-                >
-                  <span className="page-thumb-inner">
-                    <img
-                      src={getImageUrl(extraContentImage.imageUrl, { width: 300 })}
-                      alt={extraContentLabel}
-                      className="page-thumb-img"
-                      loading="lazy"
-                    />
-                  </span>
-                </button>
+        {hasExtraContent && extraContentItems.length > 0 ? (
+          extraContentItems.map((item, idx) => {
+            const itemImage = item.imageIds.length > 0
+              ? allImages.find((img) => item.imageIds.includes(img.id))
+              : null;
+            return (
+              <Fragment key={`extra-${idx}`}>
+                {(hasTranscript || idx > 0) && (
+                  <div className="content-type-divider">
+                    <div className="divider-rule" />
+                    <span className="divider-type-label">{item.label}</span>
+                    <div className="divider-rule" />
+                  </div>
+                )}
+                <section className="letter-supporting-section supporting-with-thumb">
+                  {itemImage && (
+                    <button
+                      type="button"
+                      className="page-thumb page-thumb-left"
+                      onClick={() => openViewer(allImages.indexOf(itemImage))}
+                      aria-label={`View ${item.label.toLowerCase()}`}
+                    >
+                      <span className="page-thumb-inner">
+                        <img
+                          src={getImageUrl(itemImage.imageUrl, { width: 300 })}
+                          alt={item.label}
+                          className="page-thumb-img"
+                          loading="lazy"
+                        />
+                      </span>
+                    </button>
+                  )}
+                  <div className="supporting-label">{item.label}</div>
+                  <p className="supporting-text">{item.transcript}</p>
+                </section>
+              </Fragment>
+            );
+          })
+        ) : hasExtraContent && letter.extraContentTranscript ? (() => {
+          const extraImages = allImages.filter((img) => EXTRA_CONTENT_TYPES.includes(img.type));
+          const fallbackLabel = getExtraContentLabel(letter.images);
+          return (
+            <>
+              {hasTranscript && (
+                <div className="content-type-divider">
+                  <div className="divider-rule" />
+                  <span className="divider-type-label">{fallbackLabel}</span>
+                  <div className="divider-rule" />
+                </div>
               )}
-              <div className="supporting-label">{extraContentLabel}</div>
-              <p className="supporting-text">{letter.extraContentTranscript}</p>
-            </section>
-          </>
-        )}
+              <section className="letter-supporting-section supporting-with-thumb">
+                {extraImages[0] && (
+                  <button
+                    type="button"
+                    className="page-thumb page-thumb-left"
+                    onClick={() => openViewer(allImages.indexOf(extraImages[0]))}
+                    aria-label={`View ${fallbackLabel.toLowerCase()}`}
+                  >
+                    <span className="page-thumb-inner">
+                      <img
+                        src={getImageUrl(extraImages[0].imageUrl, { width: 300 })}
+                        alt={fallbackLabel}
+                        className="page-thumb-img"
+                        loading="lazy"
+                      />
+                    </span>
+                  </button>
+                )}
+                <div className="supporting-label">{fallbackLabel}</div>
+                <p className="supporting-text">{letter.extraContentTranscript}</p>
+              </section>
+            </>
+          );
+        })() : null}
 
         {/* ── 6. People & Places ───────────────────────────── */}
         {hasEntities && (

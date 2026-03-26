@@ -264,6 +264,7 @@ export interface AdjacentLetterPreview {
   sender?: string;
   recipient?: string;
   hook?: string;
+  contentLabels?: string[];
 }
 
 /**

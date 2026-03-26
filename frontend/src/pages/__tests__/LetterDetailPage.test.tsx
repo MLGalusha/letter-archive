@@ -140,6 +140,25 @@ describe("LetterDetailPage", () => {
 
     // Transcript
     expect(screen.getByText(/My dearest friend/)).toBeInTheDocument();
+
+    // Position label
+    expect(screen.getByText("Letter 2 of 3")).toBeInTheDocument();
+
+    // Teaser cards
+    expect(screen.getByText(/Previous/)).toBeInTheDocument();
+    expect(screen.getByText(/Next/)).toBeInTheDocument();
+  });
+
+  it("renders teaser cards with correct links", async () => {
+    renderLetterDetailPage();
+
+    await screen.findByText(/A bright dispatch/);
+
+    const prevLink = screen.getByText(/Previous/).closest("a");
+    expect(prevLink).toHaveAttribute("href", "/letter/letter-0");
+
+    const nextLink = screen.getByText(/Next/).closest("a");
+    expect(nextLink).toHaveAttribute("href", "/letter/letter-2");
   });
 
   it("keeps the page usable when adjacent letter lookup fails", async () => {
@@ -148,6 +167,7 @@ describe("LetterDetailPage", () => {
     renderLetterDetailPage();
 
     expect(await screen.findByText(/A bright dispatch/)).toBeInTheDocument();
+    expect(screen.queryByText(/Previous/)).not.toBeInTheDocument();
   });
 
   it("shows the fallback error state when the letter cannot be loaded", async () => {

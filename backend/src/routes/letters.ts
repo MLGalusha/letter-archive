@@ -538,6 +538,9 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
         recipient: true,
         hook: true,
       },
+      with: {
+        pages: { columns: { id: true } },
+      },
       orderBy: [asc(letters.dateRaw), asc(letters.createdAt)],
     });
 
@@ -562,7 +565,34 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
       currentIndex = collectionLetters.findIndex(l => l.dateRaw === dateKey);
     }
 
+    // Group all letters by dateRaw:typeSequence for content labels
+    const companionGroups = new Map<string, typeof allCollectionLetters>();
+    for (const l of allCollectionLetters) {
+      const key = `${l.dateRaw}:${l.typeSequence}`;
+      const group = companionGroups.get(key) || [];
+      group.push(l);
+      companionGroups.set(key, group);
+    }
+
     function buildPreview(l: typeof collectionLetters[number]) {
+      const key = `${l.dateRaw}:${l.typeSequence}`;
+      const companions = companionGroups.get(key) || [l];
+
+      // Build content labels: "3 pages", "1 photo", etc.
+      const typeCounts = new Map<string, number>();
+      for (const c of companions) {
+        const imageType = mapTypeToImageType(c.type as LetterType);
+        typeCounts.set(imageType, (typeCounts.get(imageType) || 0) + (c.pages?.length || 0));
+      }
+      const contentLabels: string[] = [];
+      for (const [type, count] of typeCounts) {
+        if (count === 0) continue;
+        const labels = MEDIA_COUNT_LABELS[type as keyof typeof MEDIA_COUNT_LABELS];
+        if (labels) {
+          contentLabels.push(`${count} ${count === 1 ? labels[0] : labels[1]}`);
+        }
+      }
+
       return {
         id: l.id,
         dateRaw: l.dateRaw,
@@ -570,6 +600,7 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
         sender: l.sender || undefined,
         recipient: l.recipient || undefined,
         hook: l.hook || undefined,
+        contentLabels: contentLabels.length > 0 ? contentLabels : undefined,
       };
     }
 

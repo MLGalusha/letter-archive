@@ -117,107 +117,156 @@
 }
 
 /* ──────────────────────────────────────────────────────────── */
-/* 3. Scan Image — uses wide track                             */
+/* 3. Scan Image Carousel — card style with scroll scaling     */
 /* ──────────────────────────────────────────────────────────── */
 
 .letter-scan-figure {
-  grid-column: wide;
+  grid-column: full;
   margin: 2rem 0 0.5rem;
-  text-align: center;
+  position: relative;
+  overflow: hidden;
 }
 
-.letter-scan-btn {
+/* Horizontal snap-scroll track */
+.scan-carousel {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  gap: 1rem;
+  /* Side padding centres the first/last slide */
+  padding: 1.5rem calc(50% - min(22rem, 38vw));
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  align-items: center;
+}
+
+.scan-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+/* Each slide — snap target with fixed width, but content shrink-wraps the image */
+.scan-slide {
+  flex: 0 0 min(44rem, 76vw);
+  scroll-snap-align: center;
   appearance: none;
   border: none;
   background: none;
   padding: 0;
   cursor: zoom-in;
-  display: block;
-  width: 100%;
-  position: relative;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.letter-scan-img {
-  display: block;
-  width: 100%;
-  max-height: 70vh;
-  object-fit: contain;
-  border-radius: 6px;
-  box-shadow:
-    0 4px 20px rgba(29, 26, 20, 0.1),
-    0 0 0 1px rgba(217, 207, 191, 0.5);
-  transition: box-shadow 0.2s ease;
-  background: rgba(255, 250, 242, 0.5);
-}
-
-.letter-scan-btn:hover .letter-scan-img {
-  box-shadow:
-    0 8px 32px rgba(29, 26, 20, 0.15),
-    0 0 0 1px rgba(31, 109, 122, 0.3);
-}
-
-.letter-scan-zoom-hint {
-  position: absolute;
-  bottom: 0.8rem;
-  right: 0.8rem;
-  padding: 0.35rem 0.7rem;
-  border-radius: 999px;
-  background: rgba(20, 17, 14, 0.72);
-  color: rgba(255, 250, 242, 0.92);
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  pointer-events: none;
-}
-
-.letter-scan-btn:hover .letter-scan-zoom-hint {
-  opacity: 1;
-}
-
-.scan-page-nav {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.7rem;
-  margin-top: 0.7rem;
+  position: relative;
+  /* Smooth scale transition driven by JS */
+  transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              opacity 0.35s ease;
+  transform-origin: center center;
+  will-change: transform, opacity;
 }
 
-.scan-nav-arrow {
+/* The image IS the card — wraps tightly, no background peeking through */
+.scan-slide-img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 72vh;
+  border-radius: 16px;
+  box-shadow:
+    0 6px 28px rgba(29, 26, 20, 0.12),
+    0 0 0 1px rgba(217, 207, 191, 0.25),
+    /* Subtle inner glow for a soft "glass lens" feel at the edges */
+    inset 0 0 40px rgba(255, 255, 255, 0.12);
+  transition: box-shadow 0.3s ease;
+  user-select: none;
+  background: transparent;
+}
+
+.scan-slide:hover .scan-slide-img {
+  box-shadow:
+    0 10px 40px rgba(29, 26, 20, 0.18),
+    0 0 0 1px rgba(31, 109, 122, 0.2),
+    inset 0 0 50px rgba(255, 255, 255, 0.18);
+}
+
+/* Overlay arrows — glassmorphic, appear on figure hover */
+.scan-arrow {
   appearance: none;
-  border: 1px solid rgba(217, 207, 191, 0.95);
-  border-radius: 999px;
+  border: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: 50%;
   background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow:
+    0 2px 12px rgba(29, 26, 20, 0.1),
+    0 0 0 1px rgba(217, 207, 191, 0.4);
   color: var(--text);
-  font-size: 0.85rem;
-  width: 2rem;
-  height: 2rem;
-  display: inline-flex;
+  cursor: pointer;
+  display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  transition: opacity 0.25s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.letter-scan-figure:hover .scan-arrow:not(.hidden) {
+  opacity: 1;
+}
+
+.scan-arrow:hover {
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 4px 16px rgba(29, 26, 20, 0.14),
+    0 0 0 1px rgba(31, 109, 122, 0.3);
+}
+
+.scan-arrow.hidden {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.scan-arrow-prev { left: max(1rem, calc(50% - min(24rem, 40vw))); }
+.scan-arrow-next { right: max(1rem, calc(50% - min(24rem, 40vw))); }
+
+/* Dot indicators */
+.scan-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-top: 0.8rem;
+}
+
+.scan-dot {
+  appearance: none;
+  border: none;
+  padding: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border);
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  opacity: 0.5;
 }
 
-.scan-nav-arrow:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.98);
-  border-color: rgba(31, 109, 122, 0.35);
+.scan-dot:hover {
+  opacity: 0.8;
+  background: var(--text-muted);
 }
 
-.scan-nav-arrow:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.scan-page-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+.scan-dot.active {
+  width: 22px;
+  border-radius: 4px;
+  background: var(--accent);
+  opacity: 1;
 }
 
 /* ──────────────────────────────────────────────────────────── */
@@ -542,6 +591,105 @@
 /* 7. Collection Navigation                                    */
 /* ──────────────────────────────────────────────────────────── */
 
+.letter-nav-section {
+  grid-column: wide;
+  margin-top: 2.8rem;
+  padding-top: 2rem;
+  border-top: 1px solid rgba(217, 207, 191, 0.5);
+}
+
+.nav-position-label {
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.adjacent-teasers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.teaser-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid rgba(217, 207, 191, 0.7);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.55);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.teaser-card:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(31, 109, 122, 0.3);
+  box-shadow: 0 8px 24px rgba(29, 26, 20, 0.06);
+}
+
+.teaser-wraps {
+  border-style: dashed;
+}
+
+.teaser-direction {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.teaser-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-top: 0.2rem;
+}
+
+.teaser-next {
+  text-align: right;
+}
+
+.teaser-date {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.teaser-people {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.teaser-hook {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.teaser-content-labels {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.teaser-placeholder {
+  /* Empty cell to maintain grid layout when only prev or next exists */
+}
+
 /* ──────────────────────────────────────────────────────────── */
 /* Image Viewer Modal                                          */
 /* ──────────────────────────────────────────────────────────── */
@@ -657,6 +805,14 @@
   .page-thumb {
     display: none;
   }
+
+  .adjacent-teasers {
+    grid-template-columns: 1fr;
+  }
+
+  .teaser-next {
+    text-align: left;
+  }
 }
 
 @media (max-width: 640px) {
@@ -682,6 +838,10 @@
 
   .entity-chip {
     min-height: 38px;
+  }
+
+  .teaser-hook {
+    display: none;
   }
 }
 

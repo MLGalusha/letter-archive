@@ -225,6 +225,7 @@ export default function LetterDetailPage() {
 
   // Scan carousel
   const [scanPage, setScanPage] = useState(0);
+  const carouselRef = useRef<HTMLDivElement>(null);
 
   // Transcript view mode: "reading" (reflowed) or "original" (1:1 line match)
   const [transcriptMode, setTranscriptMode] = useState<"reading" | "original">("reading");
@@ -232,7 +233,71 @@ export default function LetterDetailPage() {
   // Header dock integration
   const { setDock } = useHeaderDock();
 
-  useEffect(() => { setScanPage(0); }, [letterId]);
+  useEffect(() => {
+    setScanPage(0);
+    // Also reset carousel scroll position
+    if (carouselRef.current) carouselRef.current.scrollLeft = 0;
+  }, [letterId]);
+
+  // Scroll-driven scaling: scale slides based on distance from carousel center
+  useEffect(() => {
+    const carousel = carouselRef.current;
+    if (!carousel) return;
+
+    const MIN_SCALE = 0.82;
+    let rafId: number | null = null;
+
+    const updateScales = () => {
+      rafId = null;
+      const slides = carousel.querySelectorAll<HTMLElement>(".scan-slide");
+      if (slides.length <= 1) return;
+
+      const carouselRect = carousel.getBoundingClientRect();
+      const center = carouselRect.left + carouselRect.width / 2;
+      let closestIdx = 0;
+      let closestDist = Infinity;
+
+      slides.forEach((slide, i) => {
+        const slideRect = slide.getBoundingClientRect();
+        const slideCenter = slideRect.left + slideRect.width / 2;
+        const dist = Math.abs(slideCenter - center);
+        const maxDist = carouselRect.width * 0.5;
+        const t = Math.min(dist / maxDist, 1); // 0 = centered, 1 = edge
+        const scale = 1 - t * (1 - MIN_SCALE);
+        const opacity = 1 - t * 0.3;
+
+        slide.style.transform = `scale(${scale})`;
+        slide.style.opacity = `${opacity}`;
+
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestIdx = i;
+        }
+      });
+
+      setScanPage(closestIdx);
+    };
+
+    const onScroll = () => {
+      if (rafId == null) rafId = requestAnimationFrame(updateScales);
+    };
+
+    carousel.addEventListener("scroll", onScroll, { passive: true });
+    // Initial scale on mount
+    requestAnimationFrame(updateScales);
+
+    return () => {
+      carousel.removeEventListener("scroll", onScroll);
+      if (rafId != null) cancelAnimationFrame(rafId);
+    };
+  });
+
+  const scrollToSlide = useCallback((index: number) => {
+    const carousel = carouselRef.current;
+    if (!carousel) return;
+    const slide = carousel.children[index] as HTMLElement | undefined;
+    slide?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, []);
 
   useEffect(() => {
     if (!letterId) { setLoading(false); return; }
@@ -404,7 +469,6 @@ export default function LetterDetailPage() {
   const extraContentImage = letterTypeImages.length > 0 ? (extraContentImages[0] ?? null) : null;
   const extraContentLabel = getExtraContentLabel(letter.images);
   const allImages = letter.images;
-  const currentScanImage = primaryImages[scanPage] || primaryImages[0];
   const hasTranscript = shouldShowPublicTranscript(letter);
   const hasExtraContent = !!letter.extraContentTranscript;
   const uniquePersons = dedupePersons(letter.linkedPersons);
@@ -455,43 +519,59 @@ export default function LetterDetailPage() {
           </section>
         )}
 
-        {/* ── 3. Scan Image ────────────────────────────────── */}
+        {/* ── 3. Scan Image Carousel ──────────────────────── */}
         {primaryImages.length > 0 && (
           <figure className="letter-scan-figure">
-            <button
-              type="button"
-              className="letter-scan-btn"
-              onClick={() => openViewer(scanPage)}
-              aria-label="View full size"
-            >
-              <img
-                src={getImageUrl(currentScanImage.imageUrl, { width: 1200 })}
-                alt={`Page ${(currentScanImage.pageNumber ?? 1)} of letter`}
-                className="letter-scan-img"
-              />
-              <span className="letter-scan-zoom-hint">Click to zoom &amp; pan</span>
-            </button>
+            <div className="scan-carousel" ref={carouselRef}>
+              {primaryImages.map((img, idx) => (
+                <button
+                  key={img.id ?? idx}
+                  type="button"
+                  className="scan-slide"
+                  data-index={idx}
+                  onClick={() => openViewer(idx)}
+                  aria-label={`View page ${img.pageNumber ?? idx + 1} full size`}
+                >
+                  <img
+                    src={getImageUrl(img.imageUrl, { width: 1200 })}
+                    alt={`Page ${img.pageNumber ?? idx + 1} of letter`}
+                    className="scan-slide-img"
+                    draggable={false}
+                  />
+                </button>
+              ))}
+            </div>
 
             {primaryImages.length > 1 && (
-              <div className="scan-page-nav">
+              <>
                 <button
                   type="button"
-                  className="scan-nav-arrow"
-                  disabled={scanPage === 0}
-                  onClick={() => setScanPage((p) => p - 1)}
+                  className={`scan-arrow scan-arrow-prev${scanPage === 0 ? " hidden" : ""}`}
+                  onClick={() => scrollToSlide(scanPage - 1)}
                   aria-label="Previous page"
-                >&#8592;</button>
-                <span className="scan-page-label">
-                  Page {scanPage + 1} of {primaryImages.length}
-                </span>
+                >
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
                 <button
                   type="button"
-                  className="scan-nav-arrow"
-                  disabled={scanPage === primaryImages.length - 1}
-                  onClick={() => setScanPage((p) => p + 1)}
+                  className={`scan-arrow scan-arrow-next${scanPage === primaryImages.length - 1 ? " hidden" : ""}`}
+                  onClick={() => scrollToSlide(scanPage + 1)}
                   aria-label="Next page"
-                >&#8594;</button>
-              </div>
+                >
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M7.5 5L12.5 10L7.5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+                <div className="scan-dots">
+                  {primaryImages.map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className={`scan-dot${i === scanPage ? " active" : ""}`}
+                      onClick={() => scrollToSlide(i)}
+                      aria-label={`Go to page ${i + 1}`}
+                    />
+                  ))}
+                </div>
+              </>
             )}
           </figure>
         )}
@@ -632,6 +712,66 @@ export default function LetterDetailPage() {
               ))}
             </div>
           </section>
+        )}
+
+        {/* ── 7. Collection Footer Nav ───────────────────────── */}
+        {adjacent && adjacent.total > 1 && (
+          <nav className="letter-nav-section">
+            {adjacent.position != null && (
+              <div className="nav-position-label">
+                Letter {adjacent.position} of {adjacent.total}
+              </div>
+            )}
+
+            {(adjacent.prev || adjacent.next) && (
+              <div className="adjacent-teasers">
+                {adjacent.prev ? (
+                  <Link to={`/letter/${adjacent.prev.id}`} className={`teaser-card${adjacent.prevWraps ? " teaser-wraps" : ""}`}>
+                    <span className="teaser-direction">
+                      {adjacent.prevWraps ? "\u2190 Last in Collection" : "\u2190 Previous"}
+                    </span>
+                    <div className="teaser-body">
+                      {adjacent.prev.date && <span className="teaser-date">{adjacent.prev.date}</span>}
+                      {(adjacent.prev.sender || adjacent.prev.recipient) && (
+                        <span className="teaser-people">
+                          {[adjacent.prev.sender, adjacent.prev.recipient].filter(Boolean).join(" \u2192 ")}
+                        </span>
+                      )}
+                      {adjacent.prev.hook ? (
+                        <p className="teaser-hook">{adjacent.prev.hook}</p>
+                      ) : adjacent.prev.contentLabels && (
+                        <span className="teaser-content-labels">
+                          {adjacent.prev.contentLabels.join(" \u00B7 ")}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                ) : <div className="teaser-placeholder" />}
+                {adjacent.next ? (
+                  <Link to={`/letter/${adjacent.next.id}`} className={`teaser-card teaser-next${adjacent.nextWraps ? " teaser-wraps" : ""}`}>
+                    <span className="teaser-direction">
+                      {adjacent.nextWraps ? "First in Collection \u2192" : "Next \u2192"}
+                    </span>
+                    <div className="teaser-body">
+                      {adjacent.next.date && <span className="teaser-date">{adjacent.next.date}</span>}
+                      {(adjacent.next.sender || adjacent.next.recipient) && (
+                        <span className="teaser-people">
+                          {[adjacent.next.sender, adjacent.next.recipient].filter(Boolean).join(" \u2192 ")}
+                        </span>
+                      )}
+                      {adjacent.next.hook ? (
+                        <p className="teaser-hook">{adjacent.next.hook}</p>
+                      ) : adjacent.next.contentLabels && (
+                        <span className="teaser-content-labels">
+                          {adjacent.next.contentLabels.join(" \u00B7 ")}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                ) : <div className="teaser-placeholder" />}
+              </div>
+            )}
+          </nav>
         )}
 
       </article>

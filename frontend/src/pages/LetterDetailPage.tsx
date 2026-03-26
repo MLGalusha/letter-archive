@@ -254,28 +254,33 @@ export default function LetterDetailPage() {
 
       const carouselRect = carousel.getBoundingClientRect();
       const center = carouselRect.left + carouselRect.width / 2;
+      const maxDist = carouselRect.width * 0.5;
+
+      // Pass 1: batch all DOM reads
+      const data: { scale: number; opacity: number; dist: number }[] = [];
+      for (let i = 0; i < slides.length; i++) {
+        const slideRect = slides[i].getBoundingClientRect();
+        const dist = Math.abs(slideRect.left + slideRect.width / 2 - center);
+        const t = Math.min(dist / maxDist, 1);
+        data.push({
+          scale: 1 - t * (1 - MIN_SCALE),
+          opacity: 1 - t * 0.3,
+          dist,
+        });
+      }
+
+      // Pass 2: batch all DOM writes
       let closestIdx = 0;
       let closestDist = Infinity;
-
-      slides.forEach((slide, i) => {
-        const slideRect = slide.getBoundingClientRect();
-        const slideCenter = slideRect.left + slideRect.width / 2;
-        const dist = Math.abs(slideCenter - center);
-        const maxDist = carouselRect.width * 0.5;
-        const t = Math.min(dist / maxDist, 1);
-        const scale = 1 - t * (1 - MIN_SCALE);
-        const opacity = 1 - t * 0.3;
-
-        slide.style.transform = `scale(${scale})`;
-        slide.style.opacity = `${opacity}`;
-
-        if (dist < closestDist) {
-          closestDist = dist;
+      for (let i = 0; i < slides.length; i++) {
+        slides[i].style.transform = `scale(${data[i].scale})`;
+        slides[i].style.opacity = `${data[i].opacity}`;
+        if (data[i].dist < closestDist) {
+          closestDist = data[i].dist;
           closestIdx = i;
         }
-      });
+      }
 
-      // Update dot indicators via DOM directly to avoid re-render during drag
       if (closestIdx !== currentClosest) {
         currentClosest = closestIdx;
         const dots = carousel.parentElement?.querySelectorAll<HTMLElement>(".scan-dot");
@@ -553,6 +558,7 @@ export default function LetterDetailPage() {
       active: true,
       visible: true,
       scrollReveal: true,
+      showTitle: true,
     });
   }, [adjacent, setDock]);
 
@@ -569,43 +575,53 @@ export default function LetterDetailPage() {
 
     let rafId: number | null = null;
 
+    // Cache header element — it doesn't change during this effect's lifetime
+    const headerEl = document.querySelector<HTMLElement>(".header");
+
     const tick = () => {
       rafId = null;
-      // Measure header so thumbs never sit behind it
-      const headerEl = document.querySelector<HTMLElement>(".header");
       const headerBottom = headerEl
         ? headerEl.getBoundingClientRect().bottom
         : 0;
-      const STICKY_TOP = headerBottom + 16; // 16px breathing room below header
+      const STICKY_TOP = headerBottom + 16;
 
       const viewportH = window.innerHeight;
       const viewportCenter = viewportH / 2;
 
       const thumbs = document.querySelectorAll<HTMLElement>(".page-thumb");
+
+      // Pass 1: batch all DOM reads
+      const measurements: {
+        thumb: HTMLElement;
+        sr: DOMRect;
+        thumbH: number;
+      }[] = [];
       thumbs.forEach((thumb) => {
         const section = thumb.parentElement;
         if (!section) return;
+        measurements.push({
+          thumb,
+          sr: section.getBoundingClientRect(),
+          thumbH: thumb.offsetHeight,
+        });
+      });
 
-        const sr = section.getBoundingClientRect();
-        const thumbH = thumb.offsetHeight;
-        const naturalTop = 8; // initial CSS top ~0.5rem
+      // Pass 2: compute and batch all DOM writes
+      for (const { thumb, sr, thumbH } of measurements) {
+        const naturalTop = 8;
         const maxTravel = sr.height - thumbH - naturalTop - 16;
-        if (maxTravel <= 0) { thumb.style.transform = ""; return; }
+        if (maxTravel <= 0) { thumb.style.transform = ""; continue; }
 
-        // Target: center of viewport, but stay below header, stay in section
         const idealY = viewportCenter - thumbH / 2 - sr.top - naturalTop;
         const minFromHeader = Math.max(0, STICKY_TOP - sr.top - naturalTop);
         const y = Math.min(Math.max(idealY, minFromHeader), maxTravel);
 
-        // Progress through section (0→1) for zigzag
         const progress = maxTravel > 0 ? y / maxTravel : 0;
-
-        // Zigzag S-curve
         const amp = Math.min(18, Math.max(8, sr.height * 0.012));
         const x = Math.sin(progress * Math.PI * 2) * amp;
 
         thumb.style.transform = `translate(${x}px, ${y}px)`;
-      });
+      }
     };
 
     const onScroll = () => { if (rafId == null) rafId = requestAnimationFrame(tick); };
@@ -662,11 +678,35 @@ export default function LetterDetailPage() {
     }
   }, [viewerOpen]);
 
+  // Memoize all derived values — must be before conditional returns (Rules of Hooks)
+  const derived = useMemo(() => {
+    if (!letter) return null;
+    const m = letter.metadata;
+    const letterTypeImages = letter.images.filter((img) => img.type === "letter");
+    const extraContentItems = letter.extraContentItems ?? [];
+    const uniquePersons = dedupePersons(letter.linkedPersons);
+    return {
+      m,
+      byline: correspondentLine(m),
+      dateline: [m.date, m.location].filter(Boolean).join(" \u2014 "),
+      letterTypeImages,
+      carouselImages: letter.images,
+      allImages: letter.images,
+      hasTranscript: shouldShowPublicTranscript(letter),
+      extraContentItems,
+      hasExtraContent: extraContentItems.length > 0 || !!letter.extraContentTranscript,
+      uniquePersons,
+      hasEntities: uniquePersons.length > 0 || (letter.linkedPlaces && letter.linkedPlaces.length > 0),
+      isPhotoRecord: shouldShowPhotoDescriptionWorkflow(letter),
+      heroHook: m.hook || letter.photoDescription || undefined,
+    };
+  }, [letter]);
+
   if (loading) {
     return <div className="letter-article"><p className="letter-loading">Loading letter...</p></div>;
   }
 
-  if (error || !letter) {
+  if (error || !letter || !derived) {
     return (
       <div className="letter-article letter-error-state">
         <h1>{error || "Letter not found"}</h1>
@@ -678,22 +718,11 @@ export default function LetterDetailPage() {
     );
   }
 
-  const m = letter.metadata;
-  const byline = correspondentLine(m);
-  const dateline = [m.date, m.location].filter(Boolean).join(" \u2014 ");
-
-  const letterTypeImages = letter.images.filter((img) => img.type === "letter");
-  // Carousel shows ALL images — letter pages, telegrams, covers, etc.
-  const carouselImages = letter.images;
-  const allImages = letter.images;
-  const hasTranscript = shouldShowPublicTranscript(letter);
-  const extraContentItems = letter.extraContentItems ?? [];
-  const hasExtraContent = extraContentItems.length > 0 || !!letter.extraContentTranscript;
-  const uniquePersons = dedupePersons(letter.linkedPersons);
-  const hasEntities = uniquePersons.length > 0 || (letter.linkedPlaces && letter.linkedPlaces.length > 0);
-  const isPhotoRecord = shouldShowPhotoDescriptionWorkflow(letter);
-  // Use photoDescription as the hook if no explicit hook exists
-  const heroHook = m.hook || letter.photoDescription || undefined;
+  const {
+    m, byline, dateline, letterTypeImages, carouselImages, allImages,
+    hasTranscript, extraContentItems, hasExtraContent, uniquePersons,
+    hasEntities, isPhotoRecord, heroHook,
+  } = derived;
 
   return (
     <>
@@ -768,6 +797,8 @@ export default function LetterDetailPage() {
                       }
                       className="scan-slide-img"
                       draggable={false}
+                      loading={idx === 0 ? "eager" : "lazy"}
+                      decoding="async"
                     />
                     {typeLabel && (
                       <span className="scan-slide-type-label">{typeLabel}</span>

@@ -5,6 +5,8 @@ interface HeaderDockState {
   active: boolean;
   visible: boolean;
   scrollReveal?: boolean;
+  /** When true, the site title stays visible alongside the dock content */
+  showTitle?: boolean;
 }
 
 interface HeaderDockContextValue {

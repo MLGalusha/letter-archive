@@ -28,6 +28,7 @@
   min-height: 54px;
   display: flex;
   align-items: center;
+  gap: 0.85rem;
 }
 
 .main-title {
@@ -39,11 +40,21 @@
   transition: opacity 0.22s ease, transform 0.28s ease;
 }
 
+/* Default dock behavior: title hides, dock overlays (homepage search) */
 .header-brand-slot.has-active-dock .main-title {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
   transform: translateY(-0.35rem);
+}
+
+/* show-title mode: title stays visible alongside dock (letter detail) */
+.header-brand-slot.show-title .main-title {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  flex-shrink: 0;
 }
 
 .header-brand-slot.has-active-dock {
@@ -54,6 +65,11 @@
   pointer-events: none;
 }
 
+.header-brand-slot.show-title .main-title * {
+  pointer-events: auto;
+}
+
+/* Default dock: absolute overlay (homepage) */
 .header-dock {
   position: absolute;
   inset: 0;
@@ -81,6 +97,14 @@
 .header-dock.is-active.is-visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* show-title mode: dock flows inline next to title */
+.header-brand-slot.show-title .header-dock {
+  position: static;
+  flex: 1 1 auto;
+  transform: none;
+  z-index: auto;
 }
 
 .main-title-label {

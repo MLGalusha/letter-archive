@@ -1,7 +1,7 @@
 .letter-header-dock {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   width: 100%;
   position: relative;
 }
@@ -85,68 +85,83 @@
   cursor: not-allowed;
 }
 
-/* ── Dot track (with fade edges) ───────────────────────── */
+/* ── Progress track (replaces dots) ────────────────────── */
 
 .dock-strip-track {
+  position: relative;
+  width: 100px;
+  height: 22px;
   display: flex;
   align-items: center;
-  position: relative;
-  overflow: hidden;
-  max-width: 240px;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
-.dock-track-fade {
+.dock-strip-track::before {
+  content: "";
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 16px;
-  z-index: 1;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 3px;
+  transform: translateY(-50%);
+  background: rgba(217, 207, 191, 0.6);
+  border-radius: 2px;
+}
+
+.dock-track-fill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 3px;
+  transform: translateY(-50%);
+  background: var(--accent);
+  border-radius: 2px;
+  opacity: 0.55;
+  transition: width 0.2s ease;
   pointer-events: none;
 }
 
-.dock-track-fade-left {
-  left: 0;
-  background: linear-gradient(to right, rgba(255, 255, 255, 0.85), transparent);
-}
-
-.dock-track-fade-right {
-  right: 0;
-  background: linear-gradient(to left, rgba(255, 255, 255, 0.85), transparent);
-}
-
-/* ── Dots ──────────────────────────────────────────────── */
-
-.dock-strip-dots {
-  display: flex;
-  gap: 5px;
-  align-items: center;
-  padding: 0.2rem 0.25rem;
-}
-
-.dock-strip-dot {
-  appearance: none;
-  border: none;
-  padding: 0;
-  width: 7px;
-  height: 7px;
+.dock-track-thumb {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
-  background: rgba(217, 207, 191, 0.8);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: all 0.18s ease;
-}
-
-.dock-strip-dot:hover:not(.active) {
-  background: rgba(31, 109, 122, 0.45);
-  transform: scale(1.45);
-}
-
-.dock-strip-dot.active {
-  width: 10px;
-  height: 10px;
   background: var(--accent);
-  box-shadow: 0 0 0 3px rgba(31, 109, 122, 0.15);
-  cursor: default;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  transform: translate(-50%, -50%);
+  transition: left 0.2s ease, box-shadow 0.15s ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.dock-strip-track:hover .dock-track-thumb {
+  box-shadow: 0 1px 6px rgba(31, 109, 122, 0.3);
+}
+
+/* ── Tick marks (small collections only) ───────────────── */
+
+.dock-track-ticks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dock-track-tick {
+  position: absolute;
+  top: 50%;
+  width: 1px;
+  height: 7px;
+  background: rgba(217, 207, 191, 0.7);
+  transform: translate(-50%, -50%);
+  border-radius: 1px;
+}
+
+.dock-track-tick.current {
+  background: var(--accent);
+  opacity: 0.5;
 }
 
 /* ── Position indicator ────────────────────────────────── */
@@ -186,7 +201,7 @@
   }
 
   .dock-strip-track {
-    max-width: 160px;
+    width: 70px;
   }
 }
 
@@ -200,6 +215,6 @@
   }
 
   .dock-strip-track {
-    max-width: 130px;
+    width: 60px;
   }
 }

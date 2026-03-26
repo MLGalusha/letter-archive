@@ -20,7 +20,7 @@ export default function Header() {
   return (
     <header className={headerClass}>
       <div className="header-inner">
-        <div className={`header-brand-slot${dock.active ? " has-active-dock" : ""}`}>
+        <div className={`header-brand-slot${dock.active ? " has-active-dock" : ""}${dock.active && dock.showTitle ? " show-title" : ""}`}>
           <Link to="/" className="main-title" onClick={() => setMenuOpen(false)}>
             <span className="main-title-label">Editorial Archive</span>
             <span className="main-title-name">Letter Archive</span>

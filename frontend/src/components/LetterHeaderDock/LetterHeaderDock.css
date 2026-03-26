@@ -1,7 +1,6 @@
 .letter-header-dock {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   width: 100%;
   position: relative;
 }
@@ -9,13 +8,11 @@
 /* ── Unified strip ─────────────────────────────────────── */
 
 .dock-strip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.35rem 0.55rem;
-  border-radius: 999px;
-  border: 1px solid rgba(217, 207, 191, 0.7);
-  background: rgba(255, 255, 255, 0.5);
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.1rem 0;
 }
 
 /* ── Collection link ───────────────────────────────────── */
@@ -23,10 +20,10 @@
 .dock-strip-collection {
   display: inline-flex;
   align-items: center;
-  padding: 0.28rem 0.65rem;
+  padding: 0.45rem 0.8rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.65);
-  border: 1px solid rgba(217, 207, 191, 0.6);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(217, 207, 191, 0.5);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -37,12 +34,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 180px;
+  flex-shrink: 0;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .dock-strip-collection:hover {
   background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(31, 109, 122, 0.35);
+  border-color: rgba(31, 109, 122, 0.3);
   color: var(--accent-strong);
 }
 
@@ -50,8 +48,8 @@
 
 .dock-strip-divider {
   width: 1px;
-  height: 18px;
-  background: rgba(217, 207, 191, 0.6);
+  height: 24px;
+  background: rgba(217, 207, 191, 0.45);
   flex-shrink: 0;
 }
 
@@ -59,89 +57,144 @@
 
 .dock-strip-arrow {
   appearance: none;
-  border: none;
   border-radius: 50%;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: 0.85rem;
-  width: 1.9rem;
-  height: 1.9rem;
+  background: rgba(255, 255, 255, 0.45);
+  color: var(--text-muted);
+  width: 2.1rem;
+  height: 2.1rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease,
+              border-color 0.15s ease;
+  border: 1px solid rgba(217, 207, 191, 0.4);
+}
+
+.dock-strip-arrow svg {
+  display: block;
+  width: 18px;
+  height: 18px;
 }
 
 .dock-strip-arrow:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.95);
   color: var(--accent-strong);
+  border-color: rgba(31, 109, 122, 0.25);
+  transform: scale(1.06);
+}
+
+.dock-strip-arrow:active:not(:disabled) {
+  transform: scale(0.94);
+  background: rgba(223, 241, 245, 0.7);
 }
 
 .dock-strip-arrow:disabled {
-  opacity: 0.25;
+  opacity: 0.18;
   cursor: not-allowed;
+  background: transparent;
+  border-color: transparent;
 }
 
-/* ── Progress track (replaces dots) ────────────────────── */
+/* ── Progress track ────────────────────────────────────── */
 
 .dock-strip-track {
   position: relative;
-  width: 100px;
-  height: 22px;
+  flex: 1 1 0;
+  min-width: 80px;
+  height: 36px;
   display: flex;
   align-items: center;
   cursor: pointer;
-  flex-shrink: 0;
+  touch-action: none;
+  user-select: none;
 }
 
-.dock-strip-track::before {
-  content: "";
+.dock-strip-track.is-dragging {
+  cursor: grabbing;
+}
+
+/* Rail — spans full track width */
+.dock-track-rail {
   position: absolute;
   left: 0;
   right: 0;
   top: 50%;
-  height: 3px;
+  height: 12px;
   transform: translateY(-50%);
-  background: rgba(217, 207, 191, 0.6);
-  border-radius: 2px;
+  background: rgba(217, 207, 191, 0.35);
+  border-radius: 8px;
 }
 
+/* Inner area — inset by thumb radius so 0% and 100% are both reachable */
+.dock-track-inner {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+/* Filled portion */
 .dock-track-fill {
   position: absolute;
-  left: 0;
+  left: -12px;
   top: 50%;
-  height: 3px;
+  height: 12px;
   transform: translateY(-50%);
-  background: var(--accent);
-  border-radius: 2px;
-  opacity: 0.55;
-  transition: width 0.2s ease;
+  background: linear-gradient(90deg, var(--accent), rgba(31, 109, 122, 0.5));
+  border-radius: 8px;
   pointer-events: none;
+  /* Add 12px to width to account for -12px left offset */
+  min-width: 0;
 }
 
+.dock-strip-track:not(.is-dragging) .dock-track-fill {
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Thumb — larger handle with inner detail */
 .dock-track-thumb {
   position: absolute;
   top: 50%;
-  width: 11px;
-  height: 11px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: var(--accent);
-  border: 2px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  border: 3px solid rgba(255, 250, 242, 0.98);
+  box-shadow: 0 0 0 1px rgba(31, 109, 122, 0.1), 0 2px 6px rgba(0, 0, 0, 0.12);
   transform: translate(-50%, -50%);
-  transition: left 0.2s ease, box-shadow 0.15s ease;
   pointer-events: none;
   z-index: 2;
 }
 
-.dock-strip-track:hover .dock-track-thumb {
-  box-shadow: 0 1px 6px rgba(31, 109, 122, 0.3);
+/* Inner dot on the thumb */
+.dock-track-thumb::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
 }
 
-/* ── Tick marks (small collections only) ───────────────── */
+.dock-strip-track:not(.is-dragging) .dock-track-thumb {
+  transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.2s ease,
+              transform 0.15s ease;
+}
+
+.dock-strip-track:hover .dock-track-thumb {
+  transform: translate(-50%, -50%) scale(1.08);
+  box-shadow: 0 0 0 3px rgba(31, 109, 122, 0.08), 0 2px 10px rgba(31, 109, 122, 0.16);
+}
+
+.dock-strip-track.is-dragging .dock-track-thumb {
+  transform: translate(-50%, -50%) scale(1.15);
+  box-shadow: 0 0 0 5px rgba(31, 109, 122, 0.1), 0 3px 14px rgba(31, 109, 122, 0.2);
+}
+
+/* ── Tick marks (small collections) ────────────────────── */
 
 .dock-track-ticks {
   position: absolute;
@@ -152,16 +205,16 @@
 .dock-track-tick {
   position: absolute;
   top: 50%;
-  width: 1px;
-  height: 7px;
-  background: rgba(217, 207, 191, 0.7);
+  width: 2px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.5);
   transform: translate(-50%, -50%);
   border-radius: 1px;
 }
 
 .dock-track-tick.current {
-  background: var(--accent);
-  opacity: 0.5;
+  background: rgba(255, 255, 255, 0.8);
+  height: 18px;
 }
 
 /* ── Position indicator ────────────────────────────────── */
@@ -170,10 +223,10 @@
   appearance: none;
   border: none;
   background: transparent;
-  padding: 0.2rem 0.15rem;
+  padding: 0.3rem 0.15rem;
   cursor: pointer;
   font: inherit;
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text-muted);
@@ -187,21 +240,21 @@
   color: var(--accent-strong);
 }
 
+.dock-strip-pos.is-previewing {
+  color: var(--accent);
+}
+
 .dock-strip-pos-sep {
-  opacity: 0.4;
-  margin: 0 0.06em;
+  opacity: 0.35;
+  margin: 0 0.1em;
 }
 
 /* ── Responsive ────────────────────────────────────────── */
 
 @media (max-width: 700px) {
   .dock-strip-collection {
-    max-width: 120px;
-    font-size: 0.62rem;
-  }
-
-  .dock-strip-track {
-    width: 70px;
+    max-width: 110px;
+    font-size: 0.6rem;
   }
 }
 
@@ -212,9 +265,5 @@
 
   .dock-strip-divider {
     display: none;
-  }
-
-  .dock-strip-track {
-    width: 60px;
   }
 }

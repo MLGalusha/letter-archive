@@ -852,7 +852,7 @@ export default function LetterDetailPage() {
                   return (
                     <div key={page.pageNumber} className="transcript-page" data-page={page.pageNumber}>
                       {/* Floating side thumbnail — alternates left/right */}
-                      {pageImage && letter.transcript.pages.length > 1 && (
+                      {pageImage && (
                         <button
                           type="button"
                           className={`page-thumb page-thumb-${side}`}
@@ -911,6 +911,9 @@ export default function LetterDetailPage() {
             const itemImage = item.imageIds.length > 0
               ? allImages.find((img) => item.imageIds.includes(img.id))
               : null;
+            // Continue alternating sides from where the transcript left off
+            const thumbIdx = letter.transcript.pages.length + idx;
+            const side = thumbIdx % 2 === 0 ? "left" : "right";
             return (
               <Fragment key={`extra-${idx}`}>
                 {(hasTranscript || idx > 0) && (
@@ -924,7 +927,7 @@ export default function LetterDetailPage() {
                   {itemImage && (
                     <button
                       type="button"
-                      className="page-thumb page-thumb-left"
+                      className={`page-thumb page-thumb-${side}`}
                       onClick={() => openViewer(allImages.indexOf(itemImage))}
                       aria-label={`View ${item.label.toLowerCase()}`}
                     >
@@ -947,6 +950,7 @@ export default function LetterDetailPage() {
         ) : hasExtraContent && letter.extraContentTranscript ? (() => {
           const extraImages = allImages.filter((img) => EXTRA_CONTENT_TYPES.includes(img.type));
           const fallbackLabel = getExtraContentLabel(letter.images);
+          const fallbackSide = letter.transcript.pages.length % 2 === 0 ? "left" : "right";
           return (
             <>
               {hasTranscript && (
@@ -960,7 +964,7 @@ export default function LetterDetailPage() {
                 {extraImages[0] && (
                   <button
                     type="button"
-                    className="page-thumb page-thumb-left"
+                    className={`page-thumb page-thumb-${fallbackSide}`}
                     onClick={() => openViewer(allImages.indexOf(extraImages[0]))}
                     aria-label={`View ${fallbackLabel.toLowerCase()}`}
                   >

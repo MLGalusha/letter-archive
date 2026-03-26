@@ -358,18 +358,21 @@ router.get('/letters/summaries', async (req, res, next) => {
       orderBy: [sortFn(getSortExpression())],
     });
 
+    // Group by (collectionId, dateRaw, typeSequence) — merge companion types
+    // (e.g. L + C on same date) into one group, matching the adjacent API
     const allResults = results as SummaryLetterWithRelations[];
     const groupMap = new Map<string, SummaryLetterWithRelations[]>();
     for (const letter of allResults) {
-      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.type}${letter.typeSequence}`;
+      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
       const group = groupMap.get(key) || [];
       group.push(letter);
       groupMap.set(key, group);
     }
 
+    // Select primaries: prefer L-type, then first alphabetically by type
     const filteredResults: SummaryLetterWithRelations[] = [];
     for (const [, group] of groupMap) {
-      const primary = group[0];
+      const primary = group.find((l) => l.type === 'L') || group[0];
 
       if (query.workflow && primary.workflow !== query.workflow) {
         continue;
@@ -384,7 +387,7 @@ router.get('/letters/summaries', async (req, res, next) => {
     );
 
     const transformedLetters = paginatedResults.map((letter) => {
-      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.type}${letter.typeSequence}`;
+      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
       const group = groupMap.get(key) || [];
       return transformLetterSummary(letter, group.filter((item) => item.id !== letter.id));
     });

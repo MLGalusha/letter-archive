@@ -304,6 +304,7 @@ export default function HomePage() {
             setCompactRefineOpen(open);
             if (open) {
               setPageRefineOpen(false);
+              setPageRefinePinned(false);
             }
           }}
           onPinnedChange={(pinned) => {

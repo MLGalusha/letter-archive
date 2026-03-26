@@ -329,12 +329,6 @@ export default function SearchBar({
   }, [refinePinned]);
 
   useEffect(() => {
-    if (!isCompact && hasAdvancedRefinementFilters && !showFilters) {
-      setRefineOpen(true);
-    }
-  }, [hasAdvancedRefinementFilters, isCompact, showFilters]);
-
-  useEffect(() => {
     setStartYearInput(filters.dateRange?.start?.toString() || "");
     setEndYearInput(filters.dateRange?.end?.toString() || "");
   }, [filters.dateRange?.end, filters.dateRange?.start]);

@@ -199,12 +199,12 @@ describe('letters route integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    // Each type is its own group — cover (REVIEWED) is filtered out by workflow
+    // L and C on same date merge into one group; L is primary, C is related
     expect(response.body).toEqual({
       letters: [
         {
           id: 'letter-primary',
-          relatedIds: [],
+          relatedIds: ['letter-cover'],
         },
       ],
       page: 1,
@@ -223,7 +223,16 @@ describe('letters route integration', () => {
           type: 'L',
           workflow: 'UPLOADED',
         },
-        relatedItems: [],
+        relatedItems: [
+          {
+            id: 'letter-cover',
+            collectionId: 'collection-9',
+            dateRaw: '19470810',
+            typeSequence: 1,
+            type: 'C',
+            workflow: 'REVIEWED',
+          },
+        ],
       },
     ]);
   });
@@ -429,7 +438,7 @@ describe('letters route integration', () => {
     );
   });
 
-  it('returns null adjacency for published non-letter records while keeping collection totals', async () => {
+  it('resolves companion types to the same nav position as their L-type sibling', async () => {
     findFirstLetterMock.mockResolvedValueOnce({
       id: 'letter-cover',
       collectionId: 'collection-9',
@@ -444,7 +453,19 @@ describe('letters route integration', () => {
       {
         id: 'letter-1',
         dateRaw: '19470810',
+        type: 'L',
+        typeSequence: 1,
         createdAt: '2026-03-09T11:00:00.000Z',
+        sender: null,
+        recipient: null,
+        hook: null,
+      },
+      {
+        id: 'letter-cover',
+        dateRaw: '19470810',
+        type: 'C',
+        typeSequence: 1,
+        createdAt: '2026-03-09T11:30:00.000Z',
         sender: null,
         recipient: null,
         hook: null,
@@ -452,6 +473,8 @@ describe('letters route integration', () => {
       {
         id: 'letter-2',
         dateRaw: '19470811',
+        type: 'L',
+        typeSequence: 1,
         createdAt: '2026-03-09T12:00:00.000Z',
         sender: null,
         recipient: null,
@@ -467,10 +490,9 @@ describe('letters route integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    // Cover resolves to same position as L-type on 19470810
     expect(response.body).toMatchObject({
-      prev: null,
-      next: null,
-      position: null,
+      position: 1,
       total: 2,
       collectionCode: '009',
       collectionTitle: 'Collection Nine',

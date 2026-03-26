@@ -5,7 +5,7 @@
  * to smaller modules under `services/letter/`.
  */
 
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { db, letters } from '../db/index.js';
 import { syncLetterParticipantsFromMetadata } from './entities/participant-sync.js';
 import { getLetterById } from './letters.js';
@@ -119,6 +119,27 @@ export async function buildLetterUpdates(
   }
 
   await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
+
+  // When publishing or hiding, sync companion types (C, T, etc.) on the same date
+  // so covers and telegrams are always visible alongside their letter
+  if (updates.visibility) {
+    const companionUpdated = await db.update(letters).set({
+      visibility: updates.visibility,
+      ...(updates.visibility === 'PUBLISHED' ? { reviewedAt: new Date(), reviewedBy: userId } : {}),
+    }).where(and(
+      eq(letters.collectionId, existingLetter.collectionId),
+      eq(letters.dateRaw, existingLetter.dateRaw),
+      eq(letters.typeSequence, existingLetter.typeSequence),
+      ne(letters.id, letterId),
+    ));
+
+    if (companionUpdated.rowCount && companionUpdated.rowCount > 0) {
+      log.info(
+        { letterId, companions: companionUpdated.rowCount, visibility: updates.visibility },
+        'Companion types visibility synced',
+      );
+    }
+  }
 
   if (updates.sender !== undefined || updates.recipient !== undefined) {
     await syncLetterParticipantsFromMetadata({

@@ -218,22 +218,22 @@ router.get('/letters', async (req, res, next) => {
       orderBy: [sortFn(getSortExpression())],
     });
 
-    // Group letters by (collectionId, dateRaw, type, typeSequence) to handle related items
+    // Group letters by (collectionId, dateRaw, typeSequence) — all types on the
+    // same date merge into one group so covers/telegrams don't appear as separate entries
     const allResults = results as LetterWithRelations[];
 
-    // Build a map of group keys to all letters in that group
     const groupMap = new Map<string, LetterWithRelations[]>();
     for (const letter of allResults) {
-      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.type}${letter.typeSequence}`;
+      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
       const group = groupMap.get(key) || [];
       group.push(letter);
       groupMap.set(key, group);
     }
 
-    // Select primaries and apply workflow filter to the PRIMARY (not individual records)
+    // Select primaries: prefer L-type, then first by type alphabetically
     const filteredResults: LetterWithRelations[] = [];
     for (const [_key, group] of groupMap) {
-      const primary = group[0];
+      const primary = group.find((l) => l.type === 'L') || group[0];
 
       // Apply workflow filter to PRIMARY's workflow state
       if (query.workflow && primary.workflow !== query.workflow) {
@@ -251,7 +251,7 @@ router.get('/letters', async (req, res, next) => {
 
     // Enrich primary letters with related content from the already-loaded groupMap
     const enrichedResults = paginatedResults.map((letter) => {
-      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.type}${letter.typeSequence}`;
+      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
       const group = groupMap.get(key) || [];
       const relatedItems = group.filter((l) => l.id !== letter.id);
       return { letter, relatedItems };
@@ -523,7 +523,7 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
     }
 
     // All published records in the collection, ordered by date
-    const collectionLetters = await db.query.letters.findMany({
+    const allCollectionLetters = await db.query.letters.findMany({
       where: and(
         eq(letters.collectionId, letter.collectionId),
         eq(letters.visibility, 'PUBLISHED'),
@@ -531,6 +531,8 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
       columns: {
         id: true,
         dateRaw: true,
+        type: true,
+        typeSequence: true,
         createdAt: true,
         sender: true,
         recipient: true,
@@ -539,8 +541,26 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
       orderBy: [asc(letters.dateRaw), asc(letters.createdAt)],
     });
 
-    // Find current position
-    const currentIndex = collectionLetters.findIndex(l => l.id === letterId);
+    // Deduplicate: group by (dateRaw, typeSequence), prefer L-type as the
+    // navigable entry so companion covers/telegrams don't appear separately
+    const seen = new Map<string, typeof allCollectionLetters[number]>();
+    for (const l of allCollectionLetters) {
+      const key = `${l.dateRaw}:${l.typeSequence}`;
+      const existing = seen.get(key);
+      if (!existing || (l.type === 'L' && existing.type !== 'L')) {
+        seen.set(key, l);
+      }
+    }
+    const collectionLetters = [...seen.values()];
+
+    // Find current position — if the current letter is a companion type,
+    // it resolves to the same slot as its L-type sibling
+    let currentIndex = collectionLetters.findIndex(l => l.id === letterId);
+    if (currentIndex === -1) {
+      // Current letter is a companion type — find by date instead
+      const dateKey = `${letter.dateRaw}`;
+      currentIndex = collectionLetters.findIndex(l => l.dateRaw === dateKey);
+    }
 
     function buildPreview(l: typeof collectionLetters[number]) {
       return {

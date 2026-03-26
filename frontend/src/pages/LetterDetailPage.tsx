@@ -62,12 +62,14 @@ function reflowTranscript(text: string): string {
 
     const leadingWS = line.match(/^(\s*)/)?.[1].length ?? 0;
     const prev = i > 0 ? lines[i - 1] : "";
-    const prevLen = prev.trimEnd().length;
+    // Use trimmed content length — right-aligned text like
+    // "                        Sept 23rd" is short content, not a margin break
+    const prevContentLen = prev.trim().length;
 
     const isContinuation =
       leadingWS === 0 &&
-      prevLen >= MARGIN_THRESHOLD &&
-      prev.trim() !== "" &&
+      prevContentLen >= MARGIN_THRESHOLD &&
+      prevContentLen > 0 &&
       result.length > 0;
 
     if (isContinuation) {

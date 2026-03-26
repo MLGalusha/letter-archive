@@ -139,7 +139,7 @@ export async function runTranscription(letterId: string): Promise<void> {
         });
 
         if (result.text.trim()) {
-          pageTranscriptions.push(result.text.trim());
+          pageTranscriptions.push(result.text.replace(/^\n+|\n+$/g, ''));
         }
         stubMode = result.isStub;
 
@@ -269,7 +269,7 @@ export async function runTranscription(letterId: string): Promise<void> {
                 transcriptions.push({
                   type: docType,
                   index: typeIndex,
-                  text: transcription.text.trim(),
+                  text: transcription.text.replace(/^\n+|\n+$/g, ''),
                 });
                 extrasTranscribed++;
               }

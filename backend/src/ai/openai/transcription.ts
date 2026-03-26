@@ -108,7 +108,7 @@ export async function transcribeImage(
     });
 
     return {
-      text: text.trim(),
+      text: text.replace(/^\n+|\n+$/g, ''),
       isStub: false,
     };
   } catch (error) {
@@ -415,7 +415,7 @@ File: ${params.filePath}
     });
 
     return {
-      text: text.trim(),
+      text: text.replace(/^\n+|\n+$/g, ''),
       isStub: false,
     };
   } catch (error) {
@@ -529,7 +529,7 @@ A historical photograph or visual image from the archive. ${contextNotes.join(' 
     });
 
     return {
-      text: text.trim(),
+      text: text.replace(/^\n+|\n+$/g, ''),
       isStub: false,
     };
   } catch (error) {

@@ -541,7 +541,9 @@ function extractPageText(fullText: string, pageIndex: number, totalPages: number
   // parts[0] is empty (before first separator), so use pageIndex + 1
   const partIndex = pageIndex + 1;
   if (parts.length > partIndex) {
-    return parts[partIndex].trim();
+    // Strip only leading/trailing newlines, NOT spaces — preserves
+    // intentional whitespace like right-aligned dates and indentation
+    return parts[partIndex].replace(/^\n+|\n+$/g, '');
   }
 
   // Fallback: return full text for first page, empty for others

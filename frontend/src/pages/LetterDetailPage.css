@@ -365,6 +365,9 @@
   font-family: Georgia, "Times New Roman", serif;
   white-space: pre-wrap;
   line-height: 1.85;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* ── Floating side page thumbnails ───────────────────────── */

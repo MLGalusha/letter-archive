@@ -29,7 +29,7 @@ Parsers: `frontend/src/utils/filename-parser.ts`, `backend/src/services/filename
 | Code | Name |
 |------|------|
 | L | Letter (primary) |
-| C | Cover/envelope |
+| C | Cover |
 | P | Photo |
 | E | Ephemera |
 | V | Voice |

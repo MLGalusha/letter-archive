@@ -79,7 +79,7 @@ export function getDocumentTypeFromCode(type: string): string {
     case 'T':
       return 'telegram';
     case 'C':
-      return 'cover/envelope';
+      return 'cover';
     case 'E':
       return 'ephemera';
     case 'N':

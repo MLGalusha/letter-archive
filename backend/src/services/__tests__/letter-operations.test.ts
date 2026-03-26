@@ -426,19 +426,19 @@ describe('letter operations service', () => {
     expect(checkExtraContentForTextMock).toHaveBeenCalledWith({
       filePath: 'collections/009/19470810/C01/009-19470810-C01-01.jpg',
       letterId: 'letter-11',
-      documentType: 'cover/envelope',
+      documentType: 'cover',
     });
     expect(transcribeExtraContentMock).toHaveBeenCalledWith({
       filePath: 'collections/009/19470810/C01/009-19470810-C01-01.jpg',
       letterId: 'letter-11',
-      documentType: 'cover/envelope',
+      documentType: 'cover',
       context: {
         collectionCode: '009',
         dateRaw: '19470810',
       },
     });
     expect(updateSetMock).toHaveBeenCalledWith({
-      extraContentTranscript: '--- Cover/envelope ---\n\nEnvelope note',
+      extraContentTranscript: '--- Cover ---\n\nEnvelope note',
       extraContentStatus: 'AI_DRAFT',
       extraContentVerifiedAt: null,
       extraContentVerifiedBy: null,

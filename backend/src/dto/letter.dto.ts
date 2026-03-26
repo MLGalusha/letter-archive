@@ -681,11 +681,29 @@ export function transformLetterWithRelatedToDTO(
 }
 
 /**
+ * Normalize parsed header type names to match FrontendLetterImageType values.
+ * e.g. "Cover" → "cover", "Telegram" → "telegram"
+ */
+function normalizeExtraContentType(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (lower.startsWith('cover')) return 'cover';
+  if (lower.startsWith('telegram')) return 'telegram';
+  if (lower.startsWith('ephemer')) return 'ephemera';
+  if (lower.startsWith('card')) return 'card';
+  if (lower.startsWith('photo')) return 'photo';
+  if (lower.startsWith('article')) return 'article';
+  if (lower.startsWith('diary')) return 'diary';
+  if (lower.startsWith('voice')) return 'voice';
+  return lower;
+}
+
+/**
  * Parse the combined extraContentTranscript into individual sections.
- * The format uses headers like "--- Telegram 1 ---" or "--- Cover ---".
+ * Headers can be "--- Telegram 1 ---", "--- Cover ---", etc.
  */
 function parseExtraContentSections(text: string): { type: string; index: number; text: string }[] {
-  const headerPattern = /^---\s+(\w+)(?:\s+(\d+))?\s+---$/;
+  // Match headers like "--- Cover 1 ---" or "--- Telegram ---"
+  const headerPattern = /^---\s+([^-]+?)\s*(\d+)?\s*---\s*$/;
   const lines = text.split('\n');
   const sections: { type: string; index: number; text: string }[] = [];
 
@@ -699,12 +717,12 @@ function parseExtraContentSections(text: string): { type: string; index: number;
       // Save previous section if any
       if (currentType) {
         sections.push({
-          type: currentType,
+          type: normalizeExtraContentType(currentType),
           index: currentIndex,
           text: currentLines.join('\n').trim(),
         });
       }
-      currentType = match[1];
+      currentType = match[1].trim();
       currentIndex = match[2] ? parseInt(match[2], 10) : 1;
       currentLines = [];
     } else {
@@ -715,7 +733,7 @@ function parseExtraContentSections(text: string): { type: string; index: number;
   // Save last section
   if (currentType) {
     sections.push({
-      type: currentType,
+      type: normalizeExtraContentType(currentType),
       index: currentIndex,
       text: currentLines.join('\n').trim(),
     });

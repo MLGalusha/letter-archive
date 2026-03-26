@@ -120,7 +120,7 @@ quotes: Every quote or passage in the letter that references or discusses this p
   - text: The exact quote from the letter
   - context: Brief explanation of what this quote reveals about the person
 confidence: How confident you are this person exists based on the text
-source: Where this entity was primarily discovered. Use "letter" if from the main letter transcription. If from extra content, use the document type: "telegram", "cover/envelope", "ephemera", or "card". Use "multiple" if the entity appears significantly in both the letter and extra content.
+source: Where this entity was primarily discovered. Use "letter" if from the main letter transcription. If from extra content, use the document type: "telegram", "cover", "ephemera", or "card". Use "multiple" if the entity appears significantly in both the letter and extra content.
 </people_instructions>
 
 <places_instructions>
@@ -136,7 +136,7 @@ why_mentioned: Why this place comes up in the letter (e.g., "Where the sender an
 descriptive_details: Any descriptions of the place from the letter (scenery, conditions, what it's like) or null if none
 associated_people: Names of people connected to this place in the letter
 confidence: How confident you are this place reference is correct
-source: Where this place was primarily discovered. Use "letter" if from the main letter transcription. If from extra content, use the document type: "telegram", "cover/envelope", "ephemera", or "card". Use "multiple" if the place appears significantly in both the letter and extra content.
+source: Where this place was primarily discovered. Use "letter" if from the main letter transcription. If from extra content, use the document type: "telegram", "cover", "ephemera", or "card". Use "multiple" if the place appears significantly in both the letter and extra content.
 </places_instructions>
 
 <relationships_instructions>
@@ -268,7 +268,7 @@ Before returning, verify:
 5. Relationship types match the controlled vocabulary exactly
 6. Person-place connection types match the controlled vocabulary exactly
 7. Confidence scores reflect actual certainty from the text
-8. Every person and place has a source field indicating where the entity was discovered ("letter", "telegram", "cover/envelope", "ephemera", "card", or "multiple")
+8. Every person and place has a source field indicating where the entity was discovered ("letter", "telegram", "cover", "ephemera", "card", or "multiple")
 </verification>`;
 
 export function buildEntityExtractionUserPrompt(

@@ -92,7 +92,7 @@ export const ExtractedPersonSchema = z.object({
   quotes: z.array(PersonQuoteSchema),
   confidence: z.number().min(0).max(1),
   isPlaceholder: z.boolean().optional().default(false),
-  source: z.string().optional().default('letter'), // "letter", "telegram", "cover/envelope", "ephemera", "card", "multiple"
+  source: z.string().optional().default('letter'), // "letter", "telegram", "cover", "ephemera", "card", "multiple"
 });
 export type ExtractedPerson = z.infer<typeof ExtractedPersonSchema>;
 
@@ -109,7 +109,7 @@ export const ExtractedPlaceSchema = z.object({
   associated_people: z.array(z.string()),
   confidence: z.number().min(0).max(1),
   isPlaceholder: z.boolean().optional().default(false),
-  source: z.string().optional().default('letter'), // "letter", "telegram", "cover/envelope", "ephemera", "card", "multiple"
+  source: z.string().optional().default('letter'), // "letter", "telegram", "cover", "ephemera", "card", "multiple"
 });
 export type ExtractedPlace = z.infer<typeof ExtractedPlaceSchema>;
 

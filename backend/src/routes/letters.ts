@@ -218,13 +218,13 @@ router.get('/letters', async (req, res, next) => {
       orderBy: [sortFn(getSortExpression())],
     });
 
-    // Group letters by (collectionId, dateRaw, typeSequence) to handle related items
+    // Group letters by (collectionId, dateRaw, type, typeSequence) to handle related items
     const allResults = results as LetterWithRelations[];
 
     // Build a map of group keys to all letters in that group
     const groupMap = new Map<string, LetterWithRelations[]>();
     for (const letter of allResults) {
-      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
+      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.type}${letter.typeSequence}`;
       const group = groupMap.get(key) || [];
       group.push(letter);
       groupMap.set(key, group);
@@ -233,9 +233,7 @@ router.get('/letters', async (req, res, next) => {
     // Select primaries and apply workflow filter to the PRIMARY (not individual records)
     const filteredResults: LetterWithRelations[] = [];
     for (const [_key, group] of groupMap) {
-      // Find the primary: L-type if exists, else first by type alphabetically
-      const lType = group.find((l) => l.type === 'L');
-      const primary = lType || [...group].sort((a, b) => a.type.localeCompare(b.type))[0];
+      const primary = group[0];
 
       // Apply workflow filter to PRIMARY's workflow state
       if (query.workflow && primary.workflow !== query.workflow) {
@@ -253,7 +251,7 @@ router.get('/letters', async (req, res, next) => {
 
     // Enrich primary letters with related content from the already-loaded groupMap
     const enrichedResults = paginatedResults.map((letter) => {
-      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
+      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.type}${letter.typeSequence}`;
       const group = groupMap.get(key) || [];
       const relatedItems = group.filter((l) => l.id !== letter.id);
       return { letter, relatedItems };
@@ -363,7 +361,7 @@ router.get('/letters/summaries', async (req, res, next) => {
     const allResults = results as SummaryLetterWithRelations[];
     const groupMap = new Map<string, SummaryLetterWithRelations[]>();
     for (const letter of allResults) {
-      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
+      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.type}${letter.typeSequence}`;
       const group = groupMap.get(key) || [];
       group.push(letter);
       groupMap.set(key, group);
@@ -371,8 +369,7 @@ router.get('/letters/summaries', async (req, res, next) => {
 
     const filteredResults: SummaryLetterWithRelations[] = [];
     for (const [, group] of groupMap) {
-      const lType = group.find((letter) => letter.type === 'L');
-      const primary = lType || [...group].sort((a, b) => a.type.localeCompare(b.type))[0];
+      const primary = group[0];
 
       if (query.workflow && primary.workflow !== query.workflow) {
         continue;
@@ -387,7 +384,7 @@ router.get('/letters/summaries', async (req, res, next) => {
     );
 
     const transformedLetters = paginatedResults.map((letter) => {
-      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
+      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.type}${letter.typeSequence}`;
       const group = groupMap.get(key) || [];
       return transformLetterSummary(letter, group.filter((item) => item.id !== letter.id));
     });
@@ -525,11 +522,10 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
       return;
     }
 
-    // Only include L-type (letter) records in navigation, ordered by date
+    // All published records in the collection, ordered by date
     const collectionLetters = await db.query.letters.findMany({
       where: and(
         eq(letters.collectionId, letter.collectionId),
-        eq(letters.type, 'L'),
         eq(letters.visibility, 'PUBLISHED'),
       ),
       columns: {
@@ -558,7 +554,7 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
     }
 
     if (currentIndex === -1) {
-      // Letter exists but not in L-type list (might be a cover)
+      // Letter exists but not found in collection list (edge case)
       res.json({
         prev: null,
         next: null,

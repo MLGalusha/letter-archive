@@ -35,12 +35,24 @@ function correspondentLine(m: Letter["metadata"]): string {
  *
  * A line is treated as a "continuation" (and joined to the previous) only when:
  *   1. It has NO leading whitespace
- *   2. The previous original line was long enough to suggest a margin break (≥ 55 chars)
+ *   2. The previous original line was long enough to suggest a margin break
  *   3. The previous line was not blank
+ *
+ * The margin threshold adapts to each text's actual line lengths — narrower
+ * typewriter margins (e.g. ~50 chars) are detected and handled correctly.
  */
 function reflowTranscript(text: string): string {
   const lines = text.split("\n");
-  const MARGIN_THRESHOLD = 55;
+
+  // Derive margin width from the text: the max trimmed-content length
+  // of lines that look like body text (> 20 chars, not just dates/headers)
+  const bodyLengths = lines
+    .map((l) => l.trim().length)
+    .filter((len) => len > 20);
+  const maxBodyLen = bodyLengths.length > 0 ? Math.max(...bodyLengths) : 78;
+  // Threshold = 70% of the detected margin width (min 30 to avoid over-joining)
+  const MARGIN_THRESHOLD = Math.max(30, Math.round(maxBodyLen * 0.7));
+
   const result: string[] = [];
 
   for (let i = 0; i < lines.length; i++) {
@@ -387,12 +399,14 @@ export default function LetterDetailPage() {
   const byline = correspondentLine(m);
   const dateline = [m.date, m.location].filter(Boolean).join(" \u2014 ");
 
-  const letterImages = letter.images.filter((img) => img.type === "letter");
+  const letterTypeImages = letter.images.filter((img) => img.type === "letter");
+  // Primary scan images: letter pages if available, otherwise all images (photos, covers, etc.)
+  const primaryImages = letterTypeImages.length > 0 ? letterTypeImages : letter.images;
   const extraContentImages = letter.images.filter((img) => EXTRA_CONTENT_TYPES.includes(img.type));
-  const extraContentImage = extraContentImages[0] ?? null;
+  const extraContentImage = letterTypeImages.length > 0 ? (extraContentImages[0] ?? null) : null;
   const extraContentLabel = getExtraContentLabel(letter.images);
   const allImages = letter.images;
-  const currentScanImage = letterImages[scanPage] || letterImages[0];
+  const currentScanImage = primaryImages[scanPage] || primaryImages[0];
   const hasTranscript = shouldShowPublicTranscript(letter);
   const hasExtraContent = !!letter.extraContentTranscript;
   const uniquePersons = dedupePersons(letter.linkedPersons);
@@ -444,7 +458,7 @@ export default function LetterDetailPage() {
         )}
 
         {/* ── 3. Scan Image ────────────────────────────────── */}
-        {letterImages.length > 0 && (
+        {primaryImages.length > 0 && (
           <figure className="letter-scan-figure">
             <button
               type="button"
@@ -460,7 +474,7 @@ export default function LetterDetailPage() {
               <span className="letter-scan-zoom-hint">Click to zoom &amp; pan</span>
             </button>
 
-            {letterImages.length > 1 && (
+            {primaryImages.length > 1 && (
               <div className="scan-page-nav">
                 <button
                   type="button"
@@ -470,12 +484,12 @@ export default function LetterDetailPage() {
                   aria-label="Previous page"
                 >&#8592;</button>
                 <span className="scan-page-label">
-                  Page {scanPage + 1} of {letterImages.length}
+                  Page {scanPage + 1} of {primaryImages.length}
                 </span>
                 <button
                   type="button"
                   className="scan-nav-arrow"
-                  disabled={scanPage === letterImages.length - 1}
+                  disabled={scanPage === primaryImages.length - 1}
                   onClick={() => setScanPage((p) => p + 1)}
                   aria-label="Next page"
                 >&#8594;</button>
@@ -505,7 +519,7 @@ export default function LetterDetailPage() {
             {letter.transcript.pages.length > 0 ? (
               <div className="transcript-pages">
                 {letter.transcript.pages.map((page, idx) => {
-                  const pageImage = letterImages.find((img) => img.pageNumber === page.pageNumber);
+                  const pageImage = primaryImages.find((img) => img.pageNumber === page.pageNumber);
                   const side = idx % 2 === 0 ? "left" : "right";
                   const isOriginal = transcriptMode === "original";
 
@@ -516,7 +530,7 @@ export default function LetterDetailPage() {
                         <button
                           type="button"
                           className={`page-thumb page-thumb-${side}`}
-                          onClick={() => openViewer(letterImages.indexOf(pageImage))}
+                          onClick={() => openViewer(primaryImages.indexOf(pageImage))}
                           aria-label={`View page ${page.pageNumber}`}
                         >
                           <span className="page-thumb-inner">

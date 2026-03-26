@@ -199,11 +199,12 @@ describe('letters route integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    // Each type is its own group — cover (REVIEWED) is filtered out by workflow
     expect(response.body).toEqual({
       letters: [
         {
           id: 'letter-primary',
-          relatedIds: ['letter-cover'],
+          relatedIds: [],
         },
       ],
       page: 1,
@@ -222,16 +223,7 @@ describe('letters route integration', () => {
           type: 'L',
           workflow: 'UPLOADED',
         },
-        relatedItems: [
-          {
-            id: 'letter-cover',
-            collectionId: 'collection-9',
-            dateRaw: '19470810',
-            typeSequence: 1,
-            type: 'C',
-            workflow: 'REVIEWED',
-          },
-        ],
+        relatedItems: [],
       },
     ]);
   });
@@ -341,6 +333,7 @@ describe('letters route integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    // Each type is its own group — letter and photo are separate items
     expect(response.body).toEqual({
       letters: [
         {
@@ -358,12 +351,29 @@ describe('letters route integration', () => {
           hook: 'A short note about future plans.',
           location: 'New York',
           verified: true,
-          searchText: 'Jimmie Molly New York A short note about future plans. Summary text Full transcription text Jimmy and Molly on a porch.',
+          searchText: 'Jimmie Molly New York A short note about future plans. Summary text Full transcription text',
+        },
+        {
+          id: 'letter-photo',
+          title: 'Collection Nine - August 10th, 1947',
+          imageUrl: '/images/photo-page?v=fedcba65',
+          imageType: 'photo',
+          primaryChip: '1 photo',
+          sender: undefined,
+          recipient: undefined,
+          collectionCode: '009',
+          createdAt: '2026-03-09T12:00:00.000Z',
+          date: 'August 10th, 1947',
+          dateRaw: '19470810',
+          hook: undefined,
+          location: undefined,
+          verified: false,
+          searchText: 'Jimmy and Molly on a porch.',
         },
       ],
       page: 1,
       limit: 20,
-      total: 1,
+      total: 2,
     });
   });
 

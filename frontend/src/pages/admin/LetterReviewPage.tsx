@@ -306,7 +306,7 @@ export default function LetterReviewPage() {
   // Auto-resize textareas to fit content
   const autoResizeTextarea = (textarea: HTMLTextAreaElement | null, minHeight = 80) => {
     if (!textarea) return;
-    textarea.style.height = "0px";
+    textarea.style.height = "auto";
     textarea.style.height = Math.max(textarea.scrollHeight, minHeight) + "px";
   };
 

@@ -131,17 +131,16 @@ function renderTranscriptLines(
       const isShortPositioned = contentLen < referenceWidth * 0.6;
 
       if (isShortPositioned) {
-        // Where the right edge of the text falls in the monospace original
-        const rightEdgeChar = leadingSpaces + contentLen;
-        const rightPaddingPct = Math.max(
-          ((referenceWidth - rightEdgeChar) / referenceWidth) * 100,
-          0,
+        // Preserve left-edge indent to match original spacing position
+        const indentPct = Math.min(
+          (leadingSpaces / referenceWidth) * 100,
+          90,
         );
         elements.push(
           <div
             key={i}
             className="transcript-line transcript-line-positioned"
-            style={{ paddingRight: `${rightPaddingPct}%` }}
+            style={{ paddingLeft: `${indentPct}%` }}
           >
             {content}
           </div>,

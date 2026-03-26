@@ -424,9 +424,9 @@
   word-break: break-word;
 }
 
-/* Short positioned lines (dates, closings) — right-aligned with proportional right padding */
+/* Short positioned lines (dates, closings) — left-indented to match original spacing */
 .transcript-line-positioned {
-  text-align: right;
+  text-align: left;
 }
 
 /* Blank line between paragraphs */

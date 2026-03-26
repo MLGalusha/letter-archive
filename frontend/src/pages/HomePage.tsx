@@ -130,6 +130,8 @@ export default function HomePage() {
   const [stickyDockActive, setStickyDockActive] = useState(false);
   const [pageRefineOpen, setPageRefineOpen] = useState(false);
   const [compactRefineOpen, setCompactRefineOpen] = useState(false);
+  const compactRefinePinnedRef = useRef(false);
+  const [pageRefinePinned, setPageRefinePinned] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -304,6 +306,9 @@ export default function HomePage() {
               setPageRefineOpen(false);
             }
           }}
+          onPinnedChange={(pinned) => {
+            compactRefinePinnedRef.current = pinned;
+          }}
           onQueryChange={setSearchQuery}
           onFiltersChange={setFilters}
         />
@@ -326,6 +331,11 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!stickyDockActive) {
+      if (compactRefinePinnedRef.current) {
+        setPageRefineOpen(true);
+        setPageRefinePinned(true);
+      }
+      compactRefinePinnedRef.current = false;
       setCompactRefineOpen(false);
     }
   }, [stickyDockActive]);
@@ -481,12 +491,16 @@ export default function HomePage() {
           embedded
           variant="full"
           refineOpen={pageRefineOpen}
+          refinePinned={pageRefinePinned}
           dockTriggerRef={searchDockTriggerRef}
           onRefineOpenChange={(open) => {
             setPageRefineOpen(open);
             if (open) {
               setCompactRefineOpen(false);
             }
+          }}
+          onPinnedChange={() => {
+            setPageRefinePinned(undefined);
           }}
           onQueryChange={setSearchQuery}
           onFiltersChange={setFilters}

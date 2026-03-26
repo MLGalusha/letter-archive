@@ -69,7 +69,7 @@
 .letter-card-shell {
   position: relative;
   width: 100%;
-  contain: content;
+  contain: layout style;
 }
 
 .letter-card {
@@ -100,8 +100,8 @@
 }
 
 .letter-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 22px 42px rgba(29, 26, 20, 0.1);
+  transform: translateY(-3px) scale(1.01);
+  box-shadow: 0 24px 48px rgba(29, 26, 20, 0.13);
 }
 
 .letter-card:focus-visible {
@@ -195,6 +195,7 @@
 .letter-card-overlay {
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   background: linear-gradient(180deg, rgba(20, 17, 14, 0.24), rgba(20, 17, 14, 0.14) 24%, rgba(20, 17, 14, 0.22) 42%, rgba(20, 17, 14, 0.64) 72%, rgba(20, 17, 14, 0.9) 100%);
 }
 

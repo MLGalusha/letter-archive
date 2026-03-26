@@ -11,8 +11,10 @@ interface SearchBarProps {
   embedded?: boolean;
   variant?: "full" | "compact";
   refineOpen?: boolean;
+  refinePinned?: boolean;
   dockTriggerRef?: Ref<HTMLDivElement>;
   onRefineOpenChange?: (open: boolean) => void;
+  onPinnedChange?: (pinned: boolean) => void;
   onQueryChange: (query: string) => void;
   onFiltersChange: (filters: SearchFilters) => void;
 }
@@ -239,8 +241,10 @@ export default function SearchBar({
   embedded = false,
   variant = "full",
   refineOpen,
+  refinePinned,
   dockTriggerRef,
   onRefineOpenChange,
+  onPinnedChange,
   onQueryChange,
   onFiltersChange,
 }: SearchBarProps) {
@@ -264,7 +268,11 @@ export default function SearchBar({
   const [internalShowFilters, setInternalShowFilters] = useState(
     isCompact ? false : hasAdvancedRefinementFilters,
   );
-  const [filtersPinned, setFiltersPinned] = useState(false);
+  const [filtersPinned, setFiltersPinnedRaw] = useState(false);
+  const setFiltersPinned = (pinned: boolean) => {
+    setFiltersPinnedRaw(pinned);
+    onPinnedChange?.(pinned);
+  };
   const [openChoiceField, setOpenChoiceField] = useState<string | null>(null);
   const [startYearInput, setStartYearInput] = useState(filters.dateRange?.start?.toString() || "");
   const [endYearInput, setEndYearInput] = useState(filters.dateRange?.end?.toString() || "");
@@ -313,6 +321,12 @@ export default function SearchBar({
       refineCloseTimerRef.current = null;
     }, REFINE_CLOSE_DELAY_MS);
   };
+
+  useEffect(() => {
+    if (refinePinned !== undefined && refinePinned !== filtersPinned) {
+      setFiltersPinnedRaw(refinePinned);
+    }
+  }, [refinePinned]);
 
   useEffect(() => {
     if (!isCompact && hasAdvancedRefinementFilters && !showFilters) {

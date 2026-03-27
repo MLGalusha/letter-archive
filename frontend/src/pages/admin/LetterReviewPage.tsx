@@ -1182,6 +1182,7 @@ export default function LetterReviewPage() {
             {showTranscriptSection && (
               <TranscriptionSection
                 letter={letter}
+                transcriptText={transcript}
                 letterTranscribeState={letterTranscribeState}
                 letterTranscribeMessage={letterTranscribeMessage}
                 isTranscriptEditing={isTranscriptEditing}

@@ -370,6 +370,53 @@
   margin-right: auto;
 }
 
+/* Large handwriting — scale up font so short lines fill more width */
+.transcript-text.transcript-short-lines {
+  font-size: 1.3rem;
+  line-height: 2;
+}
+
+.transcript-original.transcript-short-lines {
+  font-size: 1.45rem;
+  line-height: 2.1;
+}
+
+/* ── Combined reading view (multi-page seamless) ──────────── */
+
+.transcript-pages-combined {
+  display: flex;
+  flex-direction: column;
+}
+
+.transcript-page-region {
+  position: relative;
+}
+
+/* Faint marks on both sides at page boundaries */
+.page-boundary-mark {
+  position: relative;
+  height: 0;
+  margin: 0.4rem 0;
+}
+
+.page-boundary-mark::before,
+.page-boundary-mark::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 20px;
+  height: 1px;
+  background: rgba(217, 207, 191, 0.45);
+}
+
+.page-boundary-mark::before {
+  right: calc(100% + 2.5rem);
+}
+
+.page-boundary-mark::after {
+  left: calc(100% + 2.5rem);
+}
+
 /* ── Floating side page thumbnails ───────────────────────── */
 
 .page-thumb {
@@ -799,6 +846,11 @@
   .transcript-text {
     font-size: 1rem;
     line-height: 1.75;
+  }
+
+  .transcript-text.transcript-short-lines {
+    font-size: 1.15rem;
+    line-height: 1.85;
   }
 
   .entity-chip {

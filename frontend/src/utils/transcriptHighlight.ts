@@ -118,6 +118,12 @@ export function highlightTranscriptMarkers(text: string): string {
   // Append remaining text
   result += escapeHtml(text.slice(lastIndex));
 
+  // Style page separator lines as non-editable visual separators
+  result = result.replace(
+    /^(---\s*Page\s+(\d+)\s*---)$/gm,
+    '<span contenteditable="false" class="page-sep" data-page="$2"><span class="page-sep-text">$1</span></span>',
+  );
+
   return result;
 }
 

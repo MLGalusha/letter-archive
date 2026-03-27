@@ -8,6 +8,7 @@ const buildProps = (overrides: Partial<ComponentProps<typeof TranscriptionSectio
     transcriptStatus: "EMPTY",
     transcript: { fullText: "" },
   },
+  transcriptText: overrides?.letter?.transcript?.fullText ?? "",
   letterTranscribeState: "idle" as const,
   letterTranscribeMessage: null,
   isTranscriptEditing: false,

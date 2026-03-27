@@ -548,6 +548,16 @@
   caret-shape: block; /* Block cursor — progressive enhancement (Chrome 133+, Firefox) */
 }
 
+/* Normalize browser-generated block elements from contenteditable typing.
+   Browsers wrap lines in <div> when the user presses Enter. Without this,
+   those divs have default margins that differ from \n-based line breaks,
+   causing the gutter indicators to drift out of alignment. */
+.transcript-editor div {
+  margin: 0;
+  padding: 0;
+  line-height: inherit;
+}
+
 .transcript-editor:focus {
   outline: none;
   box-shadow: 0 0 0 2px hsla(0, 0%, 50%, 0.1);
@@ -559,9 +569,217 @@
   opacity: 0.6;
 }
 
+/* ── Page separator (non-editable visual line) ───────── */
+
+.page-sep {
+  display: inline-block;
+  width: 100%;
+  position: relative;
+  color: transparent;
+  user-select: none;
+  cursor: default;
+  height: 1em;
+  vertical-align: middle;
+}
+
+.page-sep-text {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.page-sep::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px solid rgba(200, 190, 175, 0.4);
+}
+
+.page-sep::after {
+  content: "Page " attr(data-page);
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(2px);
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.55;
+}
+
 /* Verified state - blue border on editor */
 .transcript-editor.verified {
   border-color: #3b82f6;
+}
+
+/* ── Reflow gutter ───────────────────────────────────── */
+
+.editor-container.with-gutter {
+  display: flex;
+  align-items: stretch;
+}
+
+.editor-container.with-gutter .transcript-editor {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.reflow-gutter {
+  width: 14px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-right: 4px;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  overflow: hidden;
+}
+
+.reflow-indicator {
+  width: 100%;
+  position: relative;
+  box-sizing: border-box;
+}
+
+/* All visible indicators share this base line shape */
+.reflow-indicator--group-start::after,
+.reflow-indicator--combined::after,
+.reflow-indicator--standalone::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  bottom: 2px;
+  width: 3px;
+  transform: translateX(-50%);
+  border-radius: 1.5px;
+  transition: width 0.1s ease, filter 0.1s ease;
+}
+
+/* Green — starts a group that the next line combines into */
+.reflow-indicator--group-start::after {
+  background: #4caf50;
+}
+
+/* Blue — continuation, combines into previous line */
+.reflow-indicator--combined::after {
+  background: #2196f3;
+}
+
+/* Orange — standalone, doesn't combine with anything */
+.reflow-indicator--standalone::after {
+  background: #ff9800;
+}
+
+/* Blank lines: no indicator */
+.reflow-indicator--blank {
+  /* intentionally empty */
+}
+
+/* Red — blank line blocking a combine, click to remove */
+.reflow-indicator--pending-delete::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  bottom: 2px;
+  width: 5px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  background: #ef4444;
+  animation: gutter-pulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes gutter-pulse {
+  from { opacity: 0.4; }
+  to { opacity: 1; }
+}
+
+/* Pending state: dim everything except the red blank indicators */
+.reflow-gutter.gutter-pending .reflow-indicator:not(.reflow-indicator--pending-delete) {
+  opacity: 0.25;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+/* Clickable gutter indicators */
+.reflow-indicator.clickable {
+  cursor: pointer;
+}
+
+.reflow-indicator.clickable:hover::after {
+  width: 5px;
+  filter: brightness(1.2);
+}
+
+/* ── View mode toggle (Edit / Reading view) ───────────── */
+
+.view-mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  overflow: hidden;
+}
+
+.view-mode-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 4px 10px;
+  font-size: var(--font-xs);
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.view-mode-btn:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+.view-mode-btn:hover:not(.active) {
+  background: var(--hover-bg, rgba(0, 0, 0, 0.04));
+}
+
+.view-mode-btn.active {
+  background: var(--accent, #1f6d7a);
+  color: white;
+}
+
+/* ── Reading view preview ─────────────────────────────── */
+
+.transcript-preview {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.08rem;
+  line-height: 1.85;
+  color: var(--text);
+  padding: var(--spacing-md);
+  min-height: 400px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+
+.transcript-preview.transcript-short-lines {
+  font-size: 1.3rem;
+  line-height: 2;
+}
+
+/* Reuse public site transcript line styles in preview */
+.transcript-preview .transcript-line {
+  word-break: break-word;
+}
+
+.transcript-preview .transcript-line-positioned {
+  text-align: left;
+}
+
+.transcript-preview .transcript-blank {
+  height: 1.85em;
 }
 
 /* ── Transcript uncertainty badge ── */

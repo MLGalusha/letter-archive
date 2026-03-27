@@ -11,6 +11,8 @@ import {
   shouldShowPublicTranscript,
   shouldShowPhotoDescriptionWorkflow,
 } from "../utils/letterContent";
+import { classifyTranscriptLines } from "../utils/reflowClassifier";
+import { reflowTranscript, renderTranscriptLines, computeReferenceWidth } from "../utils/transcriptRendering";
 import { useHeaderDock, EMPTY_DOCK } from "../contexts/HeaderDockContext";
 import LetterHeaderDock from "../components/LetterHeaderDock/LetterHeaderDock";
 import "./LetterDetailPage.css";
@@ -24,156 +26,6 @@ function correspondentLine(m: Letter["metadata"]): string {
   return "";
 }
 
-
-/**
- * Smart reflow: only join lines that were broken by the typewriter margin.
- * Preserves all formatting — indentation, right-aligned text, short standalone
- * lines (dates, greetings, closings), blank paragraph breaks, and intentional
- * multi-space gaps within lines.
- *
- * A line is treated as a "continuation" (and joined to the previous) only when:
- *   1. It has NO leading whitespace
- *   2. The previous original line was long enough to suggest a margin break
- *   3. The previous line was not blank
- *
- * The margin threshold adapts to each text's actual line lengths — narrower
- * typewriter margins (e.g. ~50 chars) are detected and handled correctly.
- */
-function reflowTranscript(text: string): string {
-  const lines = text.split("\n");
-
-  // Derive margin width from the text: the max trimmed-content length
-  // of lines that look like body text (> 20 chars, not just dates/headers)
-  const bodyLengths = lines
-    .map((l) => l.trim().length)
-    .filter((len) => len > 20);
-  const maxBodyLen = bodyLengths.length > 0 ? Math.max(...bodyLengths) : 78;
-  // Threshold = 70% of the detected margin width (min 30 to avoid over-joining)
-  const MARGIN_THRESHOLD = Math.max(30, Math.round(maxBodyLen * 0.7));
-
-  const result: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // Blank line → preserve as paragraph break
-    if (line.trim() === "") {
-      result.push("");
-      continue;
-    }
-
-    const leadingWS = line.match(/^(\s*)/)?.[1].length ?? 0;
-    const prev = i > 0 ? lines[i - 1] : "";
-    // Use trimmed content length — right-aligned text like
-    // "                        Sept 23rd" is short content, not a margin break
-    const prevContentLen = prev.trim().length;
-
-    const isContinuation =
-      leadingWS === 0 &&
-      prevContentLen >= MARGIN_THRESHOLD &&
-      prevContentLen > 0 &&
-      result.length > 0;
-
-    if (isContinuation) {
-      result[result.length - 1] += " " + line.trimEnd();
-    } else {
-      result.push(line.trimEnd());
-    }
-  }
-
-  return result.join("\n");
-}
-
-/**
- * Determine the "virtual page width" in characters — the max line length
- * in the original monospace text. Used to convert space-based positioning
- * (from the monospace admin editor) into percentage-based CSS indentation
- * that works with any font.
- */
-function computeReferenceWidth(text: string): number {
-  const lines = text.split("\n").filter((l) => l.trim().length > 0);
-  if (lines.length === 0) return 78; // fallback to standard typewriter width
-  return Math.max(...lines.map((l) => l.length));
-}
-
-/**
- * Render transcript text with proportional CSS-based positioning.
- *
- * Short positioned lines (dates, closings, signatures) preserve their
- * RIGHT-EDGE position from the monospace original using text-align: right
- * with proportional right padding. This matches the visual position in the
- * admin editor regardless of font.
- *
- * Paragraph text preserves its left-edge indent using text-indent.
- */
-function renderTranscriptLines(
-  text: string,
-  referenceWidth: number,
-): JSX.Element[] {
-  const lines = text.split("\n");
-  const elements: JSX.Element[] = [];
-  const MIN_SPACES = 3;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    if (line.trim() === "") {
-      elements.push(<div key={i} className="transcript-blank" />);
-      continue;
-    }
-
-    const leadingSpaces = line.match(/^( *)/)?.[1].length ?? 0;
-
-    if (leadingSpaces >= MIN_SPACES && referenceWidth > 0) {
-      const content = line.trimStart();
-      const contentLen = content.length;
-
-      // Short positioned line (date, closing, signature):
-      // content fills < 60% of the reference width → preserve RIGHT edge
-      const isShortPositioned = contentLen < referenceWidth * 0.6;
-
-      if (isShortPositioned) {
-        // Preserve left-edge indent to match original spacing position
-        const indentPct = Math.min(
-          (leadingSpaces / referenceWidth) * 100,
-          90,
-        );
-        elements.push(
-          <div
-            key={i}
-            className="transcript-line transcript-line-positioned"
-            style={{ paddingLeft: `${indentPct}%` }}
-          >
-            {content}
-          </div>,
-        );
-      } else {
-        // Paragraph text: preserve left-edge indent
-        const indentPct = Math.min(
-          (leadingSpaces / referenceWidth) * 100,
-          90,
-        );
-        elements.push(
-          <div
-            key={i}
-            className="transcript-line"
-            style={{ textIndent: `${indentPct}%` }}
-          >
-            {content}
-          </div>,
-        );
-      }
-    } else {
-      elements.push(
-        <div key={i} className="transcript-line">
-          {line}
-        </div>,
-      );
-    }
-  }
-
-  return elements;
-}
 
 function dedupePersons(persons: Letter["linkedPersons"]) {
   if (!persons?.length) return [];
@@ -650,6 +502,64 @@ export default function LetterDetailPage() {
     return computeReferenceWidth(rawText);
   }, [letter]);
 
+  // Large handwriting → short lines → scale up font size
+  const isShortLineText = referenceWidth < 40;
+  const shortLineClass = isShortLineText ? " transcript-short-lines" : "";
+
+  // Combined reading view: merge all pages into one continuous text flow
+  const readingSegments = useMemo(() => {
+    if (!letter?.transcript?.pages?.length || letter.transcript.pages.length <= 1) return null;
+
+    const pages = letter.transcript.pages;
+
+    // Build source lines tagged with their page index
+    const sourcePageIdx: number[] = [];
+    const texts: string[] = [];
+    for (let p = 0; p < pages.length; p++) {
+      const lines = pages[p].text.split("\n");
+      for (let l = 0; l < lines.length; l++) sourcePageIdx.push(p);
+      texts.push(pages[p].text);
+    }
+
+    const combinedText = texts.join("\n");
+    const classifications = classifyTranscriptLines(combinedText);
+
+    // Map each output line to a page index.
+    // Continuations merge into the previous output line (same page assignment).
+    // Every non-continuation classification produces one output line.
+    const outputPageIdx: number[] = [];
+    for (const cl of classifications) {
+      if (cl.classification !== "continuation") {
+        outputPageIdx.push(sourcePageIdx[cl.index]);
+      }
+    }
+
+    const reflowed = reflowTranscript(combinedText);
+    const outputLines = reflowed.split("\n");
+
+    // Group consecutive output lines by page
+    const segments: { pageIndex: number; pageNumber: number; text: string }[] = [];
+    let curPage = -1;
+    let curLines: string[] = [];
+    for (let i = 0; i < outputLines.length; i++) {
+      const pg = i < outputPageIdx.length ? outputPageIdx[i] : curPage;
+      if (pg !== curPage) {
+        if (curPage >= 0) {
+          segments.push({ pageIndex: curPage, pageNumber: pages[curPage].pageNumber, text: curLines.join("\n") });
+        }
+        curPage = pg;
+        curLines = [outputLines[i]];
+      } else {
+        curLines.push(outputLines[i]);
+      }
+    }
+    if (curPage >= 0 && curLines.length > 0) {
+      segments.push({ pageIndex: curPage, pageNumber: pages[curPage].pageNumber, text: curLines.join("\n") });
+    }
+
+    return segments;
+  }, [letter]);
+
   const seo = useMemo(() => (letter ? buildLetterSeo(letter) : null), [letter]);
 
 
@@ -843,55 +753,88 @@ export default function LetterDetailPage() {
             </div>
 
             {letter.transcript.pages.length > 0 ? (
-              <div className="transcript-pages">
-                {letter.transcript.pages.map((page, idx) => {
-                  const pageImage = letterTypeImages.find((img) => img.pageNumber === page.pageNumber);
-                  const side = idx % 2 === 0 ? "left" : "right";
-                  const isOriginal = transcriptMode === "original";
-
-                  return (
-                    <div key={page.pageNumber} className="transcript-page" data-page={page.pageNumber}>
-                      {/* Floating side thumbnail — alternates left/right */}
-                      {pageImage && (
-                        <button
-                          type="button"
-                          className={`page-thumb page-thumb-${side}`}
-                          onClick={() => openViewer(allImages.indexOf(pageImage))}
-                          aria-label={`View page ${page.pageNumber}`}
-                        >
-                          <span className="page-thumb-inner">
-                            <img
-                              src={getImageUrl(pageImage.imageUrl, { width: 300 })}
-                              alt={`Page ${page.pageNumber}`}
-                              className="page-thumb-img"
-                              loading="lazy"
-                            />
-                            <span className="page-thumb-label">Page {page.pageNumber}</span>
-                          </span>
-                        </button>
-                      )}
-
-                      {letter.transcript.pages.length > 1 && (
-                        <div className="page-marker">Page {page.pageNumber}</div>
-                      )}
-
-                      {isOriginal ? (
-                        <pre className="transcript-text transcript-original">{page.text}</pre>
-                      ) : (
-                        <div className="transcript-text">
-                          {renderTranscriptLines(reflowTranscript(page.text), referenceWidth)}
+              transcriptMode === "reading" && readingSegments ? (
+                /* ── Combined reading view — seamless across pages ── */
+                <div className="transcript-pages-combined">
+                  {readingSegments.map((segment, idx) => {
+                    const pageImage = letterTypeImages.find((img) => img.pageNumber === segment.pageNumber);
+                    const side = segment.pageIndex % 2 === 0 ? "left" : "right";
+                    return (
+                      <div key={segment.pageNumber} className="transcript-page-region">
+                        {idx > 0 && <div className="page-boundary-mark" />}
+                        {pageImage && (
+                          <button
+                            type="button"
+                            className={`page-thumb page-thumb-${side}`}
+                            onClick={() => openViewer(allImages.indexOf(pageImage))}
+                            aria-label={`View page ${segment.pageNumber}`}
+                          >
+                            <span className="page-thumb-inner">
+                              <img
+                                src={getImageUrl(pageImage.imageUrl, { width: 300 })}
+                                alt={`Page ${segment.pageNumber}`}
+                                className="page-thumb-img"
+                                loading="lazy"
+                              />
+                              <span className="page-thumb-label">Page {segment.pageNumber}</span>
+                            </span>
+                          </button>
+                        )}
+                        <div className={`transcript-text${shortLineClass}`}>
+                          {renderTranscriptLines(segment.text, referenceWidth)}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* ── Original view OR single-page reading view ── */
+                <div className="transcript-pages">
+                  {letter.transcript.pages.map((page, idx) => {
+                    const pageImage = letterTypeImages.find((img) => img.pageNumber === page.pageNumber);
+                    const side = idx % 2 === 0 ? "left" : "right";
+                    const isOriginal = transcriptMode === "original";
+                    return (
+                      <div key={page.pageNumber} className="transcript-page" data-page={page.pageNumber}>
+                        {pageImage && (
+                          <button
+                            type="button"
+                            className={`page-thumb page-thumb-${side}`}
+                            onClick={() => openViewer(allImages.indexOf(pageImage))}
+                            aria-label={`View page ${page.pageNumber}`}
+                          >
+                            <span className="page-thumb-inner">
+                              <img
+                                src={getImageUrl(pageImage.imageUrl, { width: 300 })}
+                                alt={`Page ${page.pageNumber}`}
+                                className="page-thumb-img"
+                                loading="lazy"
+                              />
+                              <span className="page-thumb-label">Page {page.pageNumber}</span>
+                            </span>
+                          </button>
+                        )}
+                        {letter.transcript.pages.length > 1 && (
+                          <div className="page-marker">Page {page.pageNumber}</div>
+                        )}
+                        {isOriginal ? (
+                          <pre className={`transcript-text transcript-original${shortLineClass}`}>{page.text}</pre>
+                        ) : (
+                          <div className={`transcript-text${shortLineClass}`}>
+                            {renderTranscriptLines(reflowTranscript(page.text), referenceWidth)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )
             ) : transcriptMode === "original" ? (
-              <pre className="transcript-text transcript-original">
+              <pre className={`transcript-text transcript-original${shortLineClass}`}>
                 {letter.transcript.fullText}
               </pre>
             ) : (
-              <div className="transcript-text">
+              <div className={`transcript-text${shortLineClass}`}>
                 {renderTranscriptLines(reflowTranscript(letter.transcript.fullText), referenceWidth)}
               </div>
             )}

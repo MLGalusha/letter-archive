@@ -77,7 +77,6 @@ export async function runMetadataExtraction(letterId: string): Promise<void> {
         summary: result.summary,
         tags: result.tags,
         extractedDate: result.extractedDate,
-        extractedDateConfidence: result.extractedDateConfidence,
         metadataJson: result,
       },
       null
@@ -97,7 +96,6 @@ export async function runMetadataExtraction(letterId: string): Promise<void> {
         hasSummary: !!result.summary,
         tagCount: result.tags.length,
         hasExtractedDate: !!result.extractedDate,
-        dateConfidence: result.extractedDateConfidence,
       },
       'Metadata extraction pipeline completed successfully'
     );

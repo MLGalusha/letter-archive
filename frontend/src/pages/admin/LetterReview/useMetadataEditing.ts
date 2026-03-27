@@ -18,13 +18,10 @@ import type {
 
 type ToastType = 'success' | 'error' | 'info';
 type ShowToast = (message: string, type: ToastType) => void;
-type DateConfidence = 'exact' | 'inferred' | 'unknown';
-
 interface MetadataFormValues {
   sender: string;
   recipient: string;
   date: string;
-  dateConfidence: DateConfidence;
   location: string;
   hook: string;
   description: string;
@@ -54,7 +51,6 @@ function buildMetadataValues(
     sender: metadata.sender || '',
     recipient: metadata.recipient || '',
     date: metadata.date || '',
-    dateConfidence: metadata.dateConfidence || 'unknown',
     location: metadata.location || '',
     hook: metadata.hook || '',
     description: metadata.description || '',
@@ -83,8 +79,6 @@ export function useMetadataEditing({
   const [sender, setSender] = useState('');
   const [recipient, setRecipient] = useState('');
   const [date, setDate] = useState('');
-  const [dateConfidence, setDateConfidence] =
-    useState<DateConfidence>('unknown');
   const [location, setLocation] = useState('');
   const [hook, setHook] = useState('');
   const [description, setDescription] = useState('');
@@ -111,7 +105,6 @@ export function useMetadataEditing({
       setSender(values.sender);
       setRecipient(values.recipient);
       setDate(values.date);
-      setDateConfidence(values.dateConfidence);
       setLocation(values.location);
       setHook(values.hook);
       setDescription(values.description);
@@ -185,7 +178,6 @@ export function useMetadataEditing({
       sender !== baselineValues.sender ||
         recipient !== baselineValues.recipient ||
         date !== baselineValues.date ||
-        dateConfidence !== baselineValues.dateConfidence ||
         location !== baselineValues.location ||
         hook !== baselineValues.hook ||
         description !== baselineValues.description ||
@@ -197,7 +189,6 @@ export function useMetadataEditing({
   }, [
     baselineValues,
     date,
-    dateConfidence,
     description,
     emotionalTone,
     hook,
@@ -273,7 +264,6 @@ export function useMetadataEditing({
   return {
     applyLetterMetadata,
     date,
-    dateConfidence,
     description,
     emotionalTone,
     handleMetadataFieldClick,
@@ -290,7 +280,6 @@ export function useMetadataEditing({
     relationship,
     sender,
     setDate,
-    setDateConfidence,
     setDescription,
     setEmotionalTone,
     setHook,

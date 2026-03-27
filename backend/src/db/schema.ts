@@ -186,7 +186,6 @@ export const letters = pgTable(
     recipient: text('recipient'),
     locationWritten: text('location_written'),
     extractedDate: date('extracted_date'),
-    extractedDateConfidence: dateConfidenceEnum('extracted_date_confidence'),
     hook: text('hook'),
     summary: text('summary'),
     tags: text('tags').array(),

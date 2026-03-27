@@ -18,7 +18,7 @@ const log = createLogger({ module: 'note-resolution' });
 const TRIGGER_MAP: Record<string, string> = {
   sender_filled: 'sender',
   recipient_filled: 'recipient',
-  date_confirmed: 'extractedDateConfidence',
+  date_confirmed: 'extractedDate',
   location_filled: 'locationWritten',
   relationship_set: 'senderRecipientRelationship',
   transcription_edited: 'transcriptionText',

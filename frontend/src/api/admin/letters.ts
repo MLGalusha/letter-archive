@@ -9,7 +9,6 @@ export interface UpdateLetterData {
   hook?: string | null;
   summary?: string | null;
   extractedDate?: string | null;
-  extractedDateConfidence?: "exact" | "unknown" | "inferred" | null;
   tags?: string[] | null;
   visibility?: "PUBLISHED" | "HIDDEN";
   notes?: string | null;
@@ -31,12 +30,18 @@ export async function processLetter(letterId: string): Promise<{ message: string
   return apiPost<{ message: string; letterId: string }>(`/admin/letters/${letterId}/process`);
 }
 
-export async function confirmTranscript(letterId: string): Promise<Letter> {
-  return apiPost<Letter>(`/admin/letters/${letterId}/confirm-transcript`);
+export async function confirmTranscript(
+  letterId: string,
+  options?: { confirmedSender?: string; confirmedRecipient?: string },
+): Promise<Letter> {
+  return apiPost<Letter>(`/admin/letters/${letterId}/confirm-transcript`, options ?? {});
 }
 
-export async function regenerateMetadata(letterId: string): Promise<Letter> {
-  return apiPost<Letter>(`/admin/letters/${letterId}/regenerate-metadata`);
+export async function regenerateMetadata(
+  letterId: string,
+  options?: { confirmedSender?: string; confirmedRecipient?: string },
+): Promise<Letter> {
+  return apiPost<Letter>(`/admin/letters/${letterId}/regenerate-metadata`, options ?? {});
 }
 
 export async function regenerateEntities(letterId: string): Promise<Letter> {

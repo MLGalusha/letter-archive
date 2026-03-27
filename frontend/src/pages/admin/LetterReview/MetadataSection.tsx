@@ -15,7 +15,6 @@ interface MetadataSectionProps {
   sender: string;
   recipient: string;
   date: string;
-  dateConfidence: "exact" | "inferred" | "unknown";
   location: string;
   hook: string;
   description: string;
@@ -28,7 +27,6 @@ interface MetadataSectionProps {
   onSenderChange: (value: string) => void;
   onRecipientChange: (value: string) => void;
   onDateChange: (value: string) => void;
-  onDateConfidenceChange: (value: "exact" | "inferred" | "unknown") => void;
   onLocationChange: (value: string) => void;
   onHookChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
@@ -71,7 +69,6 @@ export default function MetadataSection({
   sender,
   recipient,
   date,
-  dateConfidence,
   location,
   hook,
   description,
@@ -82,7 +79,6 @@ export default function MetadataSection({
   onSenderChange,
   onRecipientChange,
   onDateChange,
-  onDateConfidenceChange,
   onLocationChange,
   onHookChange,
   onDescriptionChange,
@@ -234,28 +230,6 @@ export default function MetadataSection({
                   : ""
               }
             />
-          </div>
-          <div className="form-group">
-            <label htmlFor="dateConfidence">Date Confidence</label>
-            <select
-              id="dateConfidence"
-              value={dateConfidence}
-              onChange={(e) =>
-                onDateConfidenceChange(
-                  e.target.value as typeof dateConfidence,
-                )
-              }
-              disabled={letter.metadataContentStatus === "VERIFIED"}
-              className={
-                letter.metadataContentStatus === "VERIFIED"
-                  ? "verified-field"
-                  : ""
-              }
-            >
-              <option value="exact">Exact</option>
-              <option value="inferred">Inferred</option>
-              <option value="unknown">Unknown</option>
-            </select>
           </div>
         </div>
 

@@ -123,7 +123,6 @@ export interface UpdateLetterInput {
   hook?: string | null;
   summary?: string | null;
   extractedDate?: string | null;
-  extractedDateConfidence?: 'exact' | 'unknown' | 'inferred' | null;
   tags?: string[] | null;
   visibility?: 'PUBLISHED' | 'HIDDEN';
   notes?: string | null;

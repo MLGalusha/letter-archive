@@ -59,8 +59,12 @@ export async function processMetadata(letterId: string): Promise<void> {
     letter.metadataStatus === 'PENDING'
   ) {
     log.info({ letterId }, 'Processing metadata');
-    // Use V2 extraction (Responses API with structured outputs)
-    await runMetadataExtractionV2(letterId);
+    // Pass existing sender/recipient as corrections so the AI uses pre-filled names
+    const options = (letter.sender || letter.recipient) ? {
+      confirmedSender: letter.sender ?? undefined,
+      confirmedRecipient: letter.recipient ?? undefined,
+    } : undefined;
+    await runMetadataExtractionV2(letterId, options);
   }
 }
 

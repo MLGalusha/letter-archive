@@ -117,6 +117,9 @@ export default function LetterReviewPage() {
   // Regenerate popup state
   const [showTranscriptRegeneratePopup, setShowTranscriptRegeneratePopup] = useState(false);
   const [showMetadataRegeneratePopup, setShowMetadataRegeneratePopup] = useState(false);
+  const [showExtractionPopup, setShowExtractionPopup] = useState(false);
+  const [extractionSender, setExtractionSender] = useState("");
+  const [extractionRecipient, setExtractionRecipient] = useState("");
   const [showPhotoContextModal, setShowPhotoContextModal] = useState(false);
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -168,7 +171,6 @@ export default function LetterReviewPage() {
   const {
     applyLetterMetadata,
     date,
-    dateConfidence,
     description,
     emotionalTone,
     handleMetadataFieldClick,
@@ -184,7 +186,6 @@ export default function LetterReviewPage() {
     relationship,
     sender,
     setDate,
-    setDateConfidence,
     setDescription,
     setEmotionalTone,
     setHook,
@@ -466,12 +467,23 @@ export default function LetterReviewPage() {
     }
   };
 
-  const handleConfirmTranscript = async () => {
+  const handleConfirmTranscript = () => {
     if (!letterId) return;
+    setExtractionSender(sender || "");
+    setExtractionRecipient(recipient || "");
+    setShowExtractionPopup(true);
+  };
+
+  const executeConfirmTranscript = async () => {
+    if (!letterId) return;
+    setShowExtractionPopup(false);
     setSaving(true);
 
     try {
-      const updated = await confirmTranscript(letterId);
+      const updated = await confirmTranscript(letterId, {
+        confirmedSender: extractionSender || undefined,
+        confirmedRecipient: extractionRecipient || undefined,
+      });
       setLetter(updated);
       applyLetterMetadata(updated, { includeNotes: false });
       showToast(
@@ -492,6 +504,8 @@ export default function LetterReviewPage() {
   // Regenerate metadata handler — shows popup for options
   const handleRegenerateMetadata = () => {
     if (!letterId) return;
+    setExtractionSender(sender || "");
+    setExtractionRecipient(recipient || "");
     setShowMetadataRegeneratePopup(true);
   };
 
@@ -501,7 +515,10 @@ export default function LetterReviewPage() {
       setShowMetadataRegeneratePopup(false);
       setRegenerateState("regenerating");
     try {
-      const updated = await regenerateMetadata(letterId);
+      const updated = await regenerateMetadata(letterId, {
+        confirmedSender: extractionSender || undefined,
+        confirmedRecipient: extractionRecipient || undefined,
+      });
       setLetter(updated);
       applyLetterMetadata(updated, { includeNotes: false });
       setRegenerateState("done");
@@ -522,7 +539,11 @@ export default function LetterReviewPage() {
 
   // Re-extract handler — calls the re-extract API with corrected sender/recipient
   const handleReExtract = useCallback(
-    async (mode: "full" | "metadata_only" | "entities_only", skipConfirm = false) => {
+    async (
+      mode: "full" | "metadata_only" | "entities_only",
+      skipConfirm = false,
+      nameOverrides?: { sender?: string; recipient?: string },
+    ) => {
       if (!letterId || !letter) return;
 
       if (!skipConfirm) {
@@ -541,8 +562,8 @@ export default function LetterReviewPage() {
 
       try {
         const updated = await reExtractLetter(letterId, {
-          confirmedSender: sender || undefined,
-          confirmedRecipient: recipient || undefined,
+          confirmedSender: nameOverrides?.sender || sender || undefined,
+          confirmedRecipient: nameOverrides?.recipient || recipient || undefined,
           mode,
         });
 
@@ -1259,7 +1280,6 @@ export default function LetterReviewPage() {
                 sender={sender}
                 recipient={recipient}
                 date={date}
-                dateConfidence={dateConfidence}
                 location={location}
                 hook={hook}
                 description={description}
@@ -1270,7 +1290,6 @@ export default function LetterReviewPage() {
                 onSenderChange={setSender}
                 onRecipientChange={setRecipient}
                 onDateChange={setDate}
-                onDateConfidenceChange={setDateConfidence}
                 onLocationChange={setLocation}
                 onHookChange={setHook}
                 onDescriptionChange={setDescription}
@@ -1418,6 +1437,48 @@ export default function LetterReviewPage() {
         </div>
       )}
 
+      {/* Extract Metadata popup */}
+      <Modal
+        isOpen={showExtractionPopup}
+        onClose={() => setShowExtractionPopup(false)}
+        title="Extract Metadata"
+        subtitle="Extraction is more accurate when sender and recipient are provided."
+        size="sm"
+        actions={
+          <>
+            <button className="btn-cancel" onClick={() => setShowExtractionPopup(false)}>
+              Cancel
+            </button>
+            <button className="btn-confirm" onClick={() => void executeConfirmTranscript()}>
+              Extract
+            </button>
+          </>
+        }
+      >
+        <div className="extraction-popup-fields">
+          <div className="form-group">
+            <label htmlFor="extraction-sender">Sender</label>
+            <input
+              type="text"
+              id="extraction-sender"
+              value={extractionSender}
+              onChange={(e) => setExtractionSender(e.target.value)}
+              placeholder="Leave blank if unknown"
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="extraction-recipient">Recipient</label>
+            <input
+              type="text"
+              id="extraction-recipient"
+              value={extractionRecipient}
+              onChange={(e) => setExtractionRecipient(e.target.value)}
+              placeholder="Leave blank if unknown"
+            />
+          </div>
+        </div>
+      </Modal>
+
       {/* Regenerate Metadata popup */}
       {showMetadataRegeneratePopup && (
         <div
@@ -1427,6 +1488,28 @@ export default function LetterReviewPage() {
           <div className="confirm-dialog regenerate-popup" onClick={(e) => e.stopPropagation()}>
             <h3>Regenerate Analysis</h3>
             <p>Choose what to regenerate. This will overwrite the existing data.</p>
+            <div className="extraction-popup-fields regenerate-name-fields">
+              <div className="form-group">
+                <label htmlFor="regen-sender">Sender</label>
+                <input
+                  type="text"
+                  id="regen-sender"
+                  value={extractionSender}
+                  onChange={(e) => setExtractionSender(e.target.value)}
+                  placeholder="Leave blank if unknown"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="regen-recipient">Recipient</label>
+                <input
+                  type="text"
+                  id="regen-recipient"
+                  value={extractionRecipient}
+                  onChange={(e) => setExtractionRecipient(e.target.value)}
+                  placeholder="Leave blank if unknown"
+                />
+              </div>
+            </div>
             <div className="regenerate-options">
               <button
                 className="btn-option"
@@ -1442,7 +1525,10 @@ export default function LetterReviewPage() {
                 className="btn-option"
                 onClick={() => {
                   setShowMetadataRegeneratePopup(false);
-                  handleReExtract("entities_only", true);
+                  handleReExtract("entities_only", true, {
+                    sender: extractionSender,
+                    recipient: extractionRecipient,
+                  });
                 }}
               >
                 <Icon name="person" size={16} />
@@ -1452,7 +1538,10 @@ export default function LetterReviewPage() {
                 className="btn-option"
                 onClick={() => {
                   setShowMetadataRegeneratePopup(false);
-                  handleReExtract("full", true);
+                  handleReExtract("full", true, {
+                    sender: extractionSender,
+                    recipient: extractionRecipient,
+                  });
                 }}
               >
                 <Icon name="process" size={16} />

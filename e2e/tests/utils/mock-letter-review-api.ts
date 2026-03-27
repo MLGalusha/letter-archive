@@ -27,7 +27,6 @@ interface MockLetterReviewLetter {
     recipient?: string;
     date?: string;
     dateRaw?: string;
-    dateConfidence?: 'exact' | 'unknown' | 'inferred';
     location?: string;
     description?: string;
     hook?: string;
@@ -242,7 +241,6 @@ const baseLetter: MockLetterReviewLetter = {
     recipient: 'Bob Smith',
     date: '1932-07-06',
     dateRaw: '19320706',
-    dateConfidence: 'exact',
     location: 'Boston',
     description: 'Alice wrote to Bob after arriving safely in Boston.',
     hook: 'Family update from Alice.',

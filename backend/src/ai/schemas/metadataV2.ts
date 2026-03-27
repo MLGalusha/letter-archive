@@ -101,12 +101,6 @@ export const PrimaryTopicEnum = z.enum(PRIMARY_TOPICS);
 export type PrimaryTopic = z.infer<typeof PrimaryTopicEnum>;
 
 /**
- * Date extraction confidence
- */
-export const DateConfidenceEnum = z.enum(['exact', 'inferred']);
-export type DateConfidence = z.infer<typeof DateConfidenceEnum>;
-
-/**
  * Entity types
  */
 export const EntityTypeEnum = z.enum(['person', 'place']);
@@ -236,7 +230,6 @@ export const MetadataV2Schema = z.object({
 
   // Date extraction
   extracted_date: z.string().nullable(), // ISO format YYYY-MM-DD or partial
-  extracted_date_confidence: DateConfidenceEnum.nullable(),
 
   // Content teasers
   hook: z.string().nullable(), // 1-2 sentences, max 150 chars
@@ -301,10 +294,6 @@ export const METADATA_V2_JSON_SCHEMA = {
       additionalProperties: false,
     },
     extracted_date: { type: ['string', 'null'] },
-    extracted_date_confidence: {
-      type: ['string', 'null'],
-      enum: ['exact', 'inferred', null],
-    },
     hook: { type: ['string', 'null'] },
     summary: { type: ['string', 'null'] },
     emotional_tone: {
@@ -372,7 +361,6 @@ export const METADATA_V2_JSON_SCHEMA = {
     'recipient',
     'location_written',
     'extracted_date',
-    'extracted_date_confidence',
     'hook',
     'summary',
     'emotional_tone',

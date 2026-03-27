@@ -229,7 +229,6 @@ export interface LetterMetadata {
   recipient?: string;
   date?: string;
   dateRaw?: string;
-  dateConfidence?: 'exact' | 'unknown' | 'inferred';
   location?: string;
   hook?: string;
   description?: string;

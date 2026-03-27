@@ -193,7 +193,6 @@ async function applyMetadataUpdate(
     hook: metadata.hook,
     summary: metadata.summary,
     extractedDate: metadata.extracted_date,
-    extractedDateConfidence: metadata.extracted_date_confidence,
     tags: metadata.primary_topics,
     // V2 specific fields
     emotionalTone: metadata.emotional_tone,

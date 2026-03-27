@@ -10,7 +10,6 @@ import {
   METADATA_V2_JSON_SCHEMA,
   type MetadataV2,
 } from '../schemas/metadataV2.js';
-import type { DateConfidence } from '../../db/schema.js';
 import { logIfSlow, TIMING_THRESHOLDS } from '../../utils/logger.js';
 import { log, openai } from './client.js';
 import { logApiUsage } from '../../services/usage-tracking.js';
@@ -33,7 +32,6 @@ export interface ExtractedMetadata {
   summary: string | null;
   tags: string[];
   extractedDate: string | null;
-  extractedDateConfidence: DateConfidence | null;
 }
 
 export async function extractMetadata(
@@ -93,7 +91,6 @@ export async function extractMetadata(
       summary: typeof parsed.summary === 'string' ? parsed.summary : null,
       tags: Array.isArray(parsed.tags) ? parsed.tags.filter((t: unknown): t is string => typeof t === 'string') : [],
       extractedDate: typeof parsed.extracted_date === 'string' ? parsed.extracted_date : null,
-      extractedDateConfidence: typeof parsed.extracted_date_confidence === 'string' && ['exact', 'unknown', 'inferred'].includes(parsed.extracted_date_confidence) ? (parsed.extracted_date_confidence as DateConfidence) : null,
     };
 
     log.info(
@@ -155,7 +152,6 @@ function generateStubMetadata(params: ExtractMetadataParams): ExtractedMetadata 
       : 'Unable to extract summary from transcription.',
     tags: hasStubMarker ? ['stub', 'placeholder'] : [],
     extractedDate: null,
-    extractedDateConfidence: null,
   };
 }
 
@@ -336,7 +332,6 @@ function generateStubMetadataV2(params: ExtractMetadataV2Params): ExtractMetadat
       recipient: { name: hasStubMarker ? 'Unknown (stub)' : null, confidence: 0 },
       location_written: { name: null, confidence: 0 },
       extracted_date: null,
-      extracted_date_confidence: null,
       hook: hasStubMarker ? 'A placeholder letter awaits review.' : null,
       summary: hasStubMarker
         ? '[STUB] This is placeholder metadata. Set OPENAI_API_KEY for real extraction.'

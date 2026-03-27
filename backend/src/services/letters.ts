@@ -179,7 +179,6 @@ export async function updateMetadataStatus(
     summary?: string | null;
     tags?: string[] | null;
     extractedDate?: string | null;
-    extractedDateConfidence?: DateConfidence | null;
     metadataJson?: unknown;
   },
   error?: string | null
@@ -197,8 +196,6 @@ export async function updateMetadataStatus(
     if (metadata.summary !== undefined) updates.summary = metadata.summary;
     if (metadata.tags !== undefined) updates.tags = metadata.tags;
     if (metadata.extractedDate !== undefined) updates.extractedDate = metadata.extractedDate;
-    if (metadata.extractedDateConfidence !== undefined)
-      updates.extractedDateConfidence = metadata.extractedDateConfidence;
     if (metadata.metadataJson !== undefined) updates.metadataJson = metadata.metadataJson;
   }
 
@@ -279,7 +276,6 @@ export async function updateMetadataV2(
     updates.hook = metadata.hook;
     updates.summary = metadata.summary;
     updates.extractedDate = metadata.extracted_date;
-    updates.extractedDateConfidence = metadata.extracted_date_confidence;
     // Generate tags from topics for V1 compatibility
     updates.tags = metadata.primary_topics;
 

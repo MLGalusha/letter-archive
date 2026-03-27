@@ -25,7 +25,6 @@ export const updateLetterSchema = z.object({
   hook: z.string().nullable().optional(),
   summary: z.string().nullable().optional(),
   extractedDate: z.string().nullable().optional(),
-  extractedDateConfidence: z.enum(['exact', 'unknown', 'inferred']).nullable().optional(),
   tags: z.array(z.string()).nullable().optional(),
   visibility: z.enum(['PUBLISHED', 'HIDDEN']).optional(),
   notes: z.string().nullable().optional(),
@@ -53,6 +52,11 @@ export const addLinkedPersonSchema = z.object({
 export const addLinkedPlaceSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   role: z.enum(['written_from', 'mentioned', 'destination']),
+});
+
+export const confirmTranscriptSchema = z.object({
+  confirmedSender: z.string().optional(),
+  confirmedRecipient: z.string().optional(),
 });
 
 export const reExtractSchema = z.object({

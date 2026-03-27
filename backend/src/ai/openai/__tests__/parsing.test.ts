@@ -56,7 +56,6 @@ describe('OpenAI modules parsing path', () => {
               summary: 'A summary',
               tags: ['family', 'travel'],
               extracted_date: '1942-05-01',
-              extracted_date_confidence: 'exact',
             }),
           },
         },
@@ -81,7 +80,6 @@ describe('OpenAI modules parsing path', () => {
       summary: 'A summary',
       tags: ['family', 'travel'],
       extractedDate: '1942-05-01',
-      extractedDateConfidence: 'exact',
     });
   });
 

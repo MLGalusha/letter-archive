@@ -29,6 +29,7 @@ import { BadRequestError, NotFoundError } from '../../../utils/response-helpers.
 import { isPlaceholderValue } from '../../../utils/placeholders.js';
 import {
   addNoteSchema,
+  confirmTranscriptSchema,
   reExtractSchema,
   toggleFlagSchema,
   updateIdentitySchema,
@@ -93,7 +94,6 @@ router.put('/:letterId', async (req, res, next) => {
       [updates.sender, 'sender'],
       [updates.recipient, 'recipient'],
       [updates.locationWritten, 'locationWritten'],
-      [updates.extractedDateConfidence, 'extractedDateConfidence'],
       [updates.extractedDate, 'extractedDate'],
       [updates.transcriptionText, 'transcriptionText'],
     ];
@@ -113,6 +113,7 @@ router.put('/:letterId', async (req, res, next) => {
 router.post('/:letterId/confirm-transcript', async (req, res, next) => {
   try {
     const { letterId } = req.params;
+    const { confirmedSender, confirmedRecipient } = confirmTranscriptSchema.parse(req.body ?? {});
     const letter = await requireLetter(letterId);
     if (letter.workflow !== 'TRANSCRIBED') {
       throw new BadRequestError('Letter must be in TRANSCRIBED state', { currentState: letter.workflow });
@@ -127,7 +128,10 @@ router.post('/:letterId/confirm-transcript', async (req, res, next) => {
     // Only trigger metadata extraction if status is PENDING (first-time flow).
     // Skip if metadata was previously cleared/failed/succeeded to avoid re-queuing.
     if (letter.metadataStatus === 'PENDING') {
-      await runMetadataExtractionV2(letterId);
+      const extractionOptions: ExtractionOptions = {};
+      if (confirmedSender) extractionOptions.confirmedSender = confirmedSender;
+      if (confirmedRecipient) extractionOptions.confirmedRecipient = confirmedRecipient;
+      await runMetadataExtractionV2(letterId, Object.keys(extractionOptions).length > 0 ? extractionOptions : undefined);
     } else {
       req.log.info(
         { letterId, metadataStatus: letter.metadataStatus },
@@ -143,6 +147,7 @@ router.post('/:letterId/confirm-transcript', async (req, res, next) => {
 router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
   try {
     const { letterId } = req.params;
+    const { confirmedSender, confirmedRecipient } = confirmTranscriptSchema.parse(req.body ?? {});
     const letter = await requireLetter(letterId);
     if (!letter.transcriptConfirmedAt) {
       throw new BadRequestError('Transcript must be confirmed before regenerating metadata');
@@ -161,7 +166,13 @@ router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
 
-    await runMetadataExtractionV2(letterId);
+    const extractionOptions: ExtractionOptions = {
+      previousAiSender: letter.sender ?? undefined,
+      previousAiRecipient: letter.recipient ?? undefined,
+    };
+    if (confirmedSender) extractionOptions.confirmedSender = confirmedSender;
+    if (confirmedRecipient) extractionOptions.confirmedRecipient = confirmedRecipient;
+    await runMetadataExtractionV2(letterId, extractionOptions);
     res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
   } catch (error) {
     next(error);

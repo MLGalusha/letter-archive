@@ -53,9 +53,6 @@ export async function buildLetterUpdates(
   if (updates.notes !== undefined) {
     dbUpdates.notes = updates.notes;
   }
-  if (updates.extractedDateConfidence !== undefined) {
-    dbUpdates.extractedDateConfidence = updates.extractedDateConfidence;
-  }
   if (updates.tags !== undefined) {
     dbUpdates.tags = updates.tags;
   }

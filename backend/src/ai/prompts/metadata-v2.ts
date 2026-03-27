@@ -160,8 +160,10 @@ If you cannot determine the recipient's name, use the exact placeholder «RECIPI
 
 Rules for placeholders:
 - Use the EXACT tokens «SENDER» and «RECIPIENT» — do not use [SENDER], "unknown", "the author", or any variation
-- Use these placeholders consistently in every field where the name would appear
-- Do NOT use gendered pronouns (he/she/him/her) for unknown persons — instead write "the sender" or "the recipient"
+- Use the placeholder or actual name for the FIRST mention in each field (hook, summary, ai_notes)
+- After the first mention, vary references naturally: use "the sender"/"the recipient", role descriptions ("the writer", "her husband", "their mother"), or pronouns when appropriate
+- Only use gendered pronouns (he/she/him/her) when gender can be CONFIDENTLY inferred from the letter content (e.g., names, salutations like "Dear Wife", relationship terms). When gender is uncertain, use "they/them/their" or role descriptions instead.
+- NEVER repeat the same reference form in consecutive sentences — if one sentence says "the sender", the next should use a pronoun or role description
 - For possessives of unknown persons, write "the sender's" or "the recipient's" (not «SENDER»'s)
 - If you CAN determine the name, use the actual name — only use placeholders when truly unknown
 </unknown_identity>
@@ -220,13 +222,12 @@ ai_notes: An array of structured observations for the admin reviewer. Each note 
 - resolves_when: A trigger key if auto-resolvable, or null. Valid keys: sender_filled, recipient_filled, date_confirmed, date_conflict_resolved, location_filled, relationship_set, transcription_edited
 
 Rules:
-- 2-6 notes per letter. Fewer is better.
-- Unknown sender → MUST have high-priority identity note with resolves_when: "sender_filled"
-- Unknown recipient → MUST have high-priority identity note with resolves_when: "recipient_filled"
-- Date conflicts → always high priority
-- A typical letter should have 0-1 high priority notes
+- Only generate notes for genuinely surprising or non-obvious observations that a human reviewer would find valuable
+- Do NOT note things already visible from other metadata fields (e.g., unknown sender, missing date, low confidence scores, missing location). The admin can see empty fields — noting them adds no value.
+- Focus notes on: discrepancies (e.g., date in letter body contradicts filename date), transcription ambiguities, internal contradictions, cross-references to people or events mentioned, unexpected historical context
+- Date conflicts between letter content and filename → always high priority
+- 0-3 notes per letter. Most letters should have 0-1 notes. Empty array [] is perfectly fine and preferred when there is nothing surprising.
 - Historical context → always low priority
-- Empty array [] if no observations
 </field_instructions>
 
 <example>
@@ -252,9 +253,8 @@ Extracted metadata:
   "recipient": { "name": "Molly", "confidence": 0.95 },
   "location_written": { "name": null, "confidence": 0.0 },
   "extracted_date": "1947-09-21",
-  "extracted_date_confidence": "exact",
   "hook": "An American man desperately pleads for his British love to delay her plans with another suitor.",
-  "summary": "The writer responds to Molly's letter with disappointment but unwavering love. He asks for one more month and offers to fly over, comparing his devotion to her other suitor George. He recalls their walk on Stockport Road and sends regards to Barbara.",
+  "summary": "«SENDER» responds to Molly's letter with disappointment but unwavering love. He asks for one more month and offers to fly over, comparing his devotion to her other suitor George. The writer recalls their walk on Stockport Road and sends regards to Barbara.",
   "emotional_tone": "desperate",
   "sender_recipient_relationship": "romantic-partner",
   "primary_topics": ["family/marriage", "family/separation", "travel/journey"],
@@ -263,9 +263,8 @@ Extracted metadata:
     { "text": "George doesn't know you like I do.", "context": "Comparing himself to rival suitor", "position": "middle" }
   ],
   "ai_notes": [
-    { "content": "Sender signs as 'Your devoted admirer' with no name — identity unknown. Handwriting or envelope may help.", "category": "identity", "priority": "high", "resolves_when": "sender_filled" },
-    { "content": "Barbara appears to be Molly's daughter — suggests Molly may be a widow or divorced.", "category": "relationship", "priority": "medium", "resolves_when": null },
-    { "content": "Stockport Road is in Manchester, UK. Sender mentions 'flying over', suggesting transatlantic correspondence.", "category": "location", "priority": "low", "resolves_when": null }
+    { "content": "Barbara appears to be Molly's daughter or younger relative — the sender sends regards and hopes she is doing well 'in school'.", "category": "relationship", "priority": "medium", "resolves_when": null },
+    { "content": "Stockport Road is in Manchester, UK. The sender mentions 'flying over', suggesting transatlantic correspondence — likely writing from the US.", "category": "location", "priority": "low", "resolves_when": null }
   ]
 }
 </example>

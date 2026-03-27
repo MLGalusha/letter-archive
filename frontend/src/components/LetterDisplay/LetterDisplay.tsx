@@ -247,9 +247,6 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
                         <span className="field-label">Date</span>
                         <span className="field-value">
                           {letter.metadata.date}
-                          {letter.metadata.dateConfidence && letter.metadata.dateConfidence !== "exact" && (
-                            <span className="confidence-inline"> ({letter.metadata.dateConfidence})</span>
-                          )}
                         </span>
                       </div>
                     )}

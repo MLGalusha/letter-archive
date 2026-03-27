@@ -451,7 +451,7 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
       recipient: letter.recipient || undefined,
       date: formatLetterDate(letter),
       dateRaw: letter.dateRaw,
-      dateConfidence: letter.extractedDateConfidence || letter.dateConfidence,
+      dateConfidence: letter.dateConfidence,
       location: letter.locationWritten || undefined,
       hook: letter.hook || undefined,
       description: letter.summary || undefined,

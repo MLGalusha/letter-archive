@@ -39,6 +39,10 @@ vi.mock('../../../api/admin', () => ({
   checkDuplicates: checkDuplicatesMock,
 }));
 
+vi.mock('../../../api/auth', () => ({
+  isAuthenticated: () => true,
+}));
+
 vi.mock('../../../components/common', () => ({
   Button: ({
     children,
@@ -82,6 +86,7 @@ vi.mock('../../../components/common', () => ({
         </button>
       </div>
     ) : null,
+  Icon: () => <span aria-hidden="true">icon</span>,
 }));
 
 vi.mock('../../../components/AdminLayout/AdminLayout', () => ({

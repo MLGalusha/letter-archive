@@ -1,548 +1,254 @@
 .support-page {
   width: 100%;
   text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
 }
 
-/* ── Hero ───────────────────────────────────────────── */
+.support-hero,
+.support-section,
+.support-impact-card,
+.support-option-card,
+.support-contact-primary,
+.support-channel-card {
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 250, 242, 0.98));
+  box-shadow: var(--shadow);
+}
 
 .support-hero {
-  text-align: center;
-  padding: var(--spacing-xl) 0 var(--spacing-lg);
+  text-align: left;
+  padding: 1.8rem;
+  border-radius: 34px;
 }
 
-.support-kicker {
-  font-size: var(--font-xs);
+.support-kicker,
+.support-eyebrow,
+.support-option-eyebrow,
+.support-channel-eyebrow {
+  margin: 0 0 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--text-muted);
-  margin-bottom: var(--spacing-sm);
+  letter-spacing: 0.22em;
+  color: var(--accent);
 }
 
 .support-headline {
+  margin: 0;
+  max-width: 12ch;
   font-family: "Playfair Display", Georgia, "Times New Roman", serif;
-  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-size: clamp(2.8rem, 6vw, 4.3rem);
   font-weight: 700;
-  line-height: 1.2;
-  margin-bottom: var(--spacing-md);
-  letter-spacing: -0.01em;
+  line-height: 0.98;
+  letter-spacing: -0.05em;
 }
 
 .support-subtitle {
-  max-width: 600px;
-  margin: 0 auto;
-  font-size: var(--font-lg);
-  line-height: 1.7;
+  max-width: 42rem;
+  margin: 1rem 0 0;
+  font-size: 1rem;
+  line-height: 1.8;
   color: var(--text-muted);
 }
-
-/* ── Shared eyebrow ────────────────────────────────── */
-
-.support-eyebrow {
-  font-size: var(--font-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--text-muted);
-  margin-bottom: var(--spacing-sm);
-}
-
-/* ── Featured section (blockquote) ──────────────────── */
 
 .support-section {
-  background: var(--bg-light);
-  border: var(--border-card);
-  border-top: solid 1px var(--highlight);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-  padding: var(--spacing-lg);
-  margin-bottom: var(--spacing-lg);
+  border-radius: 30px;
+  padding: 1.5rem;
 }
 
 .support-section-featured {
-  position: relative;
-  padding: var(--spacing-xl) var(--spacing-lg);
+  padding: 1.7rem;
 }
 
-.support-section h2 {
+.support-section h2,
+.support-impact h2,
+.support-options h2,
+.support-contact h2 {
   margin-top: 0;
-  margin-bottom: var(--spacing-md);
-  font-size: 1.35rem;
+  margin-bottom: 0.9rem;
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: clamp(1.6rem, 3vw, 2rem);
+  line-height: 1.1;
 }
 
-.support-section p {
-  line-height: 1.7;
+.support-section p,
+.support-impact-card p,
+.support-option-card p,
+.support-contact-intro,
+.support-contact-main p,
+.support-channel-card p,
+.support-thankyou-text {
+  line-height: 1.75;
   color: var(--text-muted);
-  margin: 0 0 var(--spacing-sm) 0;
 }
 
 .support-quote {
+  margin: 0 0 1rem 0;
+  padding-left: 1.05rem;
+  border-left: 3px solid var(--accent);
   font-family: "Playfair Display", Georgia, "Times New Roman", serif;
-  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  font-size: clamp(1.2rem, 2vw, 1.5rem);
   font-style: italic;
-  line-height: 1.7;
+  line-height: 1.65;
   color: var(--text);
-  margin: 0 0 var(--spacing-lg) 0;
-  padding-left: var(--spacing-md);
-  border-left: 3px solid var(--border);
 }
 
-/* ── Impact cards (3-col) ──────────────────────────── */
-
-.support-impact {
-  margin-bottom: var(--spacing-lg);
-}
-
-.support-impact h2 {
-  margin-top: var(--spacing-xs);
-  margin-bottom: var(--spacing-lg);
-}
-
-.support-impact-cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--spacing-sm);
-}
-
-.support-impact-card {
-  background: var(--bg-light);
-  border: var(--border-card);
-  border-top: solid 1px var(--highlight);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-  padding: var(--spacing-md);
+.support-impact,
+.support-options,
+.support-contact {
   display: flex;
   flex-direction: column;
+  gap: 0.95rem;
+}
+
+.support-impact-cards,
+.support-options-cards,
+.support-contact-channels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.support-impact-card,
+.support-option-card,
+.support-channel-card {
+  border-radius: 28px;
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 
 .support-impact-icon {
   font-size: 1.5rem;
   line-height: 1;
-  margin-bottom: var(--spacing-sm);
-  opacity: 0.5;
+  margin-bottom: 0.2rem;
+  opacity: 0.7;
 }
 
-.support-impact-card h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0 0 var(--spacing-xs) 0;
-}
-
-.support-impact-card p {
-  font-size: var(--font-sm);
-  line-height: 1.6;
-  color: var(--text-muted);
+.support-impact-card h3,
+.support-option-card h3,
+.support-channel-card h3,
+.support-contact-main h3 {
   margin: 0;
-  flex: 1;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
 }
 
-/* ── Donation option cards (3-col) ─────────────────── */
-
-.support-options {
-  margin-bottom: var(--spacing-lg);
-}
-
-.support-options h2 {
-  margin-top: var(--spacing-xs);
-  margin-bottom: var(--spacing-lg);
-}
-
-.support-options-cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--spacing-sm);
-}
-
-.support-option-card {
-  background: var(--bg-light);
-  border: var(--border-card);
-  border-top: solid 1px var(--highlight);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-  padding: var(--spacing-md);
-  display: flex;
-  flex-direction: column;
-}
-
-.support-option-eyebrow {
-  font-size: var(--font-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--text-muted);
-  margin-bottom: var(--spacing-xs);
-}
-
-.support-option-card h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0 0 var(--spacing-xs) 0;
-}
-
-.support-option-card p {
-  font-size: var(--font-sm);
-  line-height: 1.6;
-  color: var(--text-muted);
-  margin: 0 0 var(--spacing-sm) 0;
-  flex: 1;
-}
-
-.support-action-btn {
-  display: inline-block;
+.support-action-btn,
+.support-email-btn,
+.support-thankyou-btn {
+  width: fit-content;
   text-decoration: none;
-  font-size: var(--font-sm);
-  font-weight: 600;
-  cursor: pointer;
-  align-self: flex-start;
 }
-
-/* ── Contact section ───────────────────────────────── */
 
 .support-contact {
-  margin-bottom: var(--spacing-lg);
-  padding-top: var(--spacing-lg);
-  border-top: 1px solid var(--border);
-}
-
-.support-contact h2 {
-  margin-top: var(--spacing-xs);
-  margin-bottom: var(--spacing-sm);
+  padding-top: 0.1rem;
 }
 
 .support-contact-intro {
-  max-width: 560px;
-  font-size: var(--font-lg);
-  line-height: 1.7;
-  color: var(--text-muted);
-  margin-bottom: var(--spacing-lg);
+  max-width: 38rem;
+  margin: 0;
+  font-size: 1rem;
 }
 
 .support-contact-primary {
   display: flex;
   align-items: flex-start;
-  gap: var(--spacing-md);
-  background: var(--bg-light);
-  border: var(--border-card);
-  border-top: solid 1px var(--highlight);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-  padding: var(--spacing-lg);
-  margin-bottom: var(--spacing-sm);
+  gap: 1rem;
+  padding: 1.3rem;
+  border-radius: 30px;
 }
 
 .support-contact-icon {
-  font-size: 1.75rem;
+  font-size: 1.8rem;
   line-height: 1;
   flex-shrink: 0;
-  margin-top: 0.15rem;
-  opacity: 0.4;
-}
-
-.support-contact-main h3 {
-  margin: 0 0 var(--spacing-xs) 0;
-  font-size: 1.2rem;
-}
-
-.support-contact-main p {
-  line-height: 1.7;
-  color: var(--text-muted);
-  margin: 0 0 var(--spacing-sm) 0;
+  margin-top: 0.1rem;
 }
 
 .support-email-btn {
-  display: inline-block;
-  font-size: var(--font-sm);
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0.6rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  background: rgba(255, 255, 255, 0.82);
   color: var(--text);
-  text-decoration: none;
-  padding: 0.35rem 0.75rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  transition: border-color 0.15s ease;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .support-email-btn:hover {
-  border-color: var(--text-muted);
+  border-color: rgba(31, 109, 122, 0.24);
+  color: var(--accent-strong);
 }
-
-.support-contact-channels {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--spacing-sm);
-}
-
-.support-channel-card {
-  background: var(--bg-light);
-  border: var(--border-card);
-  border-top: solid 1px var(--highlight);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-  padding: var(--spacing-md);
-  display: flex;
-  flex-direction: column;
-}
-
-.support-channel-eyebrow {
-  font-size: var(--font-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--text-muted);
-  margin-bottom: var(--spacing-xs);
-}
-
-.support-channel-card h3 {
-  margin: 0 0 var(--spacing-xs) 0;
-  font-size: 1rem;
-}
-
-.support-channel-card p {
-  line-height: 1.6;
-  color: var(--text-muted);
-  font-size: var(--font-sm);
-  margin: 0 0 var(--spacing-sm) 0;
-  flex: 1;
-}
-
-/* ── Thank you ─────────────────────────────────────── */
 
 .support-thankyou {
-  text-align: center;
-  padding: var(--spacing-xl) 0;
+  padding: 1.2rem 0 0;
 }
 
 .support-thankyou-text {
-  max-width: 560px;
-  margin: 0 auto var(--spacing-md);
-  font-size: var(--font-lg);
-  line-height: 1.7;
-  color: var(--text-muted);
+  max-width: 42rem;
+  margin: 0 0 1rem;
+  font-size: 1rem;
 }
 
 .support-thankyou-links {
   display: flex;
-  justify-content: center;
-  gap: var(--spacing-sm);
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0.8rem;
 }
 
-.support-thankyou-btn {
-  text-decoration: none;
-  font-size: var(--font-sm);
-  cursor: pointer;
-}
-
-/* ── Tablet ─────────────────────────────────────────── */
-
-@media (max-width: 768px) {
-  .support-impact-cards {
-    grid-template-columns: 1fr;
-  }
-
-  .support-options-cards {
-    grid-template-columns: 1fr;
-  }
-
+@media (max-width: 900px) {
+  .support-impact-cards,
+  .support-options-cards,
   .support-contact-channels {
     grid-template-columns: 1fr;
   }
 }
 
-/* ── Mobile ─────────────────────────────────────────── */
-
 @media (max-width: 640px) {
-  /* Compact hero */
-  .support-hero {
-    padding: var(--spacing-md) 0 var(--spacing-sm);
+  .support-page {
+    gap: 1rem;
   }
 
-  .support-kicker {
-    margin-bottom: var(--spacing-xs);
+  .support-hero,
+  .support-section,
+  .support-impact-card,
+  .support-option-card,
+  .support-contact-primary,
+  .support-channel-card {
+    padding: 1rem;
+    border-radius: 24px;
   }
 
-  .support-subtitle {
-    font-size: var(--font-sm);
-    line-height: 1.5;
+  .support-headline {
+    max-width: none;
+    font-size: clamp(2.2rem, 13vw, 3.2rem);
   }
 
-  /* Compact sections */
-  .support-section {
-    padding: var(--spacing-sm);
-    margin-bottom: var(--spacing-sm);
-  }
-
-  .support-section h2 {
-    font-size: 1.1rem;
-    margin-bottom: var(--spacing-sm);
-  }
-
-  .support-section p {
-    font-size: 0.9rem;
-    line-height: 1.5;
-  }
-
-  /* Featured section */
-  .support-section-featured {
-    padding: var(--spacing-sm);
-  }
-
-  .support-section-featured > p {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .support-quote {
-    font-size: 1rem;
-    line-height: 1.5;
-    margin-bottom: var(--spacing-sm);
-  }
-
-  /* Impact cards: compact with truncated descriptions */
-  .support-impact {
-    margin-bottom: var(--spacing-sm);
-  }
-
-  .support-impact h2 {
-    margin-bottom: var(--spacing-sm);
-  }
-
-  .support-impact-cards {
-    gap: var(--spacing-xs);
-  }
-
-  .support-impact-card {
-    padding: var(--spacing-sm);
-  }
-
-  .support-impact-icon {
-    font-size: 1.2rem;
-    margin-bottom: var(--spacing-xs);
-  }
-
-  .support-impact-card h3 {
-    font-size: 0.9rem;
-  }
-
-  .support-impact-card p {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    font-size: var(--font-xs);
-  }
-
-  .support-eyebrow {
-    font-size: 0.6rem;
-    margin-bottom: var(--spacing-xs);
-  }
-
-  /* Donation option cards: compact with truncated descriptions */
-  .support-options {
-    margin-bottom: var(--spacing-sm);
-  }
-
-  .support-options h2 {
-    margin-bottom: var(--spacing-sm);
-  }
-
-  .support-options-cards {
-    gap: var(--spacing-xs);
-  }
-
-  .support-option-card {
-    padding: var(--spacing-sm);
-  }
-
-  .support-option-card h3 {
-    font-size: 0.9rem;
-  }
-
-  .support-option-card p {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    font-size: var(--font-xs);
-  }
-
-  .support-option-eyebrow {
-    font-size: 0.6rem;
-    margin-bottom: 2px;
-  }
-
-  /* Contact section: compact */
-  .support-contact {
-    padding-top: var(--spacing-sm);
-    margin-bottom: var(--spacing-sm);
-  }
-
-  .support-contact-intro {
-    font-size: var(--font-sm);
-    line-height: 1.5;
-    margin-bottom: var(--spacing-sm);
+  .support-subtitle,
+  .support-section p,
+  .support-impact-card p,
+  .support-option-card p,
+  .support-contact-intro,
+  .support-contact-main p,
+  .support-channel-card p,
+  .support-thankyou-text {
+    font-size: 0.95rem;
+    line-height: 1.68;
   }
 
   .support-contact-primary {
     flex-direction: column;
-    gap: var(--spacing-xs);
-    padding: var(--spacing-sm);
-    margin-bottom: var(--spacing-xs);
-  }
-
-  .support-contact-main h3 {
-    font-size: 1rem;
-  }
-
-  .support-contact-main p {
-    font-size: 0.9rem;
-    line-height: 1.5;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    margin-bottom: var(--spacing-xs);
-  }
-
-  .support-contact-channels {
-    gap: var(--spacing-xs);
-  }
-
-  .support-channel-card {
-    padding: var(--spacing-sm);
-  }
-
-  .support-channel-card h3 {
-    font-size: 0.9rem;
-  }
-
-  .support-channel-card p {
-    font-size: var(--font-xs);
-    line-height: 1.5;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .support-channel-eyebrow {
-    font-size: 0.6rem;
-    margin-bottom: 2px;
-  }
-
-  /* Thank you section: compact */
-  .support-thankyou {
-    padding: var(--spacing-md) 0;
-  }
-
-  .support-thankyou-text {
-    font-size: var(--font-sm);
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .support-thankyou-links {
-    flex-direction: column;
-    align-items: center;
-    gap: var(--spacing-xs);
   }
 }

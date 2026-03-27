@@ -5,19 +5,21 @@ export default function Footer() {
   return (
     <footer className="footer">
       <div className="footer-inner">
-        <h3 className="footer-title">Letter Archive</h3>
-        <p className="footer-tagline">
-          Preserving personal letters from the past for future generations.
+        <div className="footer-lead">
+          <p className="footer-kicker">Letter Archive</p>
+          <h3 className="footer-title">Personal correspondence, preserved with editorial care.</h3>
+          <p className="footer-tagline">
+            A reading room for letters, collections, and the quiet details history usually misses.
+          </p>
+        </div>
+        <p className="footer-note">
+          Browse the archive, follow a collection, or read the project journal.
         </p>
-        <nav className="footer-nav">
+        <nav className="footer-nav" aria-label="Footer">
           <Link to="/">Home</Link>
-          <span className="footer-dot" aria-hidden="true">&middot;</span>
           <Link to="/collections">Collections</Link>
-          <span className="footer-dot" aria-hidden="true">&middot;</span>
           <Link to="/blog">Blog</Link>
-          <span className="footer-dot" aria-hidden="true">&middot;</span>
           <Link to="/about">About</Link>
-          <span className="footer-dot" aria-hidden="true">&middot;</span>
           <Link to="/support">Support</Link>
         </nav>
         <p className="footer-copyright">

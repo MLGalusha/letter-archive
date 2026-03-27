@@ -1,31 +1,58 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import CollectionDetailPage from "../CollectionDetailPage";
 import type { Letter } from "../../types/Letter";
 
+// Polyfill IntersectionObserver for jsdom
+beforeAll(() => {
+  if (typeof globalThis.IntersectionObserver === "undefined") {
+    globalThis.IntersectionObserver = class IntersectionObserver {
+      readonly root: Element | null = null;
+      readonly rootMargin: string = "";
+      readonly thresholds: ReadonlyArray<number> = [];
+      constructor(_cb: IntersectionObserverCallback, _opts?: IntersectionObserverInit) {}
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords(): IntersectionObserverEntry[] { return []; }
+    } as unknown as typeof globalThis.IntersectionObserver;
+  }
+});
+
 const mockNavigate = vi.fn();
 const getCollectionByCodeMock = vi.fn();
 const getCollectionProfileMock = vi.fn();
+const searchArchiveShelfMock = vi.fn();
 
 vi.mock("../../api/collections", () => ({
   getCollectionByCode: (...args: unknown[]) => getCollectionByCodeMock(...args),
   getCollectionProfile: (...args: unknown[]) => getCollectionProfileMock(...args),
 }));
 
-vi.mock("../../components/LetterCard/LetterCard", () => ({
-  default: ({
-    card,
-    onClick,
-  }: {
-    card: { id: string; hook?: string; date?: string; title?: string };
-    onClick: (letterId: string) => void;
-  }) => (
-    <button type="button" onClick={() => onClick(card.id)}>
-      {card.hook || card.date || card.title || card.id}
-    </button>
+vi.mock("../../api/letters", () => ({
+  searchArchiveShelf: (...args: unknown[]) => searchArchiveShelfMock(...args),
+}));
+
+const mockSetDock = vi.fn();
+vi.mock("../../contexts/HeaderDockContext", () => ({
+  useHeaderDock: () => ({ dock: { content: null, active: false, visible: false }, setDock: mockSetDock }),
+  EMPTY_DOCK: { content: null, active: false, visible: false },
+}));
+
+vi.mock("../../components/SearchBar/SearchBar", () => ({
+  default: () => <div data-testid="search-bar">SearchBar</div>,
+}));
+
+vi.mock("../../components/ArchiveList/ArchiveList", () => ({
+  default: ({ letters }: { letters: Array<{ id: string }> }) => (
+    <div data-testid="archive-list">{letters.length} archive items</div>
   ),
+}));
+
+vi.mock("../../api/client", () => ({
+  getImageUrl: (url: string) => url,
 }));
 
 vi.mock("../../components/Breadcrumb", () => ({
@@ -37,14 +64,7 @@ vi.mock("../../components/Footer/Footer", () => ({
 }));
 
 vi.mock("../../components/CollectionProfile", () => ({
-  NarrativeSection: () => null,
-  StartHereCard: () => null,
-  SentimentArcChart: () => null,
-  TopicEvolutionChart: () => null,
-  KeyPeopleSection: () => null,
-  CorrespondenceNetwork: () => null,
-  ReadingPathsSection: () => null,
-  OnThisDaySpotlight: () => null,
+  NarrativeSection: () => <div data-testid="narrative">Narrative</div>,
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -68,7 +88,7 @@ function createLetter(
     images: [{ id: `image-${id}`, type: "letter", imageUrl: `/images/${id}` }],
     transcript: {
       pages: [],
-      fullText: "",
+      fullText: "Some transcript text here for word counting purposes.",
       verified: false,
     },
     metadata: {
@@ -88,6 +108,23 @@ function createLetter(
   };
 }
 
+const EMPTY_ARCHIVE_RESPONSE = {
+  letters: [],
+  page: 1,
+  limit: 24,
+  total: 0,
+  facets: {
+    formats: [],
+    collections: [],
+    correspondents: [],
+    places: [],
+    years: [],
+    topics: [],
+    tones: [],
+    relationships: [],
+  },
+};
+
 function renderCollectionDetailPage() {
   return render(
     <MemoryRouter initialEntries={["/collections/009"]}>
@@ -102,8 +139,8 @@ describe("CollectionDetailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Profile returns null by default (no profile generated)
     getCollectionProfileMock.mockResolvedValue(null);
+    searchArchiveShelfMock.mockResolvedValue(EMPTY_ARCHIVE_RESPONSE);
 
     getCollectionByCodeMock.mockResolvedValue({
       id: "collection-9",
@@ -150,44 +187,57 @@ describe("CollectionDetailPage", () => {
     });
   });
 
-  it("renders collection insights and lets readers reset empty filter combinations", async () => {
-    const user = userEvent.setup();
-
+  it("renders header, stats, highlights, people, and archive search", async () => {
     renderCollectionDetailPage();
 
+    // Header
     expect(await screen.findByRole("heading", { name: "Collection Nine" })).toBeInTheDocument();
-    expect(screen.getByText("3 items", { selector: ".cd-letters-count" })).toBeInTheDocument();
-    expect(screen.getByText(/1947-08-10.*1947-08-12/)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Visual Highlights" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Story Threads" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Explore by" })).toBeInTheDocument();
+    expect(screen.getByText("3 items")).toBeInTheDocument();
+    expect(screen.getByText("009")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Photos 1/i }));
-    expect(screen.getByText("1 of 3 items")).toBeInTheDocument();
+    // Stats (2 letters + 1 photo)
+    expect(screen.getByText("2 letters, 1 photo")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Travel 1/i }));
+    // Highlights (Featured + Photo)
+    expect(screen.getByRole("heading", { name: "Highlights" })).toBeInTheDocument();
+    expect(screen.getByText("Featured")).toBeInTheDocument();
+    expect(screen.getByText("Photo")).toBeInTheDocument();
 
-    expect(screen.getByText("0 of 3 items")).toBeInTheDocument();
-    expect(screen.getByText("No collection items match the current filters.")).toBeInTheDocument();
+    // People section
+    expect(screen.getByRole("heading", { name: "People" })).toBeInTheDocument();
+    expect(screen.getByText("Alice Smith")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Reset filters" }));
-
-    await waitFor(() => {
-      expect(screen.queryByText("No collection items match the current filters.")).not.toBeInTheDocument();
-    });
-    expect(screen.getByRole("button", { name: "First travel note" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Music update" })).toBeInTheDocument();
+    // Archive search components
+    expect(screen.getByTestId("search-bar")).toBeInTheDocument();
+    expect(screen.getByTestId("archive-list")).toBeInTheDocument();
   });
 
-  it("navigates to the selected letter when a card is clicked", async () => {
+  it("calls searchArchiveShelf with collection code pre-set", async () => {
+    renderCollectionDetailPage();
+
+    await screen.findByRole("heading", { name: "Collection Nine" });
+
+    await waitFor(() => {
+      expect(searchArchiveShelfMock).toHaveBeenCalled();
+    });
+
+    const callArgs = searchArchiveShelfMock.mock.calls[0][0];
+    expect(callArgs.collection).toBe("009");
+  });
+
+  it("navigates to the selected letter when a highlight is clicked", async () => {
     const user = userEvent.setup();
 
     renderCollectionDetailPage();
 
     await screen.findByRole("heading", { name: "Collection Nine" });
-    await user.click(screen.getByRole("button", { name: "First travel note" }));
+    // Click the "Featured" highlight (letter-2, the middle letter)
+    const highlightButtons = screen.getAllByRole("button").filter(
+      (btn) => btn.classList.contains("cd-highlight-item"),
+    );
+    await user.click(highlightButtons[0]);
 
-    expect(mockNavigate).toHaveBeenCalledWith("/letter/letter-1");
+    expect(mockNavigate).toHaveBeenCalledWith("/letter/letter-2");
   });
 
   it("shows the not-found state and returns to collections when loading fails", async () => {
@@ -202,5 +252,20 @@ describe("CollectionDetailPage", () => {
     await user.click(screen.getByRole("button", { name: "← All Collections" }));
 
     expect(mockNavigate).toHaveBeenCalledWith("/collections");
+  });
+
+  it("works without profile data (no narrative section)", async () => {
+    getCollectionProfileMock.mockResolvedValue(null);
+
+    renderCollectionDetailPage();
+
+    await screen.findByRole("heading", { name: "Collection Nine" });
+
+    // Narrative should not appear when profile is null
+    expect(screen.queryByTestId("narrative")).not.toBeInTheDocument();
+
+    // But highlights, stats, and archive should still render
+    expect(screen.getByRole("heading", { name: "Highlights" })).toBeInTheDocument();
+    expect(screen.getByTestId("archive-list")).toBeInTheDocument();
   });
 });

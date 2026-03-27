@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Letter } from "../../types/Letter";
 import {
-  applyCollectionFilters,
-  buildCollectionFacets,
-  getThreadKey,
+  computeCollectionStats,
+  pickLetterHighlights,
+  buildTimelineEntries,
+  buildAtAGlanceFacets,
 } from "../collection-detail-utils";
 
 function makeLetter(overrides: Partial<Letter>): Letter {
@@ -39,12 +40,12 @@ describe("collection detail utils", () => {
       id: "l1",
       images: [
         { id: "img-1", type: "letter", imageUrl: "/img/1" },
-        { id: "img-2", type: "photo", imageUrl: "/img/2" },
       ],
       metadata: {
         sender: "Alice",
         recipient: "Bob",
         dateRaw: "19320101",
+        location: "New York",
         hook: "Discusses ration planning.",
         tags: ["war", "family"],
         primaryTopics: ["Wartime life"],
@@ -58,6 +59,7 @@ describe("collection detail utils", () => {
         sender: "Alice",
         recipient: "Bob",
         dateRaw: "19320210",
+        location: "New York",
         hook: "Talks about local labor strike.",
         tags: ["labor"],
         primaryTopics: ["work"],
@@ -78,50 +80,64 @@ describe("collection detail utils", () => {
     }),
   ];
 
-  it("builds top facets and thread summaries", () => {
-    const facets = buildCollectionFacets(letters);
+  it("computes collection stats from letter data", () => {
+    const stats = computeCollectionStats(letters);
+
+    expect(stats.dateSpan).not.toBeNull();
+    expect(stats.dateSpan!.label).toContain("1932");
+    expect(stats.writingFrequency).toBeTruthy();
+    expect(stats.formatBreakdown).toContain("letter");
+    expect(stats.formatBreakdown).toContain("photo");
+  });
+
+  it("picks up to 2 highlights: featured/pinned then photo", () => {
+    const highlights = pickLetterHighlights(letters);
+
+    expect(highlights).toHaveLength(2);
+    expect(highlights[0].label).toBe("Featured");
+    expect(highlights[0].letter.id).toBe("l2");
+    expect(highlights[1].label).toBe("Photo");
+    expect(highlights[1].letter.id).toBe("l3");
+  });
+
+  it("builds timeline entries sorted by date with sender/recipient", () => {
+    const entries = buildTimelineEntries(letters);
+
+    expect(entries).toHaveLength(3);
+    expect(entries[0].letterId).toBe("l1");
+    expect(entries[0].hookLine).toBe("Discusses ration planning.");
+    expect(entries[0].sender).toBe("Alice");
+    expect(entries[0].recipient).toBe("Bob");
+    expect(entries[2].letterId).toBe("l3");
+    expect(entries[2].mediaLabel).toBe("Photo");
+    expect(entries[2].sender).toBe("Cara");
+  });
+
+  it("builds at-a-glance facets with topics, places, and people", () => {
+    const facets = buildAtAGlanceFacets(letters);
 
     expect(facets.topics[0]).toEqual({ value: "family", count: 2 });
-    expect(facets.correspondents[0]).toEqual({ value: "Alice", count: 3 });
-    expect(facets.threads[0].key).toBe("Alice -> Bob");
-    expect(facets.threads[0].count).toBe(2);
-    expect(facets.threads[0].latestDate).toBe("19320210");
-    expect(facets.formats[0]).toEqual({ value: "photo", label: "Photos", count: 2 });
+    expect(facets.people[0]).toEqual({ value: "Alice", count: 3 });
+    expect(facets.places).toHaveLength(1);
+    expect(facets.places[0]).toEqual({ value: "New York", count: 2 });
+    expect(facets.formats.length).toBeGreaterThan(0);
   });
 
-  it("filters letters by topic, correspondent, and thread", () => {
-    expect(
-      applyCollectionFilters(letters, { topic: "family", correspondent: null, threadKey: null, format: null }).map(
-        (letter) => letter.id,
-      ),
-    ).toEqual(["l1", "l3"]);
+  it("handles empty letter arrays gracefully", () => {
+    const stats = computeCollectionStats([]);
+    expect(stats.dateSpan).toBeNull();
+    expect(stats.writingFrequency).toBeNull();
+    expect(stats.formatBreakdown).toBe("0 items");
 
-    expect(
-      applyCollectionFilters(letters, { topic: null, correspondent: "alice", threadKey: null, format: null }).map(
-        (letter) => letter.id,
-      ),
-    ).toEqual(["l1", "l2", "l3"]);
+    const highlights = pickLetterHighlights([]);
+    expect(highlights).toEqual([]);
 
-    expect(
-      applyCollectionFilters(letters, {
-        topic: null,
-        correspondent: null,
-        threadKey: getThreadKey("Alice", "Bob"),
-        format: null,
-      }).map((letter) => letter.id),
-    ).toEqual(["l1", "l2"]);
+    const timeline = buildTimelineEntries([]);
+    expect(timeline).toEqual([]);
 
-    expect(
-      applyCollectionFilters(letters, {
-        topic: null,
-        correspondent: null,
-        threadKey: null,
-        format: "photo",
-      }).map((letter) => letter.id),
-    ).toEqual(["l1", "l3"]);
-  });
-
-  it("builds stable thread keys with unknown fallbacks", () => {
-    expect(getThreadKey(null, undefined)).toBe("Unknown sender -> Unknown recipient");
+    const facets = buildAtAGlanceFacets([]);
+    expect(facets.topics).toEqual([]);
+    expect(facets.places).toEqual([]);
+    expect(facets.people).toEqual([]);
   });
 });

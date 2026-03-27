@@ -10,6 +10,10 @@ interface SearchBarProps {
   loading: boolean;
   embedded?: boolean;
   variant?: "full" | "compact";
+  hideCollectionFilter?: boolean;
+  compactPlaceholder?: string;
+  searchKicker?: string;
+  searchTitle?: string;
   refineOpen?: boolean;
   refinePinned?: boolean;
   dockTriggerRef?: Ref<HTMLDivElement>;
@@ -240,6 +244,10 @@ export default function SearchBar({
   loading,
   embedded = false,
   variant = "full",
+  hideCollectionFilter = false,
+  compactPlaceholder,
+  searchKicker,
+  searchTitle,
   refineOpen,
   refinePinned,
   dockTriggerRef,
@@ -252,7 +260,7 @@ export default function SearchBar({
   const hasQuery = Boolean(query.trim());
   const selectedFormats = filters.format || null;
   const hasAdvancedRefinementFilters = Boolean(
-    filters.collection
+    (!hideCollectionFilter && filters.collection)
       || filters.person
       || filters.sender
       || filters.recipient
@@ -358,7 +366,7 @@ export default function SearchBar({
   const hasActiveFilters = Boolean(
     query.trim()
       || selectedFormats?.length
-      || filters.collection
+      || (!hideCollectionFilter && filters.collection)
       || filters.person
       || filters.sender
       || filters.recipient
@@ -385,10 +393,10 @@ export default function SearchBar({
     return `${total} published archive item${total === 1 ? "" : "s"}`;
   }, [hasActiveFilters, hasQuery, loading, query, total]);
 
-  const availableSortFields = useMemo(
-    () => getAvailableSortFields(hasQuery),
-    [hasQuery],
-  );
+  const availableSortFields = useMemo(() => {
+    const fields = getAvailableSortFields(hasQuery);
+    return hideCollectionFilter ? fields.filter((f) => f.value !== "collection") : fields;
+  }, [hasQuery, hideCollectionFilter]);
 
   const updateFilter = (partial: Partial<SearchFilters>) => {
     onFiltersChange({
@@ -400,7 +408,7 @@ export default function SearchBar({
   const activePills = useMemo(() => {
     const pills: Array<{ key: string; label: string; onClear: () => void }> = [];
 
-    if (filters.collection) {
+    if (filters.collection && !hideCollectionFilter) {
       pills.push({
         key: `collection-${filters.collection}`,
         label: `Collection: ${getCollectionLabel(filters.collection, facets)}`,
@@ -525,7 +533,7 @@ export default function SearchBar({
     [],
   );
   const collectionSuggestion = useMemo(
-    () => getBestSuggestion(
+    () => hideCollectionFilter ? null : getBestSuggestion(
       filters.collection,
       facets.collections.map((facet) => ({
         value: facet.label,
@@ -534,7 +542,7 @@ export default function SearchBar({
         aliases: [facet.value],
       })),
     ),
-    [facets.collections, filters.collection],
+    [facets.collections, filters.collection, hideCollectionFilter],
   );
   const correspondentSuggestion = useMemo(
     () => getBestSuggestion(
@@ -733,23 +741,25 @@ export default function SearchBar({
         </div>
       </div>
 
-      <div className="filter-group">
-        <label className="filter-label" htmlFor={collectionFilterId}>Collection</label>
-        <input
-          id={collectionFilterId}
-          type="text"
-          className="filter-input"
-          placeholder="Collection"
-          value={filters.collection || ""}
-          onChange={(event) => updateFilter({ collection: event.target.value || null })}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || !collectionSuggestion) return;
-            event.preventDefault();
-            updateFilter({ collection: collectionSuggestion.applyValue });
-          }}
-        />
-        <SuggestionHint suggestion={collectionSuggestion} />
-      </div>
+      {!hideCollectionFilter && (
+        <div className="filter-group">
+          <label className="filter-label" htmlFor={collectionFilterId}>Collection</label>
+          <input
+            id={collectionFilterId}
+            type="text"
+            className="filter-input"
+            placeholder="Collection"
+            value={filters.collection || ""}
+            onChange={(event) => updateFilter({ collection: event.target.value || null })}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || !collectionSuggestion) return;
+              event.preventDefault();
+              updateFilter({ collection: collectionSuggestion.applyValue });
+            }}
+          />
+          <SuggestionHint suggestion={collectionSuggestion} />
+        </div>
+      )}
 
       <div className="filter-group">
         <label className="filter-label" htmlFor={correspondentFilterId}>Sender or Recipient</label>
@@ -933,8 +943,8 @@ export default function SearchBar({
           <input
             type="search"
             className="search-input"
-            placeholder="Search archive..."
-            aria-label="Search the archive"
+            placeholder={compactPlaceholder || "Search archive..."}
+            aria-label={compactPlaceholder || "Search the archive"}
             enterKeyHint="search"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
@@ -1015,8 +1025,8 @@ export default function SearchBar({
     <div className={`search${embedded ? " search-embedded" : ""}`} ref={searchRootRef}>
       <div className="search-heading">
         <div className="search-heading-copy">
-          <p className="search-kicker">Archive-Wide Search</p>
-          <h2 className="search-title">Search the Archive</h2>
+          <p className="search-kicker">{searchKicker || "Archive-Wide Search"}</p>
+          <h2 className="search-title">{searchTitle || "Search the Archive"}</h2>
           <p className="search-description">
             Search names, phrases, places, dates, transcripts, telegram text, and photo descriptions.
           </p>

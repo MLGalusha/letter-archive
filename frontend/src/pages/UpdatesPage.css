@@ -1,73 +1,70 @@
 .updates-page {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
+  gap: 1.4rem;
   text-align: left;
 }
 
-/* ── Hero ───────────────────────────────────────────── */
-
 .updates-hero {
-  text-align: center;
-  padding: var(--spacing-xl) 0 var(--spacing-lg);
+  padding: 1.9rem 1.7rem;
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  border-radius: 34px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 250, 242, 0.98));
+  box-shadow: var(--shadow);
 }
 
 .updates-kicker {
-  font-size: var(--font-xs);
+  margin: 0 0 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--text-muted);
-  margin-bottom: var(--spacing-sm);
+  color: var(--accent);
 }
 
 .updates-headline {
-  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
-  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  margin: 0;
+  max-width: 12ch;
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: clamp(2.8rem, 6vw, 4.3rem);
   font-weight: 700;
-  line-height: 1.2;
-  margin-bottom: var(--spacing-md);
-  letter-spacing: -0.01em;
+  line-height: 0.97;
+  letter-spacing: -0.05em;
+  color: var(--text);
 }
 
 .updates-subtitle {
-  max-width: 560px;
-  margin: 0 auto;
-  font-size: var(--font-lg);
-  line-height: 1.7;
+  max-width: 40rem;
+  margin: 1rem 0 0;
+  font-size: 1rem;
+  line-height: 1.8;
   color: var(--text-muted);
 }
 
-/* ── Grid ───────────────────────────────────────────── */
-
 .updates-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: var(--spacing-md);
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
 }
 
-/* ── Card ───────────────────────────────────────────── */
-
 .update-card {
-  background: var(--bg-light);
-  border: var(--border-card);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 250, 242, 0.98));
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  border-radius: 30px;
+  box-shadow: var(--shadow-soft);
   color: inherit;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   cursor: pointer;
   text-decoration: none;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .update-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px hsla(0, 0%, 0%, 0.12);
-}
-
-.update-card:hover .update-card-cta {
-  opacity: 1;
+  transform: translateY(-2px);
+  box-shadow: 0 24px 52px rgba(29, 26, 20, 0.1);
+  border-color: rgba(31, 109, 122, 0.22);
 }
 
 .update-card:focus-visible {
@@ -77,8 +74,9 @@
 
 .update-card-image {
   width: 100%;
-  height: 180px;
+  aspect-ratio: 16 / 10;
   overflow: hidden;
+  border-bottom: 1px solid rgba(217, 207, 191, 0.7);
 }
 
 .update-card-image img {
@@ -91,47 +89,51 @@
   display: flex;
   flex-direction: column;
   flex: 1;
-  padding: var(--spacing-md);
+  padding: 1.2rem;
   text-align: left;
 }
 
 .update-card-meta {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
-  margin-bottom: var(--spacing-xs);
+  gap: 0.55rem;
+  margin-bottom: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.update-category-badge,
+.update-date {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
 }
 
 .update-category-badge {
-  font-size: var(--font-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  background: var(--bg);
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
+  color: var(--accent-strong);
+  background: rgba(223, 241, 245, 0.8);
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(31, 109, 122, 0.18);
 }
 
 .update-date {
-  font-size: var(--font-xs);
   color: var(--text-muted);
 }
 
 .update-card-title {
-  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
-  font-size: 1.2rem;
+  margin: 0 0 0.65rem;
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: 1.45rem;
   font-weight: 600;
-  line-height: 1.3;
+  line-height: 1.14;
   color: var(--text);
-  margin: 0 0 var(--spacing-xs);
 }
 
 .update-card-excerpt {
-  font-size: var(--font-sm);
+  font-size: 0.96rem;
   color: var(--text-muted);
-  line-height: 1.6;
+  line-height: 1.72;
   margin: 0;
   flex: 1;
   overflow: hidden;
@@ -144,91 +146,70 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: var(--spacing-sm);
-  padding-top: var(--spacing-xs);
-  border-top: 1px solid var(--border);
+  gap: 0.8rem;
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(217, 207, 191, 0.75);
+}
+
+.update-author,
+.update-card-cta,
+.updates-pagination-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .update-author {
-  font-size: var(--font-xs);
-  font-weight: 600;
   color: var(--text);
 }
 
-.update-card-cta {
-  font-size: var(--font-xs);
-  font-weight: 600;
-  font-style: italic;
+.update-card-cta,
+.updates-pagination-label {
   color: var(--text-muted);
-  opacity: 0;
-  transition: opacity 0.2s ease;
 }
-
-/* ── Load more ──────────────────────────────────────── */
 
 .updates-load-more {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) 0;
+  gap: 1rem;
+  padding-top: 0.2rem;
 }
-
-.updates-pagination-label {
-  font-size: var(--font-sm);
-  color: var(--text-muted);
-}
-
-/* ── Tablet ─────────────────────────────────────────── */
 
 @media (max-width: 768px) {
   .updates-grid {
     grid-template-columns: 1fr;
   }
 
-  .update-card-cta {
-    opacity: 1;
+  .updates-load-more {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
-/* ── Mobile ─────────────────────────────────────────── */
-
 @media (max-width: 640px) {
   .updates-page {
-    gap: var(--spacing-sm);
+    gap: 1rem;
   }
 
   .updates-hero {
-    padding: var(--spacing-md) 0 var(--spacing-sm);
+    padding: 1.2rem;
+    border-radius: 24px;
   }
 
-  .updates-kicker {
-    margin-bottom: var(--spacing-xs);
+  .updates-headline {
+    max-width: none;
+    font-size: clamp(2.2rem, 14vw, 3.2rem);
   }
 
   .updates-subtitle {
-    font-size: var(--font-sm);
-    line-height: 1.5;
+    font-size: 0.95rem;
+    line-height: 1.65;
   }
 
-  .updates-grid {
-    gap: var(--spacing-xs);
-  }
-
-  .update-card-image {
-    height: 140px;
-  }
-
-  .update-card-body {
-    padding: var(--spacing-sm);
-  }
-
-  .update-card-title {
-    font-size: 1.05rem;
-  }
-
-  .update-card-excerpt {
-    -webkit-line-clamp: 2;
-    font-size: var(--font-xs);
+  .update-card {
+    border-radius: 24px;
   }
 }

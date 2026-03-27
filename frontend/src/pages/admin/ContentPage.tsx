@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
 import { Button } from '../../components/common';
@@ -11,59 +11,21 @@ import {
   adminUnpublishBlogPost,
   adminDeleteBlogPost,
   adminListContentPages,
-  adminUpdateContentPage,
   adminGetFeaturedLetter,
   adminSetFeaturedLetter,
   type BlogPost,
   type ContentPage as ContentPageType,
 } from '../../api/admin/content';
+import {
+  CONTENT_PAGE_EDITOR_CONFIG,
+  CONTENT_PAGE_ORDER,
+  resolveContentPageContent,
+  serializeContentPageDraft,
+} from '../../content/contentPageConfig';
 import { useToast } from '../../contexts/ToastContext';
 import './ContentPage.css';
 
 type TabKey = 'blog' | 'pages' | 'featured';
-
-// ── Section definitions for each page ────────────────────
-
-const PAGE_SECTIONS: Record<string, { label: string; key: string; multiline?: boolean }[]> = {
-  about: [
-    { label: 'Hero Kicker', key: 'hero_kicker' },
-    { label: 'Hero Heading', key: 'hero_heading' },
-    { label: 'Hero Subtitle', key: 'hero_subtitle', multiline: true },
-    { label: 'Quote Text', key: 'quote_text', multiline: true },
-    { label: 'Quote Attribution', key: 'quote_attribution' },
-    { label: 'Why It Matters', key: 'why_matters_text', multiline: true },
-    { label: 'Process Heading', key: 'process_heading' },
-    { label: 'Process Step 1 Title', key: 'process_step_1_title' },
-    { label: 'Process Step 1 Text', key: 'process_step_1_text', multiline: true },
-    { label: 'Process Step 2 Title', key: 'process_step_2_title' },
-    { label: 'Process Step 2 Text', key: 'process_step_2_text', multiline: true },
-    { label: 'Process Step 3 Title', key: 'process_step_3_title' },
-    { label: 'Process Step 3 Text', key: 'process_step_3_text', multiline: true },
-    { label: 'Process Step 4 Title', key: 'process_step_4_title' },
-    { label: 'Process Step 4 Text', key: 'process_step_4_text', multiline: true },
-    { label: 'Contribute Heading', key: 'contribute_heading' },
-    { label: 'Contribute Text', key: 'contribute_text', multiline: true },
-    { label: 'Research Heading', key: 'research_heading' },
-    { label: 'Research Text', key: 'research_text', multiline: true },
-  ],
-  support: [
-    { label: 'Hero Kicker', key: 'hero_kicker' },
-    { label: 'Hero Heading', key: 'hero_heading' },
-    { label: 'Hero Subtitle', key: 'hero_subtitle', multiline: true },
-    { label: 'Quote Text', key: 'quote_text', multiline: true },
-    { label: 'Quote Attribution', key: 'quote_attribution' },
-    { label: 'Impact Intro', key: 'impact_intro', multiline: true },
-    { label: 'Donation Heading', key: 'donation_heading' },
-    { label: 'Thank You Text', key: 'thankyou_text', multiline: true },
-    { label: 'Contact Heading', key: 'contact_heading' },
-    { label: 'Contact Intro', key: 'contact_intro', multiline: true },
-  ],
-};
-
-const PAGE_TITLES: Record<string, string> = {
-  about: 'About',
-  support: 'Support',
-};
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -303,45 +265,14 @@ function BlogTab() {
 }
 
 // ══════════════════════════════════════════════════════════
-// Auto-resize textarea
-// ══════════════════════════════════════════════════════════
-
-function AutoResizeTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  const resize = () => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  };
-
-  useEffect(() => { resize(); }, [props.value]);
-
-  return (
-    <textarea
-      {...props}
-      ref={ref}
-      onInput={(e) => {
-        resize();
-        props.onInput?.(e);
-      }}
-    />
-  );
-}
-
-// ══════════════════════════════════════════════════════════
 // Pages Tab
 // ══════════════════════════════════════════════════════════
 
 function PagesTab() {
-  const { showToast } = useToast();
+  const navigate = useNavigate();
   const [pages, setPages] = useState<ContentPageType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
-  const [editData, setEditData] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
 
   const fetchPages = useCallback(async () => {
     try {
@@ -360,121 +291,73 @@ function PagesTab() {
     fetchPages();
   }, [fetchPages]);
 
-  const handleExpand = (slug: string) => {
-    if (expandedSlug === slug) {
-      setExpandedSlug(null);
-      setEditData({});
-      return;
-    }
-    const page = pages.find((p) => p.slug === slug);
-    setExpandedSlug(slug);
-    // Load existing content_json from DB, or start with empty object for new pages
-    setEditData(page?.contentJson || {});
-  };
-
-  const handleFieldChange = (key: string, value: string) => {
-    setEditData((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const handleSave = async (slug: string) => {
-    setSaving(true);
-    try {
-      await adminUpdateContentPage(slug, {
-        title: PAGE_TITLES[slug] || slug,
-        contentJson: editData,
-      });
-      showToast(`${PAGE_TITLES[slug] || slug} page saved.`, 'success');
-      await fetchPages();
-    } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to save page.'), 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (loading) {
     return <div className="content-loading">Loading pages...</div>;
   }
 
-  // Always show defined pages, merge in DB data if it exists
-  const slugOrder = ['about', 'support'];
   const pagesBySlug = new Map(pages.map((p) => [p.slug, p]));
 
   return (
     <div className="content-section">
       {error && <div className="content-error">{error}</div>}
 
-      <div className="pages-list">
-        {slugOrder.map((slug) => {
+      <div className="pages-overview-grid">
+        {CONTENT_PAGE_ORDER.map((slug) => {
           const dbPage = pagesBySlug.get(slug);
-          const isExpanded = expandedSlug === slug;
-          const sections = PAGE_SECTIONS[slug] || [];
+          const config = CONTENT_PAGE_EDITOR_CONFIG[slug];
+          const resolved = resolveContentPageContent(slug, dbPage?.contentJson);
+          const overrideCount = Object.keys(serializeContentPageDraft(slug, resolved)).length;
 
           return (
-            <div key={slug} className={`page-card ${isExpanded ? 'expanded' : ''}`}>
-              <button
-                className="page-card-header"
-                onClick={() => handleExpand(slug)}
-              >
-                <div className="page-card-info">
-                  <h3 className="page-card-title">{PAGE_TITLES[slug] || slug}</h3>
-                  <span className="page-card-meta">
-                    {dbPage
-                      ? `Last updated ${formatDateTime(dbPage.updatedAt)}`
-                      : 'Not yet customized'}
-                  </span>
+            <article key={slug} className={`page-overview-card page-overview-card--${slug}`}>
+              <div className="page-overview-top">
+                <div>
+                  <span className="page-overview-kicker">{config.kicker}</span>
+                  <h3 className="page-overview-title">{config.title}</h3>
                 </div>
-                <Icon
-                  name={isExpanded ? 'chevron-down' : 'chevron-right'}
-                  size={18}
-                />
-              </button>
+                <span className="page-overview-route">{config.publicPath}</span>
+              </div>
 
-              {isExpanded && (
-                <div className="page-card-body">
-                  <div className="page-sections-form">
-                    {sections.map((section) => (
-                      <div key={section.key} className="page-section-field">
-                        <label htmlFor={`page-${slug}-${section.key}`}>
-                          {section.label}
-                        </label>
-                        {section.multiline ? (
-                          <AutoResizeTextarea
-                            id={`page-${slug}-${section.key}`}
-                            value={editData[section.key] || ''}
-                            placeholder="Using default text"
-                            onChange={(e) =>
-                              handleFieldChange(section.key, e.target.value)
-                            }
-                          />
-                        ) : (
-                          <input
-                            id={`page-${slug}-${section.key}`}
-                            type="text"
-                            value={editData[section.key] || ''}
-                            placeholder="Using default text"
-                            onChange={(e) =>
-                              handleFieldChange(section.key, e.target.value)
-                            }
-                          />
-                        )}
-                      </div>
-                    ))}
+              <p className="page-overview-description">{config.description}</p>
 
-                    <div className="page-section-actions">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        loading={saving}
-                        onClick={() => handleSave(slug)}
-                      >
-                        Save {PAGE_TITLES[slug] || slug}
-                      </Button>
-                    </div>
-                  </div>
+              <div className="page-overview-preview">
+                <strong>{resolved.hero_heading || config.title}</strong>
+                <p>{resolved.hero_subtitle || resolved.hero_kicker}</p>
+              </div>
+
+              <div className="page-overview-metrics">
+                <div>
+                  <span>Sections</span>
+                  <strong>{config.sections.length}</strong>
                 </div>
-              )}
-            </div>
+                <div>
+                  <span>Overrides</span>
+                  <strong>{overrideCount}</strong>
+                </div>
+                <div>
+                  <span>Updated</span>
+                  <strong>{dbPage ? formatDateTime(dbPage.updatedAt) : 'Defaults'}</strong>
+                </div>
+              </div>
+
+              <div className="page-overview-actions">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon="edit"
+                  onClick={() => navigate(`/admin/content/pages/${slug}`)}
+                >
+                  Edit {config.title}
+                </Button>
+                <button
+                  type="button"
+                  className="page-overview-secondary"
+                  onClick={() => window.open(config.publicPath, '_blank', 'noopener,noreferrer')}
+                >
+                  View live page
+                </button>
+              </div>
+            </article>
           );
         })}
       </div>

@@ -151,7 +151,7 @@
 }
 
 .dock-strip-track:not(.is-dragging) .dock-track-fill {
-  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Thumb — larger handle with inner detail */
@@ -179,7 +179,7 @@
 }
 
 .dock-strip-track:not(.is-dragging) .dock-track-thumb {
-  transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
               box-shadow 0.2s ease,
               transform 0.15s ease;
 }
@@ -194,7 +194,30 @@
   box-shadow: 0 0 0 5px rgba(31, 109, 122, 0.1), 0 3px 14px rgba(31, 109, 122, 0.2);
 }
 
-/* ── Tick marks (small collections) ────────────────────── */
+/* ── Minimap (large collections) ───────────────────────── */
+
+.dock-track-minimap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 1px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(217, 207, 191, 0.25);
+  pointer-events: none;
+}
+
+.dock-track-minimap-window {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.35;
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Tick marks ────────────────────────────────────────── */
 
 .dock-track-ticks {
   position: absolute;
@@ -210,6 +233,7 @@
   background: rgba(255, 255, 255, 0.5);
   transform: translate(-50%, -50%);
   border-radius: 1px;
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .dock-track-tick.current {

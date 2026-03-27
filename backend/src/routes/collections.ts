@@ -17,11 +17,11 @@ router.get('/collections', async (req, res, next) => {
   try {
     const allCollections = await listCollections();
 
-    // Get all letter counts in a single grouped query instead of N+1
+    // Count unique correspondence units (dedup companion types like covers/telegrams)
     const letterCounts = await db
       .select({
         collectionId: letters.collectionId,
-        count: sql<number>`count(*)::int`,
+        count: sql<number>`count(DISTINCT (date_raw, type_sequence))::int`,
       })
       .from(letters)
       .where(eq(letters.visibility, 'PUBLISHED'))
@@ -74,10 +74,9 @@ router.get('/collections/:code', async (req, res, next) => {
     }
 
     // Get published letters in this collection
-    const collectionLetters = await db.query.letters.findMany({
+    const allLetters = await db.query.letters.findMany({
       where: and(
         eq(letters.collectionId, collection.id),
-
         eq(letters.visibility, 'PUBLISHED')
       ),
       with: {
@@ -89,8 +88,20 @@ router.get('/collections/:code', async (req, res, next) => {
       orderBy: [asc(letters.letterDate)],
     });
 
+    // Deduplicate companion types (covers, telegrams sharing same date/sequence).
+    // Keep one record per (dateRaw, typeSequence) group, preferring type='L'.
+    const groups = new Map<string, (typeof allLetters)[number]>();
+    for (const letter of allLetters) {
+      const key = `${letter.dateRaw}|${letter.typeSequence}`;
+      const existing = groups.get(key);
+      if (!existing || (letter.type === 'L' && existing.type !== 'L')) {
+        groups.set(key, letter);
+      }
+    }
+    const collectionLetters = Array.from(groups.values());
+
     req.log.debug(
-      { collectionCode: code, letterCount: collectionLetters.length },
+      { collectionCode: code, letterCount: collectionLetters.length, rawCount: allLetters.length },
       'Collection fetched with letters'
     );
 

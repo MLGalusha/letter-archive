@@ -78,7 +78,6 @@ export default function PersonPage() {
       <Breadcrumb
         items={[
           { label: 'Home', href: '/' },
-          { label: 'People', href: '/explore' },
           { label: person.canonicalName },
         ]}
       />

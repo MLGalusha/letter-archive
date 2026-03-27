@@ -3,9 +3,11 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { eq, count, and, isNull, gt } from 'drizzle-orm';
 import { db, adminUsers, adminInvites } from '../db/index.js';
+import { env } from '../config/env.js';
 import { hashPassword, verifyPassword, generateToken } from '../auth/jwt.js';
 import { validateBody } from '../middleware/validate.js';
 import { requireAuth } from '../middleware/auth.js';
+import { authRateLimit } from '../middleware/rate-limit.js';
 import { createNotification } from '../services/notifications.js';
 
 const router = Router();
@@ -38,7 +40,7 @@ const acceptInviteSchema = z.object({
 // POST /auth/login
 // ============================================================================
 
-router.post('/auth/login', validateBody(loginSchema), async (req, res) => {
+router.post('/auth/login', authRateLimit, validateBody(loginSchema), async (req, res) => {
   const { email, password } = req.body as z.infer<typeof loginSchema>;
 
   try {
@@ -83,10 +85,18 @@ router.post('/auth/login', validateBody(loginSchema), async (req, res) => {
 // POST /auth/setup — One-time admin account creation
 // ============================================================================
 
-router.post('/auth/setup', validateBody(setupSchema), async (req, res) => {
+router.post('/auth/setup', authRateLimit, validateBody(setupSchema), async (req, res) => {
   const { email, password } = req.body as z.infer<typeof setupSchema>;
 
   try {
+    if (!env.ALLOW_ADMIN_SETUP) {
+      req.log?.warn({ email }, 'Setup attempted while admin setup is disabled');
+      res.status(403).json({
+        error: 'Admin setup is disabled. Create the first admin from the server or temporarily enable ALLOW_ADMIN_SETUP.',
+      });
+      return;
+    }
+
     // Only allow setup if no admin users exist
     const [{ value: adminCount }] = await db.select({ value: count() }).from(adminUsers);
     if (adminCount > 0) {
@@ -163,14 +173,16 @@ router.post('/auth/invite', requireAuth, validateBody(inviteSchema), async (req,
 // GET /auth/invite/:token — Validate an invite token (public, no auth)
 // ============================================================================
 
-router.get('/auth/invite/:token', async (req, res) => {
+router.get('/auth/invite/:token', authRateLimit, async (req, res) => {
   try {
+    const inviteToken = Array.isArray(req.params.token) ? req.params.token[0] : req.params.token;
+
     const [invite] = await db
       .select()
       .from(adminInvites)
       .where(
         and(
-          eq(adminInvites.token, req.params.token),
+          eq(adminInvites.token, inviteToken),
           isNull(adminInvites.usedBy),
           gt(adminInvites.expiresAt, new Date()),
         )
@@ -193,7 +205,7 @@ router.get('/auth/invite/:token', async (req, res) => {
 // POST /auth/accept-invite — Accept invite and create admin account (public)
 // ============================================================================
 
-router.post('/auth/accept-invite', validateBody(acceptInviteSchema), async (req, res) => {
+router.post('/auth/accept-invite', authRateLimit, validateBody(acceptInviteSchema), async (req, res) => {
   const { token, email, password } = req.body as z.infer<typeof acceptInviteSchema>;
 
   try {

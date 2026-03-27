@@ -65,7 +65,6 @@ export default function PlacePage() {
       <Breadcrumb
         items={[
           { label: 'Home', href: '/' },
-          { label: 'Places', href: '/explore' },
           { label: place.canonicalName },
         ]}
       />

@@ -58,6 +58,7 @@ export default function CollectionsPage() {
       />
       <div className="collections-browse-page">
         <div className="collections-hero">
+          <p className="collections-kicker">Collection Shelf</p>
           <h1>Collections</h1>
           <p className="collections-hero-sub">
             Each collection holds a bundle of letters — a family's correspondence, a wartime exchange,
@@ -74,26 +75,28 @@ export default function CollectionsPage() {
           </div>
         </div>
 
-        <div className="collection-controls">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search collections..."
-            aria-label="Search collections"
-          />
-          <select
-            value={sortMode}
-            onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
-            aria-label="Sort collections"
-          >
-            <option value="letters-desc">Most letters</option>
-            <option value="letters-asc">Fewest letters</option>
-            <option value="title-asc">Title A-Z</option>
-          </select>
-          <button onClick={handleRandomCollection} disabled={visibleCollections.length === 0}>
-            Surprise me
-          </button>
+        <div className="collection-controls-shell">
+          <div className="collection-controls">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search collections..."
+              aria-label="Search collections"
+            />
+            <select
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
+              aria-label="Sort collections"
+            >
+              <option value="letters-desc">Most letters</option>
+              <option value="letters-asc">Fewest letters</option>
+              <option value="title-asc">Title A-Z</option>
+            </select>
+            <button onClick={handleRandomCollection} disabled={visibleCollections.length === 0}>
+              Surprise me
+            </button>
+          </div>
         </div>
 
         {loading && <p className="loading-message">Loading collections...</p>}

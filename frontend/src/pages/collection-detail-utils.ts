@@ -1,8 +1,10 @@
+import type { KeyPerson } from "../api/collections";
 import type { Letter, LetterImageType } from "../types/Letter";
-import {
-  getLetterPreviewText,
-  getPrimaryMediaType,
-} from "../utils/letterPreview";
+import { getMediaLabel, getPrimaryImage, getPrimaryMediaType } from "../utils/letterPreview";
+
+/* ------------------------------------------------------------------ */
+/*  Facet types                                                        */
+/* ------------------------------------------------------------------ */
 
 export interface CollectionFacet {
   value: string;
@@ -15,171 +17,359 @@ export interface CollectionFormatFacet {
   count: number;
 }
 
-export interface CollectionThread {
-  key: string;
-  sender: string;
-  recipient: string;
-  count: number;
-  latestDate: string | null;
-  sampleHook: string | null;
+/* ------------------------------------------------------------------ */
+/*  Stats                                                              */
+/* ------------------------------------------------------------------ */
+
+export interface CollectionStats {
+  dateSpan: { start: string; end: string; label: string } | null;
+  writingFrequency: string | null;
+  formatBreakdown: string;
+  largestGap: { days: number; afterDate: string; label: string } | null;
+  totalWords: number;
 }
 
-export interface CollectionFacets {
+function parseDateRaw(raw: string | undefined | null): Date | null {
+  if (!raw || raw.length < 8) return null;
+  const digits = raw.replace(/[^0-9]/g, "").slice(0, 8);
+  if (digits.length < 8) return null;
+  const year = Number(digits.slice(0, 4));
+  const month = Number(digits.slice(4, 6)) - 1;
+  const day = Number(digits.slice(6, 8));
+  if (month < 0 || month > 11 || day < 1 || day > 31) return null;
+  return new Date(year, month, day);
+}
+
+function formatDateShort(d: Date): string {
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function daysBetween(a: Date, b: Date): number {
+  return Math.round(Math.abs(b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function pluralize(count: number, singular: string, plural?: string): string {
+  return count === 1 ? `${count} ${singular}` : `${count} ${plural || singular + "s"}`;
+}
+
+const FORMAT_LABELS: Record<LetterImageType, [string, string]> = {
+  letter: ["letter", "letters"],
+  photo: ["photo", "photos"],
+  telegram: ["telegram", "telegrams"],
+  cover: ["cover", "covers"],
+  card: ["card", "cards"],
+  ephemera: ["ephemeron", "ephemera"],
+  article: ["article", "articles"],
+  diary: ["diary entry", "diary entries"],
+  voice: ["voice recording", "voice recordings"],
+};
+
+const FORMAT_DISPLAY_ORDER: LetterImageType[] = [
+  "letter", "photo", "telegram", "cover", "card", "ephemera", "article", "diary", "voice",
+];
+
+export function computeCollectionStats(letters: Letter[]): CollectionStats {
+  const dated = letters
+    .map((l) => ({ letter: l, date: parseDateRaw(l.metadata.dateRaw) }))
+    .filter((entry): entry is { letter: Letter; date: Date } => entry.date !== null)
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  // Date span
+  let dateSpan: CollectionStats["dateSpan"] = null;
+  if (dated.length >= 2) {
+    const start = dated[0].date;
+    const end = dated[dated.length - 1].date;
+    dateSpan = {
+      start: formatDateShort(start),
+      end: formatDateShort(end),
+      label: `${formatDateShort(start)} \u2014 ${formatDateShort(end)}`,
+    };
+  } else if (dated.length === 1) {
+    const d = formatDateShort(dated[0].date);
+    dateSpan = { start: d, end: d, label: d };
+  }
+
+  // Writing frequency
+  let writingFrequency: string | null = null;
+  if (dated.length >= 2) {
+    const totalDays = daysBetween(dated[0].date, dated[dated.length - 1].date);
+    const avgGap = totalDays / (dated.length - 1);
+    if (avgGap < 1.5) {
+      writingFrequency = "wrote nearly every day";
+    } else if (avgGap < 3.5) {
+      writingFrequency = `wrote every ~${Math.round(avgGap)} days`;
+    } else if (avgGap < 8) {
+      writingFrequency = "wrote about once a week";
+    } else if (avgGap < 20) {
+      writingFrequency = "wrote every few weeks";
+    } else {
+      writingFrequency = "wrote occasionally";
+    }
+  }
+
+  // Format breakdown
+  const formatCounts = new Map<LetterImageType, number>();
+  for (const letter of letters) {
+    const mediaType = getPrimaryMediaType(letter);
+    formatCounts.set(mediaType, (formatCounts.get(mediaType) || 0) + 1);
+  }
+  const formatParts = FORMAT_DISPLAY_ORDER
+    .filter((type) => formatCounts.has(type))
+    .map((type) => {
+      const count = formatCounts.get(type)!;
+      const [singular, plural] = FORMAT_LABELS[type];
+      return pluralize(count, singular, plural);
+    });
+  const formatBreakdown = formatParts.join(", ") || `${letters.length} items`;
+
+  // Largest gap
+  let largestGap: CollectionStats["largestGap"] = null;
+  if (dated.length >= 2) {
+    let maxGapDays = 0;
+    let maxGapAfterDate = dated[0].date;
+    for (let i = 1; i < dated.length; i++) {
+      const gap = daysBetween(dated[i - 1].date, dated[i].date);
+      if (gap > maxGapDays) {
+        maxGapDays = gap;
+        maxGapAfterDate = dated[i - 1].date;
+      }
+    }
+    if (maxGapDays >= 7) {
+      largestGap = {
+        days: maxGapDays,
+        afterDate: formatDateShort(maxGapAfterDate),
+        label: `${maxGapDays}-day gap after ${formatDateShort(maxGapAfterDate)}`,
+      };
+    }
+  }
+
+  // Total word count
+  const totalWords = letters.reduce((sum, l) => {
+    const text = l.transcript?.fullText;
+    if (!text) return sum;
+    return sum + text.split(/\s+/).filter(Boolean).length;
+  }, 0);
+
+  return { dateSpan, writingFrequency, formatBreakdown, largestGap, totalWords };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Letter Highlights                                                  */
+/* ------------------------------------------------------------------ */
+
+export interface LetterHighlight {
+  letter: Letter;
+  label: string;
+}
+
+/** Returns true when year, month, AND day are all known (non-zero). */
+export function hasSpecificDate(dateRaw: string | undefined | null): boolean {
+  if (!dateRaw || dateRaw.length < 8) return false;
+  const digits = dateRaw.replace(/[^0-9]/g, "").slice(0, 8);
+  if (digits.length < 8) return false;
+  const month = Number(digits.slice(4, 6));
+  const day = Number(digits.slice(6, 8));
+  return month >= 1 && month <= 12 && day >= 1 && day <= 31;
+}
+
+/**
+ * Pick up to 2 highlights:
+ *   1. Pinned / Featured (admin pin, or middle letter as fallback)
+ *   2. Photo (first photo-type item, if one exists)
+ */
+export function pickLetterHighlights(
+  letters: Letter[],
+  startHereLetterId?: string | null,
+): LetterHighlight[] {
+  if (letters.length === 0) return [];
+
+  const sorted = [...letters].sort((a, b) => {
+    const aRaw = a.metadata.dateRaw || "";
+    const bRaw = b.metadata.dateRaw || "";
+    return aRaw.localeCompare(bRaw);
+  });
+
+  const used = new Set<string>();
+  const highlights: LetterHighlight[] = [];
+
+  const add = (letter: Letter, label: string) => {
+    if (used.has(letter.id)) return;
+    used.add(letter.id);
+    highlights.push({ letter, label });
+  };
+
+  // 1. Pinned / start-here
+  if (startHereLetterId) {
+    const pinned = letters.find((l) => l.id === startHereLetterId);
+    if (pinned) add(pinned, "Pinned");
+  }
+  if (highlights.length === 0) {
+    const candidates = sorted.filter((l) => !used.has(l.id));
+    if (candidates.length > 0) {
+      const mid = Math.floor(candidates.length / 2);
+      add(candidates[mid], "Featured");
+    }
+  }
+
+  // 2. Photo
+  const photo = sorted.find((l) => getPrimaryMediaType(l) === "photo");
+  if (photo) add(photo, "Photo");
+
+  return highlights;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Timeline                                                           */
+/* ------------------------------------------------------------------ */
+
+export interface TimelineEntry {
+  letterId: string;
+  date: string | null;
+  dateRaw: string | null;
+  dateFormatted: string;
+  mediaType: LetterImageType;
+  mediaLabel: string;
+  hookLine: string;
+  sender: string | null;
+  recipient: string | null;
+  description: string | null;
+}
+
+export function buildTimelineEntries(letters: Letter[]): TimelineEntry[] {
+  return [...letters]
+    .sort((a, b) => {
+      const aRaw = a.metadata.dateRaw || "";
+      const bRaw = b.metadata.dateRaw || "";
+      return aRaw.localeCompare(bRaw);
+    })
+    .map((letter) => {
+      const dateRaw = letter.metadata.dateRaw;
+      const parsed = parseDateRaw(dateRaw);
+      const mediaType = getPrimaryMediaType(letter);
+      const hook = letter.metadata.hook || "";
+      const hookLine = hook.length > 100 ? hook.slice(0, 97) + "..." : hook;
+      const desc = letter.metadata.description || "";
+      const descLine = desc.length > 160 ? desc.slice(0, 157) + "..." : desc;
+
+      return {
+        letterId: letter.id,
+        date: letter.metadata.date || dateRaw || null,
+        dateRaw: dateRaw || null,
+        dateFormatted: parsed ? formatDateShort(parsed) : dateRaw || "Undated",
+        mediaType,
+        mediaLabel: getMediaLabel(mediaType),
+        hookLine,
+        sender: letter.metadata.sender?.trim() || null,
+        recipient: letter.metadata.recipient?.trim() || null,
+        description: descLine || null,
+      };
+    });
+}
+
+/* ------------------------------------------------------------------ */
+/*  At-a-Glance Facets                                                 */
+/* ------------------------------------------------------------------ */
+
+export interface AtAGlanceFacets {
   topics: CollectionFacet[];
-  correspondents: CollectionFacet[];
-  threads: CollectionThread[];
+  places: CollectionFacet[];
+  people: CollectionFacet[];
   formats: CollectionFormatFacet[];
-}
-
-export interface CollectionFilters {
-  topic: string | null;
-  correspondent: string | null;
-  threadKey: string | null;
-  format: LetterImageType | null;
 }
 
 function normalizeValue(value: string): string {
   return value.trim().toLowerCase();
 }
 
-function normalizeOptionalValue(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const normalized = normalizeValue(value);
-  return normalized || null;
-}
-
-function normalizeDateForCompare(value: string | null): string {
-  if (!value) return "";
-  return value.replace(/[^0-9]/g, "");
-}
-
-function getLetterDateValue(letter: Letter): string | null {
-  return letter.metadata.date || letter.metadata.dateRaw || null;
-}
-
-export function getThreadKey(sender: string | null | undefined, recipient: string | null | undefined): string {
-  const from = sender?.trim() || "Unknown sender";
-  const to = recipient?.trim() || "Unknown recipient";
-  return `${from} -> ${to}`;
-}
-
-export function buildCollectionFacets(letters: Letter[]): CollectionFacets {
+export function buildAtAGlanceFacets(letters: Letter[]): AtAGlanceFacets {
   const topicCounts = new Map<string, { label: string; count: number }>();
-  const correspondentCounts = new Map<string, { label: string; count: number }>();
-  const threadMap = new Map<string, CollectionThread>();
+  const placeCounts = new Map<string, { label: string; count: number }>();
+  const peopleCounts = new Map<string, { label: string; count: number }>();
   const formatCounts = new Map<LetterImageType, number>();
+
   const formatLabels: Record<LetterImageType, string> = {
     letter: "Letters",
     photo: "Photos",
-    ephemera: "Ephemera",
-    voice: "Voice",
-    article: "Articles",
-    diary: "Diary",
+    telegram: "Telegrams",
     cover: "Covers",
     card: "Cards",
-    telegram: "Telegrams",
+    ephemera: "Ephemera",
+    article: "Articles",
+    diary: "Diary",
+    voice: "Voice",
   };
 
   for (const letter of letters) {
+    // Topics (deduplicated per letter)
     const letterTopics = new Set<string>();
     for (const topic of [...(letter.metadata.tags || []), ...(letter.metadata.primaryTopics || [])]) {
-      const normalized = normalizeOptionalValue(topic);
-      const display = topic?.trim();
-      if (normalized && display) {
-        letterTopics.add(normalized);
-        if (!topicCounts.has(normalized)) {
-          topicCounts.set(normalized, { label: display, count: 0 });
-        }
-      }
-    }
-
-    for (const normalizedTopic of letterTopics) {
-      const current = topicCounts.get(normalizedTopic);
-      if (current) {
-        current.count += 1;
-      }
-    }
-
-    const correspondentEntries = [letter.metadata.sender, letter.metadata.recipient]
-      .map((name) => {
-        const trimmed = name?.trim();
-        const normalized = normalizeOptionalValue(name);
-        if (!trimmed || !normalized) return null;
-        return { normalized, display: trimmed };
-      })
-      .filter((entry): entry is { normalized: string; display: string } => !!entry);
-    const uniqueCorrespondents = new Map<string, string>();
-    for (const correspondent of correspondentEntries) {
-      if (!uniqueCorrespondents.has(correspondent.normalized)) {
-        uniqueCorrespondents.set(correspondent.normalized, correspondent.display);
-      }
-    }
-
-    for (const [correspondent, display] of uniqueCorrespondents) {
-      const current = correspondentCounts.get(correspondent);
-      if (current) {
-        current.count += 1;
+      const trimmed = topic?.trim();
+      if (!trimmed) continue;
+      const key = normalizeValue(trimmed);
+      if (letterTopics.has(key)) continue;
+      letterTopics.add(key);
+      const existing = topicCounts.get(key);
+      if (existing) {
+        existing.count += 1;
       } else {
-        correspondentCounts.set(correspondent, { label: display, count: 1 });
+        topicCounts.set(key, { label: trimmed, count: 1 });
       }
     }
 
-    const threadKey = getThreadKey(letter.metadata.sender, letter.metadata.recipient);
-    const existingThread = threadMap.get(threadKey);
-    const letterDate = getLetterDateValue(letter);
-
-    if (!existingThread) {
-      threadMap.set(threadKey, {
-        key: threadKey,
-        sender: letter.metadata.sender?.trim() || "Unknown sender",
-        recipient: letter.metadata.recipient?.trim() || "Unknown recipient",
-        count: 1,
-        latestDate: letterDate,
-        sampleHook: letter.metadata.hook || null,
-      });
-    } else {
-      existingThread.count += 1;
-      if (
-        normalizeDateForCompare(letterDate) > normalizeDateForCompare(existingThread.latestDate)
-      ) {
-        existingThread.latestDate = letterDate;
-      }
-      if (!existingThread.sampleHook && letter.metadata.hook) {
-        existingThread.sampleHook = letter.metadata.hook;
+    // Places (from location field)
+    const location = letter.metadata.location?.trim();
+    if (location) {
+      const key = normalizeValue(location);
+      const existing = placeCounts.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        placeCounts.set(key, { label: location, count: 1 });
       }
     }
 
-    const mediaTypes = new Set<LetterImageType>(
-      letter.images.length > 0
-        ? letter.images.map((image) => image.type)
-        : [getPrimaryMediaType(letter)],
-    );
-    for (const mediaType of mediaTypes) {
-      formatCounts.set(mediaType, (formatCounts.get(mediaType) || 0) + 1);
+    // People (sender + recipient, deduplicated per letter)
+    const letterPeople = new Set<string>();
+    for (const name of [letter.metadata.sender, letter.metadata.recipient]) {
+      const trimmed = name?.trim();
+      if (!trimmed) continue;
+      const key = normalizeValue(trimmed);
+      if (letterPeople.has(key)) continue;
+      letterPeople.add(key);
+      const existing = peopleCounts.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        peopleCounts.set(key, { label: trimmed, count: 1 });
+      }
     }
+
+    // Formats
+    const mediaType = getPrimaryMediaType(letter);
+    formatCounts.set(mediaType, (formatCounts.get(mediaType) || 0) + 1);
   }
 
   const byCountThenName = (a: CollectionFacet, b: CollectionFacet) =>
     b.count - a.count || a.value.localeCompare(b.value);
 
   const topics = Array.from(topicCounts.values())
-    .map((entry) => ({ value: entry.label, count: entry.count }))
+    .map((e) => ({ value: e.label, count: e.count }))
     .sort(byCountThenName)
     .slice(0, 12);
 
-  const correspondents = Array.from(correspondentCounts.values())
-    .map((entry) => ({ value: entry.label, count: entry.count }))
+  const places = Array.from(placeCounts.values())
+    .map((e) => ({ value: e.label, count: e.count }))
     .sort(byCountThenName)
     .slice(0, 12);
 
-  const threads = Array.from(threadMap.values())
-    .sort((a, b) => {
-      const dateSort = normalizeDateForCompare(b.latestDate)!.localeCompare(
-        normalizeDateForCompare(a.latestDate)!,
-      );
-      return b.count - a.count || dateSort || a.key.localeCompare(b.key);
-    })
-    .slice(0, 8);
+  const people = Array.from(peopleCounts.values())
+    .map((e) => ({ value: e.label, count: e.count }))
+    .sort(byCountThenName)
+    .slice(0, 12);
 
   const formats = Array.from(formatCounts.entries())
     .map(([value, count]) => ({
@@ -187,88 +377,72 @@ export function buildCollectionFacets(letters: Letter[]): CollectionFacets {
       label: formatLabels[value],
       count,
     }))
-    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
-    .slice(0, 8);
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
-  return { topics, correspondents, threads, formats };
+  return { topics, places, people, formats };
 }
 
-export function applyCollectionFilters(
+/* ------------------------------------------------------------------ */
+/*  Correspondents                                                     */
+/* ------------------------------------------------------------------ */
+
+export interface Correspondent {
+  name: string;
+  sentCount: number;
+  receivedCount: number;
+  totalLetters: number;
+  biography: string | null;
+}
+
+export function buildCorrespondents(
   letters: Letter[],
-  filters: CollectionFilters,
-): Letter[] {
-  const topic = normalizeOptionalValue(filters.topic);
-  const correspondent = normalizeOptionalValue(filters.correspondent);
-  const threadKey = filters.threadKey?.trim() || null;
-  const format = filters.format;
+  keyPeople?: KeyPerson[] | null,
+): Correspondent[] {
+  const map = new Map<string, { name: string; sent: number; received: number }>();
 
-  return letters.filter((letter) => {
-    if (topic) {
-      const topics = new Set(
-        [...(letter.metadata.tags || []), ...(letter.metadata.primaryTopics || [])]
-          .map(normalizeOptionalValue)
-          .filter((value): value is string => !!value),
-      );
-      if (!topics.has(topic)) {
-        return false;
+  for (const letter of letters) {
+    const sender = letter.metadata.sender?.trim();
+    const recipient = letter.metadata.recipient?.trim();
+
+    if (sender) {
+      const key = normalizeValue(sender);
+      const existing = map.get(key);
+      if (existing) {
+        existing.sent += 1;
+      } else {
+        map.set(key, { name: sender, sent: 1, received: 0 });
       }
     }
 
-    if (correspondent) {
-      const sender = normalizeOptionalValue(letter.metadata.sender);
-      const recipient = normalizeOptionalValue(letter.metadata.recipient);
-      if (sender !== correspondent && recipient !== correspondent) {
-        return false;
+    if (recipient) {
+      const key = normalizeValue(recipient);
+      const existing = map.get(key);
+      if (existing) {
+        existing.received += 1;
+      } else {
+        map.set(key, { name: recipient, sent: 0, received: 1 });
       }
     }
+  }
 
-    if (threadKey && getThreadKey(letter.metadata.sender, letter.metadata.recipient) !== threadKey) {
-      return false;
-    }
-
-    if (format) {
-      const mediaTypes = new Set<LetterImageType>(
-        letter.images.length > 0
-          ? letter.images.map((image) => image.type)
-          : [getPrimaryMediaType(letter)],
-      );
-      if (!mediaTypes.has(format)) {
-        return false;
+  // Build bio lookup from keyPeople (normalized name → biography)
+  const bioLookup = new Map<string, string>();
+  if (keyPeople) {
+    for (const person of keyPeople) {
+      if (person.biography) {
+        bioLookup.set(normalizeValue(person.name), person.biography);
       }
     }
+  }
 
-    return true;
-  });
-}
-
-export function pickCollectionHighlights(letters: Letter[], limit = 4): Letter[] {
-  return [...letters]
-    .sort((a, b) => scoreHighlight(b) - scoreHighlight(a) || compareDatesDesc(a, b))
-    .slice(0, limit);
-}
-
-function scoreHighlight(letter: Letter): number {
-  const primaryType = getPrimaryMediaType(letter);
-  const previewText = getLetterPreviewText(letter);
-  const peopleLine = letter.metadata.sender || letter.metadata.recipient;
-  const tagsCount = (letter.metadata.tags?.length || 0) + (letter.metadata.primaryTopics?.length || 0);
-
-  let score = 0;
-
-  if (primaryType === "photo") score += 120;
-  if (primaryType === "telegram") score += 70;
-  if (primaryType === "cover" || primaryType === "card" || primaryType === "ephemera") score += 55;
-
-  score += Math.min(letter.images.length, 4) * 18;
-  if (previewText) score += 28;
-  if (peopleLine) score += 14;
-  if (tagsCount > 0) score += Math.min(tagsCount, 3) * 6;
-
-  return score;
-}
-
-function compareDatesDesc(a: Letter, b: Letter): number {
-  const aDate = normalizeDateForCompare(getLetterDateValue(a));
-  const bDate = normalizeDateForCompare(getLetterDateValue(b));
-  return bDate.localeCompare(aDate);
+  return Array.from(map.values())
+    .map((entry) => ({
+      name: entry.name,
+      sentCount: entry.sent,
+      receivedCount: entry.received,
+      totalLetters: entry.sent + entry.received,
+      biography: bioLookup.get(normalizeValue(entry.name)) || null,
+    }))
+    .sort((a, b) => b.totalLetters - a.totalLetters)
+    .slice(0, 6);
 }

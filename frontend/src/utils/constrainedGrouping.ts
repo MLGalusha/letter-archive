@@ -1,6 +1,8 @@
 import type { OcrWordBox } from '../types/Letter';
 import type { EnrichedSegment } from './attachWordsToSegments';
 
+type EdgeSegment = Pick<EnrichedSegment, 'bbox' | 'boundary'>;
+
 export interface GroupedLine {
   /** Sequential line number after grouping */
   line: number;
@@ -184,7 +186,7 @@ function identifyOutliers(
  * Gets the Y range (top, bottom) at the east (right) edge of a segment,
  * using boundary polygon if available, otherwise falling back to bbox.
  */
-export function eastEdgeY(seg: EnrichedSegment): [number, number] {
+export function eastEdgeY(seg: EdgeSegment): [number, number] {
   if (seg.boundary && seg.boundary.length >= 3) {
     // Find boundary points closest to the right edge.
     // Use the rightmost point's x as anchor, include points within a tight
@@ -206,7 +208,7 @@ export function eastEdgeY(seg: EnrichedSegment): [number, number] {
  * Gets the Y range (top, bottom) at the west (left) edge of a segment,
  * using boundary polygon if available, otherwise falling back to bbox.
  */
-export function westEdgeY(seg: EnrichedSegment): [number, number] {
+export function westEdgeY(seg: EdgeSegment): [number, number] {
   if (seg.boundary && seg.boundary.length >= 3) {
     // Find boundary points closest to the left edge (same tight tolerance)
     const sorted = [...seg.boundary].sort((a, b) => a.x - b.x);
@@ -425,7 +427,6 @@ function chainToGroupedLine(
 
   const allWords: OcrWordBox[] = [];
   let allBoundary: { x: number; y: number }[] = [];
-  let hasBoundary = true;
 
   for (const seg of chain) {
     minX = Math.min(minX, seg.bbox[0]);
@@ -434,10 +435,6 @@ function chainToGroupedLine(
     maxY = Math.max(maxY, seg.bbox[3]);
 
     allWords.push(...seg.visionWords);
-
-    if (!seg.boundary || seg.boundary.length === 0) {
-      hasBoundary = false;
-    }
   }
 
   // Merged boundary: just use the union bbox rectangle.

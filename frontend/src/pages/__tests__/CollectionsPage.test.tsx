@@ -91,7 +91,7 @@ describe("CollectionsPage", () => {
       expect(screen.getByText("War Letters")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: "Random Collection" }));
+    await user.click(screen.getByRole("button", { name: "Surprise me" }));
     expect(mockNavigate).toHaveBeenCalledWith("/collections/001");
 
     randomSpy.mockRestore();

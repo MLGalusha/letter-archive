@@ -65,7 +65,7 @@ export default function AdminLoginPage() {
         <h1>Admin Login</h1>
         {noAdmin && (
           <p className="setup-notice">
-            No admin accounts exist yet. Ask the site owner for an invite link.
+            No admin accounts exist yet. The site owner needs to create the first admin account from the server before invite links can be used.
           </p>
         )}
         <form onSubmit={handleLogin} className="admin-login-form">

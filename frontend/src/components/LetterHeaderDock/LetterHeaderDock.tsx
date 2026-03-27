@@ -5,8 +5,20 @@ import useCollectionLetters from "./useCollectionLetters";
 import LetterPickerPopover from "./LetterPickerPopover";
 import "./LetterHeaderDock.css";
 
-/** Thumb radius in px — inner track is inset by this on each side */
 const THUMB_INSET = 12;
+const WINDOW_SIZE = 30;
+const EDGE_SCROLL_MS = 120; // ms per position during edge scroll
+
+function computeWindowStart(position: number, total: number): number {
+  if (total <= WINDOW_SIZE) return 1;
+  const half = Math.floor(WINDOW_SIZE / 2);
+  const start = position - half;
+  return Math.max(1, Math.min(start, total - WINDOW_SIZE + 1));
+}
+
+function clampWS(start: number, total: number): number {
+  return Math.max(1, Math.min(start, Math.max(1, total - WINDOW_SIZE + 1)));
+}
 
 interface LetterHeaderDockProps {
   adjacent: AdjacentLettersResponse;
@@ -17,15 +29,20 @@ export default function LetterHeaderDock({ adjacent, letterId }: LetterHeaderDoc
   const navigate = useNavigate();
   const [pickerOpen, setPickerOpen] = useState(false);
   const letters = useCollectionLetters(adjacent.collectionCode);
-  const innerRef = useRef<HTMLDivElement>(null);
-
-  // Drag state — only visual during drag, navigates on release
-  const [dragPos, setDragPos] = useState<number | null>(null);
-  const isDragging = useRef(false);
-  const didDrag = useRef(false); // true if pointer moved during press
 
   const pos = adjacent.position ?? 1;
   const total = adjacent.total;
+  const needsWindow = total > WINDOW_SIZE;
+
+  // ── React state (drives renders when NOT dragging) ──────────────
+  const [windowStart, setWindowStart] = useState(() => computeWindowStart(pos, total));
+
+  useEffect(() => {
+    setWindowStart(computeWindowStart(pos, total));
+  }, [pos, total]);
+
+  const windowEnd = Math.min(windowStart + WINDOW_SIZE - 1, total);
+  const windowSize = windowEnd - windowStart + 1;
 
   const currentIdx = useMemo(
     () => (letters ? letters.findIndex((l) => l.id === letterId) : -1),
@@ -43,83 +60,229 @@ export default function LetterHeaderDock({ adjacent, letterId }: LetterHeaderDoc
     [letters, currentIdx, pos, navigate],
   );
 
-  // Convert clientX → 1-based position via the inner track element
+  // ── DOM refs for direct manipulation during drag ────────────────
+  const trackElRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLDivElement>(null);
+  const fillRef = useRef<HTMLDivElement>(null);
+  const posCounterRef = useRef<HTMLButtonElement>(null);
+  const minimapRef = useRef<HTMLDivElement>(null);
+  const ticksRef = useRef<HTMLDivElement>(null);
+
+  // ── Mutable drag state (no React re-renders) ───────────────────
+  const drag = useRef({
+    active: false,
+    didMove: false,
+    pos: 0,         // current display position during drag
+    ws: 0,          // current windowStart during drag
+    edgeDir: 0 as -1 | 0 | 1,
+    edgeRafId: 0,
+    edgeLastTick: 0,
+  });
+
+  // ── Visual update — direct DOM, zero re-renders ─────────────────
+  const paintVisuals = useCallback((displayPos: number, ws: number) => {
+    const we = Math.min(ws + WINDOW_SIZE - 1, total);
+    const wSize = we - ws + 1;
+    const pct = wSize > 1
+      ? Math.max(0, Math.min(100, ((displayPos - ws) / (wSize - 1)) * 100))
+      : 50;
+
+    if (thumbRef.current) thumbRef.current.style.left = `${pct}%`;
+    if (fillRef.current) fillRef.current.style.width = `calc(${pct}% + ${THUMB_INSET}px)`;
+    if (posCounterRef.current) {
+      posCounterRef.current.firstElementChild!.textContent = `${displayPos}`;
+    }
+
+    // Minimap
+    if (minimapRef.current && needsWindow) {
+      const mLeft = ((ws - 1) / (total - 1)) * 100;
+      const mWidth = (Math.min(WINDOW_SIZE, total) / total) * 100;
+      minimapRef.current.style.left = `${mLeft}%`;
+      minimapRef.current.style.width = `${mWidth}%`;
+    }
+
+    // Ticks — reposition and update active class
+    if (ticksRef.current) {
+      const ticks = ticksRef.current.children;
+      for (let i = 0; i < ticks.length; i++) {
+        const el = ticks[i] as HTMLElement;
+        const tickPos = Number(el.dataset.pos);
+        const offset = tickPos - ws;
+        if (wSize > 1) el.style.left = `${(offset / (wSize - 1)) * 100}%`;
+        el.classList.toggle("current", tickPos === displayPos);
+      }
+    }
+  }, [total, needsWindow]);
+
+  // ── Edge scroll via rAF (smooth, no setInterval jank) ───────────
+  const edgeScrollLoop = useCallback((now: number) => {
+    const d = drag.current;
+    if (!d.active || d.edgeDir === 0) return;
+
+    if (now - d.edgeLastTick >= EDGE_SCROLL_MS) {
+      d.edgeLastTick = now;
+      const nextWS = clampWS(d.ws + d.edgeDir, total);
+      if (nextWS !== d.ws) {
+        d.ws = nextWS;
+        d.pos = Math.max(1, Math.min(total, d.pos + d.edgeDir));
+        paintVisuals(d.pos, d.ws);
+      } else {
+        d.edgeDir = 0; // hit the end
+        return;
+      }
+    }
+
+    d.edgeRafId = requestAnimationFrame(edgeScrollLoop);
+  }, [total, paintVisuals]);
+
+  const startEdgeScroll = useCallback((dir: -1 | 1) => {
+    const d = drag.current;
+    if (d.edgeDir === dir) return;
+    if (d.edgeRafId) cancelAnimationFrame(d.edgeRafId);
+    d.edgeDir = dir;
+    d.edgeLastTick = performance.now();
+    d.edgeRafId = requestAnimationFrame(edgeScrollLoop);
+  }, [edgeScrollLoop]);
+
+  const stopEdgeScroll = useCallback(() => {
+    const d = drag.current;
+    if (d.edgeRafId) { cancelAnimationFrame(d.edgeRafId); d.edgeRafId = 0; }
+    d.edgeDir = 0;
+  }, []);
+
+  // ── posFromClientX — maps cursor to position within window ──────
   const posFromClientX = useCallback(
-    (clientX: number) => {
+    (clientX: number, ws: number) => {
       if (!innerRef.current) return pos;
       const rect = innerRef.current.getBoundingClientRect();
+      const we = Math.min(ws + WINDOW_SIZE - 1, total);
+      const wSize = we - ws + 1;
       const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      return Math.round(pct * (total - 1)) + 1;
+      return ws + Math.round(pct * (wSize - 1));
     },
     [total, pos],
   );
 
+  // ── Pointer handlers ────────────────────────────────────────────
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!letters) return;
       e.preventDefault();
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-      isDragging.current = true;
-      didDrag.current = false;
-      const p = posFromClientX(e.clientX);
-      setDragPos(p);
+      trackElRef.current?.setPointerCapture(e.pointerId);
+
+      const d = drag.current;
+      d.active = true;
+      d.didMove = false;
+      d.ws = windowStart;
+      d.pos = posFromClientX(e.clientX, windowStart);
+      d.edgeDir = 0;
+
+      // Add dragging class
+      trackElRef.current?.classList.add("is-dragging");
+      posCounterRef.current?.classList.add("is-previewing");
+
+      paintVisuals(d.pos, d.ws);
     },
-    [letters, posFromClientX],
+    [letters, windowStart, posFromClientX, paintVisuals],
   );
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!isDragging.current) return;
-      didDrag.current = true;
-      setDragPos(posFromClientX(e.clientX));
+      const d = drag.current;
+      if (!d.active) return;
+      d.didMove = true;
+
+      if (d.edgeDir !== 0) {
+        // Edge-scrolling — check if cursor moved back away from edge
+        const p = posFromClientX(e.clientX, d.ws);
+        const we = Math.min(d.ws + WINDOW_SIZE - 1, total);
+        const stillAtRight = d.edgeDir === 1 && p >= we;
+        const stillAtLeft = d.edgeDir === -1 && p <= d.ws;
+        if (!stillAtRight && !stillAtLeft) {
+          stopEdgeScroll();
+          d.pos = p;
+          paintVisuals(d.pos, d.ws);
+        }
+        return;
+      }
+
+      const p = posFromClientX(e.clientX, d.ws);
+      d.pos = p;
+      paintVisuals(d.pos, d.ws);
+
+      if (needsWindow) {
+        const we = Math.min(d.ws + WINDOW_SIZE - 1, total);
+        if (p >= we && we < total) startEdgeScroll(1);
+        else if (p <= d.ws && d.ws > 1) startEdgeScroll(-1);
+      }
     },
-    [posFromClientX],
+    [posFromClientX, total, needsWindow, paintVisuals, startEdgeScroll, stopEdgeScroll],
   );
 
   const handlePointerUp = useCallback(
-    () => {
-      if (!isDragging.current) return;
-      isDragging.current = false;
-      // Navigate to wherever the thumb is visually — keep dragPos held
-      // so the thumb stays put until the new page loads and pos updates
-      const finalPos = dragPos ?? pos;
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const d = drag.current;
+      if (!d.active) return;
+      d.active = false;
+      trackElRef.current?.releasePointerCapture(e.pointerId);
+      stopEdgeScroll();
+
+      // Remove dragging class
+      trackElRef.current?.classList.remove("is-dragging");
+      posCounterRef.current?.classList.remove("is-previewing");
+
+      const finalPos = d.pos;
+      // Sync React state to hold position until navigation completes
+      setWindowStart(d.ws);
       navigateToPos(finalPos);
-      // dragPos is NOT cleared here — cleared below when pos catches up
     },
-    [dragPos, pos, navigateToPos],
+    [navigateToPos, stopEdgeScroll],
   );
 
-  const handlePointerCancel = useCallback(() => {
-    isDragging.current = false;
-    didDrag.current = false;
-    setDragPos(null);
-  }, []);
+  const cancelDrag = useCallback(() => {
+    const d = drag.current;
+    if (!d.active) return;
+    d.active = false;
+    stopEdgeScroll();
+    trackElRef.current?.classList.remove("is-dragging");
+    posCounterRef.current?.classList.remove("is-previewing");
+    // Reset visuals to actual position
+    const ws = computeWindowStart(pos, total);
+    setWindowStart(ws);
+    paintVisuals(pos, ws);
+  }, [pos, total, stopEdgeScroll, paintVisuals]);
 
-  // Click = tap without drag — navigate immediately
+  const handlePointerCancel = useCallback(() => cancelDrag(), [cancelDrag]);
+  const handleDockPointerLeave = useCallback(() => cancelDrag(), [cancelDrag]);
+
+  // Click = tap without drag
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (didDrag.current) return; // was a drag, not a click
+      if (drag.current.didMove) return;
       if (!letters) return;
-      const targetPos = posFromClientX(e.clientX);
+      const targetPos = posFromClientX(e.clientX, windowStart);
       navigateToPos(targetPos);
     },
-    [letters, posFromClientX, navigateToPos],
+    [letters, posFromClientX, windowStart, navigateToPos],
   );
 
-  // Clear held dragPos once the actual position catches up (page loaded)
-  useEffect(() => {
-    if (dragPos != null && !isDragging.current) {
-      setDragPos(null);
-    }
-  }, [pos, dragPos]);
+  // Cleanup on unmount
+  useEffect(() => () => {
+    if (drag.current.edgeRafId) cancelAnimationFrame(drag.current.edgeRafId);
+  }, []);
 
-  // Visual position — follows drag in real-time, otherwise shows actual position
-  const displayPos = dragPos ?? pos;
-  const progressPct = total > 1 ? ((displayPos - 1) / (total - 1)) * 100 : 50;
-  const hasDrag = dragPos != null;
+  // ── Render (only runs on mount, navigation, picker toggle) ──────
+  const displayPos = pos;
+  const progressPct = windowSize > 1
+    ? Math.max(0, Math.min(100, ((displayPos - windowStart) / (windowSize - 1)) * 100))
+    : 50;
+
+  const minimapLeft = needsWindow ? ((windowStart - 1) / (total - 1)) * 100 : 0;
+  const minimapWidth = needsWindow ? (Math.min(WINDOW_SIZE, total) / total) * 100 : 100;
 
   return (
-    <div className="letter-header-dock">
+    <div className="letter-header-dock" onPointerLeave={handleDockPointerLeave}>
       <div className="dock-strip">
         <Link
           to={`/collections/${adjacent.collectionCode}`}
@@ -143,7 +306,8 @@ export default function LetterHeaderDock({ adjacent, letterId }: LetterHeaderDoc
         </button>
 
         <div
-          className={`dock-strip-track${hasDrag ? " is-dragging" : ""}`}
+          ref={trackElRef}
+          className="dock-strip-track"
           onClick={handleClick}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -162,29 +326,51 @@ export default function LetterHeaderDock({ adjacent, letterId }: LetterHeaderDoc
             ref={innerRef}
             style={{ margin: `0 ${THUMB_INSET}px` }}
           >
-            <div className="dock-track-fill" style={{ width: `calc(${progressPct}% + ${THUMB_INSET}px)` }} />
-            <div className="dock-track-thumb" style={{ left: `${progressPct}%` }} />
-            {total <= 30 && (
-              <div className="dock-track-ticks">
-                {Array.from({ length: total }, (_, i) => (
-                  <span
-                    key={i}
-                    className={`dock-track-tick${i + 1 === displayPos ? " current" : ""}`}
-                    style={{ left: total > 1 ? `${(i / (total - 1)) * 100}%` : "50%" }}
-                  />
-                ))}
-              </div>
-            )}
+            <div ref={fillRef} className="dock-track-fill" style={{ width: `calc(${progressPct}% + ${THUMB_INSET}px)` }} />
+            <div ref={thumbRef} className="dock-track-thumb" style={{ left: `${progressPct}%` }} />
+            <div className="dock-track-ticks" ref={ticksRef}>
+              {(() => {
+                // Render extra buffer ticks so sliding transitions have no gaps
+                const BUFFER = needsWindow ? WINDOW_SIZE : 0;
+                const tickStart = Math.max(1, windowStart - BUFFER);
+                const tickEnd = Math.min(total, windowEnd + BUFFER);
+                const ticks: React.ReactElement[] = [];
+                for (let tickPos = tickStart; tickPos <= tickEnd; tickPos++) {
+                  const offset = tickPos - windowStart;
+                  const left = windowSize > 1 ? (offset / (windowSize - 1)) * 100 : 50;
+                  ticks.push(
+                    <span
+                      key={tickPos}
+                      data-pos={tickPos}
+                      className={`dock-track-tick${tickPos === displayPos ? " current" : ""}`}
+                      style={{ left: `${left}%` }}
+                    />
+                  );
+                }
+                return ticks;
+              })()}
+            </div>
           </div>
+
+          {needsWindow && (
+            <div className="dock-track-minimap">
+              <div
+                ref={minimapRef}
+                className="dock-track-minimap-window"
+                style={{ left: `${minimapLeft}%`, width: `${minimapWidth}%` }}
+              />
+            </div>
+          )}
         </div>
 
         <button
           type="button"
-          className={`dock-strip-pos${hasDrag ? " is-previewing" : ""}`}
+          ref={posCounterRef}
+          className="dock-strip-pos"
           onClick={() => setPickerOpen((v) => !v)}
           aria-label="Open letter picker"
         >
-          {displayPos}<span className="dock-strip-pos-sep">/</span>{total}
+          <span>{displayPos}</span><span className="dock-strip-pos-sep">/</span>{total}
         </button>
 
         <button

@@ -1,8 +1,8 @@
 .update-detail {
   display: flex;
   flex-direction: column;
-  gap: 1.4rem;
-  max-width: 860px;
+  gap: 1.3rem;
+  max-width: 900px;
   margin: 0 auto;
   width: 100%;
   text-align: left;
@@ -12,23 +12,26 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: var(--font-sm);
-  font-weight: 600;
+  width: fit-content;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   color: var(--text-muted);
   text-decoration: none;
   transition: color 0.2s ease;
 }
 
 .update-back-link:hover {
-  color: var(--text);
+  color: var(--accent-strong);
 }
 
 .update-hero-image {
   width: 100%;
-  border-radius: 28px;
+  border-radius: 34px;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  box-shadow: var(--shadow);
 }
 
 .update-hero-image img {
@@ -37,72 +40,89 @@
   display: block;
 }
 
+.update-header,
+.markdown-content,
+.update-cta {
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 250, 242, 0.98));
+  box-shadow: var(--shadow-soft);
+}
+
 .update-header {
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
   text-align: left;
+  padding: 1.75rem;
+  border-radius: 34px;
 }
 
 .update-meta {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: 0.6rem;
   flex-wrap: wrap;
 }
 
-.update-detail-category {
-  font-size: var(--font-xs);
+.update-detail-category,
+.update-meta time {
+  font-size: 0.74rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--text-muted);
-  background: rgba(0, 0, 0, 0.03);
-  padding: 0.35rem 0.65rem;
+  letter-spacing: 0.16em;
+}
+
+.update-detail-category {
+  color: var(--accent-strong);
+  background: rgba(223, 241, 245, 0.8);
+  padding: 0.4rem 0.7rem;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(31, 109, 122, 0.18);
 }
 
 .update-meta time {
-  font-size: var(--font-xs);
   color: var(--text-muted);
 }
 
 .update-title {
   margin: 0;
-  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
-  font-size: clamp(2.2rem, 5vw, 4rem);
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: clamp(2.8rem, 6vw, 4.5rem);
   font-weight: 700;
-  line-height: 1.04;
-  letter-spacing: -0.04em;
+  line-height: 0.96;
+  letter-spacing: -0.05em;
   color: var(--text);
 }
 
 .update-dek {
   margin: 0;
-  font-size: clamp(1.08rem, 2vw, 1.3rem);
-  line-height: 1.75;
+  font-size: clamp(1.06rem, 2vw, 1.24rem);
+  line-height: 1.78;
   color: var(--text-muted);
   max-width: 60ch;
 }
 
 .update-byline {
-  font-size: var(--font-sm);
-  color: var(--text);
   margin: 0;
-  font-weight: 600;
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
 }
 
 .update-byline-role {
   color: var(--text-muted);
-  font-weight: 400;
+  font-weight: 600;
 }
 
 .markdown-content {
-  font-size: 1.05rem;
-  line-height: 1.9;
+  padding: 1.75rem;
+  font-size: 1.04rem;
+  line-height: 1.92;
   color: var(--text);
   text-align: left;
+  border-radius: 34px;
 }
 
 .markdown-content > *:first-child {
@@ -112,27 +132,27 @@
 .markdown-content h1,
 .markdown-content h2,
 .markdown-content h3 {
-  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
   color: var(--text);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 
 .markdown-content h1 {
-  font-size: 2rem;
+  font-size: 2.3rem;
   margin: 2.6rem 0 1rem;
-  line-height: 1.1;
+  line-height: 1.02;
 }
 
 .markdown-content h2 {
-  font-size: 1.55rem;
+  font-size: 1.72rem;
   margin: 2.2rem 0 0.75rem;
-  line-height: 1.2;
+  line-height: 1.1;
 }
 
 .markdown-content h3 {
-  font-size: 1.2rem;
-  margin: 1.6rem 0 0.6rem;
-  line-height: 1.3;
+  font-size: 1.32rem;
+  margin: 1.7rem 0 0.6rem;
+  line-height: 1.2;
 }
 
 .markdown-content p {
@@ -141,32 +161,32 @@
 }
 
 .markdown-content a {
-  color: var(--text);
+  color: var(--accent-strong);
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
 
 .markdown-content a:hover {
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 .markdown-content ul,
 .markdown-content ol {
-  margin: 0 0 1.2rem;
+  margin: 0 0 1.25rem;
   padding-left: 1.35rem;
 }
 
 .markdown-content li {
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.5rem;
 }
 
 .markdown-content blockquote {
-  margin: 1.6rem 0;
-  padding: 0.1rem 0 0.1rem 1.25rem;
+  margin: 1.7rem 0;
+  padding: 0.2rem 0 0.2rem 1.3rem;
   border-left: 3px solid var(--accent);
   color: var(--text-muted);
-  font-size: 1.1rem;
+  font-size: 1.12rem;
   font-style: italic;
 }
 
@@ -175,20 +195,20 @@
 }
 
 .markdown-inline-image {
-  margin: 1.8rem 0;
+  margin: 1.9rem 0;
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 24px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.08);
+  border-radius: 28px;
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  box-shadow: 0 20px 44px rgba(29, 26, 20, 0.08);
 }
 
 .markdown-table-wrap {
   overflow-x: auto;
   margin: 1.8rem 0;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 22px;
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  border-radius: 24px;
   background: rgba(255, 255, 255, 0.78);
 }
 
@@ -201,29 +221,29 @@
 .markdown-table-wrap th,
 .markdown-table-wrap td {
   padding: 0.9rem 1rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(217, 207, 191, 0.75);
   text-align: left;
   vertical-align: top;
 }
 
 .markdown-table-wrap thead {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(223, 241, 245, 0.45);
 }
 
 .markdown-content pre {
-  background: rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 20px;
+  background: rgba(244, 236, 224, 0.86);
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  border-radius: 22px;
   padding: 1rem 1.1rem;
   overflow-x: auto;
-  font-size: var(--font-sm);
+  font-size: 0.9rem;
   line-height: 1.6;
   margin: 0 0 1.25rem;
 }
 
 .markdown-content code {
   font-size: 0.9em;
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(244, 236, 224, 0.86);
   padding: 0.18em 0.35em;
   border-radius: 8px;
 }
@@ -235,22 +255,20 @@
 
 .markdown-content hr {
   border: none;
-  border-top: 1px solid rgba(0, 0, 0, 0.12);
+  border-top: 1px solid rgba(217, 207, 191, 0.95);
   margin: 2rem 0;
 }
 
 .update-cta {
-  margin-top: 0.3rem;
+  margin-top: 0.1rem;
   padding: 1.35rem;
   border-radius: 28px;
-  background: linear-gradient(135deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.01));
-  border: 1px solid rgba(0, 0, 0, 0.08);
   text-align: left;
 }
 
 .update-cta-btn {
   text-decoration: none;
-  font-size: var(--font-sm);
+  font-size: 0.9rem;
   display: inline-block;
 }
 
@@ -263,25 +281,27 @@
     gap: 1rem;
   }
 
-  .update-title {
-    font-size: clamp(1.9rem, 12vw, 2.8rem);
-  }
-
-  .update-dek {
-    font-size: 1rem;
-    line-height: 1.7;
-  }
-
+  .update-header,
   .markdown-content {
-    font-size: 1rem;
-    line-height: 1.75;
+    padding: 1.1rem;
+    border-radius: 24px;
+  }
+
+  .update-title {
+    font-size: clamp(2.2rem, 14vw, 3.2rem);
+  }
+
+  .update-dek,
+  .markdown-content {
+    font-size: 0.98rem;
+    line-height: 1.78;
   }
 
   .markdown-content h1 {
-    font-size: 1.6rem;
+    font-size: 1.8rem;
   }
 
   .markdown-content h2 {
-    font-size: 1.32rem;
+    font-size: 1.45rem;
   }
 }

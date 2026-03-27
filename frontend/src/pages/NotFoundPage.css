@@ -2,79 +2,71 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  text-align: center;
-  padding: var(--spacing-xl) var(--spacing-md);
+  text-align: left;
+  padding: 2rem;
   min-height: 60vh;
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  border-radius: 34px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 250, 242, 0.98));
+  box-shadow: var(--shadow);
 }
-
-/* ── 404 number ────────────────────────────────────── */
 
 .notfound-code {
   font-family: "Playfair Display", Georgia, "Times New Roman", serif;
-  font-size: clamp(5rem, 12vw, 9rem);
+  font-size: clamp(5rem, 12vw, 8rem);
   font-weight: 700;
-  line-height: 1;
-  color: var(--border);
-  margin-bottom: var(--spacing-sm);
-  letter-spacing: -0.02em;
+  line-height: 0.9;
+  color: rgba(31, 109, 122, 0.22);
+  margin-bottom: 0.7rem;
+  letter-spacing: -0.04em;
 }
-
-/* ── Heading ───────────────────────────────────────── */
 
 .notfound-heading {
   font-family: "Playfair Display", Georgia, "Times New Roman", serif;
-  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-size: clamp(2rem, 4vw, 3rem);
   font-weight: 700;
-  line-height: 1.2;
-  margin-bottom: var(--spacing-sm);
-  letter-spacing: -0.01em;
+  line-height: 1;
+  margin: 0 0 0.7rem;
+  letter-spacing: -0.04em;
 }
-
-/* ── Description ───────────────────────────────────── */
 
 .notfound-message {
-  max-width: 440px;
-  font-size: var(--font-lg);
-  line-height: 1.7;
+  max-width: 30rem;
+  font-size: 1rem;
+  line-height: 1.75;
   color: var(--text-muted);
-  margin-bottom: var(--spacing-lg);
+  margin: 0 0 1.2rem;
 }
-
-/* ── Actions ───────────────────────────────────────── */
 
 .notfound-actions {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: 0.8rem;
 }
 
 .notfound-btn {
   text-decoration: none;
-  font-size: var(--font-sm);
+  font-size: 0.9rem;
   cursor: pointer;
 }
 
 .notfound-link {
-  font-size: var(--font-sm);
-  font-weight: 600;
-  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
   text-decoration: none;
-  transition: opacity 0.15s ease;
 }
-
-.notfound-link:hover {
-  opacity: 0.6;
-}
-
-/* ── Mobile ────────────────────────────────────────── */
 
 @media (max-width: 640px) {
   .notfound-page {
-    padding: var(--spacing-lg) var(--spacing-sm);
+    padding: 1.2rem;
     min-height: 50vh;
+    border-radius: 24px;
   }
 
   .notfound-code {

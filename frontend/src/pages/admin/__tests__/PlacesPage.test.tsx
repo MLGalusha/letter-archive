@@ -53,6 +53,10 @@ vi.mock('../../../api/entities', () => ({
   undoPlaceAction: vi.fn(),
 }));
 
+vi.mock('../../../api/auth', () => ({
+  isAuthenticated: () => true,
+}));
+
 vi.mock('../../../components/common', () => ({
   Button: ({
     children,
@@ -71,6 +75,7 @@ vi.mock('../../../components/common', () => ({
     title?: string;
     children?: ReactNode;
   }) => (isOpen ? <div aria-label={title}>{children}</div> : null),
+  Icon: () => <span aria-hidden="true">icon</span>,
 }));
 
 vi.mock('../../../components/MergeComparison', () => ({

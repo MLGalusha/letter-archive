@@ -2,9 +2,24 @@ import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { listCollections, type CollectionInfo } from '../api/collections';
 import { getContentPage } from '../api/client';
+import { resolveContentPageContent } from '../content/contentPageConfig';
 import Footer from '../components/Footer/Footer';
 import { useAsync } from '../hooks/useAsync';
 import './AboutPage.css';
+
+function renderParagraphs(value: string) {
+  return value.split('\n\n').map((paragraph, index) => (
+    <span key={`${paragraph.slice(0, 12)}-${index}`}>
+      {index > 0 && (
+        <>
+          <br />
+          <br />
+        </>
+      )}
+      {paragraph}
+    </span>
+  ));
+}
 
 export default function AboutPage() {
   const { data } = useAsync(async () => {
@@ -30,9 +45,10 @@ export default function AboutPage() {
   }, []);
 
   const stats = data?.stats ?? null;
-  const content = data?.content ?? null;
-
-  const get = (key: string, fallback: string) => content?.[key] || fallback;
+  const resolved = resolveContentPageContent('about', data?.content);
+  const secondaryCtaLabel = /explore/i.test(resolved.cta_secondary_label)
+    ? 'Read the Blog'
+    : resolved.cta_secondary_label;
 
   return (
     <div className="body-layout">
@@ -44,13 +60,9 @@ export default function AboutPage() {
       <div className="about-page">
         {/* Hero */}
         <header className="about-hero">
-          <p className="about-kicker">{get('hero_kicker', 'About the Archive')}</p>
-          <h1 className="about-headline">
-            {get('hero_heading', 'Every letter is a conversation across time')}
-          </h1>
-          <p className="about-subtitle">
-            {get('hero_subtitle', 'We preserve personal letters — the kind written at kitchen tables, in hospital wards, on trains between cities — so the voices inside them are never lost.')}
-          </p>
+          <p className="about-kicker">{resolved.hero_kicker}</p>
+          <h1 className="about-headline">{resolved.hero_heading}</h1>
+          <p className="about-subtitle">{resolved.hero_subtitle}</p>
         </header>
 
         {/* Stats */}
@@ -58,67 +70,55 @@ export default function AboutPage() {
           <div className="about-stats">
             <div className="stat-item">
               <span className="stat-number">{stats.letters.toLocaleString()}</span>
-              <span className="stat-label">Letters preserved</span>
+              <span className="stat-label">{resolved.stats_letters_label}</span>
             </div>
             <div className="stat-divider" />
             <div className="stat-item">
               <span className="stat-number">{stats.collections}</span>
-              <span className="stat-label">Collections</span>
+              <span className="stat-label">{resolved.stats_collections_label}</span>
             </div>
             <div className="stat-divider" />
             <div className="stat-item">
-              <span className="stat-number">100+</span>
-              <span className="stat-label">Years of history</span>
+              <span className="stat-number">{resolved.stats_years_value}</span>
+              <span className="stat-label">{resolved.stats_years_label}</span>
             </div>
           </div>
         )}
 
         {/* Why it matters */}
         <section className="about-section about-section-featured">
-          <div className="section-eyebrow">Why letters matter</div>
-          <blockquote className="about-quote">
-            {get('quote_text', 'History books record the decisions of generals and presidents. Personal letters record everything else — the price of bread, the ache of distance, the small joys that never made the newspapers.')}
-          </blockquote>
-          {get('quote_attribution', '') && (
-            <p className="about-quote-attribution">— {content!.quote_attribution}</p>
+          <div className="section-eyebrow">{resolved.why_eyebrow}</div>
+          <blockquote className="about-quote">{resolved.quote_text}</blockquote>
+          {resolved.quote_attribution && (
+            <p className="about-quote-attribution">— {resolved.quote_attribution}</p>
           )}
-          <p>
-            {get('why_matters_text', 'These documents are fragile. Paper yellows, ink fades, and families move on. Every year, irreplaceable correspondence is lost to attics, floods, and estate sales. Letter Archive exists to intervene — to digitize, transcribe, and share these fragments before they disappear.')}
-          </p>
+          <p>{resolved.why_matters_text}</p>
         </section>
 
         {/* Process */}
         <section className="about-process">
-          <div className="section-eyebrow">How it works</div>
-          <h2>{get('process_heading', 'From shoebox to searchable archive')}</h2>
+          <div className="section-eyebrow">{resolved.process_eyebrow}</div>
+          <h2>{resolved.process_heading}</h2>
           <div className="process-steps">
             <div className="process-step">
               <div className="step-number">01</div>
-              <h3>{get('process_step_1_title', 'Digitize')}</h3>
-              <p>
-                {get('process_step_1_text', 'Letters are carefully photographed at high resolution, preserving every crease, stain, and margin note.')}
-              </p>
+              <h3>{resolved.process_step_1_title}</h3>
+              <p>{resolved.process_step_1_text}</p>
             </div>
             <div className="process-step">
               <div className="step-number">02</div>
-              <h3>{get('process_step_2_title', 'Transcribe')}</h3>
-              <p>
-                {get('process_step_2_text', 'AI-assisted transcription converts handwriting to searchable text, then human reviewers verify accuracy.')}
-              </p>
+              <h3>{resolved.process_step_2_title}</h3>
+              <p>{resolved.process_step_2_text}</p>
             </div>
             <div className="process-step">
               <div className="step-number">03</div>
-              <h3>{get('process_step_3_title', 'Contextualize')}</h3>
-              <p>
-                {get('process_step_3_text', 'Each letter is annotated with dates, locations, people, and topics — connecting it to the broader historical record.')}
-              </p>
+              <h3>{resolved.process_step_3_title}</h3>
+              <p>{resolved.process_step_3_text}</p>
             </div>
             <div className="process-step">
               <div className="step-number">04</div>
-              <h3>{get('process_step_4_title', 'Publish')}</h3>
-              <p>
-                {get('process_step_4_text', 'Verified letters are published to the open archive where anyone can read, search, and explore the connections between them.')}
-              </p>
+              <h3>{resolved.process_step_4_title}</h3>
+              <p>{resolved.process_step_4_text}</p>
             </div>
           </div>
         </section>
@@ -126,43 +126,33 @@ export default function AboutPage() {
         {/* Two-column: Contribute + Researchers */}
         <div className="about-two-col">
           <section className="about-section">
-            <div className="section-eyebrow">Contribute</div>
-            <h2>{get('contribute_heading', 'Your letters have a story')}</h2>
-            <p>
-              {get('contribute_text', 'Old family correspondence gathering dust in a drawer? A bundle of postcards from a relative you never met? We can help preserve them — digitized, transcribed, and made available to future generations.\n\nEvery contribution enriches the archive and helps paint a fuller picture of everyday life across generations.').split('\n\n').map((para, i) => (
-                <span key={i}>{i > 0 && <><br /><br /></>}{para}</span>
-              ))}
-            </p>
+            <div className="section-eyebrow">{resolved.contribute_eyebrow}</div>
+            <h2>{resolved.contribute_heading}</h2>
+            <p>{renderParagraphs(resolved.contribute_text)}</p>
             <Link to="/support#contact" className="about-link">
-              Get in touch &rarr;
+              {resolved.contribute_link_label} &rarr;
             </Link>
           </section>
 
           <section className="about-section">
-            <div className="section-eyebrow">Research</div>
-            <h2>{get('research_heading', 'A primary source collection')}</h2>
-            <p>
-              {get('research_text', 'Historians, genealogists, and students will find rich material here — patterns in migration, economic hardship, family dynamics, and cultural change, told through the words of the people who lived it.\n\nThe archive is fully searchable by date, location, person, topic, and full-text content. We welcome academic inquiries and collaborations.').split('\n\n').map((para, i) => (
-                <span key={i}>{i > 0 && <><br /><br /></>}{para}</span>
-              ))}
-            </p>
+            <div className="section-eyebrow">{resolved.research_eyebrow}</div>
+            <h2>{resolved.research_heading}</h2>
+            <p>{renderParagraphs(resolved.research_text)}</p>
             <Link to="/collections" className="about-link">
-              Browse collections &rarr;
+              {resolved.research_link_label} &rarr;
             </Link>
           </section>
         </div>
 
         {/* CTA */}
         <div className="about-cta">
-          <p className="cta-text">
-            Start exploring — read the letters, follow the people, trace the places.
-          </p>
+          <p className="cta-text">{resolved.cta_text}</p>
           <div className="cta-buttons">
             <Link to="/collections" className="btn-card cta-btn">
-              Browse Collections
+              {resolved.cta_primary_label}
             </Link>
-            <Link to="/explore" className="btn-card cta-btn">
-              Explore the Graph
+            <Link to="/blog" className="btn-card cta-btn">
+              {secondaryCtaLabel}
             </Link>
           </div>
         </div>

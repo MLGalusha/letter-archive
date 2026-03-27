@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "E2E tests for letter-archive",
   "engines": {
-    "node": ">=20.19.0 <21 || >=22.12.0"
+    "node": ">=20.20.1 <21 || >=22.12.0"
   },
   "scripts": {
     "test": "playwright test",

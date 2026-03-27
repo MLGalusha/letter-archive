@@ -78,6 +78,7 @@ describe('images route integration', () => {
       id: 'page-1',
       storagePath: 'collections/009/19470810/L01/009-19470810-L01-01.jpg',
       originalFilename: '009-19470810-L01-01.JPG',
+      letter: { visibility: 'PUBLISHED' },
     });
     getAbsoluteStoragePathMock.mockReturnValue('/abs/storage/page-1.JPG');
     statMock.mockResolvedValue({ size: 4096 });
@@ -127,6 +128,7 @@ describe('images route integration', () => {
       id: 'page-2',
       storagePath: 'collections/009/19470810/L01/009-19470810-L01-02.png',
       originalFilename: '009-19470810-L01-02.png',
+      letter: { visibility: 'PUBLISHED' },
     });
     getAbsoluteStoragePathMock.mockReturnValue('/abs/storage/page-2.png');
     statMock.mockRejectedValue(new Error('ENOENT'));
@@ -154,6 +156,7 @@ describe('images route integration', () => {
       id: 'page-3',
       storagePath: 'collections/009/19470810/L01/009-19470810-L01-03.bin',
       originalFilename: '009-19470810-L01-03.bin',
+      letter: { visibility: 'PUBLISHED' },
     });
     getAbsoluteStoragePathMock.mockReturnValue('/abs/storage/page-3.bin');
     statMock.mockResolvedValue({ size: 1024 });

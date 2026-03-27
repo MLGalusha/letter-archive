@@ -54,6 +54,10 @@ vi.mock('../../../api/entities', () => ({
   searchPlaces: searchPlacesMock,
 }));
 
+vi.mock('../../../api/auth', () => ({
+  isAuthenticated: () => true,
+}));
+
 vi.mock('../../../components/common', () => ({
   Button: ({
     children,
@@ -143,8 +147,8 @@ describe('EntityReviewPage', () => {
     expect(screen.getByText('Suggested match:')).toBeInTheDocument();
     expect(screen.getByText('Alice B. Smith')).toBeInTheDocument();
     expect(screen.getByText('87%')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'People' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Places' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^People/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Places/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirm Match' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Search...' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View Letter' })).toHaveAttribute(
@@ -185,7 +189,7 @@ describe('EntityReviewPage', () => {
     render(<EntityReviewPage />);
 
     expect(await screen.findByRole('button', { name: 'Confirm Match' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Places' }));
+    await user.click(screen.getByRole('button', { name: /^Places/ }));
 
     await waitFor(() => {
       expect(getReviewQueueMock).toHaveBeenNthCalledWith(2, 'place');

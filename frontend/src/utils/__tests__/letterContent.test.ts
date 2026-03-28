@@ -47,6 +47,11 @@ describe("letter content helpers", () => {
         { id: "img-letter-2", type: "letter", imageUrl: "/images/letter-2" },
         { id: "img-cover-1", type: "cover", imageUrl: "/images/cover-1" },
       ],
+      transcript: {
+        pages: [{ pageNumber: 1, text: "Dear friend" }],
+        fullText: "Dear friend",
+        verified: false,
+      },
     });
 
     expect(hasPrimaryTranscriptContent(letter)).toBe(true);

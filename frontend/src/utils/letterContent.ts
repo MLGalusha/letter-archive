@@ -50,10 +50,8 @@ export function shouldShowPublicTranscript(letter: LetterWithTranscript): boolea
     return false;
   }
 
-  return (
-    letter.images.some((image) => image.type === "letter") ||
-    letter.transcript.fullText.trim().length > 0
-  );
+  return letter.transcript.fullText.trim().length > 0 ||
+    letter.transcript.pages.some((p) => p.text.trim().length > 0);
 }
 
 export function shouldShowMetadataWorkflow(letter: LetterWithImages): boolean {

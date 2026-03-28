@@ -389,6 +389,10 @@
 }
 
 .transcript-page-region {
+  /* no positioning — boundary mark lives here, outside the thumb context */
+}
+
+.transcript-page-body {
   position: relative;
 }
 
@@ -437,6 +441,7 @@
 .page-thumb-right {
   left: calc(100% + 4rem);
 }
+
 
 .page-thumb-inner {
   display: flex;

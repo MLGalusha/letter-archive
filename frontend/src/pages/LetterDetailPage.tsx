@@ -11,7 +11,6 @@ import {
   shouldShowPublicTranscript,
   shouldShowPhotoDescriptionWorkflow,
 } from "../utils/letterContent";
-import { classifyTranscriptLines } from "../utils/reflowClassifier";
 import { reflowTranscript, renderTranscriptLines, computeReferenceWidth } from "../utils/transcriptRendering";
 import { useHeaderDock, EMPTY_DOCK } from "../contexts/HeaderDockContext";
 import HeaderScrubber from "../components/HeaderScrubber/HeaderScrubber";
@@ -520,59 +519,78 @@ export default function LetterDetailPage() {
     if (!mq.matches) return;
 
     let rafId: number | null = null;
+    let lastTime = 0;
+    const SMOOTH_SPEED = 4; // exponential decay rate — higher = snappier, lower = floatier
 
-    // Cache header element — it doesn't change during this effect's lifetime
+    // Track current interpolated positions per thumb
+    const curPos = new WeakMap<HTMLElement, { x: number; y: number }>();
+
     const headerEl = document.querySelector<HTMLElement>(".header");
 
-    const tick = () => {
-      rafId = null;
-      const headerBottom = headerEl
-        ? headerEl.getBoundingClientRect().bottom
-        : 0;
-      const STICKY_TOP = headerBottom + 16;
+    const tick = (now: number) => {
+      const dt = lastTime ? Math.min((now - lastTime) / 1000, 0.1) : 1 / 60;
+      lastTime = now;
+      const factor = 1 - Math.exp(-SMOOTH_SPEED * dt);
 
+      const headerBottom = headerEl?.getBoundingClientRect().bottom ?? 0;
+      const STICKY_TOP = headerBottom + 16;
       const viewportH = window.innerHeight;
       const viewportCenter = viewportH / 2;
 
       const thumbs = document.querySelectorAll<HTMLElement>(".page-thumb");
 
-      // Pass 1: batch all DOM reads
-      const measurements: {
-        thumb: HTMLElement;
-        sr: DOMRect;
-        thumbH: number;
-      }[] = [];
+      // Pass 1: batch DOM reads
+      const data: { thumb: HTMLElement; sr: DOMRect; thumbH: number }[] = [];
       thumbs.forEach((thumb) => {
         const section = thumb.parentElement;
         if (!section) return;
-        measurements.push({
-          thumb,
-          sr: section.getBoundingClientRect(),
-          thumbH: thumb.offsetHeight,
-        });
+        data.push({ thumb, sr: section.getBoundingClientRect(), thumbH: thumb.offsetHeight });
       });
 
-      // Pass 2: compute and batch all DOM writes
-      for (const { thumb, sr, thumbH } of measurements) {
+      // Pass 2: compute targets, lerp, write
+      let needsMore = false;
+      for (const { thumb, sr, thumbH } of data) {
         const naturalTop = 8;
         const maxTravel = sr.height - thumbH - naturalTop - 16;
-        if (maxTravel <= 0) { thumb.style.transform = ""; continue; }
 
-        const idealY = viewportCenter - thumbH / 2 - sr.top - naturalTop;
-        const minFromHeader = Math.max(0, STICKY_TOP - sr.top - naturalTop);
-        const y = Math.min(Math.max(idealY, minFromHeader), maxTravel);
+        let targetX = 0;
+        let targetY = 0;
+        if (maxTravel > 0) {
+          const idealY = viewportCenter - thumbH / 2 - sr.top - naturalTop;
+          const minFromHeader = Math.max(0, STICKY_TOP - sr.top - naturalTop);
+          targetY = Math.min(Math.max(idealY, minFromHeader), maxTravel);
 
-        const progress = maxTravel > 0 ? y / maxTravel : 0;
-        const amp = Math.min(18, Math.max(8, sr.height * 0.012));
-        const x = Math.sin(progress * Math.PI * 2) * amp;
+          const progress = targetY / maxTravel;
+          const amp = Math.min(18, Math.max(8, sr.height * 0.012));
+          targetX = Math.sin(progress * Math.PI * 2) * amp;
+        }
 
-        thumb.style.transform = `translate(${x}px, ${y}px)`;
+        const cur = curPos.get(thumb) ?? { x: 0, y: 0 };
+        const nx = cur.x + (targetX - cur.x) * factor;
+        const ny = cur.y + (targetY - cur.y) * factor;
+        curPos.set(thumb, { x: nx, y: ny });
+
+        if (Math.abs(nx) > 0.3 || Math.abs(ny) > 0.3) {
+          thumb.style.transform = `translate(${nx.toFixed(1)}px, ${ny.toFixed(1)}px)`;
+        } else {
+          thumb.style.transform = "";
+        }
+
+        if (Math.abs(targetX - nx) > 0.3 || Math.abs(targetY - ny) > 0.3) {
+          needsMore = true;
+        }
+      }
+
+      if (needsMore) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        rafId = null;
       }
     };
 
-    const onScroll = () => { if (rafId == null) rafId = requestAnimationFrame(tick); };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
+    const start = () => { if (rafId == null) rafId = requestAnimationFrame(tick); };
+    window.addEventListener("scroll", start, { passive: true });
+    start();
 
     const onMq = (e: MediaQueryListEvent) => {
       if (!e.matches) {
@@ -582,7 +600,7 @@ export default function LetterDetailPage() {
     mq.addEventListener("change", onMq);
 
     return () => {
-      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("scroll", start);
       mq.removeEventListener("change", onMq);
       if (rafId != null) cancelAnimationFrame(rafId);
     };
@@ -604,54 +622,12 @@ export default function LetterDetailPage() {
   const readingSegments = useMemo(() => {
     if (!letter?.transcript?.pages?.length || letter.transcript.pages.length <= 1) return null;
 
-    const pages = letter.transcript.pages;
-
-    // Build source lines tagged with their page index
-    const sourcePageIdx: number[] = [];
-    const texts: string[] = [];
-    for (let p = 0; p < pages.length; p++) {
-      const lines = pages[p].text.split("\n");
-      for (let l = 0; l < lines.length; l++) sourcePageIdx.push(p);
-      texts.push(pages[p].text);
-    }
-
-    const combinedText = texts.join("\n");
-    const classifications = classifyTranscriptLines(combinedText);
-
-    // Map each output line to a page index.
-    // Continuations merge into the previous output line (same page assignment).
-    // Every non-continuation classification produces one output line.
-    const outputPageIdx: number[] = [];
-    for (const cl of classifications) {
-      if (cl.classification !== "continuation") {
-        outputPageIdx.push(sourcePageIdx[cl.index]);
-      }
-    }
-
-    const reflowed = reflowTranscript(combinedText);
-    const outputLines = reflowed.split("\n");
-
-    // Group consecutive output lines by page
-    const segments: { pageIndex: number; pageNumber: number; text: string }[] = [];
-    let curPage = -1;
-    let curLines: string[] = [];
-    for (let i = 0; i < outputLines.length; i++) {
-      const pg = i < outputPageIdx.length ? outputPageIdx[i] : curPage;
-      if (pg !== curPage) {
-        if (curPage >= 0) {
-          segments.push({ pageIndex: curPage, pageNumber: pages[curPage].pageNumber, text: curLines.join("\n") });
-        }
-        curPage = pg;
-        curLines = [outputLines[i]];
-      } else {
-        curLines.push(outputLines[i]);
-      }
-    }
-    if (curPage >= 0 && curLines.length > 0) {
-      segments.push({ pageIndex: curPage, pageNumber: pages[curPage].pageNumber, text: curLines.join("\n") });
-    }
-
-    return segments;
+    // Reflow each page independently so segment boundaries match actual pages
+    return letter.transcript.pages.map((page, idx) => ({
+      pageIndex: idx,
+      pageNumber: page.pageNumber,
+      text: reflowTranscript(page.text),
+    }));
   }, [letter]);
 
   const seo = useMemo(() => (letter ? buildLetterSeo(letter) : null), [letter]);
@@ -856,26 +832,28 @@ export default function LetterDetailPage() {
                     return (
                       <div key={segment.pageNumber} className="transcript-page-region">
                         {idx > 0 && <div className="page-boundary-mark" />}
-                        {pageImage && (
-                          <button
-                            type="button"
-                            className={`page-thumb page-thumb-${side}`}
-                            onClick={() => openViewer(allImages.indexOf(pageImage))}
-                            aria-label={`View page ${segment.pageNumber}`}
-                          >
-                            <span className="page-thumb-inner">
-                              <img
-                                src={getImageUrl(pageImage.imageUrl, { width: 300 })}
-                                alt={`Page ${segment.pageNumber}`}
-                                className="page-thumb-img"
-                                loading="lazy"
-                              />
-                              <span className="page-thumb-label">Page {segment.pageNumber}</span>
-                            </span>
-                          </button>
-                        )}
-                        <div className={`transcript-text${shortLineClass}`}>
-                          {renderTranscriptLines(segment.text, referenceWidth)}
+                        <div className="transcript-page-body">
+                          {pageImage && (
+                            <button
+                              type="button"
+                              className={`page-thumb page-thumb-${side}`}
+                              onClick={() => openViewer(allImages.indexOf(pageImage))}
+                              aria-label={`View page ${segment.pageNumber}`}
+                            >
+                              <span className="page-thumb-inner">
+                                <img
+                                  src={getImageUrl(pageImage.imageUrl, { width: 300 })}
+                                  alt={`Page ${segment.pageNumber}`}
+                                  className="page-thumb-img"
+                                  loading="lazy"
+                                />
+                                <span className="page-thumb-label">Page {segment.pageNumber}</span>
+                              </span>
+                            </button>
+                          )}
+                          <div className={`transcript-text${shortLineClass}`}>
+                            {renderTranscriptLines(segment.text, referenceWidth)}
+                          </div>
                         </div>
                       </div>
                     );

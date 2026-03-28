@@ -133,6 +133,8 @@ export default function HomePage() {
   const [compactRefineOpen, setCompactRefineOpen] = useState(false);
   const compactRefinePinnedRef = useRef(false);
   const [pageRefinePinned, setPageRefinePinned] = useState<boolean | undefined>(undefined);
+  const [pageSortOpen, setPageSortOpen] = useState<boolean | undefined>(undefined);
+  const [compactSortOpen, setCompactSortOpen] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -301,11 +303,18 @@ export default function HomePage() {
           embedded
           variant="compact"
           refineOpen={compactRefineOpen}
+          sortOpen={compactSortOpen}
           onRefineOpenChange={(open) => {
             setCompactRefineOpen(open);
             if (open) {
               setPageRefineOpen(false);
               setPageRefinePinned(false);
+            }
+          }}
+          onSortOpenChange={(open) => {
+            setCompactSortOpen(open === false ? undefined : open);
+            if (open) {
+              setPageSortOpen(false);
             }
           }}
           onPinnedChange={(pinned) => {
@@ -323,6 +332,7 @@ export default function HomePage() {
     archiveResults.facets,
     archiveResults.total,
     compactRefineOpen,
+    compactSortOpen,
     filters,
     searchQuery,
     setDock,
@@ -494,11 +504,18 @@ export default function HomePage() {
           variant="full"
           refineOpen={pageRefineOpen}
           refinePinned={pageRefinePinned}
+          sortOpen={pageSortOpen}
           dockTriggerRef={searchDockTriggerRef}
           onRefineOpenChange={(open) => {
             setPageRefineOpen(open);
             if (open) {
               setCompactRefineOpen(false);
+            }
+          }}
+          onSortOpenChange={(open) => {
+            setPageSortOpen(open === false ? undefined : open);
+            if (open) {
+              setCompactSortOpen(false);
             }
           }}
           onPinnedChange={() => {

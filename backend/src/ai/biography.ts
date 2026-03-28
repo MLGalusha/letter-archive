@@ -17,7 +17,12 @@ const openai = hasOpenAI ? new OpenAI({ apiKey: env.OPENAI_API_KEY }) : null;
  * Generate a biography for a person based on their letters and relationships.
  * Returns stub data if OPENAI_API_KEY is not set.
  */
-export async function generateBiography(personId: string): Promise<string> {
+export interface BiographyResult {
+  biography: string;
+  hook: string;
+}
+
+export async function generateBiography(personId: string): Promise<BiographyResult> {
   const context = { personId };
 
   // Get person data
@@ -72,13 +77,27 @@ export async function generateBiography(personId: string): Promise<string> {
         { role: 'system', content: BIOGRAPHY_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
+      response_format: { type: 'json_object' },
       max_completion_tokens: 1024,
       temperature: 0.3, // Low temperature for consistent, factual output
     });
 
     const duration = Date.now() - start;
-    const biography = response.choices[0]?.message?.content?.trim() ?? '';
+    const content = response.choices[0]?.message?.content?.trim() ?? '';
     const usage = response.usage;
+
+    // Parse JSON response
+    let biography: string;
+    let hook: string;
+    try {
+      const parsed = JSON.parse(content);
+      biography = typeof parsed.biography === 'string' ? parsed.biography : content;
+      hook = typeof parsed.hook === 'string' ? parsed.hook : '';
+    } catch {
+      // Fallback: treat entire response as biography if JSON parse fails
+      biography = content;
+      hook = '';
+    }
 
     log.info(
       {
@@ -86,6 +105,7 @@ export async function generateBiography(personId: string): Promise<string> {
         duration,
         model: env.OPENAI_MODEL,
         biographyLength: biography.length,
+        hookLength: hook.length,
         promptTokens: usage?.prompt_tokens,
         completionTokens: usage?.completion_tokens,
       },
@@ -94,7 +114,7 @@ export async function generateBiography(personId: string): Promise<string> {
 
     logIfSlow(log, 'Biography generation', duration, TIMING_THRESHOLDS.OPENAI_API, context);
 
-    return biography;
+    return { biography, hook };
   } catch (error) {
     const duration = Date.now() - start;
     log.error(
@@ -114,15 +134,14 @@ function generateStubBiography(
   personName: string,
   relationships: Array<{ name: string; type: string }>,
   letterSummaries: Array<{ date: string; summary: string; role: string }>
-): string {
+): BiographyResult {
   const relationshipStr =
     relationships.length > 0
       ? relationships.map((r) => `${r.type} of ${r.name}`).join(', ')
       : 'no known relationships';
 
-  return `[STUB BIOGRAPHY - OpenAI API key not configured]
-
-${personName} appears in ${letterSummaries.length} letters in the archive. Known relationships: ${relationshipStr}.
-
-Set OPENAI_API_KEY for AI-generated biography content.`;
+  return {
+    biography: `[STUB BIOGRAPHY - OpenAI API key not configured]\n\n${personName} appears in ${letterSummaries.length} letters in the archive. Known relationships: ${relationshipStr}.\n\nSet OPENAI_API_KEY for AI-generated biography content.`,
+    hook: `[STUB] ${personName} — appears in ${letterSummaries.length} letters.`,
+  };
 }

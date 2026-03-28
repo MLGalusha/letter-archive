@@ -281,7 +281,7 @@ export function buildCorrespondents(
     for (const person of keyPeople) {
       bioLookup.set(normalizeValue(person.name), {
         biography: person.biography || null,
-        hook: null, // hook will come from profile data in Phase 3
+        hook: person.hook || null,
       });
     }
   }

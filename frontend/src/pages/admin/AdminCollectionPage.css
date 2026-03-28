@@ -344,6 +344,74 @@
   color: #e5e7eb;
 }
 
+/* Hook input */
+.acp-hook-input {
+  width: 100%;
+}
+
+/* Person cards */
+.acp-person-card {
+  background: #161622;
+  border: 1px solid #2d2d3d;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.acp-person-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.acp-person-header strong {
+  color: #e5e7eb;
+  font-size: 0.95rem;
+}
+
+.acp-person-stats {
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+
+.acp-person-field {
+  margin-bottom: 0.5rem;
+}
+
+.acp-person-field label {
+  display: block;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.25rem;
+}
+
+.acp-person-bio {
+  width: 100%;
+  background: #1e1e2e;
+  border: 1px solid #2d2d3d;
+  border-radius: 6px;
+  color: #e5e7eb;
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  padding: 0.5rem;
+  resize: vertical;
+}
+
+.acp-person-bio:focus {
+  outline: none;
+  border-color: #60a5fa;
+}
+
+.acp-person-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
 @media (max-width: 640px) {
   .acp-container {
     padding: 1rem;

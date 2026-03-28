@@ -16,8 +16,10 @@ interface SearchBarProps {
   searchTitle?: string;
   refineOpen?: boolean;
   refinePinned?: boolean;
+  sortOpen?: boolean;
   dockTriggerRef?: Ref<HTMLDivElement>;
   onRefineOpenChange?: (open: boolean) => void;
+  onSortOpenChange?: (open: boolean) => void;
   onPinnedChange?: (pinned: boolean) => void;
   onQueryChange: (query: string) => void;
   onFiltersChange: (filters: SearchFilters) => void;
@@ -69,7 +71,24 @@ const SORT_FIELD_OPTIONS: SortFieldOption[] = [
   { label: "Collection", value: "collection", defaultOrder: "asc" },
 ];
 
-const REFINE_CLOSE_DELAY_MS = 350;
+type CombinedSortOption = {
+  label: string;
+  sort: NonNullable<SearchFilters["sort"]>;
+  defaultOrder: NonNullable<SearchFilters["sortOrder"]>;
+  requiresQuery?: boolean;
+  canToggle?: boolean;
+};
+
+const COMBINED_SORT_OPTIONS: CombinedSortOption[] = [
+  { label: "Best Match", sort: "relevance", defaultOrder: "desc", requiresQuery: true },
+  { label: "Letter Date", sort: "letterDate", defaultOrder: "desc", canToggle: true },
+  { label: "Date Added", sort: "createdAt", defaultOrder: "desc", canToggle: true },
+  { label: "Sender", sort: "sender", defaultOrder: "asc", canToggle: true },
+  { label: "Recipient", sort: "recipient", defaultOrder: "asc", canToggle: true },
+  { label: "Collection", sort: "collection", defaultOrder: "asc", canToggle: true },
+];
+
+const REFINE_CLOSE_DELAY_MS = 1000;
 const ARCHIVE_FORMAT_ORDER: LetterImageType[] = [
   "letter",
   "photo",
@@ -250,8 +269,10 @@ export default function SearchBar({
   searchTitle,
   refineOpen,
   refinePinned,
+  sortOpen: sortOpenProp,
   dockTriggerRef,
   onRefineOpenChange,
+  onSortOpenChange,
   onPinnedChange,
   onQueryChange,
   onFiltersChange,
@@ -313,6 +334,11 @@ export default function SearchBar({
       setFiltersPinned(true);
     }
     setRefineOpen(true);
+    // Close sort dropdown immediately if not pinned (mirror how openSortDropdown closes filters)
+    if (!sortPinned) {
+      clearSortCloseTimer();
+      setSortDropdownOpen(false);
+    }
   };
 
   const closeFilters = () => {
@@ -508,6 +534,96 @@ export default function SearchBar({
   const sortDirectionLabel = getSortDirectionAriaLabel(resolvedSort.sort, resolvedSort.sortOrder);
   const sortDirectionDisplayLabel = getSortDirectionDisplayLabel(resolvedSort.sort, resolvedSort.sortOrder);
   const canToggleSortDirection = resolvedSort.sort !== "relevance";
+
+  // Combined sort dropdown (replaces sort field + direction toggle in toolbar)
+  const [internalSortOpen, setInternalSortOpen] = useState(false);
+  const [sortPinned, setSortPinned] = useState(false);
+  const sortDropdownRef = useRef<HTMLDivElement>(null);
+  const sortDropdownOpen = sortOpenProp ?? internalSortOpen;
+  const setSortDropdownOpen = (next: boolean) => {
+    if (sortOpenProp === undefined) {
+      setInternalSortOpen(next);
+    }
+    if (!next) {
+      setSortPinned(false);
+    }
+    onSortOpenChange?.(next);
+  };
+  const visibleSortOptions = useMemo(() => {
+    let options = COMBINED_SORT_OPTIONS.filter((o) => !o.requiresQuery || hasQuery);
+    if (hideCollectionFilter) options = options.filter((o) => o.sort !== "collection");
+    return options;
+  }, [hasQuery, hideCollectionFilter]);
+  const currentSortOption = visibleSortOptions.find((o) => o.sort === resolvedSort.sort);
+  const currentSortLabel = currentSortOption?.label || visibleSortOptions[0]?.label || "Sort";
+  const showSortArrow = currentSortOption?.canToggle;
+  const sortArrow = resolvedSort.sortOrder === "asc" ? "\u2191" : "\u2193";
+
+  const sortCloseTimerRef = useRef<number | null>(null);
+  const clearSortCloseTimer = () => {
+    if (sortCloseTimerRef.current !== null) {
+      window.clearTimeout(sortCloseTimerRef.current);
+      sortCloseTimerRef.current = null;
+    }
+  };
+
+  const openSortDropdown = () => {
+    clearSortCloseTimer();
+    setSortDropdownOpen(true);
+    // Close filter dropdown if not pinned
+    if (!filtersPinned) {
+      clearRefineCloseTimer();
+      setRefineOpen(false);
+    }
+  };
+
+  const closeSortNow = () => {
+    clearSortCloseTimer();
+    setSortDropdownOpen(false);
+  };
+
+  const scheduleSortClose = () => {
+    clearSortCloseTimer();
+    if (sortPinned) return;
+    sortCloseTimerRef.current = window.setTimeout(() => {
+      setSortDropdownOpen(false);
+      sortCloseTimerRef.current = null;
+    }, REFINE_CLOSE_DELAY_MS);
+  };
+
+  const handleSortClick = () => {
+    if (!sortDropdownOpen) {
+      openSortDropdown();
+      setSortPinned(true);
+    } else if (sortPinned) {
+      setSortPinned(false);
+    } else {
+      setSortPinned(true);
+      clearSortCloseTimer();
+    }
+  };
+
+  useEffect(() => {
+    if (!sortDropdownOpen) return;
+    const close = (e: MouseEvent) => {
+      if (sortDropdownRef.current && !sortDropdownRef.current.contains(e.target as Node)) {
+        setSortDropdownOpen(false);
+        setSortPinned(false);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [sortDropdownOpen]);
+
+  useEffect(() => () => clearSortCloseTimer(), []);
+
+  // Sync sort open/pinned from parent prop
+  useEffect(() => {
+    if (sortOpenProp === false) {
+      setInternalSortOpen(false);
+      setSortPinned(false);
+    }
+  }, [sortOpenProp]);
   const toneChoiceOptions = useMemo<FilterChoiceOption[]>(
     () => facets.tones.map((facet) => ({
       value: facet.value,
@@ -706,40 +822,63 @@ export default function SearchBar({
     );
   };
 
+  const sortDropdown = (
+    <div
+      className="search-sort-dropdown"
+      ref={sortDropdownRef}
+    >
+      <button
+        type="button"
+        className={`search-sort-trigger${sortPinned ? " is-pinned" : ""}`}
+        onClick={handleSortClick}
+        onMouseEnter={openSortDropdown}
+        onMouseLeave={scheduleSortClose}
+        aria-expanded={sortDropdownOpen}
+        aria-label="Sort archive results"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M2 4h10M4 7h6M6 10h2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+        {showSortArrow && <span className="search-sort-arrow">{sortArrow}</span>}
+      </button>
+      {sortDropdownOpen && (
+        <ul
+          className={`search-sort-menu${sortPinned ? " is-pinned" : ""}`}
+          role="listbox"
+          onMouseLeave={() => { if (!sortPinned) closeSortNow(); }}
+        >
+          {visibleSortOptions.map((opt) => {
+            const isActive = opt.sort === resolvedSort.sort;
+            return (
+              <li
+                key={opt.sort}
+                role="option"
+                aria-selected={isActive}
+                className={`search-sort-option${isActive ? " search-sort-option--active" : ""}`}
+                onClick={() => {
+                  if (isActive && opt.canToggle) {
+                    updateFilter({ sortOrder: resolvedSort.sortOrder === "asc" ? "desc" : "asc" });
+                  } else {
+                    updateFilter({ sort: opt.sort, sortOrder: opt.defaultOrder });
+                    setSortDropdownOpen(false);
+                    setSortPinned(false);
+                  }
+                }}
+              >
+                <span>{opt.label}</span>
+                {isActive && opt.canToggle && (
+                  <span className="search-sort-arrow">{sortArrow}</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+
   const refinementFields = (
     <div className={`filters${isCompact ? " filters-compact" : ""}`}>
-      <div className="filter-group filter-group-sort">
-        <label className="filter-label" htmlFor={sortFilterId}>Sort</label>
-        <div className="filter-sort-row">
-          <FilterChoiceField
-            id={sortFilterId}
-            label="Sort archive results"
-            value={resolvedSortField.value}
-            placeholder="Choose sort"
-            options={sortChoiceOptions}
-            open={openChoiceField === sortFilterId}
-            onOpenChange={(open) => setOpenChoiceField(open ? sortFilterId : null)}
-            onChange={(value) => {
-              const option = parseSortValue(value, availableSortFields);
-              if (!option) return;
-              updateFilter({ sort: option.value, sortOrder: option.defaultOrder });
-            }}
-          />
-          <button
-            id={sortDirectionLabelId}
-            type="button"
-            className={`filter-toggle filter-sort-direction${canToggleSortDirection ? "" : " is-disabled"}`}
-            aria-label={canToggleSortDirection ? `Toggle sort direction, currently ${sortDirectionLabel}` : "Best match does not have a direction"}
-            disabled={!canToggleSortDirection}
-            onClick={() => {
-              if (!canToggleSortDirection) return;
-              updateFilter({ sortOrder: resolvedSort.sortOrder === "asc" ? "desc" : "asc" });
-            }}
-          >
-            {canToggleSortDirection ? sortDirectionDisplayLabel : "\u2014"}
-          </button>
-        </div>
-      </div>
 
       {!hideCollectionFilter && (
         <div className="filter-group">
@@ -980,14 +1119,16 @@ export default function SearchBar({
                 clearRefineCloseTimer();
               }}
             >
-              <span>Refine{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}</span>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="M1.5 2.5h11L8 7.5v4l-2 1.5V7.5z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
+            {sortDropdown}
 
             {showFilters && (
               <div
                 className={`search-compact-flyout search-refine-flyout${filtersPinned ? " is-pinned" : ""}`}
-                onMouseEnter={() => openFilters()}
-                onMouseLeave={scheduleFiltersClose}
+                onMouseLeave={() => { if (!filtersPinned) closeFilters(); }}
               >
                 <div className="search-compact-flyout-header">
                   <div className="search-compact-flyout-header-row">
@@ -995,14 +1136,6 @@ export default function SearchBar({
                       <span className="search-facet-label">Refine</span>
                       <p className="search-compact-flyout-status">{searchStatus}</p>
                     </div>
-                    <button
-                      type="button"
-                      className="clear-filters"
-                      onClick={clearAll}
-                      disabled={!hasActiveFilters}
-                    >
-                      Clear All
-                    </button>
                   </div>
                   {filtersPinned && (
                     <div className="search-compact-flyout-center">
@@ -1013,6 +1146,16 @@ export default function SearchBar({
                 {formatFacetRow}
                 {renderActivePills(true)}
                 {refinementFields}
+                <div className="search-flyout-footer">
+                  <button
+                    type="button"
+                    className="clear-filters"
+                    onClick={clearAll}
+                    disabled={!hasActiveFilters}
+                  >
+                    Clear All
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1081,8 +1224,11 @@ export default function SearchBar({
               clearRefineCloseTimer();
             }}
           >
-            Refine
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M1.5 2.5h11L8 7.5v4l-2 1.5V7.5z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
+          {sortDropdown}
         </div>
       </div>
 
@@ -1091,8 +1237,7 @@ export default function SearchBar({
       {showFilters && (
         <div
           className={`search-full-flyout search-refine-flyout${filtersPinned ? " is-pinned" : ""}`}
-          onMouseEnter={() => openFilters()}
-          onMouseLeave={scheduleFiltersClose}
+          onMouseLeave={() => { if (!filtersPinned) closeFilters(); }}
         >
           <div className="search-compact-flyout-header">
             <div className="search-compact-flyout-header-row">
@@ -1100,14 +1245,6 @@ export default function SearchBar({
                 <span className="search-facet-label">Refine</span>
                 <p className="search-compact-flyout-status">{searchStatus}</p>
               </div>
-              <button
-                type="button"
-                className="clear-filters"
-                onClick={clearAll}
-                disabled={!hasActiveFilters}
-              >
-                Clear All
-              </button>
             </div>
             {filtersPinned && (
               <div className="search-compact-flyout-center">
@@ -1116,6 +1253,16 @@ export default function SearchBar({
             )}
           </div>
           {refinementFields}
+          <div className="search-flyout-footer">
+            <button
+              type="button"
+              className="clear-filters"
+              onClick={clearAll}
+              disabled={!hasActiveFilters}
+            >
+              Clear All
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -13,6 +13,7 @@ export interface CanonicalPerson {
   aliases: string[];
   notes?: string;
   biography?: string;
+  hook?: string;
   biographyStatus?: ContentStatus;
   biographyVerifiedAt?: string;
   biographyVerifiedBy?: string;

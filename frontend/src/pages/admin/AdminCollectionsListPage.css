@@ -1,0 +1,45 @@
+/* Collection-specific cell styles (reuses .letters-table base from AdminDashboard.css) */
+
+.collection-code-cell {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.collection-title-cell {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+/* Profile status badges */
+.collection-profile-badge {
+  display: inline-block;
+  padding: 0.125rem 0.4rem;
+  border-radius: var(--radius-sm, 4px);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.profile-empty {
+  background: var(--bg-light, #2a2a2a);
+  color: var(--text-muted);
+}
+
+.profile-ai-draft {
+  background: rgba(234, 179, 8, 0.15);
+  color: #eab308;
+}
+
+.profile-edited {
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
+}
+
+.profile-verified {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}

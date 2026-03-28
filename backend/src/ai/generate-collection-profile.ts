@@ -43,6 +43,7 @@ export interface ThemeGroup {
 }
 
 export interface CollectionProfileResult {
+  hook: string;
   narrative: string;
   startHereLetterId: string | null;
   startHereReason: string;
@@ -184,6 +185,7 @@ export async function generateCollectionProfile(collectionId: string): Promise<C
   if (letterInputs.length === 0) {
     log.warn({ collectionId }, 'No published letters with content for profile generation');
     return {
+      hook: '',
       narrative: '',
       startHereLetterId: null,
       startHereReason: '',
@@ -308,6 +310,7 @@ async function callOpenAIForProfile(
       : letterInputs[0]?.id ?? null;
 
     const result: CollectionProfileResult = {
+      hook: typeof parsed.hook === 'string' ? parsed.hook : '',
       narrative: typeof parsed.narrative === 'string' ? parsed.narrative : '',
       startHereLetterId,
       startHereReason: typeof parsed.startHereReason === 'string' ? parsed.startHereReason : '',
@@ -361,6 +364,7 @@ function generateStubProfile(letterInputs: CollectionProfileLetterInput[]): Coll
   const allNames = [...senders, ...recipients].slice(0, 3).join(', ');
 
   return {
+    hook: `A collection of ${letterInputs.length} letters involving ${allNames || 'unknown correspondents'}. Configure API key for AI-generated hook.`,
     narrative: `This collection contains ${letterInputs.length} letters involving ${allNames || 'unknown correspondents'}. Generate a real profile by configuring an OpenAI API key.`,
     startHereLetterId: letterInputs[0]?.id ?? null,
     startHereReason: 'First letter chronologically (stub mode).',

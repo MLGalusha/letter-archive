@@ -45,12 +45,19 @@
   line-height: 1.8;
 }
 
+.collections-hero-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.2rem;
+  flex-wrap: wrap;
+}
+
 .collections-summary {
   display: flex;
   align-items: baseline;
-  justify-content: flex-start;
   gap: 0.7rem;
-  margin-top: 1.2rem;
   flex-wrap: wrap;
 }
 
@@ -77,57 +84,105 @@
   font-size: 1.4rem;
 }
 
-/* ── Controls ─────────────────────────────────────────────── */
+/* ── Sort ─────────────────────────────────────────────────── */
 
-.collection-controls-shell {
-  padding: 1rem;
-  border-radius: 30px;
+.collections-sort {
+  position: relative;
 }
 
-.collection-controls {
+.sort-trigger {
+  appearance: none;
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text);
+  padding: 0.45rem 0.75rem;
+  font-family: "Instrument Sans", "Avenir Next", sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  width: 170px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.sort-trigger:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(217, 207, 191, 1);
+}
+
+.sort-chevron {
+  transition: transform 0.2s ease;
+  opacity: 0.5;
+}
+
+.sort-chevron--open {
+  transform: rotate(180deg);
+}
+
+.sort-menu {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  left: 0;
+  margin: 0;
+  padding: 0.35rem;
+  list-style: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 250, 242, 0.98));
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(29, 26, 20, 0.1);
+  z-index: 20;
+}
+
+.sort-option {
+  padding: 0.5rem 0.7rem;
+  font-family: "Instrument Sans", "Avenir Next", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.sort-option:hover {
+  background: rgba(217, 207, 191, 0.35);
+  color: var(--text);
+}
+
+.sort-option--active {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.sort-option--active:hover {
+  background: rgba(223, 241, 245, 0.5);
+  color: var(--accent-strong);
+}
+
+.sort-option {
   display: flex;
-  gap: 0.8rem;
-  flex-wrap: wrap;
+  justify-content: space-between;
   align-items: center;
 }
 
-.collection-controls input,
-.collection-controls select,
-.collection-controls button {
-  border: 1px solid rgba(217, 207, 191, 0.95);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--text);
-  padding: 0.78rem 1rem;
-  font-size: 0.92rem;
-  box-sizing: border-box;
+.sort-indicators {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
 }
 
-.collection-controls input {
-  min-width: 0;
-  flex: 1 1 280px;
-}
-
-.collection-controls select {
-  min-width: 180px;
-}
-
-.collection-controls button {
-  cursor: pointer;
+.sort-arrow {
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  background: rgba(223, 241, 245, 0.78);
-}
-
-.collection-controls button:hover:not(:disabled) {
-  background: rgba(223, 241, 245, 1);
-  border-color: rgba(31, 109, 122, 0.24);
-}
-
-.collection-controls button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  font-size: 0.82rem;
+  opacity: 0.7;
 }
 
 /* ── Grid ─────────────────────────────────────────────────── */
@@ -267,16 +322,6 @@
 /* ── Responsive ───────────────────────────────────────────── */
 
 @media (max-width: 760px) {
-  .collection-controls {
-    flex-direction: column;
-  }
-
-  .collection-controls input,
-  .collection-controls select,
-  .collection-controls button {
-    width: 100%;
-  }
-
   .public-collections-grid {
     grid-template-columns: 1fr;
   }
@@ -287,10 +332,15 @@
     gap: 1rem;
   }
 
-  .collections-hero,
-  .collection-controls-shell {
+  .collections-hero {
     padding: 1.1rem;
     border-radius: 24px;
+  }
+
+  .collections-hero-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.7rem;
   }
 
   .collections-hero h1 {
@@ -307,10 +357,6 @@
     min-height: 220px;
     padding: 1rem 1.1rem 0.9rem;
     border-radius: 24px;
-  }
-
-  .collection-controls input {
-    flex: 1 1 auto;
   }
 
   .collection-card-top h3 {

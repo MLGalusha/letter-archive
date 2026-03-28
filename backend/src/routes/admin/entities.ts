@@ -259,11 +259,12 @@ router.post('/persons/:id/biography/generate', async (req, res, next) => {
     }
 
     log.info({ personId: req.params.id }, 'Generating biography for person');
-    const biography = await generateBiography(req.params.id);
+    const result = await generateBiography(req.params.id);
 
     // Save as AI_DRAFT
     await updatePersonBiography(req.params.id, {
-      biography,
+      biography: result.biography,
+      hook: result.hook,
       biographyStatus: 'AI_DRAFT',
     });
 
@@ -277,6 +278,7 @@ router.post('/persons/:id/biography/generate', async (req, res, next) => {
 
 const saveBiographySchema = z.object({
   biography: z.string(),
+  hook: z.string().optional(),
   verify: z.boolean().optional(),
 });
 
@@ -294,6 +296,7 @@ router.put('/persons/:id/biography', async (req, res, next) => {
 
     const updateData: BiographyUpdateData = {
       biography: data.biography,
+      hook: data.hook,
     };
 
     if (data.verify) {

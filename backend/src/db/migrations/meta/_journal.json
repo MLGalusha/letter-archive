@@ -218,6 +218,13 @@
       "when": 1775222400000,
       "tag": "0030_drop_extracted_date_confidence",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1775308800000,
+      "tag": "0031_add_hooks",
+      "breakpoints": true
     }
   ]
 }

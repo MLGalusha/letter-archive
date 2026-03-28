@@ -281,6 +281,8 @@ export default function CollectionDetailPage() {
   const [compactRefineOpen, setCompactRefineOpen] = useState(false);
   const compactRefinePinnedRef = useRef(false);
   const [pageRefinePinned, setPageRefinePinned] = useState<boolean | undefined>(undefined);
+  const [pageSortOpen, setPageSortOpen] = useState<boolean | undefined>(undefined);
+  const [compactSortOpen, setCompactSortOpen] = useState<boolean | undefined>(undefined);
 
   /* ---- Computed from collection data ---- */
   const collectionLetters = collection?.letters ?? [];
@@ -474,12 +476,17 @@ export default function CollectionDetailPage() {
             hideCollectionFilter
             compactPlaceholder={`Search Collection ${collection?.collectionCode || collectionCode}...`}
             refineOpen={compactRefineOpen}
+            sortOpen={compactSortOpen}
             onRefineOpenChange={(open) => {
               setCompactRefineOpen(open);
               if (open) {
                 setPageRefineOpen(false);
                 setPageRefinePinned(undefined);
               }
+            }}
+            onSortOpenChange={(open) => {
+              setCompactSortOpen(open === false ? undefined : open);
+              if (open) setPageSortOpen(false);
             }}
             onPinnedChange={(pinned) => {
               compactRefinePinnedRef.current = pinned;
@@ -514,6 +521,7 @@ export default function CollectionDetailPage() {
     collectionScrubberProps,
     collectionsLinkOverride,
     compactRefineOpen,
+    compactSortOpen,
     filters,
     loading,
     searchQuery,
@@ -754,12 +762,17 @@ export default function CollectionDetailPage() {
               searchTitle="Search This Collection"
               refineOpen={pageRefineOpen}
               refinePinned={pageRefinePinned}
+              sortOpen={pageSortOpen}
               dockTriggerRef={searchDockTriggerRef}
               onRefineOpenChange={(open) => {
                 setPageRefineOpen(open);
                 if (open) {
                   setCompactRefineOpen(false);
                 }
+              }}
+              onSortOpenChange={(open) => {
+                setPageSortOpen(open === false ? undefined : open);
+                if (open) setCompactSortOpen(false);
               }}
               onPinnedChange={() => {
                 setPageRefinePinned(undefined);

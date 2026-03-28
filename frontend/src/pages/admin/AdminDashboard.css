@@ -6,6 +6,47 @@
   flex-direction: column;
 }
 
+/* Dashboard view toggle (Letters / Collections) — vertical stack */
+.dashboard-view-toggle {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  box-sizing: border-box;
+  flex-shrink: 0;
+  gap: 1px;
+}
+
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  height: 20px;
+}
+
+.view-toggle-btn:hover {
+  color: var(--text);
+}
+
+.view-toggle-btn.active {
+  background: var(--bg-light);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
 .admin-dashboard .loading-content,
 .admin-dashboard .error-content {
   display: flex;

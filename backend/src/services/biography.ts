@@ -3,6 +3,7 @@ import { db, canonicalPersons, type ContentStatus } from '../db/index.js';
 
 export interface BiographyUpdateData {
   biography?: string;
+  hook?: string;
   biographyStatus?: ContentStatus;
   biographyVerifiedAt?: Date | null;
   biographyVerifiedBy?: string | null;
@@ -21,6 +22,9 @@ export async function updatePersonBiography(
 
   if (data.biography !== undefined) {
     updateFields.biography = data.biography;
+  }
+  if (data.hook !== undefined) {
+    updateFields.hook = data.hook;
   }
   if (data.biographyStatus !== undefined) {
     updateFields.biographyStatus = data.biographyStatus;

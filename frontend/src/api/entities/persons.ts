@@ -91,7 +91,7 @@ export async function generateBiography(personId: string): Promise<{ person: Can
 
 export async function saveBiography(
   personId: string,
-  data: { biography: string; verify?: boolean },
+  data: { biography: string; hook?: string; verify?: boolean },
 ): Promise<{ person: CanonicalPerson }> {
   return apiPut<{ person: CanonicalPerson }>(`/admin/entities/persons/${personId}/biography`, data);
 }

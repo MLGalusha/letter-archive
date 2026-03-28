@@ -8,17 +8,23 @@ import {
   getCollectionCompleteness,
   generateCollectionProfile,
   updateCollectionProfile,
-  type AdminCollectionInfo,
+  getCollectionProfile,
   type CollectionCompleteness,
   type CollectionWithLetters,
+  type KeyPerson,
   type ReadingPath,
   type ThemeGroup,
   type ContentStatus,
 } from '../../api/collections';
+import {
+  generateBiography as generatePersonBiography,
+  saveBiography as savePersonBiography,
+} from '../../api/entities/persons';
 import { useToast } from '../../contexts/ToastContext';
 import './AdminCollectionPage.css';
 
 type ProfileData = {
+  hook: string;
   narrative: string;
   startHereLetterId: string | null;
   startHereReason: string;
@@ -26,6 +32,14 @@ type ProfileData = {
   themes: ThemeGroup[];
   profileStatus: ContentStatus;
 };
+
+interface PersonEditState {
+  biography: string;
+  hook: string;
+  dirty: boolean;
+  generating: boolean;
+  saving: boolean;
+}
 
 export default function AdminCollectionPage() {
   const { code } = useParams<{ code: string }>();
@@ -40,6 +54,7 @@ export default function AdminCollectionPage() {
 
   // Editable profile state
   const [profile, setProfile] = useState<ProfileData>({
+    hook: '',
     narrative: '',
     startHereLetterId: null,
     startHereReason: '',
@@ -48,6 +63,10 @@ export default function AdminCollectionPage() {
     profileStatus: 'EMPTY',
   });
   const [dirty, setDirty] = useState(false);
+
+  // Key people state
+  const [keyPeople, setKeyPeople] = useState<KeyPerson[]>([]);
+  const [personEdits, setPersonEdits] = useState<Map<string, PersonEditState>>(new Map());
 
   const fetchData = useCallback(async () => {
     if (!code) return;
@@ -63,6 +82,7 @@ export default function AdminCollectionPage() {
       // Populate profile from collection data
       const c = coll as unknown as Record<string, unknown>;
       setProfile({
+        hook: (c.hook as string) || '',
         narrative: (c.profileNarrative as string) || '',
         startHereLetterId: (c.profileStartHereLetterId as string) || null,
         startHereReason: (c.profileStartHereReason as string) || '',
@@ -71,8 +91,28 @@ export default function AdminCollectionPage() {
         profileStatus: (c.profileStatus as ContentStatus) || 'EMPTY',
       });
       setDirty(false);
+
+      // Fetch key people from public profile endpoint
+      try {
+        const profileData = await getCollectionProfile(code);
+        setKeyPeople(profileData.keyPeople || []);
+        // Initialize person edit states
+        const edits = new Map<string, PersonEditState>();
+        for (const person of profileData.keyPeople || []) {
+          edits.set(person.id, {
+            biography: person.biography || '',
+            hook: person.hook || '',
+            dirty: false,
+            generating: false,
+            saving: false,
+          });
+        }
+        setPersonEdits(edits);
+      } catch {
+        // Profile may not exist yet — that's fine
+      }
     } catch (err) {
-      showToast(getErrorMessage(err), 'error');
+      showToast(getErrorMessage(err, 'An error occurred'), 'error');
     } finally {
       setLoading(false);
     }
@@ -94,6 +134,7 @@ export default function AdminCollectionPage() {
     try {
       const result = await generateCollectionProfile(code, force || profile.profileStatus !== 'EMPTY');
       setProfile({
+        hook: result.hook || '',
         narrative: result.narrative,
         startHereLetterId: result.startHereLetterId,
         startHereReason: result.startHereReason,
@@ -105,7 +146,7 @@ export default function AdminCollectionPage() {
       showToast(result.isStub ? 'Stub profile generated (no API key)' : 'Profile generated successfully', 'success');
       fetchData();
     } catch (err) {
-      showToast(getErrorMessage(err), 'error');
+      showToast(getErrorMessage(err, 'An error occurred'), 'error');
     } finally {
       setGenerating(false);
     }
@@ -116,6 +157,7 @@ export default function AdminCollectionPage() {
     setSaving(true);
     try {
       await updateCollectionProfile(code, {
+        hook: profile.hook || null,
         profileNarrative: profile.narrative,
         profileStartHereLetterId: profile.startHereLetterId,
         profileStartHereReason: profile.startHereReason,
@@ -126,7 +168,7 @@ export default function AdminCollectionPage() {
       showToast('Profile saved', 'success');
       fetchData();
     } catch (err) {
-      showToast(getErrorMessage(err), 'error');
+      showToast(getErrorMessage(err, 'An error occurred'), 'error');
     } finally {
       setSaving(false);
     }
@@ -139,7 +181,7 @@ export default function AdminCollectionPage() {
       setProfile(p => ({ ...p, profileStatus: 'VERIFIED' }));
       showToast('Profile marked as verified', 'success');
     } catch (err) {
-      showToast(getErrorMessage(err), 'error');
+      showToast(getErrorMessage(err, 'An error occurred'), 'error');
     }
   };
 
@@ -279,6 +321,24 @@ export default function AdminCollectionPage() {
         {/* Profile Editor */}
         {profile.profileStatus !== 'EMPTY' && (
           <>
+            {/* Hook */}
+            <div className="acp-section">
+              <h2>Collection Hook</h2>
+              <p className="acp-hint">A 1-2 sentence teaser that makes someone want to explore this collection.</p>
+              <input
+                type="text"
+                className="acp-input acp-hook-input"
+                value={profile.hook}
+                onChange={(e) => {
+                  setProfile(p => ({ ...p, hook: e.target.value }));
+                  setDirty(true);
+                }}
+                placeholder="e.g. A wartime love story told through 27 letters..."
+                maxLength={500}
+              />
+              <p className="acp-hint">{profile.hook.length} / 500</p>
+            </div>
+
             {/* Narrative */}
             <div className="acp-section">
               <h2>Narrative Essay</h2>
@@ -310,7 +370,7 @@ export default function AdminCollectionPage() {
                   <option value="">— None —</option>
                   {letterOptions.map(l => (
                     <option key={l.id} value={l.id}>
-                      {l.dateRaw} — {l.sender || '?'} to {l.recipient || '?'}
+                      {l.metadata.dateRaw || l.title} — {l.metadata.sender || '?'} to {l.metadata.recipient || '?'}
                     </option>
                   ))}
                 </select>
@@ -446,6 +506,134 @@ export default function AdminCollectionPage() {
                 + Add Theme
               </button>
             </div>
+
+            {/* Key People */}
+            {keyPeople.length > 0 && (
+              <div className="acp-section">
+                <h2>Key People ({keyPeople.length})</h2>
+                <p className="acp-hint">Edit hooks and biographies for people in this collection. Generate uses AI.</p>
+                {keyPeople.map((person) => {
+                  const edit = personEdits.get(person.id);
+                  if (!edit) return null;
+                  return (
+                    <div key={person.id} className="acp-person-card">
+                      <div className="acp-person-header">
+                        <strong>{person.name}</strong>
+                        <span className="acp-person-stats">
+                          {person.letterCount} letters &middot;
+                          {person.roles.sender} sent, {person.roles.recipient} received
+                        </span>
+                      </div>
+                      <div className="acp-person-field">
+                        <label>Hook</label>
+                        <input
+                          type="text"
+                          className="acp-input"
+                          value={edit.hook}
+                          onChange={(e) => {
+                            setPersonEdits(prev => {
+                              const next = new Map(prev);
+                              next.set(person.id, { ...edit, hook: e.target.value, dirty: true });
+                              return next;
+                            });
+                          }}
+                          placeholder="A single compelling sentence about this person..."
+                          maxLength={200}
+                        />
+                      </div>
+                      <div className="acp-person-field">
+                        <label>Biography</label>
+                        <textarea
+                          className="acp-person-bio"
+                          value={edit.biography}
+                          onChange={(e) => {
+                            setPersonEdits(prev => {
+                              const next = new Map(prev);
+                              next.set(person.id, { ...edit, biography: e.target.value, dirty: true });
+                              return next;
+                            });
+                          }}
+                          rows={4}
+                          placeholder="Biography..."
+                        />
+                      </div>
+                      <div className="acp-person-actions">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={edit.generating}
+                          onClick={async () => {
+                            setPersonEdits(prev => {
+                              const next = new Map(prev);
+                              next.set(person.id, { ...edit, generating: true });
+                              return next;
+                            });
+                            try {
+                              const { person: updated } = await generatePersonBiography(person.id);
+                              setPersonEdits(prev => {
+                                const next = new Map(prev);
+                                next.set(person.id, {
+                                  biography: updated.biography || '',
+                                  hook: updated.hook || '',
+                                  dirty: false,
+                                  generating: false,
+                                  saving: false,
+                                });
+                                return next;
+                              });
+                              showToast(`Generated bio for ${person.name}`, 'success');
+                            } catch (err) {
+                              showToast(getErrorMessage(err, 'An error occurred'), 'error');
+                              setPersonEdits(prev => {
+                                const next = new Map(prev);
+                                next.set(person.id, { ...edit, generating: false });
+                                return next;
+                              });
+                            }
+                          }}
+                        >
+                          {edit.generating ? 'Generating...' : 'Generate Bio + Hook'}
+                        </Button>
+                        {edit.dirty && (
+                          <Button
+                            size="sm"
+                            disabled={edit.saving}
+                            onClick={async () => {
+                              setPersonEdits(prev => {
+                                const next = new Map(prev);
+                                next.set(person.id, { ...edit, saving: true });
+                                return next;
+                              });
+                              try {
+                                await savePersonBiography(person.id, {
+                                  biography: edit.biography,
+                                  hook: edit.hook,
+                                });
+                                setPersonEdits(prev => {
+                                  const next = new Map(prev);
+                                  next.set(person.id, { ...edit, dirty: false, saving: false });
+                                  return next;
+                                });
+                                showToast(`Saved ${person.name}`, 'success');
+                              } catch (err) {
+                                showToast(getErrorMessage(err, 'An error occurred'), 'error');
+                                setPersonEdits(prev => {
+                                  const next = new Map(prev);
+                                  next.set(person.id, { ...edit, saving: false });
+                                  return next;
+                                });
+                              }
+                            }}
+                          >
+                            {edit.saving ? 'Saving...' : 'Save'}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
       </div>

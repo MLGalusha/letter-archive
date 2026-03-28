@@ -26,7 +26,16 @@ Before responding, verify:
 2. No invented names, dates, or events
 3. Length matches information density
 4. Tone is appropriate for historical archive
-</verification>`;
+</verification>
+
+<output_format>
+Return JSON with this exact structure:
+{
+  "biography": "the full biography text",
+  "hook": "A single compelling sentence that captures who this person is in the context of these letters — like a subtitle on a museum placard that makes you want to read more."
+}
+The hook should be intriguing and concise (max ~150 characters). It introduces the person's role or essence, not a summary of events.
+</output_format>`;
 
 export function buildBiographyUserPrompt(
   personName: string,
@@ -49,6 +58,6 @@ export function buildBiographyUserPrompt(
   }
   prompt += '</letters_chronological>\n\n';
 
-  prompt += 'Write the biography based ONLY on this information. Do not fabricate any details.';
+  prompt += 'Write the biography and hook based ONLY on this information. Do not fabricate any details. Return JSON only.';
   return prompt;
 }

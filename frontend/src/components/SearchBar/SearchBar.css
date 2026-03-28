@@ -226,6 +226,9 @@
 
 .search-compact-filter-wrap {
   position: static;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .search-compact-filter-toggle {
@@ -236,18 +239,16 @@
   gap: 0.2rem;
 }
 
+.search-compact-filter-toggle:hover,
 .search-compact-filter-toggle.active {
-  background: rgba(223, 241, 245, 0.9);
-  border-color: rgba(31, 109, 122, 0.28);
+  border-color: rgb(31, 109, 122);
   color: var(--text);
 }
 
 .search-refine-toggle.is-pinned {
   border-width: 2px;
-  border-color: rgba(31, 109, 122, 0.5);
-  background: rgba(223, 241, 245, 0.96);
+  border-color: rgb(31, 109, 122);
   color: var(--text);
-  box-shadow: 0 0 0 1px rgba(31, 109, 122, 0.08);
 }
 
 .search-compact-pin-indicator {
@@ -279,7 +280,7 @@
   overflow: visible;
   padding: 0.95rem;
   border-radius: 24px;
-  border: 1px solid rgba(217, 207, 191, 0.94);
+  border: 1px solid rgb(31, 109, 122);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 250, 242, 0.99)),
     radial-gradient(circle at top left, rgba(223, 241, 245, 0.56), transparent 28%);
@@ -301,7 +302,7 @@
   overflow: visible;
   padding: 0.95rem;
   border-radius: 24px;
-  border: 1px solid rgba(217, 207, 191, 0.94);
+  border: 1px solid rgb(31, 109, 122);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(255, 250, 242, 0.99)),
     radial-gradient(circle at top left, rgba(223, 241, 245, 0.52), transparent 28%);
@@ -354,6 +355,14 @@
   transform: translateX(-50%);
   z-index: 1;
   pointer-events: none;
+}
+
+.search-flyout-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.6rem;
+  margin-top: 0.4rem;
+  border-top: 1px solid rgba(217, 207, 191, 0.6);
 }
 
 .search-compact-flyout-status {
@@ -410,13 +419,13 @@
 }
 
 .search-full-filter-toggle {
-  min-width: 6rem;
+  display: inline-flex;
+  align-items: center;
 }
 
 .search-full-filter-toggle:hover,
 .search-full-filter-toggle.active {
-  background: rgba(223, 241, 245, 0.9);
-  border-color: rgba(31, 109, 122, 0.28);
+  border-color: rgb(31, 109, 122);
   color: var(--text);
 }
 
@@ -485,6 +494,96 @@
   background: rgba(255, 255, 255, 0.72);
   border-color: rgba(217, 207, 191, 0.82);
   opacity: 0.76;
+}
+
+/* ── Toolbar sort dropdown ────────────────────────────────── */
+
+.search-sort-dropdown {
+  position: relative;
+}
+
+.search-sort-trigger {
+  appearance: none;
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text);
+  padding: 0.54rem 0.7rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.search-sort-trigger:hover,
+.search-sort-trigger[aria-expanded="true"] {
+  border-color: rgb(31, 109, 122);
+}
+
+.search-sort-trigger.is-pinned {
+  border-width: 2px;
+  border-color: rgb(31, 109, 122);
+}
+
+.search-sort-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  transform: translateX(-25%);
+  min-width: 170px;
+  margin: 0;
+  padding: 0.35rem;
+  list-style: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 250, 242, 0.98));
+  border: 1px solid rgb(31, 109, 122);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(29, 26, 20, 0.1);
+  z-index: 50;
+}
+
+
+.search-sort-menu.is-pinned {
+  border-width: 2px;
+  box-shadow: 0 30px 70px rgba(29, 26, 20, 0.18);
+}
+
+.search-sort-option {
+  padding: 0.5rem 0.7rem;
+  font-family: "Instrument Sans", "Avenir Next", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.search-sort-option:hover {
+  background: rgba(217, 207, 191, 0.35);
+  color: var(--text);
+}
+
+.search-sort-option--active {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.search-sort-option--active:hover {
+  background: rgba(223, 241, 245, 0.5);
+  color: var(--accent-strong);
+}
+
+.search-sort-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.search-sort-arrow {
+  font-weight: 700;
+  font-size: 0.82rem;
+  opacity: 0.7;
 }
 
 .filter-input {
@@ -753,10 +852,6 @@
 
   .search-compact-flyout-header-row {
     flex-wrap: wrap;
-  }
-
-  .search-compact-flyout-header-row .clear-filters {
-    margin-left: auto;
   }
 
   .search-compact-flyout {

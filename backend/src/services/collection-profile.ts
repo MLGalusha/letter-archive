@@ -60,6 +60,7 @@ export interface KeyPerson {
   id: string;
   name: string;
   biography: string | null;
+  hook: string | null;
   letterCount: number;
   roles: { sender: number; recipient: number };
 }
@@ -141,6 +142,7 @@ export async function getCollectionAggregations(collectionId: string): Promise<C
     id: p.id,
     name: p.canonicalName,
     biography: p.biography,
+    hook: p.hook,
     letterCount: p.letterCount,
     roles: { sender: p.senderCount, recipient: p.recipientCount },
   }));

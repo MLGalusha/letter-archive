@@ -48,12 +48,15 @@ import { useDashboardColumns } from "./AdminDashboard/useDashboardColumns";
 import { useDashboardFilters } from "./AdminDashboard/useDashboardFilters";
 import { useDashboardSelection } from "./AdminDashboard/useDashboardSelection";
 import { useDashboardSort } from "./AdminDashboard/useDashboardSort";
+import CollectionsDashboard from "./AdminCollectionsListPage";
 import "./AdminDashboard.css";
 
+type DashboardView = 'letters' | 'collections';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const [dashboardView, setDashboardView] = useState<DashboardView>('letters');
   const [letters, setLetters] = useState<Letter[]>([]);
   const [loading, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -950,7 +953,22 @@ export default function AdminDashboard() {
   // Header action buttons for AdminLayout - now includes all filters
   const headerActions = (
     <div className="header-filters-row">
-      <div className="header-filters-left">
+      {/* Dashboard view toggle */}
+      <div className="dashboard-view-toggle">
+        <button
+          className={`view-toggle-btn ${dashboardView === 'letters' ? 'active' : ''}`}
+          onClick={() => setDashboardView('letters')}
+        >
+          Letters
+        </button>
+        <button
+          className={`view-toggle-btn ${dashboardView === 'collections' ? 'active' : ''}`}
+          onClick={() => setDashboardView('collections')}
+        >
+          Collections
+        </button>
+      </div>
+      {dashboardView === 'letters' && <div className="header-filters-left">
         {/* Visibility group: pills stacked vertically */}
         <div className="filter-group-stacked">
           <div className="filter-buttons filter-buttons-vertical">
@@ -1207,7 +1225,7 @@ export default function AdminDashboard() {
             {processingStatus.completed}/{processingStatus.total}
           </span>
         )}
-      </div>
+      </div>}
 
       {/* Actions: Recent edits */}
       <div className="header-actions-right">
@@ -1251,6 +1269,8 @@ export default function AdminDashboard() {
   return (
     <AdminLayout headerActions={headerActions} fullHeight>
     <div className="admin-dashboard">
+      {dashboardView === 'collections' && <CollectionsDashboard />}
+      {dashboardView === 'letters' && <>
       <div className={`admin-content ${editMode ? 'has-edit-toolbar' : ''}`}>
         <RecentActivityTable
           filteredLetters={filteredLetters}
@@ -1578,6 +1598,7 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+      </>}
     </div>
     </AdminLayout>
   );

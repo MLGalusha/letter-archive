@@ -4,20 +4,11 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import CollectionsPage from "../CollectionsPage";
 
-const mockNavigate = vi.fn();
 const listCollectionsMock = vi.fn();
 
 vi.mock("../../api/collections", () => ({
   listCollections: (...args: unknown[]) => listCollectionsMock(...args),
 }));
-
-vi.mock("react-router-dom", async () => {
-  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
-  return {
-    ...actual,
-    useNavigate: () => mockNavigate,
-  };
-});
 
 const mockCollections = [
   {
@@ -58,11 +49,10 @@ const mockCollections = [
 describe("CollectionsPage", () => {
   beforeEach(() => {
     listCollectionsMock.mockReset();
-    mockNavigate.mockReset();
     listCollectionsMock.mockResolvedValue(mockCollections);
   });
 
-  it("filters and sorts collections from the new controls", async () => {
+  it("sorts collections via custom dropdown", async () => {
     const user = userEvent.setup();
     const { container } = render(
       <MemoryRouter>
@@ -76,36 +66,36 @@ describe("CollectionsPage", () => {
 
     expect(container.querySelectorAll(".public-collection-card")).toHaveLength(3);
 
-    await user.type(screen.getByLabelText("Search collections"), "travel");
-    expect(screen.getByText("Travel Diary")).toBeInTheDocument();
-    expect(screen.queryByText("War Letters")).not.toBeInTheDocument();
+    // Default sort is letter count desc — War Letters (12) first
+    let titles = Array.from(container.querySelectorAll(".collection-card-top h3")).map((el) =>
+      el.textContent?.trim(),
+    );
+    expect(titles[0]).toBe("War Letters");
 
-    await user.clear(screen.getByLabelText("Search collections"));
-    await user.selectOptions(screen.getByLabelText("Sort collections"), "letters-asc");
-
-    const titles = Array.from(container.querySelectorAll(".public-collection-card h3")).map((el) =>
+    // Open dropdown and click active "Letter count" to toggle to asc
+    await user.click(screen.getByLabelText("Sort collections"));
+    let menuOptions = container.querySelectorAll(".sort-option");
+    await user.click(menuOptions[0]); // Letter count (active) — toggles to asc
+    titles = Array.from(container.querySelectorAll(".collection-card-top h3")).map((el) =>
       el.textContent?.trim(),
     );
     expect(titles[0]).toBe("Travel Diary");
-  });
 
-  it("random collection button navigates to a visible collection", async () => {
-    const user = userEvent.setup();
-    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
-
-    render(
-      <MemoryRouter>
-        <CollectionsPage />
-      </MemoryRouter>,
+    // Dropdown stayed open after toggle — pick "Date" directly
+    menuOptions = container.querySelectorAll(".sort-option");
+    if (menuOptions.length > 0) {
+      await user.click(menuOptions[1]); // Date
+    } else {
+      // Dropdown closed, reopen and pick
+      await user.click(screen.getByLabelText("Sort collections"));
+      menuOptions = container.querySelectorAll(".sort-option");
+      await user.click(menuOptions[1]);
+    }
+    titles = Array.from(container.querySelectorAll(".collection-card-top h3")).map((el) =>
+      el.textContent?.trim(),
     );
-
-    await waitFor(() => {
-      expect(screen.getByText("War Letters")).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByRole("button", { name: "Surprise me" }));
-    expect(mockNavigate).toHaveBeenCalledWith("/collections/001");
-
-    randomSpy.mockRestore();
+    // Date desc (newest) — Family Notes (1952) first
+    expect(titles[0]).toBe("Family Notes");
   });
+
 });

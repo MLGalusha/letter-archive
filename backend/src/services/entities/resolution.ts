@@ -567,12 +567,13 @@ async function executePhase3(
           continue;
         }
 
-        const biography = await generateBiography(person.id);
+        const bioResult = await generateBiography(person.id);
 
         await db
           .update(canonicalPersons)
           .set({
-            biography,
+            biography: bioResult.biography,
+            hook: bioResult.hook,
             biographyStatus: 'AI_DRAFT',
             updatedAt: new Date(),
           })

@@ -267,6 +267,7 @@ router.post('/:code/generate-profile', async (req, res, next) => {
 
     // Store results
     await db.update(collections).set({
+      hook: result.hook,
       profileNarrative: result.narrative,
       profileStartHereLetterId: result.startHereLetterId,
       profileStartHereReason: result.startHereReason,
@@ -287,6 +288,7 @@ router.post('/:code/generate-profile', async (req, res, next) => {
 });
 
 const updateProfileSchema = z.object({
+  hook: z.string().max(500).nullable().optional(),
   profileNarrative: z.string().max(10000).optional(),
   profileStartHereLetterId: z.string().uuid().nullable().optional(),
   profileStartHereReason: z.string().max(500).optional(),
@@ -334,6 +336,7 @@ router.put('/:code/profile', async (req, res, next) => {
     const updates: Record<string, unknown> = {};
     const data = parseResult.data;
 
+    if (data.hook !== undefined) updates.hook = data.hook;
     if (data.profileNarrative !== undefined) updates.profileNarrative = data.profileNarrative;
     if (data.profileStartHereLetterId !== undefined) updates.profileStartHereLetterId = data.profileStartHereLetterId;
     if (data.profileStartHereReason !== undefined) updates.profileStartHereReason = data.profileStartHereReason;

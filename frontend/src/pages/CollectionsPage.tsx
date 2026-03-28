@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { listCollections, type CollectionInfo } from '../api/collections';
 import Footer from '../components/Footer/Footer';
@@ -26,10 +26,36 @@ function formatDateRange(range: { min: string; max: string } | null | undefined)
   return `${start.label} \u2014 ${end.label}`;
 }
 
+type SortField = 'letters' | 'date' | 'title';
+type SortOrder = 'asc' | 'desc';
+
+const SORT_OPTIONS: { field: SortField; label: string; defaultOrder: SortOrder }[] = [
+  { field: 'letters', label: 'Letter count', defaultOrder: 'desc' },
+  { field: 'date', label: 'Date', defaultOrder: 'desc' },
+  { field: 'title', label: 'Title', defaultOrder: 'asc' },
+];
+
+function dateVal(range: CollectionInfo['dateRange'], which: 'min' | 'max', fallback = ''): string {
+  return range?.[which]?.replace(/[^0-9]/g, '') || fallback;
+}
+
 export default function CollectionsPage() {
-  const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortMode, setSortMode] = useState<'letters-desc' | 'letters-asc' | 'title-asc'>('letters-desc');
+  const [sortField, setSortField] = useState<SortField>('letters');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortRef = useRef<HTMLDivElement>(null);
+
+  const toggleSort = useCallback(() => setSortOpen((o) => !o), []);
+
+  useEffect(() => {
+    if (!sortOpen) return;
+    const close = (e: MouseEvent) => {
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) setSortOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [sortOpen]);
+
   const { data, loading, error } = useAsync(async () => {
     const collections = await listCollections();
     return collections
@@ -44,41 +70,25 @@ export default function CollectionsPage() {
   }, []);
   const collections: CollectionInfo[] = data ?? [];
 
-  const handleCollectionClick = (code: string) => {
-    navigate(`/collections/${code}`);
-  };
-
   const visibleCollections = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    const filtered = collections.filter((collection) => {
-      if (!query) return true;
-      return (
-        (collection.title || '').toLowerCase().includes(query) ||
-        collection.collectionCode.toLowerCase().includes(query) ||
-        (collection.description || '').toLowerCase().includes(query) ||
-        (collection.hook || '').toLowerCase().includes(query) ||
-        (collection.primarySender || '').toLowerCase().includes(query) ||
-        (collection.primaryRecipient || '').toLowerCase().includes(query)
-      );
+    const dir = sortOrder === 'asc' ? 1 : -1;
+    return [...collections].sort((a, b) => {
+      switch (sortField) {
+        case 'letters': return dir * ((a.letterCount || 0) - (b.letterCount || 0));
+        case 'date': {
+          const which = sortOrder === 'desc' ? 'max' : 'min';
+          const fallback = sortOrder === 'desc' ? '0' : '99999999';
+          return dir * dateVal(a.dateRange, which, fallback).localeCompare(dateVal(b.dateRange, which, fallback));
+        }
+        case 'title': return dir * (a.title || a.collectionCode).localeCompare(b.title || b.collectionCode);
+      }
     });
-
-    return filtered.sort((a, b) => {
-      if (sortMode === 'letters-desc') return (b.letterCount || 0) - (a.letterCount || 0);
-      if (sortMode === 'letters-asc') return (a.letterCount || 0) - (b.letterCount || 0);
-      return (a.title || a.collectionCode).localeCompare(b.title || b.collectionCode);
-    });
-  }, [collections, searchQuery, sortMode]);
+  }, [collections, sortField, sortOrder]);
 
   const totalLetters = useMemo(
     () => collections.reduce((sum, collection) => sum + (collection.letterCount || 0), 0),
     [collections],
   );
-
-  const handleRandomCollection = () => {
-    if (visibleCollections.length === 0) return;
-    const index = Math.floor(Math.random() * visibleCollections.length);
-    handleCollectionClick(visibleCollections[index].collectionCode);
-  };
 
   return (
     <div className="body-layout">
@@ -95,38 +105,60 @@ export default function CollectionsPage() {
             Each collection holds a bundle of letters — a family's correspondence, a wartime exchange,
             a love story told across distance. Pick one and step inside.
           </p>
-          <div className="collections-summary">
-            <span className="summary-stat">
-              <strong>{collections.length}</strong> collection{collections.length !== 1 ? 's' : ''}
-            </span>
-            <span className="summary-divider">/</span>
-            <span className="summary-stat">
-              <strong>{totalLetters}</strong> letters
-            </span>
-          </div>
-        </div>
-
-        <div className="collection-controls-shell">
-          <div className="collection-controls">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search collections..."
-              aria-label="Search collections"
-            />
-            <select
-              value={sortMode}
-              onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
-              aria-label="Sort collections"
-            >
-              <option value="letters-desc">Most letters</option>
-              <option value="letters-asc">Fewest letters</option>
-              <option value="title-asc">Title A-Z</option>
-            </select>
-            <button onClick={handleRandomCollection} disabled={visibleCollections.length === 0}>
-              Surprise me
-            </button>
+          <div className="collections-hero-bottom">
+            <div className="collections-summary">
+              <span className="summary-stat">
+                <strong>{collections.length}</strong> collection{collections.length !== 1 ? 's' : ''}
+              </span>
+              <span className="summary-divider">/</span>
+              <span className="summary-stat">
+                <strong>{totalLetters}</strong> letters
+              </span>
+            </div>
+            <div className="collections-sort" ref={sortRef}>
+              <button
+                type="button"
+                className="sort-trigger"
+                onClick={toggleSort}
+                aria-expanded={sortOpen}
+                aria-label="Sort collections"
+              >
+                <span>{SORT_OPTIONS.find((o) => o.field === sortField)!.label}</span>
+                <span className="sort-indicators">
+                  <span className="sort-arrow">{sortOrder === 'asc' ? '\u2191' : '\u2193'}</span>
+                  <svg className={`sort-chevron${sortOpen ? ' sort-chevron--open' : ''}`} width="8" height="5" viewBox="0 0 8 5" aria-hidden="true">
+                    <path d="M0 0l4 5 4-5z" fill="currentColor" />
+                  </svg>
+                </span>
+              </button>
+              {sortOpen && (
+                <ul className="sort-menu" role="listbox">
+                  {SORT_OPTIONS.map((opt) => {
+                    const isActive = sortField === opt.field;
+                    return (
+                      <li
+                        key={opt.field}
+                        role="option"
+                        aria-selected={isActive}
+                        className={`sort-option${isActive ? ' sort-option--active' : ''}`}
+                        onClick={() => {
+                          if (isActive) {
+                            setSortOrder((o) => o === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setSortField(opt.field);
+                            setSortOrder(opt.defaultOrder);
+                            setSortOpen(false);
+                          }
+                        }}
+                      >
+                        <span>{opt.label}</span>
+                        {isActive && <span className="sort-arrow">{sortOrder === 'asc' ? '\u2191' : '\u2193'}</span>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
 
@@ -178,8 +210,7 @@ export default function CollectionsPage() {
 
         {!loading && visibleCollections.length === 0 && !error && (
           <div className="no-results">
-            <p>No matching collections found.</p>
-            <p className="no-results-hint">Try a different search or sorting strategy.</p>
+            <p>No collections available yet.</p>
           </div>
         )}
       </div>

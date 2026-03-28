@@ -23,6 +23,7 @@ export interface CollectionPerson {
   canonicalName: string;
   aliases: string[];
   biography: string | null;
+  hook: string | null;
   letterCount: number;
   senderCount: number;
   recipientCount: number;
@@ -111,6 +112,7 @@ export async function getPersonsForCollection(
       canonicalName: canonicalPersons.canonicalName,
       aliases: canonicalPersons.aliases,
       biography: canonicalPersons.biography,
+      hook: canonicalPersons.hook,
       letterCount: sql<number>`COUNT(DISTINCT ${letterPersons.letterId})::int`,
       senderCount: sql<number>`COUNT(DISTINCT CASE WHEN ${letterPersons.role} = 'sender' THEN ${letterPersons.letterId} END)::int`,
       recipientCount: sql<number>`COUNT(DISTINCT CASE WHEN ${letterPersons.role} = 'recipient' THEN ${letterPersons.letterId} END)::int`,
@@ -120,7 +122,7 @@ export async function getPersonsForCollection(
     .innerJoin(letterPersons, eq(canonicalPersons.id, letterPersons.personId))
     .innerJoin(letters, eq(letterPersons.letterId, letters.id))
     .where(eq(letters.collectionId, collectionId))
-    .groupBy(canonicalPersons.id, canonicalPersons.canonicalName, canonicalPersons.aliases, canonicalPersons.biography)
+    .groupBy(canonicalPersons.id, canonicalPersons.canonicalName, canonicalPersons.aliases, canonicalPersons.biography, canonicalPersons.hook)
     .orderBy(sql`COUNT(DISTINCT ${letterPersons.letterId}) DESC`);
 
   return results.map((r) => ({
@@ -128,6 +130,7 @@ export async function getPersonsForCollection(
     canonicalName: r.canonicalName,
     aliases: r.aliases || [],
     biography: r.biography,
+    hook: r.hook,
     letterCount: r.letterCount,
     senderCount: r.senderCount,
     recipientCount: r.recipientCount,

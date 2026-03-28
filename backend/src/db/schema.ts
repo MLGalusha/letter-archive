@@ -144,6 +144,7 @@ export const collections = pgTable('collections', {
   profileThemes: jsonb('profile_themes'),               // Array<{ name, description, letterIds[] }>
   profileStatus: contentStatusEnum('profile_status').notNull().default('EMPTY'),
   profileGeneratedAt: timestamp('profile_generated_at', { withTimezone: true }),
+  hook: text('hook'),
 });
 
 // Letters table
@@ -337,6 +338,7 @@ export const canonicalPersons = pgTable(
     notes: text('notes'),
     // Biography fields for AI-generated person narratives
     biography: text('biography'),
+    hook: text('hook'),
     biographyStatus: contentStatusEnum('biography_status').notNull().default('EMPTY'),
     biographyVerifiedAt: timestamp('biography_verified_at', { withTimezone: true }),
     biographyVerifiedBy: text('biography_verified_by'),

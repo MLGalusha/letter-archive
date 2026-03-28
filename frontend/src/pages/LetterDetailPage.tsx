@@ -15,6 +15,7 @@ import { reflowTranscript, renderTranscriptLines, computeReferenceWidth } from "
 import { useHeaderDock, EMPTY_DOCK } from "../contexts/HeaderDockContext";
 import HeaderScrubber from "../components/HeaderScrubber/HeaderScrubber";
 import useLetterScrubber from "../components/LetterHeaderDock/useLetterScrubber";
+import BackToTop from "../components/BackToTop";
 import "./LetterDetailPage.css";
 
 /* ── helpers ─────────────────────────────────────────────── */
@@ -1249,6 +1250,7 @@ export default function LetterDetailPage() {
           </div>
         </div>
       )}
+      <BackToTop />
     </>
   );
 }

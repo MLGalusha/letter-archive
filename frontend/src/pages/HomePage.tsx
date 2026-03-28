@@ -4,6 +4,7 @@ import SEO from "../components/SEO";
 import SearchBar, { type SearchFilters } from "../components/SearchBar/SearchBar";
 import ArchiveList from "../components/ArchiveList/ArchiveList";
 import Footer from "../components/Footer/Footer";
+import BackToTop from "../components/BackToTop";
 import { getImageUrl, listBlogPosts, type BlogPost } from "../api/client";
 import {
   getArchiveShelfItems,
@@ -527,6 +528,7 @@ export default function HomePage() {
       </section>
 
       <Footer />
+      <BackToTop />
     </div>
   );
 }

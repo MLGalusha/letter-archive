@@ -5,6 +5,7 @@ import SEO from '../components/SEO';
 import SearchBar, { type SearchFilters } from '../components/SearchBar/SearchBar';
 import ArchiveList from '../components/ArchiveList/ArchiveList';
 import Footer from '../components/Footer/Footer';
+import BackToTop from '../components/BackToTop';
 import { getCollectionByCode, getCollectionProfile, type CollectionWithLetters, type CollectionProfile } from '../api/collections';
 import { getImageUrl } from '../api/client';
 import { searchArchiveShelf, type ArchiveSearchResponse } from '../api/letters';
@@ -294,20 +295,10 @@ export default function CollectionDetailPage() {
     [collectionLetters, profile?.startHere?.letterId],
   );
 
-  const correspondents = useMemo(() => {
-    const result = buildCorrespondents(collectionLetters, profile?.keyPeople);
-    // TODO: remove mock data — temporary for visual testing on collection 009
-    if (collectionCode === '009') {
-      for (const person of result) {
-        if (person.name.toLowerCase().includes('jimmi')) {
-          person.hook = 'A devoted husband writing from abroad, longing to reunite with his wife.';
-        } else if (person.name.toLowerCase().includes('molly')) {
-          person.hook = 'A steadfast wife managing the household while awaiting her husband\'s return.';
-        }
-      }
-    }
-    return result;
-  }, [collectionCode, collectionLetters, profile?.keyPeople]);
+  const correspondents = useMemo(
+    () => buildCorrespondents(collectionLetters, profile?.keyPeople),
+    [collectionLetters, profile?.keyPeople],
+  );
 
   const gallery = useMemo(
     () => buildExtraContentGallery(collectionLetters),
@@ -681,11 +672,10 @@ export default function CollectionDetailPage() {
         </header>
 
         {/* ---- 2. Narrative (optional, standalone) ---- */}
-        {/* TODO: remove mock narrative — temporary for visual testing */}
-        {(profile?.narrative || collectionCode === '009') && (
+        {profile?.narrative && (
           <section className="cd-narrative">
             <div className="cd-narrative-label">About This Collection</div>
-            <p>{profile?.narrative || 'In the late summer of 1947, Jimmie and Molly exchanged a remarkable series of letters as Jimmie traveled through England. What begins as routine correspondence quickly deepens into an intimate portrait of a marriage tested by distance — Jimmie\'s longing to return home, Molly\'s quiet strength managing daily life alone, and the small details of a post-war world slowly rebuilding itself. These letters capture not just a relationship, but a moment in time when the ordinary act of writing was the only thread connecting two lives.'}</p>
+            <p>{profile.narrative}</p>
           </section>
         )}
 
@@ -797,6 +787,7 @@ export default function CollectionDetailPage() {
 
       </div>
       <Footer />
+      <BackToTop />
     </div>
   );
 }

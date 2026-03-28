@@ -79,6 +79,20 @@
   line-height: 1.4;
 }
 
+.letter-dateline:only-child {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: clamp(1.3rem, 2.5vw, 1.8rem);
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.2rem 0 0;
+  letter-spacing: -0.02em;
+}
+
+.ordinal-suffix {
+  font-size: 0.65em;
+  vertical-align: baseline;
+}
+
 .date-approx {
   font-style: italic;
   font-size: 0.82rem;
@@ -125,6 +139,7 @@
   margin: 2rem 0 0.5rem;
   position: relative;
   overflow: hidden;
+  min-height: 50vh;
 }
 
 /* Horizontal scroll track — drag to scroll with momentum */
@@ -249,6 +264,16 @@
   grid-column: wide;
   margin-top: 2.2rem;
   overflow: visible;
+  border-left: 1px solid transparent;
+  padding-left: 1rem;
+}
+
+.letter-transcript-section.transcript-verified {
+  border-left-color: rgba(42, 138, 153, 0.45);
+}
+
+.letter-transcript-section.transcript-unverified {
+  border-left-color: rgba(201, 106, 58, 0.45);
 }
 
 .transcript-header-row {
@@ -295,16 +320,32 @@
   color: var(--text);
 }
 
-.verified-pill {
-  display: inline-block;
-  padding: 0.15rem 0.45rem;
+.transcript-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
   border-radius: 999px;
-  font-size: 0.6rem;
+  font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  background-color: var(--success-bg);
-  color: var(--success-text);
+}
+
+.transcript-status.verified {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.transcript-status.unverified {
+  background: #fce8df;
+  color: #b5572a;
+}
+
+.supporting-header-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .transcript-pages {
@@ -449,8 +490,7 @@
   align-items: center;
   gap: 0;
   position: relative;
-  filter: brightness(0.85);
-  transition: filter 0.25s ease, transform 0.25s ease;
+  transition: transform 0.25s ease;
 }
 
 .page-thumb-left .page-thumb-inner {
@@ -462,7 +502,6 @@
 }
 
 .page-thumb:hover .page-thumb-inner {
-  filter: brightness(1);
   transform: scale(1.15);
 }
 
@@ -476,6 +515,37 @@
   border: 1px solid rgba(217, 207, 191, 0.7);
   box-shadow: 0 6px 16px rgba(29, 26, 20, 0.1);
   background: rgba(255, 250, 242, 0.5);
+  filter: brightness(0.85);
+  transition: filter 0.25s ease;
+}
+
+.page-thumb:hover .page-thumb-img {
+  filter: brightness(1);
+}
+
+/* Verification border on the image — colors pre-brightened to compensate for brightness(0.85) */
+.page-thumb.verified .page-thumb-img {
+  border-color: #31a2b4;
+}
+
+.page-thumb.verified .page-thumb-label {
+  color: #2a8a99;
+  background: rgba(42, 138, 153, 0.15);
+  border: 1px solid #2a8a99;
+  border-top: none;
+  bottom: 0;
+}
+
+.page-thumb.unverified .page-thumb-img {
+  border-color: #e07d48;
+}
+
+.page-thumb.unverified .page-thumb-label {
+  color: #c96a3a;
+  background: rgba(201, 106, 58, 0.15);
+  border: 1px solid #c96a3a;
+  border-top: none;
+  bottom: 0;
 }
 
 .page-thumb-label {

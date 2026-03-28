@@ -61,6 +61,33 @@ function getExtraContentLabel(images: LetterImage[]): string {
   return types.map((t) => t.charAt(0).toUpperCase() + t.slice(1)).join(" & ");
 }
 
+/** Wrap ordinal suffixes (1st, 2nd, 3rd, 4th) and decade "s" (1800s) in small spans */
+function formatDateText(text: string): React.ReactNode {
+  // Split on ordinals (1st, 22nd, 3rd, 14th) and decade/century s (1800s, 1880S)
+  const parts = text.split(/(\d+(?:st|nd|rd|th)|(\d{3,4})[sS])/gi);
+  if (parts.length === 1) return text;
+  const result: React.ReactNode[] = [];
+  let i = 0;
+  // Walk the original string, matching patterns and building nodes
+  const regex = /(\d+)(st|nd|rd|th)|(\d{3,4})([sS])/g;
+  let lastIdx = 0;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > lastIdx) result.push(text.slice(lastIdx, m.index));
+    if (m[1]) {
+      // Ordinal: "1st", "4th"
+      result.push(<Fragment key={i}>{m[1]}<span className="ordinal-suffix">{m[2]}</span></Fragment>);
+    } else {
+      // Decade: "1800S" → "1800s"
+      result.push(<Fragment key={i}>{m[3]}<span className="ordinal-suffix">s</span></Fragment>);
+    }
+    lastIdx = m.index + m[0].length;
+    i++;
+  }
+  if (lastIdx < text.length) result.push(text.slice(lastIdx));
+  return result;
+}
+
 /* ── component ───────────────────────────────────────────── */
 
 export default function LetterDetailPage() {
@@ -104,6 +131,8 @@ export default function LetterDetailPage() {
 
   useEffect(() => {
     if (carouselRef.current) carouselRef.current.scrollLeft = 0;
+    // Scroll to top on letter change (unless coming from a highlight)
+    if (!fromHighlightRef.current) window.scrollTo(0, 0);
   }, [letterId]);
 
   // Scroll-driven scaling + mouse-drag scrolling
@@ -451,8 +480,10 @@ export default function LetterDetailPage() {
   useEffect(() => {
     if (!letterId) { setLoading(false); return; }
     const controller = new AbortController();
+    const isFirstLoad = !letter;
     async function fetchLetter() {
-      setLoading(true);
+      // Only show loading state on first load — keep previous letter visible during navigation
+      if (isFirstLoad) setLoading(true);
       setError(null);
       try {
         const [data, adj] = await Promise.all([
@@ -473,7 +504,7 @@ export default function LetterDetailPage() {
     }
     fetchLetter();
     return () => controller.abort();
-  }, [letterId]);
+  }, [letterId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard nav
   useEffect(() => {
@@ -493,18 +524,30 @@ export default function LetterDetailPage() {
   const scrubberProps = useLetterScrubber(adjacent, letterId);
 
   useEffect(() => {
-    if (!scrubberProps) return;
-    setDock({
-      content: <HeaderScrubber {...scrubberProps} />,
-      active: true,
-      visible: true,
-      scrollReveal: true,
-      showTitle: true,
-      collectionsLink: adjacent ? {
-        label: 'Collection',
-        to: `/collections/${adjacent.collectionCode}`,
-      } : undefined,
-    });
+    const collectionsLink = adjacent ? {
+      label: 'Collection',
+      to: `/collections/${adjacent.collectionCode}`,
+    } : undefined;
+
+    if (scrubberProps) {
+      setDock({
+        content: <HeaderScrubber {...scrubberProps} />,
+        active: true,
+        visible: true,
+        scrollReveal: true,
+        showTitle: true,
+        collectionsLink,
+      });
+    } else {
+      setDock({
+        content: null,
+        active: false,
+        visible: false,
+        scrollReveal: true,
+        showTitle: true,
+        collectionsLink,
+      });
+    }
   }, [scrubberProps, adjacent, setDock]);
 
   // Clear dock on unmount
@@ -731,7 +774,7 @@ export default function LetterDetailPage() {
           {byline && <p className="letter-byline">{byline}</p>}
 
           {dateline && (
-            <p className="letter-dateline">{dateline}</p>
+            <p className="letter-dateline">{formatDateText(dateline)}</p>
           )}
 
         </header>
@@ -806,12 +849,14 @@ export default function LetterDetailPage() {
 
         {/* ── 4. Transcript ────────────────────────────────── */}
         {hasTranscript && (
-          <section className="letter-transcript-section" ref={transcriptSectionRef}>
+          <section className={`letter-transcript-section${letter.transcriptStatus === "VERIFIED" ? " transcript-verified" : letter.transcriptStatus !== "EMPTY" ? " transcript-unverified" : ""}`} ref={transcriptSectionRef}>
             <div className="transcript-header-row">
               <div className="transcript-label">Transcript</div>
-              {letter.transcript.verified && (
-                <span className="verified-pill">Verified</span>
-              )}
+              {letter.transcriptStatus === "VERIFIED" ? (
+                <span className="transcript-status verified">Verified</span>
+              ) : letter.transcriptStatus !== "EMPTY" ? (
+                <span className="transcript-status unverified">Unverified</span>
+              ) : null}
               <button
                 type="button"
                 className="transcript-mode-toggle"
@@ -836,7 +881,7 @@ export default function LetterDetailPage() {
                           {pageImage && (
                             <button
                               type="button"
-                              className={`page-thumb page-thumb-${side}`}
+                              className={`page-thumb page-thumb-${side}${letter.transcriptStatus === "VERIFIED" ? " verified" : letter.transcriptStatus !== "EMPTY" ? " unverified" : ""}`}
                               onClick={() => openViewer(allImages.indexOf(pageImage))}
                               aria-label={`View page ${segment.pageNumber}`}
                             >
@@ -871,7 +916,7 @@ export default function LetterDetailPage() {
                         {pageImage && (
                           <button
                             type="button"
-                            className={`page-thumb page-thumb-${side}`}
+                            className={`page-thumb page-thumb-${side}${letter.transcriptStatus === "VERIFIED" ? " verified" : letter.transcriptStatus !== "EMPTY" ? " unverified" : ""}`}
                             onClick={() => openViewer(allImages.indexOf(pageImage))}
                             aria-label={`View page ${page.pageNumber}`}
                           >
@@ -942,7 +987,7 @@ export default function LetterDetailPage() {
                   {itemImage && (
                     <button
                       type="button"
-                      className={`page-thumb page-thumb-${side}`}
+                      className={`page-thumb page-thumb-${side}${letter.extraContentStatus === "VERIFIED" ? " verified" : letter.extraContentStatus !== "EMPTY" ? " unverified" : ""}`}
                       onClick={() => openViewer(allImages.indexOf(itemImage))}
                       aria-label={`View ${item.label.toLowerCase()}`}
                     >
@@ -956,7 +1001,15 @@ export default function LetterDetailPage() {
                       </span>
                     </button>
                   )}
-                  <div className="supporting-label">{item.label}</div>
+                  <div className="supporting-header-row">
+                    <div className="supporting-label">{item.label}</div>
+                    {idx === 0 && letter.extraContentStatus === "VERIFIED" && (
+                      <span className="transcript-status verified">Verified</span>
+                    )}
+                    {idx === 0 && letter.extraContentStatus !== "VERIFIED" && letter.extraContentStatus !== "EMPTY" && (
+                      <span className="transcript-status unverified">Unverified</span>
+                    )}
+                  </div>
                   <p className="supporting-text">{item.transcript}</p>
                 </section>
               </Fragment>
@@ -979,7 +1032,7 @@ export default function LetterDetailPage() {
                 {extraImages[0] && (
                   <button
                     type="button"
-                    className={`page-thumb page-thumb-${fallbackSide}`}
+                    className={`page-thumb page-thumb-${fallbackSide}${letter.extraContentStatus === "VERIFIED" ? " verified" : letter.extraContentStatus !== "EMPTY" ? " unverified" : ""}`}
                     onClick={() => openViewer(allImages.indexOf(extraImages[0]))}
                     aria-label={`View ${fallbackLabel.toLowerCase()}`}
                   >
@@ -993,7 +1046,14 @@ export default function LetterDetailPage() {
                     </span>
                   </button>
                 )}
-                <div className="supporting-label">{fallbackLabel}</div>
+                <div className="supporting-header-row">
+                  <div className="supporting-label">{fallbackLabel}</div>
+                  {letter.extraContentStatus === "VERIFIED" ? (
+                    <span className="transcript-status verified">Verified</span>
+                  ) : letter.extraContentStatus !== "EMPTY" ? (
+                    <span className="transcript-status unverified">Unverified</span>
+                  ) : null}
+                </div>
                 <p className="supporting-text">{letter.extraContentTranscript}</p>
               </section>
             </>

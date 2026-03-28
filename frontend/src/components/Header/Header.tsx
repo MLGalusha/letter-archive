@@ -7,7 +7,7 @@ import useScrollDirection from "../../hooks/useScrollDirection";
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { dock } = useHeaderDock();
-  const hasDock = Boolean(dock.content);
+  const hasDock = Boolean(dock.content) || Boolean(dock.showTitle);
   const isScrollReveal = dock.scrollReveal ?? false;
   const scrollVisible = useScrollDirection(isScrollReveal);
 
@@ -20,7 +20,7 @@ export default function Header() {
   return (
     <header className={headerClass}>
       <div className="header-inner">
-        <div className={`header-brand-slot${dock.active ? " has-active-dock" : ""}${dock.active && dock.showTitle ? " show-title" : ""}`}>
+        <div className={`header-brand-slot${dock.active ? " has-active-dock" : ""}${dock.showTitle ? " show-title" : ""}`}>
           <Link to="/" className="main-title" onClick={() => setMenuOpen(false)}>
             <span className="main-title-label">Editorial Archive</span>
             <span className="main-title-name">Letter Archive</span>

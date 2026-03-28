@@ -55,6 +55,8 @@ export default function useCollectionLetters(collectionCode: string): ArchiveShe
   );
 
   useEffect(() => {
+    if (!collectionCode) return;
+
     if (cache.has(collectionCode)) {
       setLetters(cache.get(collectionCode)!);
       return;

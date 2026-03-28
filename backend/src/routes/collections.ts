@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { eq, and, sql, asc } from 'drizzle-orm';
 import { db, letters, collections } from '../db/index.js';
 import { listCollections, getCollectionByCode } from '../services/collections.js';
-import { transformLettersToDTO, type LetterWithRelations } from '../dto/index.js';
+import { transformLettersWithRelatedToDTO, type LetterWithRelations } from '../dto/index.js';
 import { getCollectionAggregations } from '../services/collection-profile.js';
 
 const router = Router();
@@ -88,17 +88,31 @@ router.get('/collections/:code', async (req, res, next) => {
       orderBy: [asc(letters.letterDate)],
     });
 
-    // Deduplicate companion types (covers, telegrams sharing same date/sequence).
-    // Keep one record per (dateRaw, typeSequence) group, preferring type='L'.
-    const groups = new Map<string, (typeof allLetters)[number]>();
+    // Group by (dateRaw, typeSequence) to merge companions into primaries.
+    // Primary = L-type (or first in group if no L-type).
+    // Related items (covers, photos, etc.) get their images appended.
+    const groupMap = new Map<string, (typeof allLetters)[number][]>();
     for (const letter of allLetters) {
       const key = `${letter.dateRaw}|${letter.typeSequence}`;
-      const existing = groups.get(key);
-      if (!existing || (letter.type === 'L' && existing.type !== 'L')) {
-        groups.set(key, letter);
+      const group = groupMap.get(key);
+      if (group) {
+        group.push(letter);
+      } else {
+        groupMap.set(key, [letter]);
       }
     }
-    const collectionLetters = Array.from(groups.values());
+
+    const enrichedResults: Array<{ letter: LetterWithRelations; relatedItems: LetterWithRelations[] }> = [];
+    for (const [, group] of groupMap) {
+      const primary = group.find((l) => l.type === 'L') || group[0];
+      const relatedItems = group.filter((l) => l.id !== primary.id);
+      enrichedResults.push({
+        letter: primary as LetterWithRelations,
+        relatedItems: relatedItems as LetterWithRelations[],
+      });
+    }
+
+    const collectionLetters = transformLettersWithRelatedToDTO(enrichedResults);
 
     req.log.debug(
       { collectionCode: code, letterCount: collectionLetters.length, rawCount: allLetters.length },
@@ -107,7 +121,7 @@ router.get('/collections/:code', async (req, res, next) => {
 
     res.json({
       ...collection,
-      letters: transformLettersToDTO(collectionLetters as LetterWithRelations[]),
+      letters: collectionLetters,
       letterCount: collectionLetters.length,
     });
   } catch (error) {

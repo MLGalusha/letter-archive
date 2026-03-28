@@ -3,8 +3,8 @@ import type { Letter } from "../../types/Letter";
 import {
   computeCollectionStats,
   pickLetterHighlights,
-  buildTimelineEntries,
-  buildAtAGlanceFacets,
+  buildCorrespondents,
+  buildExtraContentGallery,
 } from "../collection-detail-utils";
 
 function makeLetter(overrides: Partial<Letter>): Letter {
@@ -80,64 +80,77 @@ describe("collection detail utils", () => {
     }),
   ];
 
-  it("computes collection stats from letter data", () => {
+  it("computes collection stats with date span and format breakdown", () => {
     const stats = computeCollectionStats(letters);
 
     expect(stats.dateSpan).not.toBeNull();
     expect(stats.dateSpan!.label).toContain("1932");
-    expect(stats.writingFrequency).toBeTruthy();
     expect(stats.formatBreakdown).toContain("letter");
+    expect(stats.formatBreakdown).toContain("\u00B7");
     expect(stats.formatBreakdown).toContain("photo");
   });
 
-  it("picks up to 2 highlights: featured/pinned then photo", () => {
+  it("picks 1 featured highlight, preferring items with images", () => {
     const highlights = pickLetterHighlights(letters);
 
-    expect(highlights).toHaveLength(2);
+    expect(highlights).toHaveLength(1);
     expect(highlights[0].label).toBe("Featured");
-    expect(highlights[0].letter.id).toBe("l2");
-    expect(highlights[1].label).toBe("Photo");
-    expect(highlights[1].letter.id).toBe("l3");
+    expect(highlights[0].letter.images.length).toBeGreaterThan(0);
   });
 
-  it("builds timeline entries sorted by date with sender/recipient", () => {
-    const entries = buildTimelineEntries(letters);
+  it("builds extra content gallery from photos and covers", () => {
+    const gallery = buildExtraContentGallery(letters);
 
-    expect(entries).toHaveLength(3);
-    expect(entries[0].letterId).toBe("l1");
-    expect(entries[0].hookLine).toBe("Discusses ration planning.");
-    expect(entries[0].sender).toBe("Alice");
-    expect(entries[0].recipient).toBe("Bob");
-    expect(entries[2].letterId).toBe("l3");
-    expect(entries[2].mediaLabel).toBe("Photo");
-    expect(entries[2].sender).toBe("Cara");
+    expect(gallery.length).toBeGreaterThan(0);
+    expect(gallery[0].mediaType).toBe("photo");
+    expect(gallery[0].letterId).toBe("l3");
+    // Standalone photo letter should have a hook
+    expect(gallery[0].hook).toBeTruthy();
   });
 
-  it("builds at-a-glance facets with topics, places, and people", () => {
-    const facets = buildAtAGlanceFacets(letters);
+  it("includes extra content images from letter-type items without hook", () => {
+    const letterWithExtra = makeLetter({
+      id: "l-with-extra",
+      images: [
+        { id: "img-letter", type: "letter", imageUrl: "/img/letter-page" },
+        { id: "img-cover", type: "cover", imageUrl: "/img/cover-extra" },
+      ],
+      metadata: {
+        sender: "Alice",
+        recipient: "Bob",
+        dateRaw: "19320401",
+        hook: "Discusses the new house.",
+        verified: false,
+      },
+    });
 
-    expect(facets.topics[0]).toEqual({ value: "family", count: 2 });
-    expect(facets.people[0]).toEqual({ value: "Alice", count: 3 });
-    expect(facets.places).toHaveLength(1);
-    expect(facets.places[0]).toEqual({ value: "New York", count: 2 });
-    expect(facets.formats.length).toBeGreaterThan(0);
+    const gallery = buildExtraContentGallery([letterWithExtra]);
+
+    expect(gallery).toHaveLength(1);
+    expect(gallery[0].mediaType).toBe("cover");
+    expect(gallery[0].hook).toBe(""); // hook omitted — it describes the letter, not the cover
+  });
+
+  it("builds correspondents with sent/received counts", () => {
+    const correspondents = buildCorrespondents(letters);
+
+    expect(correspondents.length).toBeGreaterThan(0);
+    const alice = correspondents.find((c) => c.name === "Alice");
+    expect(alice).toBeDefined();
+    expect(alice!.sentCount).toBe(2);
+    expect(alice!.receivedCount).toBe(1);
+    expect(alice!.totalLetters).toBe(3);
   });
 
   it("handles empty letter arrays gracefully", () => {
     const stats = computeCollectionStats([]);
     expect(stats.dateSpan).toBeNull();
-    expect(stats.writingFrequency).toBeNull();
     expect(stats.formatBreakdown).toBe("0 items");
 
     const highlights = pickLetterHighlights([]);
     expect(highlights).toEqual([]);
 
-    const timeline = buildTimelineEntries([]);
-    expect(timeline).toEqual([]);
-
-    const facets = buildAtAGlanceFacets([]);
-    expect(facets.topics).toEqual([]);
-    expect(facets.places).toEqual([]);
-    expect(facets.people).toEqual([]);
+    const correspondents = buildCorrespondents([]);
+    expect(correspondents).toEqual([]);
   });
 });

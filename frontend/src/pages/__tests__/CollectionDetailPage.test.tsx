@@ -29,6 +29,7 @@ const searchArchiveShelfMock = vi.fn();
 vi.mock("../../api/collections", () => ({
   getCollectionByCode: (...args: unknown[]) => getCollectionByCodeMock(...args),
   getCollectionProfile: (...args: unknown[]) => getCollectionProfileMock(...args),
+  listCollections: () => Promise.resolve([]),
 }));
 
 vi.mock("../../api/letters", () => ({
@@ -55,16 +56,8 @@ vi.mock("../../api/client", () => ({
   getImageUrl: (url: string) => url,
 }));
 
-vi.mock("../../components/Breadcrumb", () => ({
-  default: () => <nav>Breadcrumb</nav>,
-}));
-
 vi.mock("../../components/Footer/Footer", () => ({
   default: () => <footer>Footer</footer>,
-}));
-
-vi.mock("../../components/CollectionProfile", () => ({
-  NarrativeSection: () => <div data-testid="narrative">Narrative</div>,
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -187,25 +180,21 @@ describe("CollectionDetailPage", () => {
     });
   });
 
-  it("renders header, stats, highlights, people, and archive search", async () => {
+  it("renders header with inline stats, people, highlights, and archive search", async () => {
     renderCollectionDetailPage();
 
     // Header
     expect(await screen.findByRole("heading", { name: "Collection Nine" })).toBeInTheDocument();
-    expect(screen.getByText("3 items")).toBeInTheDocument();
-    expect(screen.getByText("009")).toBeInTheDocument();
 
-    // Stats (2 letters + 1 photo)
-    expect(screen.getByText("2 letters, 1 photo")).toBeInTheDocument();
-
-    // Highlights (Featured + Photo)
-    expect(screen.getByRole("heading", { name: "Highlights" })).toBeInTheDocument();
-    expect(screen.getByText("Featured")).toBeInTheDocument();
-    expect(screen.getByText("Photo")).toBeInTheDocument();
+    // Inline stats (format breakdown)
+    expect(screen.getByText("2 letters \u00B7 1 photo")).toBeInTheDocument();
 
     // People section
-    expect(screen.getByRole("heading", { name: "People" })).toBeInTheDocument();
     expect(screen.getByText("Alice Smith")).toBeInTheDocument();
+
+    // Highlights (featured letter + gallery)
+    expect(screen.getByText(/Featured/)).toBeInTheDocument();
+    expect(screen.getByText("Photo")).toBeInTheDocument();
 
     // Archive search components
     expect(screen.getByTestId("search-bar")).toBeInTheDocument();
@@ -231,13 +220,14 @@ describe("CollectionDetailPage", () => {
     renderCollectionDetailPage();
 
     await screen.findByRole("heading", { name: "Collection Nine" });
-    // Click the "Featured" highlight (letter-2, the middle letter)
     const highlightButtons = screen.getAllByRole("button").filter(
-      (btn) => btn.classList.contains("cd-highlight-item"),
+      (btn) => btn.classList.contains("cd-highlight-card"),
     );
     await user.click(highlightButtons[0]);
 
-    expect(mockNavigate).toHaveBeenCalledWith("/letter/letter-2");
+    expect(mockNavigate).toHaveBeenCalledWith(
+      expect.stringContaining("/letter/letter-2"),
+    );
   });
 
   it("shows the not-found state and returns to collections when loading fails", async () => {
@@ -262,10 +252,23 @@ describe("CollectionDetailPage", () => {
     await screen.findByRole("heading", { name: "Collection Nine" });
 
     // Narrative should not appear when profile is null
-    expect(screen.queryByTestId("narrative")).not.toBeInTheDocument();
+    expect(screen.queryByText(/narrative/i)).not.toBeInTheDocument();
 
-    // But highlights, stats, and archive should still render
-    expect(screen.getByRole("heading", { name: "Highlights" })).toBeInTheDocument();
+    // But highlights and archive should still render
+    expect(screen.getByText(/Featured/)).toBeInTheDocument();
     expect(screen.getByTestId("archive-list")).toBeInTheDocument();
+  });
+
+  it("shows narrative when profile has one", async () => {
+    getCollectionProfileMock.mockResolvedValue({
+      narrative: "This collection tells the story of wartime correspondence.",
+      profileStatus: "AI_DRAFT",
+    });
+
+    renderCollectionDetailPage();
+
+    await screen.findByRole("heading", { name: "Collection Nine" });
+
+    expect(screen.getByText("This collection tells the story of wartime correspondence.")).toBeInTheDocument();
   });
 });

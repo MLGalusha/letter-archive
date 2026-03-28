@@ -1,22 +1,25 @@
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+// ReactMouseEvent used by HighlightCard page navigation
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import SEO from '../components/SEO';
 import SearchBar, { type SearchFilters } from '../components/SearchBar/SearchBar';
 import ArchiveList from '../components/ArchiveList/ArchiveList';
-import Breadcrumb from '../components/Breadcrumb';
 import Footer from '../components/Footer/Footer';
-import { NarrativeSection } from '../components/CollectionProfile';
 import { getCollectionByCode, getCollectionProfile, type CollectionWithLetters, type CollectionProfile } from '../api/collections';
 import { getImageUrl } from '../api/client';
 import { searchArchiveShelf, type ArchiveSearchResponse } from '../api/letters';
 import type { ArchiveShelfItem } from '../types/Letter';
 import { EMPTY_DOCK, useHeaderDock } from '../contexts/HeaderDockContext';
-import { getPrimaryImage } from '../utils/letterPreview';
+import { getPrimaryImage, getPrimaryMediaType, getMediaLabel } from '../utils/letterPreview';
 import {
   computeCollectionStats,
   pickLetterHighlights,
   buildCorrespondents,
+  buildExtraContentGallery,
+  type GalleryItem,
 } from './collection-detail-utils';
+import HeaderScrubber from '../components/HeaderScrubber/HeaderScrubber';
+import useCollectionScrubber from '../components/CollectionHeaderDock/useCollectionScrubber';
 import { buildCollectionSeo } from '../utils/seo';
 import './CollectionDetailPage.css';
 
@@ -41,13 +44,177 @@ function mergeArchiveItems(
   return next;
 }
 
+/* ---- Highlight Card with page navigation ---- */
+
+function HighlightCard({
+  letter,
+  label,
+  onNavigate,
+}: {
+  letter: import('../types/Letter').Letter;
+  label: string;
+  onNavigate: (letterId: string, imageId?: string) => void;
+}) {
+  const images = letter.images || [];
+  const [pageIndex, setPageIndex] = useState(0);
+  const currentImage = images[pageIndex];
+  const hasMultiplePages = images.length > 1;
+
+  const mediaType = getPrimaryMediaType(letter);
+  const mediaLabel = getMediaLabel(mediaType);
+  const sender = letter.metadata.sender?.trim();
+  const recipient = letter.metadata.recipient?.trim();
+  const peopleLine = sender && recipient
+    ? `${sender} \u2192 ${recipient}`
+    : sender || recipient || '';
+  const date = letter.metadata.date || letter.metadata.dateRaw || '';
+  const hook = mediaType === 'photo'
+    ? (letter.photoDescription || letter.metadata.hook || '')
+    : (letter.metadata.hook || letter.photoDescription || '');
+  const chipLabel = label.toLowerCase() === mediaLabel.toLowerCase()
+    ? label
+    : `${label} \u00B7 ${mediaLabel}`;
+
+  const handlePrevPage = (e: ReactMouseEvent) => {
+    e.stopPropagation();
+    setPageIndex((i) => (i === 0 ? images.length - 1 : i - 1));
+  };
+
+  const handleNextPage = (e: ReactMouseEvent) => {
+    e.stopPropagation();
+    setPageIndex((i) => (i === images.length - 1 ? 0 : i + 1));
+  };
+
+  return (
+    <button
+      type="button"
+      className={`cd-highlight-card cd-highlight-card--${mediaType}`}
+      onClick={() => onNavigate(letter.id, currentImage?.id)}
+    >
+      {currentImage?.imageUrl ? (
+        <img
+          className="cd-highlight-img"
+          src={getImageUrl(currentImage.imageUrl, { width: 720 })}
+          alt={hook || label}
+          loading="lazy"
+        />
+      ) : (
+        <div className="cd-highlight-placeholder" />
+      )}
+      <div className="cd-highlight-overlay" />
+      <span className="cd-highlight-label">{chipLabel}</span>
+      <div className="cd-highlight-content">
+        {peopleLine && (
+          <span className="cd-highlight-meta">{peopleLine}</span>
+        )}
+        {date && (
+          <span className="cd-highlight-date">{date}</span>
+        )}
+        {hook && (
+          <p className="cd-highlight-hook">{hook}</p>
+        )}
+      </div>
+      {hasMultiplePages && (
+        <>
+          <span className="cd-highlight-page-counter">
+            {pageIndex + 1}/{images.length}
+          </span>
+          <div
+            className="cd-highlight-zone cd-highlight-zone--prev"
+            onClick={handlePrevPage}
+            aria-label="Previous page"
+          />
+          <div
+            className="cd-highlight-zone cd-highlight-zone--next"
+            onClick={handleNextPage}
+            aria-label="Next page"
+          />
+        </>
+      )}
+    </button>
+  );
+}
+
+/* ---- Gallery Card — cycles through all photos + covers ---- */
+
+function GalleryCard({
+  items,
+  onNavigate,
+}: {
+  items: GalleryItem[];
+  onNavigate: (letterId: string, imageId?: string) => void;
+}) {
+  const [index, setIndex] = useState(0);
+  const item = items[index];
+
+  const peopleLine = item.sender && item.recipient
+    ? `${item.sender} \u2192 ${item.recipient}`
+    : item.sender || item.recipient || '';
+
+  const handlePrev = (e: ReactMouseEvent) => {
+    e.stopPropagation();
+    setIndex((i) => (i === 0 ? items.length - 1 : i - 1));
+  };
+
+  const handleNext = (e: ReactMouseEvent) => {
+    e.stopPropagation();
+    setIndex((i) => (i === items.length - 1 ? 0 : i + 1));
+  };
+
+  return (
+    <button
+      type="button"
+      className={`cd-highlight-card cd-highlight-card--${item.mediaType}`}
+      onClick={() => onNavigate(item.letterId, item.imageId)}
+    >
+      <img
+        className="cd-highlight-img"
+        src={getImageUrl(item.imageUrl, { width: 720 })}
+        alt={item.hook || item.mediaLabel}
+        loading="lazy"
+      />
+      <div className="cd-highlight-overlay" />
+      <span className="cd-highlight-label">{item.mediaLabel}</span>
+      <div className="cd-highlight-content">
+        {peopleLine && (
+          <span className="cd-highlight-meta">{peopleLine}</span>
+        )}
+        {item.date && (
+          <span className="cd-highlight-date">{item.date}</span>
+        )}
+        {item.hook && (
+          <p className="cd-highlight-hook">{item.hook}</p>
+        )}
+      </div>
+      {items.length > 1 && (
+        <>
+          <span className="cd-highlight-page-counter">
+            {index + 1}/{items.length}
+          </span>
+          <div
+            className="cd-highlight-zone cd-highlight-zone--prev"
+            onClick={handlePrev}
+            aria-label="Previous"
+          />
+          <div
+            className="cd-highlight-zone cd-highlight-zone--next"
+            onClick={handleNext}
+            aria-label="Next"
+          />
+        </>
+      )}
+    </button>
+  );
+}
+
 export default function CollectionDetailPage() {
   const navigate = useNavigate();
   const { collectionCode } = useParams<{ collectionCode: string }>();
   const { setDock } = useHeaderDock();
+  const collectionScrubberProps = useCollectionScrubber(collectionCode);
   const [searchParams, setSearchParams] = useSearchParams();
 
-  /* ---- Collection data (stats, highlights, timeline) ---- */
+  /* ---- Collection data ---- */
   const [collection, setCollection] = useState<CollectionWithLetters | null>(null);
   const [profile, setProfile] = useState<CollectionProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,7 +247,7 @@ export default function CollectionDetailPage() {
       ? null
       : searchParams.get('verified') === 'true',
     sort: (searchParams.get('sort') as SearchFilters['sort']) || undefined,
-    sortOrder: (searchParams.get('sortOrder') as SearchFilters['sortOrder']) || undefined,
+    sortOrder: (searchParams.get('sortOrder') as SearchFilters['sortOrder']) || 'asc',
   }));
 
   const [archiveResults, setArchiveResults] = useState<ArchiveSearchResponse>({
@@ -127,9 +294,24 @@ export default function CollectionDetailPage() {
     [collectionLetters, profile?.startHere?.letterId],
   );
 
-  const correspondents = useMemo(
-    () => buildCorrespondents(collectionLetters, profile?.keyPeople),
-    [collectionLetters, profile?.keyPeople],
+  const correspondents = useMemo(() => {
+    const result = buildCorrespondents(collectionLetters, profile?.keyPeople);
+    // TODO: remove mock data — temporary for visual testing on collection 009
+    if (collectionCode === '009') {
+      for (const person of result) {
+        if (person.name.toLowerCase().includes('jimmi')) {
+          person.hook = 'A devoted husband writing from abroad, longing to reunite with his wife.';
+        } else if (person.name.toLowerCase().includes('molly')) {
+          person.hook = 'A steadfast wife managing the household while awaiting her husband\'s return.';
+        }
+      }
+    }
+    return result;
+  }, [collectionCode, collectionLetters, profile?.keyPeople]);
+
+  const gallery = useMemo(
+    () => buildExtraContentGallery(collectionLetters),
+    [collectionLetters],
   );
 
   /* ---- Fetch collection + profile ---- */
@@ -161,7 +343,6 @@ export default function CollectionDetailPage() {
     if (filters.format?.length) {
       filters.format.forEach((f) => nextParams.append('format', f));
     }
-    // collection is NOT synced — it's implicit from the route
     if (filters.person) nextParams.set('person', filters.person);
     if (filters.person && filters.personRole && filters.personRole !== 'any') {
       nextParams.set('personRole', filters.personRole);
@@ -281,47 +462,69 @@ export default function CollectionDetailPage() {
   }, [loading]);
 
   /* ---- Header dock content ---- */
+  const collectionsLinkOverride = useMemo(() => ({
+    label: 'Collections',
+    to: '/collections',
+  }), []);
+
   useEffect(() => {
-    if (!stickyDockActive) {
+    if (stickyDockActive) {
+      // Show compact search when scrolled past search bar
+      setDock({
+        content: (
+          <SearchBar
+            query={searchQuery}
+            filters={filters}
+            facets={archiveResults.facets}
+            total={archiveResults.total}
+            loading={archiveLoading}
+            embedded
+            variant="compact"
+            hideCollectionFilter
+            compactPlaceholder={`Search Collection ${collection?.collectionCode || collectionCode}...`}
+            refineOpen={compactRefineOpen}
+            onRefineOpenChange={(open) => {
+              setCompactRefineOpen(open);
+              if (open) {
+                setPageRefineOpen(false);
+                setPageRefinePinned(undefined);
+              }
+            }}
+            onPinnedChange={(pinned) => {
+              compactRefinePinnedRef.current = pinned;
+            }}
+            onQueryChange={setSearchQuery}
+            onFiltersChange={handleFiltersChange}
+          />
+        ),
+        active: true,
+        visible: true,
+        collectionsLink: collectionsLinkOverride,
+      });
+    } else if (collectionScrubberProps) {
+      // Show collection scrubber when above the search bar
+      setDock({
+        content: <HeaderScrubber {...collectionScrubberProps} />,
+        active: true,
+        visible: true,
+        showTitle: true,
+        collectionsLink: collectionsLinkOverride,
+      });
+    } else if (!loading) {
+      // Only clear dock after loading is done (preserves previous dock during transitions)
       setDock(EMPTY_DOCK);
-      return;
     }
-    setDock({
-      content: (
-        <SearchBar
-          query={searchQuery}
-          filters={filters}
-          facets={archiveResults.facets}
-          total={archiveResults.total}
-          loading={archiveLoading}
-          embedded
-          variant="compact"
-          hideCollectionFilter
-          compactPlaceholder={`Search Collection ${collection?.collectionCode || collectionCode}...`}
-          refineOpen={compactRefineOpen}
-          onRefineOpenChange={(open) => {
-            setCompactRefineOpen(open);
-            if (open) {
-              setPageRefineOpen(false);
-              setPageRefinePinned(undefined);
-            }
-          }}
-          onPinnedChange={(pinned) => {
-            compactRefinePinnedRef.current = pinned;
-          }}
-          onQueryChange={setSearchQuery}
-          onFiltersChange={handleFiltersChange}
-        />
-      ),
-      active: true,
-      visible: true,
-    });
   }, [
     archiveLoading,
     archiveResults.facets,
     archiveResults.total,
+    collection,
+    collectionCode,
+    collectionScrubberProps,
+    collectionsLinkOverride,
     compactRefineOpen,
     filters,
+    loading,
     searchQuery,
     setDock,
     stickyDockActive,
@@ -374,8 +577,18 @@ export default function CollectionDetailPage() {
     }
   };
 
-  const handleLetterClick = useCallback((letterId: string) => {
-    navigate(`/letter/${letterId}`);
+  const handleLetterClick = useCallback((letterId: string, imageId?: string) => {
+    const params = new URLSearchParams();
+    if (imageId) params.set('image', imageId);
+    const qs = params.toString();
+    navigate(`/letter/${letterId}${qs ? `?${qs}` : ''}`);
+  }, [navigate]);
+
+  const handleHighlightClick = useCallback((letterId: string, imageId?: string) => {
+    const params = new URLSearchParams();
+    params.set('from', 'highlight');
+    if (imageId) params.set('image', imageId);
+    navigate(`/letter/${letterId}?${params.toString()}`);
   }, [navigate]);
 
   const handleBack = () => {
@@ -408,6 +621,8 @@ export default function CollectionDetailPage() {
     const sorted = [...values].sort();
     return { start: sorted[0], end: sorted[sorted.length - 1] };
   }, [collectionLetters]);
+
+  const hasExploreContent = correspondents.length > 0 || highlights.length > 0 || gallery.length > 0;
 
   /* ---- Loading / error states ---- */
   if (loading) {
@@ -449,114 +664,91 @@ export default function CollectionDetailPage() {
         ogType={seo.ogType}
         jsonLd={seo.jsonLd}
       />
-      <Breadcrumb
-        items={[
-          { label: 'Home', href: '/' },
-          { label: 'Collections', href: '/collections' },
-          { label: collection.title || collection.collectionCode },
-        ]}
-      />
       <div className="collection-detail-public">
 
-        {/* ---- 1. Header + Stats ---- */}
-        <div className="cd-header">
-          <div className="cd-header-top">
-            <span className="cd-code-badge">{collection.collectionCode}</span>
-            <span className="cd-letter-count">
-              {collectionLetters.length} item{collectionLetters.length !== 1 ? 's' : ''}
-            </span>
-          </div>
+        {/* ---- 1. Header + Inline Stats ---- */}
+        <header className="cd-header">
           <h1>{collection.title || `Collection ${collection.collectionCode}`}</h1>
           {collection.description && (
             <p className="cd-description">{collection.description}</p>
           )}
-          <div className="cd-stats-row">
+          <div className="cd-stats-line">
             {stats.dateSpan && (
-              <span className="cd-stat-chip">{stats.dateSpan.label}</span>
+              <span className="cd-stat-date">{stats.dateSpan.label}</span>
             )}
-            {stats.writingFrequency && (
-              <span className="cd-stat-chip">{stats.writingFrequency}</span>
-            )}
-            <span className="cd-stat-chip">{stats.formatBreakdown}</span>
-            {stats.largestGap && (
-              <span className="cd-stat-chip">{stats.largestGap.label}</span>
-            )}
+            <span className="cd-stat-format">{stats.formatBreakdown}</span>
           </div>
-        </div>
+        </header>
 
-        {/* ---- 2. Narrative (optional, AI-generated) ---- */}
-        {profile?.narrative && (
-          <NarrativeSection
-            narrative={profile.narrative}
-            status={profile.profileStatus}
-          />
+        {/* ---- 2. Narrative (optional, standalone) ---- */}
+        {/* TODO: remove mock narrative — temporary for visual testing */}
+        {(profile?.narrative || collectionCode === '009') && (
+          <section className="cd-narrative">
+            <div className="cd-narrative-label">About This Collection</div>
+            <p>{profile?.narrative || 'In the late summer of 1947, Jimmie and Molly exchanged a remarkable series of letters as Jimmie traveled through England. What begins as routine correspondence quickly deepens into an intimate portrait of a marriage tested by distance — Jimmie\'s longing to return home, Molly\'s quiet strength managing daily life alone, and the small details of a post-war world slowly rebuilding itself. These letters capture not just a relationship, but a moment in time when the ordinary act of writing was the only thread connecting two lives.'}</p>
+          </section>
         )}
 
-        {/* ---- 3. Letter Highlights ---- */}
-        {highlights.length > 0 && (
-          <section className="cd-highlights">
-            <h2>Highlights</h2>
-            <div className="cd-highlights-grid">
-              {highlights.map(({ letter, label }, idx) => {
-                const img = getPrimaryImage(letter);
-                const imgWidths = [800, 640, 480, 480];
-                const imgWidth = imgWidths[idx] ?? 480;
-                return (
+        {/* ---- 3. People + Highlights (side by side) ---- */}
+        {hasExploreContent && (
+          <section className="cd-explore">
+            {/* People (text-only cards) */}
+            {correspondents.length > 0 && (
+              <div className="cd-people-col">
+                <h3 className="cd-people-title">People</h3>
+                {correspondents.map((person) => (
                   <button
                     type="button"
-                    key={letter.id}
-                    className={`cd-highlight-item cd-highlight-item--${idx + 1}`}
-                    onClick={() => handleLetterClick(letter.id)}
+                    key={person.name}
+                    className="cd-person-card"
+                    onClick={() => {
+                      /* Person page navigation — will use canonical person ID in Phase 2 */
+                      navigate(`/collections/${collectionCode}?sender=${encodeURIComponent(person.name)}`);
+                    }}
                   >
-                    <span className="cd-highlight-label">{label}</span>
-                    {img?.imageUrl ? (
-                      <img
-                        className="cd-highlight-img"
-                        src={getImageUrl(img.imageUrl, { width: imgWidth })}
-                        alt={letter.metadata.hook || label}
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="cd-highlight-fallback">
-                        <span>{letter.metadata.date || letter.metadata.dateRaw || label}</span>
-                      </div>
+                    <h3 className="cd-person-name">{person.name}</h3>
+                    <div className="cd-person-role">
+                      {person.sentCount > 0 && (
+                        <span>Sent {person.sentCount}</span>
+                      )}
+                      {person.sentCount > 0 && person.receivedCount > 0 && (
+                        <span className="cd-person-divider">&middot;</span>
+                      )}
+                      {person.receivedCount > 0 && (
+                        <span>Received {person.receivedCount}</span>
+                      )}
+                    </div>
+                    {person.hook && (
+                      <p className="cd-person-hook">{person.hook}</p>
                     )}
                   </button>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )}
+
+            {/* Highlights (image cards with overlay) */}
+            {(highlights.length > 0 || gallery.length > 0) && (
+              <div className="cd-highlights-col">
+                {highlights.map(({ letter, label }) => (
+                  <HighlightCard
+                    key={letter.id}
+                    letter={letter}
+                    label={label}
+                    onNavigate={handleHighlightClick}
+                  />
+                ))}
+                {gallery.length > 0 && (
+                  <GalleryCard
+                    items={gallery}
+                    onNavigate={handleHighlightClick}
+                  />
+                )}
+              </div>
+            )}
           </section>
         )}
 
-        {/* ---- 4. People ---- */}
-        {correspondents.length > 0 && (
-          <section className="cd-people">
-            <h2>People</h2>
-            <div className="cd-people-grid">
-              {correspondents.map((person) => (
-                <div key={person.name} className="cd-person-card">
-                  <h3 className="cd-person-name">{person.name}</h3>
-                  <div className="cd-person-role">
-                    {person.sentCount > 0 && (
-                      <span>Sent {person.sentCount}</span>
-                    )}
-                    {person.sentCount > 0 && person.receivedCount > 0 && (
-                      <span className="cd-person-divider">&middot;</span>
-                    )}
-                    {person.receivedCount > 0 && (
-                      <span>Received {person.receivedCount}</span>
-                    )}
-                  </div>
-                  {person.biography && (
-                    <p className="cd-person-bio">{person.biography}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ---- 5. Search + Archive List ---- */}
+        {/* ---- 4. Search + Archive List (unchanged) ---- */}
         <section id="collection-archive" className="cd-archive-surface" ref={archiveSearchRef}>
           <div className="cd-search-panel">
             <SearchBar

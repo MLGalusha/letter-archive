@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import SEO from "../components/SEO";
 
 import LetterViewer from "../components/LetterViewer/LetterViewer";
@@ -14,7 +14,8 @@ import {
 import { classifyTranscriptLines } from "../utils/reflowClassifier";
 import { reflowTranscript, renderTranscriptLines, computeReferenceWidth } from "../utils/transcriptRendering";
 import { useHeaderDock, EMPTY_DOCK } from "../contexts/HeaderDockContext";
-import LetterHeaderDock from "../components/LetterHeaderDock/LetterHeaderDock";
+import HeaderScrubber from "../components/HeaderScrubber/HeaderScrubber";
+import useLetterScrubber from "../components/LetterHeaderDock/useLetterScrubber";
 import "./LetterDetailPage.css";
 
 /* ── helpers ─────────────────────────────────────────────── */
@@ -66,6 +67,7 @@ function getExtraContentLabel(images: LetterImage[]): string {
 export default function LetterDetailPage() {
   const { letterId } = useParams<{ letterId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [letter, setLetter] = useState<Letter | null>(null);
   const [adjacent, setAdjacent] = useState<AdjacentLettersResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,6 +86,22 @@ export default function LetterDetailPage() {
 
   // Header dock integration
   const { setDock } = useHeaderDock();
+
+  const initialImageIdRef = useRef(searchParams.get("image"));
+  const fromHighlightRef = useRef(searchParams.get("from") === "highlight");
+
+  // Strip highlight params from URL so refresh doesn't re-trigger auto-scroll
+  useEffect(() => {
+    const hasFrom = searchParams.has("from");
+    const hasImage = searchParams.has("image");
+    if (hasFrom || hasImage) {
+      const clean = new URLSearchParams(searchParams);
+      clean.delete("from");
+      clean.delete("image");
+      const qs = clean.toString();
+      window.history.replaceState({}, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (carouselRef.current) carouselRef.current.scrollLeft = 0;
@@ -353,8 +371,83 @@ export default function LetterDetailPage() {
     const carousel = carouselRef.current;
     if (!carousel) return;
     const slide = carousel.children[index] as HTMLElement | undefined;
-    slide?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    if (!slide) return;
+
+    const targetScroll = slide.offsetLeft - (carousel.clientWidth - slide.clientWidth) / 2;
+    const start = carousel.scrollLeft;
+    const distance = targetScroll - start;
+    if (Math.abs(distance) < 2) return;
+
+    const duration = Math.min(900, Math.max(500, Math.abs(distance) * 0.6));
+    const startTime = performance.now();
+
+    function animate(now: number) {
+      const elapsed = now - startTime;
+      const t = Math.min(1, elapsed / duration);
+      // ease-out cubic — soft deceleration
+      const ease = 1 - Math.pow(1 - t, 3);
+      carousel!.scrollLeft = start + distance * ease;
+      if (t < 1) requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
   }, []);
+
+  // Auto-scroll to a specific image when navigated with ?image= param
+  useEffect(() => {
+    const targetImageId = initialImageIdRef.current;
+    if (!targetImageId || !letter) return;
+    const idx = letter.images.findIndex((img) => img.id === targetImageId);
+    if (idx > 0) {
+      // Delay to let carousel render and settle
+      const timer = setTimeout(() => scrollToSlide(idx), 150);
+      return () => clearTimeout(timer);
+    }
+  }, [letter, scrollToSlide]);
+
+  // When navigating from a highlight card, scroll to the summary belt area
+  useEffect(() => {
+    if (!fromHighlightRef.current || !letter) return;
+    fromHighlightRef.current = false;
+
+    const timer = setTimeout(() => {
+      // Target the summary section, fall back to the scan figure
+      const target = (
+        document.querySelector(".letter-summary-section") ||
+        document.querySelector(".letter-scan-figure")
+      ) as HTMLElement | null;
+      if (!target) return;
+
+      const idealTarget = target.offsetTop;
+
+      // Cap: bottom of carousel should never scroll above bottom of viewport
+      const carousel = document.querySelector(".letter-scan-figure") as HTMLElement | null;
+      const maxScroll = carousel
+        ? carousel.offsetTop + carousel.offsetHeight - window.innerHeight
+        : Infinity;
+      const scrollTarget = Math.min(idealTarget, Math.max(0, maxScroll));
+
+      window.scrollTo(0, 0);
+
+      requestAnimationFrame(() => {
+        const distance = scrollTarget;
+        if (distance < 2) return;
+
+        const duration = Math.min(1000, Math.max(600, distance * 0.5));
+        const startTime = performance.now();
+
+        function animate(now: number) {
+          const elapsed = now - startTime;
+          const t = Math.min(1, elapsed / duration);
+          const ease = 1 - Math.pow(1 - t, 3);
+          window.scrollTo(0, distance * ease);
+          if (t < 1) requestAnimationFrame(animate);
+        }
+        requestAnimationFrame(animate);
+      });
+    }, 80);
+
+    return () => clearTimeout(timer);
+  }, [letter]);
 
   useEffect(() => {
     if (!letterId) { setLoading(false); return; }
@@ -397,22 +490,23 @@ export default function LetterDetailPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [adjacent, navigate, viewerOpen]);
 
-  // Set header dock content when adjacent data loads.
-  // Use a ref for letterId so the effect only fires when adjacent changes
-  // (not on every rapid navigation before the fetch completes).
-  const letterIdRef = useRef(letterId);
-  letterIdRef.current = letterId;
+  // Build scrubber props from adjacent data (hook must be at top level)
+  const scrubberProps = useLetterScrubber(adjacent, letterId);
 
   useEffect(() => {
-    if (!adjacent || adjacent.total <= 1) return;
+    if (!scrubberProps) return;
     setDock({
-      content: <LetterHeaderDock adjacent={adjacent} letterId={letterIdRef.current!} />,
+      content: <HeaderScrubber {...scrubberProps} />,
       active: true,
       visible: true,
       scrollReveal: true,
       showTitle: true,
+      collectionsLink: adjacent ? {
+        label: 'Collection',
+        to: `/collections/${adjacent.collectionCode}`,
+      } : undefined,
     });
-  }, [adjacent, setDock]);
+  }, [scrubberProps, adjacent, setDock]);
 
   // Clear dock on unmount
   useEffect(() => () => setDock(EMPTY_DOCK), [setDock]);

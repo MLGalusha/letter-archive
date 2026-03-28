@@ -37,9 +37,9 @@ export interface ArchiveSearchParams {
   sender?: string | null;
   recipient?: string | null;
   place?: string | null;
-  topic?: string | null;
-  tone?: string | null;
-  relationship?: string | null;
+  topic?: string | string[] | null;
+  tone?: string | string[] | null;
+  relationship?: string | string[] | null;
   year?: number | null;
   yearFrom?: number | null;
   yearTo?: number | null;
@@ -167,9 +167,9 @@ export async function searchArchiveShelf(
     sender: params.sender || undefined,
     recipient: params.recipient || undefined,
     place: params.place || undefined,
-    topic: params.topic || undefined,
-    tone: params.tone || undefined,
-    relationship: params.relationship || undefined,
+    topic: Array.isArray(params.topic) ? params.topic.join(",") : params.topic || undefined,
+    tone: Array.isArray(params.tone) ? params.tone.join(",") : params.tone || undefined,
+    relationship: Array.isArray(params.relationship) ? params.relationship.join(",") : params.relationship || undefined,
     year: params.year || undefined,
     yearFrom: params.yearFrom || undefined,
     yearTo: params.yearTo || undefined,

@@ -1,6 +1,24 @@
 import { useEffect, useId, useMemo, useRef, useState, type Ref } from "react";
 import type { ArchiveSearchFacets, LetterImageType } from "../../types/Letter";
 import "./SearchBar.css";
+import {
+  ARCHIVE_FORMAT_LABELS,
+  ARCHIVE_FORMAT_ORDER,
+  COMBINED_SORT_OPTIONS,
+  REFINE_CLOSE_DELAY_MS,
+  SORT_FIELD_OPTIONS,
+  formatFacetLabel,
+  getAvailableSortFields,
+  getBestSuggestion,
+  getResolvedSort,
+  getSortDirectionAriaLabel,
+  getSortDirectionDisplayLabel,
+} from "./searchBarUtils";
+import type { FilterChoiceOption } from "./searchBarUtils";
+import useTimerDropdown from "./useTimerDropdown";
+import FilterChoiceField from "./FilterChoiceField";
+import FacetRow from "./FacetRow";
+import SuggestionHint from "./SuggestionHint";
 
 interface SearchBarProps {
   query: string;
@@ -31,227 +49,15 @@ export interface SearchFilters {
   sender?: string | null;
   recipient?: string | null;
   place?: string | null;
-  topic?: string | null;
-  tone?: string | null;
-  relationship?: string | null;
+  topic?: string[] | null;
+  tone?: string[] | null;
+  relationship?: string[] | null;
   year?: number | null;
   dateRange?: { start?: number; end?: number };
   hasTranscript?: boolean | null;
   verified?: boolean | null;
   sort?: "relevance" | "createdAt" | "letterDate" | "sender" | "recipient" | "collection";
   sortOrder?: "asc" | "desc";
-}
-
-type SortFieldOption = {
-  value: NonNullable<SearchFilters["sort"]>;
-  label: string;
-  defaultOrder: NonNullable<SearchFilters["sortOrder"]>;
-};
-
-type FilterSuggestion = {
-  display: string;
-  applyValue: string;
-  count: number;
-};
-
-type FilterChoiceOption = {
-  value: string;
-  label: string;
-  count?: number;
-  aliases?: string[];
-};
-
-const SORT_FIELD_OPTIONS: SortFieldOption[] = [
-  { label: "Best Match", value: "relevance", defaultOrder: "desc" },
-  { label: "Publish Date", value: "createdAt", defaultOrder: "desc" },
-  { label: "Letter Date", value: "letterDate", defaultOrder: "desc" },
-  { label: "Sender", value: "sender", defaultOrder: "asc" },
-  { label: "Recipient", value: "recipient", defaultOrder: "asc" },
-  { label: "Collection", value: "collection", defaultOrder: "asc" },
-];
-
-type CombinedSortOption = {
-  label: string;
-  sort: NonNullable<SearchFilters["sort"]>;
-  defaultOrder: NonNullable<SearchFilters["sortOrder"]>;
-  requiresQuery?: boolean;
-  canToggle?: boolean;
-};
-
-const COMBINED_SORT_OPTIONS: CombinedSortOption[] = [
-  { label: "Best Match", sort: "relevance", defaultOrder: "desc", requiresQuery: true },
-  { label: "Letter Date", sort: "letterDate", defaultOrder: "desc", canToggle: true },
-  { label: "Date Added", sort: "createdAt", defaultOrder: "desc", canToggle: true },
-  { label: "Sender", sort: "sender", defaultOrder: "asc", canToggle: true },
-  { label: "Recipient", sort: "recipient", defaultOrder: "asc", canToggle: true },
-  { label: "Collection", sort: "collection", defaultOrder: "asc", canToggle: true },
-];
-
-const REFINE_CLOSE_DELAY_MS = 1000;
-const ARCHIVE_FORMAT_ORDER: LetterImageType[] = [
-  "letter",
-  "photo",
-  "telegram",
-  "cover",
-  "card",
-  "ephemera",
-  "article",
-  "diary",
-  "voice",
-];
-const ARCHIVE_FORMAT_LABELS: Record<LetterImageType, string> = {
-  letter: "Letters",
-  photo: "Photos",
-  telegram: "Telegrams",
-  cover: "Covers",
-  card: "Cards",
-  ephemera: "Ephemera",
-  article: "Articles",
-  diary: "Diary",
-  voice: "Voice",
-};
-
-function getResolvedSort(query: string, filters: SearchFilters) {
-  const hasQuery = Boolean(query.trim());
-  return {
-    sort: filters.sort || (hasQuery ? "relevance" : "createdAt"),
-    sortOrder: filters.sortOrder || "desc",
-  };
-}
-
-function getSortValue(option: SortFieldOption) {
-  return option.value;
-}
-
-function getAvailableSortFields(hasQuery: boolean) {
-  return hasQuery ? SORT_FIELD_OPTIONS : SORT_FIELD_OPTIONS.filter((option) => option.value !== "relevance");
-}
-
-function parseSortValue(value: string, options: SortFieldOption[]) {
-  return options.find((option) => option.value === value) || null;
-}
-
-function getSortDirectionAriaLabel(
-  sort: NonNullable<SearchFilters["sort"]>,
-  sortOrder: NonNullable<SearchFilters["sortOrder"]>,
-) {
-  switch (sort) {
-    case "letterDate":
-      return sortOrder === "asc" ? "Oldest letter first" : "Newest letter first";
-    case "createdAt":
-      return sortOrder === "asc" ? "Oldest published first" : "Newest published first";
-    case "sender":
-    case "recipient":
-    case "collection":
-      return sortOrder === "asc" ? "A to Z" : "Z to A";
-    case "relevance":
-    default:
-      return "Best match";
-  }
-}
-
-function getSortDirectionDisplayLabel(
-  sort: NonNullable<SearchFilters["sort"]>,
-  sortOrder: NonNullable<SearchFilters["sortOrder"]>,
-) {
-  switch (sort) {
-    case "sender":
-    case "recipient":
-    case "collection":
-      return sortOrder === "asc" ? "A \u2192 Z" : "Z \u2192 A";
-    case "letterDate":
-    case "createdAt":
-      return sortOrder === "asc" ? "\u2191" : "\u2193";
-    case "relevance":
-    default:
-      return "\u2014";
-  }
-}
-
-function toTitleCase(value: string) {
-  return value
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-function formatFacetLabel(value: string) {
-  return value
-    .split("/")
-    .map((part) => toTitleCase(part.replace(/[-_]+/g, " ").trim()))
-    .join(" / ");
-}
-
-function normalizeSuggestionText(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function scoreSuggestionText(needle: string, alias: string) {
-  const normalizedNeedle = normalizeSuggestionText(needle);
-  const normalizedAlias = normalizeSuggestionText(alias);
-  if (!normalizedNeedle || !normalizedAlias) return 0;
-  if (normalizedAlias === normalizedNeedle) return 500;
-  if (normalizedAlias.startsWith(normalizedNeedle)) return 420 - normalizedAlias.length;
-  const wordMatch = normalizedAlias
-    .split(" ")
-    .some((part) => part.startsWith(normalizedNeedle));
-  if (wordMatch) return 320;
-  if (normalizedAlias.includes(normalizedNeedle)) return 220;
-  return 0;
-}
-
-function getBestSuggestion(
-  inputValue: string | null | undefined,
-  candidates: Array<{ value: string; display: string; count: number; aliases?: string[] }>,
-): FilterSuggestion | null {
-  if (!inputValue?.trim()) return null;
-
-  let bestMatch: (FilterSuggestion & { score: number }) | null = null;
-
-  for (const candidate of candidates) {
-    const aliases = [candidate.display, candidate.value, ...(candidate.aliases || [])];
-    const score = Math.max(...aliases.map((alias) => scoreSuggestionText(inputValue, alias)));
-    if (score <= 0) continue;
-
-    if (
-      !bestMatch
-      || score > bestMatch.score
-      || (score === bestMatch.score && candidate.count > bestMatch.count)
-    ) {
-      bestMatch = {
-        display: candidate.display,
-        applyValue: candidate.value,
-        count: candidate.count,
-        score,
-      };
-    }
-  }
-
-  if (!bestMatch) return null;
-  return {
-    display: bestMatch.display,
-    applyValue: bestMatch.applyValue,
-    count: bestMatch.count,
-  };
-}
-
-function getCollectionLabel(value: string, facets: ArchiveSearchFacets) {
-  return facets.collections.find((facet) => facet.value === value)?.label || value;
-}
-
-function filterChoiceOptions(options: FilterChoiceOption[], query: string) {
-  const needle = normalizeSuggestionText(query);
-  if (!needle) return options;
-
-  return options.filter((option) => {
-    const haystacks = [option.label, option.value, ...(option.aliases || [])];
-    return haystacks.some((haystack) => normalizeSuggestionText(haystack).includes(needle));
-  });
-}
-
-function normalizeYearInput(value: string) {
-  return value.replace(/\D+/g, "").slice(0, 4);
 }
 
 export default function SearchBar({
@@ -284,9 +90,9 @@ export default function SearchBar({
       || filters.sender
       || filters.recipient
       || filters.place
-      || filters.topic
-      || filters.tone
-      || filters.relationship
+      || filters.topic?.length
+      || filters.tone?.length
+      || filters.relationship?.length
       || filters.year
       || filters.dateRange?.start
       || filters.dateRange?.end
@@ -301,11 +107,8 @@ export default function SearchBar({
     onPinnedChange?.(pinned);
   };
   const [openChoiceField, setOpenChoiceField] = useState<string | null>(null);
-  const [startYearInput, setStartYearInput] = useState(filters.dateRange?.start?.toString() || "");
-  const [endYearInput, setEndYearInput] = useState(filters.dateRange?.end?.toString() || "");
   const searchIdBase = useId().replace(/:/g, "");
   const searchRootRef = useRef<HTMLDivElement | null>(null);
-  const refineCloseTimerRef = useRef<number | null>(null);
   const showFilters = refineOpen ?? internalShowFilters;
 
   const setRefineOpen = (next: boolean) => {
@@ -319,39 +122,28 @@ export default function SearchBar({
     onRefineOpenChange?.(next);
   };
 
-  const clearRefineCloseTimer = () => {
-    if (refineCloseTimerRef.current !== null) {
-      window.clearTimeout(refineCloseTimerRef.current);
-      refineCloseTimerRef.current = null;
-    }
-  };
+  const refineTimer = useTimerDropdown({
+    delay: REFINE_CLOSE_DELAY_MS,
+    pinned: filtersPinned,
+    onClose: () => setRefineOpen(false),
+  });
 
   const openFilters = (options?: { pin?: boolean }) => {
-    clearRefineCloseTimer();
+    refineTimer.clearTimer();
     if (options?.pin) {
       setFiltersPinned(true);
     }
     setRefineOpen(true);
-    // Close sort dropdown immediately if not pinned (mirror how openSortDropdown closes filters)
+    // Close sort dropdown immediately if not pinned
     if (!sortPinned) {
-      clearSortCloseTimer();
+      sortTimer.clearTimer();
       setSortDropdownOpen(false);
     }
   };
 
   const closeFilters = () => {
-    clearRefineCloseTimer();
+    refineTimer.clearTimer();
     setRefineOpen(false);
-  };
-
-  const scheduleFiltersClose = () => {
-    clearRefineCloseTimer();
-    if (filtersPinned) return;
-
-    refineCloseTimerRef.current = window.setTimeout(() => {
-      setRefineOpen(false);
-      refineCloseTimerRef.current = null;
-    }, REFINE_CLOSE_DELAY_MS);
   };
 
   useEffect(() => {
@@ -359,11 +151,6 @@ export default function SearchBar({
       setFiltersPinnedRaw(refinePinned);
     }
   }, [refinePinned]);
-
-  useEffect(() => {
-    setStartYearInput(filters.dateRange?.start?.toString() || "");
-    setEndYearInput(filters.dateRange?.end?.toString() || "");
-  }, [filters.dateRange?.end, filters.dateRange?.start]);
 
   useEffect(() => {
     if (!showFilters) return;
@@ -379,8 +166,6 @@ export default function SearchBar({
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [isCompact, showFilters]);
 
-  useEffect(() => () => clearRefineCloseTimer(), []);
-
   useEffect(() => {
     if (!showFilters) {
       setOpenChoiceField(null);
@@ -394,9 +179,9 @@ export default function SearchBar({
       || filters.sender
       || filters.recipient
       || filters.place
-      || filters.topic
-      || filters.tone
-      || filters.relationship
+      || filters.topic?.length
+      || filters.tone?.length
+      || filters.relationship?.length
       || filters.year
       || filters.dateRange?.start
       || filters.dateRange?.end
@@ -429,106 +214,29 @@ export default function SearchBar({
     });
   };
 
-  const activePills = useMemo(() => {
-    const pills: Array<{ key: string; label: string; onClear: () => void }> = [];
-
-    if (filters.collection && !hideCollectionFilter) {
-      pills.push({
-        key: `collection-${filters.collection}`,
-        label: `Collection: ${getCollectionLabel(filters.collection, facets)}`,
-        onClear: () => updateFilter({ collection: null }),
-      });
-    }
-    if (filters.sender) {
-      pills.push({
-        key: `sender-${filters.sender}`,
-        label: `From: ${filters.sender}`,
-        onClear: () => updateFilter({ sender: null }),
-      });
-    }
-    if (filters.recipient) {
-      pills.push({
-        key: `recipient-${filters.recipient}`,
-        label: `To: ${filters.recipient}`,
-        onClear: () => updateFilter({ recipient: null }),
-      });
-    }
-    if (filters.place) {
-      pills.push({
-        key: `place-${filters.place}`,
-        label: `Place: ${filters.place}`,
-        onClear: () => updateFilter({ place: null }),
-      });
-    }
-    if (filters.topic) {
-      pills.push({
-        key: `topic-${filters.topic}`,
-        label: `Topic: ${formatFacetLabel(filters.topic)}`,
-        onClear: () => updateFilter({ topic: null }),
-      });
-    }
-    if (filters.tone) {
-      pills.push({
-        key: `tone-${filters.tone}`,
-        label: `Tone: ${formatFacetLabel(filters.tone)}`,
-        onClear: () => updateFilter({ tone: null }),
-      });
-    }
-    if (filters.relationship) {
-      pills.push({
-        key: `relationship-${filters.relationship}`,
-        label: `Relationship: ${formatFacetLabel(filters.relationship)}`,
-        onClear: () => updateFilter({ relationship: null }),
-      });
-    }
-    if (filters.year) {
-      pills.push({
-        key: `year-${filters.year}`,
-        label: String(filters.year),
-        onClear: () => updateFilter({ year: null }),
-      });
-    }
-    if (filters.dateRange?.start || filters.dateRange?.end) {
-      pills.push({
-        key: "dateRange",
-        label: `${filters.dateRange.start || "Any"}-${filters.dateRange.end || "Any"}`,
-        onClear: () => {
-          setStartYearInput("");
-          setEndYearInput("");
-          updateFilter({ dateRange: undefined });
-        },
-      });
-    }
-    if (filters.hasTranscript !== undefined && filters.hasTranscript !== null) {
-      pills.push({
-        key: "hasTranscript",
-        label: filters.hasTranscript ? "Has transcript" : "No transcript",
-        onClear: () => updateFilter({ hasTranscript: null }),
-      });
-    }
-    if (filters.verified !== undefined && filters.verified !== null) {
-      pills.push({
-        key: "verified",
-        label: filters.verified ? "Verified" : "Unverified",
-        onClear: () => updateFilter({ verified: null }),
-      });
-    }
-
-    return pills;
-  }, [facets, filters, selectedFormats]);
-
-  const activeFilterCount = activePills.length;
+  // Count active filters for the badge on the refine button.
+  // In compact mode, format chips are inside the flyout so they count.
+  // In full mode, format chips are in the toolbar so they don't count.
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (selectedFormats?.length) count += selectedFormats.length;
+    if (filters.collection && !hideCollectionFilter) count++;
+    if (filters.sender) count++;
+    if (filters.recipient) count++;
+    if (filters.place) count++;
+    if (filters.topic?.length) count += filters.topic.length;
+    if (filters.tone?.length) count += filters.tone.length;
+    if (filters.relationship?.length) count += filters.relationship.length;
+    if (filters.year) count++;
+    if (filters.dateRange?.start || filters.dateRange?.end) count++;
+    if (filters.hasTranscript !== undefined && filters.hasTranscript !== null) count++;
+    if (filters.verified !== undefined && filters.verified !== null) count++;
+    return count;
+  }, [filters, selectedFormats, isCompact, hideCollectionFilter]);
   const resolvedSort = getResolvedSort(query, filters);
   const resolvedSortField = availableSortFields.find((option) => option.value === resolvedSort.sort)
     || availableSortFields[0]
     || SORT_FIELD_OPTIONS[0];
-  const sortChoiceOptions = useMemo<FilterChoiceOption[]>(
-    () => availableSortFields.map((option) => ({
-      value: getSortValue(option),
-      label: option.label,
-    })),
-    [availableSortFields],
-  );
   const sortDirectionLabel = getSortDirectionAriaLabel(resolvedSort.sort, resolvedSort.sortOrder);
   const sortDirectionDisplayLabel = getSortDirectionDisplayLabel(resolvedSort.sort, resolvedSort.sortOrder);
   const canToggleSortDirection = resolvedSort.sort !== "relevance";
@@ -555,36 +263,25 @@ export default function SearchBar({
   const showSortArrow = currentSortOption?.canToggle;
   const sortArrow = resolvedSort.sortOrder === "asc" ? "\u2191" : "\u2193";
 
-  const sortCloseTimerRef = useRef<number | null>(null);
-  const clearSortCloseTimer = () => {
-    if (sortCloseTimerRef.current !== null) {
-      window.clearTimeout(sortCloseTimerRef.current);
-      sortCloseTimerRef.current = null;
-    }
-  };
+  const sortTimer = useTimerDropdown({
+    delay: REFINE_CLOSE_DELAY_MS,
+    pinned: sortPinned,
+    onClose: () => setSortDropdownOpen(false),
+  });
 
   const openSortDropdown = () => {
-    clearSortCloseTimer();
+    sortTimer.clearTimer();
     setSortDropdownOpen(true);
     // Close filter dropdown if not pinned
     if (!filtersPinned) {
-      clearRefineCloseTimer();
+      refineTimer.clearTimer();
       setRefineOpen(false);
     }
   };
 
   const closeSortNow = () => {
-    clearSortCloseTimer();
+    sortTimer.clearTimer();
     setSortDropdownOpen(false);
-  };
-
-  const scheduleSortClose = () => {
-    clearSortCloseTimer();
-    if (sortPinned) return;
-    sortCloseTimerRef.current = window.setTimeout(() => {
-      setSortDropdownOpen(false);
-      sortCloseTimerRef.current = null;
-    }, REFINE_CLOSE_DELAY_MS);
   };
 
   const handleSortClick = () => {
@@ -595,7 +292,7 @@ export default function SearchBar({
       setSortPinned(false);
     } else {
       setSortPinned(true);
-      clearSortCloseTimer();
+      sortTimer.clearTimer();
     }
   };
 
@@ -611,8 +308,6 @@ export default function SearchBar({
     return () => document.removeEventListener("mousedown", close);
   }, [sortDropdownOpen]);
 
-  useEffect(() => () => clearSortCloseTimer(), []);
-
   // Sync sort open/pinned from parent prop
   useEffect(() => {
     if (sortOpenProp === false) {
@@ -620,30 +315,70 @@ export default function SearchBar({
       setSortPinned(false);
     }
   }, [sortOpenProp]);
-  const toneChoiceOptions = useMemo<FilterChoiceOption[]>(
-    () => facets.tones.map((facet) => ({
-      value: facet.value,
-      label: formatFacetLabel(facet.value),
-      count: facet.count,
-    })),
-    [facets.tones],
-  );
-  const relationshipChoiceOptions = useMemo<FilterChoiceOption[]>(
-    () => facets.relationships.map((facet) => ({
-      value: facet.value,
-      label: formatFacetLabel(facet.value),
-      count: facet.count,
-    })),
-    [facets.relationships],
-  );
+  // Accumulate all facet values ever seen so options never disappear when filtering
+  const seenTonesRef = useRef(new Map<string, number>());
+  const seenRelationshipsRef = useRef(new Map<string, number>());
+  const seenTopicsRef = useRef(new Map<string, number>());
+  const seenYearsRef = useRef(new Set<number>());
+
+  // Update seen maps when facets change
+  useEffect(() => {
+    for (const f of facets.tones) seenTonesRef.current.set(f.value, f.count);
+    for (const f of facets.relationships) seenRelationshipsRef.current.set(f.value, f.count);
+    for (const f of facets.years) seenYearsRef.current.add(f.value);
+    for (const f of facets.topics) {
+      const cat = f.value.split("/")[0].trim();
+      if (cat) seenTopicsRef.current.set(cat, (seenTopicsRef.current.get(cat) || 0));
+    }
+  }, [facets.tones, facets.relationships, facets.topics]);
+
+  const toneChoiceOptions = useMemo<FilterChoiceOption[]>(() => {
+    const currentMap = new Map(facets.tones.map((f) => [f.value, f.count]));
+    const allValues = new Map(seenTonesRef.current);
+    for (const [k, v] of currentMap) allValues.set(k, v);
+    return Array.from(allValues.keys())
+      .map((value) => ({
+        value,
+        label: formatFacetLabel(value),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [facets.tones]);
+  const relationshipChoiceOptions = useMemo<FilterChoiceOption[]>(() => {
+    const currentMap = new Map(facets.relationships.map((f) => [f.value, f.count]));
+    const allValues = new Map(seenRelationshipsRef.current);
+    for (const [k, v] of currentMap) allValues.set(k, v);
+    return Array.from(allValues.keys())
+      .map((value) => ({
+        value,
+        label: formatFacetLabel(value),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [facets.relationships]);
   const verificationChoiceOptions = useMemo<FilterChoiceOption[]>(
     () => [
-      { value: "all", label: "All items" },
+      { value: "all", label: "All" },
       { value: "true", label: "Verified only" },
       { value: "false", label: "Unverified" },
     ],
     [],
   );
+  const yearChoiceOptions = useMemo<FilterChoiceOption[]>(() => {
+    const currentMap = new Map(facets.years.map((f) => [f.value, f.count]));
+    for (const y of currentMap.keys()) seenYearsRef.current.add(y);
+    const dataYears = [...seenYearsRef.current, ...currentMap.keys()];
+    if (dataYears.length === 0) return [];
+    const dataMin = Math.min(...dataYears);
+    const dataMax = Math.max(...dataYears);
+    const currentYear = new Date().getFullYear();
+    const min = Math.max(1700, dataMin - 50);
+    const max = Math.min(currentYear, dataMax + 50);
+    const opts: FilterChoiceOption[] = [];
+    for (let y = min; y <= max; y++) {
+      opts.push({ value: String(y), label: String(y) });
+    }
+    return opts;
+  }, [facets.years]);
+
   const collectionSuggestion = useMemo(
     () => hideCollectionFilter ? null : getBestSuggestion(
       filters.collection,
@@ -658,8 +393,8 @@ export default function SearchBar({
   );
   const transcriptChoiceOptions = useMemo<FilterChoiceOption[]>(
     () => [
-      { value: "all", label: "All items" },
-      { value: "true", label: "Has transcript" },
+      { value: "all", label: "All" },
+      { value: "true", label: "Transcript" },
       { value: "false", label: "No transcript" },
     ],
     [],
@@ -697,17 +432,25 @@ export default function SearchBar({
     ),
     [facets.places, filters.place],
   );
-  const topicSuggestion = useMemo(
-    () => getBestSuggestion(
-      filters.topic,
-      facets.topics.map((facet) => ({
-        value: facet.value,
-        display: formatFacetLabel(facet.value),
-        count: facet.count,
-      })),
-    ),
-    [facets.topics, filters.topic],
-  );
+  const topicChoiceOptions = useMemo(() => {
+    // Build current category counts from facets
+    const currentCategoryMap = new Map<string, number>();
+    for (const facet of facets.topics) {
+      const category = facet.value.split("/")[0].trim();
+      if (!category) continue;
+      currentCategoryMap.set(category, (currentCategoryMap.get(category) || 0) + facet.count);
+    }
+    // Update seen topics
+    for (const [k] of currentCategoryMap) seenTopicsRef.current.set(k, 0);
+    // Merge with all seen categories
+    const allCategories = new Set([...seenTopicsRef.current.keys(), ...currentCategoryMap.keys()]);
+    return Array.from(allCategories)
+      .map((category) => ({
+        value: category,
+        label: formatFacetLabel(category),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [facets.topics]);
 
   const toggleFormatFilter = (format: LetterImageType) => {
     const nextFormats = selectedFormats?.includes(format)
@@ -719,20 +462,7 @@ export default function SearchBar({
     });
   };
 
-  const applyDateRange = () => {
-    const start = startYearInput ? Number(startYearInput) : undefined;
-    const end = endYearInput ? Number(endYearInput) : undefined;
-
-    onFiltersChange({
-      ...filters,
-      year: null,
-      dateRange: start || end ? { start, end } : undefined,
-    });
-  };
-
   const clearAll = () => {
-    setStartYearInput("");
-    setEndYearInput("");
     onQueryChange("");
     onFiltersChange({});
     if (isCompact) {
@@ -747,26 +477,19 @@ export default function SearchBar({
   const topicFilterId = `${searchIdBase}-topic`;
   const sortFilterId = `${searchIdBase}-sort`;
   const sortDirectionLabelId = `${searchIdBase}-sort-direction`;
-  const startYearFilterId = `${searchIdBase}-year-start`;
 
   const formatFacetItems = useMemo(() => {
     const formatCounts = new Map(
       facets.formats.map((facet) => [facet.value, facet.count] as const),
     );
-    const availableFormats = new Set<LetterImageType>([
-      ...facets.formats.map((facet) => facet.value),
-      ...(selectedFormats || []),
-    ]);
 
-    return ARCHIVE_FORMAT_ORDER
-      .filter((format) => availableFormats.has(format))
-      .map((format) => ({
-        key: format,
-        label: ARCHIVE_FORMAT_LABELS[format],
-        count: formatCounts.get(format) || 0,
-        active: selectedFormats?.includes(format) || false,
-        onClick: () => toggleFormatFilter(format),
-      }));
+    return ARCHIVE_FORMAT_ORDER.map((format) => ({
+      key: format,
+      label: ARCHIVE_FORMAT_LABELS[format],
+      count: formatCounts.get(format) || 0,
+      active: selectedFormats?.includes(format) || false,
+      onClick: () => toggleFormatFilter(format),
+    }));
   }, [facets.formats, filters, selectedFormats]);
 
   const formatFacetRow = formatFacetItems.length > 0 ? (
@@ -775,45 +498,6 @@ export default function SearchBar({
       items={formatFacetItems}
     />
   ) : null;
-  const formatFacetToolbar = formatFacetItems.length > 0 ? (
-    <div className="search-toolbar-format-group" role="group" aria-label="Browse by format">
-      {formatFacetItems.map((item) => (
-        <button
-          key={item.key}
-          type="button"
-          className={`search-facet-chip ${item.active ? "active" : ""}`}
-          onClick={item.onClick}
-        >
-          <span>{item.label}</span>
-          <span className="search-facet-count">{item.count}</span>
-        </button>
-      ))}
-    </div>
-  ) : null;
-
-  const renderActivePills = (compactLayout = false) => {
-    if (activePills.length === 0) return null;
-
-    return (
-      <div
-        className={`search-active-pills${compactLayout ? " search-active-pills-compact" : ""}`}
-        aria-label="Active archive filters"
-      >
-        {activePills.map((pill) => (
-          <button
-            key={pill.key}
-            type="button"
-            className="search-active-pill"
-            onClick={pill.onClear}
-          >
-            <span>{pill.label}</span>
-            <span aria-hidden="true">×</span>
-          </button>
-        ))}
-      </div>
-    );
-  };
-
   const sortDropdown = (
     <div
       className="search-sort-dropdown"
@@ -824,7 +508,7 @@ export default function SearchBar({
         className={`search-sort-trigger${sortPinned ? " is-pinned" : ""}`}
         onClick={handleSortClick}
         onMouseEnter={openSortDropdown}
-        onMouseLeave={scheduleSortClose}
+        onMouseLeave={sortTimer.scheduleClose}
         aria-expanded={sortDropdownOpen}
         aria-label="Sort archive results"
       >
@@ -836,7 +520,7 @@ export default function SearchBar({
       <ul
           className={`search-sort-menu${sortPinned ? " is-pinned" : ""}${sortDropdownOpen ? "" : " search-sort-menu--hidden"}`}
           role="listbox"
-          onMouseEnter={clearSortCloseTimer}
+          onMouseEnter={sortTimer.clearTimer}
           onMouseLeave={() => { if (!sortPinned) closeSortNow(); }}
         >
           {visibleSortOptions.map((opt) => {
@@ -869,195 +553,213 @@ export default function SearchBar({
   const refinementFields = (
     <div className={`filters${isCompact ? " filters-compact" : ""}`}>
 
-      {!hideCollectionFilter && (
-        <div className="filter-group">
-          <label className="filter-label" htmlFor={collectionFilterId}>Collection</label>
-          <input
-            id={collectionFilterId}
-            type="text"
-            className="filter-input"
-            placeholder="Collection"
-            value={filters.collection || ""}
-            onChange={(event) => updateFilter({ collection: event.target.value || null })}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter" || !collectionSuggestion) return;
-              event.preventDefault();
-              updateFilter({ collection: collectionSuggestion.applyValue });
-            }}
-          />
-          <SuggestionHint suggestion={collectionSuggestion} />
+      <div className="filter-section">
+        <span className="filter-section-label">People &amp; Location</span>
+        <div className="filter-section-row">
+          <div className="filter-group">
+            <span className="filter-label">Sender</span>
+            <input
+              id={senderFilterId}
+              type="text"
+              className="filter-input"
+              placeholder="Sender name"
+              value={filters.sender || ""}
+              onChange={(event) => updateFilter({ sender: event.target.value || null })}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || !senderSuggestion) return;
+                event.preventDefault();
+                updateFilter({ sender: senderSuggestion.applyValue });
+              }}
+            />
+            <SuggestionHint suggestion={senderSuggestion} />
+          </div>
+          <div className="filter-group">
+            <span className="filter-label">Recipient</span>
+            <input
+              id={recipientFilterId}
+              type="text"
+              className="filter-input"
+              placeholder="Recipient name"
+              value={filters.recipient || ""}
+              onChange={(event) => updateFilter({ recipient: event.target.value || null })}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || !recipientSuggestion) return;
+                event.preventDefault();
+                updateFilter({ recipient: recipientSuggestion.applyValue });
+              }}
+            />
+            <SuggestionHint suggestion={recipientSuggestion} />
+          </div>
+          {!hideCollectionFilter && (
+            <div className="filter-group">
+              <span className="filter-label">Collection</span>
+              <input
+                id={collectionFilterId}
+                type="text"
+                className="filter-input"
+                placeholder="Collection"
+                value={filters.collection || ""}
+                onChange={(event) => updateFilter({ collection: event.target.value || null })}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" || !collectionSuggestion) return;
+                  event.preventDefault();
+                  updateFilter({ collection: collectionSuggestion.applyValue });
+                }}
+              />
+              <SuggestionHint suggestion={collectionSuggestion} />
+            </div>
+          )}
+          <div className="filter-group">
+            <span className="filter-label">Place</span>
+            <input
+              id={placeFilterId}
+              type="text"
+              className="filter-input"
+              placeholder="Place"
+              value={filters.place || ""}
+              onChange={(event) => updateFilter({ place: event.target.value || null })}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || !placeSuggestion) return;
+                event.preventDefault();
+                updateFilter({ place: placeSuggestion.applyValue });
+              }}
+            />
+            <SuggestionHint suggestion={placeSuggestion} />
+          </div>
+          <div className="filter-group filter-group-year-range">
+            <span className="filter-label">Year Range</span>
+            <div className="year-range-pair">
+              <FilterChoiceField
+                id={`${searchIdBase}-year-from`}
+                label="From year"
+                value={filters.dateRange?.start ? String(filters.dateRange.start) : ""}
+                placeholder="From"
+                options={yearChoiceOptions}
+                allowClear
+                clearLabel="Any"
+                compact
+                closeOnSelect
+                open={openChoiceField === `${searchIdBase}-year-from`}
+                onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-year-from` : null)}
+                onChange={(value) => {
+                  const start = value ? Number(value) : undefined;
+                  updateFilter({ year: null, dateRange: start || filters.dateRange?.end ? { start, end: filters.dateRange?.end } : undefined });
+                }}
+              />
+              <span className="year-range-sep">&ndash;</span>
+              <FilterChoiceField
+                id={`${searchIdBase}-year-to`}
+                label="To year"
+                value={filters.dateRange?.end ? String(filters.dateRange.end) : ""}
+                placeholder="To"
+                options={yearChoiceOptions}
+                allowClear
+                clearLabel="Any"
+                compact
+                closeOnSelect
+                open={openChoiceField === `${searchIdBase}-year-to`}
+                onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-year-to` : null)}
+                onChange={(value) => {
+                  const end = value ? Number(value) : undefined;
+                  updateFilter({ year: null, dateRange: filters.dateRange?.start || end ? { start: filters.dateRange?.start, end } : undefined });
+                }}
+              />
+            </div>
+          </div>
         </div>
-      )}
-
-      <div className="filter-group">
-        <label className="filter-label" htmlFor={senderFilterId}>Sender</label>
-        <input
-          id={senderFilterId}
-          type="text"
-          className="filter-input"
-          placeholder="Sender name"
-          value={filters.sender || ""}
-          onChange={(event) => updateFilter({ sender: event.target.value || null })}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || !senderSuggestion) return;
-            event.preventDefault();
-            updateFilter({ sender: senderSuggestion.applyValue });
-          }}
-        />
-        <SuggestionHint suggestion={senderSuggestion} />
       </div>
 
-      <div className="filter-group">
-        <label className="filter-label" htmlFor={recipientFilterId}>Recipient</label>
-        <input
-          id={recipientFilterId}
-          type="text"
-          className="filter-input"
-          placeholder="Recipient name"
-          value={filters.recipient || ""}
-          onChange={(event) => updateFilter({ recipient: event.target.value || null })}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || !recipientSuggestion) return;
-            event.preventDefault();
-            updateFilter({ recipient: recipientSuggestion.applyValue });
-          }}
-        />
-        <SuggestionHint suggestion={recipientSuggestion} />
-      </div>
-
-      <div className="filter-group">
-        <label className="filter-label" htmlFor={placeFilterId}>Place</label>
-        <input
-          id={placeFilterId}
-          type="text"
-          className="filter-input"
-          placeholder="Place"
-          value={filters.place || ""}
-          onChange={(event) => updateFilter({ place: event.target.value || null })}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || !placeSuggestion) return;
-            event.preventDefault();
-            updateFilter({ place: placeSuggestion.applyValue });
-          }}
-        />
-        <SuggestionHint suggestion={placeSuggestion} />
-      </div>
-
-      <div className="filter-group">
-        <label className="filter-label" htmlFor={startYearFilterId}>Year Range</label>
-        <div className="date-range">
-          <input
-            id={startYearFilterId}
-            type="text"
-            inputMode="numeric"
-            className="filter-input"
-            placeholder="From year"
-            value={startYearInput}
-            onChange={(event) => setStartYearInput(normalizeYearInput(event.target.value))}
-            onBlur={applyDateRange}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") applyDateRange();
-            }}
-          />
-          <span className="date-separator">to</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            className="filter-input"
-            placeholder="To year"
-            value={endYearInput}
-            onChange={(event) => setEndYearInput(normalizeYearInput(event.target.value))}
-            onBlur={applyDateRange}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") applyDateRange();
-            }}
-          />
+      <div className="filter-section">
+        <span className="filter-section-label">Content &amp; Status</span>
+        <div className="filter-section-row">
+          <div className="filter-group">
+            <span className="filter-label">Topic</span>
+            <FilterChoiceField
+              id={topicFilterId}
+              label="Topic"
+              value={filters.topic?.join(",") || ""}
+              placeholder="All"
+              options={topicChoiceOptions}
+              allowClear
+              clearLabel="All"
+              searchable={topicChoiceOptions.length > 6}
+              multiple
+              maxSelections={2}
+              compact
+              open={openChoiceField === topicFilterId}
+              onOpenChange={(open) => setOpenChoiceField(open ? topicFilterId : null)}
+              onChange={(value) => updateFilter({ topic: value ? value.split(",") : null })}
+            />
+          </div>
+          <div className="filter-group">
+            <span className="filter-label">Tone</span>
+            <FilterChoiceField
+              id={`${searchIdBase}-tone`}
+              label="Tone"
+              value={filters.tone?.join(",") || ""}
+              placeholder="All"
+              options={toneChoiceOptions}
+              allowClear
+              clearLabel="All"
+              searchable={toneChoiceOptions.length > 6}
+              multiple
+              compact
+              open={openChoiceField === `${searchIdBase}-tone`}
+              onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-tone` : null)}
+              onChange={(value) => updateFilter({ tone: value ? value.split(",") : null })}
+            />
+          </div>
+          <div className="filter-group">
+            <span className="filter-label">Relationship</span>
+            <FilterChoiceField
+              id={`${searchIdBase}-relationship`}
+              label="Relationship"
+              value={filters.relationship?.join(",") || ""}
+              placeholder="All"
+              options={relationshipChoiceOptions}
+              allowClear
+              clearLabel="All"
+              searchable
+              multiple
+              compact
+              open={openChoiceField === `${searchIdBase}-relationship`}
+              onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-relationship` : null)}
+              onChange={(value) => updateFilter({ relationship: value ? value.split(",") : null })}
+            />
+          </div>
+          <div className="filter-group">
+            <span className="filter-label">Transcript</span>
+            <FilterChoiceField
+              id={`${searchIdBase}-transcript`}
+              label="Transcript"
+              value={filters.hasTranscript === null || filters.hasTranscript === undefined ? "all" : filters.hasTranscript ? "true" : "false"}
+              placeholder="All"
+              options={transcriptChoiceOptions}
+              compact
+              open={openChoiceField === `${searchIdBase}-transcript`}
+              onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-transcript` : null)}
+              onChange={(value) => updateFilter({
+                hasTranscript: value === "all" ? null : value === "true",
+              })}
+            />
+          </div>
+          <div className="filter-group">
+            <span className="filter-label">Verification</span>
+            <FilterChoiceField
+              id={`${searchIdBase}-verified`}
+              label="Verification"
+              value={filters.verified === null || filters.verified === undefined ? "all" : filters.verified ? "true" : "false"}
+              placeholder="All"
+              options={verificationChoiceOptions}
+              compact
+              open={openChoiceField === `${searchIdBase}-verified`}
+              onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-verified` : null)}
+              onChange={(value) => updateFilter({
+                verified: value === "all" ? null : value === "true",
+              })}
+            />
+          </div>
         </div>
-        <p className="filter-empty-copy">Use one year or both. Press Enter to apply.</p>
-      </div>
-
-      <div className="filter-group">
-        <label className="filter-label" htmlFor={topicFilterId}>Topic</label>
-        <input
-          id={topicFilterId}
-          type="text"
-          className="filter-input"
-          placeholder="Topic"
-          value={filters.topic || ""}
-          onChange={(event) => updateFilter({ topic: event.target.value || null })}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || !topicSuggestion) return;
-            event.preventDefault();
-            updateFilter({ topic: topicSuggestion.applyValue });
-          }}
-        />
-        <SuggestionHint suggestion={topicSuggestion} />
-      </div>
-
-      <div className="filter-group">
-        <label className="filter-label" htmlFor={`${searchIdBase}-tone`}>Tone</label>
-        <FilterChoiceField
-          id={`${searchIdBase}-tone`}
-          label="Tone"
-          value={filters.tone || ""}
-          placeholder="Any tone"
-          options={toneChoiceOptions}
-          allowClear
-          clearLabel="Any tone"
-          searchable={toneChoiceOptions.length > 6}
-          open={openChoiceField === `${searchIdBase}-tone`}
-          onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-tone` : null)}
-          onChange={(value) => updateFilter({ tone: value || null })}
-        />
-      </div>
-
-      <div className="filter-group">
-        <label className="filter-label" htmlFor={`${searchIdBase}-relationship`}>Relationship</label>
-        <FilterChoiceField
-          id={`${searchIdBase}-relationship`}
-          label="Relationship"
-          value={filters.relationship || ""}
-          placeholder="Any relationship"
-          options={relationshipChoiceOptions}
-          allowClear
-          clearLabel="Any relationship"
-          searchable
-          open={openChoiceField === `${searchIdBase}-relationship`}
-          onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-relationship` : null)}
-          onChange={(value) => updateFilter({ relationship: value || null })}
-        />
-      </div>
-
-      <div className="filter-group">
-        <label className="filter-label" htmlFor={`${searchIdBase}-transcript`}>Transcript</label>
-        <FilterChoiceField
-          id={`${searchIdBase}-transcript`}
-          label="Transcript"
-          value={filters.hasTranscript === null || filters.hasTranscript === undefined ? "all" : filters.hasTranscript ? "true" : "false"}
-          placeholder="All items"
-          options={transcriptChoiceOptions}
-          open={openChoiceField === `${searchIdBase}-transcript`}
-          onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-transcript` : null)}
-          onChange={(value) => updateFilter({
-            hasTranscript: value === "all" ? null : value === "true",
-          })}
-        />
-      </div>
-
-      <div className="filter-group">
-        <label className="filter-label" htmlFor={`${searchIdBase}-verified`}>Verification</label>
-        <FilterChoiceField
-          id={`${searchIdBase}-verified`}
-          label="Verification"
-          value={filters.verified === null || filters.verified === undefined ? "all" : filters.verified ? "true" : "false"}
-          placeholder="All items"
-          options={verificationChoiceOptions}
-          open={openChoiceField === `${searchIdBase}-verified`}
-          onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-verified` : null)}
-          onChange={(value) => updateFilter({
-            verified: value === "all" ? null : value === "true",
-          })}
-        />
       </div>
     </div>
   );
@@ -1080,15 +782,15 @@ export default function SearchBar({
             <button
               type="button"
               className={`filter-toggle search-refine-toggle search-compact-filter-toggle${showFilters ? " active" : ""}${filtersPinned ? " is-pinned" : ""}`}
-              aria-label="Open archive refine controls"
+              aria-label={`Open archive refine controls${activeFilterCount > 0 ? `, ${activeFilterCount} active` : ""}`}
               aria-expanded={showFilters}
               aria-pressed={filtersPinned}
               onMouseEnter={() => openFilters()}
-              onMouseLeave={scheduleFiltersClose}
+              onMouseLeave={refineTimer.scheduleClose}
               onFocus={() => openFilters()}
               onBlur={() => {
                 if (!filtersPinned) {
-                  scheduleFiltersClose();
+                  refineTimer.scheduleClose();
                 }
               }}
               onClick={() => {
@@ -1103,38 +805,36 @@ export default function SearchBar({
                 }
 
                 setFiltersPinned(true);
-                clearRefineCloseTimer();
+                refineTimer.clearTimer();
               }}
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                 <path d="M1.5 2.5h11L8 7.5v4l-2 1.5V7.5z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
+              {activeFilterCount > 0 && <span className="filter-count-badge">{activeFilterCount}</span>}
             </button>
             {sortDropdown}
 
             {showFilters && (
               <div
                 className={`search-compact-flyout search-refine-flyout${filtersPinned ? " is-pinned" : ""}`}
-                onMouseEnter={clearRefineCloseTimer}
-                onMouseLeave={() => { if (!filtersPinned) closeFilters(); }}
+                onMouseEnter={refineTimer.clearTimer}
+                onMouseLeave={refineTimer.scheduleClose}
               >
-                <div className="search-compact-flyout-header">
-                  <div className="search-compact-flyout-header-row">
-                    <div className="search-compact-flyout-copy">
-                      <span className="search-facet-label">Refine</span>
-                      <p className="search-compact-flyout-status">{searchStatus}</p>
-                    </div>
-                  </div>
-                  {filtersPinned && (
+                {filtersPinned && (
+                  <div className="search-compact-flyout-header">
                     <div className="search-compact-flyout-center">
                       <span className="search-compact-pin-indicator">Pinned open</span>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
                 {formatFacetRow}
-                {renderActivePills(true)}
                 {refinementFields}
                 <div className="search-flyout-footer">
+                  <div className="search-flyout-footer-status">
+                    <span className="search-facet-label">Refine</span>
+                    <p className="search-compact-flyout-status">{searchStatus}</p>
+                  </div>
                   <button
                     type="button"
                     className="clear-filters"
@@ -1168,7 +868,7 @@ export default function SearchBar({
         </div>
       </div>
 
-      <div className="search-input-wrapper" ref={dockTriggerRef}>
+      <div className="search-input-wrapper search-input-wrapper-compact" ref={dockTriggerRef}>
         <input
           type="search"
           className="search-input"
@@ -1178,23 +878,20 @@ export default function SearchBar({
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
         />
-      </div>
 
-      <div className="search-toolbar">
-        {formatFacetToolbar}
-        <div className="search-toolbar-actions">
+        <div className="search-compact-filter-wrap">
           <button
             type="button"
             className={`filter-toggle search-refine-toggle search-full-filter-toggle${showFilters ? " active" : ""}${filtersPinned ? " is-pinned" : ""}`}
-            aria-label="Open archive refine controls"
+            aria-label={`Open archive refine controls${activeFilterCount > 0 ? `, ${activeFilterCount} active` : ""}`}
             aria-expanded={showFilters}
             aria-pressed={filtersPinned}
             onMouseEnter={() => openFilters()}
-            onMouseLeave={scheduleFiltersClose}
+            onMouseLeave={refineTimer.scheduleClose}
             onFocus={() => openFilters()}
             onBlur={() => {
               if (!filtersPinned) {
-                scheduleFiltersClose();
+                refineTimer.scheduleClose();
               }
             }}
             onClick={() => {
@@ -1209,40 +906,36 @@ export default function SearchBar({
               }
 
               setFiltersPinned(true);
-              clearRefineCloseTimer();
+              refineTimer.clearTimer();
             }}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
               <path d="M1.5 2.5h11L8 7.5v4l-2 1.5V7.5z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
+            {activeFilterCount > 0 && <span className="filter-count-badge">{activeFilterCount}</span>}
           </button>
           {sortDropdown}
-        </div>
-      </div>
 
-      {renderActivePills()}
-
-      {showFilters && (
-        <div
-          className={`search-full-flyout search-refine-flyout${filtersPinned ? " is-pinned" : ""}`}
-          onMouseEnter={clearRefineCloseTimer}
-          onMouseLeave={() => { if (!filtersPinned) closeFilters(); }}
-        >
-          <div className="search-compact-flyout-header">
-            <div className="search-compact-flyout-header-row">
-              <div className="search-compact-flyout-copy">
-                <span className="search-facet-label">Refine</span>
-                <p className="search-compact-flyout-status">{searchStatus}</p>
-              </div>
-            </div>
-            {filtersPinned && (
-              <div className="search-compact-flyout-center">
-                <span className="search-compact-pin-indicator">Pinned open</span>
-              </div>
-            )}
-          </div>
-          {refinementFields}
+          {showFilters && (
+            <div
+              className={`search-full-flyout search-refine-flyout${filtersPinned ? " is-pinned" : ""}`}
+              onMouseEnter={refineTimer.clearTimer}
+              onMouseLeave={refineTimer.scheduleClose}
+            >
+              {filtersPinned && (
+                <div className="search-compact-flyout-header">
+                  <div className="search-compact-flyout-center">
+                    <span className="search-compact-pin-indicator">Pinned open</span>
+                  </div>
+                </div>
+              )}
+              {formatFacetRow}
+              {refinementFields}
           <div className="search-flyout-footer">
+            <div className="search-flyout-footer-status">
+              <span className="search-facet-label">Refine</span>
+              <p className="search-compact-flyout-status">{searchStatus}</p>
+            </div>
             <button
               type="button"
               className="clear-filters"
@@ -1254,186 +947,8 @@ export default function SearchBar({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-interface FacetItem {
-  key: string;
-  label: string;
-  count: number;
-  active: boolean;
-  onClick: () => void;
-}
-
-function FacetRow({
-  label,
-  items,
-}: {
-  label: string;
-  items: FacetItem[];
-}) {
-  return (
-    <div className="search-facet-row">
-      <span className="search-facet-label">{label}</span>
-      <div className="search-facet-chips">
-        {items.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={`search-facet-chip ${item.active ? "active" : ""}`}
-            onClick={item.onClick}
-          >
-            <span>{item.label}</span>
-            <span className="search-facet-count">{item.count}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SuggestionHint({ suggestion }: { suggestion: FilterSuggestion | null }) {
-  if (!suggestion) return null;
-
-  return (
-    <p className="filter-suggestion-hint">
-      Press Enter to use <strong>{suggestion.display}</strong>
-      <span> · {suggestion.count} item{suggestion.count === 1 ? "" : "s"}</span>
-    </p>
-  );
-}
-
-function FilterChoiceField({
-  id,
-  label,
-  value,
-  placeholder,
-  options,
-  open,
-  searchable = false,
-  allowClear = false,
-  clearLabel = "Any",
-  onChange,
-  onOpenChange,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  placeholder: string;
-  options: FilterChoiceOption[];
-  open: boolean;
-  searchable?: boolean;
-  allowClear?: boolean;
-  clearLabel?: string;
-  onChange: (value: string) => void;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [panelDirection, setPanelDirection] = useState<"down" | "up">("down");
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  const selectedOption = options.find((option) => option.value === value) || null;
-  const filteredOptions = useMemo(
-    () => filterChoiceOptions(options, searchTerm),
-    [options, searchTerm],
-  );
-
-  useEffect(() => {
-    if (open && searchable) {
-      window.requestAnimationFrame(() => searchInputRef.current?.focus());
-    }
-    if (!open) {
-      setSearchTerm("");
-    }
-  }, [open, searchable]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const measureDirection = () => {
-      const triggerRect = triggerRef.current?.getBoundingClientRect();
-      const panelRect = panelRef.current?.getBoundingClientRect();
-      if (!triggerRect || !panelRect) return;
-
-      const viewportHeight = window.innerHeight;
-      const spaceBelow = viewportHeight - triggerRect.bottom;
-      const spaceAbove = triggerRect.top;
-      const nextDirection = panelRect.height > spaceBelow && spaceAbove > spaceBelow ? "up" : "down";
-      setPanelDirection(nextDirection);
-    };
-
-    measureDirection();
-    window.addEventListener("resize", measureDirection);
-    return () => window.removeEventListener("resize", measureDirection);
-  }, [filteredOptions.length, open]);
-
-  const hasSearch = searchable && options.length > 6;
-
-  return (
-    <div className={`filter-choice${open ? " is-open" : ""}`}>
-      <button
-        ref={triggerRef}
-        id={id}
-        type="button"
-        className={`filter-choice-trigger${selectedOption ? " has-value" : ""}`}
-        aria-label={label}
-        aria-expanded={open}
-        onClick={() => onOpenChange(!open)}
-      >
-        <span className="filter-choice-value">{selectedOption?.label || placeholder}</span>
-        <span className="filter-choice-caret" aria-hidden="true">▾</span>
-      </button>
-
-      {open && (
-        <div ref={panelRef} className={`filter-choice-panel${panelDirection === "up" ? " filter-choice-panel-up" : ""}`}>
-          {hasSearch && (
-            <input
-              ref={searchInputRef}
-              type="search"
-              className="filter-input filter-choice-search"
-              placeholder={`Find ${label.toLowerCase()}`}
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
-          )}
-          <div className="filter-choice-options" role="listbox" aria-label={label}>
-            {allowClear && (
-              <button
-                type="button"
-                className={`filter-choice-option${!selectedOption ? " active" : ""}`}
-                onClick={() => {
-                  onChange("");
-                  onOpenChange(false);
-                }}
-              >
-                <span>{clearLabel}</span>
-              </button>
-            )}
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={`filter-choice-option${option.value === value ? " active" : ""}`}
-                  onClick={() => {
-                    onChange(option.value);
-                    onOpenChange(false);
-                  }}
-                >
-                  <span>{option.label}</span>
-                  {typeof option.count === "number" && (
-                    <span className="filter-choice-count">{option.count}</span>
-                  )}
-                </button>
-              ))
-            ) : (
-              <div className="filter-choice-empty">No matches</div>
-            )}
-          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

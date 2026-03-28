@@ -1065,28 +1065,53 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
     )`);
   }
   if (query.topic) {
-    const topicNeedle = `%${query.topic}%`;
-    baseScopedFilters.push(sql`EXISTS (
-      SELECT 1
-      FROM UNNEST(COALESCE(gf.topics, ARRAY[]::text[])) AS topic_name
-      WHERE topic_name ILIKE ${topicNeedle}
-    )`);
+    const topics = query.topic.split(",").map((t: string) => t.trim()).filter(Boolean);
+    if (topics.length === 1) {
+      const topicNeedle = `%${topics[0]}%`;
+      baseScopedFilters.push(sql`EXISTS (
+        SELECT 1
+        FROM UNNEST(COALESCE(gf.topics, ARRAY[]::text[])) AS topic_name
+        WHERE topic_name ILIKE ${topicNeedle}
+      )`);
+    } else if (topics.length > 1) {
+      const conditions = topics.map((t: string) => {
+        const needle = `%${t}%`;
+        return sql`topic_name ILIKE ${needle}`;
+      });
+      baseScopedFilters.push(sql`EXISTS (
+        SELECT 1
+        FROM UNNEST(COALESCE(gf.topics, ARRAY[]::text[])) AS topic_name
+        WHERE ${sql.join(conditions, sql` OR `)}
+      )`);
+    }
   }
   if (query.tone) {
-    baseScopedFilters.push(sql`${query.tone} = ANY(COALESCE(gf.tones, ARRAY[]::text[]))`);
+    const tones = query.tone.split(",").map((t: string) => t.trim()).filter(Boolean);
+    if (tones.length === 1) {
+      baseScopedFilters.push(sql`${tones[0]} = ANY(COALESCE(gf.tones, ARRAY[]::text[]))`);
+    } else if (tones.length > 1) {
+      const conditions = tones.map((t: string) => sql`${t} = ANY(COALESCE(gf.tones, ARRAY[]::text[]))`);
+      baseScopedFilters.push(sql`(${sql.join(conditions, sql` OR `)})`);
+    }
   }
   if (query.relationship) {
-    baseScopedFilters.push(sql`${query.relationship} = ANY(COALESCE(gf.relationships, ARRAY[]::text[]))`);
+    const rels = query.relationship.split(",").map((r: string) => r.trim()).filter(Boolean);
+    if (rels.length === 1) {
+      baseScopedFilters.push(sql`${rels[0]} = ANY(COALESCE(gf.relationships, ARRAY[]::text[]))`);
+    } else if (rels.length > 1) {
+      const conditions = rels.map((r: string) => sql`${r} = ANY(COALESCE(gf.relationships, ARRAY[]::text[]))`);
+      baseScopedFilters.push(sql`(${sql.join(conditions, sql` OR `)})`);
+    }
   }
   if (query.year) {
     const yearText = String(query.year);
     baseScopedFilters.push(sql`SUBSTRING(mg."dateRaw", 1, 4) = ${yearText}`);
   }
   if (query.yearFrom !== undefined) {
-    baseScopedFilters.push(sql`SUBSTRING(mg."dateRaw", 1, 4)::int >= ${query.yearFrom}`);
+    baseScopedFilters.push(sql`SUBSTRING(mg."dateRaw", 1, 4) ~ '^[0-9]{4}$' AND SUBSTRING(mg."dateRaw", 1, 4)::int >= ${query.yearFrom}`);
   }
   if (query.yearTo !== undefined) {
-    baseScopedFilters.push(sql`SUBSTRING(mg."dateRaw", 1, 4)::int <= ${query.yearTo}`);
+    baseScopedFilters.push(sql`SUBSTRING(mg."dateRaw", 1, 4) ~ '^[0-9]{4}$' AND SUBSTRING(mg."dateRaw", 1, 4)::int <= ${query.yearTo}`);
   }
   if (query.hasTranscript !== undefined) {
     baseScopedFilters.push(sql`pr."hasTranscript" = ${query.hasTranscript}`);

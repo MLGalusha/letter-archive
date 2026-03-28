@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -43,8 +43,9 @@ describe("SearchBar", () => {
     );
 
     expect(screen.getByText("95 published archive items")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Best Match/i })).not.toBeInTheDocument();
 
+    // Format chips are inside the flyout — open it first
+    await user.click(screen.getByRole("button", { name: /Open archive refine controls/i }));
     await user.click(screen.getByRole("button", { name: /Letters 12/i }));
 
     expect(handleFiltersChange).toHaveBeenCalledWith({
@@ -54,7 +55,7 @@ describe("SearchBar", () => {
     });
   });
 
-  it("does not auto-open refine when a top-level format chip is toggled", async () => {
+  it("shows format chips inside the refine flyout", async () => {
     const user = userEvent.setup();
 
     function SearchBarHarness() {
@@ -75,27 +76,21 @@ describe("SearchBar", () => {
 
     render(<SearchBarHarness />);
 
-    expect(screen.getByRole("button", { name: "Open archive refine controls" })).toHaveTextContent("Refine");
-    expect(screen.queryByRole("button", { name: "Sort archive results" })).not.toBeInTheDocument();
+    // Format chips are only visible after opening the flyout
+    expect(screen.queryByRole("button", { name: /Letters/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Letters 12/i }));
+    await user.click(screen.getByRole("button", { name: /Open archive refine controls/i }));
 
-    expect(screen.queryByRole("button", { name: "Sort archive results" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Letters 12" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Letters 12/i })).toBeInTheDocument();
   });
 
-  it("keeps format selection on the chips and only shows removable pills for other filters", async () => {
-    const user = userEvent.setup();
-    const handleQueryChange = vi.fn();
-    const handleFiltersChange = vi.fn();
-
+  it("shows filter count badge when filters are active", () => {
     render(
       <SearchBar
         query="Molly"
         filters={{
           format: ["photo"],
-          person: "Jimmie",
-          personRole: "sender",
+          sender: "Jimmie",
           sort: "relevance",
           sortOrder: "desc",
         }}
@@ -105,27 +100,18 @@ describe("SearchBar", () => {
         }}
         total={3}
         loading={false}
-        onQueryChange={handleQueryChange}
-        onFiltersChange={handleFiltersChange}
+        onQueryChange={vi.fn()}
+        onFiltersChange={vi.fn()}
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Photos 3" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sender or recipient: Jimmie" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Photos 3" })).toHaveLength(1);
-
-    await user.click(screen.getByRole("button", { name: "Sender or recipient: Jimmie" }));
-
-    expect(handleFiltersChange).toHaveBeenCalledWith({
-      format: ["photo"],
-      person: null,
-      personRole: null,
-      sort: "relevance",
-      sortOrder: "desc",
-    });
+    // Format + sender both count in the badge
+    const refineButton = screen.getByRole("button", { name: /Open archive refine controls, 2 active/i });
+    expect(refineButton).toBeInTheDocument();
+    expect(refineButton.querySelector(".filter-count-badge")).toHaveTextContent("2");
   });
 
-  it("lets the selected format chip remain the only visible format state", async () => {
+  it("lets the selected format chip be toggled inside the flyout", async () => {
     const user = userEvent.setup();
     const handleFiltersChange = vi.fn();
 
@@ -151,8 +137,8 @@ describe("SearchBar", () => {
       />,
     );
 
-    expect(screen.getAllByRole("button", { name: "Photos 3" })).toHaveLength(1);
-
+    // Open flyout to access format chips
+    await user.click(screen.getByRole("button", { name: /Open archive refine controls/i }));
     await user.click(screen.getByRole("button", { name: "Photos 3" }));
 
     expect(handleFiltersChange).toHaveBeenCalledWith({
@@ -196,7 +182,7 @@ describe("SearchBar", () => {
     );
 
     const refineButton = screen.getByRole("button", { name: "Open archive refine controls" });
-    expect(refineButton).toHaveTextContent("Refine");
+    expect(refineButton).toBeInTheDocument();
 
     await user.click(refineButton);
 
@@ -256,7 +242,8 @@ describe("SearchBar", () => {
     expect(screen.getByText('12 results for "Molly"')).toBeInTheDocument();
 
     fireEvent.click(refineButton);
-    expect(screen.queryByText('12 results for "Molly"')).not.toBeInTheDocument();
+    // Second click unpins but flyout stays open until mouse leaves
+    expect(refineButton).not.toHaveClass("is-pinned");
   });
 
   it("gives the page refine flyout the same hover grace period and click pinning", async () => {
@@ -277,23 +264,22 @@ describe("SearchBar", () => {
     const refineButton = screen.getByRole("button", { name: "Open archive refine controls" });
 
     fireEvent.mouseEnter(refineButton);
-    expect(screen.getByRole("button", { name: "Sort archive results" })).toBeInTheDocument();
+    const flyout = screen.getByText("Refine", { selector: ".search-facet-label" }).closest(".search-full-flyout") as HTMLElement;
+    expect(flyout).toBeTruthy();
 
     fireEvent.mouseLeave(refineButton);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(200);
     });
-    expect(screen.getByRole("button", { name: "Sort archive results" })).toBeInTheDocument();
+    expect(flyout).toBeInTheDocument();
 
-    const flyout = screen.getByRole("button", { name: "Sort archive results" }).closest(".search-full-flyout") as HTMLElement;
     fireEvent.mouseLeave(flyout);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(450);
     });
-    expect(screen.queryByRole("button", { name: "Sort archive results" })).not.toBeInTheDocument();
+    expect(flyout).not.toBeInTheDocument();
 
     fireEvent.click(refineButton);
-    expect(screen.getByRole("button", { name: "Sort archive results" })).toBeInTheDocument();
     expect(screen.getByText("Pinned open")).toBeInTheDocument();
     expect(refineButton).toHaveClass("is-pinned");
 
@@ -301,10 +287,10 @@ describe("SearchBar", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(450);
     });
-    expect(screen.getByRole("button", { name: "Sort archive results" })).toBeInTheDocument();
+    expect(screen.getByText("Pinned open")).toBeInTheDocument();
   });
 
-  it("shows Clear All inside the page refine flyout instead of beside the toolbar", async () => {
+  it("shows Clear All inside the page refine flyout", async () => {
     const user = userEvent.setup();
 
     render(
@@ -321,14 +307,14 @@ describe("SearchBar", () => {
 
     expect(screen.queryByRole("button", { name: "Clear All" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Open archive refine controls" }));
+    await user.click(screen.getByRole("button", { name: /Open archive refine controls/i }));
 
-    const flyout = screen.getByRole("button", { name: "Sort archive results" }).closest(".search-full-flyout");
+    const flyout = screen.getByText("Refine", { selector: ".search-facet-label" }).closest(".search-full-flyout");
     expect(flyout).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Clear All" })).toBeInTheDocument();
+    expect(within(flyout!).getByRole("button", { name: "Clear All" })).toBeInTheDocument();
   });
 
-  it("lets people choose advanced archive-wide sorts from refine", async () => {
+  it("lets people choose archive-wide sorts from the sort dropdown", async () => {
     const user = userEvent.setup();
     const handleFiltersChange = vi.fn();
 
@@ -344,9 +330,8 @@ describe("SearchBar", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Open archive refine controls" }));
     await user.click(screen.getByRole("button", { name: "Sort archive results" }));
-    await user.click(screen.getByRole("button", { name: "Collection" }));
+    await user.click(screen.getByRole("option", { name: /Collection/i }));
 
     expect(handleFiltersChange).toHaveBeenCalledWith({
       sort: "collection",
@@ -354,7 +339,7 @@ describe("SearchBar", () => {
     });
   });
 
-  it("lets people flip sort direction separately from the sort field", async () => {
+  it("lets people flip sort direction by clicking the active sort option", async () => {
     const user = userEvent.setup();
     const handleFiltersChange = vi.fn();
 
@@ -370,8 +355,8 @@ describe("SearchBar", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Open archive refine controls" }));
-    await user.click(screen.getByRole("button", { name: /Toggle sort direction, currently Newest letter first/i }));
+    await user.click(screen.getByRole("button", { name: "Sort archive results" }));
+    await user.click(screen.getByRole("option", { name: /Letter Date/i }));
 
     expect(handleFiltersChange).toHaveBeenCalledWith({
       sort: "letterDate",

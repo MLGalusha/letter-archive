@@ -248,9 +248,9 @@ export default function CollectionDetailPage() {
       sender: searchParams.get('sender') || null,
       recipient: searchParams.get('recipient') || null,
       place: searchParams.get('place') || null,
-      topic: searchParams.get('topic') || null,
-      tone: searchParams.get('tone') || null,
-      relationship: searchParams.get('relationship') || null,
+      topic: searchParams.get('topic') ? searchParams.get('topic')!.split(',') : null,
+      tone: searchParams.get('tone') ? searchParams.get('tone')!.split(',') : null,
+      relationship: searchParams.get('relationship') ? searchParams.get('relationship')!.split(',') : null,
       year: searchParams.get('year') ? Number(searchParams.get('year')) : null,
       dateRange: searchParams.get('yearFrom') || searchParams.get('yearTo')
         ? {
@@ -354,9 +354,9 @@ export default function CollectionDetailPage() {
     if (filters.sender) nextParams.set('sender', filters.sender);
     if (filters.recipient) nextParams.set('recipient', filters.recipient);
     if (filters.place) nextParams.set('place', filters.place);
-    if (filters.topic) nextParams.set('topic', filters.topic);
-    if (filters.tone) nextParams.set('tone', filters.tone);
-    if (filters.relationship) nextParams.set('relationship', filters.relationship);
+    if (filters.topic?.length) nextParams.set('topic', filters.topic.join(','));
+    if (filters.tone?.length) nextParams.set('tone', filters.tone.join(','));
+    if (filters.relationship?.length) nextParams.set('relationship', filters.relationship.join(','));
     if (filters.year) nextParams.set('year', String(filters.year));
     if (filters.dateRange?.start) nextParams.set('yearFrom', String(filters.dateRange.start));
     if (filters.dateRange?.end) nextParams.set('yearTo', String(filters.dateRange.end));
@@ -388,9 +388,9 @@ export default function CollectionDetailPage() {
       sender: filters.sender || undefined,
       recipient: filters.recipient || undefined,
       place: filters.place || undefined,
-      topic: filters.topic || undefined,
-      tone: filters.tone || undefined,
-      relationship: filters.relationship || undefined,
+      topic: filters.topic?.length ? filters.topic : undefined,
+      tone: filters.tone?.length ? filters.tone : undefined,
+      relationship: filters.relationship?.length ? filters.relationship : undefined,
       year: filters.year || undefined,
       yearFrom: filters.dateRange?.start,
       yearTo: filters.dateRange?.end,
@@ -410,7 +410,7 @@ export default function CollectionDetailPage() {
       || filters.sender?.trim()
       || filters.recipient?.trim()
       || filters.place?.trim()
-      || filters.topic?.trim()
+      || filters.topic?.length
       ? 180
       : 0;
 

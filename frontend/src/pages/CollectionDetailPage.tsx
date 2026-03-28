@@ -22,6 +22,7 @@ import {
 import HeaderScrubber from '../components/HeaderScrubber/HeaderScrubber';
 import useCollectionScrubber from '../components/CollectionHeaderDock/useCollectionScrubber';
 import { buildCollectionSeo } from '../utils/seo';
+import { saveSearchState, loadSearchState } from '../utils/searchPersistence';
 import './CollectionDetailPage.css';
 
 const ARCHIVE_PAGE_SIZE = 24;
@@ -222,34 +223,48 @@ export default function CollectionDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   /* ---- Archive search state (mirrors HomePage) ---- */
-  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '');
-  const [filters, setFilters] = useState<SearchFilters>(() => ({
-    collection: collectionCode || null,
-    format: (() => {
-      const vals = searchParams.getAll('format') as NonNullable<SearchFilters['format']>;
-      return vals.length > 0 ? vals : null;
-    })(),
-    person: searchParams.get('person') || null,
-    personRole: (searchParams.get('personRole') as SearchFilters['personRole']) || null,
-    sender: searchParams.get('sender') || null,
-    recipient: searchParams.get('recipient') || null,
-    place: searchParams.get('place') || null,
-    topic: searchParams.get('topic') || null,
-    tone: searchParams.get('tone') || null,
-    relationship: searchParams.get('relationship') || null,
-    year: searchParams.get('year') ? Number(searchParams.get('year')) : null,
-    dateRange: searchParams.get('yearFrom') || searchParams.get('yearTo')
-      ? {
-          start: searchParams.get('yearFrom') ? Number(searchParams.get('yearFrom')) : undefined,
-          end: searchParams.get('yearTo') ? Number(searchParams.get('yearTo')) : undefined,
-        }
-      : undefined,
-    verified: searchParams.get('verified') === null
-      ? null
-      : searchParams.get('verified') === 'true',
-    sort: (searchParams.get('sort') as SearchFilters['sort']) || undefined,
-    sortOrder: (searchParams.get('sortOrder') as SearchFilters['sortOrder']) || 'asc',
-  }));
+  const collectionStorageKey = `collection:${collectionCode}`;
+  const [searchQuery, setSearchQuery] = useState(() => {
+    const urlQ = searchParams.get('q');
+    if (urlQ) return urlQ;
+    const saved = loadSearchState(collectionStorageKey);
+    return saved?.query || '';
+  });
+  const [filters, setFilters] = useState<SearchFilters>(() => {
+    const hasUrlFilters = searchParams.get('q') || searchParams.get('sender')
+      || searchParams.get('recipient') || searchParams.get('format')
+      || searchParams.get('sort') || searchParams.get('verified')
+      || searchParams.get('hasTranscript');
+    if (!hasUrlFilters) {
+      const saved = loadSearchState(collectionStorageKey);
+      if (saved?.filters) return { ...saved.filters, collection: collectionCode || null };
+    }
+    return {
+      collection: collectionCode || null,
+      format: (() => {
+        const vals = searchParams.getAll('format') as NonNullable<SearchFilters['format']>;
+        return vals.length > 0 ? vals : null;
+      })(),
+      sender: searchParams.get('sender') || null,
+      recipient: searchParams.get('recipient') || null,
+      place: searchParams.get('place') || null,
+      topic: searchParams.get('topic') || null,
+      tone: searchParams.get('tone') || null,
+      relationship: searchParams.get('relationship') || null,
+      year: searchParams.get('year') ? Number(searchParams.get('year')) : null,
+      dateRange: searchParams.get('yearFrom') || searchParams.get('yearTo')
+        ? {
+            start: searchParams.get('yearFrom') ? Number(searchParams.get('yearFrom')) : undefined,
+            end: searchParams.get('yearTo') ? Number(searchParams.get('yearTo')) : undefined,
+          }
+        : undefined,
+      verified: searchParams.get('verified') === null
+        ? null
+        : searchParams.get('verified') === 'true',
+      sort: (searchParams.get('sort') as SearchFilters['sort']) || undefined,
+      sortOrder: (searchParams.get('sortOrder') as SearchFilters['sortOrder']) || 'asc',
+    };
+  });
 
   const [archiveResults, setArchiveResults] = useState<ArchiveSearchResponse>({
     letters: [],
@@ -336,10 +351,6 @@ export default function CollectionDetailPage() {
     if (filters.format?.length) {
       filters.format.forEach((f) => nextParams.append('format', f));
     }
-    if (filters.person) nextParams.set('person', filters.person);
-    if (filters.person && filters.personRole && filters.personRole !== 'any') {
-      nextParams.set('personRole', filters.personRole);
-    }
     if (filters.sender) nextParams.set('sender', filters.sender);
     if (filters.recipient) nextParams.set('recipient', filters.recipient);
     if (filters.place) nextParams.set('place', filters.place);
@@ -357,12 +368,15 @@ export default function CollectionDetailPage() {
       nextParams.set('sortOrder', filters.sortOrder);
     }
 
+    // Persist to localStorage for cross-navigation restoration
+    saveSearchState(collectionStorageKey, searchQuery, filters);
+
     if (nextParams.toString() === searchParams.toString()) return;
 
     startTransition(() => {
       setSearchParams(nextParams, { replace: true });
     });
-  }, [filters, searchParams, searchQuery, setSearchParams]);
+  }, [filters, searchParams, searchQuery, setSearchParams, collectionStorageKey]);
 
   /* ---- Build request params ---- */
   const requestParams = useMemo(
@@ -371,10 +385,6 @@ export default function CollectionDetailPage() {
       search: searchQuery.trim() || undefined,
       format: filters.format?.length ? filters.format : undefined,
       collection: collectionCode || undefined,
-      person: filters.person || undefined,
-      personRole: filters.person && filters.personRole && filters.personRole !== 'any'
-        ? filters.personRole
-        : undefined,
       sender: filters.sender || undefined,
       recipient: filters.recipient || undefined,
       place: filters.place || undefined,
@@ -384,6 +394,7 @@ export default function CollectionDetailPage() {
       year: filters.year || undefined,
       yearFrom: filters.dateRange?.start,
       yearTo: filters.dateRange?.end,
+      hasTranscript: filters.hasTranscript,
       verified: filters.verified,
       sort: filters.sort || undefined,
       sortOrder: filters.sortOrder || undefined,
@@ -396,7 +407,6 @@ export default function CollectionDetailPage() {
     let cancelled = false;
     const requestVersion = ++requestVersionRef.current;
     const delay = searchQuery.trim()
-      || filters.person?.trim()
       || filters.sender?.trim()
       || filters.recipient?.trim()
       || filters.place?.trim()
@@ -630,7 +640,6 @@ export default function CollectionDetailPage() {
         <div className="collection-detail-public">
           <p className="loading-message">Loading collection...</p>
         </div>
-        <Footer />
       </div>
     );
   }

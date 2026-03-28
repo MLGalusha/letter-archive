@@ -1,10 +1,11 @@
-import { useMemo, useState, useRef, useEffect } from 'react';
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { listCollections, type CollectionInfo } from '../api/collections';
 import Footer from '../components/Footer/Footer';
 import BackToTop from '../components/BackToTop';
 import { useAsync } from '../hooks/useAsync';
+import { saveCollectionsSort, loadCollectionsSort } from '../utils/searchPersistence';
 import './CollectionsPage.css';
 
 function formatDateRange(range: { min: string; max: string } | null | undefined): string | null {
@@ -40,8 +41,14 @@ function dateVal(range: CollectionInfo['dateRange'], which: 'min' | 'max', fallb
 }
 
 export default function CollectionsPage() {
-  const [sortField, setSortField] = useState<SortField>('letters');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [sortField, setSortField] = useState<SortField>(() => {
+    const saved = loadCollectionsSort();
+    return (saved?.field as SortField) || 'letters';
+  });
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => {
+    const saved = loadCollectionsSort();
+    return (saved?.order as SortOrder) || 'desc';
+  });
   const [sortOpen, setSortOpen] = useState(false);
   const [sortPinned, setSortPinned] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
@@ -96,6 +103,11 @@ export default function CollectionsPage() {
   }, [sortOpen]);
 
   useEffect(() => () => clearSortCloseTimer(), []);
+
+  // Persist sort to localStorage
+  useEffect(() => {
+    saveCollectionsSort(sortField, sortOrder);
+  }, [sortField, sortOrder]);
 
   const { data, loading, error } = useAsync(async () => {
     const collections = await listCollections();

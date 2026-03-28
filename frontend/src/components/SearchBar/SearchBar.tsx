@@ -28,8 +28,6 @@ interface SearchBarProps {
 export interface SearchFilters {
   format?: LetterImageType[] | null;
   collection?: string | null;
-  person?: string | null;
-  personRole?: "any" | "sender" | "recipient" | null;
   sender?: string | null;
   recipient?: string | null;
   place?: string | null;
@@ -38,6 +36,7 @@ export interface SearchFilters {
   relationship?: string | null;
   year?: number | null;
   dateRange?: { start?: number; end?: number };
+  hasTranscript?: boolean | null;
   verified?: boolean | null;
   sort?: "relevance" | "createdAt" | "letterDate" | "sender" | "recipient" | "collection";
   sortOrder?: "asc" | "desc";
@@ -282,7 +281,6 @@ export default function SearchBar({
   const selectedFormats = filters.format || null;
   const hasAdvancedRefinementFilters = Boolean(
     (!hideCollectionFilter && filters.collection)
-      || filters.person
       || filters.sender
       || filters.recipient
       || filters.place
@@ -393,7 +391,6 @@ export default function SearchBar({
     query.trim()
       || selectedFormats?.length
       || (!hideCollectionFilter && filters.collection)
-      || filters.person
       || filters.sender
       || filters.recipient
       || filters.place
@@ -403,7 +400,8 @@ export default function SearchBar({
       || filters.year
       || filters.dateRange?.start
       || filters.dateRange?.end
-      || filters.verified !== undefined && filters.verified !== null,
+      || (filters.hasTranscript !== undefined && filters.hasTranscript !== null)
+      || (filters.verified !== undefined && filters.verified !== null),
   );
 
   const searchStatus = useMemo(() => {
@@ -439,13 +437,6 @@ export default function SearchBar({
         key: `collection-${filters.collection}`,
         label: `Collection: ${getCollectionLabel(filters.collection, facets)}`,
         onClear: () => updateFilter({ collection: null }),
-      });
-    }
-    if (filters.person) {
-      pills.push({
-        key: `person-${filters.person}`,
-        label: `Sender or recipient: ${filters.person}`,
-        onClear: () => updateFilter({ person: null, personRole: null }),
       });
     }
     if (filters.sender) {
@@ -506,6 +497,13 @@ export default function SearchBar({
           setEndYearInput("");
           updateFilter({ dateRange: undefined });
         },
+      });
+    }
+    if (filters.hasTranscript !== undefined && filters.hasTranscript !== null) {
+      pills.push({
+        key: "hasTranscript",
+        label: filters.hasTranscript ? "Has transcript" : "No transcript",
+        onClear: () => updateFilter({ hasTranscript: null }),
       });
     }
     if (filters.verified !== undefined && filters.verified !== null) {
@@ -658,16 +656,13 @@ export default function SearchBar({
     ),
     [facets.collections, filters.collection, hideCollectionFilter],
   );
-  const correspondentSuggestion = useMemo(
-    () => getBestSuggestion(
-      filters.person,
-      facets.correspondents.map((facet) => ({
-        value: facet.value,
-        display: facet.value,
-        count: facet.count,
-      })),
-    ),
-    [facets.correspondents, filters.person],
+  const transcriptChoiceOptions = useMemo<FilterChoiceOption[]>(
+    () => [
+      { value: "all", label: "All items" },
+      { value: "true", label: "Has transcript" },
+      { value: "false", label: "No transcript" },
+    ],
+    [],
   );
   const senderSuggestion = useMemo(
     () => getBestSuggestion(
@@ -746,7 +741,6 @@ export default function SearchBar({
   };
 
   const collectionFilterId = `${searchIdBase}-collection`;
-  const correspondentFilterId = `${searchIdBase}-person`;
   const senderFilterId = `${searchIdBase}-sender`;
   const recipientFilterId = `${searchIdBase}-recipient`;
   const placeFilterId = `${searchIdBase}-place`;
@@ -896,24 +890,6 @@ export default function SearchBar({
       )}
 
       <div className="filter-group">
-        <label className="filter-label" htmlFor={correspondentFilterId}>Sender or Recipient</label>
-        <input
-          id={correspondentFilterId}
-          type="text"
-          className="filter-input"
-          placeholder="Any sender or recipient"
-          value={filters.person || ""}
-          onChange={(event) => updateFilter({ person: event.target.value || null, personRole: null })}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || !correspondentSuggestion) return;
-            event.preventDefault();
-            updateFilter({ person: correspondentSuggestion.applyValue, personRole: null });
-          }}
-        />
-        <SuggestionHint suggestion={correspondentSuggestion} />
-      </div>
-
-      <div className="filter-group">
         <label className="filter-label" htmlFor={senderFilterId}>Sender</label>
         <input
           id={senderFilterId}
@@ -1049,6 +1025,22 @@ export default function SearchBar({
           open={openChoiceField === `${searchIdBase}-relationship`}
           onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-relationship` : null)}
           onChange={(value) => updateFilter({ relationship: value || null })}
+        />
+      </div>
+
+      <div className="filter-group">
+        <label className="filter-label" htmlFor={`${searchIdBase}-transcript`}>Transcript</label>
+        <FilterChoiceField
+          id={`${searchIdBase}-transcript`}
+          label="Transcript"
+          value={filters.hasTranscript === null || filters.hasTranscript === undefined ? "all" : filters.hasTranscript ? "true" : "false"}
+          placeholder="All items"
+          options={transcriptChoiceOptions}
+          open={openChoiceField === `${searchIdBase}-transcript`}
+          onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-transcript` : null)}
+          onChange={(value) => updateFilter({
+            hasTranscript: value === "all" ? null : value === "true",
+          })}
         />
       </div>
 

@@ -1088,8 +1088,11 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
   if (query.yearTo !== undefined) {
     baseScopedFilters.push(sql`SUBSTRING(mg."dateRaw", 1, 4)::int <= ${query.yearTo}`);
   }
+  if (query.hasTranscript !== undefined) {
+    baseScopedFilters.push(sql`pr."hasTranscript" = ${query.hasTranscript}`);
+  }
   if (query.verified !== undefined) {
-    baseScopedFilters.push(sql`pr."metadataVerified" = ${query.verified}`);
+    baseScopedFilters.push(sql`pr."transcriptVerified" = ${query.verified}`);
   }
 
   const formatFilter = query.format?.length
@@ -1166,6 +1169,8 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         l.location_written AS location,
         l.hook,
         (l.metadata_content_status = 'VERIFIED') AS "metadataVerified",
+        (l.transcript_status != 'EMPTY') AS "hasTranscript",
+        (l.transcript_status = 'VERIFIED' OR (l.transcript_status = 'EMPTY' AND l.extra_content_status = 'VERIFIED')) AS "transcriptVerified",
         c.collection_code AS "collectionCode",
         c.title AS "collectionTitle",
         l.created_at AS "createdAt"
@@ -1208,6 +1213,8 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         pr.location,
         pr.hook,
         pr."metadataVerified",
+        pr."hasTranscript",
+        pr."transcriptVerified",
         pr."collectionCode",
         pr."collectionTitle",
         pr."createdAt"

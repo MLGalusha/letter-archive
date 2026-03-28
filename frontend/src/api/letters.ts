@@ -34,8 +34,6 @@ export interface ArchiveSearchParams {
   collection?: string;
   search?: string;
   format?: LetterImageType[] | null;
-  person?: string | null;
-  personRole?: 'any' | 'sender' | 'recipient' | null;
   sender?: string | null;
   recipient?: string | null;
   place?: string | null;
@@ -45,6 +43,7 @@ export interface ArchiveSearchParams {
   year?: number | null;
   yearFrom?: number | null;
   yearTo?: number | null;
+  hasTranscript?: boolean | null;
   verified?: boolean | null;
   sort?: 'relevance' | 'createdAt' | 'letterDate' | 'sender' | 'recipient' | 'collection';
   sortOrder?: SortOrder;
@@ -165,8 +164,6 @@ export async function searchArchiveShelf(
     collection: params.collection,
     search: params.search,
     format: params.format?.length ? params.format : undefined,
-    person: params.person || undefined,
-    personRole: params.personRole || undefined,
     sender: params.sender || undefined,
     recipient: params.recipient || undefined,
     place: params.place || undefined,
@@ -176,6 +173,9 @@ export async function searchArchiveShelf(
     year: params.year || undefined,
     yearFrom: params.yearFrom || undefined,
     yearTo: params.yearTo || undefined,
+    hasTranscript: params.hasTranscript === null || params.hasTranscript === undefined
+      ? undefined
+      : params.hasTranscript ? 'true' : 'false',
     verified: params.verified === null || params.verified === undefined
       ? undefined
       : params.verified ? 'true' : 'false',

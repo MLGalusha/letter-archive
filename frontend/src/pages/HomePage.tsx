@@ -14,6 +14,7 @@ import {
 } from "../api/letters";
 import type { ArchiveShelfItem, LetterImage } from "../types/Letter";
 import { buildHomeSeo } from "../utils/seo";
+import { saveSearchState, loadSearchState } from "../utils/searchPersistence";
 import { EMPTY_DOCK, useHeaderDock } from "../contexts/HeaderDockContext";
 import "./HomePage.css";
 
@@ -79,31 +80,45 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { setDock } = useHeaderDock();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") || "");
-  const [filters, setFilters] = useState<SearchFilters>(() => ({
-    format: getInitialFormats(searchParams),
-    collection: searchParams.get("collection") || null,
-    person: searchParams.get("person") || null,
-    personRole: (searchParams.get("personRole") as SearchFilters["personRole"]) || null,
-    sender: searchParams.get("sender") || null,
-    recipient: searchParams.get("recipient") || null,
-    place: searchParams.get("place") || null,
-    topic: searchParams.get("topic") || null,
-    tone: searchParams.get("tone") || null,
-    relationship: searchParams.get("relationship") || null,
-    year: searchParams.get("year") ? Number(searchParams.get("year")) : null,
-    dateRange: searchParams.get("yearFrom") || searchParams.get("yearTo")
-      ? {
-          start: searchParams.get("yearFrom") ? Number(searchParams.get("yearFrom")) : undefined,
-          end: searchParams.get("yearTo") ? Number(searchParams.get("yearTo")) : undefined,
-        }
-      : undefined,
-    verified: searchParams.get("verified") === null
-      ? null
-      : searchParams.get("verified") === "true",
-    sort: (searchParams.get("sort") as SearchFilters["sort"]) || undefined,
-    sortOrder: (searchParams.get("sortOrder") as SearchFilters["sortOrder"]) || undefined,
-  }));
+  const [searchQuery, setSearchQuery] = useState(() => {
+    const urlQ = searchParams.get("q");
+    if (urlQ) return urlQ;
+    const saved = loadSearchState("home");
+    return saved?.query || "";
+  });
+  const [filters, setFilters] = useState<SearchFilters>(() => {
+    // If URL has any filter params, use those; otherwise restore from localStorage
+    const hasUrlFilters = searchParams.get("q") || searchParams.get("collection")
+      || searchParams.get("sender") || searchParams.get("recipient")
+      || searchParams.get("format") || searchParams.get("sort")
+      || searchParams.get("verified") || searchParams.get("hasTranscript");
+    if (!hasUrlFilters) {
+      const saved = loadSearchState("home");
+      if (saved?.filters) return saved.filters;
+    }
+    return {
+      format: getInitialFormats(searchParams),
+      collection: searchParams.get("collection") || null,
+      sender: searchParams.get("sender") || null,
+      recipient: searchParams.get("recipient") || null,
+      place: searchParams.get("place") || null,
+      topic: searchParams.get("topic") || null,
+      tone: searchParams.get("tone") || null,
+      relationship: searchParams.get("relationship") || null,
+      year: searchParams.get("year") ? Number(searchParams.get("year")) : null,
+      dateRange: searchParams.get("yearFrom") || searchParams.get("yearTo")
+        ? {
+            start: searchParams.get("yearFrom") ? Number(searchParams.get("yearFrom")) : undefined,
+            end: searchParams.get("yearTo") ? Number(searchParams.get("yearTo")) : undefined,
+          }
+        : undefined,
+      verified: searchParams.get("verified") === null
+        ? null
+        : searchParams.get("verified") === "true",
+      sort: (searchParams.get("sort") as SearchFilters["sort"]) || undefined,
+      sortOrder: (searchParams.get("sortOrder") as SearchFilters["sortOrder"]) || undefined,
+    };
+  });
   const [heroLetter, setHeroLetter] = useState<ArchiveShelfItem | null>(null);
   const [heroImages, setHeroImages] = useState<LetterImage[]>([]);
   const [heroPageIndex, setHeroPageIndex] = useState(0);
@@ -175,10 +190,6 @@ export default function HomePage() {
       filters.format.forEach((format) => nextParams.append("format", format));
     }
     if (filters.collection) nextParams.set("collection", filters.collection);
-    if (filters.person) nextParams.set("person", filters.person);
-    if (filters.person && filters.personRole && filters.personRole !== "any") {
-      nextParams.set("personRole", filters.personRole);
-    }
     if (filters.sender) nextParams.set("sender", filters.sender);
     if (filters.recipient) nextParams.set("recipient", filters.recipient);
     if (filters.place) nextParams.set("place", filters.place);
@@ -196,6 +207,9 @@ export default function HomePage() {
       nextParams.set("sortOrder", filters.sortOrder);
     }
 
+    // Persist to localStorage for cross-navigation restoration
+    saveSearchState("home", searchQuery, filters);
+
     if (nextParams.toString() === searchParams.toString()) {
       return;
     }
@@ -211,10 +225,6 @@ export default function HomePage() {
       search: searchQuery.trim() || undefined,
       format: filters.format?.length ? filters.format : undefined,
       collection: filters.collection || undefined,
-      person: filters.person || undefined,
-      personRole: filters.person && filters.personRole && filters.personRole !== "any"
-        ? filters.personRole
-        : undefined,
       sender: filters.sender || undefined,
       recipient: filters.recipient || undefined,
       place: filters.place || undefined,
@@ -224,6 +234,7 @@ export default function HomePage() {
       year: filters.year || undefined,
       yearFrom: filters.dateRange?.start,
       yearTo: filters.dateRange?.end,
+      hasTranscript: filters.hasTranscript,
       verified: filters.verified,
       sort: filters.sort || undefined,
       sortOrder: filters.sortOrder || undefined,
@@ -236,7 +247,6 @@ export default function HomePage() {
     const requestVersion = ++requestVersionRef.current;
     const delay = searchQuery.trim()
       || filters.collection?.trim()
-      || filters.person?.trim()
       || filters.sender?.trim()
       || filters.recipient?.trim()
       || filters.place?.trim()

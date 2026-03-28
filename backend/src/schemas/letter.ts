@@ -65,6 +65,10 @@ export const archiveSearchQuerySchema = z.object({
   year: z.coerce.number().int().min(0).max(9999).optional(),
   yearFrom: z.coerce.number().int().min(0).max(9999).optional(),
   yearTo: z.coerce.number().int().min(0).max(9999).optional(),
+  hasTranscript: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
   verified: z
     .enum(['true', 'false'])
     .transform((value) => value === 'true')

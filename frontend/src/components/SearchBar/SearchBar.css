@@ -126,8 +126,9 @@
 .filter-input:focus,
 .filter-select:focus {
   outline: none;
-  border-color: rgba(31, 109, 122, 0.45);
-  box-shadow: 0 0 0 4px rgba(31, 109, 122, 0.1);
+  border-width: 2px;
+  border-color: rgb(31, 109, 122);
+  box-shadow: none;
   background: rgba(255, 255, 255, 0.98);
 }
 
@@ -192,7 +193,7 @@
 .clear-filters:hover,
 .search-facet-chip:hover,
 .radio-label:hover {
-  border-color: rgba(31, 109, 122, 0.28);
+  border-color: rgb(31, 109, 122);
   background: rgba(255, 255, 255, 0.94);
   color: var(--text);
 }
@@ -200,13 +201,14 @@
 .search-sort-chip.active,
 .search-facet-chip.active,
 .radio-label.active {
-  background: rgba(223, 241, 245, 0.9);
-  border-color: rgba(31, 109, 122, 0.3);
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgb(31, 109, 122);
+  border-width: 2px;
   color: var(--text);
 }
 
 .clear-filters {
-  background: rgba(223, 241, 245, 0.72);
+  background: rgba(255, 255, 255, 0.8);
   color: var(--text);
 }
 
@@ -384,9 +386,9 @@
 
 .search-active-pill {
   appearance: none;
-  border: 1px solid rgba(31, 109, 122, 0.24);
+  border: 2px solid rgb(31, 109, 122);
   border-radius: 999px;
-  background: rgba(223, 241, 245, 0.82);
+  background: rgba(255, 255, 255, 0.9);
   color: var(--text);
   cursor: pointer;
   padding: 0.45rem 0.74rem;
@@ -574,7 +576,7 @@
 }
 
 .search-sort-option--active:hover {
-  background: rgba(223, 241, 245, 0.5);
+  background: rgba(255, 255, 255, 0.6);
   color: var(--accent-strong);
 }
 
@@ -715,13 +717,14 @@
 }
 
 .filter-choice-option:hover {
-  border-color: rgba(31, 109, 122, 0.24);
-  background: rgba(223, 241, 245, 0.34);
+  border-color: rgb(31, 109, 122);
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .filter-choice-option.active {
-  border-color: rgba(31, 109, 122, 0.3);
-  background: rgba(223, 241, 245, 0.82);
+  border-color: rgb(31, 109, 122);
+  border-width: 2px;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .filter-choice-count {

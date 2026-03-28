@@ -3,8 +3,28 @@ import { Link, useNavigate } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { listCollections, type CollectionInfo } from '../api/collections';
 import Footer from '../components/Footer/Footer';
+import BackToTop from '../components/BackToTop';
 import { useAsync } from '../hooks/useAsync';
 import './CollectionsPage.css';
+
+function formatDateRange(range: { min: string; max: string } | null | undefined): string | null {
+  if (!range) return null;
+  const fmt = (raw: string) => {
+    const digits = raw.replace(/[^0-9]/g, '').slice(0, 8);
+    if (digits.length < 6) return null;
+    const year = Number(digits.slice(0, 4));
+    const month = Number(digits.slice(4, 6)) - 1;
+    if (month < 0 || month > 11 || year < 1700) return null;
+    const hasDay = digits.length >= 8 && Number(digits.slice(6, 8)) > 0;
+    const d = new Date(year, month, hasDay ? Number(digits.slice(6, 8)) : 1);
+    return { year, month, label: d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) };
+  };
+  const start = fmt(range.min);
+  const end = fmt(range.max);
+  if (!start) return null;
+  if (!end || (start.year === end.year && start.month === end.month)) return start.label;
+  return `${start.label} \u2014 ${end.label}`;
+}
 
 export default function CollectionsPage() {
   const navigate = useNavigate();
@@ -12,7 +32,15 @@ export default function CollectionsPage() {
   const [sortMode, setSortMode] = useState<'letters-desc' | 'letters-asc' | 'title-asc'>('letters-desc');
   const { data, loading, error } = useAsync(async () => {
     const collections = await listCollections();
-    return collections.filter((collection) => (collection.letterCount || 0) > 0);
+    return collections
+      .filter((collection) => (collection.letterCount || 0) > 0)
+      .map((c) => {
+        // TODO: remove mock hook for collection 009
+        if (c.collectionCode === '009' && !c.hook) {
+          return { ...c, hook: 'A newlywed couple navigates early marriage through letters — homesickness, daily routines, and the quiet ache of separation.' };
+        }
+        return c;
+      });
   }, []);
   const collections: CollectionInfo[] = data ?? [];
 
@@ -27,7 +55,10 @@ export default function CollectionsPage() {
       return (
         (collection.title || '').toLowerCase().includes(query) ||
         collection.collectionCode.toLowerCase().includes(query) ||
-        (collection.description || '').toLowerCase().includes(query)
+        (collection.description || '').toLowerCase().includes(query) ||
+        (collection.hook || '').toLowerCase().includes(query) ||
+        (collection.primarySender || '').toLowerCase().includes(query) ||
+        (collection.primaryRecipient || '').toLowerCase().includes(query)
       );
     });
 
@@ -103,25 +134,46 @@ export default function CollectionsPage() {
         {error && <p className="error-message">{error}</p>}
 
         <div className="public-collections-grid">
-          {visibleCollections.map((collection) => (
-            <Link
-              key={collection.id}
-              to={`/collections/${collection.collectionCode}`}
-              className="public-collection-card"
-            >
-              <div className="collection-card-top">
-                <span className="collection-card-code">{collection.collectionCode}</span>
-                <span className="collection-card-count">
-                  {collection.letterCount} letter{collection.letterCount !== 1 ? 's' : ''}
-                </span>
-              </div>
-              <h3>{collection.title || `Collection ${collection.collectionCode}`}</h3>
-              {collection.description && (
-                <p className="collection-card-description">{collection.description}</p>
-              )}
-              <span className="collection-card-cta">Read the letters &rarr;</span>
-            </Link>
-          ))}
+          {visibleCollections.map((collection) => {
+            const dateLabel = formatDateRange(collection.dateRange);
+            const teaser = collection.hook || collection.description;
+            const hasPeople = collection.primarySender || collection.primaryRecipient;
+
+            return (
+              <Link
+                key={collection.id}
+                to={`/collections/${collection.collectionCode}`}
+                className="public-collection-card"
+              >
+                <div className="collection-card-top">
+                  <h3>{collection.title || `Collection ${collection.collectionCode}`}</h3>
+                  <span className="collection-card-count">
+                    {collection.letterCount} letter{collection.letterCount !== 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                {hasPeople && (
+                  <p className="collection-card-people">
+                    {collection.primarySender && collection.primaryRecipient
+                      ? <>{collection.primarySender} <span className="people-arrow">&rarr;</span> {collection.primaryRecipient}</>
+                      : collection.primarySender || collection.primaryRecipient}
+                  </p>
+                )}
+
+                {dateLabel && (
+                  <div className="collection-card-meta">
+                    <span>{dateLabel}</span>
+                  </div>
+                )}
+
+                {teaser && (
+                  <p className="collection-card-teaser">{teaser}</p>
+                )}
+
+                <span className="collection-card-cta">Read the letters &rarr;</span>
+              </Link>
+            );
+          })}
         </div>
 
         {!loading && visibleCollections.length === 0 && !error && (
@@ -132,6 +184,7 @@ export default function CollectionsPage() {
         )}
       </div>
       <Footer />
+      <BackToTop />
     </div>
   );
 }

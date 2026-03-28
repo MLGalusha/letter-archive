@@ -12,6 +12,10 @@ export interface CollectionInfo {
   description: string | null;
   createdAt: string;
   letterCount?: number;
+  hook?: string | null;
+  dateRange?: { min: string; max: string } | null;
+  primarySender?: string | null;
+  primaryRecipient?: string | null;
 }
 
 export interface CollectionWithLetters extends CollectionInfo {
@@ -31,6 +35,9 @@ export interface AdminCollectionInfo extends CollectionInfo {
   verifiedCount: number;      // Letters with both transcript AND metadata verified
   minDate: string | null;     // Earliest dateRaw (YYYYMMDD format)
   maxDate: string | null;     // Latest dateRaw (YYYYMMDD format)
+  // Profile
+  profileStatus?: ContentStatus;
+  hook?: string | null;
 }
 
 /**
@@ -247,6 +254,7 @@ export interface KeyPerson {
   id: string;
   name: string;
   biography: string | null;
+  hook: string | null;
   letterCount: number;
   roles: { sender: number; recipient: number };
 }
@@ -261,6 +269,7 @@ export type ContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
 
 export interface CollectionProfile {
   // AI-generated
+  hook: string | null;
   narrative: string | null;
   profileStatus: ContentStatus;
   startHere: { letterId: string; reason: string; hook: string | null; date: string | null } | null;
@@ -279,6 +288,7 @@ export interface CollectionProfile {
 }
 
 export interface GenerateProfileResult {
+  hook: string;
   narrative: string;
   startHereLetterId: string | null;
   startHereReason: string;
@@ -303,6 +313,7 @@ export async function generateCollectionProfile(code: string, force = false): Pr
 export async function updateCollectionProfile(
   code: string,
   data: {
+    hook?: string | null;
     profileNarrative?: string;
     profileStartHereLetterId?: string | null;
     profileStartHereReason?: string;

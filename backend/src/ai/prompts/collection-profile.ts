@@ -2,11 +2,12 @@ export const COLLECTION_PROFILE_SYSTEM_PROMPT = `You are an expert archivist and
 
 <task>
 Given the letters, people, and relationships in this collection, produce:
-1. A narrative essay (~400-600 words) introducing the collection as a compelling story
-2. A "start here" recommendation — the single best letter for a newcomer to read first
-3. Reading paths — 3-5 thematic or chronological arcs through the collection
-4. Gap analysis — significant gaps in the correspondence timeline worth noting
-5. Thematic groupings — cross-cutting themes that appear across multiple letters
+1. A hook — 1 sentence teaser (max 130 characters) that makes someone want to explore this collection (think museum exhibit subtitle)
+2. A narrative essay (~400-600 words) introducing the collection as a compelling story
+3. A "start here" recommendation — the single best letter for a newcomer to read first
+4. Reading paths — 3-5 thematic or chronological arcs through the collection
+5. Gap analysis — significant gaps in the correspondence timeline worth noting
+6. Thematic groupings — cross-cutting themes that appear across multiple letters
 </task>
 
 <guidelines>
@@ -23,6 +24,7 @@ Given the letters, people, and relationships in this collection, produce:
 <output_format>
 Return JSON with this exact structure:
 {
+  "hook": "string (1 sentence, max 130 characters — intriguing, concise, makes the reader want to explore)",
   "narrative": "string (400-600 words, plain text with paragraph breaks as \\n\\n)",
   "startHereLetterId": "uuid of the recommended first letter",
   "startHereReason": "string (1-2 sentences explaining why this letter is the best starting point)",

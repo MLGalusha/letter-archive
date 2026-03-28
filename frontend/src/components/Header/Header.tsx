@@ -44,8 +44,12 @@ export default function Header() {
           <Link to="/" className="page-selector" onClick={() => setMenuOpen(false)}>
             Home
           </Link>
-          <Link to="/collections" className="page-selector" onClick={() => setMenuOpen(false)}>
-            Collections
+          <Link
+            to={dock.collectionsLink?.to ?? "/collections"}
+            className="page-selector"
+            onClick={() => setMenuOpen(false)}
+          >
+            {dock.collectionsLink?.label ?? "Collections"}
           </Link>
           <Link to="/blog" className="page-selector" onClick={() => setMenuOpen(false)}>
             Blog

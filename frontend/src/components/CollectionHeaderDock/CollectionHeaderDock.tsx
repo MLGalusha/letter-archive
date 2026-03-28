@@ -1,0 +1,83 @@
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { listCollections, type CollectionInfo } from "../../api/collections";
+import HeaderScrubber from "../HeaderScrubber/HeaderScrubber";
+
+// Session-level cache for collections list
+let cachedCollections: CollectionInfo[] | null = null;
+let pendingFetch: Promise<CollectionInfo[]> | null = null;
+
+function fetchAllCollections(): Promise<CollectionInfo[]> {
+  if (cachedCollections) return Promise.resolve(cachedCollections);
+  if (pendingFetch) return pendingFetch;
+  pendingFetch = listCollections().then((result) => {
+    result.sort((a, b) => {
+      const aNum = parseInt(a.collectionCode, 10);
+      const bNum = parseInt(b.collectionCode, 10);
+      if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+      return a.collectionCode.localeCompare(b.collectionCode);
+    });
+    cachedCollections = result;
+    pendingFetch = null;
+    return result;
+  });
+  return pendingFetch;
+}
+
+interface CollectionHeaderDockProps {
+  collectionCode: string;
+}
+
+export default function CollectionHeaderDock({ collectionCode }: CollectionHeaderDockProps) {
+  const navigate = useNavigate();
+  const [collections, setCollections] = useState<CollectionInfo[] | null>(cachedCollections);
+
+  useEffect(() => {
+    fetchAllCollections().then(setCollections);
+  }, []);
+
+  const currentIdx = useMemo(
+    () => (collections ? collections.findIndex((c) => c.collectionCode === collectionCode) : -1),
+    [collections, collectionCode],
+  );
+
+  const total = collections?.length ?? 0;
+  const pos = currentIdx + 1;
+
+  const handleNavigate = useCallback(
+    (targetPos: number) => {
+      if (!collections) return;
+      const targetIdx = targetPos - 1;
+      if (targetIdx >= 0 && targetIdx < collections.length) {
+        navigate(`/collections/${collections[targetIdx].collectionCode}`);
+      }
+    },
+    [collections, navigate],
+  );
+
+  const handlePrev = useCallback(() => {
+    if (!collections || total <= 1) return;
+    const prevIdx = currentIdx === 0 ? total - 1 : currentIdx - 1;
+    navigate(`/collections/${collections[prevIdx].collectionCode}`);
+  }, [collections, currentIdx, total, navigate]);
+
+  const handleNext = useCallback(() => {
+    if (!collections || total <= 1) return;
+    const nextIdx = currentIdx === total - 1 ? 0 : currentIdx + 1;
+    navigate(`/collections/${collections[nextIdx].collectionCode}`);
+  }, [collections, currentIdx, total, navigate]);
+
+  if (!collections || total <= 1 || currentIdx === -1) return null;
+
+  return (
+    <HeaderScrubber
+      position={pos}
+      total={total}
+      onNavigate={handleNavigate}
+      onPrev={handlePrev}
+      onNext={handleNext}
+      wrap
+      ariaLabel={`Collection ${pos} of ${total}`}
+    />
+  );
+}

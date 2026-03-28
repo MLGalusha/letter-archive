@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { listCollections, type CollectionInfo } from '../api/collections';
@@ -43,18 +43,59 @@ export default function CollectionsPage() {
   const [sortField, setSortField] = useState<SortField>('letters');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [sortOpen, setSortOpen] = useState(false);
+  const [sortPinned, setSortPinned] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
+  const sortCloseTimerRef = useRef<number | null>(null);
 
-  const toggleSort = useCallback(() => setSortOpen((o) => !o), []);
+  const clearSortCloseTimer = () => {
+    if (sortCloseTimerRef.current !== null) {
+      window.clearTimeout(sortCloseTimerRef.current);
+      sortCloseTimerRef.current = null;
+    }
+  };
+
+  const openSort = () => {
+    clearSortCloseTimer();
+    setSortOpen(true);
+  };
+
+  const closeSort = () => {
+    clearSortCloseTimer();
+    setSortOpen(false);
+    setSortPinned(false);
+  };
+
+  const scheduleSortClose = () => {
+    clearSortCloseTimer();
+    if (sortPinned) return;
+    sortCloseTimerRef.current = window.setTimeout(() => {
+      setSortOpen(false);
+      sortCloseTimerRef.current = null;
+    }, 1000);
+  };
+
+  const handleSortClick = () => {
+    if (!sortOpen) {
+      openSort();
+      setSortPinned(true);
+    } else if (sortPinned) {
+      setSortPinned(false);
+    } else {
+      setSortPinned(true);
+      clearSortCloseTimer();
+    }
+  };
 
   useEffect(() => {
     if (!sortOpen) return;
     const close = (e: MouseEvent) => {
-      if (sortRef.current && !sortRef.current.contains(e.target as Node)) setSortOpen(false);
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) closeSort();
     };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [sortOpen]);
+
+  useEffect(() => () => clearSortCloseTimer(), []);
 
   const { data, loading, error } = useAsync(async () => {
     const collections = await listCollections();
@@ -118,8 +159,10 @@ export default function CollectionsPage() {
             <div className="collections-sort" ref={sortRef}>
               <button
                 type="button"
-                className="sort-trigger"
-                onClick={toggleSort}
+                className={`sort-trigger${sortPinned ? ' sort-trigger--pinned' : ''}`}
+                onClick={handleSortClick}
+                onMouseEnter={openSort}
+                onMouseLeave={scheduleSortClose}
                 aria-expanded={sortOpen}
                 aria-label="Sort collections"
               >
@@ -131,33 +174,35 @@ export default function CollectionsPage() {
                   </svg>
                 </span>
               </button>
-              {sortOpen && (
-                <ul className="sort-menu" role="listbox">
-                  {SORT_OPTIONS.map((opt) => {
-                    const isActive = sortField === opt.field;
-                    return (
-                      <li
-                        key={opt.field}
-                        role="option"
-                        aria-selected={isActive}
-                        className={`sort-option${isActive ? ' sort-option--active' : ''}`}
-                        onClick={() => {
-                          if (isActive) {
-                            setSortOrder((o) => o === 'asc' ? 'desc' : 'asc');
-                          } else {
-                            setSortField(opt.field);
-                            setSortOrder(opt.defaultOrder);
-                            setSortOpen(false);
-                          }
-                        }}
-                      >
-                        <span>{opt.label}</span>
-                        {isActive && <span className="sort-arrow">{sortOrder === 'asc' ? '\u2191' : '\u2193'}</span>}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
+              <ul
+                className={`sort-menu${sortPinned ? ' sort-menu--pinned' : ''}${sortOpen ? '' : ' sort-menu--hidden'}`}
+                role="listbox"
+                onMouseEnter={clearSortCloseTimer}
+                onMouseLeave={() => { if (!sortPinned) closeSort(); }}
+              >
+                {SORT_OPTIONS.map((opt) => {
+                  const isActive = sortField === opt.field;
+                  return (
+                    <li
+                      key={opt.field}
+                      role="option"
+                      aria-selected={isActive}
+                      className={`sort-option${isActive ? ' sort-option--active' : ''}`}
+                      onClick={() => {
+                        if (isActive) {
+                          setSortOrder((o) => o === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortField(opt.field);
+                          setSortOrder(opt.defaultOrder);
+                        }
+                      }}
+                    >
+                      <span>{opt.label}</span>
+                      {isActive && <span className="sort-arrow">{sortOrder === 'asc' ? '\u2191' : '\u2193'}</span>}
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           </div>
         </div>

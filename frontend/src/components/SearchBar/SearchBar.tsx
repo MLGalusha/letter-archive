@@ -541,9 +541,7 @@ export default function SearchBar({
   const sortDropdownRef = useRef<HTMLDivElement>(null);
   const sortDropdownOpen = sortOpenProp ?? internalSortOpen;
   const setSortDropdownOpen = (next: boolean) => {
-    if (sortOpenProp === undefined) {
-      setInternalSortOpen(next);
-    }
+    setInternalSortOpen(next);
     if (!next) {
       setSortPinned(false);
     }
@@ -841,10 +839,10 @@ export default function SearchBar({
         </svg>
         {showSortArrow && <span className="search-sort-arrow">{sortArrow}</span>}
       </button>
-      {sortDropdownOpen && (
-        <ul
-          className={`search-sort-menu${sortPinned ? " is-pinned" : ""}`}
+      <ul
+          className={`search-sort-menu${sortPinned ? " is-pinned" : ""}${sortDropdownOpen ? "" : " search-sort-menu--hidden"}`}
           role="listbox"
+          onMouseEnter={clearSortCloseTimer}
           onMouseLeave={() => { if (!sortPinned) closeSortNow(); }}
         >
           {visibleSortOptions.map((opt) => {
@@ -860,8 +858,6 @@ export default function SearchBar({
                     updateFilter({ sortOrder: resolvedSort.sortOrder === "asc" ? "desc" : "asc" });
                   } else {
                     updateFilter({ sort: opt.sort, sortOrder: opt.defaultOrder });
-                    setSortDropdownOpen(false);
-                    setSortPinned(false);
                   }
                 }}
               >
@@ -873,7 +869,6 @@ export default function SearchBar({
             );
           })}
         </ul>
-      )}
     </div>
   );
 
@@ -1128,6 +1123,7 @@ export default function SearchBar({
             {showFilters && (
               <div
                 className={`search-compact-flyout search-refine-flyout${filtersPinned ? " is-pinned" : ""}`}
+                onMouseEnter={clearRefineCloseTimer}
                 onMouseLeave={() => { if (!filtersPinned) closeFilters(); }}
               >
                 <div className="search-compact-flyout-header">
@@ -1237,6 +1233,7 @@ export default function SearchBar({
       {showFilters && (
         <div
           className={`search-full-flyout search-refine-flyout${filtersPinned ? " is-pinned" : ""}`}
+          onMouseEnter={clearRefineCloseTimer}
           onMouseLeave={() => { if (!filtersPinned) closeFilters(); }}
         >
           <div className="search-compact-flyout-header">

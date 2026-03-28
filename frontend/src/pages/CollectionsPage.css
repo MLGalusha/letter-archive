@@ -111,9 +111,14 @@
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.sort-trigger:hover {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(217, 207, 191, 1);
+.sort-trigger:hover,
+.sort-trigger[aria-expanded="true"] {
+  border-color: rgb(31, 109, 122);
+}
+
+.sort-trigger--pinned {
+  border-width: 2px;
+  border-color: rgb(31, 109, 122);
 }
 
 .sort-chevron {
@@ -134,10 +139,19 @@
   padding: 0.35rem;
   list-style: none;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 250, 242, 0.98));
-  border: 1px solid rgba(217, 207, 191, 0.95);
+  border: 1px solid rgb(31, 109, 122);
   border-radius: 14px;
   box-shadow: 0 12px 32px rgba(29, 26, 20, 0.1);
   z-index: 20;
+}
+
+.sort-menu--hidden {
+  display: none;
+}
+
+.sort-menu--pinned {
+  border-width: 2px;
+  box-shadow: 0 30px 70px rgba(29, 26, 20, 0.18);
 }
 
 .sort-option {

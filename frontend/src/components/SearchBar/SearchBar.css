@@ -543,6 +543,10 @@
 }
 
 
+.search-sort-menu--hidden {
+  display: none;
+}
+
 .search-sort-menu.is-pinned {
   border-width: 2px;
   box-shadow: 0 30px 70px rgba(29, 26, 20, 0.18);

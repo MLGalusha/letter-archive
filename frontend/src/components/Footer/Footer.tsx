@@ -5,26 +5,50 @@ export default function Footer() {
   return (
     <footer className="footer">
       <div className="footer-inner">
-        <div className="footer-lead">
-          <p className="footer-kicker">Letter Archive</p>
-          <h3 className="footer-title">Personal correspondence, preserved with editorial care.</h3>
-          <p className="footer-tagline">
-            A reading room for letters, collections, and the quiet details history usually misses.
-          </p>
+        <div className="footer-top">
+          <div className="footer-lead">
+            <h3 className="footer-headline">
+              Every letter was once folded, sealed, and sent to someone who mattered.
+            </h3>
+            <p className="footer-sub">
+              This archive preserves personal correspondence that might otherwise
+              be forgotten — the ordinary language of people separated by
+              distance, war, work, or simply the shape of daily life.
+            </p>
+          </div>
+
+          <div className="footer-explore">
+            <span className="footer-explore-label">Start exploring</span>
+            <div className="footer-explore-links">
+              <Link to="/collections" className="footer-explore-link">
+                <span className="footer-explore-title">Collections</span>
+                <span className="footer-explore-desc">Browse letter bundles by family, era, or theme</span>
+              </Link>
+              <Link to="/blog" className="footer-explore-link">
+                <span className="footer-explore-title">The Journal</span>
+                <span className="footer-explore-desc">Behind-the-scenes notes on the archive</span>
+              </Link>
+              <Link to="/about" className="footer-explore-link">
+                <span className="footer-explore-title">About</span>
+                <span className="footer-explore-desc">How this project works and why it exists</span>
+              </Link>
+            </div>
+          </div>
+
+          <div className="footer-support">
+            <span className="footer-support-heading">Help build the archive</span>
+            <p className="footer-support-desc">
+              Donate family letters, help transcribe and verify pages, or contribute financially — every form of support grows the collection.
+            </p>
+            <Link to="/support" className="footer-support-cta">Get involved &rarr;</Link>
+          </div>
         </div>
-        <p className="footer-note">
-          Browse the archive, follow a collection, or read the project journal.
-        </p>
-        <nav className="footer-nav" aria-label="Footer">
-          <Link to="/">Home</Link>
-          <Link to="/collections">Collections</Link>
-          <Link to="/blog">Blog</Link>
-          <Link to="/about">About</Link>
-          <Link to="/support">Support</Link>
-        </nav>
-        <p className="footer-copyright">
-          &copy; {new Date().getFullYear()} Letter Archive
-        </p>
+
+        <div className="footer-bottom">
+          <span className="footer-brand">Letter Archive</span>
+          <span className="footer-dot">&middot;</span>
+          <span className="footer-copy">&copy; {new Date().getFullYear()}</span>
+        </div>
       </div>
     </footer>
   );

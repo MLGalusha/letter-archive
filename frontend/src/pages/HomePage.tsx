@@ -8,10 +8,11 @@ import BackToTop from "../components/BackToTop";
 import { getImageUrl, listBlogPosts, type BlogPost } from "../api/client";
 import {
   getArchiveShelfItems,
+  getLetterById,
   searchArchiveShelf,
   type ArchiveSearchResponse,
 } from "../api/letters";
-import type { ArchiveShelfItem } from "../types/Letter";
+import type { ArchiveShelfItem, LetterImage } from "../types/Letter";
 import { buildHomeSeo } from "../utils/seo";
 import { EMPTY_DOCK, useHeaderDock } from "../contexts/HeaderDockContext";
 import "./HomePage.css";
@@ -104,6 +105,8 @@ export default function HomePage() {
     sortOrder: (searchParams.get("sortOrder") as SearchFilters["sortOrder"]) || undefined,
   }));
   const [heroLetter, setHeroLetter] = useState<ArchiveShelfItem | null>(null);
+  const [heroImages, setHeroImages] = useState<LetterImage[]>([]);
+  const [heroPageIndex, setHeroPageIndex] = useState(0);
   const [latestBlogPost, setLatestBlogPost] = useState<BlogPost | null>(null);
   const [archiveResults, setArchiveResults] = useState<ArchiveSearchResponse>({
     letters: [],
@@ -150,7 +153,14 @@ export default function HomePage() {
     ]).then(([blogData, heroData]) => {
       if (cancelled) return;
       if (blogData.posts.length > 0) setLatestBlogPost(blogData.posts[0]);
-      setHeroLetter(pickHeroLetter(heroData?.letters || []));
+      const picked = pickHeroLetter(heroData?.letters || []);
+      setHeroLetter(picked);
+      if (picked) {
+        getLetterById(picked.id).then((full) => {
+          if (cancelled) return;
+          setHeroImages(full.images || []);
+        }).catch(() => {});
+      }
     });
 
     return () => {
@@ -433,16 +443,29 @@ export default function HomePage() {
             </Link>
           </div>
         </div>
-        {heroLetter ? (
-          <Link
-            to={`/letter/${heroLetter.id}`}
+        {heroLetter ? (() => {
+          const currentImage = heroImages[heroPageIndex] || null;
+          const heroSrc = currentImage?.imageUrl
+            ? getImageUrl(currentImage.imageUrl, { width: 1200 })
+            : heroLetter.imageUrl
+              ? getImageUrl(heroLetter.imageUrl, { width: 1200 })
+              : null;
+          const hasMultiplePages = heroImages.length > 1;
+          return (<button
+            type="button"
             className={`letter-card home-hero-feature-card letter-card--${heroLetter.imageType}`}
             aria-label={heroAriaLabel}
+            onClick={() => {
+              const params = new URLSearchParams();
+              params.set('from', 'highlight');
+              if (currentImage) params.set('image', currentImage.id);
+              navigate(`/letter/${heroLetter.id}?${params.toString()}`);
+            }}
           >
-            {heroLetter.imageUrl ? (
+            {heroSrc ? (
               <img
                 className="letter-card-image"
-                src={getImageUrl(heroLetter.imageUrl, { width: 1200 })}
+                src={heroSrc}
                 alt=""
                 loading="eager"
                 fetchPriority="high"
@@ -454,15 +477,36 @@ export default function HomePage() {
               </div>
             )}
             <div className="letter-card-overlay" />
-            <div className="home-hero-feature-label">Featured Letter · Collection 009</div>
-            {heroLetter.primaryChip && <div className="letter-card-page-count">{heroLetter.primaryChip}</div>}
+            <div className="home-hero-feature-label">
+              <span className="home-hero-feature-title">Featured Letter</span>
+              <span className="home-hero-feature-collection">Collection {heroLetter.collectionCode || '009'}</span>
+            </div>
+            {hasMultiplePages && (
+              <span className="home-hero-page-counter">
+                {heroPageIndex + 1}/{heroImages.length}
+              </span>
+            )}
             <div className="letter-card-content">
               {heroPeopleLine && <div className="letter-card-meta">{heroPeopleLine}</div>}
               {heroDate && <div className="letter-card-date">{heroDate}</div>}
               {heroLetter.hook && <p className="letter-hook">{heroLetter.hook}</p>}
             </div>
-          </Link>
-        ) : (
+            {hasMultiplePages && (
+              <>
+                <div
+                  className="home-hero-zone home-hero-zone--prev"
+                  onClick={(e) => { e.stopPropagation(); setHeroPageIndex((i) => (i === 0 ? heroImages.length - 1 : i - 1)); }}
+                  aria-label="Previous page"
+                />
+                <div
+                  className="home-hero-zone home-hero-zone--next"
+                  onClick={(e) => { e.stopPropagation(); setHeroPageIndex((i) => (i === heroImages.length - 1 ? 0 : i + 1)); }}
+                  aria-label="Next page"
+                />
+              </>
+            )}
+          </button>);
+        })() : (
           <div className="home-hero-feature-card home-hero-feature-card--placeholder">
             <span className="home-hero-feature-placeholder-label">Featured Letter</span>
             <p>Loading a featured letter from collection 009...</p>

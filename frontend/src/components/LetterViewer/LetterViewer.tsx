@@ -109,12 +109,14 @@ export default function LetterViewer({
 
   const [currentImageIndex, setCurrentImageIndex] = useState(initialIndex);
 
-  // Initialize scale and position from localStorage synchronously to prevent flash
+  // Initialize scale and position — lightbox always starts at 1x, panel restores from localStorage
   const [scale, setScale] = useState(() => {
+    if (variant === "lightbox") return 1;
     const initial = getInitialStateForLetter(letterId, displayImages, 0);
     return initial.scale;
   });
   const [position, setPosition] = useState(() => {
+    if (variant === "lightbox") return { x: 0, y: 0 };
     const initial = getInitialStateForLetter(letterId, displayImages, 0);
     return initial.position;
   });
@@ -208,8 +210,9 @@ export default function LetterViewer({
   }, [letterId]);
 
   // Load state when changing images within the same letter
+  // Lightbox always resets to 1x; panel restores from localStorage
   useEffect(() => {
-    if (!letterId) {
+    if (!letterId || variant === "lightbox") {
       setScale(1);
       setPosition({ x: 0, y: 0 });
       return;

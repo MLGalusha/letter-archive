@@ -529,9 +529,9 @@
 }
 
 .page-thumb.verified .page-thumb-label {
-  color: #2a8a99;
-  background: rgba(42, 138, 153, 0.15);
-  border: 1px solid #2a8a99;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-strong);
   border-top: none;
   bottom: 0;
 }
@@ -541,9 +541,9 @@
 }
 
 .page-thumb.unverified .page-thumb-label {
-  color: #c96a3a;
-  background: rgba(201, 106, 58, 0.15);
-  border: 1px solid #c96a3a;
+  color: #b5572a;
+  background: #fce8df;
+  border: 1px solid #b5572a;
   border-top: none;
   bottom: 0;
 }
@@ -606,6 +606,16 @@
 .letter-supporting-section {
   grid-column: wide;
   margin-top: 2rem;
+  border-left: 1px solid transparent;
+  padding-left: 1rem;
+}
+
+.letter-supporting-section.transcript-verified {
+  border-left-color: rgba(42, 138, 153, 0.45);
+}
+
+.letter-supporting-section.transcript-unverified {
+  border-left-color: rgba(201, 106, 58, 0.45);
 }
 
 .supporting-with-thumb {
@@ -794,11 +804,10 @@
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(15, 12, 10, 0.92);
+  background: rgba(10, 10, 10, 0.96);
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
+  align-items: stretch;
+  justify-content: stretch;
 }
 
 .viewer-modal {
@@ -817,26 +826,29 @@
 
 .viewer-close {
   position: absolute;
-  top: 0.8rem;
-  right: 0.8rem;
+  top: 0.75rem;
+  right: 0.75rem;
   z-index: 10;
   appearance: none;
-  border: 1px solid rgba(217, 207, 191, 0.95);
-  border-radius: 999px;
-  background: rgba(255, 250, 242, 0.92);
-  color: var(--text);
-  font-size: 1.3rem;
-  width: 2.5rem;
-  height: 2.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.4rem;
+  width: 2.4rem;
+  height: 2.4rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  backdrop-filter: blur(12px);
 }
 
 .viewer-close:hover {
-  background: rgba(255, 255, 255, 0.98);
+  background: rgba(255, 255, 255, 0.18);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* ──────────────────────────────────────────────────────────── */
@@ -885,7 +897,7 @@
   }
 
   .viewer-backdrop {
-    padding: 0.5rem;
+    padding: 0;
   }
 
   /* No gutter space for floating thumbs — hide them */

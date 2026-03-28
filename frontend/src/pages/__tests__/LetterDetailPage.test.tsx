@@ -13,6 +13,7 @@ const getAdjacentLettersMock = vi.fn();
 vi.mock("../../api/letters", () => ({
   getLetterById: (...args: unknown[]) => getLetterByIdMock(...args),
   getAdjacentLetters: (...args: unknown[]) => getAdjacentLettersMock(...args),
+  getArchiveShelfItems: vi.fn().mockResolvedValue({ letters: [], total: 0 }),
 }));
 
 // Mock LetterViewer since it requires complex DOM setup

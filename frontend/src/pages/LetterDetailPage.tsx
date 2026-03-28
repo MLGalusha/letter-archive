@@ -38,13 +38,6 @@ function dedupePersons(persons: Letter["linkedPersons"]) {
   return [...map.values()];
 }
 
-/* ── parallax helpers ─────────────────────────────────────── */
-
-function smoothstep(t: number): number {
-  const c = Math.max(0, Math.min(1, t));
-  return c * c * (3 - 2 * c);
-}
-
 const EXTRA_CONTENT_TYPES: LetterImageType[] = [
   "telegram", "ephemera", "cover", "card", "article", "diary", "voice",
 ];
@@ -145,9 +138,12 @@ export default function LetterDetailPage() {
 
     let currentClosest = -1;
 
+    // Cache DOM queries — these don't change during the effect lifecycle
+    const slides = Array.from(carousel.querySelectorAll<HTMLElement>(".scan-slide"));
+    const dots = Array.from(carousel.parentElement?.querySelectorAll<HTMLElement>(".scan-dot") ?? []);
+
     const updateScales = () => {
       rafId = null;
-      const slides = carousel.querySelectorAll<HTMLElement>(".scan-slide");
       if (slides.length <= 1) return;
 
       const carouselRect = carousel.getBoundingClientRect();
@@ -181,10 +177,9 @@ export default function LetterDetailPage() {
 
       if (closestIdx !== currentClosest) {
         currentClosest = closestIdx;
-        const dots = carousel.parentElement?.querySelectorAll<HTMLElement>(".scan-dot");
-        dots?.forEach((dot, i) => {
-          dot.classList.toggle("active", i === closestIdx);
-        });
+        for (let i = 0; i < dots.length; i++) {
+          dots[i].classList.toggle("active", i === closestIdx);
+        }
       }
     };
 
@@ -261,14 +256,13 @@ export default function LetterDetailPage() {
 
     // Find nearest slide, using direction as tiebreaker
     const findNearestSlide = (projectedScroll: number, tiebreakDir: number): HTMLElement | null => {
-      const slides = carousel.querySelectorAll<HTMLElement>(".scan-slide");
       if (slides.length === 0) return null;
 
       const slideData: { el: HTMLElement; center: number; dist: number }[] = [];
-      slides.forEach((slide) => {
+      for (const slide of slides) {
         const center = getSlideCenterScroll(slide);
         slideData.push({ el: slide, center, dist: Math.abs(projectedScroll - center) });
-      });
+      }
       slideData.sort((a, b) => a.dist - b.dist);
 
       // If top two are very close (near-tie), use direction to break it
@@ -562,64 +556,123 @@ export default function LetterDetailPage() {
     if (!mq.matches) return;
 
     let rafId: number | null = null;
-    let lastTime = 0;
-    const SMOOTH_SPEED = 4; // exponential decay rate — higher = snappier, lower = floatier
+    let lastScrollY = -1;
 
-    // Track current interpolated positions per thumb
-    const curPos = new WeakMap<HTMLElement, { x: number; y: number }>();
+    // ── Layout cache: document-relative positions (no per-frame layout reads) ──
+    interface ThumbLayout {
+      thumb: HTMLElement;
+      sectionDocTop: number;   // section.top relative to document
+      sectionHeight: number;
+      thumbH: number;
+      curX: number;
+      curY: number;
+    }
+    let layout: ThumbLayout[] = [];
+    let headerHeight = 0;
+    let viewportH = window.innerHeight;
 
-    const headerEl = document.querySelector<HTMLElement>(".header");
+    // Compute document-relative position of an element (no getBoundingClientRect needed later)
+    const getDocTop = (el: HTMLElement): number => {
+      let top = 0;
+      let cur: HTMLElement | null = el;
+      while (cur) {
+        top += cur.offsetTop;
+        cur = cur.offsetParent as HTMLElement | null;
+      }
+      return top;
+    };
 
-    const tick = (now: number) => {
-      const dt = lastTime ? Math.min((now - lastTime) / 1000, 0.1) : 1 / 60;
-      lastTime = now;
-      const factor = 1 - Math.exp(-SMOOTH_SPEED * dt);
+    const cacheLayout = () => {
+      const headerEl = document.querySelector<HTMLElement>(".header");
+      headerHeight = headerEl?.offsetHeight ?? 0;
+      viewportH = window.innerHeight;
 
-      const headerBottom = headerEl?.getBoundingClientRect().bottom ?? 0;
-      const STICKY_TOP = headerBottom + 16;
-      const viewportH = window.innerHeight;
-      const viewportCenter = viewportH / 2;
-
-      const thumbs = document.querySelectorAll<HTMLElement>(".page-thumb");
-
-      // Pass 1: batch DOM reads
-      const data: { thumb: HTMLElement; sr: DOMRect; thumbH: number }[] = [];
-      thumbs.forEach((thumb) => {
+      const thumbEls = document.querySelectorAll<HTMLElement>(".page-thumb");
+      layout = [];
+      thumbEls.forEach((thumb) => {
         const section = thumb.parentElement;
         if (!section) return;
-        data.push({ thumb, sr: section.getBoundingClientRect(), thumbH: thumb.offsetHeight });
+        const prev = layout.find((l) => l.thumb === thumb);
+        layout.push({
+          thumb,
+          sectionDocTop: getDocTop(section),
+          sectionHeight: section.offsetHeight,
+          thumbH: thumb.offsetHeight,
+          curX: prev?.curX ?? 0,
+          curY: prev?.curY ?? 0,
+        });
       });
+      lastScrollY = -1; // force recalc on next tick
+    };
 
-      // Pass 2: compute targets, lerp, write
+    cacheLayout();
+
+    // Recache on resize or content changes
+    const onResize = () => { cacheLayout(); start(); };
+    window.addEventListener("resize", onResize, { passive: true });
+
+    const observer = new MutationObserver(() => {
+      // Debounce layout recalc to avoid thrashing during DOM updates
+      setTimeout(cacheLayout, 50);
+    });
+    const transcriptEl = document.querySelector(".letter-transcript-section");
+    if (transcriptEl) observer.observe(transcriptEl, { childList: true, subtree: true });
+
+    const SMOOTH_SPEED = 4;
+    const TWO_PI = Math.PI * 2;
+
+    const tick = () => {
+      const scrollY = window.scrollY;
+
+      // Skip if scroll hasn't changed and positions have converged
+      if (scrollY === lastScrollY && rafId === null) return;
+      lastScrollY = scrollY;
+
+      const stickyTop = headerHeight + 16;
+      const viewCenter = viewportH / 2;
+      // Approximate lerp factor for ~60fps: 1 - e^(-4 * 1/60) ≈ 0.0645
+      // Use fixed factor — avoids Date.now()/performance.now() overhead
+      const factor = 0.065;
+
       let needsMore = false;
-      for (const { thumb, sr, thumbH } of data) {
+
+      for (let i = 0; i < layout.length; i++) {
+        const l = layout[i];
+        // Section top relative to viewport = docTop - scrollY
+        const sectionViewTop = l.sectionDocTop - scrollY;
         const naturalTop = 8;
-        const maxTravel = sr.height - thumbH - naturalTop - 16;
+        const maxTravel = l.sectionHeight - l.thumbH - naturalTop - 16;
 
         let targetX = 0;
         let targetY = 0;
         if (maxTravel > 0) {
-          const idealY = viewportCenter - thumbH / 2 - sr.top - naturalTop;
-          const minFromHeader = Math.max(0, STICKY_TOP - sr.top - naturalTop);
-          targetY = Math.min(Math.max(idealY, minFromHeader), maxTravel);
+          const idealY = viewCenter - l.thumbH / 2 - sectionViewTop - naturalTop;
+          const minFromHeader = stickyTop - sectionViewTop - naturalTop;
+          targetY = maxTravel < idealY ? maxTravel : idealY;
+          if (targetY < minFromHeader) targetY = minFromHeader > 0 ? minFromHeader : 0;
+          if (targetY < 0) targetY = 0;
+          if (targetY > maxTravel) targetY = maxTravel;
 
           const progress = targetY / maxTravel;
-          const amp = Math.min(18, Math.max(8, sr.height * 0.012));
-          targetX = Math.sin(progress * Math.PI * 2) * amp;
+          const amp = l.sectionHeight * 0.012;
+          targetX = Math.sin(progress * TWO_PI) * (amp < 8 ? 8 : amp > 18 ? 18 : amp);
         }
 
-        const cur = curPos.get(thumb) ?? { x: 0, y: 0 };
-        const nx = cur.x + (targetX - cur.x) * factor;
-        const ny = cur.y + (targetY - cur.y) * factor;
-        curPos.set(thumb, { x: nx, y: ny });
+        const nx = l.curX + (targetX - l.curX) * factor;
+        const ny = l.curY + (targetY - l.curY) * factor;
+        l.curX = nx;
+        l.curY = ny;
 
-        if (Math.abs(nx) > 0.3 || Math.abs(ny) > 0.3) {
-          thumb.style.transform = `translate(${nx.toFixed(1)}px, ${ny.toFixed(1)}px)`;
-        } else {
-          thumb.style.transform = "";
+        // Only write DOM if position changed meaningfully (> 0.5px)
+        if (Math.abs(nx) > 0.5 || Math.abs(ny) > 0.5) {
+          l.thumb.style.transform = `translate3d(${nx | 0}px,${ny | 0}px,0)`;
+        } else if (l.thumb.style.transform) {
+          l.thumb.style.transform = "";
         }
 
-        if (Math.abs(targetX - nx) > 0.3 || Math.abs(targetY - ny) > 0.3) {
+        const dx = targetX - nx;
+        const dy = targetY - ny;
+        if (dx * dx + dy * dy > 0.25) {
           needsMore = true;
         }
       }
@@ -631,20 +684,22 @@ export default function LetterDetailPage() {
       }
     };
 
-    const start = () => { if (rafId == null) rafId = requestAnimationFrame(tick); };
+    function start() { if (rafId == null) rafId = requestAnimationFrame(tick); }
     window.addEventListener("scroll", start, { passive: true });
     start();
 
     const onMq = (e: MediaQueryListEvent) => {
       if (!e.matches) {
-        document.querySelectorAll<HTMLElement>(".page-thumb").forEach((t) => { t.style.transform = ""; });
+        for (const l of layout) l.thumb.style.transform = "";
       }
     };
     mq.addEventListener("change", onMq);
 
     return () => {
       window.removeEventListener("scroll", start);
+      window.removeEventListener("resize", onResize);
       mq.removeEventListener("change", onMq);
+      observer.disconnect();
       if (rafId != null) cancelAnimationFrame(rafId);
     };
   }, [letter]);
@@ -708,6 +763,12 @@ export default function LetterDetailPage() {
     const letterTypeImages = letter.images.filter((img) => img.type === "letter");
     const extraContentItems = letter.extraContentItems ?? [];
     const uniquePersons = dedupePersons(letter.linkedPersons);
+    // Pre-compute verification CSS class fragments (used repeatedly in JSX)
+    const transcriptVerifClass = letter.transcriptStatus === "VERIFIED" ? " verified" : letter.transcriptStatus !== "EMPTY" ? " unverified" : "";
+    const transcriptSectionClass = letter.transcriptStatus === "VERIFIED" ? " transcript-verified" : letter.transcriptStatus !== "EMPTY" ? " transcript-unverified" : "";
+    const extraVerifClass = letter.extraContentStatus === "VERIFIED" ? " verified" : letter.extraContentStatus !== "EMPTY" ? " unverified" : "";
+    const extraSectionClass = letter.extraContentStatus === "VERIFIED" ? " transcript-verified" : letter.extraContentStatus !== "EMPTY" ? " transcript-unverified" : "";
+
     return {
       m,
       byline: correspondentLine(m),
@@ -722,6 +783,10 @@ export default function LetterDetailPage() {
       hasEntities: uniquePersons.length > 0 || (letter.linkedPlaces && letter.linkedPlaces.length > 0),
       isPhotoRecord: shouldShowPhotoDescriptionWorkflow(letter),
       heroHook: m.hook || letter.photoDescription || undefined,
+      transcriptVerifClass,
+      transcriptSectionClass,
+      extraVerifClass,
+      extraSectionClass,
     };
   }, [letter]);
 
@@ -745,6 +810,7 @@ export default function LetterDetailPage() {
     m, byline, dateline, letterTypeImages, carouselImages, allImages,
     hasTranscript, extraContentItems, hasExtraContent, uniquePersons,
     hasEntities, isPhotoRecord, heroHook,
+    transcriptVerifClass, transcriptSectionClass, extraVerifClass, extraSectionClass,
   } = derived;
 
   return (
@@ -849,7 +915,7 @@ export default function LetterDetailPage() {
 
         {/* ── 4. Transcript ────────────────────────────────── */}
         {hasTranscript && (
-          <section className={`letter-transcript-section${letter.transcriptStatus === "VERIFIED" ? " transcript-verified" : letter.transcriptStatus !== "EMPTY" ? " transcript-unverified" : ""}`} ref={transcriptSectionRef}>
+          <section className={`letter-transcript-section${transcriptSectionClass}`} ref={transcriptSectionRef}>
             <div className="transcript-header-row">
               <div className="transcript-label">Transcript</div>
               {letter.transcriptStatus === "VERIFIED" ? (
@@ -881,7 +947,7 @@ export default function LetterDetailPage() {
                           {pageImage && (
                             <button
                               type="button"
-                              className={`page-thumb page-thumb-${side}${letter.transcriptStatus === "VERIFIED" ? " verified" : letter.transcriptStatus !== "EMPTY" ? " unverified" : ""}`}
+                              className={`page-thumb page-thumb-${side}${transcriptVerifClass}`}
                               onClick={() => openViewer(allImages.indexOf(pageImage))}
                               aria-label={`View page ${segment.pageNumber}`}
                             >
@@ -916,7 +982,7 @@ export default function LetterDetailPage() {
                         {pageImage && (
                           <button
                             type="button"
-                            className={`page-thumb page-thumb-${side}${letter.transcriptStatus === "VERIFIED" ? " verified" : letter.transcriptStatus !== "EMPTY" ? " unverified" : ""}`}
+                            className={`page-thumb page-thumb-${side}${transcriptVerifClass}`}
                             onClick={() => openViewer(allImages.indexOf(pageImage))}
                             aria-label={`View page ${page.pageNumber}`}
                           >
@@ -983,11 +1049,11 @@ export default function LetterDetailPage() {
                     <div className="divider-rule" />
                   </div>
                 )}
-                <section className="letter-supporting-section supporting-with-thumb">
+                <section className={`letter-supporting-section supporting-with-thumb${extraSectionClass}`}>
                   {itemImage && (
                     <button
                       type="button"
-                      className={`page-thumb page-thumb-${side}${letter.extraContentStatus === "VERIFIED" ? " verified" : letter.extraContentStatus !== "EMPTY" ? " unverified" : ""}`}
+                      className={`page-thumb page-thumb-${side}${extraVerifClass}`}
                       onClick={() => openViewer(allImages.indexOf(itemImage))}
                       aria-label={`View ${item.label.toLowerCase()}`}
                     >
@@ -1028,11 +1094,11 @@ export default function LetterDetailPage() {
                   <div className="divider-rule" />
                 </div>
               )}
-              <section className="letter-supporting-section supporting-with-thumb">
+              <section className={`letter-supporting-section supporting-with-thumb${extraSectionClass}`}>
                 {extraImages[0] && (
                   <button
                     type="button"
-                    className={`page-thumb page-thumb-${fallbackSide}${letter.extraContentStatus === "VERIFIED" ? " verified" : letter.extraContentStatus !== "EMPTY" ? " unverified" : ""}`}
+                    className={`page-thumb page-thumb-${fallbackSide}${extraVerifClass}`}
                     onClick={() => openViewer(allImages.indexOf(extraImages[0]))}
                     aria-label={`View ${fallbackLabel.toLowerCase()}`}
                   >

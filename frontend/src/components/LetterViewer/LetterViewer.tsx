@@ -322,7 +322,10 @@ export default function LetterViewer({
   // ============================================================================
 
   useEffect(() => {
-    const handleGlobalWheel = (e: WheelEvent) => {
+    const container = imageContainerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
       // Handle Ctrl/Cmd+wheel for zoom
       if (e.metaKey || e.ctrlKey) {
         e.preventDefault();
@@ -337,10 +340,10 @@ export default function LetterViewer({
       }
     };
 
-    document.addEventListener("wheel", handleGlobalWheel, { passive: false });
+    container.addEventListener("wheel", handleWheel, { passive: false });
 
     return () => {
-      document.removeEventListener("wheel", handleGlobalWheel, { passive: false } as EventListenerOptions);
+      container.removeEventListener("wheel", handleWheel);
     };
   }, [applyZoom]);
 

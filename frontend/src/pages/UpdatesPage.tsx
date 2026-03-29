@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import SEO from '../components/SEO';
-import { listBlogPosts, type BlogPost } from '../api/client';
+import { listBlogPosts, getImageUrl, type BlogPost } from '../api/client';
 import Footer from '../components/Footer/Footer';
 import { buildBlogIndexSeo, stripMarkdown, truncateText } from '../utils/seo';
 import { saveJournalSort, loadJournalSort } from '../utils/searchPersistence';
@@ -37,14 +37,13 @@ export default function BlogPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const blogIndexSeo = buildBlogIndexSeo(currentPage);
 
-  const [sortField, setSortField] = useState<SortField>(() => {
-    const saved = loadJournalSort();
-    return (saved?.field as SortField) || 'date';
-  });
-  const [sortOrder, setSortOrder] = useState<SortOrder>(() => {
-    const saved = loadJournalSort();
-    return (saved?.order as SortOrder) || 'desc';
-  });
+  const savedSort = loadJournalSort();
+  const [sortField, setSortField] = useState<SortField>(
+    (savedSort?.field as SortField) || 'date',
+  );
+  const [sortOrder, setSortOrder] = useState<SortOrder>(
+    (savedSort?.order as SortOrder) || 'desc',
+  );
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
 
@@ -61,26 +60,6 @@ export default function BlogPage() {
     saveJournalSort(sortField, sortOrder);
   }, [sortField, sortOrder]);
 
-  const sortedPosts = useMemo(() => {
-    const dir = sortOrder === 'asc' ? 1 : -1;
-    return [...posts].sort((a, b) => {
-      switch (sortField) {
-        case 'date': {
-          const aDate = a.publishedAt || a.createdAt;
-          const bDate = b.publishedAt || b.createdAt;
-          return dir * aDate.localeCompare(bDate);
-        }
-        case 'title':
-          return dir * a.title.localeCompare(b.title);
-        case 'author': {
-          const aAuthor = a.authorDisplayName || '';
-          const bAuthor = b.authorDisplayName || '';
-          return dir * aAuthor.localeCompare(bAuthor);
-        }
-      }
-    });
-  }, [posts, sortField, sortOrder]);
-
   useEffect(() => {
     async function fetchBlogPosts() {
       setLoading(true);
@@ -88,6 +67,8 @@ export default function BlogPage() {
         const data = await listBlogPosts({
           limit: PAGE_SIZE,
           offset: (currentPage - 1) * PAGE_SIZE,
+          sort: sortField,
+          sortOrder,
         });
         setPosts(data.posts);
         setTotal(data.total);
@@ -100,7 +81,7 @@ export default function BlogPage() {
     }
 
     fetchBlogPosts();
-  }, [currentPage]);
+  }, [currentPage, sortField, sortOrder]);
 
   useEffect(() => {
     if (!loading && total > 0 && currentPage > totalPages) {
@@ -181,9 +162,9 @@ export default function BlogPage() {
           </div>
         )}
 
-        {posts.length > 0 && (
+        {!loading && posts.length > 0 && (
           <div className="updates-grid">
-            {sortedPosts.map((post) => (
+            {posts.map((post) => (
               <Link
                 key={post.id}
                 to={`/blog/${post.slug}`}
@@ -192,7 +173,7 @@ export default function BlogPage() {
                 {post.heroImageUrl && (
                   <div className="update-card-image">
                     <img
-                      src={post.heroImageUrl}
+                      src={getImageUrl(post.heroImageUrl, { publicOnly: true })}
                       alt={post.heroImageAlt || post.title}
                       loading="lazy"
                     />

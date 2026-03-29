@@ -145,6 +145,7 @@ export default function HomePage() {
   const [heroLetter, setHeroLetter] = useState<ArchiveShelfItem | null>(null);
   const [heroImages, setHeroImages] = useState<LetterImage[]>([]);
   const [heroPageIndex, setHeroPageIndex] = useState(0);
+  const [heroLoaded, setHeroLoaded] = useState(false);
   const [latestBlogPost, setLatestBlogPost] = useState<BlogPost | null>(null);
 
   // ── Archive search (extracted hook) ──
@@ -175,7 +176,10 @@ export default function HomePage() {
       if (blogData.posts.length > 0) setLatestBlogPost(blogData.posts[0]);
       const picked = pickHeroLetter(heroData?.letters || []);
       setHeroLetter(picked);
+      setHeroLoaded(true);
       if (picked) {
+        setHeroImages([]);
+        setHeroPageIndex(0);
         getLetterById(picked.id).then((full) => {
           if (cancelled) return;
           setHeroImages(full.images || []);
@@ -299,12 +303,12 @@ export default function HomePage() {
             ariaLabel={heroAriaLabel}
             onNavigate={handleHeroNavigate}
           />
-        ) : (
+        ) : !heroLoaded ? (
           <div className="home-hero-feature-card home-hero-feature-card--placeholder">
             <span className="home-hero-feature-placeholder-label">Featured Letter</span>
             <p>Loading a featured letter from collection 009...</p>
           </div>
-        )}
+        ) : null}
       </section>
 
       {latestBlogPost && (

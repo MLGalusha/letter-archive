@@ -1,5 +1,5 @@
 import "./Header.css";
-import { Link } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { useHeaderDock } from "../../contexts/HeaderDockContext";
 import useScrollDirection from "../../hooks/useScrollDirection";
@@ -41,22 +41,22 @@ export default function Header() {
           Menu
         </button>
         <nav className={`nav ${menuOpen ? "open" : ""}`}>
-          <Link to="/" className="page-selector" onClick={() => setMenuOpen(false)}>
+          <NavLink to="/" className={({ isActive }) => `page-selector${isActive ? " active" : ""}`} onClick={() => setMenuOpen(false)} end>
             Home
-          </Link>
-          <Link
+          </NavLink>
+          <NavLink
             to={dock.collectionsLink?.to ?? "/collections"}
-            className="page-selector"
+            className={({ isActive }) => `page-selector${isActive ? " active" : ""}`}
             onClick={() => setMenuOpen(false)}
           >
             {dock.collectionsLink?.label ?? "Collections"}
-          </Link>
-          <Link to="/blog" className="page-selector" onClick={() => setMenuOpen(false)}>
+          </NavLink>
+          <NavLink to="/blog" className={({ isActive }) => `page-selector${isActive ? " active" : ""}`} onClick={() => setMenuOpen(false)}>
             Journal
-          </Link>
-          <Link to="/about" className="page-selector" onClick={() => setMenuOpen(false)}>
+          </NavLink>
+          <NavLink to="/about" className={({ isActive }) => `page-selector${isActive ? " active" : ""}`} onClick={() => setMenuOpen(false)}>
             About
-          </Link>
+          </NavLink>
           <Link to="/support" className="header-cta" onClick={() => setMenuOpen(false)}>
             Support
           </Link>

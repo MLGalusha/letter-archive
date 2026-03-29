@@ -189,7 +189,7 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
       topic: filters.topic?.length ? filters.topic : undefined,
       tone: filters.tone?.length ? filters.tone : undefined,
       relationship: filters.relationship?.length ? filters.relationship : undefined,
-      year: filters.year || undefined,
+      year: filters.year ?? undefined,
       yearFrom: filters.dateRange?.start,
       yearTo: filters.dateRange?.end,
       hasTranscript: filters.hasTranscript,

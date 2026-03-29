@@ -1,28 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { listCollections, type CollectionInfo } from "../../api/collections";
+import type { CollectionInfo } from "../../api/collections";
 import HeaderScrubber from "../HeaderScrubber/HeaderScrubber";
-
-// Session-level cache for collections list
-let cachedCollections: CollectionInfo[] | null = null;
-let pendingFetch: Promise<CollectionInfo[]> | null = null;
-
-function fetchAllCollections(): Promise<CollectionInfo[]> {
-  if (cachedCollections) return Promise.resolve(cachedCollections);
-  if (pendingFetch) return pendingFetch;
-  pendingFetch = listCollections().then((result) => {
-    result.sort((a, b) => {
-      const aNum = parseInt(a.collectionCode, 10);
-      const bNum = parseInt(b.collectionCode, 10);
-      if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
-      return a.collectionCode.localeCompare(b.collectionCode);
-    });
-    cachedCollections = result;
-    pendingFetch = null;
-    return result;
-  });
-  return pendingFetch;
-}
+import { fetchAllCollections, getCachedCollections } from "./collectionCache";
 
 interface CollectionHeaderDockProps {
   collectionCode: string;
@@ -30,10 +10,10 @@ interface CollectionHeaderDockProps {
 
 export default function CollectionHeaderDock({ collectionCode }: CollectionHeaderDockProps) {
   const navigate = useNavigate();
-  const [collections, setCollections] = useState<CollectionInfo[] | null>(cachedCollections);
+  const [collections, setCollections] = useState<CollectionInfo[] | null>(getCachedCollections());
 
   useEffect(() => {
-    fetchAllCollections().then(setCollections);
+    fetchAllCollections().then(setCollections).catch(() => {});
   }, []);
 
   const currentIdx = useMemo(

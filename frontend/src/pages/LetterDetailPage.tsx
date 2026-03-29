@@ -512,7 +512,7 @@ export default function LetterDetailPage() {
                             <button
                               type="button"
                               className={`page-thumb page-thumb-${side}${transcriptVerifClass}`}
-                              onClick={() => openViewer(allImages.indexOf(pageImage))}
+                              onClick={() => openViewer(Math.max(0, allImages.indexOf(pageImage)))}
                               aria-label={`View page ${segment.pageNumber}`}
                             >
                               <span className="page-thumb-inner">
@@ -547,7 +547,7 @@ export default function LetterDetailPage() {
                           <button
                             type="button"
                             className={`page-thumb page-thumb-${side}${transcriptVerifClass}`}
-                            onClick={() => openViewer(allImages.indexOf(pageImage))}
+                            onClick={() => openViewer(Math.max(0, allImages.indexOf(pageImage)))}
                             aria-label={`View page ${page.pageNumber}`}
                           >
                             <span className="page-thumb-inner">
@@ -618,7 +618,7 @@ export default function LetterDetailPage() {
                     <button
                       type="button"
                       className={`page-thumb page-thumb-${side}${extraVerifClass}`}
-                      onClick={() => openViewer(allImages.indexOf(itemImage))}
+                      onClick={() => openViewer(Math.max(0, allImages.indexOf(itemImage)))}
                       aria-label={`View ${item.label.toLowerCase()}`}
                     >
                       <span className="page-thumb-inner">
@@ -663,7 +663,7 @@ export default function LetterDetailPage() {
                   <button
                     type="button"
                     className={`page-thumb page-thumb-${fallbackSide}${extraVerifClass}`}
-                    onClick={() => openViewer(allImages.indexOf(extraImages[0]))}
+                    onClick={() => openViewer(Math.max(0, allImages.indexOf(extraImages[0])))}
                     aria-label={`View ${fallbackLabel.toLowerCase()}`}
                   >
                     <span className="page-thumb-inner">

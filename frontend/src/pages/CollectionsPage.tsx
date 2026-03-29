@@ -41,14 +41,13 @@ function dateVal(range: CollectionInfo['dateRange'], which: 'min' | 'max', fallb
 }
 
 export default function CollectionsPage() {
-  const [sortField, setSortField] = useState<SortField>(() => {
-    const saved = loadCollectionsSort();
-    return (saved?.field as SortField) || 'letters';
-  });
-  const [sortOrder, setSortOrder] = useState<SortOrder>(() => {
-    const saved = loadCollectionsSort();
-    return (saved?.order as SortOrder) || 'desc';
-  });
+  const savedSort = loadCollectionsSort();
+  const [sortField, setSortField] = useState<SortField>(
+    (savedSort?.field as SortField) || 'letters',
+  );
+  const [sortOrder, setSortOrder] = useState<SortOrder>(
+    (savedSort?.order as SortOrder) || 'desc',
+  );
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
 

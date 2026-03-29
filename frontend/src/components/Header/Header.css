@@ -180,6 +180,10 @@
   background: rgba(255, 255, 255, 0.72);
 }
 
+.page-selector.active {
+  color: var(--text);
+}
+
 .header-cta {
   margin-left: 0.4rem;
   border: 1px solid rgba(31, 109, 122, 0.18);

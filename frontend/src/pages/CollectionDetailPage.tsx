@@ -16,7 +16,7 @@ import {
 } from './collection-detail-utils';
 import HeaderScrubber from '../components/HeaderScrubber/HeaderScrubber';
 import useCollectionScrubber from '../components/CollectionHeaderDock/useCollectionScrubber';
-import { buildCollectionSeo } from '../utils/seo';
+import { buildCollectionSeo, buildNotFoundSeo } from '../utils/seo';
 import useArchiveSearch from '../hooks/useArchiveSearch';
 import useStickyDock from '../hooks/useStickyDock';
 import ShowcaseCard, { type ShowcaseItem } from '../components/ShowcaseCard';
@@ -82,22 +82,31 @@ export default function CollectionDetailPage() {
   useEffect(() => {
     if (!collectionCode) return;
 
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setCollection(null);
+    setProfile(null);
+
     async function fetchCollection() {
       try {
         const [data, profileData] = await Promise.all([
           getCollectionByCode(collectionCode!),
           getCollectionProfile(collectionCode!).catch(() => null),
         ]);
+        if (cancelled) return;
         setCollection(data);
         setProfile(profileData);
       } catch (err) {
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Collection not found');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     fetchCollection();
+    return () => { cancelled = true; };
   }, [collectionCode]);
 
   /* ---- Header dock content ---- */
@@ -281,8 +290,10 @@ export default function CollectionDetailPage() {
   }
 
   if (!collection || error) {
+    const notFoundSeo = buildNotFoundSeo();
     return (
       <div className="body-layout">
+        <SEO title={notFoundSeo.title} description={notFoundSeo.description} robots={notFoundSeo.robots} />
         <div className="collection-detail-public">
           <button onClick={handleBack} className="back-link">
             &larr; All Collections
@@ -345,6 +356,7 @@ export default function CollectionDetailPage() {
                     className="cd-person-card"
                     onClick={() => {
                       navigate(`/collections/${collectionCode}?sender=${encodeURIComponent(person.name)}`);
+                      setTimeout(() => archiveSearchRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
                     }}
                   >
                     <h3 className="cd-person-name">{person.name}</h3>

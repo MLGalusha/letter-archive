@@ -13,17 +13,31 @@ export interface SiteSettings {
 }
 
 let cachedSettings: SiteSettings | null = null;
+let pendingFetch: Promise<SiteSettings> | null = null;
+
+function fetchSettings(): Promise<SiteSettings> {
+  if (cachedSettings) return Promise.resolve(cachedSettings);
+  if (pendingFetch) return pendingFetch;
+  pendingFetch = apiGet<SiteSettings>('/settings/public')
+    .then((data) => {
+      cachedSettings = data;
+      pendingFetch = null;
+      return data;
+    })
+    .catch((err) => {
+      pendingFetch = null;
+      throw err;
+    });
+  return pendingFetch;
+}
 
 export function useSiteSettings(): SiteSettings | null {
   const [settings, setSettings] = useState<SiteSettings | null>(cachedSettings);
 
   useEffect(() => {
     if (cachedSettings) return;
-    apiGet<SiteSettings>('/settings/public')
-      .then((data) => {
-        cachedSettings = data;
-        setSettings(data);
-      })
+    fetchSettings()
+      .then(setSettings)
       .catch((err) => console.warn('[SiteSettings] Failed to load:', err));
   }, []);
 

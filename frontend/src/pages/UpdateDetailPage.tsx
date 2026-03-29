@@ -23,18 +23,23 @@ export default function BlogDetailPage() {
   useEffect(() => {
     if (!slug) return;
 
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
     async function fetchBlogPost() {
       try {
         const data = await getBlogPost(slug!);
-        setPost(data);
+        if (!cancelled) setPost(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Journal entry not found');
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Journal entry not found');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     fetchBlogPost();
+    return () => { cancelled = true; };
   }, [slug]);
 
   if (loading) {
@@ -86,7 +91,7 @@ export default function BlogDetailPage() {
         {post.heroImageUrl && (
           <div className="update-hero-image">
             <img
-              src={post.heroImageUrl}
+              src={getImageUrl(post.heroImageUrl, { publicOnly: true })}
               alt={post.heroImageAlt || post.title}
             />
           </div>
@@ -110,7 +115,7 @@ export default function BlogDetailPage() {
                 if (!src) return null;
                 // Resolve relative backend paths to full URLs
                 const resolvedSrc = (src.startsWith('/images/') || src.startsWith('/blog-images/'))
-                  ? getImageUrl(src)
+                  ? getImageUrl(src, { publicOnly: true })
                   : src;
                 return (
                   <img

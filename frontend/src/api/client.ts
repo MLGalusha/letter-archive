@@ -233,9 +233,10 @@ export async function apiGet<T>(
  */
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const isFormData = body instanceof FormData;
+  const url = new URL(path, API_BASE_URL).toString();
 
   log.debug('POST request', { path, isFormData });
-  return performRequest<T>('POST', path, `${API_BASE_URL}${path}`, {
+  return performRequest<T>('POST', path, url, {
     method: 'POST',
     headers: isFormData ? {} : { 'Content-Type': 'application/json' },
     body: isFormData ? body : body ? JSON.stringify(body) : undefined,
@@ -246,8 +247,9 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
  * PUT request
  */
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  const url = new URL(path, API_BASE_URL).toString();
   log.debug('PUT request', { path });
-  return performRequest<T>('PUT', path, `${API_BASE_URL}${path}`, {
+  return performRequest<T>('PUT', path, url, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -258,8 +260,9 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
  * PATCH request
  */
 export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  const url = new URL(path, API_BASE_URL).toString();
   log.debug('PATCH request', { path });
-  return performRequest<T>('PATCH', path, `${API_BASE_URL}${path}`, {
+  return performRequest<T>('PATCH', path, url, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -270,8 +273,9 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
  * DELETE request
  */
 export async function apiDelete<T>(path: string): Promise<T> {
+  const url = new URL(path, API_BASE_URL).toString();
   log.debug('DELETE request', { path });
-  return performRequest<T>('DELETE', path, `${API_BASE_URL}${path}`, {
+  return performRequest<T>('DELETE', path, url, {
     method: 'DELETE',
   });
 }
@@ -283,15 +287,18 @@ export function getImageUrl(
   imageUrl: string,
   options?: {
     width?: number;
+    publicOnly?: boolean;
   },
 ): string {
   const isAbsolute = imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
-  const token = localStorage.getItem('adminToken');
   const baseUrl = isAbsolute ? imageUrl : `${API_BASE_URL}${imageUrl}`;
   const url = new URL(baseUrl);
 
-  if (token) {
-    url.searchParams.set('token', token);
+  if (!options?.publicOnly) {
+    const token = localStorage.getItem('adminToken');
+    if (token) {
+      url.searchParams.set('token', token);
+    }
   }
 
   if (options?.width) {
@@ -338,19 +345,21 @@ export interface FeaturedLetter {
 export interface ContentPage {
   slug: string;
   title: string;
-  contentJson: Record<string, string>;
+  contentJson: Record<string, unknown>;
   updatedAt: string;
 }
 
 // ── Blog & Content API ───────────────────────────────────────────────────────
 
 export async function listBlogPosts(
-  params?: { limit?: number; offset?: number; category?: string },
+  params?: { limit?: number; offset?: number; category?: string; sort?: string; sortOrder?: string },
 ): Promise<{ posts: BlogPost[]; total: number }> {
   return apiGet<{ posts: BlogPost[]; total: number }>('/blog', {
     limit: params?.limit,
     offset: params?.offset,
     category: params?.category,
+    sort: params?.sort,
+    sortOrder: params?.sortOrder,
   });
 }
 

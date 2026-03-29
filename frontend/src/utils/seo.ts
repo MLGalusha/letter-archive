@@ -1,4 +1,4 @@
-import type { BlogPost } from '../api/client';
+import { API_BASE_URL, type BlogPost } from '../api/client';
 import type { CollectionWithLetters } from '../api/collections';
 import type { PublicPersonDetail, PublicPlaceDetail } from '../api/entities';
 import type { Letter } from '../types/Letter';
@@ -40,6 +40,12 @@ function getSiteUrl(): string {
 export function absoluteUrl(path?: string | null): string | undefined {
   if (!path) return undefined;
   return new URL(path, `${getSiteUrl()}/`).toString();
+}
+
+export function absoluteImageUrl(path?: string | null): string | undefined {
+  if (!path) return undefined;
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  return new URL(path, API_BASE_URL).toString();
 }
 
 function collapseWhitespace(value: string): string {
@@ -214,7 +220,7 @@ export function buildBlogPostSeo(post: BlogPost): SeoPayload {
     description,
     canonicalPath,
     ogType: 'article',
-    ogImage: post.heroImageUrl || undefined,
+    ogImage: absoluteImageUrl(post.heroImageUrl) || undefined,
     imageAlt: post.heroImageAlt || post.title,
     publishedTime: post.publishedAt || post.createdAt,
     modifiedTime: post.updatedAt || post.publishedAt || post.createdAt,
@@ -228,7 +234,7 @@ export function buildBlogPostSeo(post: BlogPost): SeoPayload {
         mainEntityOfPage: absoluteUrl(canonicalPath),
         datePublished: post.publishedAt || post.createdAt,
         dateModified: post.updatedAt || post.publishedAt || post.createdAt,
-        image: absoluteUrl(post.heroImageUrl),
+        image: absoluteImageUrl(post.heroImageUrl),
         articleSection: post.category || undefined,
         author: post.authorDisplayName
           ? {
@@ -315,7 +321,7 @@ export function buildLetterSeo(letter: Letter): SeoPayload {
     description,
     canonicalPath,
     ogType: 'article',
-    ogImage: letter.images[0]?.imageUrl,
+    ogImage: absoluteImageUrl(letter.images[0]?.imageUrl),
     imageAlt: title,
     modifiedTime: letter.updatedAt || letter.createdAt,
     jsonLd: [
@@ -325,7 +331,7 @@ export function buildLetterSeo(letter: Letter): SeoPayload {
         name: title,
         description,
         url: absoluteUrl(canonicalPath),
-        image: absoluteUrl(letter.images[0]?.imageUrl),
+        image: absoluteImageUrl(letter.images[0]?.imageUrl),
         creator: letter.metadata.sender
           ? {
               '@type': 'Person',

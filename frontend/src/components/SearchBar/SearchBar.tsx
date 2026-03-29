@@ -381,7 +381,7 @@ export default function SearchBar({
     onQueryChange("");
     onFiltersChange({});
     if (isCompact) {
-      closeFilters();
+      setRefineOpen(false);
     }
   };
 

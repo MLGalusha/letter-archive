@@ -455,6 +455,8 @@ router.get('/letters/:letterId', async (req, res, next) => {
         pages: {
           orderBy: (p, { asc }) => [asc(p.pageNumber)],
         },
+        persons: { with: { person: true } },
+        places: { with: { place: true } },
       },
     });
 

@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm';
 import SEO from '../components/SEO';
 import { getBlogPost, type BlogPost } from '../api/client';
 import Footer from '../components/Footer/Footer';
-import { buildBlogPostSeo } from '../utils/seo';
+import { buildBlogPostSeo, stripMarkdown, truncateText } from '../utils/seo';
 import './UpdateDetailPage.css';
 
 function formatDate(dateStr: string): string {
@@ -66,7 +66,7 @@ export default function BlogDetailPage() {
   }
 
   const seo = buildBlogPostSeo(post);
-  const deck = post.excerpt || seo.description;
+  const deck = post.excerpt || truncateText(stripMarkdown(post.bodyMarkdown), 280);
   const publishedDate = post.publishedAt || post.createdAt;
 
   return (
@@ -83,10 +83,6 @@ export default function BlogDetailPage() {
         jsonLd={seo.jsonLd}
       />
       <article className="update-detail">
-        <Link to="/blog" className="update-back-link">
-          &larr; All Journal Entries
-        </Link>
-
         {post.heroImageUrl && (
           <div className="update-hero-image">
             <img
@@ -97,22 +93,12 @@ export default function BlogDetailPage() {
         )}
 
         <header className="update-header">
-          <div className="update-meta">
-            {post.category && (
-              <span className="update-detail-category">{post.category}</span>
-            )}
-            <time dateTime={publishedDate}>{formatDate(publishedDate)}</time>
-          </div>
           <h1 className="update-title">{post.title}</h1>
-          {deck && <p className="update-dek">{deck}</p>}
-          {(post.authorDisplayName || post.authorRole) && (
-            <p className="update-byline">
-              {post.authorDisplayName}
-              {post.authorRole && (
-                <span className="update-byline-role"> &middot; {post.authorRole}</span>
-              )}
-            </p>
+          {post.authorDisplayName && (
+            <p className="update-byline">Written by {post.authorDisplayName}</p>
           )}
+          <time className="update-date" dateTime={publishedDate}>{formatDate(publishedDate)}</time>
+          {deck && <p className="update-dek">{deck}</p>}
         </header>
 
         <div className="markdown-content">
@@ -172,11 +158,6 @@ export default function BlogDetailPage() {
           </div>
         )}
 
-        <div className="update-footer-nav">
-          <Link to="/blog" className="update-back-link">
-            &larr; Back to all journal entries
-          </Link>
-        </div>
       </article>
       <Footer />
     </div>

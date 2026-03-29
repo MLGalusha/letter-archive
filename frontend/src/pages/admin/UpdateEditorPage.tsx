@@ -449,6 +449,17 @@ export default function JournalEditorPage() {
           </div>
 
           <div className="journal-topbar-right">
+            {status === 'published' && slug && (
+              <a
+                className="journal-preview-link"
+                href={`/blog/${slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Icon name="eye" size={16} />
+                <span>Preview</span>
+              </a>
+            )}
             <button
               className="journal-settings-toggle"
               onClick={() => setSettingsOpen((prev) => !prev)}
@@ -487,22 +498,33 @@ export default function JournalEditorPage() {
 
         {/* ---- writing canvas ---- */}
         <div className="journal-editor-canvas">
-          <input
-            className="journal-editor-title"
-            type="text"
-            value={title}
-            onChange={(e) => handleTitleChange(e.target.value)}
-            placeholder="Title"
-          />
+          <div className="journal-title-group">
+            <label className="journal-canvas-label">Title</label>
+            <input
+              className="journal-editor-title"
+              type="text"
+              value={title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+              placeholder="Give your entry a title..."
+            />
+          </div>
 
-          <AutoResizeTextarea
-            className="journal-editor-excerpt"
-            value={excerpt}
-            onChange={setExcerpt}
-            minHeight={36}
-            maxHeight={120}
-            placeholder={excerptPreview ? `Excerpt: ${excerptPreview.slice(0, 80)}...` : 'Add a brief excerpt (optional)'}
-          />
+          <div className="journal-excerpt-group">
+            <div className="journal-excerpt-header">
+              <label className="journal-canvas-label">Summary</label>
+              {!excerpt.trim() && excerptPreview && (
+                <span className="journal-excerpt-auto">Auto-generated from body</span>
+              )}
+            </div>
+            <AutoResizeTextarea
+              className="journal-editor-excerpt"
+              value={excerpt}
+              onChange={setExcerpt}
+              minHeight={48}
+              maxHeight={140}
+              placeholder={excerptPreview ? excerptPreview.slice(0, 120) + '...' : 'Write a brief summary for readers...'}
+            />
+          </div>
 
           <div className="journal-editor-surface">
             <MDXEditor

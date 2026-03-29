@@ -27,6 +27,11 @@ if (!("IntersectionObserver" in globalThis)) {
   });
 }
 
+// jsdom doesn't implement window.scrollTo
+if (!window.scrollTo) {
+  window.scrollTo = () => {};
+}
+
 Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
   value: () => ({
     measureText: (text: string) => ({ width: text.length * 8 }),

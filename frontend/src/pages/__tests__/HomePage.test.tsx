@@ -18,6 +18,7 @@ vi.mock("../../api/client", () => ({
 vi.mock("../../api/letters", () => ({
   getArchiveShelfItems: (...args: unknown[]) => getArchiveShelfItemsMock(...args),
   searchArchiveShelf: (...args: unknown[]) => searchArchiveShelfMock(...args),
+  getLetterById: vi.fn().mockResolvedValue({ images: [] }),
 }));
 
 vi.mock("../../components/SEO", () => ({

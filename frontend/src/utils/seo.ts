@@ -168,13 +168,13 @@ export function buildHomeSeo(): SeoPayload {
 }
 
 export function buildBlogIndexSeo(page: number): SeoPayload {
-  const title = page > 1 ? `Blog - Page ${page}` : 'Blog';
+  const title = page > 1 ? `Journal - Page ${page}` : 'Journal';
   const description =
     'Read field notes, collection highlights, and essays from Letter Archive as the project grows.';
   const canonicalPath = page > 1 ? `/blog?page=${page}` : '/blog';
   const breadcrumb = buildBreadcrumbJsonLd([
     { label: 'Home', href: '/' },
-    { label: 'Blog', href: '/blog' },
+    { label: 'Journal', href: '/blog' },
     ...(page > 1 ? [{ label: `Page ${page}`, href: canonicalPath }] : []),
   ]);
 
@@ -186,7 +186,7 @@ export function buildBlogIndexSeo(page: number): SeoPayload {
       {
         '@context': 'https://schema.org',
         '@type': 'CollectionPage',
-        name: `${SITE_NAME} Blog`,
+        name: `${SITE_NAME} Journal`,
         url: absoluteUrl(canonicalPath),
         description,
       },
@@ -205,7 +205,7 @@ export function buildBlogPostSeo(post: BlogPost): SeoPayload {
   const canonicalPath = `/blog/${post.slug}`;
   const breadcrumb = buildBreadcrumbJsonLd([
     { label: 'Home', href: '/' },
-    { label: 'Blog', href: '/blog' },
+    { label: 'Journal', href: '/blog' },
     { label: post.title, href: canonicalPath },
   ]);
 

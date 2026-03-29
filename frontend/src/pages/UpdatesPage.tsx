@@ -64,7 +64,7 @@ export default function BlogPage() {
       />
       <div className="updates-page">
         <header className="updates-hero">
-          <p className="updates-kicker">Blog</p>
+          <p className="updates-kicker">Journal</p>
           <h1 className="updates-headline">Stories from the Archive</h1>
           <p className="updates-subtitle">
             Essays, project notes, collection highlights, and the occasional oddity

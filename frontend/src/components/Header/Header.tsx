@@ -52,7 +52,7 @@ export default function Header() {
             {dock.collectionsLink?.label ?? "Collections"}
           </Link>
           <Link to="/blog" className="page-selector" onClick={() => setMenuOpen(false)}>
-            Blog
+            Journal
           </Link>
           <Link to="/about" className="page-selector" onClick={() => setMenuOpen(false)}>
             About

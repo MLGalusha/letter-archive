@@ -294,10 +294,11 @@ export default function CollectionDetailPage() {
   const [stickyDockActive, setStickyDockActive] = useState(false);
   const [pageRefineOpen, setPageRefineOpen] = useState(false);
   const [compactRefineOpen, setCompactRefineOpen] = useState(false);
-  const compactRefinePinnedRef = useRef(false);
-  const [pageRefinePinned, setPageRefinePinned] = useState<boolean | undefined>(undefined);
   const [pageSortOpen, setPageSortOpen] = useState<boolean | undefined>(undefined);
   const [compactSortOpen, setCompactSortOpen] = useState<boolean | undefined>(undefined);
+  const headerDropdownOpenRef = useRef(false);
+
+  headerDropdownOpenRef.current = compactRefineOpen || compactSortOpen === true;
 
   /* ---- Computed from collection data ---- */
   const collectionLetters = collection?.letters ?? [];
@@ -368,15 +369,18 @@ export default function CollectionDetailPage() {
       nextParams.set('sortOrder', filters.sortOrder);
     }
 
-    // Persist to localStorage for cross-navigation restoration
-    saveSearchState(collectionStorageKey, searchQuery, filters);
-
     if (nextParams.toString() === searchParams.toString()) return;
 
     startTransition(() => {
       setSearchParams(nextParams, { replace: true });
     });
   }, [filters, searchParams, searchQuery, setSearchParams, collectionStorageKey]);
+
+  // Debounce localStorage persistence so it doesn't run on every keystroke
+  useEffect(() => {
+    const timer = window.setTimeout(() => saveSearchState(collectionStorageKey, searchQuery, filters), 300);
+    return () => window.clearTimeout(timer);
+  }, [collectionStorageKey, filters, searchQuery]);
 
   /* ---- Build request params ---- */
   const requestParams = useMemo(
@@ -406,14 +410,6 @@ export default function CollectionDetailPage() {
   useEffect(() => {
     let cancelled = false;
     const requestVersion = ++requestVersionRef.current;
-    const delay = searchQuery.trim()
-      || filters.sender?.trim()
-      || filters.recipient?.trim()
-      || filters.place?.trim()
-      || filters.topic?.length
-      ? 180
-      : 0;
-
     const timer = window.setTimeout(() => {
       setArchiveLoading(true);
       setArchiveLoadingMore(false);
@@ -433,13 +429,13 @@ export default function CollectionDetailPage() {
           if (cancelled || requestVersion !== requestVersionRef.current) return;
           setArchiveLoading(false);
         });
-    }, delay);
+    }, 180);
 
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [requestParams, searchQuery]);
+  }, [requestParams]);
 
   /* ---- IntersectionObserver for sticky header search ---- */
   useEffect(() => {
@@ -452,7 +448,9 @@ export default function CollectionDetailPage() {
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setStickyDockActive(false);
+          if (!headerDropdownOpenRef.current) {
+            setStickyDockActive(false);
+          }
         } else {
           setStickyDockActive(entry.boundingClientRect.bottom <= headerHeight);
         }
@@ -463,6 +461,21 @@ export default function CollectionDetailPage() {
     observer.observe(trigger);
     return () => observer.disconnect();
   }, [loading]);
+
+  // When header dropdown closes, re-evaluate whether dock should still be active
+  useEffect(() => {
+    const isHeaderDropdown = compactRefineOpen || compactSortOpen === true;
+    if (isHeaderDropdown || !stickyDockActive) return;
+
+    const trigger = searchDockTriggerRef.current || archiveSearchRef.current;
+    if (!trigger) return;
+    const header = document.querySelector(".header") as HTMLElement | null;
+    const headerHeight = header?.offsetHeight || 80;
+
+    if (trigger.getBoundingClientRect().bottom > headerHeight) {
+      setStickyDockActive(false);
+    }
+  }, [compactRefineOpen, compactSortOpen, stickyDockActive]);
 
   /* ---- Header dock content ---- */
   const collectionsLinkOverride = useMemo(() => ({
@@ -491,15 +504,11 @@ export default function CollectionDetailPage() {
               setCompactRefineOpen(open);
               if (open) {
                 setPageRefineOpen(false);
-                setPageRefinePinned(undefined);
               }
             }}
             onSortOpenChange={(open) => {
               setCompactSortOpen(open === false ? undefined : open);
               if (open) setPageSortOpen(false);
-            }}
-            onPinnedChange={(pinned) => {
-              compactRefinePinnedRef.current = pinned;
             }}
             onQueryChange={setSearchQuery}
             onFiltersChange={handleFiltersChange}
@@ -543,12 +552,14 @@ export default function CollectionDetailPage() {
 
   useEffect(() => {
     if (!stickyDockActive) {
-      if (compactRefinePinnedRef.current) {
+      if (compactRefineOpen) {
         setPageRefineOpen(true);
-        setPageRefinePinned(true);
       }
-      compactRefinePinnedRef.current = false;
+      if (compactSortOpen === true) {
+        setPageSortOpen(true);
+      }
       setCompactRefineOpen(false);
+      setCompactSortOpen(undefined);
     }
   }, [stickyDockActive]);
 
@@ -770,7 +781,6 @@ export default function CollectionDetailPage() {
               searchKicker={`Collection ${collection.collectionCode}`}
               searchTitle="Search This Collection"
               refineOpen={pageRefineOpen}
-              refinePinned={pageRefinePinned}
               sortOpen={pageSortOpen}
               dockTriggerRef={searchDockTriggerRef}
               onRefineOpenChange={(open) => {
@@ -782,9 +792,6 @@ export default function CollectionDetailPage() {
               onSortOpenChange={(open) => {
                 setPageSortOpen(open === false ? undefined : open);
                 if (open) setCompactSortOpen(false);
-              }}
-              onPinnedChange={() => {
-                setPageRefinePinned(undefined);
               }}
               onQueryChange={setSearchQuery}
               onFiltersChange={handleFiltersChange}

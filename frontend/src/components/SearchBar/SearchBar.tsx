@@ -5,17 +5,11 @@ import {
   ARCHIVE_FORMAT_LABELS,
   ARCHIVE_FORMAT_ORDER,
   COMBINED_SORT_OPTIONS,
-  REFINE_CLOSE_DELAY_MS,
-  SORT_FIELD_OPTIONS,
   formatFacetLabel,
-  getAvailableSortFields,
   getBestSuggestion,
   getResolvedSort,
-  getSortDirectionAriaLabel,
-  getSortDirectionDisplayLabel,
 } from "./searchBarUtils";
 import type { FilterChoiceOption } from "./searchBarUtils";
-import useTimerDropdown from "./useTimerDropdown";
 import FilterChoiceField from "./FilterChoiceField";
 import FacetRow from "./FacetRow";
 import SuggestionHint from "./SuggestionHint";
@@ -33,12 +27,10 @@ interface SearchBarProps {
   searchKicker?: string;
   searchTitle?: string;
   refineOpen?: boolean;
-  refinePinned?: boolean;
   sortOpen?: boolean;
   dockTriggerRef?: Ref<HTMLDivElement>;
   onRefineOpenChange?: (open: boolean) => void;
   onSortOpenChange?: (open: boolean) => void;
-  onPinnedChange?: (pinned: boolean) => void;
   onQueryChange: (query: string) => void;
   onFiltersChange: (filters: SearchFilters) => void;
 }
@@ -73,12 +65,10 @@ export default function SearchBar({
   searchKicker,
   searchTitle,
   refineOpen,
-  refinePinned,
   sortOpen: sortOpenProp,
   dockTriggerRef,
   onRefineOpenChange,
   onSortOpenChange,
-  onPinnedChange,
   onQueryChange,
   onFiltersChange,
 }: SearchBarProps) {
@@ -101,11 +91,6 @@ export default function SearchBar({
   const [internalShowFilters, setInternalShowFilters] = useState(
     isCompact ? false : hasAdvancedRefinementFilters,
   );
-  const [filtersPinned, setFiltersPinnedRaw] = useState(false);
-  const setFiltersPinned = (pinned: boolean) => {
-    setFiltersPinnedRaw(pinned);
-    onPinnedChange?.(pinned);
-  };
   const [openChoiceField, setOpenChoiceField] = useState<string | null>(null);
   const searchIdBase = useId().replace(/:/g, "");
   const searchRootRef = useRef<HTMLDivElement | null>(null);
@@ -116,41 +101,16 @@ export default function SearchBar({
       setInternalShowFilters(next);
     }
     if (!next) {
-      setFiltersPinned(false);
       setOpenChoiceField(null);
     }
     onRefineOpenChange?.(next);
   };
 
-  const refineTimer = useTimerDropdown({
-    delay: REFINE_CLOSE_DELAY_MS,
-    pinned: filtersPinned,
-    onClose: () => setRefineOpen(false),
-  });
-
-  const openFilters = (options?: { pin?: boolean }) => {
-    refineTimer.clearTimer();
-    if (options?.pin) {
-      setFiltersPinned(true);
-    }
-    setRefineOpen(true);
-    // Close sort dropdown immediately if not pinned
-    if (!sortPinned) {
-      sortTimer.clearTimer();
-      setSortDropdownOpen(false);
-    }
+  const toggleRefine = () => {
+    const next = !showFilters;
+    setRefineOpen(next);
+    if (next) setSortDropdownOpen(false);
   };
-
-  const closeFilters = () => {
-    refineTimer.clearTimer();
-    setRefineOpen(false);
-  };
-
-  useEffect(() => {
-    if (refinePinned !== undefined && refinePinned !== filtersPinned) {
-      setFiltersPinnedRaw(refinePinned);
-    }
-  }, [refinePinned]);
 
   useEffect(() => {
     if (!showFilters) return;
@@ -158,7 +118,7 @@ export default function SearchBar({
     const handlePointerDown = (event: PointerEvent) => {
       if (!(event.target instanceof Node)) return;
       if (!searchRootRef.current?.contains(event.target)) {
-        closeFilters();
+        setRefineOpen(false);
       }
     };
 
@@ -202,11 +162,6 @@ export default function SearchBar({
     return `${total} published archive item${total === 1 ? "" : "s"}`;
   }, [hasActiveFilters, hasQuery, loading, query, total]);
 
-  const availableSortFields = useMemo(() => {
-    const fields = getAvailableSortFields(hasQuery);
-    return hideCollectionFilter ? fields.filter((f) => f.value !== "collection") : fields;
-  }, [hasQuery, hideCollectionFilter]);
-
   const updateFilter = (partial: Partial<SearchFilters>) => {
     onFiltersChange({
       ...filters,
@@ -234,23 +189,13 @@ export default function SearchBar({
     return count;
   }, [filters, selectedFormats, isCompact, hideCollectionFilter]);
   const resolvedSort = getResolvedSort(query, filters);
-  const resolvedSortField = availableSortFields.find((option) => option.value === resolvedSort.sort)
-    || availableSortFields[0]
-    || SORT_FIELD_OPTIONS[0];
-  const sortDirectionLabel = getSortDirectionAriaLabel(resolvedSort.sort, resolvedSort.sortOrder);
-  const sortDirectionDisplayLabel = getSortDirectionDisplayLabel(resolvedSort.sort, resolvedSort.sortOrder);
-  const canToggleSortDirection = resolvedSort.sort !== "relevance";
 
-  // Combined sort dropdown (replaces sort field + direction toggle in toolbar)
+  // Sort dropdown
   const [internalSortOpen, setInternalSortOpen] = useState(false);
-  const [sortPinned, setSortPinned] = useState(false);
   const sortDropdownRef = useRef<HTMLDivElement>(null);
   const sortDropdownOpen = sortOpenProp ?? internalSortOpen;
   const setSortDropdownOpen = (next: boolean) => {
     setInternalSortOpen(next);
-    if (!next) {
-      setSortPinned(false);
-    }
     onSortOpenChange?.(next);
   };
   const visibleSortOptions = useMemo(() => {
@@ -263,37 +208,10 @@ export default function SearchBar({
   const showSortArrow = currentSortOption?.canToggle;
   const sortArrow = resolvedSort.sortOrder === "asc" ? "\u2191" : "\u2193";
 
-  const sortTimer = useTimerDropdown({
-    delay: REFINE_CLOSE_DELAY_MS,
-    pinned: sortPinned,
-    onClose: () => setSortDropdownOpen(false),
-  });
-
-  const openSortDropdown = () => {
-    sortTimer.clearTimer();
-    setSortDropdownOpen(true);
-    // Close filter dropdown if not pinned
-    if (!filtersPinned) {
-      refineTimer.clearTimer();
-      setRefineOpen(false);
-    }
-  };
-
-  const closeSortNow = () => {
-    sortTimer.clearTimer();
-    setSortDropdownOpen(false);
-  };
-
   const handleSortClick = () => {
-    if (!sortDropdownOpen) {
-      openSortDropdown();
-      setSortPinned(true);
-    } else if (sortPinned) {
-      setSortPinned(false);
-    } else {
-      setSortPinned(true);
-      sortTimer.clearTimer();
-    }
+    const next = !sortDropdownOpen;
+    setSortDropdownOpen(next);
+    if (next) setRefineOpen(false);
   };
 
   useEffect(() => {
@@ -301,18 +219,15 @@ export default function SearchBar({
     const close = (e: MouseEvent) => {
       if (sortDropdownRef.current && !sortDropdownRef.current.contains(e.target as Node)) {
         setSortDropdownOpen(false);
-        setSortPinned(false);
       }
     };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [sortDropdownOpen]);
 
-  // Sync sort open/pinned from parent prop
   useEffect(() => {
     if (sortOpenProp === false) {
       setInternalSortOpen(false);
-      setSortPinned(false);
     }
   }, [sortOpenProp]);
   // Accumulate all facet values ever seen so options never disappear when filtering
@@ -475,8 +390,6 @@ export default function SearchBar({
   const recipientFilterId = `${searchIdBase}-recipient`;
   const placeFilterId = `${searchIdBase}-place`;
   const topicFilterId = `${searchIdBase}-topic`;
-  const sortFilterId = `${searchIdBase}-sort`;
-  const sortDirectionLabelId = `${searchIdBase}-sort-direction`;
 
   const formatFacetItems = useMemo(() => {
     const formatCounts = new Map(
@@ -505,10 +418,8 @@ export default function SearchBar({
     >
       <button
         type="button"
-        className={`search-sort-trigger${sortPinned ? " is-pinned" : ""}`}
+        className="search-sort-trigger"
         onClick={handleSortClick}
-        onMouseEnter={openSortDropdown}
-        onMouseLeave={sortTimer.scheduleClose}
         aria-expanded={sortDropdownOpen}
         aria-label="Sort archive results"
       >
@@ -518,10 +429,8 @@ export default function SearchBar({
         {showSortArrow && <span className="search-sort-arrow">{sortArrow}</span>}
       </button>
       <ul
-          className={`search-sort-menu${sortPinned ? " is-pinned" : ""}${sortDropdownOpen ? "" : " search-sort-menu--hidden"}`}
+          className={`search-sort-menu${sortDropdownOpen ? "" : " search-sort-menu--hidden"}`}
           role="listbox"
-          onMouseEnter={sortTimer.clearTimer}
-          onMouseLeave={() => { if (!sortPinned) closeSortNow(); }}
         >
           {visibleSortOptions.map((opt) => {
             const isActive = opt.sort === resolvedSort.sort;
@@ -781,32 +690,10 @@ export default function SearchBar({
           <div className="search-compact-filter-wrap">
             <button
               type="button"
-              className={`filter-toggle search-refine-toggle search-compact-filter-toggle${showFilters ? " active" : ""}${filtersPinned ? " is-pinned" : ""}`}
-              aria-label={`Open archive refine controls${activeFilterCount > 0 ? `, ${activeFilterCount} active` : ""}`}
+              className={`filter-toggle search-refine-toggle search-compact-filter-toggle${showFilters ? " active" : ""}`}
+              aria-label={`${showFilters ? "Close" : "Open"} archive refine controls${activeFilterCount > 0 ? `, ${activeFilterCount} active` : ""}`}
               aria-expanded={showFilters}
-              aria-pressed={filtersPinned}
-              onMouseEnter={() => openFilters()}
-              onMouseLeave={refineTimer.scheduleClose}
-              onFocus={() => openFilters()}
-              onBlur={() => {
-                if (!filtersPinned) {
-                  refineTimer.scheduleClose();
-                }
-              }}
-              onClick={() => {
-                if (!showFilters) {
-                  openFilters({ pin: true });
-                  return;
-                }
-
-                if (filtersPinned) {
-                  setFiltersPinned(false);
-                  return;
-                }
-
-                setFiltersPinned(true);
-                refineTimer.clearTimer();
-              }}
+              onClick={toggleRefine}
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                 <path d="M1.5 2.5h11L8 7.5v4l-2 1.5V7.5z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
@@ -816,18 +703,7 @@ export default function SearchBar({
             {sortDropdown}
 
             {showFilters && (
-              <div
-                className={`search-compact-flyout search-refine-flyout${filtersPinned ? " is-pinned" : ""}`}
-                onMouseEnter={refineTimer.clearTimer}
-                onMouseLeave={refineTimer.scheduleClose}
-              >
-                {filtersPinned && (
-                  <div className="search-compact-flyout-header">
-                    <div className="search-compact-flyout-center">
-                      <span className="search-compact-pin-indicator">Pinned open</span>
-                    </div>
-                  </div>
-                )}
+              <div className="search-compact-flyout search-refine-flyout">
                 {formatFacetRow}
                 {refinementFields}
                 <div className="search-flyout-footer">
@@ -882,32 +758,10 @@ export default function SearchBar({
         <div className="search-compact-filter-wrap">
           <button
             type="button"
-            className={`filter-toggle search-refine-toggle search-full-filter-toggle${showFilters ? " active" : ""}${filtersPinned ? " is-pinned" : ""}`}
-            aria-label={`Open archive refine controls${activeFilterCount > 0 ? `, ${activeFilterCount} active` : ""}`}
+            className={`filter-toggle search-refine-toggle search-full-filter-toggle${showFilters ? " active" : ""}`}
+            aria-label={`${showFilters ? "Close" : "Open"} archive refine controls${activeFilterCount > 0 ? `, ${activeFilterCount} active` : ""}`}
             aria-expanded={showFilters}
-            aria-pressed={filtersPinned}
-            onMouseEnter={() => openFilters()}
-            onMouseLeave={refineTimer.scheduleClose}
-            onFocus={() => openFilters()}
-            onBlur={() => {
-              if (!filtersPinned) {
-                refineTimer.scheduleClose();
-              }
-            }}
-            onClick={() => {
-              if (!showFilters) {
-                openFilters({ pin: true });
-                return;
-              }
-
-              if (filtersPinned) {
-                setFiltersPinned(false);
-                return;
-              }
-
-              setFiltersPinned(true);
-              refineTimer.clearTimer();
-            }}
+            onClick={toggleRefine}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
               <path d="M1.5 2.5h11L8 7.5v4l-2 1.5V7.5z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
@@ -917,18 +771,7 @@ export default function SearchBar({
           {sortDropdown}
 
           {showFilters && (
-            <div
-              className={`search-full-flyout search-refine-flyout${filtersPinned ? " is-pinned" : ""}`}
-              onMouseEnter={refineTimer.clearTimer}
-              onMouseLeave={refineTimer.scheduleClose}
-            >
-              {filtersPinned && (
-                <div className="search-compact-flyout-header">
-                  <div className="search-compact-flyout-center">
-                    <span className="search-compact-pin-indicator">Pinned open</span>
-                  </div>
-                </div>
-              )}
+            <div className="search-full-flyout search-refine-flyout">
               {formatFacetRow}
               {refinementFields}
           <div className="search-flyout-footer">

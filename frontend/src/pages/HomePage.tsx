@@ -149,10 +149,11 @@ export default function HomePage() {
   const [stickyDockActive, setStickyDockActive] = useState(false);
   const [pageRefineOpen, setPageRefineOpen] = useState(false);
   const [compactRefineOpen, setCompactRefineOpen] = useState(false);
-  const compactRefinePinnedRef = useRef(false);
-  const [pageRefinePinned, setPageRefinePinned] = useState<boolean | undefined>(undefined);
   const [pageSortOpen, setPageSortOpen] = useState<boolean | undefined>(undefined);
   const [compactSortOpen, setCompactSortOpen] = useState<boolean | undefined>(undefined);
+  const headerDropdownOpenRef = useRef(false);
+
+  headerDropdownOpenRef.current = compactRefineOpen || compactSortOpen === true;
 
   useEffect(() => {
     let cancelled = false;
@@ -207,9 +208,6 @@ export default function HomePage() {
       nextParams.set("sortOrder", filters.sortOrder);
     }
 
-    // Persist to localStorage for cross-navigation restoration
-    saveSearchState("home", searchQuery, filters);
-
     if (nextParams.toString() === searchParams.toString()) {
       return;
     }
@@ -218,6 +216,12 @@ export default function HomePage() {
       setSearchParams(nextParams, { replace: true });
     });
   }, [filters, searchParams, searchQuery, setSearchParams]);
+
+  // Debounce localStorage persistence so it doesn't run on every keystroke
+  useEffect(() => {
+    const timer = window.setTimeout(() => saveSearchState("home", searchQuery, filters), 300);
+    return () => window.clearTimeout(timer);
+  }, [filters, searchQuery]);
 
   const requestParams = useMemo(
     () => ({
@@ -245,14 +249,6 @@ export default function HomePage() {
   useEffect(() => {
     let cancelled = false;
     const requestVersion = ++requestVersionRef.current;
-    const delay = searchQuery.trim()
-      || filters.collection?.trim()
-      || filters.sender?.trim()
-      || filters.recipient?.trim()
-      || filters.place?.trim()
-      || filters.topic?.length
-      ? 180
-      : 0;
     const timer = window.setTimeout(() => {
       setArchiveLoading(true);
       setArchiveLoadingMore(false);
@@ -272,13 +268,13 @@ export default function HomePage() {
           if (cancelled || requestVersion !== requestVersionRef.current) return;
           setArchiveLoading(false);
         });
-    }, delay);
+    }, 180);
 
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [requestParams, searchQuery]);
+  }, [requestParams]);
 
   useEffect(() => {
     const trigger = searchDockTriggerRef.current || archiveSearchRef.current;
@@ -293,7 +289,11 @@ export default function HomePage() {
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setStickyDockActive(false);
+          // Don't deactivate dock while a header dropdown is open —
+          // content height changes can briefly expose the trigger
+          if (!headerDropdownOpenRef.current) {
+            setStickyDockActive(false);
+          }
         } else {
           // bottom <= headerHeight means the trigger has scrolled under the header
           setStickyDockActive(entry.boundingClientRect.bottom <= headerHeight);
@@ -306,6 +306,21 @@ export default function HomePage() {
 
     return () => observer.disconnect();
   }, []);
+
+  // When header dropdown closes, re-evaluate whether dock should still be active
+  useEffect(() => {
+    const isHeaderDropdown = compactRefineOpen || compactSortOpen === true;
+    if (isHeaderDropdown || !stickyDockActive) return;
+
+    const trigger = searchDockTriggerRef.current || archiveSearchRef.current;
+    if (!trigger) return;
+    const header = document.querySelector(".header") as HTMLElement | null;
+    const headerHeight = header?.offsetHeight || 80;
+
+    if (trigger.getBoundingClientRect().bottom > headerHeight) {
+      setStickyDockActive(false);
+    }
+  }, [compactRefineOpen, compactSortOpen, stickyDockActive]);
 
   useEffect(() => {
     if (!stickyDockActive) {
@@ -328,7 +343,6 @@ export default function HomePage() {
             setCompactRefineOpen(open);
             if (open) {
               setPageRefineOpen(false);
-              setPageRefinePinned(false);
             }
           }}
           onSortOpenChange={(open) => {
@@ -336,9 +350,6 @@ export default function HomePage() {
             if (open) {
               setPageSortOpen(false);
             }
-          }}
-          onPinnedChange={(pinned) => {
-            compactRefinePinnedRef.current = pinned;
           }}
           onQueryChange={setSearchQuery}
           onFiltersChange={setFilters}
@@ -363,12 +374,14 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!stickyDockActive) {
-      if (compactRefinePinnedRef.current) {
+      if (compactRefineOpen) {
         setPageRefineOpen(true);
-        setPageRefinePinned(true);
       }
-      compactRefinePinnedRef.current = false;
+      if (compactSortOpen === true) {
+        setPageSortOpen(true);
+      }
       setCompactRefineOpen(false);
+      setCompactSortOpen(undefined);
     }
   }, [stickyDockActive]);
 
@@ -527,7 +540,7 @@ export default function HomePage() {
       {latestBlogPost && (
         <section className="home-editorial-rail">
           <section className="home-latest-update">
-            <div className="section-eyebrow">Latest From the Blog</div>
+            <div className="section-eyebrow">Latest From the Journal</div>
             <Link to={`/blog/${latestBlogPost.slug}`} className="latest-update-card">
               <div className="latest-update-content">
                 <h3 className="latest-update-title">{latestBlogPost.title}</h3>
@@ -557,7 +570,6 @@ export default function HomePage() {
           embedded
           variant="full"
           refineOpen={pageRefineOpen}
-          refinePinned={pageRefinePinned}
           sortOpen={pageSortOpen}
           dockTriggerRef={searchDockTriggerRef}
           onRefineOpenChange={(open) => {
@@ -571,9 +583,6 @@ export default function HomePage() {
             if (open) {
               setCompactSortOpen(false);
             }
-          }}
-          onPinnedChange={() => {
-            setPageRefinePinned(undefined);
           }}
           onQueryChange={setSearchQuery}
           onFiltersChange={setFilters}

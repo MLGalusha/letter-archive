@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import Header from "../Header";
 import { HeaderDockProvider, useHeaderDock } from "../../../contexts/HeaderDockContext";
@@ -39,14 +39,14 @@ describe("Header", () => {
   });
 
   it("Home link is active when on /", () => {
-    const { container } = renderHeader(["/"]);
+    renderHeader(["/"]);
 
     const homeLink = screen.getByText("Home").closest("a");
     expect(homeLink).toHaveClass("active");
   });
 
   it("Journal link is active when on /blog", () => {
-    const { container } = renderHeader(["/blog"]);
+    renderHeader(["/blog"]);
 
     const journalLink = screen.getByText("Journal").closest("a");
     expect(journalLink).toHaveClass("active");

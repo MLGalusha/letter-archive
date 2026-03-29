@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   absoluteUrl,
   absoluteImageUrl,
@@ -12,7 +12,6 @@ import {
   buildNotFoundSeo,
   buildBreadcrumbJsonLd,
   buildLetterTitle,
-  buildLetterDescription,
   getTranscriptExcerpt,
 } from '../seo';
 import type { BlogPost } from '../../api/client';

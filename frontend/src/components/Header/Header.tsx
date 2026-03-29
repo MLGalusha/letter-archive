@@ -1,5 +1,5 @@
 import "./Header.css";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { useState } from "react";
 import { useHeaderDock } from "../../contexts/HeaderDockContext";
 import useScrollDirection from "../../hooks/useScrollDirection";

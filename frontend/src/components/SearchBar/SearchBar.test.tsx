@@ -214,7 +214,7 @@ describe("SearchBar", () => {
 
     const flyout = screen.getByText("Refine", { selector: ".search-facet-label" }).closest(".search-full-flyout");
     expect(flyout).toBeTruthy();
-    expect(within(flyout!).getByRole("button", { name: "Clear All" })).toBeInTheDocument();
+    expect(within(flyout! as HTMLElement).getByRole("button", { name: "Clear All" })).toBeInTheDocument();
   });
 
   it("lets people choose archive-wide sorts from the sort dropdown", async () => {

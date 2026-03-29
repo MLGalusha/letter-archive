@@ -204,7 +204,6 @@ export default function SearchBar({
     return options;
   }, [hasQuery, hideCollectionFilter]);
   const currentSortOption = visibleSortOptions.find((o) => o.sort === resolvedSort.sort);
-  const currentSortLabel = currentSortOption?.label || visibleSortOptions[0]?.label || "Sort";
   const showSortArrow = currentSortOption?.canToggle;
   const sortArrow = resolvedSort.sortOrder === "asc" ? "\u2191" : "\u2193";
 

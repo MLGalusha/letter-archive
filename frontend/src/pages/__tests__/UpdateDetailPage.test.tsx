@@ -5,11 +5,11 @@ import UpdateDetailPage from "../UpdateDetailPage";
 import type { BlogPost } from "../../api/client";
 
 const getBlogPostMock = vi.fn();
-const getImageUrlMock = vi.fn((url: string) => `http://localhost:3002${url}`);
+const getImageUrlMock = vi.fn((url: string, _opts?: Record<string, unknown>) => `http://localhost:3002${url}`);
 
 vi.mock("../../api/client", () => ({
-  getBlogPost: (...args: unknown[]) => getBlogPostMock(...args),
-  getImageUrl: (...args: unknown[]) => getImageUrlMock(...args),
+  getBlogPost: (...args: string[]) => getBlogPostMock(...args),
+  getImageUrl: (url: string, opts?: Record<string, unknown>) => getImageUrlMock(url, opts),
 }));
 
 vi.mock("../../components/SEO", () => ({

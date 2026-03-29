@@ -6,11 +6,11 @@ import UpdatesPage from "../UpdatesPage";
 import type { BlogPost } from "../../api/client";
 
 const listBlogPostsMock = vi.fn();
-const getImageUrlMock = vi.fn((url: string) => `http://localhost:3002${url}`);
+const getImageUrlMock = vi.fn((url: string, _opts?: Record<string, unknown>) => `http://localhost:3002${url}`);
 
 vi.mock("../../api/client", () => ({
-  listBlogPosts: (...args: unknown[]) => listBlogPostsMock(...args),
-  getImageUrl: (...args: unknown[]) => getImageUrlMock(...args),
+  listBlogPosts: (params?: Record<string, unknown>) => listBlogPostsMock(params),
+  getImageUrl: (url: string, opts?: Record<string, unknown>) => getImageUrlMock(url, opts),
 }));
 
 vi.mock("../../components/SEO", () => ({

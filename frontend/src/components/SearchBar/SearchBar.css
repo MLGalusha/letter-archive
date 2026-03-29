@@ -167,7 +167,7 @@
 .radio-label {
   appearance: none;
   border: 1px solid rgba(217, 207, 191, 0.95);
-  border-radius: 999px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.8);
   color: var(--text-muted);
   cursor: pointer;

@@ -1,12 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { listBlogPosts, type BlogPost } from '../api/client';
 import Footer from '../components/Footer/Footer';
 import { buildBlogIndexSeo, stripMarkdown, truncateText } from '../utils/seo';
+import { saveJournalSort, loadJournalSort } from '../utils/searchPersistence';
 import './UpdatesPage.css';
 
 const PAGE_SIZE = 12;
+
+type SortField = 'date' | 'title' | 'author';
+type SortOrder = 'asc' | 'desc';
+
+const SORT_OPTIONS: { field: SortField; label: string; defaultOrder: SortOrder }[] = [
+  { field: 'date', label: 'Date', defaultOrder: 'desc' },
+  { field: 'title', label: 'Title', defaultOrder: 'asc' },
+  { field: 'author', label: 'Author', defaultOrder: 'asc' },
+];
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
@@ -26,6 +36,50 @@ export default function BlogPage() {
   const [error, setError] = useState<string | null>(null);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const blogIndexSeo = buildBlogIndexSeo(currentPage);
+
+  const [sortField, setSortField] = useState<SortField>(() => {
+    const saved = loadJournalSort();
+    return (saved?.field as SortField) || 'date';
+  });
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => {
+    const saved = loadJournalSort();
+    return (saved?.order as SortOrder) || 'desc';
+  });
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!sortOpen) return;
+    const close = (e: MouseEvent) => {
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) setSortOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [sortOpen]);
+
+  useEffect(() => {
+    saveJournalSort(sortField, sortOrder);
+  }, [sortField, sortOrder]);
+
+  const sortedPosts = useMemo(() => {
+    const dir = sortOrder === 'asc' ? 1 : -1;
+    return [...posts].sort((a, b) => {
+      switch (sortField) {
+        case 'date': {
+          const aDate = a.publishedAt || a.createdAt;
+          const bDate = b.publishedAt || b.createdAt;
+          return dir * aDate.localeCompare(bDate);
+        }
+        case 'title':
+          return dir * a.title.localeCompare(b.title);
+        case 'author': {
+          const aAuthor = a.authorDisplayName || '';
+          const bAuthor = b.authorDisplayName || '';
+          return dir * aAuthor.localeCompare(bAuthor);
+        }
+      }
+    });
+  }, [posts, sortField, sortOrder]);
 
   useEffect(() => {
     async function fetchBlogPosts() {
@@ -70,6 +124,52 @@ export default function BlogPage() {
             Essays, project notes, collection highlights, and the occasional oddity
             uncovered while preserving personal correspondence.
           </p>
+          <div className="updates-hero-bottom">
+            <div className="updates-sort" ref={sortRef}>
+              <button
+                type="button"
+                className="sort-trigger"
+                onClick={() => setSortOpen((o) => !o)}
+                aria-expanded={sortOpen}
+                aria-label="Sort journal entries"
+              >
+                <span>{SORT_OPTIONS.find((o) => o.field === sortField)!.label}</span>
+                <span className="sort-indicators">
+                  <span className="sort-arrow">{sortOrder === 'asc' ? '\u2191' : '\u2193'}</span>
+                  <svg className={`sort-chevron${sortOpen ? ' sort-chevron--open' : ''}`} width="8" height="5" viewBox="0 0 8 5" aria-hidden="true">
+                    <path d="M0 0l4 5 4-5z" fill="currentColor" />
+                  </svg>
+                </span>
+              </button>
+              <ul
+                className={`sort-menu${sortOpen ? '' : ' sort-menu--hidden'}`}
+                role="listbox"
+              >
+                {SORT_OPTIONS.map((opt) => {
+                  const isActive = sortField === opt.field;
+                  return (
+                    <li
+                      key={opt.field}
+                      role="option"
+                      aria-selected={isActive}
+                      className={`sort-option${isActive ? ' sort-option--active' : ''}`}
+                      onClick={() => {
+                        if (isActive) {
+                          setSortOrder((o) => o === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortField(opt.field);
+                          setSortOrder(opt.defaultOrder);
+                        }
+                      }}
+                    >
+                      <span>{opt.label}</span>
+                      {isActive && <span className="sort-arrow">{sortOrder === 'asc' ? '\u2191' : '\u2193'}</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </div>
         </header>
 
         {loading && <p className="loading-message">Loading journal entries...</p>}
@@ -83,7 +183,7 @@ export default function BlogPage() {
 
         {posts.length > 0 && (
           <div className="updates-grid">
-            {posts.map((post) => (
+            {sortedPosts.map((post) => (
               <Link
                 key={post.id}
                 to={`/blog/${post.slug}`}
@@ -99,15 +199,10 @@ export default function BlogPage() {
                   </div>
                 )}
                 <div className="update-card-body">
-                  <div className="update-card-meta">
-                    {post.category && (
-                      <span className="update-category-badge">{post.category}</span>
-                    )}
-                    <span className="update-date">
-                      {formatDate(post.publishedAt || post.createdAt)}
-                    </span>
-                  </div>
                   <h2 className="update-card-title">{post.title}</h2>
+                  <span className="update-date">
+                    {formatDate(post.publishedAt || post.createdAt)}
+                  </span>
                   <p className="update-card-excerpt">
                     {post.excerpt || truncateText(stripMarkdown(post.bodyMarkdown), 150)}
                   </p>

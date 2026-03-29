@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { listCollections, type CollectionInfo } from '../api/collections';
@@ -50,59 +50,16 @@ export default function CollectionsPage() {
     return (saved?.order as SortOrder) || 'desc';
   });
   const [sortOpen, setSortOpen] = useState(false);
-  const [sortPinned, setSortPinned] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
-  const sortCloseTimerRef = useRef<number | null>(null);
-
-  const clearSortCloseTimer = () => {
-    if (sortCloseTimerRef.current !== null) {
-      window.clearTimeout(sortCloseTimerRef.current);
-      sortCloseTimerRef.current = null;
-    }
-  };
-
-  const openSort = () => {
-    clearSortCloseTimer();
-    setSortOpen(true);
-  };
-
-  const closeSort = () => {
-    clearSortCloseTimer();
-    setSortOpen(false);
-    setSortPinned(false);
-  };
-
-  const scheduleSortClose = () => {
-    clearSortCloseTimer();
-    if (sortPinned) return;
-    sortCloseTimerRef.current = window.setTimeout(() => {
-      setSortOpen(false);
-      sortCloseTimerRef.current = null;
-    }, 1000);
-  };
-
-  const handleSortClick = () => {
-    if (!sortOpen) {
-      openSort();
-      setSortPinned(true);
-    } else if (sortPinned) {
-      setSortPinned(false);
-    } else {
-      setSortPinned(true);
-      clearSortCloseTimer();
-    }
-  };
 
   useEffect(() => {
     if (!sortOpen) return;
     const close = (e: MouseEvent) => {
-      if (sortRef.current && !sortRef.current.contains(e.target as Node)) closeSort();
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) setSortOpen(false);
     };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [sortOpen]);
-
-  useEffect(() => () => clearSortCloseTimer(), []);
 
   // Persist sort to localStorage
   useEffect(() => {
@@ -163,10 +120,8 @@ export default function CollectionsPage() {
             <div className="collections-sort" ref={sortRef}>
               <button
                 type="button"
-                className={`sort-trigger${sortPinned ? ' sort-trigger--pinned' : ''}`}
-                onClick={handleSortClick}
-                onMouseEnter={openSort}
-                onMouseLeave={scheduleSortClose}
+                className="sort-trigger"
+                onClick={() => setSortOpen((o) => !o)}
                 aria-expanded={sortOpen}
                 aria-label="Sort collections"
               >
@@ -179,10 +134,8 @@ export default function CollectionsPage() {
                 </span>
               </button>
               <ul
-                className={`sort-menu${sortPinned ? ' sort-menu--pinned' : ''}${sortOpen ? '' : ' sort-menu--hidden'}`}
+                className={`sort-menu${sortOpen ? '' : ' sort-menu--hidden'}`}
                 role="listbox"
-                onMouseEnter={clearSortCloseTimer}
-                onMouseLeave={() => { if (!sortPinned) closeSort(); }}
               >
                 {SORT_OPTIONS.map((opt) => {
                   const isActive = sortField === opt.field;

@@ -47,3 +47,21 @@ export function loadCollectionsSort(): { field: string; order: string } | null {
     return null;
   }
 }
+
+export function saveJournalSort(field: string, order: string): void {
+  try {
+    localStorage.setItem('archiveSort:journal', JSON.stringify({ field, order }));
+  } catch {
+    // ignore
+  }
+}
+
+export function loadJournalSort(): { field: string; order: string } | null {
+  try {
+    const raw = localStorage.getItem('archiveSort:journal');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}

@@ -13,7 +13,7 @@ import './BlockRenderer.css';
 export interface BlockRendererProps {
   blocks: ContentBlock[];
   liveStats?: { letters: number; collections: number } | null;
-  siteSettings?: Record<string, string> | null;
+  siteSettings?: Record<string, string | undefined> | null;
   editable?: boolean;
   onBlockChange?: (blockId: string, patch: Partial<ContentBlock>) => void;
 }

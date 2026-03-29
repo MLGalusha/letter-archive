@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { apiGet } from '../api/client';
 
 export interface SiteSettings {
+  [key: string]: string | undefined;
   site_title?: string;
   site_description?: string;
   donate_onetime_url?: string;

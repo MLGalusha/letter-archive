@@ -447,7 +447,7 @@ export default function AdminDashboard() {
     toggleSelection,
     clearSelection,
     allPageSelected,
-    somePageSelected,
+    somePageSelected: _somePageSelected,
     handleSelectAllPage,
     selectAllFiltered,
   } = useDashboardSelection(filteredLetters);

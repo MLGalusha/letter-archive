@@ -1,13 +1,13 @@
 import type { ContactBlock, ContactChannel } from '../../content/blocks';
 import Editable from './Editable';
 
-function resolveEmail(settingKey: string, siteSettings?: Record<string, string> | null): string {
+function resolveEmail(settingKey: string, siteSettings?: Record<string, string | undefined> | null): string {
   return siteSettings?.[settingKey] || `${settingKey.replace('contact_', '').replace('_email', '')}@letterarchive.org`;
 }
 
 interface Props {
   block: ContactBlock;
-  siteSettings?: Record<string, string> | null;
+  siteSettings?: Record<string, string | undefined> | null;
   editable?: boolean;
   onChange?: (patch: Partial<ContactBlock>) => void;
 }

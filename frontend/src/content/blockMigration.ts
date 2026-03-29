@@ -28,8 +28,8 @@ export function resolveBlocks(
   }
 
   // New format: has a blocks array
-  if (Array.isArray((contentJson as BlockPageContent).blocks)) {
-    return (contentJson as BlockPageContent).blocks;
+  if (Array.isArray((contentJson as unknown as BlockPageContent).blocks)) {
+    return (contentJson as unknown as BlockPageContent).blocks;
   }
 
   // Old flat-field format: convert

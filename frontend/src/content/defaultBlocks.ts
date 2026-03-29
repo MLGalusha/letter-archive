@@ -5,7 +5,6 @@ import {
   createStatsBlock,
   createStepsBlock,
   createTwoColumnBlock,
-  createCtaBlock,
   createCardsBlock,
   createContactBlock,
 } from './blockFactories';

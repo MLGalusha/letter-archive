@@ -98,9 +98,10 @@ function SentimentArcChart({ data }: SentimentArcChartProps) {
         <ResponsiveContainer width="100%" height={280}>
           <AreaChart
             data={chartData}
-            onClick={(e) => {
-              if (e?.activePayload?.[0]?.payload) {
-                handleClick(e.activePayload[0].payload as ChartPoint);
+            onClick={(e: Record<string, unknown>) => {
+              const payload = (e?.activePayload as Array<{ payload: ChartPoint }> | undefined)?.[0]?.payload;
+              if (payload) {
+                handleClick(payload);
               }
             }}
             style={{ cursor: 'pointer' }}

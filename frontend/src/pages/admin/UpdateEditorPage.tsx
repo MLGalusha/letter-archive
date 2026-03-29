@@ -616,7 +616,7 @@ export default function JournalEditorPage() {
                   linkDialogPlugin(),
                   imagePlugin({
                     imagePreviewHandler: async (src) => resolveAdminImageSrc(src),
-                    EditImageToolbar: ImageLayoutToolbar,
+                    EditImageToolbar: ImageLayoutToolbar as React.FC<object>,
                   }),
                   tablePlugin(),
                   thematicBreakPlugin(),

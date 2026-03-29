@@ -1,3 +1,5 @@
+import type { JSX } from 'react';
+
 /**
  * Shared transcript rendering utilities used by both the public letter
  * detail page and the admin reading view preview.

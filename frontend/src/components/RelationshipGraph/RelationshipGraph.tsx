@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import {
   select,
-  zoom,
+  zoom as d3Zoom,
   zoomIdentity,
   forceSimulation,
   forceLink,
@@ -91,22 +91,22 @@ export function RelationshipGraph({
   const handleZoomIn = useCallback(() => {
     if (!svgRef.current) return;
     const svg = select(svgRef.current);
-    const zoom = zoom<SVGSVGElement, unknown>();
-    svg.transition().duration(300).call(zoom.scaleBy, 1.3);
+    const zoomBehavior = d3Zoom<SVGSVGElement, unknown>();
+    svg.transition().duration(300).call(zoomBehavior.scaleBy, 1.3);
   }, []);
 
   const handleZoomOut = useCallback(() => {
     if (!svgRef.current) return;
     const svg = select(svgRef.current);
-    const zoom = zoom<SVGSVGElement, unknown>();
-    svg.transition().duration(300).call(zoom.scaleBy, 0.7);
+    const zoomBehavior = d3Zoom<SVGSVGElement, unknown>();
+    svg.transition().duration(300).call(zoomBehavior.scaleBy, 0.7);
   }, []);
 
   const handleResetZoom = useCallback(() => {
     if (!svgRef.current) return;
     const svg = select(svgRef.current);
-    const zoom = zoom<SVGSVGElement, unknown>();
-    svg.transition().duration(300).call(zoom.transform, zoomIdentity);
+    const zoomBehavior = d3Zoom<SVGSVGElement, unknown>();
+    svg.transition().duration(300).call(zoomBehavior.transform, zoomIdentity);
   }, []);
 
   useEffect(() => {
@@ -133,13 +133,13 @@ export function RelationshipGraph({
     const g = svg.append('g').attr('class', 'graph-container');
 
     // Setup zoom behavior
-    const zoom = zoom<SVGSVGElement, unknown>()
+    const zoomBehavior = d3Zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 4])
-      .on('zoom', (event) => {
+      .on('zoom', (event: { transform: string }) => {
         g.attr('transform', event.transform);
       });
 
-    svg.call(zoom);
+    svg.call(zoomBehavior);
 
     // Create force simulation
     const simulation = forceSimulation<SimulationNode>(simNodes)

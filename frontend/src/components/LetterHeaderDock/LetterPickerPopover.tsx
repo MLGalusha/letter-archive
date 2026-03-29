@@ -14,7 +14,7 @@ interface LetterPickerPopoverProps {
 export default function LetterPickerPopover({
   letters,
   currentLetterId,
-  currentPosition,
+  currentPosition: _currentPosition,
   total,
   onClose,
 }: LetterPickerPopoverProps) {

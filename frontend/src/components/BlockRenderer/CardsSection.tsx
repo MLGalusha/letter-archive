@@ -1,7 +1,7 @@
 import type { CardsBlock, CardItem } from '../../content/blocks';
 import Editable from './Editable';
 
-function resolveLink(link: string, siteSettings?: Record<string, string> | null): string {
+function resolveLink(link: string, siteSettings?: Record<string, string | undefined> | null): string {
   if (!link) return '#';
   if (link.startsWith('mailto:$')) {
     const key = link.slice(8);
@@ -17,7 +17,7 @@ function resolveLink(link: string, siteSettings?: Record<string, string> | null)
 
 interface Props {
   block: CardsBlock;
-  siteSettings?: Record<string, string> | null;
+  siteSettings?: Record<string, string | undefined> | null;
   editable?: boolean;
   onChange?: (patch: Partial<CardsBlock>) => void;
 }

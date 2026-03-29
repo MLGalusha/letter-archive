@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyTranscriptLines, FORCE_CONTINUATION, type ClassifiedLine } from "../reflowClassifier";
+import { classifyTranscriptLines, FORCE_CONTINUATION } from "../reflowClassifier";
 
 function classify(text: string) {
   return classifyTranscriptLines(text).map((c) => c.classification);

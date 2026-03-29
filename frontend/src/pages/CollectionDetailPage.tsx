@@ -93,13 +93,19 @@ function HighlightCard({
       className={`cd-highlight-card cd-highlight-card--${mediaType}`}
       onClick={() => onNavigate(letter.id, currentImage?.id)}
     >
-      {currentImage?.imageUrl ? (
-        <img
-          className="cd-highlight-img"
-          src={getImageUrl(currentImage.imageUrl, { width: 720 })}
-          alt={hook || label}
-          loading="lazy"
-        />
+      {images.length > 0 ? (
+        images.map((img, idx) => (
+          img.imageUrl ? (
+            <img
+              key={img.id}
+              className="cd-highlight-img"
+              src={getImageUrl(img.imageUrl, { width: 720 })}
+              alt={idx === pageIndex ? (hook || label) : ''}
+              loading={idx === 0 ? 'eager' : 'lazy'}
+              style={{ opacity: idx === pageIndex ? 1 : 0 }}
+            />
+          ) : null
+        ))
       ) : (
         <div className="cd-highlight-placeholder" />
       )}
@@ -169,12 +175,16 @@ function GalleryCard({
       className={`cd-highlight-card cd-highlight-card--${item.mediaType}`}
       onClick={() => onNavigate(item.letterId, item.imageId)}
     >
-      <img
-        className="cd-highlight-img"
-        src={getImageUrl(item.imageUrl, { width: 720 })}
-        alt={item.hook || item.mediaLabel}
-        loading="lazy"
-      />
+      {items.map((gi, idx) => (
+        <img
+          key={gi.imageId || idx}
+          className="cd-highlight-img"
+          src={getImageUrl(gi.imageUrl, { width: 720 })}
+          alt={idx === index ? (gi.hook || gi.mediaLabel) : ''}
+          loading={idx === 0 ? 'eager' : 'lazy'}
+          style={{ opacity: idx === index ? 1 : 0 }}
+        />
+      ))}
       <div className="cd-highlight-overlay" />
       <span className="cd-highlight-label">{item.mediaLabel}</span>
       <div className="cd-highlight-content">

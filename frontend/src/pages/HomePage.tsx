@@ -468,11 +468,6 @@ export default function HomePage() {
         </div>
         {heroLetter ? (() => {
           const currentImage = heroImages[heroPageIndex] || null;
-          const heroSrc = currentImage?.imageUrl
-            ? getImageUrl(currentImage.imageUrl, { width: 1200 })
-            : heroLetter.imageUrl
-              ? getImageUrl(heroLetter.imageUrl, { width: 1200 })
-              : null;
           const hasMultiplePages = heroImages.length > 1;
           return (<button
             type="button"
@@ -485,10 +480,23 @@ export default function HomePage() {
               navigate(`/letter/${heroLetter.id}?${params.toString()}`);
             }}
           >
-            {heroSrc ? (
+            {heroImages.length > 0 ? (
+              heroImages.map((img, idx) => (
+                <img
+                  key={img.id}
+                  className="letter-card-image"
+                  src={getImageUrl(img.imageUrl, { width: 1200 })}
+                  alt=""
+                  loading={idx === 0 ? "eager" : "lazy"}
+                  fetchPriority={idx === 0 ? "high" : undefined}
+                  decoding="async"
+                  style={{ opacity: idx === heroPageIndex ? 1 : 0 }}
+                />
+              ))
+            ) : heroLetter.imageUrl ? (
               <img
                 className="letter-card-image"
-                src={heroSrc}
+                src={getImageUrl(heroLetter.imageUrl, { width: 1200 })}
                 alt=""
                 loading="eager"
                 fetchPriority="high"

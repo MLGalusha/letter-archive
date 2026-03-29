@@ -102,6 +102,8 @@
 .blk-section {
   border-radius: 30px;
   padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
 }
 
 .blk-section--featured {
@@ -124,7 +126,8 @@
 
 .blk-section-link {
   display: inline-block;
-  margin-top: 0.25rem;
+  margin-top: auto;
+  padding-top: 0.25rem;
   font-size: 0.86rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -395,29 +398,24 @@
 
 .editable-inline {
   display: block;
-  width: 100%;
-  margin: 0;
+  width: calc(100% + 3px);
+  margin: 0 -1.5px;
   padding: 0;
-  border: 1.5px dashed transparent;
+  border: 1.5px dashed rgba(31, 109, 122, 0.25);
   border-radius: 6px;
-  background: transparent;
+  background: rgba(31, 109, 122, 0.018);
   font: inherit;
-  font-size: inherit;
-  font-weight: inherit;
-  font-style: inherit;
-  font-family: inherit;
-  line-height: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
   color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
   resize: none;
   overflow: hidden;
   transition: border-color 0.15s, background 0.15s;
 }
 
 .editable-inline:hover {
-  border-color: rgba(31, 109, 122, 0.35);
-  background: rgba(31, 109, 122, 0.03);
+  border-color: rgba(31, 109, 122, 0.45);
+  background: rgba(31, 109, 122, 0.04);
 }
 
 .editable-inline:focus {

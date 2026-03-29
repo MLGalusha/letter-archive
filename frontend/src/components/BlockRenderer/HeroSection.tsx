@@ -24,6 +24,7 @@ export default function HeroSection({ block, editable, onChange }: Props) {
         onChange={(v) => onChange?.({ heading: v })}
         tag="h1"
         className="blk-hero-heading"
+        multiline
         placeholder="Heading"
       />
       <Editable

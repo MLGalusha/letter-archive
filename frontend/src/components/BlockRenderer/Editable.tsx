@@ -13,8 +13,8 @@ interface EditableProps {
 
 /**
  * Renders text as a normal element when `editable` is false,
- * or as a transparent input/textarea when `editable` is true.
- * Inherits all font styles from the className so it looks identical to the real page.
+ * or wraps a transparent input/textarea inside the semantic tag when `editable` is true.
+ * The tag carries the styling (font-size, font-family, etc.) and the input inherits it.
  */
 export default function Editable({
   value,
@@ -47,25 +47,29 @@ export default function Editable({
 
   if (multiline) {
     return (
-      <textarea
-        ref={ref}
-        className={`editable-inline editable-inline--multi ${className}`}
-        value={value}
-        onChange={(e) => { onChange?.(e.target.value); }}
-        onInput={resize}
-        placeholder={placeholder}
-        rows={1}
-      />
+      <Tag className={className}>
+        <textarea
+          ref={ref}
+          className="editable-inline editable-inline--multi"
+          value={value}
+          onChange={(e) => { onChange?.(e.target.value); }}
+          onInput={resize}
+          placeholder={placeholder}
+          rows={1}
+        />
+      </Tag>
     );
   }
 
   return (
-    <input
-      type="text"
-      className={`editable-inline ${className}`}
-      value={value}
-      onChange={(e) => onChange?.(e.target.value)}
-      placeholder={placeholder}
-    />
+    <Tag className={className}>
+      <input
+        type="text"
+        className="editable-inline"
+        value={value}
+        onChange={(e) => onChange?.(e.target.value)}
+        placeholder={placeholder}
+      />
+    </Tag>
   );
 }

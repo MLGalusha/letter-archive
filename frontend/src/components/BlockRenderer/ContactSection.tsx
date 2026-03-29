@@ -50,33 +50,35 @@ export default function ContactSection({ block, siteSettings, editable, onChange
         placeholder="Intro text"
       />
 
-      <div className="blk-contact-primary blk-card">
-        <div className="blk-contact-icon">{'\u2709'}</div>
-        <div className="blk-contact-main">
-          <Editable
-            value={block.primaryTitle}
-            editable={editable}
-            onChange={(v) => onChange?.({ primaryTitle: v })}
-            tag="h3"
-            className=""
-            placeholder="Contact title"
-          />
-          <Editable
-            value={block.primaryText}
-            editable={editable}
-            onChange={(v) => onChange?.({ primaryText: v })}
-            tag="p"
-            className=""
-            multiline
-            placeholder="Contact description"
-          />
-          {editable ? (
-            <span className="blk-email-btn blk-non-editable">{primaryEmail}</span>
-          ) : (
-            <a href={`mailto:${primaryEmail}`} className="blk-email-btn">{primaryEmail}</a>
-          )}
+      {(block.primaryTitle || editable) && (
+        <div className="blk-contact-primary blk-card">
+          <div className="blk-contact-icon">{'\u2709'}</div>
+          <div className="blk-contact-main">
+            <Editable
+              value={block.primaryTitle}
+              editable={editable}
+              onChange={(v) => onChange?.({ primaryTitle: v })}
+              tag="h3"
+              className=""
+              placeholder="Contact title"
+            />
+            <Editable
+              value={block.primaryText}
+              editable={editable}
+              onChange={(v) => onChange?.({ primaryText: v })}
+              tag="p"
+              className=""
+              multiline
+              placeholder="Contact description"
+            />
+            {editable ? (
+              <span className="blk-email-btn blk-non-editable">{primaryEmail}</span>
+            ) : (
+              <a href={`mailto:${primaryEmail}`} className="blk-email-btn">{primaryEmail}</a>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {block.channels.length > 0 && (
         <div className="blk-contact-channels">

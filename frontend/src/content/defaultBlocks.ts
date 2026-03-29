@@ -41,7 +41,7 @@ function aboutBlocks(): ContentBlock[] {
       steps: [
         {
           title: 'Digitize',
-          text: 'Each letter is photographed at high resolution, capturing every fold, stain, margin note, and pencil correction exactly as the writer left it.',
+          text: 'Each letter is photographed to capture the handwriting, margin notes, and physical details as faithfully as possible.',
         },
         {
           title: 'Transcribe',
@@ -75,14 +75,6 @@ function aboutBlocks(): ContentBlock[] {
         },
       ],
     }),
-    createCtaBlock({
-      eyebrow: '',
-      text: 'Start exploring \u2014 read the letters, follow the people, trace the places. Every collection is a door into someone else\u2019s life.',
-      buttons: [
-        { label: 'Browse Collections', link: '/collections' },
-        { label: 'Read the Journal', link: '/blog' },
-      ],
-    }),
   ];
 }
 
@@ -94,7 +86,7 @@ function supportBlocks(): ContentBlock[] {
       kicker: 'Support & Contact',
       heading: 'Help us keep these voices alive',
       subtitle:
-        'Letter Archive runs on real resources \u2014 scanning equipment, archival storage, cloud hosting, and hundreds of hours of careful human work. There are no corporate sponsors or institutional grants behind this project. It exists because people like you believe these voices deserve to be heard.',
+        'Letter Archive runs on real resources \u2014 equipment, storage, hosting, and a lot of careful human work. There are no corporate sponsors or institutional grants behind this project. It exists because people like you believe these voices deserve to be heard.',
     }),
     createQuoteBlock({
       eyebrow: 'Why your support matters',
@@ -102,7 +94,7 @@ function supportBlocks(): ContentBlock[] {
         'Every letter in this archive was written by someone who trusted that their words would reach the person they loved. Preserving that trust \u2014 across decades, across generations \u2014 is the least we can do.',
       attribution: '',
       bodyText:
-        'This project started with one family\u2019s letters and grew into something much larger. There is no grant committee or endowment keeping the lights on. What keeps this archive running is the generosity of people who understand that ordinary voices matter \u2014 that the letter your grandmother wrote from a hospital bed in 1943 is as important to history as any general\u2019s memoir.',
+        'This project started with one family\u2019s letters and grew into something much larger. There is no grant committee or endowment keeping the lights on. What keeps this archive running is the generosity of people who understand that ordinary voices matter \u2014 that a letter written from a kitchen table is as important to history as any general\u2019s memoir.',
     }),
     createCardsBlock({
       eyebrow: 'Where Your Support Goes',
@@ -113,7 +105,7 @@ function supportBlocks(): ContentBlock[] {
           icon: '\u{1F4F7}',
           eyebrow: '',
           title: 'Digitization',
-          text: 'High-resolution scanning equipment and archival supplies to capture every crease, margin note, and faded line of ink before time erases them.',
+          text: 'Scanning equipment and supplies to capture the details of each letter \u2014 the handwriting, the margin notes, the faded ink \u2014 before time takes them.',
           buttonLabel: '',
           buttonLink: '',
         },
@@ -121,7 +113,7 @@ function supportBlocks(): ContentBlock[] {
           icon: '\u{1F5C3}',
           eyebrow: '',
           title: 'Preservation & Storage',
-          text: 'Acid-free materials for physical preservation and secure cloud infrastructure to safeguard digital copies for decades to come.',
+          text: 'Safe, dry storage for physical letters and reliable cloud backups for digital copies \u2014 so nothing is lost once it enters the archive.',
           buttonLabel: '',
           buttonLink: '',
         },
@@ -144,7 +136,7 @@ function supportBlocks(): ContentBlock[] {
           icon: '',
           eyebrow: 'One-Time',
           title: 'Make a donation',
-          text: 'A single contribution of any size goes directly toward preserving and publishing letters. No amount is too small \u2014 every dollar digitizes another page of history.',
+          text: 'A single contribution of any size goes directly toward preserving and publishing letters. No amount is too small \u2014 every bit helps keep the archive running and growing.',
           buttonLabel: 'Donate Once',
           buttonLink: '$donate_onetime_url',
         },
@@ -170,10 +162,16 @@ function supportBlocks(): ContentBlock[] {
       eyebrow: 'Get in Touch',
       heading: "We'd love to hear from you",
       intro: 'Whether you have letters to contribute, a research question, or just want to learn more \u2014 we read every message and respond to each one personally.',
-      primaryTitle: 'General Inquiries',
-      primaryText: 'Questions about the archive, the project, or how to get involved? Start here.',
+      primaryTitle: '',
+      primaryText: '',
       primaryEmailKey: 'contact_general_email',
       channels: [
+        {
+          eyebrow: 'General',
+          title: 'General Inquiries',
+          text: 'Questions about the archive, the project, or how to get involved? Start here.',
+          emailSettingKey: 'contact_general_email',
+        },
         {
           eyebrow: 'Contribute',
           title: 'Share your letters',
@@ -181,25 +179,11 @@ function supportBlocks(): ContentBlock[] {
           emailSettingKey: 'contact_contribute_email',
         },
         {
-          eyebrow: 'Research',
-          title: 'Academic access',
-          text: 'Historians, genealogists, and students are welcome. We can help locate material relevant to your area of study.',
-          emailSettingKey: 'contact_research_email',
-        },
-        {
           eyebrow: 'Volunteer',
           title: 'Join the effort',
           text: 'Help with transcription verification, metadata review, or digitization. No experience necessary \u2014 just care and curiosity.',
           emailSettingKey: 'contact_volunteer_email',
         },
-      ],
-    }),
-    createCtaBlock({
-      eyebrow: 'Thank You',
-      text: 'Whether you give a dollar, an hour, or a letter \u2014 you become part of the story this archive tells. It exists because of people who believe that the quiet, honest words of everyday life deserve to survive. From our family to yours: thank you.',
-      buttons: [
-        { label: 'About the Project', link: '/about' },
-        { label: 'Browse the Archive', link: '/collections' },
       ],
     }),
   ];

@@ -31,6 +31,7 @@ export default function StepsSection({ block, editable, onChange }: Props) {
         onChange={(v) => onChange?.({ heading: v })}
         tag="h2"
         className="blk-steps-heading"
+        multiline
         placeholder="Section heading"
       />
       <div className="blk-steps-grid">

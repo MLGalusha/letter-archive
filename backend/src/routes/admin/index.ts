@@ -9,6 +9,7 @@ import settingsRouter from './settings.js';
 import notificationsRouter from './notifications.js';
 import usageRouter from './usage.js';
 import contentRouter from './content.js';
+import blogImagesRouter from './blog-images.js';
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use(settingsRouter);
 router.use(notificationsRouter);
 router.use(usageRouter);
 router.use(contentRouter);
+router.use(blogImagesRouter);
 
 export default router;

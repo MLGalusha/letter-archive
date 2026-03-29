@@ -18,7 +18,6 @@ import {
   CreateLink,
   DiffSourceToggleWrapper,
   InsertCodeBlock,
-  InsertImage,
   InsertTable,
   InsertThematicBreak,
   ListsToggle,
@@ -43,7 +42,7 @@ import AdminLayout from '../../components/AdminLayout';
 import { Button } from '../../components/common';
 import AutoResizeTextarea from '../../components/common/AutoResizeTextarea';
 import Icon from '../../components/common/Icon';
-import { getErrorMessage } from '../../api/client';
+import { getErrorMessage, getImageUrl } from '../../api/client';
 import {
   adminCreateBlogPost,
   adminDeleteBlogPost,
@@ -55,6 +54,8 @@ import {
 } from '../../api/admin/content';
 import { useToast } from '../../contexts/ToastContext';
 import { COMMON_BLOG_CATEGORIES } from './blogEditorConfig';
+import JournalImageDialog from '../../components/JournalImageDialog';
+import ImageLayoutToolbar from '../../components/ImageLayoutToolbar';
 import '../UpdateDetailPage.css';
 import './UpdateEditorPage.css';
 
@@ -118,6 +119,14 @@ function deriveExcerpt(markdown: string): string {
   return plain.slice(0, 180).trim();
 }
 
+/** Resolve image src for admin context — adds auth token for /images/ paths */
+function resolveAdminImageSrc(src: string): string {
+  if (src.startsWith('/images/') || src.startsWith('/blog-images/')) {
+    return getImageUrl(src);
+  }
+  return src;
+}
+
 function formatSavedTime(iso: string | null): string {
   if (!iso) return 'Not saved yet';
   const date = new Date(iso);
@@ -178,6 +187,7 @@ export default function JournalEditorPage() {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
+  const [imageDialogOpen, setImageDialogOpen] = useState(false);
 
   const postId = id || createdDraftId;
   const isNew = !postId;
@@ -424,6 +434,17 @@ export default function JournalEditorPage() {
     }
   };
 
+  const handleImageInsert = useCallback((url: string, alt?: string) => {
+    const imgMd = `![${alt || ''}](${url})`;
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    // Focus editor at the end so insertion always works, even without a cursor
+    editor.focus(() => {
+      editor.insertMarkdown(imgMd);
+    }, { defaultSelection: 'rootEnd' });
+  }, []);
+
   /* ---- render ---- */
 
   if (loading) {
@@ -521,13 +542,14 @@ export default function JournalEditorPage() {
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeSanitize]}
                   components={{
-                    img({ alt, src }) {
+                    img({ alt, src, title }) {
                       if (!src) return null;
                       return (
                         <img
                           className="markdown-inline-image"
-                          src={src}
+                          src={resolveAdminImageSrc(src)}
                           alt={alt || ''}
+                          title={title || undefined}
                           loading="lazy"
                         />
                       );
@@ -592,7 +614,10 @@ export default function JournalEditorPage() {
                   quotePlugin(),
                   linkPlugin(),
                   linkDialogPlugin(),
-                  imagePlugin(),
+                  imagePlugin({
+                    imagePreviewHandler: async (src) => resolveAdminImageSrc(src),
+                    EditImageToolbar: ImageLayoutToolbar,
+                  }),
                   tablePlugin(),
                   thematicBreakPlugin(),
                   codeBlockPlugin({ defaultCodeBlockLanguage: 'text' }),
@@ -607,7 +632,14 @@ export default function JournalEditorPage() {
                         <ListsToggle />
                         <CreateLink />
                         <CodeToggle />
-                        <InsertImage />
+                        <button
+                          type="button"
+                          className="journal-toolbar-image-btn"
+                          title="Insert image"
+                          onClick={() => setImageDialogOpen(true)}
+                        >
+                          <Icon name="image" size={18} />
+                        </button>
                         <InsertTable />
                         <InsertCodeBlock />
                         <InsertThematicBreak />
@@ -779,6 +811,12 @@ export default function JournalEditorPage() {
           </>
         )}
       </div>
+
+      <JournalImageDialog
+        isOpen={imageDialogOpen}
+        onClose={() => setImageDialogOpen(false)}
+        onInsert={handleImageInsert}
+      />
     </AdminLayout>
   );
 }

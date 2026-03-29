@@ -14,6 +14,11 @@ export default defineConfig({
     hmr: {
       overlay: true,
     },
+    // Proxy image paths to the backend so relative URLs in markdown work
+    proxy: {
+      '/images': 'http://localhost:3002',
+      '/blog-images': 'http://localhost:3002',
+    },
   },
   build: {
     // Add content hashes to filenames for cache busting in production

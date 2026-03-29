@@ -294,6 +294,23 @@
   border-radius: 6px;
 }
 
+.journal-toolbar-image-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--editor-ink);
+  opacity: 0.7;
+  transition: opacity 0.12s;
+}
+
+.journal-toolbar-image-btn:hover {
+  opacity: 1;
+}
+
 .journal-mdx-prose {
   font-family: 'Georgia', 'Times New Roman', serif;
   font-size: 1.08rem;
@@ -341,6 +358,19 @@
   margin: 1.5rem 0;
 }
 
+/* Image float layouts via title attribute */
+.journal-mdx-editor [class*="imageWrapper"]:has(img[title="float-left"]) {
+  float: left;
+  margin: 0.5rem 1.2rem 1rem 0;
+  max-width: 50%;
+}
+
+.journal-mdx-editor [class*="imageWrapper"]:has(img[title="float-right"]) {
+  float: right;
+  margin: 0.5rem 0 1rem 1.2rem;
+  max-width: 50%;
+}
+
 /* ---- image selection ---- */
 
 /* Image wrapper */
@@ -374,50 +404,66 @@
   transition: opacity 0.15s ease;
 }
 
-/* Hide toolbar by default — only show when image is selected */
-.journal-mdx-editor [class*="editImageToolbar"] {
-  display: none !important;
+/* Hide image layout toolbar by default */
+.img-layout-toolbar {
+  display: none;
 }
 
-.journal-mdx-editor [class*="imageWrapper"]:has([class*="focusedImage"]) [class*="editImageToolbar"] {
-  display: flex !important;
+/* Show centered at bottom of image when image is clicked */
+.journal-mdx-editor [class*="imageWrapper"]:has([class*="focusedImage"]) .img-layout-toolbar {
+  display: flex;
   position: absolute;
-  top: auto !important;
-  right: auto !important;
   bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
   align-items: center;
   gap: 2px;
   padding: 4px 6px;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(8px);
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
-  z-index: 3;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.14);
+  z-index: 10;
 }
 
-.journal-mdx-editor [class*="editImageToolbar"] button {
+.img-layout-toolbar button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
   background: transparent;
-  color: rgba(255, 255, 255, 0.9);
   cursor: pointer;
   border-radius: 6px;
-  transition: background 0.12s ease;
+  transition: background 0.12s, border-color 0.12s;
 }
 
-.journal-mdx-editor [class*="editImageToolbar"] button:hover {
-  background: rgba(255, 255, 255, 0.2);
+.img-layout-toolbar button:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.08);
 }
 
-.journal-mdx-editor [class*="editImageToolbar"] button svg {
-  width: 16px;
-  height: 16px;
+.img-layout-toolbar button svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.img-layout-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.1);
+  margin: 0 2px;
+}
+
+.img-layout-delete-btn {
+  color: #c0392b !important;
+}
+
+.img-layout-delete-btn:hover {
+  background: rgba(192, 57, 43, 0.08) !important;
 }
 
 /* ---- link & image dialog styling ---- */
@@ -765,16 +811,18 @@ body.dark .journal-editor-excerpt {
   background: rgba(33, 30, 26, 0.5) !important;
 }
 
-body.dark .journal-mdx-editor [class*="editImageToolbar"] {
-  background: #e8e0d4;
+body.dark .img-layout-toolbar {
+  background: #2a2520;
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
-body.dark .journal-mdx-editor [class*="editImageToolbar"] button {
-  color: #1a1714;
+body.dark .img-layout-toolbar button {
+  color: #ccc;
 }
 
-body.dark .journal-mdx-editor [class*="editImageToolbar"] button:hover {
-  background: rgba(0, 0, 0, 0.12);
+body.dark .img-layout-toolbar button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 body.dark .journal-status-badge.draft {

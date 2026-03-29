@@ -91,3 +91,11 @@ export async function adminGetFeaturedLetter(): Promise<{ letter_id: string | nu
 export async function adminSetFeaturedLetter(letterId: string): Promise<void> {
   return apiPut<void>('/admin/content/featured-letter', { letterId });
 }
+
+// ── Blog Images ─────────────────────────────────────────
+
+export async function uploadBlogImage(file: File): Promise<{ url: string }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiPost<{ url: string }>('/admin/blog/images', formData);
+}

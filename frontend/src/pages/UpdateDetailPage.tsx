@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import SEO from '../components/SEO';
-import { getBlogPost, type BlogPost } from '../api/client';
+import { getBlogPost, getImageUrl, type BlogPost } from '../api/client';
 import Footer from '../components/Footer/Footer';
 import { buildBlogPostSeo, stripMarkdown, truncateText } from '../utils/seo';
 import './UpdateDetailPage.css';
@@ -106,14 +106,18 @@ export default function BlogDetailPage() {
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeSanitize]}
             components={{
-              img({ alt, src }) {
+              img({ alt, src, title }) {
                 if (!src) return null;
-
+                // Resolve relative backend paths to full URLs
+                const resolvedSrc = (src.startsWith('/images/') || src.startsWith('/blog-images/'))
+                  ? getImageUrl(src)
+                  : src;
                 return (
                   <img
                     className="markdown-inline-image"
-                    src={src}
+                    src={resolvedSrc}
                     alt={alt || ''}
+                    title={title || undefined}
                     loading="lazy"
                   />
                 );

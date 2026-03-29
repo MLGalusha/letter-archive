@@ -119,11 +119,16 @@ export default function BlogDetailPage() {
                 );
               },
               a({ href, children, ...props }) {
-                const isExternal = typeof href === 'string' && /^https?:\/\//.test(href);
+                let resolvedHref = href || '';
+                // Auto-prefix URLs that look like domains but lack a protocol
+                if (resolvedHref && !/^(https?:\/\/|mailto:|tel:|\/|#)/.test(resolvedHref)) {
+                  resolvedHref = `https://${resolvedHref}`;
+                }
+                const isExternal = /^https?:\/\//.test(resolvedHref);
 
                 return (
                   <a
-                    href={href}
+                    href={resolvedHref}
                     {...props}
                     target={isExternal ? '_blank' : undefined}
                     rel={isExternal ? 'noopener noreferrer' : undefined}

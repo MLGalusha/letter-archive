@@ -8,6 +8,9 @@ import {
 } from 'react';
 import type { ChangeEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
+import remarkGfm from 'remark-gfm';
 import {
   BlockTypeSelect,
   BoldItalicUnderlineToggles,
@@ -52,6 +55,7 @@ import {
 } from '../../api/admin/content';
 import { useToast } from '../../contexts/ToastContext';
 import { COMMON_BLOG_CATEGORIES } from './blogEditorConfig';
+import '../UpdateDetailPage.css';
 import './UpdateEditorPage.css';
 
 /* ------------------------------------------------------------------ */
@@ -173,6 +177,7 @@ export default function JournalEditorPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
 
   const postId = id || createdDraftId;
   const isNew = !postId;
@@ -449,17 +454,13 @@ export default function JournalEditorPage() {
           </div>
 
           <div className="journal-topbar-right">
-            {status === 'published' && slug && (
-              <a
-                className="journal-preview-link"
-                href={`/blog/${slug}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Icon name="eye" size={16} />
-                <span>Preview</span>
-              </a>
-            )}
+            <button
+              className={`journal-preview-toggle ${previewMode ? 'active' : ''}`}
+              onClick={() => setPreviewMode((prev) => !prev)}
+            >
+              <Icon name={previewMode ? 'edit' : 'eye'} size={16} />
+              <span>{previewMode ? 'Edit' : 'Preview'}</span>
+            </button>
             <button
               className="journal-settings-toggle"
               onClick={() => setSettingsOpen((prev) => !prev)}
@@ -496,77 +497,128 @@ export default function JournalEditorPage() {
 
         {error && <div className="journal-editor-error">{error}</div>}
 
-        {/* ---- writing canvas ---- */}
-        <div className="journal-editor-canvas">
-          <div className="journal-title-group">
-            <label className="journal-canvas-label">Title</label>
-            <input
-              className="journal-editor-title"
-              type="text"
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              placeholder="Give your entry a title..."
-            />
-          </div>
+        {previewMode ? (
+          /* ---- inline preview ---- */
+          <div className="journal-preview-pane">
+            <article className="update-detail">
+              <header className="update-header">
+                <h1 className="update-title">{title || 'Untitled'}</h1>
+                {authorDisplayName && (
+                  <p className="update-byline">Written by {authorDisplayName}</p>
+                )}
+                <time className="update-date">
+                  {publishedAtInput
+                    ? new Date(publishedAtInput).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+                    : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </time>
+                {(excerpt.trim() || excerptPreview) && (
+                  <p className="update-dek">{excerpt.trim() || excerptPreview}</p>
+                )}
+              </header>
 
-          <div className="journal-excerpt-group">
-            <div className="journal-excerpt-header">
-              <label className="journal-canvas-label">Summary</label>
-              {!excerpt.trim() && excerptPreview && (
-                <span className="journal-excerpt-auto">Auto-generated from body</span>
-              )}
+              <div className="markdown-content">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeSanitize]}
+                  components={{
+                    img({ alt, src }) {
+                      if (!src) return null;
+                      return (
+                        <img
+                          className="markdown-inline-image"
+                          src={src}
+                          alt={alt || ''}
+                          loading="lazy"
+                        />
+                      );
+                    },
+                    table({ children }) {
+                      return (
+                        <div className="markdown-table-wrap">
+                          <table>{children}</table>
+                        </div>
+                      );
+                    },
+                  }}
+                >
+                  {bodyMarkdown}
+                </ReactMarkdown>
+              </div>
+            </article>
+          </div>
+        ) : (
+          /* ---- writing canvas ---- */
+          <div className="journal-editor-canvas">
+            <div className="journal-title-group">
+              <label className="journal-canvas-label">Title</label>
+              <input
+                className="journal-editor-title"
+                type="text"
+                value={title}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                placeholder="Give your entry a title..."
+              />
             </div>
-            <AutoResizeTextarea
-              className="journal-editor-excerpt"
-              value={excerpt}
-              onChange={setExcerpt}
-              minHeight={48}
-              maxHeight={140}
-              placeholder={excerptPreview ? excerptPreview.slice(0, 120) + '...' : 'Write a brief summary for readers...'}
-            />
-          </div>
 
-          <div className="journal-editor-surface">
-            <MDXEditor
-              key={editorKey}
-              ref={editorRef}
-              markdown={bodyMarkdown}
-              onChange={(md) => setBodyMarkdown(md)}
-              className="journal-mdx-editor"
-              contentEditableClassName="journal-mdx-prose"
-              placeholder="Start writing..."
-              plugins={[
-                headingsPlugin({ allowedHeadingLevels: [1, 2, 3] }),
-                listsPlugin(),
-                quotePlugin(),
-                linkPlugin(),
-                linkDialogPlugin(),
-                imagePlugin(),
-                tablePlugin(),
-                thematicBreakPlugin(),
-                codeBlockPlugin({ defaultCodeBlockLanguage: 'text' }),
-                markdownShortcutPlugin(),
-                diffSourcePlugin({ viewMode: 'rich-text' }),
-                toolbarPlugin({
-                  toolbarContents: () => (
-                    <DiffSourceToggleWrapper options={['rich-text', 'source']}>
-                      <UndoRedo />
-                      <BlockTypeSelect />
-                      <BoldItalicUnderlineToggles />
-                      <ListsToggle />
-                      <CreateLink />
-                      <CodeToggle />
-                      <InsertImage />
-                      <InsertTable />
-                      <InsertCodeBlock />
-                      <InsertThematicBreak />
-                    </DiffSourceToggleWrapper>
-                  ),
-                }),
-              ]}
-            />
+            <div className="journal-excerpt-group">
+              <div className="journal-excerpt-header">
+                <label className="journal-canvas-label">Summary</label>
+                {!excerpt.trim() && excerptPreview && (
+                  <span className="journal-excerpt-auto">Auto-generated from body</span>
+                )}
+              </div>
+              <AutoResizeTextarea
+                className="journal-editor-excerpt"
+                value={excerpt}
+                onChange={setExcerpt}
+                minHeight={48}
+                maxHeight={140}
+                placeholder={excerptPreview ? excerptPreview.slice(0, 120) + '...' : 'Write a brief summary for readers...'}
+              />
+            </div>
+
+            <div className="journal-editor-surface">
+              <MDXEditor
+                key={editorKey}
+                ref={editorRef}
+                markdown={bodyMarkdown}
+                onChange={(md) => setBodyMarkdown(md)}
+                className="journal-mdx-editor"
+                contentEditableClassName="journal-mdx-prose"
+                placeholder="Start writing..."
+                plugins={[
+                  headingsPlugin({ allowedHeadingLevels: [1, 2, 3] }),
+                  listsPlugin(),
+                  quotePlugin(),
+                  linkPlugin(),
+                  linkDialogPlugin(),
+                  imagePlugin({ disableImageResize: true }),
+                  tablePlugin(),
+                  thematicBreakPlugin(),
+                  codeBlockPlugin({ defaultCodeBlockLanguage: 'text' }),
+                  markdownShortcutPlugin(),
+                  diffSourcePlugin({ viewMode: 'rich-text' }),
+                  toolbarPlugin({
+                    toolbarContents: () => (
+                      <DiffSourceToggleWrapper options={['rich-text', 'source']}>
+                        <UndoRedo />
+                        <BlockTypeSelect />
+                        <BoldItalicUnderlineToggles />
+                        <ListsToggle />
+                        <CreateLink />
+                        <CodeToggle />
+                        <InsertImage />
+                        <InsertTable />
+                        <InsertCodeBlock />
+                        <InsertThematicBreak />
+                      </DiffSourceToggleWrapper>
+                    ),
+                  }),
+                ]}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ---- settings drawer ---- */}
         {settingsOpen && (

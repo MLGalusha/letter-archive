@@ -1,0 +1,91 @@
+import { useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { getImageUrl } from '../api/client';
+import type { LetterImageType } from '../types/Letter';
+
+export interface ShowcaseItem {
+  letterId: string;
+  imageId?: string;
+  imageUrl: string;
+  label: string;
+  peopleLine: string;
+  date: string;
+  hook: string;
+  mediaType: LetterImageType;
+}
+
+interface ShowcaseCardProps {
+  items: ShowcaseItem[];
+  onNavigate: (letterId: string, imageId?: string) => void;
+}
+
+export default function ShowcaseCard({ items, onNavigate }: ShowcaseCardProps) {
+  const [index, setIndex] = useState(0);
+  const item = items[index];
+  const hasMultiple = items.length > 1;
+
+  if (!item) return null;
+
+  const handlePrev = (e: ReactMouseEvent) => {
+    e.stopPropagation();
+    setIndex((i) => (i === 0 ? items.length - 1 : i - 1));
+  };
+
+  const handleNext = (e: ReactMouseEvent) => {
+    e.stopPropagation();
+    setIndex((i) => (i === items.length - 1 ? 0 : i + 1));
+  };
+
+  return (
+    <button
+      type="button"
+      className={`cd-highlight-card cd-highlight-card--${item.mediaType}`}
+      onClick={() => onNavigate(item.letterId, item.imageId)}
+    >
+      {items.map((gi, idx) => (
+        gi.imageUrl ? (
+          <img
+            key={gi.imageId || idx}
+            className="cd-highlight-img"
+            src={getImageUrl(gi.imageUrl, { width: 720 })}
+            alt={idx === index ? (gi.hook || gi.label) : ''}
+            loading={idx === 0 ? 'eager' : 'lazy'}
+            style={{ opacity: idx === index ? 1 : 0 }}
+          />
+        ) : null
+      ))}
+      {items.every((gi) => !gi.imageUrl) && (
+        <div className="cd-highlight-placeholder" />
+      )}
+      <div className="cd-highlight-overlay" />
+      <span className="cd-highlight-label">{item.label}</span>
+      <div className="cd-highlight-content">
+        {item.peopleLine && (
+          <span className="cd-highlight-meta">{item.peopleLine}</span>
+        )}
+        {item.date && (
+          <span className="cd-highlight-date">{item.date}</span>
+        )}
+        {item.hook && (
+          <p className="cd-highlight-hook">{item.hook}</p>
+        )}
+      </div>
+      {hasMultiple && (
+        <>
+          <span className="cd-highlight-page-counter">
+            {index + 1}/{items.length}
+          </span>
+          <div
+            className="cd-highlight-zone cd-highlight-zone--prev"
+            onClick={handlePrev}
+            aria-label="Previous"
+          />
+          <div
+            className="cd-highlight-zone cd-highlight-zone--next"
+            onClick={handleNext}
+            aria-label="Next"
+          />
+        </>
+      )}
+    </button>
+  );
+}

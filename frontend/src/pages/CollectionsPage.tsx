@@ -111,15 +111,7 @@ export default function CollectionsPage() {
 
   const { data, loading, error } = useAsync(async () => {
     const collections = await listCollections();
-    return collections
-      .filter((collection) => (collection.letterCount || 0) > 0)
-      .map((c) => {
-        // TODO: remove mock hook for collection 009
-        if (c.collectionCode === '009' && !c.hook) {
-          return { ...c, hook: 'A newlywed couple navigates early marriage through letters — homesickness, daily routines, and the quiet ache of separation.' };
-        }
-        return c;
-      });
+    return collections.filter((collection) => (collection.letterCount || 0) > 0);
   }, []);
   const collections: CollectionInfo[] = data ?? [];
 

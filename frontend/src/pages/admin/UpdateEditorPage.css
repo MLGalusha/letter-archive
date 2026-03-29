@@ -350,11 +350,28 @@
   border-radius: 12px;
 }
 
-/* Remove default focus outline */
+/* Selected image — grab cursor for drag-to-reorder */
 .journal-mdx-editor [class*="focusedImage"] {
   outline: none !important;
   border-radius: 10px;
   box-shadow: 0 0 0 2px var(--editor-accent);
+  cursor: grab;
+}
+
+.journal-mdx-editor [class*="focusedImage"]:active {
+  cursor: grabbing;
+}
+
+/* Resize handles — styled as small teal dots, only visible when selected */
+.journal-mdx-editor [class*="imageResizer"] {
+  background: var(--editor-accent) !important;
+  border: 2px solid #fff !important;
+  border-radius: 50% !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transform: scale(1.4);
+  z-index: 2;
+  opacity: 1;
+  transition: opacity 0.15s ease;
 }
 
 /* Hide toolbar by default — only show when image is selected */
@@ -401,6 +418,90 @@
 .journal-mdx-editor [class*="editImageToolbar"] button svg {
   width: 16px;
   height: 16px;
+}
+
+/* ---- link & image dialog styling ---- */
+
+.journal-mdx-editor [class*="linkDialogPopoverContent"] {
+  border: 1px solid var(--editor-stroke) !important;
+  border-radius: 14px !important;
+  background: var(--editor-paper) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
+  padding: 16px !important;
+  min-width: 320px;
+}
+
+.journal-mdx-editor [class*="dialogContent"] {
+  border: 1px solid var(--editor-stroke) !important;
+  border-radius: 14px !important;
+  background: var(--editor-paper) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
+  padding: 20px !important;
+}
+
+.journal-mdx-editor [class*="textInput"] {
+  width: 100% !important;
+  padding: 8px 10px !important;
+  border: 1px solid var(--editor-stroke) !important;
+  border-radius: 8px !important;
+  font-size: 0.88rem !important;
+  color: var(--editor-ink) !important;
+  background: #fff !important;
+  transition: border-color 0.15s ease;
+  outline: none !important;
+  box-sizing: border-box;
+}
+
+.journal-mdx-editor [class*="textInput"]:focus {
+  border-color: var(--editor-accent) !important;
+}
+
+.journal-mdx-editor [class*="formField"] label {
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  color: var(--editor-muted) !important;
+  margin-bottom: 4px !important;
+  display: block;
+}
+
+.journal-mdx-editor [class*="formField"] {
+  margin-bottom: 10px;
+}
+
+.journal-mdx-editor [class*="primaryButton"] {
+  background: var(--editor-accent) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 7px 18px !important;
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.journal-mdx-editor [class*="primaryButton"]:hover {
+  opacity: 0.9;
+}
+
+.journal-mdx-editor [class*="secondaryButton"] {
+  background: transparent !important;
+  color: var(--editor-muted) !important;
+  border: 1px solid var(--editor-stroke) !important;
+  border-radius: 8px !important;
+  padding: 7px 18px !important;
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+}
+
+/* Link preview popover (when hovering existing link) */
+.journal-mdx-editor [class*="linkDialogPopoverContent"] a {
+  color: var(--editor-accent);
+  font-size: 0.85rem;
+  word-break: break-all;
 }
 
 .journal-mdx-prose a {

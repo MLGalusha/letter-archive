@@ -592,7 +592,7 @@ export default function JournalEditorPage() {
                   quotePlugin(),
                   linkPlugin(),
                   linkDialogPlugin(),
-                  imagePlugin({ disableImageResize: true }),
+                  imagePlugin(),
                   tablePlugin(),
                   thematicBreakPlugin(),
                   codeBlockPlugin({ defaultCodeBlockLanguage: 'text' }),

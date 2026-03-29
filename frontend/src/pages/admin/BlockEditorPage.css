@@ -1,0 +1,154 @@
+/* ── Block Editor Page ──────────────────────────────────────────────── */
+
+.be-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Sticky toolbar ─────────────────────────────────────────────────── */
+
+.be-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 1.2rem;
+  background: var(--editor-paper, #fffaf2);
+  border-bottom: 1px solid var(--editor-stroke, #d9cfbf);
+}
+
+.be-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--editor-muted, #6d5f51);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.be-back:hover {
+  color: var(--editor-accent, #1f6d7a);
+}
+
+.be-toolbar-center {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.be-toolbar-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--editor-ink, #2d241d);
+  white-space: nowrap;
+}
+
+.be-save-state {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--editor-muted, #6d5f51);
+  white-space: nowrap;
+}
+
+.be-save-state.state-autosaving,
+.be-save-state.state-saving {
+  color: var(--editor-accent, #1f6d7a);
+}
+
+.be-save-state.state-error {
+  color: #c0392b;
+}
+
+.be-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.be-reset-btn {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--editor-stroke, #d9cfbf);
+  border-radius: 8px;
+  background: none;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--editor-muted, #6d5f51);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.be-reset-btn:hover {
+  color: #c0392b;
+  border-color: rgba(192, 57, 43, 0.25);
+}
+
+.be-view-link {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--editor-accent, #1f6d7a);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.be-view-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Error / loading ────────────────────────────────────────────────── */
+
+.be-error {
+  margin: 1rem 1.2rem 0;
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  background: rgba(192, 57, 43, 0.08);
+  color: #c0392b;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.be-loading {
+  padding: 3rem;
+  text-align: center;
+  color: var(--editor-muted, #6d5f51);
+}
+
+/* ── Page preview area ──────────────────────────────────────────────── */
+
+.be-preview {
+  width: 100%;
+  max-width: 740px;
+  margin: 0 auto;
+  padding: 1.5rem 1.2rem 3rem;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .be-toolbar {
+    padding: 0.5rem 0.8rem;
+    gap: 0.5rem;
+  }
+
+  .be-toolbar-center {
+    display: none;
+  }
+
+  .be-preview {
+    padding: 1rem 0.8rem 2rem;
+    gap: 1rem;
+  }
+}

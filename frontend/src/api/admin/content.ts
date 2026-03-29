@@ -26,7 +26,7 @@ export interface BlogPost {
 export interface ContentPage {
   slug: string;
   title: string;
-  contentJson: Record<string, string>;
+  contentJson: Record<string, unknown>;
   updatedAt: string;
 }
 
@@ -77,7 +77,7 @@ export async function adminGetContentPage(slug: string): Promise<ContentPage> {
 
 export async function adminUpdateContentPage(
   slug: string,
-  data: { title: string; contentJson: Record<string, string> },
+  data: { title: string; contentJson: Record<string, unknown> },
 ): Promise<ContentPage> {
   return apiPut<ContentPage>(`/admin/content/pages/${slug}`, data);
 }

@@ -16,12 +16,8 @@ import {
   type BlogPost,
   type ContentPage as ContentPageType,
 } from '../../api/admin/content';
-import {
-  CONTENT_PAGE_EDITOR_CONFIG,
-  CONTENT_PAGE_ORDER,
-  resolveContentPageContent,
-  serializeContentPageDraft,
-} from '../../content/contentPageConfig';
+import { resolveBlocks } from '../../content/blockMigration';
+import type { ContentBlock } from '../../content/blocks';
 import { useToast } from '../../contexts/ToastContext';
 import './ContentPage.css';
 
@@ -268,6 +264,28 @@ function BlogTab() {
 // Pages Tab
 // ══════════════════════════════════════════════════════════
 
+const PAGE_SLUGS = ['about', 'support'] as const;
+const PAGE_META: Record<string, { title: string; kicker: string; description: string; publicPath: string }> = {
+  about: {
+    title: 'About',
+    kicker: 'Page Editor',
+    description: 'Shape the archive story, explain the preservation process, and invite visitors to explore.',
+    publicPath: '/about',
+  },
+  support: {
+    title: 'Support',
+    kicker: 'Page Editor',
+    description: 'Tune the fundraising story, clarify contribution paths, and make every contact route feel intentional.',
+    publicPath: '/support',
+  },
+};
+
+function getHeroText(blocks: ContentBlock[]): { heading: string; subtitle: string } {
+  const hero = blocks.find((b) => b.type === 'hero');
+  if (hero && hero.type === 'hero') return { heading: hero.heading, subtitle: hero.subtitle };
+  return { heading: '', subtitle: '' };
+}
+
 function PagesTab() {
   const navigate = useNavigate();
   const [pages, setPages] = useState<ContentPageType[]>([]);
@@ -302,37 +320,33 @@ function PagesTab() {
       {error && <div className="content-error">{error}</div>}
 
       <div className="pages-overview-grid">
-        {CONTENT_PAGE_ORDER.map((slug) => {
+        {PAGE_SLUGS.map((slug) => {
           const dbPage = pagesBySlug.get(slug);
-          const config = CONTENT_PAGE_EDITOR_CONFIG[slug];
-          const resolved = resolveContentPageContent(slug, dbPage?.contentJson);
-          const overrideCount = Object.keys(serializeContentPageDraft(slug, resolved)).length;
+          const meta = PAGE_META[slug];
+          const blocks = resolveBlocks(slug, dbPage?.contentJson);
+          const hero = getHeroText(blocks);
 
           return (
             <article key={slug} className={`page-overview-card page-overview-card--${slug}`}>
               <div className="page-overview-top">
                 <div>
-                  <span className="page-overview-kicker">{config.kicker}</span>
-                  <h3 className="page-overview-title">{config.title}</h3>
+                  <span className="page-overview-kicker">{meta.kicker}</span>
+                  <h3 className="page-overview-title">{meta.title}</h3>
                 </div>
-                <span className="page-overview-route">{config.publicPath}</span>
+                <span className="page-overview-route">{meta.publicPath}</span>
               </div>
 
-              <p className="page-overview-description">{config.description}</p>
+              <p className="page-overview-description">{meta.description}</p>
 
               <div className="page-overview-preview">
-                <strong>{resolved.hero_heading || config.title}</strong>
-                <p>{resolved.hero_subtitle || resolved.hero_kicker}</p>
+                <strong>{hero.heading || meta.title}</strong>
+                <p>{hero.subtitle}</p>
               </div>
 
               <div className="page-overview-metrics">
                 <div>
-                  <span>Sections</span>
-                  <strong>{config.sections.length}</strong>
-                </div>
-                <div>
-                  <span>Overrides</span>
-                  <strong>{overrideCount}</strong>
+                  <span>Blocks</span>
+                  <strong>{blocks.length}</strong>
                 </div>
                 <div>
                   <span>Updated</span>
@@ -347,12 +361,12 @@ function PagesTab() {
                   icon="edit"
                   onClick={() => navigate(`/admin/content/pages/${slug}`)}
                 >
-                  Edit {config.title}
+                  Edit {meta.title}
                 </Button>
                 <button
                   type="button"
                   className="page-overview-secondary"
-                  onClick={() => window.open(config.publicPath, '_blank', 'noopener,noreferrer')}
+                  onClick={() => window.open(meta.publicPath, '_blank', 'noopener,noreferrer')}
                 >
                   View live page
                 </button>

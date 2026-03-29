@@ -31,6 +31,7 @@ const NotesPage = lazy(() => import("./pages/admin/NotesPage"));
 const ContentPage = lazy(() => import("./pages/admin/ContentPage"));
 const BlogEditorPage = lazy(() => import("./pages/admin/UpdateEditorPage"));
 const AdminCollectionPage = lazy(() => import("./pages/admin/AdminCollectionPage"));
+const BlockEditorPage = lazy(() => import("./pages/admin/BlockEditorPage"));
 
 function RouteLoading() {
   return (
@@ -61,6 +62,7 @@ function App() {
           <Route path="/admin/content" element={<ContentPage />} />
           <Route path="/admin/content/blog/new" element={<BlogEditorPage />} />
           <Route path="/admin/content/blog/:id" element={<BlogEditorPage />} />
+          <Route path="/admin/content/pages/:slug" element={<BlockEditorPage />} />
           <Route path="/admin/collections/:code" element={<AdminCollectionPage />} />
           <Route path="/admin/usage" element={<UsagePage />} />
           <Route path="/admin/notifications" element={<NotificationsPage />} />

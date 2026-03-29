@@ -259,7 +259,7 @@ describe('updates route integration', () => {
       // Actually: eq(status, 'published') and eq(category, 'news')
       const eqCalls = eqMock.mock.calls;
       const categoryCall = eqCalls.find(
-        ([left, right]: [unknown, unknown]) => left === 'updatePosts.category' && right === 'news',
+        (args: unknown[]) => args[0] === 'updatePosts.category' && args[1] === 'news',
       );
       expect(categoryCall).toBeDefined();
     });

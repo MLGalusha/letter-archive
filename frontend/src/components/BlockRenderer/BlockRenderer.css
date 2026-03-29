@@ -1,0 +1,512 @@
+/* ── Block renderer – shared styles for About & Support pages ────── */
+
+/* ── Card base ─────────────────────────────────────────────────── */
+
+.blk-card {
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 250, 242, 0.98));
+  box-shadow: var(--shadow);
+}
+
+/* ── Eyebrow (shared) ──────────────────────────────────────────── */
+
+.blk-eyebrow {
+  margin: 0 0 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--accent);
+}
+
+/* ── Hero ───────────────────────────────────────────────────────── */
+
+.blk-hero {
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 250, 242, 0.98));
+  box-shadow: var(--shadow);
+  text-align: left;
+  padding: 1.8rem;
+  border-radius: 34px;
+}
+
+.blk-hero-heading {
+  margin: 0;
+  max-width: 13ch;
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: clamp(2.8rem, 6vw, 4.4rem);
+  font-weight: 700;
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+}
+
+.support-page .blk-hero-heading {
+  max-width: 12ch;
+  font-size: clamp(2.8rem, 6vw, 4.3rem);
+}
+
+.blk-hero-subtitle {
+  max-width: 42rem;
+  margin: 1rem 0 0;
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--text-muted);
+}
+
+/* ── Stats row ─────────────────────────────────────────────────── */
+
+.blk-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.3rem;
+  border-radius: 30px;
+}
+
+.blk-stats > div {
+  display: contents;
+}
+
+.blk-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.blk-stat-value {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: clamp(1.7rem, 3vw, 2.5rem);
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+
+.blk-stat-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.blk-stats-divider {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(217, 207, 191, 0.8);
+}
+
+/* ── Section (generic card section) ────────────────────────────── */
+
+.blk-section {
+  border-radius: 30px;
+  padding: 1.5rem;
+}
+
+.blk-section--featured {
+  padding: 1.7rem;
+}
+
+.blk-section-heading {
+  margin-top: 0;
+  margin-bottom: 0.9rem;
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.08;
+}
+
+.blk-section p {
+  line-height: 1.78;
+  color: var(--text-muted);
+  margin: 0 0 0.8rem 0;
+}
+
+.blk-section-link {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  text-decoration: none;
+}
+
+/* ── Quote ──────────────────────────────────────────────────────── */
+
+.blk-quote {
+  margin: 0 0 1rem 0;
+  padding-left: 1.05rem;
+  border-left: 3px solid var(--accent);
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: clamp(1.2rem, 2vw, 1.55rem);
+  font-style: italic;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.blk-quote-attribution {
+  margin: -0.2rem 0 1rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ── Steps ──────────────────────────────────────────────────────── */
+
+.blk-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.blk-steps-heading {
+  margin: 0;
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: clamp(1.8rem, 4vw, 2.3rem);
+  line-height: 1.08;
+}
+
+.blk-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.blk-step {
+  border-radius: 28px;
+  padding: 1.2rem;
+}
+
+.blk-step-number {
+  margin-bottom: 0.55rem;
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: rgba(31, 109, 122, 0.4);
+  line-height: 1;
+}
+
+.blk-step h3 {
+  margin-bottom: 0.45rem;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.blk-step p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.68;
+  color: var(--text-muted);
+}
+
+/* ── Cards (icon + eyebrow variants) ───────────────────────────── */
+
+.blk-cards-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+}
+
+.blk-cards-section .blk-section-heading {
+  margin-bottom: 0;
+}
+
+.blk-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.blk-card-item {
+  border-radius: 28px;
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.blk-card-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+  margin-bottom: 0.2rem;
+  opacity: 0.7;
+}
+
+.blk-card-item h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.blk-card-item p {
+  line-height: 1.75;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.blk-card-btn {
+  width: fit-content;
+  text-decoration: none;
+  margin-top: auto;
+}
+
+/* ── Two-column ────────────────────────────────────────────────── */
+
+.blk-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+/* ── CTA ───────────────────────────────────────────────────────── */
+
+.blk-cta {
+  padding: 1.3rem 0 0;
+}
+
+.blk-cta-text {
+  margin: 0 0 1rem;
+  max-width: 42rem;
+  font-size: 1rem;
+  color: var(--text-muted);
+  line-height: 1.75;
+}
+
+.blk-cta-buttons {
+  display: flex;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+
+.blk-cta-btn {
+  text-decoration: none;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+/* ── Contact ───────────────────────────────────────────────────── */
+
+.blk-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+  padding-top: 0.1rem;
+}
+
+.blk-contact .blk-section-heading {
+  margin-bottom: 0;
+}
+
+.blk-contact-intro {
+  max-width: 38rem;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.75;
+  color: var(--text-muted);
+}
+
+.blk-contact-primary {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.3rem;
+  border-radius: 30px;
+}
+
+.blk-contact-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.blk-contact-main h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.blk-contact-main p {
+  line-height: 1.75;
+  color: var(--text-muted);
+  margin: 0.3rem 0 0.6rem;
+}
+
+.blk-contact-channels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.blk-channel-card {
+  border-radius: 28px;
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.blk-channel-card h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.blk-channel-card p {
+  line-height: 1.75;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.blk-email-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0.6rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  width: fit-content;
+  margin-top: auto;
+}
+
+.blk-email-btn:hover {
+  border-color: rgba(31, 109, 122, 0.24);
+  color: var(--accent-strong);
+}
+
+/* ── Inline editable fields ────────────────────────────────────── */
+
+.editable-inline {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 1.5px dashed transparent;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  font-family: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  resize: none;
+  overflow: hidden;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.editable-inline:hover {
+  border-color: rgba(31, 109, 122, 0.35);
+  background: rgba(31, 109, 122, 0.03);
+}
+
+.editable-inline:focus {
+  outline: none;
+  border-color: var(--accent, #1f6d7a);
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 0 2px rgba(31, 109, 122, 0.12);
+}
+
+.editable-inline::placeholder {
+  color: rgba(109, 95, 81, 0.35);
+  font-style: italic;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.editable-inline--multi {
+  field-sizing: content;
+  min-height: 1.5em;
+}
+
+/* Non-editable elements shown in edit mode (buttons, links, emails) */
+.blk-non-editable {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ── Responsive ────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .blk-cards-grid,
+  .blk-contact-channels {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .blk-stats {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .blk-stats-divider {
+    width: 100%;
+    height: 1px;
+  }
+
+  .blk-steps-grid,
+  .blk-two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .blk-hero,
+  .blk-section,
+  .blk-step,
+  .blk-card-item,
+  .blk-contact-primary,
+  .blk-channel-card {
+    padding: 1rem;
+    border-radius: 24px;
+  }
+
+  .blk-hero-heading {
+    max-width: none;
+    font-size: clamp(2.2rem, 13vw, 3.2rem);
+  }
+
+  .support-page .blk-hero-heading {
+    max-width: none;
+    font-size: clamp(2.2rem, 13vw, 3.2rem);
+  }
+
+  .blk-hero-subtitle,
+  .blk-section p,
+  .blk-step p,
+  .blk-card-item p,
+  .blk-contact-intro,
+  .blk-contact-main p,
+  .blk-channel-card p,
+  .blk-cta-text {
+    font-size: 0.95rem;
+    line-height: 1.68;
+  }
+
+  .blk-contact-primary {
+    flex-direction: column;
+  }
+}

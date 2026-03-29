@@ -63,7 +63,7 @@ export default function ContentPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('blog');
 
   const tabs: { key: TabKey; label: string }[] = [
-    { key: 'blog', label: 'Blog' },
+    { key: 'blog', label: 'Journal' },
     { key: 'pages', label: 'Pages' },
     { key: 'featured', label: 'Featured' },
   ];
@@ -75,7 +75,7 @@ export default function ContentPage() {
           <div className="content-page-kicker">Administration</div>
           <h1 className="content-page-title">Content</h1>
           <p className="content-page-subtitle">
-            Manage blog posts, static page content, and the featured letter.
+            Manage journal entries, static page content, and the featured letter.
           </p>
         </div>
 
@@ -120,7 +120,7 @@ function BlogTab() {
       setPosts(data.posts);
       setTotal(data.total);
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to load blog posts.'));
+      setError(getErrorMessage(err, 'Failed to load journal entries.'));
     } finally {
       setLoading(false);
     }
@@ -135,10 +135,10 @@ function BlogTab() {
     try {
       if (post.status === 'published') {
         await adminUnpublishBlogPost(post.id);
-        showToast('Blog post unpublished.', 'success');
+        showToast('Journal entry unpublished.', 'success');
       } else {
         await adminPublishBlogPost(post.id);
-        showToast('Blog post published.', 'success');
+        showToast('Journal entry published.', 'success');
       }
       await fetchBlogPosts();
     } catch (err) {
@@ -153,7 +153,7 @@ function BlogTab() {
     setActionLoading(post.id);
     try {
       await adminDeleteBlogPost(post.id);
-      showToast('Blog post deleted.', 'success');
+      showToast('Journal entry deleted.', 'success');
       await fetchBlogPosts();
     } catch (err) {
       showToast(getErrorMessage(err, 'Failed to delete.'), 'error');
@@ -163,20 +163,20 @@ function BlogTab() {
   };
 
   if (loading) {
-    return <div className="content-loading">Loading blog posts...</div>;
+    return <div className="content-loading">Loading journal entries...</div>;
   }
 
   return (
     <div className="content-section">
       <div className="content-section-header">
-        <span className="content-section-count">{total} blog post{total !== 1 ? 's' : ''}</span>
+        <span className="content-section-count">{total} journal entr{total !== 1 ? 'ies' : 'y'}</span>
         <Button
           variant="primary"
           size="sm"
           icon="plus"
           onClick={() => navigate('/admin/content/blog/new')}
         >
-          New Blog Post
+          New Journal Entry
         </Button>
       </div>
 
@@ -187,9 +187,9 @@ function BlogTab() {
           <div className="content-empty-icon">
             <Icon name="file" size={40} />
           </div>
-          <p className="content-empty-title">No blog posts yet</p>
+          <p className="content-empty-title">No journal entries yet</p>
           <p className="content-empty-desc">
-            Create your first blog post to share news with visitors.
+            Create your first journal entry to share updates with visitors.
           </p>
         </div>
       ) : (

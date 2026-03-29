@@ -175,7 +175,11 @@
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  padding-top: 0.2rem;
+  padding: 1rem 1.4rem;
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 250, 242, 0.98));
+  box-shadow: var(--shadow-soft);
+  border-radius: 28px;
 }
 
 @media (max-width: 768px) {

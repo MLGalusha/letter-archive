@@ -28,7 +28,7 @@ export default function BlogDetailPage() {
         const data = await getBlogPost(slug!);
         setPost(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Blog post not found');
+        setError(err instanceof Error ? err.message : 'Journal entry not found');
       } finally {
         setLoading(false);
       }
@@ -41,7 +41,7 @@ export default function BlogDetailPage() {
     return (
       <div className="body-layout">
         <div className="update-detail">
-          <p className="loading-message">Loading blog post...</p>
+          <p className="loading-message">Loading journal entry...</p>
         </div>
         <Footer />
       </div>
@@ -53,11 +53,11 @@ export default function BlogDetailPage() {
       <div className="body-layout">
         <div className="update-detail">
           <Link to="/blog" className="update-back-link">
-            &larr; All Blog Posts
+            &larr; All Journal Entries
           </Link>
-          <h1>Blog Post Not Found</h1>
+          <h1>Journal Entry Not Found</h1>
           <p className="error-text">
-            {error || 'This blog post does not exist or is no longer published.'}
+            {error || 'This journal entry does not exist or is no longer published.'}
           </p>
         </div>
         <Footer />
@@ -84,7 +84,7 @@ export default function BlogDetailPage() {
       />
       <article className="update-detail">
         <Link to="/blog" className="update-back-link">
-          &larr; All Blog Posts
+          &larr; All Journal Entries
         </Link>
 
         {post.heroImageUrl && (
@@ -174,7 +174,7 @@ export default function BlogDetailPage() {
 
         <div className="update-footer-nav">
           <Link to="/blog" className="update-back-link">
-            &larr; Back to all blog posts
+            &larr; Back to all journal entries
           </Link>
         </div>
       </article>

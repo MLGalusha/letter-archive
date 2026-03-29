@@ -39,7 +39,7 @@ export default function BlogPage() {
         setTotal(data.total);
         setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load blog posts');
+        setError(err instanceof Error ? err.message : 'Failed to load journal entries');
       } finally {
         setLoading(false);
       }
@@ -72,12 +72,12 @@ export default function BlogPage() {
           </p>
         </header>
 
-        {loading && <p className="loading-message">Loading blog posts...</p>}
+        {loading && <p className="loading-message">Loading journal entries...</p>}
         {error && <p className="error-message">{error}</p>}
 
         {!loading && posts.length === 0 && !error && (
           <div className="no-results">
-            <p>No blog posts yet. Check back soon.</p>
+            <p>No journal entries yet. Check back soon.</p>
           </div>
         )}
 

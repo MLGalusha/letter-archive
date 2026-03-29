@@ -1,11 +1,12 @@
 .update-detail {
   display: flex;
   flex-direction: column;
-  gap: 1.3rem;
-  max-width: 900px;
+  gap: 0;
+  max-width: 780px;
   margin: 0 auto;
   width: 100%;
   text-align: left;
+  padding-bottom: 1rem;
 }
 
 .update-back-link {
@@ -20,18 +21,20 @@
   color: var(--text-muted);
   text-decoration: none;
   transition: color 0.2s ease;
+  margin-bottom: 1.6rem;
 }
 
 .update-back-link:hover {
   color: var(--accent-strong);
 }
 
+/* ── Hero image ───────────────────────────────────────────── */
+
 .update-hero-image {
   width: 100%;
-  border-radius: 34px;
+  border-radius: 28px;
   overflow: hidden;
-  border: 1px solid rgba(217, 207, 191, 0.95);
-  box-shadow: var(--shadow);
+  margin-bottom: 2rem;
 }
 
 .update-hero-image img {
@@ -40,21 +43,13 @@
   display: block;
 }
 
-.update-header,
-.markdown-content,
-.update-cta {
-  border: 1px solid rgba(217, 207, 191, 0.95);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 250, 242, 0.98));
-  box-shadow: var(--shadow-soft);
-}
+/* ── Header (title, meta, deck, byline) ───────────────────── */
 
 .update-header {
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
-  text-align: left;
-  padding: 1.75rem;
-  border-radius: 34px;
+  gap: 0.7rem;
+  margin-bottom: 2.4rem;
 }
 
 .update-meta {
@@ -66,7 +61,7 @@
 
 .update-detail-category,
 .update-meta time {
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.16em;
@@ -75,7 +70,7 @@
 .update-detail-category {
   color: var(--accent-strong);
   background: rgba(223, 241, 245, 0.8);
-  padding: 0.4rem 0.7rem;
+  padding: 0.35rem 0.65rem;
   border-radius: 999px;
   border: 1px solid rgba(31, 109, 122, 0.18);
 }
@@ -87,26 +82,26 @@
 .update-title {
   margin: 0;
   font-family: "Playfair Display", Georgia, "Times New Roman", serif;
-  font-size: clamp(2.8rem, 6vw, 4.5rem);
+  font-size: clamp(2.6rem, 6vw, 4rem);
   font-weight: 700;
-  line-height: 0.96;
+  line-height: 0.97;
   letter-spacing: -0.05em;
   color: var(--text);
 }
 
 .update-dek {
-  margin: 0;
-  font-size: clamp(1.06rem, 2vw, 1.24rem);
-  line-height: 1.78;
+  margin: 0.3rem 0 0;
+  font-size: clamp(1.04rem, 2vw, 1.18rem);
+  line-height: 1.72;
   color: var(--text-muted);
   max-width: 60ch;
 }
 
 .update-byline {
-  margin: 0;
-  font-size: 0.88rem;
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text);
 }
@@ -116,13 +111,26 @@
   font-weight: 600;
 }
 
+/* ── Divider between header and body ──────────────────────── */
+
+.update-header + .markdown-content::before {
+  content: '';
+  display: block;
+  width: 4rem;
+  height: 2px;
+  background: var(--accent);
+  margin-bottom: 2rem;
+  opacity: 0.5;
+}
+
+/* ── Markdown body ────────────────────────────────────────── */
+
 .markdown-content {
-  padding: 1.75rem;
-  font-size: 1.04rem;
-  line-height: 1.92;
+  font-size: 1.06rem;
+  line-height: 1.88;
   color: var(--text);
   text-align: left;
-  border-radius: 34px;
+  margin-bottom: 2.4rem;
 }
 
 .markdown-content > *:first-child {
@@ -138,25 +146,25 @@
 }
 
 .markdown-content h1 {
-  font-size: 2.3rem;
-  margin: 2.6rem 0 1rem;
-  line-height: 1.02;
+  font-size: 2.1rem;
+  margin: 2.6rem 0 0.8rem;
+  line-height: 1.05;
 }
 
 .markdown-content h2 {
-  font-size: 1.72rem;
-  margin: 2.2rem 0 0.75rem;
+  font-size: 1.62rem;
+  margin: 2.4rem 0 0.65rem;
   line-height: 1.1;
 }
 
 .markdown-content h3 {
-  font-size: 1.32rem;
-  margin: 1.7rem 0 0.6rem;
+  font-size: 1.25rem;
+  margin: 1.8rem 0 0.5rem;
   line-height: 1.2;
 }
 
 .markdown-content p {
-  margin: 0 0 1rem;
+  margin: 0 0 1.1rem;
   color: var(--text);
 }
 
@@ -182,7 +190,7 @@
 }
 
 .markdown-content blockquote {
-  margin: 1.7rem 0;
+  margin: 1.8rem 0;
   padding: 0.2rem 0 0.2rem 1.3rem;
   border-left: 3px solid var(--accent);
   color: var(--text-muted);
@@ -195,45 +203,43 @@
 }
 
 .markdown-inline-image {
-  margin: 1.9rem 0;
+  margin: 2rem 0;
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 28px;
-  border: 1px solid rgba(217, 207, 191, 0.95);
-  box-shadow: 0 20px 44px rgba(29, 26, 20, 0.08);
+  border-radius: 20px;
 }
 
 .markdown-table-wrap {
   overflow-x: auto;
   margin: 1.8rem 0;
-  border: 1px solid rgba(217, 207, 191, 0.95);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(217, 207, 191, 0.65);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .markdown-table-wrap table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 560px;
+  min-width: 480px;
 }
 
 .markdown-table-wrap th,
 .markdown-table-wrap td {
-  padding: 0.9rem 1rem;
-  border-bottom: 1px solid rgba(217, 207, 191, 0.75);
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(217, 207, 191, 0.55);
   text-align: left;
   vertical-align: top;
 }
 
 .markdown-table-wrap thead {
-  background: rgba(223, 241, 245, 0.45);
+  background: rgba(223, 241, 245, 0.3);
 }
 
 .markdown-content pre {
-  background: rgba(244, 236, 224, 0.86);
-  border: 1px solid rgba(217, 207, 191, 0.95);
-  border-radius: 22px;
+  background: rgba(244, 236, 224, 0.55);
+  border: 1px solid rgba(217, 207, 191, 0.6);
+  border-radius: 14px;
   padding: 1rem 1.1rem;
   overflow-x: auto;
   font-size: 0.9rem;
@@ -243,9 +249,9 @@
 
 .markdown-content code {
   font-size: 0.9em;
-  background: rgba(244, 236, 224, 0.86);
+  background: rgba(244, 236, 224, 0.6);
   padding: 0.18em 0.35em;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .markdown-content pre code {
@@ -255,15 +261,14 @@
 
 .markdown-content hr {
   border: none;
-  border-top: 1px solid rgba(217, 207, 191, 0.95);
-  margin: 2rem 0;
+  border-top: 1px solid rgba(217, 207, 191, 0.7);
+  margin: 2.2rem 0;
 }
 
+/* ── CTA ──────────────────────────────────────────────────── */
+
 .update-cta {
-  margin-top: 0.1rem;
-  padding: 1.35rem;
-  border-radius: 28px;
-  text-align: left;
+  margin-bottom: 1.5rem;
 }
 
 .update-cta-btn {
@@ -272,36 +277,46 @@
   display: inline-block;
 }
 
+/* ── Footer nav ───────────────────────────────────────────── */
+
 .update-footer-nav {
-  padding-bottom: 0.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 0;
+  border-top: 1px solid rgba(217, 207, 191, 0.7);
 }
+
+.update-footer-nav .update-back-link {
+  margin: 0;
+}
+
+/* ── Responsive ───────────────────────────────────────────── */
 
 @media (max-width: 640px) {
   .update-detail {
-    gap: 1rem;
-  }
-
-  .update-header,
-  .markdown-content {
-    padding: 1.1rem;
-    border-radius: 24px;
+    gap: 0;
   }
 
   .update-title {
-    font-size: clamp(2.2rem, 14vw, 3.2rem);
+    font-size: clamp(2rem, 12vw, 2.8rem);
   }
 
   .update-dek,
   .markdown-content {
     font-size: 0.98rem;
-    line-height: 1.78;
+    line-height: 1.75;
   }
 
   .markdown-content h1 {
-    font-size: 1.8rem;
+    font-size: 1.65rem;
   }
 
   .markdown-content h2 {
-    font-size: 1.45rem;
+    font-size: 1.4rem;
+  }
+
+  .update-hero-image {
+    border-radius: 20px;
   }
 }

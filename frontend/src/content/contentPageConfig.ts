@@ -68,7 +68,7 @@ const ABOUT_DEFAULTS = {
   cta_text:
     'Start exploring - read the letters, follow the people, trace the places.',
   cta_primary_label: 'Browse Collections',
-  cta_secondary_label: 'Read the Blog',
+  cta_secondary_label: 'Read the Journal',
 } satisfies Record<string, string>;
 
 const SUPPORT_DEFAULTS = {

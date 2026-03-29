@@ -47,7 +47,7 @@ export default function AboutPage() {
   const stats = data?.stats ?? null;
   const resolved = resolveContentPageContent('about', data?.content);
   const secondaryCtaLabel = /explore/i.test(resolved.cta_secondary_label)
-    ? 'Read the Blog'
+    ? 'Read the Journal'
     : resolved.cta_secondary_label;
 
   return (

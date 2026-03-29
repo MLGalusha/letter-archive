@@ -3,7 +3,6 @@ import {
   loginAsAdmin,
   logoutAdmin,
   clearSession,
-  setLoggedIn,
   ADMIN_EMAIL,
   ADMIN_PASSWORD,
   SELECTORS,
@@ -156,9 +155,7 @@ test.describe('Admin Authentication', () => {
     });
 
     test('allows access to admin dashboard with valid session', async ({ page }) => {
-      await page.goto('/admin-login');
-      await setLoggedIn(page);
-      await page.goto('/admin');
+      await loginAsAdmin(page);
 
       await expect(page.locator(SELECTORS.dashboard.ready)).toBeVisible({ timeout: 30000 });
     });
@@ -190,7 +187,7 @@ test.describe('Admin Authentication', () => {
   test.describe('Public Pages Access', () => {
     test('allows access to homepage without authentication', async ({ page }) => {
       await page.goto('/');
-      await expect(page).toHaveTitle(/fragments-of-us/i);
+      await expect(page).toHaveTitle(/letter archive/i);
     });
 
     test('allows access to collections page without authentication', async ({ page }) => {

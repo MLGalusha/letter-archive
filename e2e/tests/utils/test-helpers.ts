@@ -4,9 +4,9 @@ import { Page, expect } from '@playwright/test';
  * Shared test utilities for E2E tests
  */
 
-// Test credentials
-export const ADMIN_EMAIL = 'admin@letterarchive.com';
-export const ADMIN_PASSWORD = 'admin123';
+// Test credentials — must match the dev seed in backend/src/index.ts
+export const ADMIN_EMAIL = 'dev@localhost.test';
+export const ADMIN_PASSWORD = 'dev';
 export const API_BASE_URL = process.env.E2E_API_BASE_URL || 'http://localhost:3002';
 const DASHBOARD_SHELL_SELECTOR = '.admin-header';
 const DASHBOARD_READY_SELECTOR = 'table.letters-table';

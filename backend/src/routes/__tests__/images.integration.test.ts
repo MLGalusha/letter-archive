@@ -93,7 +93,7 @@ describe('images route integration', () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toBe('image-bytes');
     expect(response.headers['content-type']).toBe('image/jpeg');
-    expect(response.headers['cache-control']).toBe('public, max-age=31536000');
+    expect(response.headers['cache-control']).toBe('public, max-age=31536000, immutable');
     expect(response.headers['x-content-type-options']).toBe('nosniff');
     expect(response.headers['x-request-id']).toEqual(expect.any(String));
     expect(getAbsoluteStoragePathMock).toHaveBeenCalledWith(

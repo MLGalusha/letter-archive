@@ -578,7 +578,7 @@
   color: transparent;
   user-select: none;
   cursor: default;
-  height: 1em;
+  height: 0.4em;
   vertical-align: middle;
 }
 
@@ -616,104 +616,31 @@
   border-color: #3b82f6;
 }
 
-/* ── Reflow gutter ───────────────────────────────────── */
+/* ── Spacing editor (reading view textarea) ────────────── */
 
-.editor-container.with-gutter {
-  display: flex;
-  align-items: stretch;
-}
-
-.editor-container.with-gutter .transcript-editor {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.reflow-gutter {
-  width: 14px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-right: 4px;
-  border-radius: var(--radius-md) 0 0 var(--radius-md);
-  overflow: hidden;
-}
-
-.reflow-indicator {
+.spacing-editor-textarea {
   width: 100%;
-  position: relative;
   box-sizing: border-box;
+  padding: var(--spacing-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.08rem;
+  line-height: 1.85;
+  resize: none;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  outline: none;
+  transition: border-color 0.2s ease;
 }
 
-/* All visible indicators share this base line shape */
-.reflow-indicator--group-start::after,
-.reflow-indicator--combined::after,
-.reflow-indicator--standalone::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 2px;
-  bottom: 2px;
-  width: 3px;
-  transform: translateX(-50%);
-  border-radius: 1.5px;
-  transition: width 0.1s ease, filter 0.1s ease;
-}
-
-/* Green — starts a group that the next line combines into */
-.reflow-indicator--group-start::after {
-  background: #4caf50;
-}
-
-/* Blue — continuation, combines into previous line */
-.reflow-indicator--combined::after {
-  background: #2196f3;
-}
-
-/* Orange — standalone, doesn't combine with anything */
-.reflow-indicator--standalone::after {
-  background: #ff9800;
-}
-
-/* Blank lines: no indicator */
-.reflow-indicator--blank {
-  /* intentionally empty */
-}
-
-/* Red — blank line blocking a combine, click to remove */
-.reflow-indicator--pending-delete::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 2px;
-  bottom: 2px;
-  width: 5px;
-  transform: translateX(-50%);
-  border-radius: 2px;
-  background: #ef4444;
-  animation: gutter-pulse 0.8s ease-in-out infinite alternate;
-}
-
-@keyframes gutter-pulse {
-  from { opacity: 0.4; }
-  to { opacity: 1; }
-}
-
-/* Pending state: dim everything except the red blank indicators */
-.reflow-gutter.gutter-pending .reflow-indicator:not(.reflow-indicator--pending-delete) {
-  opacity: 0.25;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
-}
-
-/* Clickable gutter indicators */
-.reflow-indicator.clickable {
-  cursor: pointer;
-}
-
-.reflow-indicator.clickable:hover::after {
-  width: 5px;
-  filter: brightness(1.2);
+.spacing-editor-textarea:focus {
+  border-color: var(--text-muted);
+  box-shadow: 0 0 0 3px hsla(0, 0%, 50%, 0.1);
 }
 
 /* ── View mode toggle (Edit / Reading view) ───────────── */

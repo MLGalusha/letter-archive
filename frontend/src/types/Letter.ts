@@ -288,6 +288,8 @@ export interface Letter {
   photoDescriptionContext?: string;
   // AI notes (observations, suggestions)
   aiNotes?: string;
+  // Reading view text (independent spacing from raw transcript)
+  readingText?: string;
   // Entity extraction (Prompt 2)
   entityExtractionStatus?: string;
   entityExtractionJson?: unknown;

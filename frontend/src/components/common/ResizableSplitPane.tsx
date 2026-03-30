@@ -16,6 +16,8 @@ interface ResizableSplitPaneProps {
   secondPanelClassName?: string;
   letterId?: string; // for localStorage persistence
   onSplitChange?: (ratio: number) => void;
+  /** When set, overrides the split ratio and locks the divider */
+  forceSplit?: number;
 }
 
 // ============================================================================
@@ -65,6 +67,7 @@ export function ResizableSplitPane({
   secondPanelClassName = "",
   letterId,
   onSplitChange,
+  forceSplit,
 }: ResizableSplitPaneProps) {
   // Determine if mobile (vertical split) or desktop (horizontal split)
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -271,16 +274,20 @@ export function ResizableSplitPane({
     };
   }, []);
 
+  // When forceSplit is set, override the displayed ratio and lock the divider
+  const locked = forceSplit !== undefined;
+  const effectiveRatio = locked ? forceSplit : splitRatio;
+
   // Calculate panel sizes
   const firstSize = isMobile
-    ? `${splitRatio * 100}%`
-    : `calc(${splitRatio * 100}% - ${gap} / 2)`;
+    ? `${effectiveRatio * 100}%`
+    : `calc(${effectiveRatio * 100}% - ${gap} / 2)`;
   const secondSize = isMobile
-    ? `${(1 - splitRatio) * 100}%`
-    : `calc(${(1 - splitRatio) * 100}% - ${gap} / 2)`;
+    ? `${(1 - effectiveRatio) * 100}%`
+    : `calc(${(1 - effectiveRatio) * 100}% - ${gap} / 2)`;
 
   // Calculate divider position (for desktop, it's positioned after the first panel)
-  const dividerPosition = `${splitRatio * 100}%`;
+  const dividerPosition = `${effectiveRatio * 100}%`;
 
   return (
     <div
@@ -302,16 +309,14 @@ export function ResizableSplitPane({
 
       <div
         ref={dividerRef}
-        className={`split-pane-divider ${isDragging ? "dragging" : ""}`}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
-        // Prevent native behaviors
+        className={`split-pane-divider ${isDragging ? "dragging" : ""}${locked ? " locked" : ""}`}
+        onPointerDown={locked ? undefined : handlePointerDown}
+        onPointerMove={locked ? undefined : handlePointerMove}
+        onPointerUp={locked ? undefined : handlePointerUp}
+        onPointerCancel={locked ? undefined : handlePointerCancel}
         onDragStart={(e) => e.preventDefault()}
         draggable={false}
-        // touch-action CSS prevents browser gestures from interfering
-        style={{ touchAction: "none" }}
+        style={{ touchAction: "none", cursor: locked ? "default" : undefined }}
       />
 
       <div className={`split-pane-second ${secondPanelClassName}`}>{children[1]}</div>

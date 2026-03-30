@@ -239,6 +239,9 @@ export const letters = pgTable(
     // AI notes (structured observations, suggestions, hunches)
     aiNotes: jsonb('ai_notes'),
 
+    // Reading view text (independent spacing from raw transcript)
+    readingText: text('reading_text'),
+
     // Admin review
     reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
     reviewedBy: text('reviewed_by'),

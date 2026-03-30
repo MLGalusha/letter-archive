@@ -23,6 +23,7 @@ export interface AutoSaveData {
   hook?: string | null;
   summary?: string | null;
   notes?: string | null;
+  readingText?: string | null;
 }
 
 interface UseAutoSaveOptions {

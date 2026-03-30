@@ -37,6 +37,7 @@ import {
 } from "../../components/common";
 import { trackEdit } from "../../utils/recentEdits";
 import { highlightTranscriptMarkers } from "../../utils/transcriptHighlight";
+import { reflowTranscript } from "../../utils/transcriptRendering";
 import { useTooltip } from "../../hooks/useTooltip";
 import type { Letter, LetterImage, VisibilityState } from "../../types/Letter";
 import {
@@ -72,6 +73,70 @@ export default function LetterReviewPage() {
   const [loading, setLoading] = useState(true);
 
   const [transcript, setTranscript] = useState("");
+  const [transcriptViewMode, setTranscriptViewMode] = useState<"edit" | "preview">("edit");
+  // Reader view text — independent from raw transcript, initialized once from reflow
+  const [readerText, setReaderText] = useState<string | null>(null);
+  const prevTranscriptRef = useRef("");
+
+  // Initialize reader text on first switch to reading view:
+  // use saved readingText from backend if available, otherwise generate from reflow
+  const handleViewModeChange = useCallback((mode: "edit" | "preview") => {
+    setTranscriptViewMode(mode);
+    if (mode === "preview" && readerText === null) {
+      if (letter?.readingText) {
+        setReaderText(letter.readingText);
+      } else {
+        const stripped = transcript.replace(/^---\s*Page\s+\d+\s*---$/gm, "").replace(/\n{3,}/g, "\n\n");
+        setReaderText(reflowTranscript(stripped));
+      }
+      prevTranscriptRef.current = transcript;
+    }
+  }, [readerText, transcript, letter?.readingText]);
+
+  // When transcript changes in edit mode, patch ONLY text changes into reader text.
+  // Whitespace-only changes (line splits, spacing) are ignored — the reader view
+  // maintains its own independent spacing.
+  useEffect(() => {
+    if (readerText === null) return;
+    const prev = prevTranscriptRef.current;
+    if (prev === transcript || !prev) {
+      prevTranscriptRef.current = transcript;
+      return;
+    }
+
+    // Compare non-whitespace content — if identical, only spacing changed → skip
+    const stripWS = (s: string) => s.replace(/\s+/g, "");
+    const oldContent = stripWS(prev);
+    const newContent = stripWS(transcript);
+
+    prevTranscriptRef.current = transcript;
+
+    if (oldContent === newContent) {
+      // Only whitespace changed in edit view — don't touch reader text
+      return;
+    }
+
+    // Actual text changed — patch word-level changes into reader text
+    const oldWords = prev.split(/\s+/).filter(Boolean);
+    const newWords = transcript.split(/\s+/).filter(Boolean);
+
+    if (oldWords.length === newWords.length) {
+      // Same word count — do word-for-word replacement
+      let patched = readerText;
+      for (let i = 0; i < oldWords.length; i++) {
+        if (oldWords[i] !== newWords[i]) {
+          patched = patched.replace(oldWords[i], newWords[i]);
+        }
+      }
+      if (patched !== readerText) {
+        setReaderText(patched);
+      }
+    } else {
+      // Word count changed — regenerate reader text fully
+      const stripped = transcript.replace(/^---\s*Page\s+\d+\s*---$/gm, "").replace(/\n{3,}/g, "\n\n");
+      setReaderText(reflowTranscript(stripped));
+    }
+  }, [transcript, readerText]);
 
   // Photo description state
   const [photoDescription, setPhotoDescription] = useState("");
@@ -305,8 +370,13 @@ export default function LetterReviewPage() {
   // Auto-resize textareas to fit content
   const autoResizeTextarea = (textarea: HTMLTextAreaElement | null, minHeight = 80) => {
     if (!textarea) return;
-    textarea.style.height = "auto";
-    textarea.style.height = Math.max(textarea.scrollHeight, minHeight) + "px";
+    // Grow to fit content but never shrink below minHeight.
+    // Avoid setting height to "auto" which causes a momentary collapse
+    // and scroll jump when the user is scrolled down.
+    const needed = Math.max(textarea.scrollHeight, minHeight);
+    if (Math.abs(textarea.offsetHeight - needed) > 1) {
+      textarea.style.height = needed + "px";
+    }
   };
 
   useEffect(() => autoResizeTextarea(notesRef.current), [notes]);
@@ -647,12 +717,48 @@ export default function LetterReviewPage() {
     if (e.key === "Tab") {
       e.preventDefault();
       e.stopPropagation();
-
-      // Use execCommand to insert text - works better with contentEditable
-      // and integrates with browser's undo/redo stack
-      // The onInput handler will update React state after execCommand modifies the DOM
       document.execCommand("insertText", false, "    ");
+      return;
     }
+
+    // Prevent deleting page separators
+    if (e.key === "Backspace" || e.key === "Delete") {
+      const sel = window.getSelection();
+      if (!sel || !sel.isCollapsed) return;
+      const node = sel.focusNode;
+      if (!node) return;
+
+      // Check if adjacent node is a page separator
+      const isInEditor = editorRef.current?.contains(node);
+      if (!isInEditor) return;
+
+      if (e.key === "Backspace") {
+        // Check the node/element just before cursor
+        const prev = sel.focusOffset === 0
+          ? node.previousSibling || node.parentElement?.previousSibling
+          : null;
+        if (prev && isPageSepNode(prev)) {
+          e.preventDefault();
+        }
+      } else {
+        // Delete key: check element just after cursor
+        const parent = node.parentNode;
+        const next = node.nodeType === Node.TEXT_NODE && sel.focusOffset === node.textContent?.length
+          ? node.nextSibling || parent?.nextSibling
+          : null;
+        if (next && isPageSepNode(next)) {
+          e.preventDefault();
+        }
+      }
+    }
+  };
+
+  const isPageSepNode = (node: Node): boolean => {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      return el.classList.contains("page-sep");
+    }
+    return false;
   };
 
   // Handle Tab key for extra content editor
@@ -1119,6 +1225,7 @@ export default function LetterReviewPage() {
           className="review-layout"
           firstPanelClassName="images-panel"
           secondPanelClassName="edit-panel"
+          forceSplit={transcriptViewMode === "preview" ? 0.4 : undefined}
         >
           {/* Left side: Letter viewer */}
           <div className="image-review-shell">
@@ -1217,6 +1324,12 @@ export default function LetterReviewPage() {
                 onTranscriptDoubleClick={handleTranscriptDoubleClick}
                 onTranscriptInput={handleTranscriptInput}
                 onEditorKeyDown={handleEditorKeyDown}
+                onViewModeChange={handleViewModeChange}
+                readerText={readerText ?? ""}
+                onReaderTextChange={(text) => {
+                  setReaderText(text);
+                  void triggerAutoSave({ readingText: text });
+                }}
               />
             )}
 

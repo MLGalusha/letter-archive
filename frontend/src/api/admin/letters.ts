@@ -12,6 +12,7 @@ export interface UpdateLetterData {
   tags?: string[] | null;
   visibility?: "PUBLISHED" | "HIDDEN";
   notes?: string | null;
+  readingText?: string | null;
 }
 
 export async function updateLetter(letterId: string, data: UpdateLetterData): Promise<Letter> {

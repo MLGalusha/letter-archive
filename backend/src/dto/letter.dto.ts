@@ -171,6 +171,8 @@ export interface FrontendLetter {
   photoDescriptionContext?: string;
   // AI notes (structured observations, suggestions)
   aiNotes?: unknown;
+  // Reading view text (independent spacing from raw transcript)
+  readingText?: string;
   // Legacy field kept for backward compat
   transcriptConfirmedAt?: string;
   flagged: boolean;
@@ -489,6 +491,8 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
     photoDescriptionContext: letter.photoDescriptionContext || undefined,
     // AI notes
     aiNotes: letter.aiNotes || undefined,
+    // Reading view text
+    readingText: letter.readingText || undefined,
     // Entity extraction (Prompt 2)
     entityExtractionStatus: letter.entityExtractionStatus || undefined,
     entityExtractionJson: letter.entityExtractionJson || undefined,

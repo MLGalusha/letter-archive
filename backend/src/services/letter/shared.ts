@@ -131,6 +131,7 @@ export interface UpdateLetterInput {
   tags?: string[] | null;
   visibility?: 'PUBLISHED' | 'HIDDEN';
   notes?: string | null;
+  readingText?: string | null;
 }
 
 export interface UpdateLetterResult {

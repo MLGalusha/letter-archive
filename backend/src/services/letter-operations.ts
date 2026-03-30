@@ -56,6 +56,9 @@ export async function buildLetterUpdates(
   if (updates.tags !== undefined) {
     dbUpdates.tags = updates.tags;
   }
+  if (updates.readingText !== undefined) {
+    dbUpdates.readingText = updates.readingText;
+  }
   if (updates.visibility !== undefined) {
     dbUpdates.visibility = updates.visibility;
     if (updates.visibility === 'PUBLISHED') {

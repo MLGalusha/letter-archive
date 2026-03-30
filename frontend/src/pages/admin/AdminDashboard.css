@@ -1857,24 +1857,6 @@
   position: relative;
 }
 
-/* Column toggle floating in table header — centered in the checkbox column */
-.column-toggle-in-table {
-  position: sticky;
-  top: 0;
-  left: 0;
-  width: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 12;
-  pointer-events: none;
-  background: var(--bg);
-}
-
-.column-toggle-in-table > * {
-  pointer-events: auto;
-}
-
 .column-toggle-btn {
   display: inline-flex;
   align-items: center;
@@ -2501,6 +2483,8 @@
   min-width: 32px;
   max-width: 32px;
   padding: 0 !important;
+  position: relative;
+  text-align: center;
 }
 
 .checkbox-cell {

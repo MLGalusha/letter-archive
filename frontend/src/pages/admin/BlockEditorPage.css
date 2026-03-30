@@ -35,19 +35,27 @@
   color: var(--editor-accent, #1f6d7a);
 }
 
-.be-toolbar-center {
+/* ── Inline header (above content, like Homepage hero header) ──────── */
+
+.be-inline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1.5rem;
+}
+
+.be-section-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #2d241d;
+}
+
+.be-inline-actions {
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  flex: 1;
-  min-width: 0;
-}
-
-.be-toolbar-title {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--editor-ink, #2d241d);
-  white-space: nowrap;
 }
 
 .be-save-state {
@@ -63,29 +71,6 @@
 
 .be-save-state.state-error {
   color: #c0392b;
-}
-
-.be-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.be-reset-btn {
-  padding: 0.3rem 0.6rem;
-  border: 1px solid var(--editor-stroke, #d9cfbf);
-  border-radius: 8px;
-  background: none;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--editor-muted, #6d5f51);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.be-reset-btn:hover {
-  color: #c0392b;
-  border-color: rgba(192, 57, 43, 0.25);
 }
 
 .be-view-link {
@@ -121,7 +106,9 @@
 /* ── Responsive ─────────────────────────────────────────────────────── */
 
 @media (max-width: 640px) {
-  .be-toolbar-center {
-    display: none;
+  .be-inline-header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.6rem 1rem;
   }
 }

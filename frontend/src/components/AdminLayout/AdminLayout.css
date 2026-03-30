@@ -2,6 +2,7 @@
   display: flex;
   min-height: 100vh;
   background: var(--bg);
+  overflow-x: hidden;
 }
 
 /* Lock layout to viewport when fullHeight content is present */

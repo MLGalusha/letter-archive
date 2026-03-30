@@ -1060,12 +1060,6 @@ function PageEditorTab({ slug }: { slug: string }) {
     );
   }, []);
 
-  // ── Reset ──
-  const handleReset = useCallback(() => {
-    if (!window.confirm('Reset all text to defaults? Your current edits will be replaced.')) return;
-    setBlocks(getDefaultBlocks(slug));
-  }, [slug]);
-
   if (!config) return null;
 
   const saveLabel = saveState === 'saving'
@@ -1082,38 +1076,38 @@ function PageEditorTab({ slug }: { slug: string }) {
 
   return (
     <div className="pub-section pub-editor-tab">
-      {/* ── Inline toolbar ── */}
-      <div className="pe-toolbar">
-        {saveLabel && (
-          <span className={`pe-save-state ${saveState === 'error' ? 'pe-save-error' : ''}`}>
-            {saveLabel}
-          </span>
-        )}
-        <button type="button" className="pe-reset-btn" onClick={handleReset}>Reset</button>
-        <Button
-          variant="primary"
-          size="sm"
-          icon="save"
-          loading={saveState === 'saving'}
-          onClick={() => void persistPage()}
-        >
-          Update
-        </Button>
-        <a
-          className="pe-view-link"
-          href={config.publicPath}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          View &rarr;
-        </a>
-      </div>
-
       {error && <div className="pub-error">{error}</div>}
 
       {/* ── Block editor (uses public page shell for accurate rendering) ── */}
       <div className="public-site-shell be-page-shell pe-shell">
         <div className="body-layout">
+          <div className="hp-hero-header">
+            <h3 className="hp-section-title">{config.title} Page</h3>
+            <div className="hp-hero-actions">
+              {saveLabel && (
+                <span className={`hp-save-state ${saveState === 'error' ? 'pe-save-error' : ''}`}>
+                  {saveLabel}
+                </span>
+              )}
+              <Button
+                variant="primary"
+                size="sm"
+                icon="save"
+                loading={saveState === 'saving'}
+                onClick={() => void persistPage()}
+              >
+                Update
+              </Button>
+              <a
+                className="hp-view-link"
+                href={config.publicPath}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                View live &rarr;
+              </a>
+            </div>
+          </div>
           <div
             className={config.className}
             style={{ width: '100%', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}

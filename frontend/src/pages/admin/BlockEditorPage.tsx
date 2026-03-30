@@ -120,13 +120,6 @@ export default function BlockEditorPage() {
     );
   }, []);
 
-  // ── Reset to defaults ──
-  const handleReset = useCallback(() => {
-    if (!slug) return;
-    if (!window.confirm('Reset all text to defaults? Your current edits will be replaced.')) return;
-    setBlocks(getDefaultBlocks(slug));
-  }, [slug]);
-
   // ── Not found ──
   if (!slug || !config) {
     return (
@@ -138,47 +131,17 @@ export default function BlockEditorPage() {
 
   const saveLabel = getSaveLabel(saveState, updatedAt);
 
-  const toolbar = (
-    <>
-      <button type="button" className="be-back" onClick={() => navigate('/admin/content')}>
-        <Icon name="arrow-left" size={16} />
-        Content
-      </button>
-      <div className="be-toolbar-center">
-        <span className="be-toolbar-title">Editing: {config.title} Page</span>
-        {saveLabel && (
-          <span className={`be-save-state state-${saveState}`}>{saveLabel}</span>
-        )}
-      </div>
-      <div className="be-toolbar-actions">
-        <button type="button" className="be-reset-btn" onClick={handleReset}>
-          Reset
-        </button>
-        <Button
-          variant="primary"
-          size="sm"
-          icon="save"
-          loading={saveState === 'saving'}
-          onClick={() => void persistPage()}
-        >
-          Update
-        </Button>
-        <a
-          className="be-view-link"
-          href={config.publicPath}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          View &rarr;
-        </a>
-      </div>
-    </>
+  const headerNav = (
+    <button type="button" className="be-back" onClick={() => navigate('/admin/content')}>
+      <Icon name="arrow-left" size={16} />
+      Content
+    </button>
   );
 
   // ── Loading ──
   if (loading) {
     return (
-      <AdminLayout headerActions={toolbar}>
+      <AdminLayout headerActions={headerNav}>
         <div className="be-loading">Loading...</div>
       </AdminLayout>
     );
@@ -186,9 +149,34 @@ export default function BlockEditorPage() {
 
   // ── Editor: exact public page layout, but with editable text ──
   return (
-    <AdminLayout headerActions={toolbar}>
+    <AdminLayout headerActions={headerNav}>
       <div className="public-site-shell be-page-shell">
         {error && <div className="be-error">{error}</div>}
+        <div className="be-inline-header">
+          <h3 className="be-section-title">Editing: {config.title} Page</h3>
+          <div className="be-inline-actions">
+            {saveLabel && (
+              <span className={`be-save-state state-${saveState}`}>{saveLabel}</span>
+            )}
+            <Button
+              variant="primary"
+              size="sm"
+              icon="save"
+              loading={saveState === 'saving'}
+              onClick={() => void persistPage()}
+            >
+              Update
+            </Button>
+            <a
+              className="be-view-link"
+              href={config.publicPath}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View &rarr;
+            </a>
+          </div>
+        </div>
         <div className="body-layout">
           <div
             className={config.className}

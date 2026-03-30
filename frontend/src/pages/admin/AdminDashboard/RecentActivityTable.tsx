@@ -1,5 +1,5 @@
 import type React from "react";
-import { type RefObject, useRef, useState, useEffect } from "react";
+import type { RefObject } from "react";
 import { VisibilityBadge } from "../../../components/common";
 import { Icon } from "../../../components/common/Icon";
 import type { Letter, ContentStatus } from "../../../types/Letter";
@@ -93,18 +93,6 @@ export default function RecentActivityTable({
   columnMenuRef,
   onToggleFlag,
 }: RecentActivityTableProps) {
-  const theadRef = useRef<HTMLTableSectionElement>(null);
-  const [headerHeight, setHeaderHeight] = useState(0);
-
-  useEffect(() => {
-    if (!theadRef.current) return;
-    const measure = () => setHeaderHeight(theadRef.current?.offsetHeight ?? 0);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(theadRef.current);
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <>
       <div
@@ -113,37 +101,32 @@ export default function RecentActivityTable({
         role="region"
         aria-label="Letters table"
       >
-        <div
-          className="column-toggle-in-table"
-          ref={columnMenuRef}
-          style={headerHeight ? { height: headerHeight, marginBottom: -headerHeight } : undefined}
-        >
-          <button
-            className={`column-toggle-btn ${showColumnMenu ? 'active' : ''}`}
-            onClick={onToggleColumnMenu}
-            title="Toggle columns"
-          >
-            <Icon name="columns" size={14} />
-          </button>
-          {showColumnMenu && (
-            <div className="column-toggle-dropdown column-toggle-left">
-              {allColumns.map(col => (
-                <label key={col.id} className="column-toggle-item">
-                  <input
-                    type="checkbox"
-                    checked={visibleColumns.has(col.id)}
-                    onChange={() => onToggleColumn(col.id)}
-                  />
-                  {col.label}
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
         <table className="letters-table">
-          <thead ref={theadRef}>
+          <thead>
             <tr>
-              <th className="checkbox-header" />
+              <th className="checkbox-header" ref={columnMenuRef}>
+                <button
+                  className={`column-toggle-btn ${showColumnMenu ? 'active' : ''}`}
+                  onClick={onToggleColumnMenu}
+                  title="Toggle columns"
+                >
+                  <Icon name="columns" size={14} />
+                </button>
+                {showColumnMenu && (
+                  <div className="column-toggle-dropdown column-toggle-left">
+                    {allColumns.map(col => (
+                      <label key={col.id} className="column-toggle-item">
+                        <input
+                          type="checkbox"
+                          checked={visibleColumns.has(col.id)}
+                          onChange={() => onToggleColumn(col.id)}
+                        />
+                        {col.label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </th>
               {visibleColumns.has("sender") && (
                 <th
                   className={`sortable-header ${getSortInfo("sender") ? "sorted" : ""}`}

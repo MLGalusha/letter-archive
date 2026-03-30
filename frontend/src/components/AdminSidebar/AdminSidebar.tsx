@@ -23,7 +23,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Upload', path: '/admin/upload', icon: 'plus' },
       { label: 'Processing', path: '/admin/processing', icon: 'process' },
       { label: 'Notes', path: '/admin/notes', icon: 'file' },
-      { label: 'Content', path: '/admin/content', icon: 'folder' },
+      { label: 'Publish', path: '/admin/content', icon: 'folder' },
       { label: 'Usage', path: '/admin/usage', icon: 'chart' },
     ],
   },

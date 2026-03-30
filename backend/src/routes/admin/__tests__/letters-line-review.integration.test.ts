@@ -25,6 +25,7 @@ const {
   describePhotoMock,
   updateExtraContentMock,
   updatePhotoDescriptionMock,
+  executeRetagForLetterMock,
   verifyExtraContentMock,
   verifyPhotoDescriptionMock,
   unverifyExtraContentMock,
@@ -53,6 +54,7 @@ const {
   describePhotoMock: vi.fn(),
   updateExtraContentMock: vi.fn(),
   updatePhotoDescriptionMock: vi.fn(),
+  executeRetagForLetterMock: vi.fn(),
   verifyExtraContentMock: vi.fn(),
   verifyPhotoDescriptionMock: vi.fn(),
   unverifyExtraContentMock: vi.fn(),
@@ -176,6 +178,10 @@ vi.mock('../../../services/letter-operations.js', () => ({
   addLinkedPlace: vi.fn(),
   removeLinkedPerson: vi.fn(),
   removeLinkedPlace: vi.fn(),
+}));
+
+vi.mock('../../../services/metadata-update.js', () => ({
+  executeRetagForLetter: executeRetagForLetterMock,
 }));
 
 import lettersRouter from '../letters.js';
@@ -336,6 +342,43 @@ describe('admin letters line review route integration', () => {
       fieldType: 'transcript',
       source: 'human',
     });
+  });
+
+  it('re-tags metadata immediately and returns the refreshed letter DTO', async () => {
+    const refreshedLetter = createLetterDto({
+      metadata: {
+        sender: 'Ada Lovelace',
+        recipient: 'Charles Babbage',
+        hook: 'Ada Lovelace shares a mathematical note with Charles Babbage.',
+        description: 'Ada Lovelace writes to Charles Babbage about an analytical engine idea.',
+      },
+    });
+
+    getLetterByIdMock.mockResolvedValueOnce({ id: LETTER_ID });
+    executeRetagForLetterMock.mockResolvedValueOnce({ status: 'updated' });
+    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(refreshedLetter);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/retag`,
+      path: `/letters/${LETTER_ID}/retag`,
+      body: {
+        field: 'sender',
+        oldSender: 'A. Lovelace',
+        newSender: 'Ada Lovelace',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(getLetterByIdMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(executeRetagForLetterMock).toHaveBeenCalledWith(LETTER_ID, {
+      field: 'sender',
+      oldSender: 'A. Lovelace',
+      newSender: 'Ada Lovelace',
+    });
+    expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(response.body).toEqual(refreshedLetter);
   });
 
   it('passes includeExtras through regeneration and returns the refreshed letter DTO', async () => {

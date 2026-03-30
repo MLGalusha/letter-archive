@@ -5,7 +5,9 @@ import { getErrorMessage } from "../../api/client";
 import { getAdminLetters, getFilteredLetterIds, deleteLetter } from "../../api/letters";
 import { toggleLetterFlag, publishLetter, hideLetter } from "../../api/admin/letters";
 import {
+  confirmTranscript,
   getProcessingStatus,
+  regenerateMetadata,
   startTranscription,
   startMetadataExtraction,
   pauseProcessing,
@@ -25,6 +27,7 @@ import {
   ConfirmDialog,
 } from "../../components/common";
 import AdminLayout from "../../components/AdminLayout";
+import IdentityExtractionModal from "../../components/admin/IdentityExtractionModal";
 import Icon from "../../components/common/Icon";
 import { getRecentEdits, formatTimeAgo, type RecentEdit } from "../../utils/recentEdits";
 import RecentActivityTable from "./AdminDashboard/RecentActivityTable";
@@ -192,6 +195,10 @@ export default function AdminDashboard() {
   const [pendingMetadataIds, setPendingMetadataIds] = useState<string[]>([]);
   const [showTranscribeConfirm, setShowTranscribeConfirm] = useState(false);
   const [showMetadataConfirm, setShowMetadataConfirm] = useState(false);
+  const [showSingleMetadataModal, setShowSingleMetadataModal] = useState(false);
+  const [singleMetadataSender, setSingleMetadataSender] = useState("");
+  const [singleMetadataRecipient, setSingleMetadataRecipient] = useState("");
+  const [singleMetadataSubmitting, setSingleMetadataSubmitting] = useState(false);
   // Overwrite/skip state for transcribe and metadata
   const [transcribeExistingCount, setTranscribeExistingCount] = useState(0);
   const [metadataExistingCount, setMetadataExistingCount] = useState(0);
@@ -457,6 +464,22 @@ export default function AdminDashboard() {
   // Toolbar visibility is manually controlled — opens on first selection, closes only via X button
   const [editToolbarOpen, setEditToolbarOpen] = useState(false);
   const editMode = editToolbarOpen || copyModeActive || pendingChanges.size > 0;
+
+  const singleSelectedLetter = useMemo(() => {
+    if (selectedIds.size !== 1) return null;
+    const [selectedId] = Array.from(selectedIds);
+    return letters.find((letter) => letter.id === selectedId) ?? null;
+  }, [letters, selectedIds]);
+
+  const singleMetadataMode = useMemo(
+    () =>
+      singleSelectedLetter &&
+      (Boolean(singleSelectedLetter.transcriptConfirmedAt) ||
+        singleSelectedLetter.metadataContentStatus !== "EMPTY")
+        ? "regenerate"
+        : "extract",
+    [singleSelectedLetter],
+  );
 
   // Auto-open toolbar when items are selected
   useEffect(() => {
@@ -816,6 +839,98 @@ export default function AdminDashboard() {
     setShowUnconfirmedDialog(false);
     await handleStartMetadataExtraction(true);
   };
+
+  const handleOpenMetadataExtraction = useCallback(() => {
+    if (selectedIds.size === 1 && singleSelectedLetter) {
+      setSingleMetadataSender(singleSelectedLetter.metadata.sender ?? "");
+      setSingleMetadataRecipient(singleSelectedLetter.metadata.recipient ?? "");
+      setShowSingleMetadataModal(true);
+      return;
+    }
+
+    if (selectedIds.size > 0) {
+      const existing = letters.filter(
+        (letter) =>
+          selectedIds.has(letter.id) && letter.metadataContentStatus !== "EMPTY",
+      ).length;
+      setMetadataExistingCount(existing);
+    } else {
+      setMetadataExistingCount(0);
+    }
+
+    setShowMetadataConfirm(true);
+  }, [letters, selectedIds, singleSelectedLetter]);
+
+  const handleSingleMetadataExtraction = useCallback(async () => {
+    if (!singleSelectedLetter) return;
+
+    const extractionOptions = {
+      confirmedSender: singleMetadataSender.trim() || undefined,
+      confirmedRecipient: singleMetadataRecipient.trim() || undefined,
+    };
+
+    setSingleMetadataSubmitting(true);
+
+    try {
+      let updatedLetter: Letter | null = null;
+      let didRefresh =
+        Boolean(singleSelectedLetter.transcriptConfirmedAt) ||
+        singleSelectedLetter.metadataContentStatus !== "EMPTY";
+
+      if (!singleSelectedLetter.transcriptConfirmedAt) {
+        updatedLetter = await confirmTranscript(
+          singleSelectedLetter.id,
+          extractionOptions,
+        );
+
+        if (
+          singleSelectedLetter.metadataContentStatus !== "EMPTY" ||
+          updatedLetter.metadataContentStatus === "EMPTY"
+        ) {
+          didRefresh = true;
+          updatedLetter = await regenerateMetadata(
+            singleSelectedLetter.id,
+            extractionOptions,
+          );
+        }
+      } else {
+        updatedLetter = await regenerateMetadata(
+          singleSelectedLetter.id,
+          extractionOptions,
+        );
+      }
+
+      if (!updatedLetter) {
+        throw new Error("Metadata extraction did not return an updated letter");
+      }
+
+      setShowSingleMetadataModal(false);
+      showToast(
+        didRefresh
+          ? "Metadata regenerated"
+          : "Transcript confirmed — metadata extracted",
+        "success",
+      );
+      exitEditMode();
+      await fetchLetters();
+    } catch (err) {
+      console.error("Failed to extract metadata for selected letter:", err);
+      showToast(
+        err instanceof Error
+          ? err.message
+          : "Failed to extract metadata for selected letter",
+        "error",
+      );
+    } finally {
+      setSingleMetadataSubmitting(false);
+    }
+  }, [
+    fetchLetters,
+    showToast,
+    singleMetadataRecipient,
+    singleMetadataSender,
+    singleSelectedLetter,
+  ]);
 
 
   const handlePauseProcessing = async () => {
@@ -1423,6 +1538,19 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      <IdentityExtractionModal
+        isOpen={showSingleMetadataModal}
+        onClose={() => setShowSingleMetadataModal(false)}
+        onConfirm={() => void handleSingleMetadataExtraction()}
+        sender={singleMetadataSender}
+        recipient={singleMetadataRecipient}
+        onSenderChange={setSingleMetadataSender}
+        onRecipientChange={setSingleMetadataRecipient}
+        submitting={singleMetadataSubmitting}
+        mode={singleMetadataMode}
+        letterTitle={singleSelectedLetter?.title}
+      />
+
 
       {/* Floating edit toolbar with process actions */}
       {editMode && (
@@ -1528,15 +1656,7 @@ export default function AdminDashboard() {
                   </button>
                   <button
                     className="toolbar-process-btn"
-                    onClick={() => {
-                      if (selectedIds.size > 0) {
-                        const existing = letters.filter(l => selectedIds.has(l.id) && l.metadataContentStatus !== 'EMPTY').length;
-                        setMetadataExistingCount(existing);
-                      } else {
-                        setMetadataExistingCount(0);
-                      }
-                      setShowMetadataConfirm(true);
-                    }}
+                    onClick={handleOpenMetadataExtraction}
                   >
                     Extract Metadata{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
                   </button>

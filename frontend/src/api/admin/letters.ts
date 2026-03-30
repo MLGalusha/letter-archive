@@ -15,6 +15,14 @@ export interface UpdateLetterData {
   readingText?: string | null;
 }
 
+export interface RetagMetadataChange {
+  field: "sender" | "recipient" | "both";
+  oldSender?: string | null;
+  newSender?: string | null;
+  oldRecipient?: string | null;
+  newRecipient?: string | null;
+}
+
 export async function updateLetter(letterId: string, data: UpdateLetterData): Promise<Letter> {
   return apiPut<Letter>(`/admin/letters/${letterId}`, data);
 }
@@ -144,6 +152,14 @@ export async function reExtractLetter(
 
 export async function updateIdentity(letterId: string, data: { sender?: string; recipient?: string }): Promise<Letter> {
   return apiPatch<Letter>(`/admin/letters/${letterId}/identity`, data);
+}
+
+export async function retagMetadata(
+  letterId: string,
+  change: RetagMetadataChange,
+  signal?: AbortSignal,
+): Promise<Letter> {
+  return apiPost<Letter>(`/admin/letters/${letterId}/retag`, change, signal);
 }
 
 export async function toggleLetterFlag(letterId: string, flagged: boolean): Promise<Letter> {

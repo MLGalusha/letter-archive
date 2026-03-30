@@ -62,6 +62,7 @@ import { useTranscriptFontSize } from "./LetterReview/useTranscriptFontSize";
 import LineReviewMode, {
   type LineReviewModeHandle,
 } from "../../components/LineReviewMode/LineReviewMode";
+import IdentityExtractionModal from "../../components/admin/IdentityExtractionModal";
 import "./LetterReviewPage.css";
 
 export default function LetterReviewPage() {
@@ -545,7 +546,6 @@ export default function LetterReviewPage() {
 
   const executeConfirmTranscript = useCallback(async () => {
     if (!letterId) return;
-    setShowExtractionPopup(false);
     setSaving(true);
 
     try {
@@ -555,6 +555,7 @@ export default function LetterReviewPage() {
       });
       setLetter(updated);
       applyLetterMetadata(updated, { includeNotes: false });
+      setShowExtractionPopup(false);
       showToast(
         "Transcript confirmed — metadata extracted",
         "success",
@@ -1579,47 +1580,18 @@ export default function LetterReviewPage() {
         </div>
       )}
 
-      {/* Extract Metadata popup */}
-      <Modal
+      <IdentityExtractionModal
         isOpen={showExtractionPopup}
         onClose={() => setShowExtractionPopup(false)}
-        title="Extract Metadata"
-        subtitle="Extraction is more accurate when sender and recipient are provided."
-        size="sm"
-        actions={
-          <>
-            <button className="btn-cancel" onClick={() => setShowExtractionPopup(false)}>
-              Cancel
-            </button>
-            <button className="btn-confirm" onClick={() => void executeConfirmTranscript()}>
-              Extract
-            </button>
-          </>
-        }
-      >
-        <div className="extraction-popup-fields">
-          <div className="form-group">
-            <label htmlFor="extraction-sender">Sender</label>
-            <input
-              type="text"
-              id="extraction-sender"
-              value={extractionSender}
-              onChange={(e) => setExtractionSender(e.target.value)}
-              placeholder="Leave blank if unknown"
-            />
-          </div>
-          <div className="form-group">
-            <label htmlFor="extraction-recipient">Recipient</label>
-            <input
-              type="text"
-              id="extraction-recipient"
-              value={extractionRecipient}
-              onChange={(e) => setExtractionRecipient(e.target.value)}
-              placeholder="Leave blank if unknown"
-            />
-          </div>
-        </div>
-      </Modal>
+        onConfirm={() => void executeConfirmTranscript()}
+        sender={extractionSender}
+        recipient={extractionRecipient}
+        onSenderChange={setExtractionSender}
+        onRecipientChange={setExtractionRecipient}
+        submitting={saving}
+        mode="extract"
+        letterTitle={letter?.title}
+      />
 
       {/* Regenerate Metadata popup */}
       {showMetadataRegeneratePopup && (

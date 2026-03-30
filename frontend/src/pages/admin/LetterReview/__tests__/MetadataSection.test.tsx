@@ -51,29 +51,18 @@ const buildProps = (overrides: Partial<ComponentProps<typeof MetadataSection>> =
     onPrimaryTopicsChange: vi.fn(),
     onTopicsDropdownOpenChange: vi.fn(),
     onTriggerAutoSave: vi.fn(),
-    hookRef: createRef<HTMLTextAreaElement>(),
-    descriptionRef: createRef<HTMLTextAreaElement>(),
     regenerateState: "idle",
-    reExtractState: "idle" as const,
-    onReExtract: vi.fn(),
+    identityUpdateState: "idle" as const,
+    identityUpdateSecondsRemaining: 0,
+    retagState: "idle" as const,
     onVerifyMetadata: vi.fn(),
     onConfirmTranscript: vi.fn(),
     onRegenerateMetadata: vi.fn(),
-    onRegenerateEntities: vi.fn().mockResolvedValue(undefined),
     onMetadataFieldClick: vi.fn(),
     onMetadataFieldDoubleClick: vi.fn(),
     showMetadataTooltip: false,
     metadataTooltipPosition: { x: 120, y: 120 },
     metadataTooltipRef: createRef<HTMLDivElement>(),
-    onUpdateLinkedPerson: vi.fn().mockResolvedValue(letter),
-    onUpdateLinkedPlace: vi.fn().mockResolvedValue(letter),
-    onRemoveLinkedPerson: vi.fn().mockResolvedValue(letter),
-    onRemoveLinkedPlace: vi.fn().mockResolvedValue(letter),
-    onSetLetter: vi.fn(),
-    onShowAddPersonModal: vi.fn(),
-    onShowAddPlaceModal: vi.fn(),
-    onOpenLinkedPerson: vi.fn(),
-    onOpenLinkedPlace: vi.fn(),
     saving: false,
     showToast: vi.fn(),
     ...overrides,
@@ -140,5 +129,46 @@ describe("MetadataSection", () => {
     expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
     expect(container.querySelector(".metadata-form")).toHaveClass("verified");
     expect(screen.getByLabelText("Sender")).toHaveAttribute("readonly");
+  });
+
+  it("shows pending identity update feedback", () => {
+    const props = buildProps({
+      identityUpdateState: "pending",
+      identityUpdateSecondsRemaining: 10,
+    });
+
+    render(<MetadataSection {...props} />);
+
+    expect(screen.getByText("Updating in 10s...")).toBeInTheDocument();
+  });
+
+  it("shows identity save progress feedback", () => {
+    const props = buildProps({
+      identityUpdateState: "saving",
+    });
+
+    render(<MetadataSection {...props} />);
+
+    expect(screen.getByText("Saving name...")).toBeInTheDocument();
+  });
+
+  it("shows retagging feedback under sender and recipient", () => {
+    const props = buildProps({
+      retagState: "retagging",
+    });
+
+    render(<MetadataSection {...props} />);
+
+    expect(screen.getByText("Updating references...")).toBeInTheDocument();
+  });
+
+  it("shows retag completion feedback", () => {
+    const props = buildProps({
+      retagState: "done",
+    });
+
+    render(<MetadataSection {...props} />);
+
+    expect(screen.getByText("References updated")).toBeInTheDocument();
   });
 });

@@ -1,11 +1,9 @@
 /**
  * AI-Assisted Metadata Update Service
  *
- * When a sender/recipient name is changed, this service debounces for 2 minutes
- * then calls OpenAI to re-tag all «SENDER:...» and «RECIPIENT:...» references
- * in the metadata text fields with natural language using the corrected names.
- *
- * Falls back to simple field update in stub mode (no OPENAI_API_KEY).
+ * When a sender/recipient name is changed, this service can immediately
+ * re-tag all «SENDER:...» and «RECIPIENT:...» references in the metadata text
+ * fields using the corrected names.
  */
 
 import { eq } from 'drizzle-orm';
@@ -16,105 +14,52 @@ import {
   METADATA_UPDATE_SYSTEM_PROMPT,
   buildMetadataUpdateUserPrompt,
 } from '../ai/prompts.js';
-import { MetadataV2Schema, type MetadataV2 } from '../ai/schemas/metadataV2.js';
+import { MetadataV2Schema } from '../ai/schemas/metadataV2.js';
 import { METADATA_V2_JSON_SCHEMA } from '../ai/schemas/metadataV2.js';
 import { createLogger } from '../utils/logger.js';
 import { logApiUsage } from './usage-tracking.js';
 
 const log = createLogger({ module: 'metadata-update' });
 
-const RETAG_DELAY_MS = 2 * 60 * 1000; // 2 minutes
-
-// ============================================================================
-// DEBOUNCE TIMER
-// ============================================================================
-
-interface PendingRetag {
-  timer: ReturnType<typeof setTimeout>;
-  senderName: string | null;
-  recipientName: string | null;
-  change: {
-    field: 'sender' | 'recipient' | 'both';
-    oldSender?: string | null;
-    newSender?: string | null;
-    oldRecipient?: string | null;
-    newRecipient?: string | null;
-  };
-}
-
-const pendingRetags = new Map<string, PendingRetag>();
-
-/**
- * Schedule a debounced AI re-tag for a letter's metadata.
- * Resets the timer if called again within the delay window.
- */
-export function scheduleMetadataRetag(params: {
-  letterId: string;
-  senderName: string | null;
-  recipientName: string | null;
-  change: PendingRetag['change'];
-}): void {
-  const { letterId } = params;
-
-  // Clear existing timer for this letter
-  const existing = pendingRetags.get(letterId);
-  if (existing) {
-    clearTimeout(existing.timer);
-    // Merge changes: if previous was sender-only and now recipient, make it both
-    if (existing.change.field !== params.change.field && params.change.field !== 'both') {
-      params.change = {
-        field: 'both',
-        oldSender: existing.change.oldSender ?? params.change.oldSender,
-        newSender: params.change.newSender ?? existing.change.newSender ?? params.senderName,
-        oldRecipient: existing.change.oldRecipient ?? params.change.oldRecipient,
-        newRecipient: params.change.newRecipient ?? existing.change.newRecipient ?? params.recipientName,
-      };
-    }
-  }
-
-  const timer = setTimeout(() => {
-    pendingRetags.delete(letterId);
-    void executeRetag(letterId).catch((err) => {
-      log.error({ letterId, err }, 'Scheduled metadata re-tag failed');
-    });
-  }, RETAG_DELAY_MS);
-
-  pendingRetags.set(letterId, {
-    timer,
-    senderName: params.senderName,
-    recipientName: params.recipientName,
-    change: params.change,
-  });
-
-  log.info({ letterId, delay: RETAG_DELAY_MS }, 'Metadata re-tag scheduled');
-}
-
-/** Check if a retag is pending for a letter (for testing/status) */
-export function isRetagPending(letterId: string): boolean {
-  return pendingRetags.has(letterId);
-}
-
-/** Cancel a pending retag (e.g., if letter is deleted) */
-export function cancelPendingRetag(letterId: string): void {
-  const existing = pendingRetags.get(letterId);
-  if (existing) {
-    clearTimeout(existing.timer);
-    pendingRetags.delete(letterId);
-    log.debug({ letterId }, 'Pending metadata re-tag cancelled');
-  }
-}
-
 // ============================================================================
 // AI RE-TAG EXECUTION
 // ============================================================================
 
-async function executeRetag(letterId: string): Promise<void> {
-  const pending = pendingRetags.get(letterId);
-  // May have been cancelled
-  if (!pending) return;
+export interface RetagChange {
+  field: 'sender' | 'recipient' | 'both';
+  oldSender?: string | null;
+  newSender?: string | null;
+  oldRecipient?: string | null;
+  newRecipient?: string | null;
+}
+
+export interface ExecuteRetagResult {
+  status: 'updated' | 'skipped' | 'noop';
+  reason?: string;
+}
+
+function matchesRetagTarget(letter: Pick<Letter, 'sender' | 'recipient'>, change: RetagChange): boolean {
+  if ((change.field === 'sender' || change.field === 'both') && letter.sender !== (change.newSender ?? null)) {
+    return false;
+  }
+
+  if (
+    (change.field === 'recipient' || change.field === 'both')
+    && letter.recipient !== (change.newRecipient ?? null)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+export async function executeRetagForLetter(
+  letterId: string,
+  change: RetagChange,
+): Promise<ExecuteRetagResult> {
 
   const letterLog = log.child({ letterId });
-  letterLog.info('Executing scheduled metadata re-tag');
+  letterLog.info({ change }, 'Executing immediate metadata re-tag');
 
   const letter = await db.query.letters.findFirst({
     where: eq(letters.id, letterId),
@@ -122,12 +67,20 @@ async function executeRetag(letterId: string): Promise<void> {
 
   if (!letter) {
     letterLog.warn('Letter not found for re-tag, skipping');
-    return;
+    return { status: 'skipped', reason: 'missing_letter' };
   }
 
   if (!letter.metadataV2Json || !hasOpenAI || !openai) {
     letterLog.debug('Skipping AI re-tag (no metadata or no API key)');
-    return;
+    return {
+      status: 'noop',
+      reason: !letter.metadataV2Json ? 'missing_metadata' : 'openai_unavailable',
+    };
+  }
+
+  if (!matchesRetagTarget(letter, change)) {
+    letterLog.info({ change }, 'Skipping stale metadata re-tag before AI call');
+    return { status: 'skipped', reason: 'stale_before_ai' };
   }
 
   const existingMetadata = letter.metadataV2Json as Record<string, unknown>;
@@ -137,7 +90,7 @@ async function executeRetag(letterId: string): Promise<void> {
       existingMetadata,
       senderName: letter.sender,
       recipientName: letter.recipient,
-      change: pending.change,
+      change,
     });
 
     const start = Date.now();
@@ -162,19 +115,19 @@ async function executeRetag(letterId: string): Promise<void> {
 
     if (response.status === 'incomplete') {
       letterLog.warn({ duration }, 'AI re-tag incomplete, skipping update');
-      return;
+      return { status: 'skipped', reason: 'incomplete_response' };
     }
 
     const outputItem = response.output.find((item) => item.type === 'message');
     if (!outputItem || outputItem.type !== 'message') {
       letterLog.warn({ duration }, 'No message in AI re-tag response');
-      return;
+      return { status: 'skipped', reason: 'missing_message' };
     }
 
     const textContent = outputItem.content.find((c) => c.type === 'output_text');
     if (!textContent || textContent.type !== 'output_text') {
       letterLog.warn({ duration }, 'No text content in AI re-tag response');
-      return;
+      return { status: 'skipped', reason: 'missing_text' };
     }
 
     let parsed: unknown;
@@ -182,7 +135,7 @@ async function executeRetag(letterId: string): Promise<void> {
       parsed = JSON.parse(textContent.text);
     } catch {
       letterLog.warn({ duration }, 'Failed to parse AI re-tag response JSON');
-      return;
+      return { status: 'skipped', reason: 'invalid_json' };
     }
 
     const validationResult = MetadataV2Schema.safeParse(parsed);
@@ -191,11 +144,31 @@ async function executeRetag(letterId: string): Promise<void> {
         { duration, errors: validationResult.error.errors },
         'AI re-tag response failed validation',
       );
-      return;
+      return { status: 'skipped', reason: 'validation_failed' };
     }
 
     const updatedMetadata = validationResult.data;
     const usage = response.usage;
+
+    const latestLetter = await db.query.letters.findFirst({
+      where: eq(letters.id, letterId),
+    });
+
+    if (!latestLetter) {
+      letterLog.warn({ duration }, 'Letter disappeared before metadata re-tag save');
+      return { status: 'skipped', reason: 'missing_letter_before_save' };
+    }
+
+    if (!matchesRetagTarget(latestLetter, change)) {
+      letterLog.info({ duration, change }, 'Skipping stale metadata re-tag before save');
+      return { status: 'skipped', reason: 'stale_before_save' };
+    }
+
+    const finalMetadata = {
+      ...updatedMetadata,
+      sender: latestLetter.sender,
+      recipient: latestLetter.recipient,
+    };
 
     // Strip tags for display fields
     const stripTags = (text: string) =>
@@ -203,15 +176,15 @@ async function executeRetag(letterId: string): Promise<void> {
 
     const dbUpdates: Record<string, unknown> = {
       updatedAt: new Date(),
-      hook: updatedMetadata.hook ? stripTags(updatedMetadata.hook) : updatedMetadata.hook,
-      summary: updatedMetadata.summary ? stripTags(updatedMetadata.summary) : updatedMetadata.summary,
-      metadataV2Json: updatedMetadata,
-      metadataJson: updatedMetadata,
+      hook: finalMetadata.hook ? stripTags(finalMetadata.hook) : finalMetadata.hook,
+      summary: finalMetadata.summary ? stripTags(finalMetadata.summary) : finalMetadata.summary,
+      metadataV2Json: finalMetadata,
+      metadataJson: finalMetadata,
     };
 
     // Preserve the current sender/recipient names (don't let AI override them)
-    dbUpdates.sender = letter.sender;
-    dbUpdates.recipient = letter.recipient;
+    dbUpdates.sender = latestLetter.sender;
+    dbUpdates.recipient = latestLetter.recipient;
 
     await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
 
@@ -232,8 +205,10 @@ async function executeRetag(letterId: string): Promise<void> {
       outputTokens: usage?.output_tokens ?? 0,
       durationMs: duration,
     });
+    return { status: 'updated' };
   } catch (error) {
     letterLog.error({ err: error }, 'AI metadata re-tag failed');
+    return { status: 'skipped', reason: 'request_failed' };
   }
 }
 

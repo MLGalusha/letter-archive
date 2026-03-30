@@ -231,7 +231,7 @@ export async function apiGet<T>(
 /**
  * POST request
  */
-export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+export async function apiPost<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const isFormData = body instanceof FormData;
   const url = new URL(path, API_BASE_URL).toString();
 
@@ -240,7 +240,7 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
     method: 'POST',
     headers: isFormData ? {} : { 'Content-Type': 'application/json' },
     body: isFormData ? body : body ? JSON.stringify(body) : undefined,
-  });
+  }, signal);
 }
 
 /**

@@ -71,6 +71,34 @@ export const updateIdentitySchema = z.object({
   recipient: z.string().nullable().optional(),
 });
 
+export const retagMetadataSchema = z.object({
+  field: z.enum(['sender', 'recipient', 'both']),
+  oldSender: z.string().nullable().optional(),
+  newSender: z.string().nullable().optional(),
+  oldRecipient: z.string().nullable().optional(),
+  newRecipient: z.string().nullable().optional(),
+}).superRefine((value, ctx) => {
+  if (value.field === 'sender' || value.field === 'both') {
+    if (value.newSender === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'newSender is required when sender references are being re-tagged',
+        path: ['newSender'],
+      });
+    }
+  }
+
+  if (value.field === 'recipient' || value.field === 'both') {
+    if (value.newRecipient === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'newRecipient is required when recipient references are being re-tagged',
+        path: ['newRecipient'],
+      });
+    }
+  }
+});
+
 export const toggleFlagSchema = z.object({
   flagged: z.boolean(),
 });

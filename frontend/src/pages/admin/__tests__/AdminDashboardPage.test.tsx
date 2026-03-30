@@ -1,16 +1,19 @@
-import { render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
+import userEvent from "@testing-library/user-event";
 import { ApiError } from "../../../api/client";
 import type { Letter } from "../../../types/Letter";
 
 const {
+  confirmTranscriptMock,
   getAdminLettersMock,
   getFilteredLetterIdsMock,
   deleteLetterMock,
   toggleLetterFlagMock,
   getProcessingStatusMock,
+  regenerateMetadataMock,
   startTranscriptionMock,
   startMetadataExtractionMock,
   pauseProcessingMock,
@@ -24,11 +27,13 @@ const {
   showToastMock,
   isAuthenticatedMock,
 } = vi.hoisted(() => ({
+  confirmTranscriptMock: vi.fn(),
   getAdminLettersMock: vi.fn(),
   getFilteredLetterIdsMock: vi.fn(),
   deleteLetterMock: vi.fn(),
   toggleLetterFlagMock: vi.fn(),
   getProcessingStatusMock: vi.fn(),
+  regenerateMetadataMock: vi.fn(),
   startTranscriptionMock: vi.fn(),
   startMetadataExtractionMock: vi.fn(),
   pauseProcessingMock: vi.fn(),
@@ -58,7 +63,9 @@ vi.mock("../../../api/admin/letters", () => ({
 }));
 
 vi.mock("../../../api/admin", () => ({
+  confirmTranscript: (...args: unknown[]) => confirmTranscriptMock(...args),
   getProcessingStatus: (...args: unknown[]) => getProcessingStatusMock(...args),
+  regenerateMetadata: (...args: unknown[]) => regenerateMetadataMock(...args),
   startTranscription: (...args: unknown[]) => startTranscriptionMock(...args),
   startMetadataExtraction: (...args: unknown[]) => startMetadataExtractionMock(...args),
   pauseProcessing: (...args: unknown[]) => pauseProcessingMock(...args),
@@ -134,7 +141,28 @@ vi.mock("../../../components/common/Icon", () => ({
 }));
 
 vi.mock("../AdminDashboard/RecentActivityTable", () => ({
-  default: () => <div>Recent activity table</div>,
+  default: ({
+    filteredLetters,
+    onCheckboxChange,
+    selectedIds,
+  }: {
+    filteredLetters: Letter[];
+    onCheckboxChange: (letterId: string, index: number, event: unknown) => void;
+    selectedIds: Set<string>;
+  }) => (
+    <div>
+      <div>Recent activity table</div>
+      {filteredLetters.map((letter, index) => (
+        <button
+          key={letter.id}
+          type="button"
+          onClick={(event) => onCheckboxChange(letter.id, index, event)}
+        >
+          {selectedIds.has(letter.id) ? `Selected ${letter.title}` : `Select ${letter.title}`}
+        </button>
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock("../../../utils/recentEdits", () => ({
@@ -144,8 +172,8 @@ vi.mock("../../../utils/recentEdits", () => ({
 
 import AdminDashboard from "../AdminDashboard";
 
-function makeLetter(): Letter {
-  return {
+function makeLetter(overrides: Partial<Letter> = {}): Letter {
+  const baseLetter: Letter = {
     id: "letter-1",
     title: "Test Letter",
     collectionCode: "009",
@@ -163,35 +191,49 @@ function makeLetter(): Letter {
     lettersCount: 1,
     extrasCount: 0,
   };
+
+  return {
+    ...baseLetter,
+    ...overrides,
+    transcript: {
+      ...baseLetter.transcript,
+      ...(overrides.transcript ?? {}),
+    },
+    metadata: {
+      ...baseLetter.metadata,
+      ...(overrides.metadata ?? {}),
+    },
+    images: overrides.images ?? baseLetter.images,
+  };
 }
 
-function createLettersResponse() {
+function createLettersResponse(letters: Letter[] = [makeLetter()]) {
   return {
-    letters: [makeLetter()],
+    letters,
     pagination: {
       page: 1,
       limit: 50,
-      total: 1,
+      total: letters.length,
       totalPages: 1,
     },
     stats: {
-      total: 1,
-      uploaded: 1,
+      total: letters.length,
+      uploaded: letters.length,
       transcribed: 0,
       metadataReady: 0,
       reviewed: 0,
       published: 0,
-      hidden: 1,
+      hidden: letters.length,
       flagged: 0,
       transcript: {
         empty: 0,
-        aiDraft: 1,
+        aiDraft: letters.length,
         edited: 0,
         verified: 0,
       },
       metadata: {
         empty: 0,
-        aiDraft: 1,
+        aiDraft: letters.length,
         edited: 0,
         verified: 0,
       },
@@ -253,5 +295,123 @@ describe("AdminDashboard processing", () => {
       "error",
     );
     expect(consoleDebugSpy).toHaveBeenCalled();
+  });
+
+  it("opens the sender and recipient modal when exactly one letter is selected", async () => {
+    const user = userEvent.setup();
+
+    getAdminLettersMock.mockResolvedValue(
+      createLettersResponse([
+        makeLetter({
+          metadataContentStatus: "EMPTY",
+          metadata: {
+            sender: "",
+            recipient: "",
+            dateRaw: "19470810",
+            verified: false,
+          },
+        }),
+      ]),
+    );
+
+    render(
+      <MemoryRouter>
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Select Test Letter" }));
+    await user.click(
+      await screen.findByRole("button", { name: /Extract Metadata \(1\)/ }),
+    );
+
+    expect(screen.getByLabelText("Sender")).toBeInTheDocument();
+    expect(screen.getByLabelText("Recipient")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Extract metadata for 1 selected letter\?/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the bulk confirmation flow when more than one letter is selected", async () => {
+    const user = userEvent.setup();
+
+    getAdminLettersMock.mockResolvedValue(
+      createLettersResponse([
+        makeLetter({
+          id: "letter-1",
+          title: "Letter One",
+          metadataContentStatus: "EMPTY",
+        }),
+        makeLetter({
+          id: "letter-2",
+          title: "Letter Two",
+          metadataContentStatus: "EMPTY",
+        }),
+      ]),
+    );
+
+    render(
+      <MemoryRouter>
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Select Letter One" }));
+    await user.click(await screen.findByRole("button", { name: "Select Letter Two" }));
+    await user.click(
+      await screen.findByRole("button", { name: /Extract Metadata \(2\)/ }),
+    );
+
+    expect(
+      screen.getByText(/Extract metadata for 2 selected letters\?/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Sender")).not.toBeInTheDocument();
+  });
+
+  it("submits single-letter extraction with the provided sender and recipient", async () => {
+    const user = userEvent.setup();
+
+    getAdminLettersMock.mockResolvedValue(
+      createLettersResponse([
+        makeLetter({
+          metadataContentStatus: "EMPTY",
+          metadata: {
+            sender: "",
+            recipient: "",
+            dateRaw: "19470810",
+            verified: false,
+          },
+        }),
+      ]),
+    );
+    confirmTranscriptMock.mockResolvedValue(
+      makeLetter({
+        metadataContentStatus: "AI_DRAFT",
+        transcriptConfirmedAt: "2026-03-30T12:00:00.000Z",
+      }),
+    );
+
+    render(
+      <MemoryRouter>
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Select Test Letter" }));
+    await user.click(
+      await screen.findByRole("button", { name: /Extract Metadata \(1\)/ }),
+    );
+
+    await user.type(screen.getByLabelText("Sender"), "Mabel");
+    await user.type(screen.getByLabelText("Recipient"), "Theo");
+    await user.click(screen.getByRole("button", { name: "Extract Metadata" }));
+
+    await waitFor(() => {
+      expect(confirmTranscriptMock).toHaveBeenCalledWith("letter-1", {
+        confirmedSender: "Mabel",
+        confirmedRecipient: "Theo",
+      });
+    });
+    expect(regenerateMetadataMock).not.toHaveBeenCalled();
   });
 });

@@ -19,7 +19,7 @@ import {
   type UpdateLetterInput,
 } from '../../../services/letter-operations.js';
 import { resetLetterForProcessing } from '../../../services/letters.js';
-import { scheduleMetadataRetag } from '../../../services/metadata-update.js';
+import { executeRetagForLetter } from '../../../services/metadata-update.js';
 import { checkNoteAutoResolutions } from '../../../services/note-resolution.js';
 import { addAliasToCanonicalPerson } from '../../../services/entities/persons.js';
 import { syncLetterParticipantsFromMetadata } from '../../../services/entities/participant-sync.js';
@@ -31,6 +31,7 @@ import {
   addNoteSchema,
   confirmTranscriptSchema,
   reExtractSchema,
+  retagMetadataSchema,
   toggleFlagSchema,
   updateIdentitySchema,
   updateLetterSchema,
@@ -285,24 +286,10 @@ router.patch('/:letterId/identity', async (req, res, next) => {
 
     await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
 
-    // Schedule debounced AI re-tag of metadata text fields
     const oldSender = letter.sender;
     const oldRecipient = letter.recipient;
     const senderChanged = newSender !== undefined && newSender !== oldSender;
     const recipientChanged = newRecipient !== undefined && newRecipient !== oldRecipient;
-
-    if (senderChanged || recipientChanged) {
-      scheduleMetadataRetag({
-        letterId,
-        senderName: newSender !== undefined ? (newSender || null) : letter.sender,
-        recipientName: newRecipient !== undefined ? (newRecipient || null) : letter.recipient,
-        change: {
-          field: senderChanged && recipientChanged ? 'both' : senderChanged ? 'sender' : 'recipient',
-          ...(senderChanged ? { oldSender, newSender: newSender || null } : {}),
-          ...(recipientChanged ? { oldRecipient, newRecipient: newRecipient || null } : {}),
-        },
-      });
-    }
 
     req.log.info({ letterId, newSender, newRecipient, senderChanged, recipientChanged }, 'Identity update completed');
 
@@ -353,6 +340,21 @@ router.patch('/:letterId/identity', async (req, res, next) => {
       recipient: newRecipient ?? undefined,
     }).catch(err => req.log.warn({ letterId, err }, 'Participant sync failed after identity update'));
 
+    res.json(await requireLetterDto(letterId));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/:letterId/retag', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+    const change = parseOrThrow(retagMetadataSchema, req.body, 'Invalid request body');
+
+    await requireLetter(letterId);
+    const result = await executeRetagForLetter(letterId, change);
+
+    req.log.info({ letterId, change, result }, 'Metadata re-tag request completed');
     res.json(await requireLetterDto(letterId));
   } catch (error) {
     next(error);

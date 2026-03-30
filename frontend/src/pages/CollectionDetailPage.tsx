@@ -355,25 +355,20 @@ export default function CollectionDetailPage() {
                         key={person.name}
                         className="cd-person-card"
                         onClick={() => {
-                          if (person.hook || person.biography) {
-                            setPopup({
-                              title: person.name,
-                              content: (
-                                <>
-                                  <div className="cd-popup-role">
-                                    {person.sentCount > 0 && <span>Sent {person.sentCount}</span>}
-                                    {person.sentCount > 0 && person.receivedCount > 0 && <span className="cd-person-divider">&middot;</span>}
-                                    {person.receivedCount > 0 && <span>Received {person.receivedCount}</span>}
-                                  </div>
-                                  {person.hook && <p className="cd-popup-hook">{person.hook}</p>}
-                                  {person.biography && <p className="cd-popup-biography">{person.biography}</p>}
-                                </>
-                              ),
-                            });
-                          } else {
-                            navigate(`/collections/${collectionCode}?sender=${encodeURIComponent(person.name)}`);
-                            setTimeout(() => archiveSearchRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-                          }
+                          setPopup({
+                            title: person.name,
+                            content: (
+                              <>
+                                <div className="cd-popup-role">
+                                  {person.sentCount > 0 && <span>Sent {person.sentCount}</span>}
+                                  {person.sentCount > 0 && person.receivedCount > 0 && <span className="cd-person-divider">&middot;</span>}
+                                  {person.receivedCount > 0 && <span>Received {person.receivedCount}</span>}
+                                </div>
+                                {person.hook && <p className="cd-popup-hook">{person.hook}</p>}
+                                {person.biography && <p className="cd-popup-biography">{person.biography}</p>}
+                              </>
+                            ),
+                          });
                         }}
                       >
                         <h3 className="cd-person-name">{person.name}</h3>

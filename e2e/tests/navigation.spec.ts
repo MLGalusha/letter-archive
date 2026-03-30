@@ -11,7 +11,7 @@ test.describe('Navigation', () => {
   test.describe('Public Navigation', () => {
     test.beforeEach(async ({ page }) => {
       await page.goto('/');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
     });
 
     test('shows header on homepage', async ({ page }) => {
@@ -48,7 +48,7 @@ test.describe('Navigation', () => {
 
     test('logo links to homepage', async ({ page }) => {
       await page.goto('/collections');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       const logo = page.locator('a[href="/"] img, .logo a, header a[href="/"]');
 
@@ -61,7 +61,7 @@ test.describe('Navigation', () => {
 
     test('footer shows on collections page', async ({ page }) => {
       await page.goto('/collections');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       const footer = page.locator(SELECTORS.public.footer);
       await expect(footer).toBeVisible();
@@ -69,7 +69,7 @@ test.describe('Navigation', () => {
 
     test('footer shows on about page', async ({ page }) => {
       await page.goto('/about');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       const footer = page.locator(SELECTORS.public.footer);
       const hasFooter = await footer.isVisible().catch(() => false);
@@ -96,47 +96,28 @@ test.describe('Navigation', () => {
       expect(page.url()).toContain('/admin/upload');
     });
 
-    test('can navigate to people page', async ({ page }) => {
-      const peopleLink = page.locator('a[href="/admin/entities/people"], a:has-text("People")');
+    test('can navigate to processing page', async ({ page }) => {
+      const processingLink = page.locator('a.nav-item:has-text("Processing")');
+      await processingLink.click();
 
-      if (await peopleLink.first().isVisible()) {
-        await peopleLink.first().click();
-        await page.waitForURL(/\/admin\/entities\/people/);
-        expect(page.url()).toContain('/admin/entities/people');
-      } else {
-        // Navigate directly
-        await page.goto('/admin/entities/people');
-        await page.waitForLoadState('networkidle');
-        expect(page.url()).toContain('/admin/entities/people');
-      }
+      await page.waitForURL(/\/admin\/processing/);
+      expect(page.url()).toContain('/admin/processing');
     });
 
-    test('can navigate to places page', async ({ page }) => {
-      const placesLink = page.locator('a[href="/admin/entities/places"], a:has-text("Places")');
+    test('can navigate to notes page', async ({ page }) => {
+      const notesLink = page.locator('a.nav-item:has-text("Notes")');
+      await notesLink.click();
 
-      if (await placesLink.first().isVisible()) {
-        await placesLink.first().click();
-        await page.waitForURL(/\/admin\/entities\/places/);
-      } else {
-        await page.goto('/admin/entities/places');
-        await page.waitForLoadState('networkidle');
-      }
-
-      expect(page.url()).toContain('/admin/entities/places');
+      await page.waitForURL(/\/admin\/notes/);
+      expect(page.url()).toContain('/admin/notes');
     });
 
-    test('can navigate to review queue', async ({ page }) => {
-      const reviewLink = page.locator('a[href="/admin/entities/review"]');
+    test('can navigate to publish page', async ({ page }) => {
+      const publishLink = page.locator('a.nav-item:has-text("Publish")');
+      await publishLink.click();
 
-      if (await reviewLink.first().isVisible()) {
-        await reviewLink.first().click();
-        await page.waitForURL(/\/admin\/entities\/review/);
-      } else {
-        await page.goto('/admin/entities/review');
-        await page.waitForLoadState('networkidle');
-      }
-
-      expect(page.url()).toContain('/admin/entities/review');
+      await page.waitForURL(/\/admin\/content/);
+      expect(page.url()).toContain('/admin/content');
     });
 
     test('can navigate back to dashboard from letter review', async ({ page }) => {
@@ -163,7 +144,10 @@ test.describe('Navigation', () => {
     });
 
     test('logout returns to login page', async ({ page }) => {
+      // Logout button is on the Settings page
+      await page.goto('/admin/settings', { waitUntil: 'domcontentloaded' });
       const logoutBtn = page.locator(SELECTORS.dashboard.logoutBtn);
+      await logoutBtn.waitFor({ state: 'visible', timeout: 10000 });
       await logoutBtn.click();
 
       await page.waitForURL(/\/admin-login/);
@@ -174,10 +158,10 @@ test.describe('Navigation', () => {
   test.describe('Browser Navigation', () => {
     test('back button works on public pages', async ({ page }) => {
       await page.goto('/');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       await page.goto('/collections');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       await page.goBack();
 
@@ -188,7 +172,7 @@ test.describe('Navigation', () => {
       await loginAsAdmin(page);
 
       await page.goto('/admin/upload');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       await page.goBack();
 
@@ -197,10 +181,10 @@ test.describe('Navigation', () => {
 
     test('forward button works', async ({ page }) => {
       await page.goto('/');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       await page.goto('/collections');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       await page.goBack();
       await page.goForward();
@@ -213,7 +197,7 @@ test.describe('Navigation', () => {
     test('can directly access letter by URL', async ({ page }) => {
       // First get a valid letter ID
       await page.goto('/');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       const letterCard = page.locator(SELECTORS.public.letterCard).first();
 
@@ -258,7 +242,7 @@ test.describe('Navigation', () => {
   test.describe('404 Handling', () => {
     test('shows error for invalid public route', async ({ page }) => {
       await page.goto('/invalid-route-xyz-123');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       // Should show some error or redirect to home
       const pageContent = await page.content();
@@ -268,7 +252,7 @@ test.describe('Navigation', () => {
     test('shows error for invalid admin route', async ({ page }) => {
       await loginAsAdmin(page);
       await page.goto('/admin/invalid-route-xyz');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       // Should show some content (error or redirect)
       const pageContent = await page.content();

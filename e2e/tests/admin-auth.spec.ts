@@ -83,7 +83,9 @@ test.describe('Admin Authentication', () => {
     test('logs out successfully', async ({ page }) => {
       await loginAsAdmin(page);
 
-      // Click logout
+      // Logout button is on the Settings page
+      await page.goto('/admin/settings', { waitUntil: 'domcontentloaded' });
+      await page.locator(SELECTORS.dashboard.logoutBtn).waitFor({ state: 'visible', timeout: 10000 });
       await page.click(SELECTORS.dashboard.logoutBtn);
 
       // Should redirect to login page
@@ -112,7 +114,7 @@ test.describe('Admin Authentication', () => {
   test.describe('Protected Routes', () => {
     test('redirects to login when accessing /admin without session', async ({ page }) => {
       await page.goto('/admin');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       // useEffect redirect happens after initial render
       await page.waitForURL(/\/admin-login/, { timeout: 10000 });
       await expect(page.locator('input[type="password"]')).toBeVisible();
@@ -120,37 +122,27 @@ test.describe('Admin Authentication', () => {
 
     test('redirects to login when accessing /admin/letters/:id without session', async ({ page }) => {
       await page.goto('/admin/letters/some-letter-id');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       await page.waitForURL(/\/admin-login/, { timeout: 10000 });
     });
 
     test('redirects to login when accessing /admin/upload without session', async ({ page }) => {
       await page.goto('/admin/upload');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       await page.waitForURL(/\/admin-login/, { timeout: 10000 });
     });
 
-    test('redirects to login when accessing /admin/entities/people without session', async ({ page }) => {
-      await page.goto('/admin/entities/people');
-      // useEffect auth check runs after mount and API calls may start before redirect
-      // Wait for either redirect or timeout, then verify we end up at login
-      try {
-        await page.waitForURL(/\/admin-login/, { timeout: 5000 });
-      } catch {
-        // If redirect didn't happen in time, navigate away and back to trigger redirect
-        await page.goto('/admin-login');
-      }
+    test('redirects to login when accessing /admin/settings without session', async ({ page }) => {
+      await page.goto('/admin/settings');
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForURL(/\/admin-login/, { timeout: 10000 });
       await expect(page.locator('input[type="password"]')).toBeVisible();
     });
 
-    test('redirects to login when accessing /admin/entities/places without session', async ({ page }) => {
-      await page.goto('/admin/entities/places');
-      // useEffect auth check runs after mount and API calls may start before redirect
-      try {
-        await page.waitForURL(/\/admin-login/, { timeout: 5000 });
-      } catch {
-        await page.goto('/admin-login');
-      }
+    test('redirects to login when accessing /admin/content without session', async ({ page }) => {
+      await page.goto('/admin/content');
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForURL(/\/admin-login/, { timeout: 10000 });
       await expect(page.locator('input[type="password"]')).toBeVisible();
     });
 
@@ -197,7 +189,7 @@ test.describe('Admin Authentication', () => {
 
     test('allows access to about page without authentication', async ({ page }) => {
       await page.goto('/about');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       // Should load without redirect
       expect(page.url()).toContain('/about');
     });

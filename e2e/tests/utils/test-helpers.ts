@@ -27,15 +27,15 @@ export async function waitForAdminDashboardReady(page: Page): Promise<void> {
  * data load completed.
  */
 export async function loginAsAdmin(page: Page): Promise<void> {
-  // Use networkidle to ensure Vite has finished serving all JS modules
-  // (cold CI Vite dev server compiles on-demand, which can be slow on first request)
-  await page.goto('/admin-login', { waitUntil: 'networkidle' });
+  // Use domcontentloaded — networkidle can hang on CI when Vite HMR websocket stays open
+  await page.goto('/admin-login', { waitUntil: 'domcontentloaded' });
+  await page.locator('input[type="email"]').waitFor({ state: 'visible', timeout: 15000 });
 
   await page.locator('input[type="email"]').fill(ADMIN_EMAIL);
   await page.locator('input[type="password"]').fill(ADMIN_PASSWORD);
   await page.click('button[type="submit"]');
 
-  await page.waitForURL(/\/admin$/);
+  await page.waitForURL(/\/admin$/, { timeout: 15000 });
   await waitForAdminDashboardReady(page);
 }
 
@@ -43,11 +43,12 @@ export async function loginAsAdmin(page: Page): Promise<void> {
  * Logout from admin
  */
 export async function logoutAdmin(page: Page): Promise<void> {
+  // Logout button is on the Settings page
+  await page.goto('/admin/settings', { waitUntil: 'domcontentloaded' });
   const logoutBtn = page.locator('button:has-text("Logout")');
-  if (await logoutBtn.isVisible()) {
-    await logoutBtn.click();
-    await page.waitForURL(/\/admin-login/);
-  }
+  await logoutBtn.waitFor({ state: 'visible', timeout: 10000 });
+  await logoutBtn.click();
+  await page.waitForURL(/\/admin-login/);
 }
 
 /**
@@ -194,10 +195,10 @@ export const SELECTORS = {
     tableRow: 'table tbody tr',
     shell: DASHBOARD_SHELL_SELECTOR,
     ready: DASHBOARD_READY_SELECTOR,
-    uploadBtn: 'aside .nav-item:has-text("Upload")',
+    uploadBtn: 'a.nav-item:has-text("Upload")',
     editBtn: '.toolbar-buttons button:has-text("Edit")',
     processBtn: 'button:has-text("Process")',
-    logoutBtn: 'button:has-text("Logout")',
+    logoutBtn: '.settings-logout-section button:has-text("Logout")',
     searchInput: '.search-group input',
     collectionInput: '.collection-input',
     paginationPrev: '.pagination-btn:has-text("Previous")',

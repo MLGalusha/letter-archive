@@ -440,26 +440,18 @@ router.post('/:code/generate-profile', async (req, res, next) => {
     }
 
     const result = await generateCollectionProfile(collection.id);
-    const resolvedStartHereLetterId = result.startHereLetterId
-      ? await resolveRepresentativeLetterId(result.startHereLetterId)
-      : null;
 
     // Store results
     await db.update(collections).set({
       hook: result.hook,
       profileNarrative: result.narrative,
-      profileStartHereLetterId: resolvedStartHereLetterId,
-      profileStartHereReason: result.startHereReason,
-      profileReadingPaths: result.readingPaths,
-      profileGapAnalysis: result.gapAnalysis,
-      profileThemes: result.themes,
+      profileCorrespondents: result.correspondents,
       profileStatus: 'AI_DRAFT',
       profileGeneratedAt: new Date(),
     }).where(eq(collections.id, collection.id));
 
     res.json({
       ...result,
-      startHereLetterId: resolvedStartHereLetterId,
       profileStatus: 'AI_DRAFT',
     });
   } catch (error) {

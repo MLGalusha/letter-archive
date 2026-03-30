@@ -43,7 +43,8 @@ export type IconName =
   | 'settings'
   | 'bell'
   | 'chart'
-  | 'image';
+  | 'image'
+  | 'external-link';
 
 interface IconProps {
   name: IconName;
@@ -278,6 +279,13 @@ const iconPaths: Record<IconName, React.ReactNode> = {
       <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
       <circle cx="8.5" cy="8.5" r="1.5" />
       <polyline points="21,15 16,10 5,21" />
+    </>
+  ),
+  'external-link': (
+    <>
+      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+      <polyline points="15,3 21,3 21,9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
     </>
   ),
 };

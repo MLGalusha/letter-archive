@@ -53,11 +53,62 @@
   gap: 0.55rem;
 }
 
-.acp-header-right {
+/* Header bar actions (in AdminLayout header) */
+.acp-header-actions {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.75rem;
+}
+
+.acp-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.acp-back-link:hover {
+  color: var(--text);
+}
+
+.acp-header-actions-right {
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
+}
+
+.acp-view-live-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-decoration: none;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.acp-view-live-btn:hover {
+  color: var(--accent);
+  background: rgba(31, 109, 122, 0.08);
+}
+
+.acp-update-btn.has-changes {
+  animation: update-pulse 2s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(31, 109, 122, 0.4);
+}
+
+@keyframes update-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(31, 109, 122, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(31, 109, 122, 0.15); }
 }
 
 .acp-kicker {
@@ -137,22 +188,6 @@
 .acp-status-badge.status-verified {
   background: rgba(34, 197, 94, 0.12);
   color: #15803d;
-}
-
-.acp-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.acp-back-link {
-  color: var(--text-muted);
-  text-decoration: none;
-  font-size: 0.85rem;
-}
-
-.acp-back-link:hover {
-  color: var(--text);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -299,12 +334,6 @@
   font-size: 0.88rem;
 }
 
-.acp-featured-desc-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
 
 /* Overlay controls on the ShowcaseCard */
 .acp-featured-controls {
@@ -901,6 +930,70 @@
   margin-top: 1rem;
 }
 
+.acp-dialog--generate {
+  max-width: 520px;
+}
+
+.acp-dialog-warning {
+  color: #b45309;
+  font-size: 0.85rem;
+}
+
+.acp-dialog-stats {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  background: rgba(245, 237, 225, 0.6);
+  border-radius: 6px;
+  font-size: 0.88rem;
+}
+
+.acp-dialog-stats p {
+  color: var(--text);
+  margin: 0;
+}
+
+.acp-dialog-subheading {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0.75rem 0 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.acp-dialog-correspondent-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.acp-dialog-correspondent-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.acp-dialog-correspondent-list li:last-child {
+  border-bottom: none;
+}
+
+.acp-dialog-person-name {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.acp-dialog-person-counts {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
 /* ════════════════════════════════════════════════════════════
    Person Cards (Correspondents)
    ════════════════════════════════════════════════════════════ */
@@ -1018,11 +1111,6 @@
   line-height: 1.4;
 }
 
-.acp-person-actions {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-start;
-}
 
 .acp-correspondent-grid {
   display: grid;
@@ -1049,9 +1137,6 @@
     flex-direction: column;
   }
 
-  .acp-header-right {
-    align-items: flex-start;
-  }
 
   .acp-header-metrics {
     align-items: flex-start;

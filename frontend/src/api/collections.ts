@@ -329,11 +329,7 @@ export interface CollectionProfile {
 export interface GenerateProfileResult {
   hook: string;
   narrative: string;
-  startHereLetterId: string | null;
-  startHereReason: string;
-  readingPaths: ReadingPath[];
-  gapAnalysis: GapAnalysis[];
-  themes: ThemeGroup[];
+  correspondents: CollectionProfileCorrespondent[];
   profileStatus: ContentStatus;
   isStub: boolean;
 }

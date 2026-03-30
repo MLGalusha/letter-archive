@@ -1,18 +1,13 @@
 import OpenAI from 'openai';
-import { eq, asc, and, isNotNull } from 'drizzle-orm';
+import { eq, asc, and } from 'drizzle-orm';
 import { env, hasOpenAI } from '../config/env.js';
 import {
   COLLECTION_PROFILE_SYSTEM_PROMPT,
   buildCollectionProfilePrompt,
   type CollectionProfileLetterInput,
-  type CollectionProfilePersonInput,
-  type CollectionProfileRelationshipInput,
+  type LetterPersonEntity,
 } from './prompts.js';
 import { db, letters, collections } from '../db/index.js';
-import {
-  getPersonsForCollection,
-  getRelationshipsForCollection,
-} from '../services/entities/collection-queries.js';
 import { logApiUsage } from '../services/usage-tracking.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -24,32 +19,16 @@ const openai = hasOpenAI ? new OpenAI({ apiKey: env.OPENAI_API_KEY }) : null;
 // TYPES
 // ============================================================================
 
-export interface ReadingPath {
-  title: string;
-  description: string;
-  letterIds: string[];
-}
-
-export interface GapAnalysis {
-  startDate: string;
-  endDate: string;
-  description: string;
-}
-
-export interface ThemeGroup {
+export interface ProfileCorrespondent {
   name: string;
-  description: string;
-  letterIds: string[];
+  hook: string | null;
+  biography: string | null;
 }
 
 export interface CollectionProfileResult {
   hook: string;
   narrative: string;
-  startHereLetterId: string | null;
-  startHereReason: string;
-  readingPaths: ReadingPath[];
-  gapAnalysis: GapAnalysis[];
-  themes: ThemeGroup[];
+  correspondents: ProfileCorrespondent[];
   isStub: boolean;
   usage?: { inputTokens: number; outputTokens: number };
 }
@@ -113,7 +92,6 @@ export async function assessCollectionCompleteness(collectionId: string): Promis
     warnings.push('No emotional tones extracted — sentiment arc will be empty');
   }
 
-  // Score: weighted average of coverage rates
   const score = Math.round(
     (transcriptPct * 40 + metadataPct * 30 + (withTone.length / denominator) * 15 + (withTopics.length / denominator) * 15) * 100
   ) / 100;
@@ -127,6 +105,61 @@ export async function assessCollectionCompleteness(collectionId: string): Promis
     withTopics: withTopics.length,
     completenessScore: Math.min(score, 100),
     warnings,
+  };
+}
+
+// ============================================================================
+// ENTITY EXTRACTION HELPERS
+// ============================================================================
+
+interface RawExtractedPerson {
+  name?: string;
+  role?: string;
+  narrative?: string;
+  emotional_significance?: string;
+  details?: Array<{ detail?: string; category?: string }>;
+  quotes?: Array<{ text?: string; context?: string }>;
+  relationship_to_sender?: string;
+}
+
+function extractPersonEntity(
+  entityJson: unknown,
+  senderName: string | null,
+  recipientName: string | null,
+  role: 'sender' | 'recipient',
+): LetterPersonEntity | null {
+  if (!entityJson || typeof entityJson !== 'object') return null;
+  const extraction = entityJson as { people?: RawExtractedPerson[] };
+  if (!Array.isArray(extraction.people)) return null;
+
+  const targetName = role === 'sender' ? senderName : recipientName;
+  if (!targetName) return null;
+  const targetLower = targetName.trim().toLowerCase();
+
+  // Find matching person in the extraction by name and role
+  const match = extraction.people.find(p => {
+    if (!p.name) return false;
+    const nameLower = p.name.trim().toLowerCase();
+    return nameLower === targetLower && (p.role === role || nameLower === targetLower);
+  }) ?? extraction.people.find(p => {
+    if (!p.name) return false;
+    return p.name.trim().toLowerCase() === targetLower;
+  });
+
+  if (!match) return null;
+
+  return {
+    name: match.name?.trim() || targetName,
+    role,
+    narrative: match.narrative?.trim() || null,
+    emotionalSignificance: match.emotional_significance?.trim() || null,
+    details: Array.isArray(match.details)
+      ? match.details.filter(d => d.detail && d.category).map(d => ({ detail: d.detail!, category: d.category! }))
+      : [],
+    quotes: Array.isArray(match.quotes)
+      ? match.quotes.filter(q => q.text).map(q => ({ text: q.text!, context: q.context || '' }))
+      : [],
+    relationship: match.relationship_to_sender?.trim() || null,
   };
 }
 
@@ -145,7 +178,7 @@ export async function generateCollectionProfile(collectionId: string): Promise<C
     throw new Error(`Collection not found: ${collectionId}`);
   }
 
-  // Gather published letters with metadata
+  // Gather published letters with metadata and entity extraction
   const collectionLetters = await db.query.letters.findMany({
     where: and(
       eq(letters.collectionId, collectionId),
@@ -160,14 +193,12 @@ export async function generateCollectionProfile(collectionId: string): Promise<C
       recipient: true,
       summary: true,
       hook: true,
-      emotionalTone: true,
-      primaryTopics: true,
-      locationWritten: true,
       type: true,
+      entityExtractionJson: true,
     },
   });
 
-  // Only include type='L' letters for profile generation context
+  // Only include type='L' letters
   const letterInputs: CollectionProfileLetterInput[] = collectionLetters
     .filter(l => l.type === 'L')
     .map(l => ({
@@ -177,9 +208,8 @@ export async function generateCollectionProfile(collectionId: string): Promise<C
       recipient: l.recipient,
       summary: l.summary,
       hook: l.hook,
-      emotionalTone: l.emotionalTone,
-      primaryTopics: l.primaryTopics,
-      locationWritten: l.locationWritten,
+      senderEntity: extractPersonEntity(l.entityExtractionJson, l.sender, l.recipient, 'sender'),
+      recipientEntity: extractPersonEntity(l.entityExtractionJson, l.sender, l.recipient, 'recipient'),
     }));
 
   if (letterInputs.length === 0) {
@@ -187,32 +217,10 @@ export async function generateCollectionProfile(collectionId: string): Promise<C
     return {
       hook: '',
       narrative: '',
-      startHereLetterId: null,
-      startHereReason: '',
-      readingPaths: [],
-      gapAnalysis: [],
-      themes: [],
+      correspondents: [],
       isStub: true,
     };
   }
-
-  // Gather people and relationships
-  const persons = await getPersonsForCollection(collectionId);
-  const relationships = await getRelationshipsForCollection(collectionId);
-
-  const peopleInputs: CollectionProfilePersonInput[] = persons.slice(0, 20).map(p => ({
-    name: p.canonicalName,
-    biography: p.biography ?? null,
-    letterCount: p.letterCount,
-    senderCount: p.senderCount,
-    recipientCount: p.recipientCount,
-  }));
-
-  const relInputs: CollectionProfileRelationshipInput[] = relationships.slice(0, 30).map(r => ({
-    personA: r.personAName,
-    personB: r.personBName,
-    type: r.relationshipType,
-  }));
 
   // Generate
   if (!hasOpenAI || !openai) {
@@ -220,7 +228,7 @@ export async function generateCollectionProfile(collectionId: string): Promise<C
     return generateStubProfile(letterInputs);
   }
 
-  return callOpenAIForProfile(collection, letterInputs, peopleInputs, relInputs, start);
+  return callOpenAIForProfile(collection, letterInputs, start);
 }
 
 // ============================================================================
@@ -230,22 +238,18 @@ export async function generateCollectionProfile(collectionId: string): Promise<C
 async function callOpenAIForProfile(
   collection: { id: string; title: string | null; description: string | null; collectionCode: string },
   letterInputs: CollectionProfileLetterInput[],
-  people: CollectionProfilePersonInput[],
-  relationships: CollectionProfileRelationshipInput[],
   startTime: number,
 ): Promise<CollectionProfileResult> {
   const collectionId = collection.id;
 
   log.info(
-    { collectionId, letterCount: letterInputs.length, peopleCount: people.length },
+    { collectionId, letterCount: letterInputs.length },
     'Generating collection profile via AI',
   );
 
   const userPrompt = buildCollectionProfilePrompt(
     { title: collection.title, description: collection.description },
     letterInputs,
-    people,
-    relationships,
   );
 
   try {
@@ -256,7 +260,7 @@ async function callOpenAIForProfile(
         { role: 'user', content: userPrompt },
       ],
       response_format: { type: 'json_object' },
-      max_completion_tokens: 4096,
+      max_completion_tokens: 6144,
       temperature: 0.4,
     });
 
@@ -276,52 +280,32 @@ async function callOpenAIForProfile(
       throw new Error('Invalid JSON response from OpenAI for collection profile');
     }
 
-    // Validate letter IDs referenced in the response
-    const validIds = new Set(letterInputs.map(l => l.id));
-    const filterIds = (ids: unknown[]): string[] =>
-      Array.isArray(ids) ? ids.filter(id => typeof id === 'string' && validIds.has(id)) as string[] : [];
+    const GENERIC_NAMES = new Set([
+      'sender', 'recipient', 'the sender', 'the recipient',
+      'the writer', 'the author', 'unknown', 'someone',
+    ]);
 
-    const readingPaths: ReadingPath[] = Array.isArray(parsed.readingPaths)
-      ? (parsed.readingPaths as Record<string, unknown>[]).map(p => ({
-          title: String(p.title || ''),
-          description: String(p.description || ''),
-          letterIds: filterIds(p.letterIds as unknown[]),
-        })).filter(p => p.title && p.letterIds.length > 0)
+    const correspondents: ProfileCorrespondent[] = Array.isArray(parsed.correspondents)
+      ? (parsed.correspondents as Record<string, unknown>[])
+          .filter(c => {
+            const name = typeof c.name === 'string' ? c.name.trim() : '';
+            return name.length > 0 && !GENERIC_NAMES.has(name.toLowerCase());
+          })
+          .map(c => ({
+            name: String(c.name).trim(),
+            hook: typeof c.hook === 'string' && c.hook.trim() ? c.hook.trim() : null,
+            biography: typeof c.biography === 'string' && c.biography.trim() ? c.biography.trim() : null,
+          }))
       : [];
-
-    const gapAnalysis: GapAnalysis[] = Array.isArray(parsed.gapAnalysis)
-      ? (parsed.gapAnalysis as Record<string, unknown>[]).map(g => ({
-          startDate: String(g.startDate || ''),
-          endDate: String(g.endDate || ''),
-          description: String(g.description || ''),
-        })).filter(g => g.startDate && g.endDate)
-      : [];
-
-    const themes: ThemeGroup[] = Array.isArray(parsed.themes)
-      ? (parsed.themes as Record<string, unknown>[]).map(t => ({
-          name: String(t.name || ''),
-          description: String(t.description || ''),
-          letterIds: filterIds(t.letterIds as unknown[]),
-        })).filter(t => t.name && t.letterIds.length > 0)
-      : [];
-
-    const startHereLetterId = typeof parsed.startHereLetterId === 'string' && validIds.has(parsed.startHereLetterId)
-      ? parsed.startHereLetterId
-      : letterInputs[0]?.id ?? null;
 
     const result: CollectionProfileResult = {
       hook: typeof parsed.hook === 'string' ? parsed.hook : '',
       narrative: typeof parsed.narrative === 'string' ? parsed.narrative : '',
-      startHereLetterId,
-      startHereReason: typeof parsed.startHereReason === 'string' ? parsed.startHereReason : '',
-      readingPaths,
-      gapAnalysis,
-      themes,
+      correspondents,
       isStub: false,
       usage: usage ? { inputTokens: usage.prompt_tokens ?? 0, outputTokens: usage.completion_tokens ?? 0 } : undefined,
     };
 
-    // Log usage
     if (usage) {
       logApiUsage({
         callType: 'collection_profile',
@@ -337,9 +321,7 @@ async function callOpenAIForProfile(
         collectionId,
         duration,
         narrativeLength: result.narrative.length,
-        readingPathCount: readingPaths.length,
-        themeCount: themes.length,
-        gapCount: gapAnalysis.length,
+        correspondentCount: correspondents.length,
         promptTokens: usage?.prompt_tokens,
         completionTokens: usage?.completion_tokens,
       },
@@ -366,11 +348,7 @@ function generateStubProfile(letterInputs: CollectionProfileLetterInput[]): Coll
   return {
     hook: `A collection of ${letterInputs.length} letters involving ${allNames || 'unknown correspondents'}. Configure API key for AI-generated hook.`,
     narrative: `This collection contains ${letterInputs.length} letters involving ${allNames || 'unknown correspondents'}. Generate a real profile by configuring an OpenAI API key.`,
-    startHereLetterId: letterInputs[0]?.id ?? null,
-    startHereReason: 'First letter chronologically (stub mode).',
-    readingPaths: [],
-    gapAnalysis: [],
-    themes: [],
+    correspondents: [],
     isStub: true,
   };
 }

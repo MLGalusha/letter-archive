@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
 import { Button } from '../../components/common';
+import Icon from '../../components/common/Icon';
 import { getErrorMessage } from '../../api/client';
 import {
   getAdminCollectionByCode,
@@ -49,6 +50,15 @@ interface CollectionCorrespondent {
   roles: Array<'sender' | 'recipient'>;
   hook: string | null;
   biography: string | null;
+}
+
+const GENERIC_CORRESPONDENT_NAMES = new Set([
+  'sender', 'recipient', 'the sender', 'the recipient',
+  'the writer', 'the author', 'unknown', 'someone',
+]);
+
+function isGenericCorrespondentName(name: string): boolean {
+  return GENERIC_CORRESPONDENT_NAMES.has(name.trim().toLowerCase());
 }
 
 function normalizeCorrespondentName(value: string | null | undefined) {
@@ -181,6 +191,7 @@ function buildCollectionCorrespondents(
 
 export default function AdminCollectionPage() {
   const { code } = useParams<{ code: string }>();
+  const navigate = useNavigate();
   const { showToast } = useToast();
 
   const [collection, setCollection] = useState<CollectionWithLetters | null>(null);
@@ -210,7 +221,6 @@ export default function AdminCollectionPage() {
   // Collection description (admin-written extra info)
   const [description, setDescription] = useState('');
   const [descriptionDirty, setDescriptionDirty] = useState(false);
-  const [descriptionSaving, setDescriptionSaving] = useState(false);
 
   // Collection-scoped correspondent renames
   const [correspondentEdits, setCorrespondentEdits] = useState<Map<string, CorrespondentEditState>>(new Map());
@@ -299,6 +309,11 @@ export default function AdminCollectionPage() {
   const actualLetterCount = collection?.letters.length ?? collection?.letterCount ?? 0;
   const publishedStats = useMemo(() => computeCollectionStats(publishedLetters), [publishedLetters]);
 
+  const dialogCorrespondents = useMemo(
+    () => correspondents.filter(c => !isGenericCorrespondentName(c.name)),
+    [correspondents],
+  );
+
   const resetLetterPickerControls = useCallback(() => {
     setPickerSearch('');
     setPickerFormat('all');
@@ -384,19 +399,15 @@ export default function AdminCollectionPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleGenerate = async (force = false) => {
+  const handleGenerate = async () => {
     if (!code) return;
-    if (!force && profileStatus !== 'EMPTY') {
-      setShowWarningDialog(true);
-      return;
-    }
     setShowWarningDialog(false);
     setGenerating(true);
+    const force = profileStatus !== 'EMPTY';
     try {
-      const result = await generateCollectionProfile(code, force || profileStatus !== 'EMPTY');
+      const result = await generateCollectionProfile(code, force);
       setHook(result.hook || '');
       setNarrative(result.narrative || '');
-      if (result.startHereLetterId) setFeaturedLetterId(result.startHereLetterId);
       setProfileStatus(result.profileStatus);
       setDirty(false);
       showToast(result.isStub ? 'Stub profile generated (no API key)' : 'Profile generated', 'success');
@@ -409,35 +420,67 @@ export default function AdminCollectionPage() {
   };
 
   const handleSave = async () => {
-    if (!code) return;
+    if (!code || !collection) return;
     setSaving(true);
     try {
+      // Save profile fields
       await updateCollectionProfile(code, {
         hook: hook || null,
         profileNarrative: narrative,
         profileStartHereLetterId: featuredLetterId,
       });
+
+      // Save description if changed
+      if (descriptionDirty) {
+        await updateCollection(code, { description: description.trim() || null });
+        setDescriptionDirty(false);
+      }
+
+      // Save dirty correspondents
+      const dirtyCorrespondents = Array.from(correspondentEdits.entries())
+        .filter(([, edit]) => edit.dirty);
+      for (const [key, edit] of dirtyCorrespondents) {
+        const person = correspondents.find((c) => c.key === key);
+        if (!person) continue;
+        const nextName = edit.name.trim();
+        const nextHook = normalizeOptionalProfileText(edit.hook);
+        const nextBiography = normalizeOptionalProfileText(edit.biography);
+        const currentHook = normalizeOptionalProfileText(person.hook);
+        const currentBiography = normalizeOptionalProfileText(person.biography);
+        const nameChanged = nextName.length > 0 && nextName !== person.name;
+        const profileChanged = nextHook !== currentHook || nextBiography !== currentBiography;
+        const shouldSaveProfile = profileChanged || (nameChanged && Boolean(currentHook || currentBiography));
+
+        if (nextName.length === 0 || (!nameChanged && !shouldSaveProfile)) continue;
+
+        if (nameChanged) {
+          await renameCollectionCorrespondent(code, {
+            oldName: person.name,
+            newName: nextName,
+            roles: person.roles,
+          });
+        }
+
+        if (shouldSaveProfile) {
+          await updateCollectionProfile(code, {
+            profileCorrespondents: buildNextProfileCorrespondents(
+              collection.profileCorrespondents || [],
+              person.name,
+              nextName,
+              edit.hook,
+              edit.biography,
+            ),
+          });
+        }
+      }
+
       setDirty(false);
-      showToast('Saved', 'success');
+      showToast('Updated', 'success');
       fetchData();
     } catch (err) {
       showToast(getErrorMessage(err, 'An error occurred'), 'error');
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleSaveDescription = async () => {
-    if (!code || !descriptionDirty) return;
-    setDescriptionSaving(true);
-    try {
-      await updateCollection(code, { description: description.trim() || null });
-      setDescriptionDirty(false);
-      showToast('Description saved', 'success');
-    } catch (err) {
-      showToast(getErrorMessage(err, 'An error occurred'), 'error');
-    } finally {
-      setDescriptionSaving(false);
     }
   };
 
@@ -477,82 +520,6 @@ export default function AdminCollectionPage() {
     return `${filteredLetters.length} of ${publishedLetterCount} ${publishedLetterCount === 1 ? 'published letter' : 'published letters'} showing`;
   })();
 
-  const statusLabel = (status: ContentStatus) => {
-    switch (status) {
-      case 'EMPTY': return 'No profile';
-      case 'AI_DRAFT': return 'AI Draft';
-      case 'EDITED': return 'Edited';
-      case 'VERIFIED': return 'Verified';
-    }
-  };
-
-  const statusClass = (status: ContentStatus) => {
-    switch (status) {
-      case 'EMPTY': return 'status-empty';
-      case 'AI_DRAFT': return 'status-draft';
-      case 'EDITED': return 'status-edited';
-      case 'VERIFIED': return 'status-verified';
-    }
-  };
-
-  const handleSaveCorrespondent = async (correspondent: CollectionCorrespondent) => {
-    if (!code || !collection) return;
-    const edit = correspondentEdits.get(correspondent.key);
-    const nextName = edit?.name.trim() || '';
-    const nextHook = normalizeOptionalProfileText(edit?.hook);
-    const nextBiography = normalizeOptionalProfileText(edit?.biography);
-    const currentHook = normalizeOptionalProfileText(correspondent.hook);
-    const currentBiography = normalizeOptionalProfileText(correspondent.biography);
-    const nameChanged = nextName.length > 0 && nextName !== correspondent.name;
-    const profileChanged = nextHook !== currentHook || nextBiography !== currentBiography;
-    const shouldSaveProfile = profileChanged || (nameChanged && Boolean(currentHook || currentBiography));
-
-    if (!edit || !edit.dirty || nextName.length === 0 || (!nameChanged && !shouldSaveProfile)) {
-      return;
-    }
-
-    setCorrespondentEdits((previous) => {
-      const next = new Map(previous);
-      next.set(correspondent.key, { ...edit, saving: true });
-      return next;
-    });
-
-    try {
-      if (nameChanged) {
-        const response = await renameCollectionCorrespondent(code, {
-          oldName: correspondent.name,
-          newName: nextName,
-          roles: correspondent.roles,
-        });
-        showToast(response.message, 'success');
-      }
-
-      if (shouldSaveProfile) {
-        await updateCollectionProfile(code, {
-          profileCorrespondents: buildNextProfileCorrespondents(
-            collection.profileCorrespondents || [],
-            correspondent.name,
-            nextName,
-            edit.hook,
-            edit.biography,
-          ),
-        });
-      }
-
-      if (!nameChanged && shouldSaveProfile) {
-        showToast('Correspondent details saved', 'success');
-      }
-
-      await fetchData();
-    } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to rename correspondent'), 'error');
-      setCorrespondentEdits((previous) => {
-        const next = new Map(previous);
-        next.set(correspondent.key, { ...edit, saving: false });
-        return next;
-      });
-    }
-  };
 
   if (loading) {
     return (
@@ -574,7 +541,19 @@ export default function AdminCollectionPage() {
     <AdminLayout
       headerActions={
         <div className="acp-header-actions">
-          <Link to="/admin" className="acp-back-link">&larr; Dashboard</Link>
+          <Link to="/admin" className="acp-back-link">
+            <Icon name="arrow-left" size={16} />
+            Dashboard
+          </Link>
+          <div className="acp-header-actions-right">
+            <Link to={`/collections/${collection.collectionCode}`} className="acp-view-live-btn" target="_blank">
+              <Icon name="external-link" size={14} />
+              View live
+            </Link>
+            <Button onClick={handleSave} disabled={!dirty || saving} size="sm" className={dirty ? 'acp-update-btn has-changes' : 'acp-update-btn'}>
+              {saving ? 'Updating...' : 'Update'}
+            </Button>
+          </div>
         </div>
       }
     >
@@ -583,40 +562,61 @@ export default function AdminCollectionPage() {
         <div className="acp-header">
           <div className="acp-header-top">
             <div className="acp-header-copy">
-              <p className="acp-kicker">Admin Collection</p>
               <h1 className="acp-title">{collection.title || `Collection ${collection.collectionCode}`}</h1>
-              <p className="acp-subtitle">
-                Collection {collection.collectionCode} · {actualLetterCount} items · {publishedLetterCount} published
-              </p>
               {publishedStats.formatBreakdown && (
-                <p className="acp-subtitle acp-format-breakdown">{publishedStats.formatBreakdown}</p>
+                <p className="acp-subtitle">{publishedStats.formatBreakdown}</p>
               )}
-              <div className="acp-header-metrics">
-                <span className="acp-metric-pill">{correspondents.length} correspondents</span>
-                <span className={`acp-status-badge ${statusClass(profileStatus)}`}>
-                  {statusLabel(profileStatus)}
-                </span>
-              </div>
             </div>
-            {dirty && (
-              <div className="acp-header-right">
-                <Button onClick={handleSave} disabled={saving} size="sm">
-                  {saving ? 'Saving...' : 'Save'}
-                </Button>
-              </div>
-            )}
+            <Button
+              onClick={() => setShowWarningDialog(true)}
+              disabled={generating}
+              size="sm"
+              variant={profileStatus === 'EMPTY' ? 'primary' : 'secondary'}
+            >
+              {generating ? 'Generating...' : profileStatus === 'EMPTY' ? 'Generate profile' : 'Regenerate profile'}
+            </Button>
           </div>
         </div>
 
-        {/* Regenerate Warning Dialog */}
+        {/* Generate Profile Confirmation Dialog */}
         {showWarningDialog && (
           <div className="acp-dialog-overlay">
-            <div className="acp-dialog">
-              <h3>Regenerate Profile?</h3>
-              <p>This will overwrite the current hook, summary, and featured letter with AI-generated content.</p>
+            <div className="acp-dialog acp-dialog--generate">
+              <h3>{profileStatus === 'EMPTY' ? 'Generate Profile?' : 'Regenerate Profile?'}</h3>
+
+              {profileStatus !== 'EMPTY' && (
+                <p className="acp-dialog-warning">
+                  This will overwrite the current hook, summary, featured letter, and correspondent bios with AI-generated content.
+                </p>
+              )}
+
+              <div className="acp-dialog-stats">
+                <p><strong>{publishedLetterCount}</strong> published {publishedLetterCount === 1 ? 'letter' : 'letters'} will be used for generation</p>
+              </div>
+
+              {dialogCorrespondents.length > 0 && (
+                <div className="acp-dialog-correspondents">
+                  <p className="acp-dialog-subheading">Correspondents ({dialogCorrespondents.length})</p>
+                  <ul className="acp-dialog-correspondent-list">
+                    {dialogCorrespondents.map(person => (
+                      <li key={person.key}>
+                        <span className="acp-dialog-person-name">{person.name}</span>
+                        <span className="acp-dialog-person-counts">
+                          {person.senderCount > 0 && `${person.senderCount} sent`}
+                          {person.senderCount > 0 && person.recipientCount > 0 && ', '}
+                          {person.recipientCount > 0 && `${person.recipientCount} received`}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="acp-dialog-actions">
                 <Button onClick={() => setShowWarningDialog(false)} variant="secondary">Cancel</Button>
-                <Button onClick={() => handleGenerate(true)}>Regenerate</Button>
+                <Button onClick={handleGenerate} disabled={publishedLetterCount === 0}>
+                  {profileStatus === 'EMPTY' ? 'Generate' : 'Regenerate'}
+                </Button>
               </div>
             </div>
           </div>
@@ -644,20 +644,9 @@ export default function AdminCollectionPage() {
             </div>
 
             <div className="acp-profile-block acp-profile-block--summary">
-              <div className="acp-profile-block-header">
-                <div className="acp-section-heading">
-                  <h3 className="acp-profile-block-title">Collection Summary</h3>
-                  <p className="acp-hint">Narrative shown on the public collection page. Empty until you write one or generate a profile.</p>
-                </div>
-                <div className="acp-profile-actions">
-                  <Button
-                    onClick={() => handleGenerate(profileStatus !== 'EMPTY')}
-                    disabled={generating}
-                    size="sm"
-                  >
-                    {generating ? 'Generating...' : profileStatus === 'EMPTY' ? 'Generate profile' : 'Regenerate profile'}
-                  </Button>
-                </div>
+              <div className="acp-section-heading">
+                <h3 className="acp-profile-block-title">Collection Summary</h3>
+                <p className="acp-hint">Narrative shown on the public collection page. Empty until you write one or generate a profile.</p>
               </div>
               <textarea
                 className="acp-textarea"
@@ -680,18 +669,11 @@ export default function AdminCollectionPage() {
                 id="collection-description"
                 className="acp-textarea acp-featured-desc-input"
                 value={description}
-                onChange={(e) => { setDescription(e.target.value); setDescriptionDirty(true); }}
+                onChange={(e) => { setDescription(e.target.value); setDescriptionDirty(true); setDirty(true); }}
                 rows={6}
                 placeholder="e.g. Twenty-seven letters from an American serviceman to the woman he loved in England..."
                 maxLength={2000}
               />
-              {descriptionDirty && (
-                <div className="acp-featured-desc-footer">
-                  <Button variant="secondary" size="sm" onClick={handleSaveDescription} disabled={descriptionSaving}>
-                    {descriptionSaving ? 'Saving...' : 'Save info'}
-                  </Button>
-                </div>
-              )}
             </div>
 
             {featuredLetter && showcaseItems.length > 0 ? (
@@ -907,10 +889,6 @@ export default function AdminCollectionPage() {
                   : person.roles[0] === 'sender'
                     ? 'Sender'
                     : 'Recipient';
-                const saveDisabled = edit.saving
-                  || trimmedName.length === 0
-                  || !edit.dirty;
-
                 return (
                   <div key={person.key} className="acp-person-card">
                     <div className="acp-person-header">
@@ -928,13 +906,11 @@ export default function AdminCollectionPage() {
                           const nextName = e.target.value;
                           setCorrespondentEdits((previous) => {
                             const next = new Map(previous);
-                            next.set(person.key, {
-                              ...edit,
-                              name: nextName,
-                              dirty: isCorrespondentDirty(person, nextName, edit.hook, edit.biography),
-                            });
+                            const isDirty = isCorrespondentDirty(person, nextName, edit.hook, edit.biography);
+                            next.set(person.key, { ...edit, name: nextName, dirty: isDirty });
                             return next;
                           });
+                          setDirty(true);
                         }}
                         placeholder="Rename this correspondent for the whole collection..."
                         maxLength={255}
@@ -955,13 +931,11 @@ export default function AdminCollectionPage() {
                           const nextHook = e.target.value;
                           setCorrespondentEdits((previous) => {
                             const next = new Map(previous);
-                            next.set(person.key, {
-                              ...edit,
-                              hook: nextHook,
-                              dirty: isCorrespondentDirty(person, edit.name, nextHook, edit.biography),
-                            });
+                            const isDirty = isCorrespondentDirty(person, edit.name, nextHook, edit.biography);
+                            next.set(person.key, { ...edit, hook: nextHook, dirty: isDirty });
                             return next;
                           });
+                          setDirty(true);
                         }}
                         rows={2}
                         placeholder="Short hook for this sender or recipient..."
@@ -978,27 +952,15 @@ export default function AdminCollectionPage() {
                           const nextBiography = e.target.value;
                           setCorrespondentEdits((previous) => {
                             const next = new Map(previous);
-                            next.set(person.key, {
-                              ...edit,
-                              biography: nextBiography,
-                              dirty: isCorrespondentDirty(person, edit.name, edit.hook, nextBiography),
-                            });
+                            const isDirty = isCorrespondentDirty(person, edit.name, edit.hook, nextBiography);
+                            next.set(person.key, { ...edit, biography: nextBiography, dirty: isDirty });
                             return next;
                           });
+                          setDirty(true);
                         }}
                         rows={5}
                         placeholder="Collection-specific description or biography..."
                       />
-                    </div>
-                    <div className="acp-person-actions">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={saveDisabled}
-                        onClick={() => handleSaveCorrespondent(person)}
-                      >
-                        {edit.saving ? 'Saving...' : mergeTarget ? 'Merge & save' : 'Save correspondent'}
-                      </Button>
                     </div>
                   </div>
                 );

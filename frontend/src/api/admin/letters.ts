@@ -1,4 +1,4 @@
-import { apiPost, apiPut, apiPatch, API_BASE_URL, getAuthHeaders } from "../client";
+import { apiPost, apiPut, apiPatch, ApiError, API_BASE_URL, getAuthHeaders } from "../client";
 import type { Letter, LineSegment, OcrWordBox } from "../../types/Letter";
 
 export interface UpdateLetterData {
@@ -91,7 +91,16 @@ export async function detectPageLines(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || 'Line detection failed');
+    let message = text || 'Line detection failed';
+    let requestId: string | undefined;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.error) message = parsed.error;
+      requestId = parsed.requestId || response.headers.get('x-request-id') || undefined;
+    } catch {
+      // not JSON, use raw text
+    }
+    throw new ApiError(response.status, message, undefined, requestId);
   }
 
   const reader = response.body!.getReader();

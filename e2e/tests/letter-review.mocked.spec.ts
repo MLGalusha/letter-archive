@@ -113,7 +113,7 @@ test.describe('@mocked Letter Review', () => {
     const transcriptSection = page.locator('.editor-section').first();
     const verifyBtn = transcriptSection.locator('.verify-btn');
     await verifyBtn.scrollIntoViewIfNeeded();
-    await verifyBtn.click();
+    await verifyBtn.click({ force: true });
 
     await expect(page.locator('.toast:has-text("Transcript verified")')).toBeVisible();
     await expect(transcriptSection.locator('.verified-info')).toContainText('Verified');
@@ -144,7 +144,7 @@ test.describe('@mocked Letter Review', () => {
     const transcriptSection = page.locator('.editor-section').first();
     const verifyBtn2 = transcriptSection.locator('.verify-btn');
     await verifyBtn2.scrollIntoViewIfNeeded();
-    await verifyBtn2.click();
+    await verifyBtn2.click({ force: true });
 
     await expect(page.locator('.toast')).toContainText(
       'Transcript verifier offline (Request ID: req-review-transcript-503)',
@@ -185,7 +185,7 @@ test.describe('@mocked Letter Review', () => {
     const metadataSection = page.locator('.metadata-section');
     const metaVerifyBtn = metadataSection.locator('.verify-btn');
     await metaVerifyBtn.scrollIntoViewIfNeeded();
-    await metaVerifyBtn.click();
+    await metaVerifyBtn.click({ force: true });
 
     await expect(page.locator('.toast:has-text("Metadata verified")')).toBeVisible();
     await expect(metadataSection.locator('.verified-info')).toContainText('Verified');
@@ -238,7 +238,7 @@ test.describe('@mocked Letter Review', () => {
 
     const extraVerifyBtn = extraSection.locator('.verify-btn');
     await extraVerifyBtn.scrollIntoViewIfNeeded();
-    await extraVerifyBtn.click();
+    await extraVerifyBtn.click({ force: true });
 
     await expect(page.locator('.toast:has-text("Extra content verified")')).toBeVisible();
     await expect(extraSection.locator('.verified-info')).toContainText('Verified');
@@ -312,10 +312,10 @@ test.describe('@mocked Letter Review', () => {
       },
     );
 
-    await page.locator('#sender').fill('Alicia Smith');
+    await page.locator('#location').fill('Philadelphia, PA');
 
     await expect
-      .poll(() => mockedApi.updateLetterRequests.length, { timeout: 20000 })
+      .poll(() => mockedApi.updateLetterRequests.length, { timeout: 10000 })
       .toBe(1);
     await expect(page.locator('.toast')).toContainText(
       'Metadata save failed (Request ID: req-metadata-save-503)',

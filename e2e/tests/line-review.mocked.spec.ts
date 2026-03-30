@@ -60,7 +60,7 @@ test.describe('@mocked Line Review', () => {
     await expect(page.locator('.line-review-editable')).toContainText('My dear mother,');
     expect(mockedApi.detectLineRequests).toHaveLength(0);
 
-    await page.locator('.header-action.redetect').click({ force: true });
+    await page.locator('.header-action.redetect').dispatchEvent('click');
     await expect
       .poll(() => mockedApi.detectLineRequests.length)
       .toBe(1);
@@ -85,10 +85,10 @@ test.describe('@mocked Line Review', () => {
     const mockedApi = await openLineReview(page);
     const initialDetectCount = mockedApi.detectLineRequests.length;
 
-    await page.locator('.header-action.debug').click({ force: true });
+    await page.locator('.header-action.debug').dispatchEvent('click');
     await expect(page.locator('.line-review-debug-legend')).toBeVisible();
 
-    await page.locator('.header-action.redetect').click({ force: true });
+    await page.locator('.header-action.redetect').dispatchEvent('click');
     await expect
       .poll(() => mockedApi.detectLineRequests.length)
       .toBeGreaterThan(initialDetectCount);

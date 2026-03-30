@@ -112,8 +112,7 @@ test.describe('@mocked Letter Review', () => {
 
     const transcriptSection = page.locator('.editor-section').first();
     const verifyBtn = transcriptSection.locator('.verify-btn');
-    await verifyBtn.scrollIntoViewIfNeeded();
-    await verifyBtn.click({ force: true });
+    await verifyBtn.dispatchEvent('click');
 
     await expect(page.locator('.toast:has-text("Transcript verified")')).toBeVisible();
     await expect(transcriptSection.locator('.verified-info')).toContainText('Verified');
@@ -143,8 +142,7 @@ test.describe('@mocked Letter Review', () => {
 
     const transcriptSection = page.locator('.editor-section').first();
     const verifyBtn2 = transcriptSection.locator('.verify-btn');
-    await verifyBtn2.scrollIntoViewIfNeeded();
-    await verifyBtn2.click({ force: true });
+    await verifyBtn2.dispatchEvent('click');
 
     await expect(page.locator('.toast')).toContainText(
       'Transcript verifier offline (Request ID: req-review-transcript-503)',
@@ -184,8 +182,7 @@ test.describe('@mocked Letter Review', () => {
 
     const metadataSection = page.locator('.metadata-section');
     const metaVerifyBtn = metadataSection.locator('.verify-btn');
-    await metaVerifyBtn.scrollIntoViewIfNeeded();
-    await metaVerifyBtn.click({ force: true });
+    await metaVerifyBtn.dispatchEvent('click');
 
     await expect(page.locator('.toast:has-text("Metadata verified")')).toBeVisible();
     await expect(metadataSection.locator('.verified-info')).toContainText('Verified');
@@ -237,8 +234,7 @@ test.describe('@mocked Letter Review', () => {
     ]);
 
     const extraVerifyBtn = extraSection.locator('.verify-btn');
-    await extraVerifyBtn.scrollIntoViewIfNeeded();
-    await extraVerifyBtn.click({ force: true });
+    await extraVerifyBtn.dispatchEvent('click');
 
     await expect(page.locator('.toast:has-text("Extra content verified")')).toBeVisible();
     await expect(extraSection.locator('.verified-info')).toContainText('Verified');

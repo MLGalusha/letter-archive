@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import HomePage from "../HomePage";
 import { HeaderDockProvider } from "../../contexts/HeaderDockContext";
@@ -94,6 +94,11 @@ describe("HomePage archive browsing", () => {
       });
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.querySelectorAll(".header").forEach((element) => element.remove());
+  });
+
   it("appends later archive pages from the load-more control", async () => {
     const user = userEvent.setup();
 
@@ -120,5 +125,89 @@ describe("HomePage archive browsing", () => {
       2,
       expect.objectContaining({ page: 2, limit: 24 }),
     );
+  });
+
+  it("smoothly scrolls the hero CTA to the full search panel below the header", async () => {
+    const user = userEvent.setup();
+    const scrollToMock = vi.fn();
+
+    vi.stubGlobal("scrollTo", scrollToMock);
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    );
+
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      writable: true,
+      value: 240,
+    });
+
+    const header = document.createElement("div");
+    header.className = "header";
+    Object.defineProperty(header, "offsetHeight", {
+      configurable: true,
+      value: 112,
+    });
+    document.body.appendChild(header);
+
+    const { container } = render(
+      <MemoryRouter>
+        <HeaderDockProvider>
+          <HomePage />
+        </HeaderDockProvider>
+      </MemoryRouter>,
+    );
+
+    const searchPanel = container.querySelector(".home-search-panel") as HTMLDivElement | null;
+    expect(searchPanel).not.toBeNull();
+
+    vi.spyOn(searchPanel!, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 760,
+      top: 760,
+      bottom: 1000,
+      left: 0,
+      right: 900,
+      width: 900,
+      height: 240,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    await user.click(screen.getByRole("link", { name: "Search the Archive" }));
+
+    expect(scrollToMock).toHaveBeenCalledWith({
+      top: 868,
+      behavior: "smooth",
+    });
+  });
+
+  it("formats featured letter dates into human-readable month names", async () => {
+    getArchiveShelfItemsMock.mockResolvedValueOnce({
+      letters: [{ ...makeShelfItem(101), date: "09/21/2000", dateRaw: "20000921" }],
+      page: 1,
+      limit: 100,
+      total: 1,
+    });
+
+    render(
+      <MemoryRouter>
+        <HeaderDockProvider>
+          <HomePage />
+        </HeaderDockProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("September 21, 2000")).toBeInTheDocument();
+    expect(screen.queryByText("09/21/2000")).not.toBeInTheDocument();
   });
 });

@@ -334,6 +334,7 @@
   border: 1px solid rgba(217, 207, 191, 0.95);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 250, 242, 0.99));
   box-shadow: var(--shadow);
+  scroll-margin-top: clamp(6.5rem, 11vw, 8rem);
 }
 
 .home-editorial-rail {

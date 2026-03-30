@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import SEO from "../components/SEO";
 import SearchBar from "../components/SearchBar/SearchBar";
@@ -17,6 +17,51 @@ import "./HomePage.css";
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+}
+
+function formatDateParts(yearText: string, monthText: string, dayText: string): string | null {
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+function formatFeaturedLetterDate(dateStr?: string | null): string | null {
+  if (!dateStr) return null;
+
+  const trimmed = dateStr.trim();
+  if (!trimmed) return null;
+  if (/[A-Za-z]/.test(trimmed)) return trimmed;
+
+  const compactMatch = trimmed.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compactMatch) {
+    return formatDateParts(compactMatch[1], compactMatch[2], compactMatch[3]) || trimmed;
+  }
+
+  const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashMatch) {
+    return formatDateParts(
+      slashMatch[3],
+      slashMatch[1].padStart(2, "0"),
+      slashMatch[2].padStart(2, "0"),
+    ) || trimmed;
+  }
+
+  return trimmed;
 }
 
 function getCorrespondentLine(letter: Pick<ArchiveShelfItem, "sender" | "recipient">): string | null {
@@ -40,6 +85,8 @@ function pickHeroLetter(items: ArchiveShelfItem[]): ArchiveShelfItem | null {
   return pool[index] || null;
 }
 
+const HOME_SEARCH_SCROLL_GAP = 20;
+
 /* ── Hero feature card ────────────────────────────────── */
 
 function HeroLetterCard({
@@ -60,7 +107,7 @@ function HeroLetterCard({
   const currentImage = heroImages[heroPageIndex] || null;
   const hasMultiplePages = heroImages.length > 1;
   const heroPeopleLine = getCorrespondentLine(heroLetter);
-  const heroDate = heroLetter.date || heroLetter.dateRaw || null;
+  const heroDate = formatFeaturedLetterDate(heroLetter.date || heroLetter.dateRaw);
 
   return (
     <button
@@ -153,6 +200,7 @@ export default function HomePage() {
 
   // ── Sticky dock (extracted hook) ──
   const archiveSearchRef = useRef<HTMLElement | null>(null);
+  const searchPanelRef = useRef<HTMLDivElement | null>(null);
   const searchDockTriggerRef = useRef<HTMLDivElement | null>(null);
   const dock = useStickyDock({
     triggerRef: searchDockTriggerRef,
@@ -251,8 +299,26 @@ export default function HomePage() {
     navigate(`/letter/${letterId}?${params.toString()}`);
   }, [navigate]);
 
+  const handleScrollToArchiveSearch = useCallback((event: ReactMouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+
+    const target = searchPanelRef.current ?? archiveSearchRef.current;
+    if (!target) return;
+
+    const header = document.querySelector(".header") as HTMLElement | null;
+    const headerHeight = header?.offsetHeight ?? 0;
+    const targetTop = window.scrollY + target.getBoundingClientRect().top - headerHeight - HOME_SEARCH_SCROLL_GAP;
+    const prefersReducedMotion = typeof window.matchMedia === "function"
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    window.scrollTo({
+      top: Math.max(0, targetTop),
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+    });
+  }, []);
+
   const heroPeopleLine = heroLetter ? getCorrespondentLine(heroLetter) : null;
-  const heroDate = heroLetter?.date || heroLetter?.dateRaw || null;
+  const heroDate = formatFeaturedLetterDate(heroLetter?.date || heroLetter?.dateRaw);
   const heroAriaLabel = heroLetter
     ? [
         "Featured letter",
@@ -283,7 +349,7 @@ export default function HomePage() {
             at a time.
           </p>
           <div className="home-hero-actions">
-            <a href="#archive-search" className="btn-card home-primary-action">
+            <a href="#archive-search" className="btn-card home-primary-action" onClick={handleScrollToArchiveSearch}>
               Search the Archive
             </a>
             <Link to="/collections" className="btn-card home-secondary-action">
@@ -334,7 +400,7 @@ export default function HomePage() {
       )}
 
       <section id="archive-search" className="home-archive-surface" ref={archiveSearchRef}>
-        <div className="home-search-panel">
+        <div className="home-search-panel" ref={searchPanelRef}>
         <SearchBar
           query={archive.searchQuery}
           filters={archive.filters}

@@ -10,7 +10,7 @@
 .dock-strip {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.5rem;
   width: 100%;
   padding: 0.1rem 0;
 }
@@ -97,11 +97,21 @@
   border-color: transparent;
 }
 
+/* ── Track wrapper (track + counter stacked) ──────────── */
+
+.dock-strip-track-wrap {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 /* ── Progress track ────────────────────────────────────── */
 
 .dock-strip-track {
   position: relative;
-  flex: 1 1 0;
+  width: 100%;
   min-width: 80px;
   height: 36px;
   display: flex;
@@ -247,17 +257,18 @@
   appearance: none;
   border: none;
   background: transparent;
-  padding: 0.3rem 0.15rem;
+  padding: 0;
+  margin-top: -0.15rem;
   cursor: pointer;
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text-muted);
   white-space: nowrap;
-  flex-shrink: 0;
   transition: color 0.15s ease;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .dock-strip-pos:hover {

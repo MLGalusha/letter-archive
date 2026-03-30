@@ -284,66 +284,68 @@ export default function HeaderScrubber({
           </svg>
         </button>
 
-        <div
-          ref={trackElRef}
-          className="dock-strip-track"
-          onClick={handleClick}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerCancel}
-          role="slider"
-          aria-valuenow={pos}
-          aria-valuemin={1}
-          aria-valuemax={total}
-          aria-label={ariaLabel || `${pos} of ${total}`}
-          tabIndex={0}
-        >
-          <div className="dock-track-rail" />
+        <div className="dock-strip-track-wrap">
           <div
-            className="dock-track-inner"
-            ref={innerRef}
-            style={{ margin: `0 ${THUMB_INSET}px` }}
+            ref={trackElRef}
+            className="dock-strip-track"
+            onClick={handleClick}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
+            role="slider"
+            aria-valuenow={pos}
+            aria-valuemin={1}
+            aria-valuemax={total}
+            aria-label={ariaLabel || `${pos} of ${total}`}
+            tabIndex={0}
           >
-            <div ref={fillRef} className="dock-track-fill" style={{ width: `calc(${progressPct}% + ${THUMB_INSET}px)` }} />
-            <div ref={thumbRef} className="dock-track-thumb" style={{ left: `${progressPct}%` }} />
-            <div className="dock-track-ticks" ref={ticksRef}>
-              {(() => {
-                const BUFFER = needsWindow ? WINDOW_SIZE : 0;
-                const tickStart = Math.max(1, windowStart - BUFFER);
-                const tickEnd = Math.min(total, windowEnd + BUFFER);
-                const ticks: React.ReactElement[] = [];
-                for (let tickPos = tickStart; tickPos <= tickEnd; tickPos++) {
-                  const offset = tickPos - windowStart;
-                  const left = windowSize > 1 ? (offset / (windowSize - 1)) * 100 : 50;
-                  ticks.push(
-                    <span
-                      key={tickPos}
-                      data-pos={tickPos}
-                      className={`dock-track-tick${tickPos === displayPos ? " current" : ""}`}
-                      style={{ left: `${left}%` }}
-                    />
-                  );
-                }
-                return ticks;
-              })()}
+            <div className="dock-track-rail" />
+            <div
+              className="dock-track-inner"
+              ref={innerRef}
+              style={{ margin: `0 ${THUMB_INSET}px` }}
+            >
+              <div ref={fillRef} className="dock-track-fill" style={{ width: `calc(${progressPct}% + ${THUMB_INSET}px)` }} />
+              <div ref={thumbRef} className="dock-track-thumb" style={{ left: `${progressPct}%` }} />
+              <div className="dock-track-ticks" ref={ticksRef}>
+                {(() => {
+                  const BUFFER = needsWindow ? WINDOW_SIZE : 0;
+                  const tickStart = Math.max(1, windowStart - BUFFER);
+                  const tickEnd = Math.min(total, windowEnd + BUFFER);
+                  const ticks: React.ReactElement[] = [];
+                  for (let tickPos = tickStart; tickPos <= tickEnd; tickPos++) {
+                    const offset = tickPos - windowStart;
+                    const left = windowSize > 1 ? (offset / (windowSize - 1)) * 100 : 50;
+                    ticks.push(
+                      <span
+                        key={tickPos}
+                        data-pos={tickPos}
+                        className={`dock-track-tick${tickPos === displayPos ? " current" : ""}`}
+                        style={{ left: `${left}%` }}
+                      />
+                    );
+                  }
+                  return ticks;
+                })()}
+              </div>
             </div>
+
+            {needsWindow && (
+              <div className="dock-track-minimap">
+                <div
+                  ref={minimapRef}
+                  className="dock-track-minimap-window"
+                  style={{ left: `${minimapLeft}%`, width: `${minimapWidth}%` }}
+                />
+              </div>
+            )}
           </div>
 
-          {needsWindow && (
-            <div className="dock-track-minimap">
-              <div
-                ref={minimapRef}
-                className="dock-track-minimap-window"
-                style={{ left: `${minimapLeft}%`, width: `${minimapWidth}%` }}
-              />
-            </div>
-          )}
+          <span ref={posCounterRef} className="dock-strip-pos">
+            <span>{displayPos}</span><span className="dock-strip-pos-sep">/</span>{total}
+          </span>
         </div>
-
-        <span ref={posCounterRef} className="dock-strip-pos">
-          <span>{displayPos}</span><span className="dock-strip-pos-sep">/</span>{total}
-        </span>
 
         <button
           type="button"

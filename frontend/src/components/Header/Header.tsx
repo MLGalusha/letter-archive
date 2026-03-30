@@ -32,8 +32,8 @@ export default function Header() {
       <div className="header-inner">
         <div className={`header-brand-slot${dock.active ? " has-active-dock" : ""}${dock.showTitle ? " show-title" : ""}`}>
           <Link to="/" className="main-title" onClick={() => setMenuOpen(false)}>
-            <span className="main-title-label">Editorial Archive</span>
-            <span className="main-title-name">Letter Archive</span>
+            <span className="main-title-label">A Letter Archive</span>
+            <span className="main-title-name">Voices That Remain</span>
           </Link>
           {hasDock && (
             <div className={`header-dock${dock.active ? " is-active" : ""}${dock.visible ? " is-visible" : ""}`}>
@@ -69,9 +69,9 @@ export default function Header() {
           <NavLink to="/about" className={({ isActive }) => `page-selector${isActive ? " active" : ""}`} onClick={() => setMenuOpen(false)}>
             About
           </NavLink>
-          <Link to="/support" className="header-cta" onClick={() => setMenuOpen(false)}>
+          <NavLink to="/support" className={({ isActive }) => `page-selector${isActive ? " active" : ""}`} onClick={() => setMenuOpen(false)}>
             Support
-          </Link>
+          </NavLink>
         </nav>
       </div>
     </header>

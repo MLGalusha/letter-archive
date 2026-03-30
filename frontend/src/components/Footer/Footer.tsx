@@ -45,7 +45,7 @@ export default function Footer() {
         </div>
 
         <div className="footer-bottom">
-          <span className="footer-brand">Letter Archive</span>
+          <span className="footer-brand">Voices That Remain</span>
           <span className="footer-dot">&middot;</span>
           <span className="footer-copy">&copy; {new Date().getFullYear()}</span>
         </div>

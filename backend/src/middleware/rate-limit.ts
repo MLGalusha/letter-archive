@@ -21,7 +21,7 @@ export const globalRateLimit = rateLimit({
 
 export const authRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 10,
+  limit: process.env.NODE_ENV === 'production' ? 10 : 200,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: {

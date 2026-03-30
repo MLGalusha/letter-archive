@@ -387,8 +387,10 @@ export async function installMockLetterReviewApi(
   });
 
   await page.route(new RegExp(`${escapeRegex(API_BASE_URL)}/mock-assets/collection-009/.*$`), async (route) => {
+    const requestUrl = new URL(route.request().url());
+    const requestPath = requestUrl.origin + requestUrl.pathname;
     const asset = collection009ImageFixtures.find(
-      (candidate) => `${API_BASE_URL}${candidate.imageUrl}` === route.request().url(),
+      (candidate) => `${API_BASE_URL}${candidate.imageUrl}` === requestPath,
     );
 
     if (!asset) {

@@ -17,7 +17,8 @@ async function openLineReview(
   });
   await page.goto(`/admin/letters/${initialLetter.id}`);
   await page.locator('.letter-review-page').waitFor({ state: 'visible' });
-  await page.locator('.header-action.review').click();
+  await page.locator('.viewer-image').waitFor({ state: 'visible' });
+  await page.locator('.viewer-image').click();
   await page.locator('.line-review-mode').waitFor({ state: 'visible' });
   await page.locator('.line-review-input-overlay').waitFor({ state: 'visible' });
   return mockedApi;
@@ -127,7 +128,7 @@ test.describe('@mocked Line Review', () => {
       );
     }, 'My dearest mother,');
 
-    await page.locator('.header-action.review').click();
+    await page.locator('.line-review-close-btn').click();
 
     await expect(page.locator('.transcript-editor')).toContainText('My dearest mother,');
     await expect
@@ -156,7 +157,7 @@ test.describe('@mocked Line Review', () => {
       );
     }, 'My dearest mother,');
 
-    await page.locator('.header-action.review').click();
+    await page.locator('.line-review-close-btn').click();
 
     await expect(page.locator('.transcript-editor')).toContainText('My dearest mother,');
     await expect
@@ -206,7 +207,7 @@ test.describe('@mocked Line Review', () => {
       );
     }, 'My dearest mother,');
 
-    await page.locator('.header-action.review').click();
+    await page.locator('.line-review-close-btn').click();
 
     const transcriptSection = page.locator('.editor-section').first();
     await expect(transcriptSection.locator('.verified-info')).toHaveCount(0);
@@ -268,7 +269,7 @@ test.describe('@mocked Line Review', () => {
       );
     }, 'My dearest mother,');
 
-    await page.locator('.header-action.review').click();
+    await page.locator('.line-review-close-btn').click();
 
     await expect(page.locator('.toast')).toContainText(
       'Transcript save failed (Request ID: req-transcript-save-503)',

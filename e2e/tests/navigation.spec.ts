@@ -165,7 +165,9 @@ test.describe('Navigation', () => {
 
       await page.goBack({ waitUntil: 'domcontentloaded' });
 
-      expect(page.url()).toMatch(/\/$/);
+      // SPA router may resolve to "/" or keep the base URL without trailing slash
+      const url = new URL(page.url());
+      expect(url.pathname).toMatch(/^\/?$/);
     });
 
     test('back button works on admin pages', async ({ page }) => {
@@ -187,7 +189,10 @@ test.describe('Navigation', () => {
       await page.waitForLoadState('domcontentloaded');
 
       await page.goBack({ waitUntil: 'domcontentloaded' });
-      await page.goForward({ waitUntil: 'domcontentloaded' });
+      // SPA client-side routing may not trigger a real page load on goForward,
+      // so skip waitUntil and poll for the URL change instead
+      await page.goForward();
+      await page.waitForURL(/\/collections/, { timeout: 15000 });
 
       expect(page.url()).toContain('/collections');
     });

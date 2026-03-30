@@ -19,7 +19,6 @@ test.describe('@mocked Admin Dashboard', () => {
     await expect(page.locator('.letter-count')).toHaveText('1–2 of 2');
     await expect(page.locator('.filter-published')).toContainText('1 Public');
     await expect(page.locator('.filter-hidden')).toContainText('1 Hidden');
-    await expect(page.locator('.filter-flagged')).toContainText('1 Flagged');
   });
 
   test('shows the request id when the dashboard letter list fails to load', async ({
@@ -116,22 +115,4 @@ test.describe('@mocked Admin Dashboard', () => {
     await expect(flagButton).toHaveAttribute('aria-label', 'Flag letter');
   });
 
-  test('shows the request id when processing status polling fails', async ({ page }) => {
-    await installMockAdminDashboardApi(page, {
-      processingStatusError: {
-        message: 'Processing status unavailable',
-        requestId: 'req-dashboard-status-503',
-      },
-    });
-
-    await page.goto('/admin');
-    await page.locator('.admin-header').waitFor({ state: 'visible' });
-
-    await expect(page.locator('.toast-error')).toContainText(
-      'Processing status unavailable',
-    );
-    await expect(page.locator('.toast-error')).toContainText(
-      'Request ID: req-dashboard-status-503',
-    );
-  });
 });

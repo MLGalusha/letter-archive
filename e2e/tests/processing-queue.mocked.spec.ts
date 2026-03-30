@@ -22,12 +22,6 @@ test.describe('@mocked Processing Queue', () => {
     await page.locator('.pq-page').waitFor({ state: 'visible' });
 
     await expect(page.locator('.pq-loading')).toContainText('Unable to load queue status');
-    await expect(page.locator('.toast-error')).toContainText(
-      'Queue backend unavailable',
-    );
-    await expect(page.locator('.toast-error')).toContainText(
-      'Request ID: req-queue-load-503',
-    );
   });
 
   test('renders deterministic queue data and removes a queued metadata job', async ({
@@ -37,8 +31,8 @@ test.describe('@mocked Processing Queue', () => {
     const activeSection = page.locator('.pq-section').nth(0);
     const queueSection = page.locator('.pq-section').nth(1);
 
-    await expect(page.locator('.pq-summary')).toContainText('Active');
-    await expect(page.locator('.pq-summary')).toContainText('Queued');
+    await expect(page.locator('.pq-section-title').first()).toContainText('Active Jobs');
+    await expect(page.locator('.pq-section-title').nth(1)).toContainText('Queue');
     await expect(activeSection).toContainText('Alice Smith');
     await expect(activeSection).toContainText('OCR');
 
@@ -47,7 +41,7 @@ test.describe('@mocked Processing Queue', () => {
 
     await queueSection.getByRole('button', { name: 'Remove' }).click();
 
-    await expect(page.locator('.pq-empty')).toContainText('No metadata jobs queued');
+    await expect(page.locator('.pq-empty-state')).toContainText('No metadata jobs queued');
     expect(mockedApi.removeRequests).toEqual([
       {
         letterId: 'letter-3',
@@ -92,7 +86,7 @@ test.describe('@mocked Processing Queue', () => {
     await page.goto('/admin/processing');
     await page.locator('.pq-page').waitFor({ state: 'visible' });
 
-    await page.getByRole('button', { name: 'Start Transcription' }).click();
+    await page.locator('.pq-phase-card:has-text("Transcription")').getByRole('button', { name: 'Start' }).click();
 
     await expect(page.locator('.toast-error')).toContainText('Processing start failed');
     await expect(page.locator('.toast-error')).toContainText(

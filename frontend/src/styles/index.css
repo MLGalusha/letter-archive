@@ -14,7 +14,12 @@
 }
 
 html {
-  scrollbar-gutter: stable;
+  scrollbar-gutter: stable both-edges;
+}
+
+/* Admin pages handle their own scrolling — don't reserve gutter space */
+html:has(.admin-layout) {
+  scrollbar-gutter: auto;
 }
 
 body {

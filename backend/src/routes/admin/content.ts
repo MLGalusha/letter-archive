@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { eq, desc, and, sql } from 'drizzle-orm';
+import { pickFeaturedLetter } from '../../services/pick-featured-letter.js';
 import {
   db,
   updatePosts,
@@ -460,44 +461,111 @@ router.put('/content/featured-letter', validateBody(featuredLetterSchema), async
   }
 });
 
-// GET /content/featured-letter — Get current featured letter with basic info
+// GET /content/featured-letter — Get current featured letter with full info
 router.get('/content/featured-letter', async (req, res) => {
   try {
-    const [setting] = await db
+    // Helper: fetch full letter details including imageUrl
+    const fetchLetterDetails = async (letterId: string) => {
+      const rows = await db.execute(sql`
+        SELECT
+          l.id,
+          l.hook,
+          l.summary,
+          l.letter_date AS "letterDate",
+          l.date_raw AS "dateRaw",
+          l.sender,
+          l.recipient,
+          l.visibility,
+          l.type AS "imageType",
+          c.collection_code AS "collectionCode",
+          c.title AS "collectionTitle",
+          CASE WHEN EXISTS (SELECT 1 FROM letter_pages lp WHERE lp.letter_id = l.id)
+            THEN '/images/' || (
+              SELECT lp2.id ||
+                CASE WHEN lp2.checksum_sha256 IS NOT NULL
+                  THEN '?v=' || LEFT(lp2.checksum_sha256, 8)
+                  ELSE ''
+                END
+              FROM letter_pages lp2
+              WHERE lp2.letter_id = l.id
+              ORDER BY lp2.page_number
+              LIMIT 1
+            )
+            ELSE NULL
+          END AS "imageUrl"
+        FROM letters l
+        LEFT JOIN collections c ON c.id = l.collection_id
+        WHERE l.id = ${letterId}
+        LIMIT 1
+      `);
+      return (rows as unknown as any[])[0] ?? null;
+    };
+
+    // 1. Check manual override
+    const [manualSetting] = await db
       .select()
       .from(siteSettings)
       .where(eq(siteSettings.key, 'featured_letter_id'))
       .limit(1);
 
-    if (!setting) {
-      res.json({ featuredLetter: null });
-      return;
+    if (manualSetting?.value) {
+      const letter = await fetchLetterDetails(manualSetting.value);
+      if (letter?.id && letter.visibility === 'PUBLISHED') {
+        res.json({ letter_id: manualSetting.value, letter, source: 'manual' });
+        return;
+      }
+      // Stale — clear it
+      await db.delete(siteSettings).where(eq(siteSettings.key, 'featured_letter_id'));
     }
 
-    const [letter] = await db
-      .select({
-        id: letters.id,
-        hook: letters.hook,
-        letterDate: letters.letterDate,
-        sender: letters.sender,
-        recipient: letters.recipient,
-        collectionId: letters.collectionId,
-        collectionCode: collections.collectionCode,
-        collectionTitle: collections.title,
-      })
-      .from(letters)
-      .leftJoin(collections, eq(letters.collectionId, collections.id))
-      .where(eq(letters.id, setting.value))
+    // 2. Check persisted auto-pick
+    const [autoSetting] = await db
+      .select()
+      .from(siteSettings)
+      .where(eq(siteSettings.key, 'auto_featured_letter_id'))
       .limit(1);
 
-    if (!letter) {
-      res.json({ featuredLetter: null });
+    if (autoSetting?.value) {
+      const letter = await fetchLetterDetails(autoSetting.value);
+      if (letter?.id && letter.visibility === 'PUBLISHED') {
+        res.json({ letter_id: autoSetting.value, letter, source: 'auto' });
+        return;
+      }
+      // Stale — clear it
+      await db.delete(siteSettings).where(eq(siteSettings.key, 'auto_featured_letter_id'));
+    }
+
+    // 3. Auto-select and persist
+    const auto = await pickFeaturedLetter();
+    if (auto) {
+      await db
+        .insert(siteSettings)
+        .values({ key: 'auto_featured_letter_id', value: auto.id })
+        .onConflictDoUpdate({
+          target: siteSettings.key,
+          set: { value: auto.id, updatedAt: new Date() },
+        });
+      res.json({ letter_id: auto.id, letter: auto, source: 'auto' });
       return;
     }
 
-    res.json({ featuredLetter: letter });
+    res.json({ letter_id: null, letter: null, source: 'none' });
   } catch (error) {
     req.log?.error({ error }, 'Failed to fetch featured letter');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /content/featured-letter — Clear manual override (reverts to auto)
+router.delete('/content/featured-letter', async (req, res) => {
+  try {
+    // Clear both manual and auto so a fresh auto-pick happens on next request
+    await db.delete(siteSettings).where(eq(siteSettings.key, 'featured_letter_id'));
+    await db.delete(siteSettings).where(eq(siteSettings.key, 'auto_featured_letter_id'));
+    req.log?.info('Featured letter override cleared');
+    res.json({ success: true });
+  } catch (error) {
+    req.log?.error({ error }, 'Failed to clear featured letter');
     res.status(500).json({ error: 'Internal server error' });
   }
 });

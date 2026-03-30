@@ -84,12 +84,34 @@ export async function adminUpdateContentPage(
 
 // ── Content Management - Featured Letter ─────────────────
 
-export async function adminGetFeaturedLetter(): Promise<{ letter_id: string | null; letter?: any }> {
-  return apiGet<{ letter_id: string | null; letter?: any }>('/admin/content/featured-letter');
+export interface AdminFeaturedLetterResponse {
+  letter_id: string | null;
+  letter: {
+    id: string;
+    hook: string | null;
+    summary?: string | null;
+    letterDate: string | null;
+    dateRaw?: string | null;
+    sender: string | null;
+    recipient: string | null;
+    imageType?: string;
+    imageUrl?: string | null;
+    collectionCode?: string;
+    collectionTitle?: string | null;
+  } | null;
+  source: 'manual' | 'auto' | 'none';
+}
+
+export async function adminGetFeaturedLetter(): Promise<AdminFeaturedLetterResponse> {
+  return apiGet<AdminFeaturedLetterResponse>('/admin/content/featured-letter');
 }
 
 export async function adminSetFeaturedLetter(letterId: string): Promise<void> {
   return apiPut<void>('/admin/content/featured-letter', { letterId });
+}
+
+export async function adminClearFeaturedLetter(): Promise<void> {
+  return apiDelete<void>('/admin/content/featured-letter');
 }
 
 // ── Blog Images ─────────────────────────────────────────

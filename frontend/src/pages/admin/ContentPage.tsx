@@ -1,27 +1,37 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
 import { Button } from '../../components/common';
 import Icon from '../../components/common/Icon';
-import { getErrorMessage } from '../../api/client';
-import { getAdminLetters } from '../../api/letters';
+import { ApiError, getErrorMessage, getImageUrl } from '../../api/client';
 import {
   adminListBlogPosts,
   adminPublishBlogPost,
   adminUnpublishBlogPost,
   adminDeleteBlogPost,
-  adminListContentPages,
+  adminGetContentPage,
+  adminUpdateContentPage,
   adminGetFeaturedLetter,
   adminSetFeaturedLetter,
+  adminClearFeaturedLetter,
   type BlogPost,
-  type ContentPage as ContentPageType,
+  type AdminFeaturedLetterResponse,
 } from '../../api/admin/content';
-import { resolveBlocks } from '../../content/blockMigration';
+import { searchArchiveShelf } from '../../api/letters';
+import type { ArchiveShelfItem } from '../../types/Letter';
+import { listCollections, type CollectionInfo } from '../../api/collections';
+import { useSiteSettings } from '../../hooks/useSiteSettings';
 import type { ContentBlock } from '../../content/blocks';
+import { getDefaultBlocks } from '../../content/defaultBlocks';
+import { resolveBlocks } from '../../content/blockMigration';
+import BlockRenderer from '../../components/BlockRenderer/BlockRenderer';
+import Editable from '../../components/BlockRenderer/Editable';
 import { useToast } from '../../contexts/ToastContext';
+import '../../components/BlockRenderer/BlockRenderer.css';
+import './BlockEditorPage.css';
 import './ContentPage.css';
 
-type TabKey = 'blog' | 'pages' | 'featured';
+type TabKey = 'journal' | 'homepage' | 'about' | 'support';
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -35,6 +45,13 @@ function formatDate(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+function formatSavedTime(iso: string | null): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'Saved';
+  return `Saved ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
 }
 
 function formatDateTime(iso: string): string {
@@ -55,51 +72,55 @@ function formatDateTime(iso: string): string {
 // Main Component
 // ══════════════════════════════════════════════════════════
 
+const PAGE_CONFIG: Record<string, { title: string; publicPath: string; className: string }> = {
+  about: { title: 'About', publicPath: '/about', className: 'about-page' },
+  support: { title: 'Support', publicPath: '/support', className: 'support-page' },
+};
+
 export default function ContentPage() {
-  const [activeTab, setActiveTab] = useState<TabKey>('blog');
+  const [activeTab, setActiveTab] = useState<TabKey>('journal');
 
   const tabs: { key: TabKey; label: string }[] = [
-    { key: 'blog', label: 'Journal' },
-    { key: 'pages', label: 'Pages' },
-    { key: 'featured', label: 'Featured' },
+    { key: 'journal', label: 'Journal' },
+    { key: 'homepage', label: 'Homepage' },
+    { key: 'about', label: 'About' },
+    { key: 'support', label: 'Support' },
   ];
+
+  const isPageEditor = activeTab === 'about' || activeTab === 'support';
 
   return (
     <AdminLayout>
-      <div className="content-page">
-        <div className="content-page-header">
-          <div className="content-page-kicker">Administration</div>
-          <h1 className="content-page-title">Content</h1>
-          <p className="content-page-subtitle">
-            Manage journal entries, static page content, and the featured letter.
-          </p>
+      <div className="pub-shell">
+        <div className="pub-tabs-bar">
+          <div className="pub-tabs">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                className={`pub-tab ${activeTab === tab.key ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
-
-        <div className="content-tabs">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              className={`content-tab ${activeTab === tab.key ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.key)}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className={`pub-page ${isPageEditor ? 'pub-page--editor' : ''}`}>
+          {activeTab === 'journal' && <JournalTab />}
+          {activeTab === 'homepage' && <HomepageTab />}
+          {activeTab === 'about' && <PageEditorTab slug="about" />}
+          {activeTab === 'support' && <PageEditorTab slug="support" />}
         </div>
-
-        {activeTab === 'blog' && <BlogTab />}
-        {activeTab === 'pages' && <PagesTab />}
-        {activeTab === 'featured' && <FeaturedTab />}
       </div>
     </AdminLayout>
   );
 }
 
 // ══════════════════════════════════════════════════════════
-// Blog Tab
+// Journal Tab
 // ══════════════════════════════════════════════════════════
 
-function BlogTab() {
+function JournalTab() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [posts, setPosts] = useState<BlogPost[]>([]);
@@ -126,7 +147,8 @@ function BlogTab() {
     fetchBlogPosts();
   }, [fetchBlogPosts]);
 
-  const handleTogglePublish = async (post: BlogPost) => {
+  const handleTogglePublish = async (e: React.MouseEvent, post: BlogPost) => {
+    e.stopPropagation();
     setActionLoading(post.id);
     try {
       if (post.status === 'published') {
@@ -144,7 +166,8 @@ function BlogTab() {
     }
   };
 
-  const handleDelete = async (post: BlogPost) => {
+  const handleDelete = async (e: React.MouseEvent, post: BlogPost) => {
+    e.stopPropagation();
     if (!window.confirm(`Delete "${post.title}"? This cannot be undone.`)) return;
     setActionLoading(post.id);
     try {
@@ -159,101 +182,81 @@ function BlogTab() {
   };
 
   if (loading) {
-    return <div className="content-loading">Loading journal entries...</div>;
+    return <div className="pub-loading">Loading journal entries...</div>;
   }
 
   return (
-    <div className="content-section">
-      <div className="content-section-header">
-        <span className="content-section-count">{total} journal entr{total !== 1 ? 'ies' : 'y'}</span>
+    <div className="pub-section">
+      <div className="pub-section-header">
+        <span className="pub-section-count">{total} journal entr{total !== 1 ? 'ies' : 'y'}</span>
         <Button
           variant="primary"
           size="sm"
           icon="plus"
           onClick={() => navigate('/admin/content/blog/new')}
         >
-          New Journal Entry
+          New Entry
         </Button>
       </div>
 
-      {error && <div className="content-error">{error}</div>}
+      {error && <div className="pub-error">{error}</div>}
 
       {posts.length === 0 ? (
-        <div className="content-empty">
-          <div className="content-empty-icon">
-            <Icon name="file" size={40} />
-          </div>
-          <p className="content-empty-title">No journal entries yet</p>
-          <p className="content-empty-desc">
+        <div className="pub-empty">
+          <Icon name="file" size={36} />
+          <p className="pub-empty-title">No journal entries yet</p>
+          <p className="pub-empty-desc">
             Create your first journal entry to share updates with visitors.
           </p>
         </div>
       ) : (
-        <div className="updates-table-wrap">
-          <table className="updates-table">
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Status</th>
-                <th>Category</th>
-                <th>Author</th>
-                <th>Date</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {posts.map((post) => (
-                <tr
-                  key={post.id}
-                  className="updates-row"
-                  onClick={() => navigate(`/admin/content/blog/${post.id}`)}
+        <div className="jn-list">
+          {posts.map((post) => (
+            <div
+              key={post.id}
+              className="jn-card"
+              onClick={() => navigate(`/admin/content/blog/${post.id}`)}
+            >
+              <div className="jn-card-body">
+                <div className="jn-card-top">
+                  <h3 className="jn-card-title">{post.title}</h3>
+                  <span className={`jn-status ${post.status}`}>
+                    {post.status}
+                  </span>
+                </div>
+                {post.excerpt && (
+                  <p className="jn-card-excerpt">{post.excerpt}</p>
+                )}
+                <div className="jn-card-meta">
+                  {post.category && <span className="jn-category">{post.category}</span>}
+                  <span className="jn-author">{post.authorDisplayName || 'Unknown'}</span>
+                  <span className="jn-date">
+                    {post.publishedAt ? formatDate(post.publishedAt) : formatDate(post.createdAt)}
+                  </span>
+                </div>
+              </div>
+              <div className="jn-card-actions">
+                <button
+                  className="pub-icon-btn"
+                  title={post.status === 'published' ? 'Unpublish' : 'Publish'}
+                  disabled={actionLoading === post.id}
+                  onClick={(e) => handleTogglePublish(e, post)}
                 >
-                  <td className="updates-title-cell">
-                    <span className="updates-title-text">{post.title}</span>
-                    {post.excerpt && (
-                      <span className="updates-excerpt">{post.excerpt}</span>
-                    )}
-                  </td>
-                  <td>
-                    <span className={`updates-status-badge ${post.status}`}>
-                      {post.status}
-                    </span>
-                  </td>
-                  <td className="updates-category-cell">
-                    {post.category || <span className="text-muted">--</span>}
-                  </td>
-                  <td className="updates-author-cell">
-                    {post.authorDisplayName || <span className="text-muted">--</span>}
-                  </td>
-                  <td className="updates-date-cell">
-                    {post.publishedAt
-                      ? formatDate(post.publishedAt)
-                      : formatDate(post.createdAt)}
-                  </td>
-                  <td className="updates-actions-cell" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      className="updates-action-btn"
-                      title={post.status === 'published' ? 'Unpublish' : 'Publish'}
-                      disabled={actionLoading === post.id}
-                      onClick={() => handleTogglePublish(post)}
-                    >
-                      <Icon name={post.status === 'published' ? 'eye-off' : 'eye'} size={16} />
-                    </button>
-                    {post.status === 'draft' && (
-                      <button
-                        className="updates-action-btn danger"
-                        title="Delete"
-                        disabled={actionLoading === post.id}
-                        onClick={() => handleDelete(post)}
-                      >
-                        <Icon name="delete" size={16} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  <Icon name={post.status === 'published' ? 'eye-off' : 'eye'} size={16} />
+                </button>
+                {post.status === 'draft' && (
+                  <button
+                    className="pub-icon-btn danger"
+                    title="Delete"
+                    disabled={actionLoading === post.id}
+                    onClick={(e) => handleDelete(e, post)}
+                  >
+                    <Icon name="delete" size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -261,336 +264,510 @@ function BlogTab() {
 }
 
 // ══════════════════════════════════════════════════════════
-// Pages Tab
+// Homepage Tab
 // ══════════════════════════════════════════════════════════
 
-const PAGE_SLUGS = ['about', 'support'] as const;
-const PAGE_META: Record<string, { title: string; kicker: string; description: string; publicPath: string }> = {
-  about: {
-    title: 'About',
-    kicker: 'Page Editor',
-    description: 'Shape the archive story, explain the preservation process, and invite visitors to explore.',
-    publicPath: '/about',
-  },
-  support: {
-    title: 'Support',
-    kicker: 'Page Editor',
-    description: 'Tune the fundraising story, clarify contribution paths, and make every contact route feel intentional.',
-    publicPath: '/support',
-  },
-};
-
-function getHeroText(blocks: ContentBlock[]): { heading: string; subtitle: string } {
-  const hero = blocks.find((b) => b.type === 'hero');
-  if (hero && hero.type === 'hero') return { heading: hero.heading, subtitle: hero.subtitle };
-  return { heading: '', subtitle: '' };
+interface HeroContent {
+  kicker: string;
+  heading: string;
+  subtitle: string;
 }
 
-function PagesTab() {
-  const navigate = useNavigate();
-  const [pages, setPages] = useState<ContentPageType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+const DEFAULT_HERO: HeroContent = {
+  kicker: 'Real Letters, Real Lives',
+  heading:
+    'Follow real lives through letters, telegrams, photographs, and the paper trail they left behind.',
+  subtitle:
+    'Search names, places, dates, and remembered phrases across the archive, or open a collection to stay inside one family, one romance, or one moment at a time.',
+};
 
-  const fetchPages = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await adminListContentPages();
-      setPages(data);
-    } catch (err) {
-      setError(getErrorMessage(err, 'Failed to load pages.'));
-    } finally {
-      setLoading(false);
-    }
+/* ── Letter Picker (search & select) ── */
+
+function LetterPicker({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (letterId: string) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<ArchiveShelfItem[]>([]);
+  const [searching, setSearching] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    inputRef.current?.focus();
   }, []);
 
   useEffect(() => {
-    fetchPages();
-  }, [fetchPages]);
-
-  if (loading) {
-    return <div className="content-loading">Loading pages...</div>;
-  }
-
-  const pagesBySlug = new Map(pages.map((p) => [p.slug, p]));
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!query.trim()) {
+      setResults([]);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await searchArchiveShelf({ search: query.trim(), limit: 8, verified: true });
+        setResults(res.letters);
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query]);
 
   return (
-    <div className="content-section">
-      {error && <div className="content-error">{error}</div>}
+    <div className="fl-picker">
+      <div className="fl-picker-header">
+        <input
+          ref={inputRef}
+          className="fl-picker-input"
+          type="text"
+          placeholder="Search letters by name, date, or keyword..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <button type="button" className="pub-icon-btn" onClick={onClose} title="Close">
+          <Icon name="close" size={16} />
+        </button>
+      </div>
+      {searching && <div className="fl-picker-status">Searching...</div>}
+      {!searching && query.trim() && results.length === 0 && (
+        <div className="fl-picker-status">No published letters found</div>
+      )}
+      {results.length > 0 && (
+        <div className="fl-picker-results">
+          {results.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className="fl-picker-item"
+              onClick={() => onSelect(item.id)}
+            >
+              {item.imageUrl && (
+                <img
+                  className="fl-picker-thumb"
+                  src={getImageUrl(item.imageUrl, { width: 80 })}
+                  alt=""
+                />
+              )}
+              <div className="fl-picker-info">
+                <span className="fl-picker-people">
+                  {[item.sender, item.recipient].filter(Boolean).join(' \u2192 ') || 'Unknown'}
+                </span>
+                {item.date && <span className="fl-picker-date">{item.date}</span>}
+                {item.hook && <span className="fl-picker-hook">{item.hook}</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
-      <div className="pages-overview-grid">
-        {PAGE_SLUGS.map((slug) => {
-          const dbPage = pagesBySlug.get(slug);
-          const meta = PAGE_META[slug];
-          const blocks = resolveBlocks(slug, dbPage?.contentJson);
-          const hero = getHeroText(blocks);
+function HomepageTab() {
+  const { showToast } = useToast();
 
-          return (
-            <article key={slug} className={`page-overview-card page-overview-card--${slug}`}>
-              <div className="page-overview-top">
-                <div>
-                  <span className="page-overview-kicker">{meta.kicker}</span>
-                  <h3 className="page-overview-title">{meta.title}</h3>
+  // ── Hero text content ──
+  const [hero, setHero] = useState<HeroContent>(DEFAULT_HERO);
+  const [heroLoading, setHeroLoading] = useState(true);
+  const [heroSaving, setHeroSaving] = useState(false);
+  const [heroUpdatedAt, setHeroUpdatedAt] = useState<string | null>(null);
+
+  // ── Featured letter ──
+  const [featured, setFeatured] = useState<AdminFeaturedLetterResponse | null>(null);
+  const [featuredLoading, setFeaturedLoading] = useState(true);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [featuredSaving, setFeaturedSaving] = useState(false);
+
+  // Load hero text + featured letter in parallel
+  useEffect(() => {
+    (async () => {
+      try {
+        const page = await adminGetContentPage('home');
+        const json = page.contentJson as { hero?: HeroContent };
+        if (json?.hero) {
+          setHero({
+            kicker: json.hero.kicker || DEFAULT_HERO.kicker,
+            heading: json.hero.heading || DEFAULT_HERO.heading,
+            subtitle: json.hero.subtitle || DEFAULT_HERO.subtitle,
+          });
+        }
+        setHeroUpdatedAt(page.updatedAt);
+      } catch (err) {
+        if (!(err instanceof ApiError && err.status === 404)) {
+          showToast(getErrorMessage(err, 'Failed to load homepage content.'), 'error');
+        }
+      } finally {
+        setHeroLoading(false);
+      }
+    })();
+
+    (async () => {
+      try {
+        const data = await adminGetFeaturedLetter();
+        setFeatured(data);
+      } catch {
+        // no featured letter available
+      } finally {
+        setFeaturedLoading(false);
+      }
+    })();
+  }, [showToast]);
+
+  const saveHero = async () => {
+    setHeroSaving(true);
+    try {
+      const saved = await adminUpdateContentPage('home', {
+        title: 'Homepage',
+        contentJson: { hero },
+      });
+      setHeroUpdatedAt(saved.updatedAt);
+      showToast('Homepage updated.', 'success');
+    } catch (err) {
+      showToast(getErrorMessage(err, 'Failed to save homepage.'), 'error');
+    } finally {
+      setHeroSaving(false);
+    }
+  };
+
+  const handleSelectFeatured = async (letterId: string) => {
+    setFeaturedSaving(true);
+    setPickerOpen(false);
+    try {
+      await adminSetFeaturedLetter(letterId);
+      const data = await adminGetFeaturedLetter();
+      setFeatured(data);
+      showToast('Featured letter updated.', 'success');
+    } catch (err) {
+      showToast(getErrorMessage(err, 'Failed to set featured letter.'), 'error');
+    } finally {
+      setFeaturedSaving(false);
+    }
+  };
+
+  const handleClearFeatured = async () => {
+    setFeaturedSaving(true);
+    try {
+      await adminClearFeaturedLetter();
+      // Re-fetch to get the new auto-pick
+      const data = await adminGetFeaturedLetter();
+      setFeatured(data);
+      showToast('Featured letter reset to auto-selection.', 'success');
+    } catch (err) {
+      showToast(getErrorMessage(err, 'Failed to clear featured letter.'), 'error');
+    } finally {
+      setFeaturedSaving(false);
+    }
+  };
+
+  const fl = featured?.letter;
+  const flPeopleLine = fl
+    ? [fl.sender, fl.recipient].filter(Boolean).join(' \u2192 ')
+    : null;
+  const flDate = fl?.letterDate || fl?.dateRaw || null;
+
+  return (
+    <div className="pub-section pub-homepage-tab">
+      {/* ── Hero Section ── */}
+      <div className="hp-hero-section">
+        <div className="hp-hero-header">
+          <h3 className="hp-section-title">Hero Section</h3>
+          <div className="hp-hero-actions">
+            {heroUpdatedAt && (
+              <span className="hp-save-state">
+                Updated {formatDateTime(heroUpdatedAt)}
+              </span>
+            )}
+            <Button
+              variant="primary"
+              size="sm"
+              icon="save"
+              loading={heroSaving}
+              disabled={heroLoading}
+              onClick={() => void saveHero()}
+            >
+              Update
+            </Button>
+            <a
+              className="hp-view-link"
+              href="/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View live &rarr;
+            </a>
+          </div>
+        </div>
+
+        {heroLoading ? (
+          <div className="pub-loading">Loading...</div>
+        ) : (
+          <div className="hp-hero-preview">
+            <div className="hp-hero-card">
+              <Editable
+                value={hero.kicker}
+                editable
+                onChange={(v) => setHero((h) => ({ ...h, kicker: v }))}
+                tag="p"
+                className="hp-kicker"
+                placeholder="Kicker text"
+              />
+              <Editable
+                value={hero.heading}
+                editable
+                multiline
+                onChange={(v) => setHero((h) => ({ ...h, heading: v }))}
+                tag="h1"
+                className="hp-headline"
+                placeholder="Main headline"
+              />
+              <Editable
+                value={hero.subtitle}
+                editable
+                multiline
+                onChange={(v) => setHero((h) => ({ ...h, subtitle: v }))}
+                tag="p"
+                className="hp-subtitle"
+                placeholder="Subtitle text"
+              />
+              <div className="hp-hero-buttons-preview">
+                <span className="hp-btn-preview hp-btn-preview--primary">Search the Archive</span>
+                <span className="hp-btn-preview hp-btn-preview--secondary">Browse Collections</span>
+                <span className="hp-btn-preview hp-btn-preview--text">Read the Journal &rarr;</span>
+              </div>
+            </div>
+
+            {/* ── Featured Letter Card ── */}
+            <div className="hp-featured-section">
+              {featuredLoading ? (
+                <div className="hp-hero-feature-placeholder">
+                  <span>Featured Letter</span>
+                  <p>Loading...</p>
                 </div>
-                <span className="page-overview-route">{meta.publicPath}</span>
-              </div>
-
-              <p className="page-overview-description">{meta.description}</p>
-
-              <div className="page-overview-preview">
-                <strong>{hero.heading || meta.title}</strong>
-                <p>{hero.subtitle}</p>
-              </div>
-
-              <div className="page-overview-metrics">
-                <div>
-                  <span>Blocks</span>
-                  <strong>{blocks.length}</strong>
+              ) : fl ? (
+                <div className="fl-card">
+                  {fl.imageUrl && (
+                    <img
+                      className="fl-card-image"
+                      src={getImageUrl(fl.imageUrl, { width: 600 })}
+                      alt=""
+                    />
+                  )}
+                  <div className="fl-card-overlay" />
+                  <div className="fl-card-label">
+                    <span className="fl-card-label-title">Featured Letter</span>
+                    <span className={`fl-card-source fl-card-source--${featured?.source}`}>
+                      {featured?.source === 'manual' ? 'Manual' : 'Auto'}
+                    </span>
+                  </div>
+                  <div className="fl-card-content">
+                    {flPeopleLine && <div className="fl-card-people">{flPeopleLine}</div>}
+                    {flDate && <div className="fl-card-date">{flDate}</div>}
+                    {fl.hook && <p className="fl-card-hook">{fl.hook}</p>}
+                  </div>
+                  <div className="fl-card-actions">
+                    <button
+                      type="button"
+                      className="fl-action-btn"
+                      onClick={() => setPickerOpen(true)}
+                      disabled={featuredSaving}
+                    >
+                      Change
+                    </button>
+                    {featured?.source === 'manual' && (
+                      <button
+                        type="button"
+                        className="fl-action-btn fl-action-btn--secondary"
+                        onClick={() => void handleClearFeatured()}
+                        disabled={featuredSaving}
+                      >
+                        Auto-select
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <span>Updated</span>
-                  <strong>{dbPage ? formatDateTime(dbPage.updatedAt) : 'Defaults'}</strong>
+              ) : (
+                <div className="hp-hero-feature-placeholder">
+                  <span>Featured Letter</span>
+                  <p>No published letters available</p>
+                  <button
+                    type="button"
+                    className="fl-action-btn"
+                    style={{ marginTop: '0.5rem' }}
+                    onClick={() => setPickerOpen(true)}
+                  >
+                    Choose one
+                  </button>
                 </div>
-              </div>
+              )}
 
-              <div className="page-overview-actions">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon="edit"
-                  onClick={() => navigate(`/admin/content/pages/${slug}`)}
-                >
-                  Edit {meta.title}
-                </Button>
-                <button
-                  type="button"
-                  className="page-overview-secondary"
-                  onClick={() => window.open(meta.publicPath, '_blank', 'noopener,noreferrer')}
-                >
-                  View live page
-                </button>
-              </div>
-            </article>
-          );
-        })}
+              {pickerOpen && (
+                <LetterPicker
+                  onSelect={(id) => void handleSelectFeatured(id)}
+                  onClose={() => setPickerOpen(false)}
+                />
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 // ══════════════════════════════════════════════════════════
-// Featured Tab
+// Page Editor Tab (About / Support) — embedded block editor
 // ══════════════════════════════════════════════════════════
 
-interface LetterSearchResult {
-  id: string;
-  sender: string | null;
-  recipient: string | null;
-  letterDate: string | null;
-  collectionCode: string;
-}
+type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
-function FeaturedTab() {
+function PageEditorTab({ slug }: { slug: string }) {
+  const config = PAGE_CONFIG[slug];
   const { showToast } = useToast();
-  const [featuredData, setFeaturedData] = useState<{
-    letter_id: string | null;
-    letter?: any;
-  } | null>(null);
+  const siteSettings = useSiteSettings();
+
+  const [blocks, setBlocks] = useState<ContentBlock[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [liveStats, setLiveStats] = useState<{ letters: number; collections: number } | null>(null);
 
-  // Search state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<LetterSearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const fetchFeatured = useCallback(async () => {
+  // ── Load ──
+  const loadPage = useCallback(async () => {
+    if (!config) return;
     try {
       setLoading(true);
       setError(null);
-      const data = await adminGetFeaturedLetter();
-      setFeaturedData(data);
+      const page = await adminGetContentPage(slug);
+      setBlocks(resolveBlocks(slug, page.contentJson));
+      setUpdatedAt(page.updatedAt);
+      setSaveState('saved');
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to load featured letter.'));
+      if (err instanceof ApiError && err.status === 404) {
+        setBlocks(getDefaultBlocks(slug));
+        setUpdatedAt(null);
+        setSaveState('idle');
+      } else {
+        setError(getErrorMessage(err, 'Failed to load page.'));
+      }
     } finally {
       setLoading(false);
     }
+  }, [config, slug]);
+
+  useEffect(() => { void loadPage(); }, [loadPage]);
+
+  // Fetch live stats for about page
+  useEffect(() => {
+    if (slug !== 'about') return;
+    listCollections()
+      .then((collections: CollectionInfo[]) => {
+        const visible = collections.filter((c) => (c.letterCount || 0) > 0);
+        const letters = visible.reduce((sum, c) => sum + (c.letterCount || 0), 0);
+        setLiveStats({ collections: visible.length, letters });
+      })
+      .catch(() => {});
+  }, [slug]);
+
+  // ── Save ──
+  const persistPage = useCallback(async () => {
+    if (!config) return;
+    setSaveState('saving');
+    try {
+      const saved = await adminUpdateContentPage(slug, {
+        title: config.title,
+        contentJson: { blocks },
+      });
+      setUpdatedAt(saved.updatedAt);
+      setSaveState('saved');
+      showToast(`${config.title} page updated.`, 'success');
+    } catch (err) {
+      setSaveState('error');
+      showToast(getErrorMessage(err, 'Failed to update.'), 'error');
+    }
+  }, [blocks, config, showToast, slug]);
+
+  // ── Block change ──
+  const handleBlockChange = useCallback((blockId: string, patch: Partial<ContentBlock>) => {
+    setBlocks((prev) =>
+      prev.map((b) => (b.id === blockId ? { ...b, ...patch } as ContentBlock : b)),
+    );
   }, []);
 
-  useEffect(() => {
-    fetchFeatured();
-  }, [fetchFeatured]);
+  // ── Reset ──
+  const handleReset = useCallback(() => {
+    if (!window.confirm('Reset all text to defaults? Your current edits will be replaced.')) return;
+    setBlocks(getDefaultBlocks(slug));
+  }, [slug]);
 
-  // Debounced search
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
-    }
+  if (!config) return null;
 
-    const timer = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const data = await getAdminLetters({
-          search: searchQuery.trim(),
-          limit: 10,
-          page: 1,
-        });
-        setSearchResults(
-          data.letters.map((l: any) => ({
-            id: l.id,
-            sender: l.sender,
-            recipient: l.recipient,
-            letterDate: l.letterDate || null,
-            collectionCode: l.collectionCode || '',
-          })),
-        );
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  const handleSetFeatured = async (letterId: string) => {
-    setSaving(true);
-    try {
-      await adminSetFeaturedLetter(letterId);
-      showToast('Featured letter updated.', 'success');
-      setSearchQuery('');
-      setSearchResults([]);
-      await fetchFeatured();
-    } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to set featured letter.'), 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleClearFeatured = async () => {
-    if (!window.confirm('Clear the featured letter? The homepage will not show a featured section.')) {
-      return;
-    }
-    setSaving(true);
-    try {
-      // Set to empty string to clear
-      await adminSetFeaturedLetter('');
-      showToast('Featured letter cleared.', 'success');
-      await fetchFeatured();
-    } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to clear featured letter.'), 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const saveLabel = saveState === 'saving'
+    ? 'Updating\u2026'
+    : saveState === 'error'
+      ? 'Update failed'
+      : updatedAt
+        ? formatSavedTime(updatedAt)
+        : '';
 
   if (loading) {
-    return <div className="content-loading">Loading featured letter...</div>;
+    return <div className="pub-loading">Loading {config.title.toLowerCase()} page...</div>;
   }
 
-  const featured = featuredData?.letter;
-
   return (
-    <div className="content-section">
-      {error && <div className="content-error">{error}</div>}
-
-      {/* Current featured letter */}
-      <div className="featured-current">
-        <h3 className="featured-section-title">Current Featured Letter</h3>
-        {featured ? (
-          <div className="featured-letter-card">
-            <div className="featured-letter-info">
-              <div className="featured-letter-id">
-                <Link to={`/admin/letters/${featuredData?.letter_id}`}>
-                  {featuredData?.letter_id?.slice(0, 12)}...
-                </Link>
-              </div>
-              {featured.sender && (
-                <div className="featured-letter-detail">
-                  <strong>From:</strong> {featured.sender}
-                </div>
-              )}
-              {featured.recipient && (
-                <div className="featured-letter-detail">
-                  <strong>To:</strong> {featured.recipient}
-                </div>
-              )}
-              {featured.letterDate && (
-                <div className="featured-letter-detail">
-                  <strong>Date:</strong> {featured.letterDate}
-                </div>
-              )}
-              {featured.hook && (
-                <div className="featured-letter-hook">{featured.hook}</div>
-              )}
-            </div>
-            <Button
-              variant="danger"
-              size="sm"
-              loading={saving}
-              onClick={handleClearFeatured}
-            >
-              Clear Featured
-            </Button>
-          </div>
-        ) : (
-          <div className="featured-empty">
-            <p>No featured letter set. The homepage featured section will be hidden.</p>
-          </div>
+    <div className="pub-section pub-editor-tab">
+      {/* ── Inline toolbar ── */}
+      <div className="pe-toolbar">
+        {saveLabel && (
+          <span className={`pe-save-state ${saveState === 'error' ? 'pe-save-error' : ''}`}>
+            {saveLabel}
+          </span>
         )}
+        <button type="button" className="pe-reset-btn" onClick={handleReset}>Reset</button>
+        <Button
+          variant="primary"
+          size="sm"
+          icon="save"
+          loading={saveState === 'saving'}
+          onClick={() => void persistPage()}
+        >
+          Update
+        </Button>
+        <a
+          className="pe-view-link"
+          href={config.publicPath}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          View &rarr;
+        </a>
       </div>
 
-      {/* Search to pick a new featured letter */}
-      <div className="featured-picker">
-        <h3 className="featured-section-title">Select Featured Letter</h3>
-        <p className="featured-picker-desc">
-          Search by letter ID, sender, or recipient to find a letter.
-        </p>
+      {error && <div className="pub-error">{error}</div>}
 
-        <input
-          type="text"
-          className="featured-search-input"
-          placeholder="Search letters..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-
-        {searching && (
-          <div className="featured-searching">Searching...</div>
-        )}
-
-        {searchResults.length > 0 && (
-          <div className="featured-results">
-            {searchResults.map((letter) => (
-              <div key={letter.id} className="featured-result-row">
-                <div className="featured-result-info">
-                  <span className="featured-result-id">{letter.id.slice(0, 12)}...</span>
-                  <span className="featured-result-meta">
-                    {letter.sender || '?'} &rarr; {letter.recipient || '?'}
-                    {letter.collectionCode && ` (${letter.collectionCode})`}
-                  </span>
-                </div>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  loading={saving}
-                  onClick={() => handleSetFeatured(letter.id)}
-                >
-                  Set Featured
-                </Button>
-              </div>
-            ))}
+      {/* ── Block editor (uses public page shell for accurate rendering) ── */}
+      <div className="public-site-shell be-page-shell pe-shell">
+        <div className="body-layout">
+          <div
+            className={config.className}
+            style={{ width: '100%', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}
+          >
+            <BlockRenderer
+              blocks={blocks}
+              liveStats={liveStats}
+              siteSettings={siteSettings}
+              editable
+              onBlockChange={handleBlockChange}
+            />
           </div>
-        )}
-
-        {searchQuery.trim() && !searching && searchResults.length === 0 && (
-          <div className="featured-no-results">No letters found.</div>
-        )}
+        </div>
       </div>
     </div>
   );

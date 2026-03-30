@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { eq } from 'drizzle-orm';
 import { db, collections, contentPages, letters, siteSettings } from '../db/index.js';
+import { pickFeaturedLetter } from '../services/pick-featured-letter.js';
 
 const router = Router();
 
@@ -10,40 +11,79 @@ const router = Router();
 
 router.get('/content/featured-letter', async (req, res) => {
   try {
-    const [setting] = await db
+    // Helper: fetch full letter details for the featured letter response
+    const fetchLetterDetails = async (letterId: string) => {
+      const [letter] = await db
+        .select({
+          id: letters.id,
+          hook: letters.hook,
+          summary: letters.summary,
+          letterDate: letters.letterDate,
+          dateRaw: letters.dateRaw,
+          sender: letters.sender,
+          recipient: letters.recipient,
+          visibility: letters.visibility,
+          collectionId: letters.collectionId,
+          collectionCode: collections.collectionCode,
+          collectionTitle: collections.title,
+          type: letters.type,
+        })
+        .from(letters)
+        .leftJoin(collections, eq(letters.collectionId, collections.id))
+        .where(eq(letters.id, letterId))
+        .limit(1);
+      return letter ?? null;
+    };
+
+    // 1. Check for manual override
+    const [manualSetting] = await db
       .select()
       .from(siteSettings)
       .where(eq(siteSettings.key, 'featured_letter_id'))
       .limit(1);
 
-    if (!setting?.value) {
-      res.json(null);
-      return;
+    if (manualSetting?.value) {
+      const letter = await fetchLetterDetails(manualSetting.value);
+      if (letter?.id && letter.visibility === 'PUBLISHED') {
+        res.json({ ...letter, imageType: letter.type, source: 'manual' as const });
+        return;
+      }
+      // Manual pick is stale (unpublished/deleted) — clear it
+      await db.delete(siteSettings).where(eq(siteSettings.key, 'featured_letter_id'));
     }
 
-    const [letter] = await db
-      .select({
-        id: letters.id,
-        hook: letters.hook,
-        summary: letters.summary,
-        letterDate: letters.letterDate,
-        sender: letters.sender,
-        recipient: letters.recipient,
-        collectionId: letters.collectionId,
-        collectionCode: collections.collectionCode,
-        collectionTitle: collections.title,
-      })
-      .from(letters)
-      .leftJoin(collections, eq(letters.collectionId, collections.id))
-      .where(eq(letters.id, setting.value))
+    // 2. Check for persisted auto-pick
+    const [autoSetting] = await db
+      .select()
+      .from(siteSettings)
+      .where(eq(siteSettings.key, 'auto_featured_letter_id'))
       .limit(1);
 
-    if (!letter || !letter.id) {
-      res.json(null);
+    if (autoSetting?.value) {
+      const letter = await fetchLetterDetails(autoSetting.value);
+      if (letter?.id && letter.visibility === 'PUBLISHED') {
+        res.json({ ...letter, imageType: letter.type, source: 'auto' as const });
+        return;
+      }
+      // Auto pick is stale — clear it so we re-pick below
+      await db.delete(siteSettings).where(eq(siteSettings.key, 'auto_featured_letter_id'));
+    }
+
+    // 3. Auto-select and persist
+    const auto = await pickFeaturedLetter();
+    if (auto) {
+      await db
+        .insert(siteSettings)
+        .values({ key: 'auto_featured_letter_id', value: auto.id })
+        .onConflictDoUpdate({
+          target: siteSettings.key,
+          set: { value: auto.id, updatedAt: new Date() },
+        });
+      res.json({ ...auto, source: 'auto' as const });
       return;
     }
 
-    res.json(letter);
+    res.json(null);
   } catch (error) {
     req.log?.error({ error }, 'Failed to fetch featured letter');
     res.status(500).json({ error: 'Internal server error' });

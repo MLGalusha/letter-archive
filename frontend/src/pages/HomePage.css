@@ -131,7 +131,7 @@
 }
 
 .home-hero-feature-card:hover {
-  transform: translateY(-3px);
+  transform: none;
   box-shadow: 0 34px 62px rgba(29, 26, 20, 0.18);
 }
 

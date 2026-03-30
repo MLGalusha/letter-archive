@@ -161,23 +161,33 @@ describe('admin collections route integration', () => {
       },
     ]);
     // Single batched execute for stats across all collections
-    executeMock.mockResolvedValueOnce({ rows: 'all-stats' });
-    getRowsMock.mockReturnValueOnce([
-      {
-        collection_id: 'collection-9',
-        total: 4,
-        published: 3,
-        hidden: 1,
-        uploaded: 1,
-        transcribed: 1,
-        metadata_ready: 1,
-        reviewed: 1,
-        verified: 2,
-        min_date: '19470810',
-        max_date: '19470812',
-      },
-      // collection-10 has no rows — defaults to 0
-    ]);
+    executeMock
+      .mockResolvedValueOnce({ rows: 'all-stats' })
+      .mockResolvedValueOnce({ rows: 'type-counts' });
+    getRowsMock
+      .mockReturnValueOnce([
+        {
+          collection_id: 'collection-9',
+          total: 4,
+          published: 3,
+          hidden: 1,
+          uploaded: 1,
+          transcribed: 1,
+          metadata_ready: 1,
+          reviewed: 1,
+          verified: 2,
+          min_date: '19470810',
+          max_date: '19470812',
+          min_date_specific: '19470810',
+          max_date_specific: '19470812',
+        },
+        // collection-10 has no rows — defaults to 0
+      ])
+      .mockReturnValueOnce([
+        { collection_id: 'collection-9', type: 'L', cnt: 2 },
+        { collection_id: 'collection-9', type: 'C', cnt: 1 },
+        { collection_id: 'collection-9', type: 'P', cnt: 1 },
+      ]);
     // Single batched groupBy for page counts across all collections
     innerJoinMock.mockReturnValue({
       groupBy: vi.fn().mockResolvedValue([
@@ -209,8 +219,21 @@ describe('admin collections route integration', () => {
         verifiedCount: 2,
         minDate: '19470810',
         maxDate: '19470812',
+        minDateSpecific: true,
+        maxDateSpecific: true,
         letterPageCount: 7,
         extraContentCount: 2,
+        typeCounts: {
+          letter: 2,
+          photo: 1,
+          cover: 1,
+          telegram: 0,
+          card: 0,
+          ephemera: 0,
+          voice: 0,
+          article: 0,
+          diary: 0,
+        },
       },
       {
         id: 'collection-10',
@@ -227,8 +250,21 @@ describe('admin collections route integration', () => {
         verifiedCount: 0,
         minDate: null,
         maxDate: null,
+        minDateSpecific: false,
+        maxDateSpecific: false,
         letterPageCount: 0,
         extraContentCount: 0,
+        typeCounts: {
+          letter: 0,
+          photo: 0,
+          cover: 0,
+          telegram: 0,
+          card: 0,
+          ephemera: 0,
+          voice: 0,
+          article: 0,
+          diary: 0,
+        },
       },
     ]);
   });

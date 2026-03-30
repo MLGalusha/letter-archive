@@ -246,36 +246,6 @@ router.post('/persons/actions/:actionId/undo', async (req, res, next) => {
 // BIOGRAPHY ENDPOINTS
 // ============================================================================
 
-/**
- * POST /admin/entities/persons/:id/biography/generate - Generate AI biography
- */
-router.post('/persons/:id/biography/generate', async (req, res, next) => {
-  try {
-    const { generateBiography } = await import('../../ai/biography.js');
-    const person = await getCanonicalPersonById(req.params.id);
-    if (!person) {
-      res.status(404).json({ error: 'Person not found' });
-      return;
-    }
-
-    log.info({ personId: req.params.id }, 'Generating biography for person');
-    const result = await generateBiography(req.params.id);
-
-    // Save as AI_DRAFT
-    await updatePersonBiography(req.params.id, {
-      biography: result.biography,
-      hook: result.hook,
-      biographyStatus: 'AI_DRAFT',
-    });
-
-    const updated = await getCanonicalPersonById(req.params.id);
-    res.json({ person: updated });
-  } catch (error) {
-    log.error({ error, personId: req.params.id }, 'Failed to generate biography');
-    next(error);
-  }
-});
-
 const saveBiographySchema = z.object({
   biography: z.string(),
   hook: z.string().optional(),

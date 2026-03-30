@@ -9,7 +9,6 @@ import {
 import { transformLettersWithRelatedToDTO, type LetterWithRelations } from '../../dto/index.js';
 import { getRows } from '../../services/letter-queries.js';
 import { analyzeCollection } from '../../ai/analyze-collection.js';
-import { resolveCollectionEntities } from '../../services/entities/resolution.js';
 import { resolveRepresentativeLetterId } from '../../services/letters.js';
 import { propagateName } from '../../services/name-propagation.js';
 import { syncLetterParticipantsFromMetadata } from '../../services/entities/participant-sync.js';
@@ -387,27 +386,6 @@ router.post('/:code/analyze', async (req, res, next) => {
     }
 
     const result = await analyzeCollection(collection.id);
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * POST /admin/collections/:code/resolve-entities
- * Run collection-level entity resolution (merges, generics, fills, bios)
- */
-router.post('/:code/resolve-entities', async (req, res, next) => {
-  try {
-    const { code } = req.params;
-    const collection = await getCollectionByCode(code);
-
-    if (!collection) {
-      res.status(404).json({ error: 'Collection not found' });
-      return;
-    }
-
-    const result = await resolveCollectionEntities(collection.id);
     res.json(result);
   } catch (error) {
     next(error);

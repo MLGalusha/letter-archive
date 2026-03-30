@@ -16,7 +16,6 @@ import {
   searchPersons,
   createRelationship,
   deleteRelationship,
-  generateBiography,
   saveBiography,
   unverifyBiography,
   type PersonWithCount,
@@ -61,7 +60,6 @@ export default function PeoplePage() {
   // Biography state
   const [biographyText, setBiographyText] = useState("");
   const [biographyStatus, setBiographyStatus] = useState<string | undefined>(undefined);
-  const [generatingBiography, setGeneratingBiography] = useState(false);
   const [savingBiography, setSavingBiography] = useState(false);
 
   // Bulk selection state
@@ -452,25 +450,6 @@ export default function PeoplePage() {
     return role.replace(/_/g, " ");
   };
 
-  // Handle generate biography
-  const handleGenerateBiography = async () => {
-    if (!selectedPerson) return;
-    setGeneratingBiography(true);
-    try {
-      const response = await generateBiography(selectedPerson.id);
-      setBiographyText(response.person.biography || "");
-      setBiographyStatus(response.person.biographyStatus);
-      showToast("Biography generated", "success");
-    } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to generate biography",
-        "error"
-      );
-    } finally {
-      setGeneratingBiography(false);
-    }
-  };
-
   // Handle save biography
   const handleSaveBiography = async (verify = false) => {
     if (!selectedPerson) return;
@@ -809,14 +788,6 @@ export default function PeoplePage() {
                       </Button>
                     ) : (
                       <>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={handleGenerateBiography}
-                          disabled={generatingBiography}
-                        >
-                          {generatingBiography ? "Generating..." : "Generate"}
-                        </Button>
                         {biographyText && (
                           <>
                             <Button

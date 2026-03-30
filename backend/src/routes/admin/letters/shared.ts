@@ -28,6 +28,7 @@ export const updateLetterSchema = z.object({
   tags: z.array(z.string()).nullable().optional(),
   visibility: z.enum(['PUBLISHED', 'HIDDEN']).optional(),
   notes: z.string().nullable().optional(),
+  readingText: z.string().nullable().optional(),
 });
 
 export const versionBodySchema = z.object({
@@ -92,8 +93,4 @@ export const notesQuerySchema = z.object({
   search: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
-});
-
-export const entityResolutionBodySchema = z.object({
-  collectionCode: z.string().min(1),
 });

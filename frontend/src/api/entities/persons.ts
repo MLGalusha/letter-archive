@@ -85,10 +85,6 @@ export async function getPersonSameNameCandidates(
   );
 }
 
-export async function generateBiography(personId: string): Promise<{ person: CanonicalPerson }> {
-  return apiPost<{ person: CanonicalPerson }>(`/admin/entities/persons/${personId}/biography/generate`);
-}
-
 export async function saveBiography(
   personId: string,
   data: { biography: string; hook?: string; verify?: boolean },

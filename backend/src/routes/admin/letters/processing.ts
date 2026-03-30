@@ -3,7 +3,6 @@ import {
   abortProcessing,
   cancelActiveJob,
   clearQueue,
-  getEntityResolutionStatus,
   getProcessingStatus,
   getQueueStatus,
   pauseProcessing,
@@ -13,13 +12,11 @@ import {
   resumeProcessing,
   retryJob,
   startEntityExtractionProcessing,
-  startEntityResolutionProcessing,
   startMetadataProcessing,
   startTranscriptionProcessing,
 } from '../../../services/processing-queue.js';
 import { BadRequestError } from '../../../utils/response-helpers.js';
 import { requireString } from './helpers.js';
-import { entityResolutionBodySchema } from './shared.js';
 
 const router = Router();
 
@@ -63,20 +60,6 @@ router.post('/start-entities', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
-
-router.post('/start-entity-resolution', async (req, res, next) => {
-  try {
-    const { collectionCode } = entityResolutionBodySchema.parse(req.body || {});
-    const result = await startEntityResolutionProcessing(collectionCode);
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.get('/entity-resolution-status', (_req, res) => {
-  res.json(getEntityResolutionStatus());
 });
 
 router.post('/pause', (_req, res, next) => {

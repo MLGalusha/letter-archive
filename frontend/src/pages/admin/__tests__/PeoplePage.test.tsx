@@ -55,7 +55,6 @@ vi.mock('../../../api/entities', () => ({
   searchPersons: vi.fn(),
   createRelationship: vi.fn(),
   deleteRelationship: vi.fn(),
-  generateBiography: vi.fn(),
   saveBiography: vi.fn(),
   unverifyBiography: unverifyBiographyMock,
 }));

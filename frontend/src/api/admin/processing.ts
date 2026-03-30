@@ -48,12 +48,6 @@ export async function startEntityExtraction(
   return apiPost<{ message: string; total: number }>("/admin/processing/start-entities", options || {});
 }
 
-export async function startEntityResolution(
-  collectionCode: string,
-): Promise<{ message: string; total: number }> {
-  return apiPost<{ message: string; total: number }>("/admin/processing/start-entity-resolution", { collectionCode });
-}
-
 export async function pauseProcessing(): Promise<{ message: string }> {
   return apiPost<{ message: string }>("/admin/processing/pause");
 }

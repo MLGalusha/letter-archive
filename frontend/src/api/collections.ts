@@ -191,44 +191,6 @@ export async function analyzeCollection(code: string): Promise<CollectionAnalysi
   return apiPost<CollectionAnalysisResult>(`/admin/collections/${code}/analyze`);
 }
 
-/**
- * Entity resolution result types
- */
-export interface EntityResolutionResult {
-  collectionId: string;
-  phases: {
-    phase1: {
-      mergesExecuted: number;
-      mergesQueued: number;
-      genericsResolved: number;
-      genericsQueued: number;
-      genericsDeleted: number;
-      fillsApplied: number;
-      fillsQueued: number;
-      relationshipCorrections: number;
-      relationshipCorrectionsQueued: number;
-    };
-    phase2: {
-      relationshipsVerified: number;
-      correctionsApplied: number;
-      correctionsQueued: number;
-    };
-    phase3: {
-      biographiesGenerated: number;
-      biographiesSkipped: number;
-    };
-  };
-  isStub: boolean;
-  errors: string[];
-}
-
-/**
- * Run collection-level entity resolution (merges, generics, fills, bios)
- */
-export async function resolveCollectionEntities(code: string): Promise<EntityResolutionResult> {
-  return apiPost<EntityResolutionResult>(`/admin/collections/${code}/resolve-entities`);
-}
-
 // ============================================================================
 // COLLECTION PROFILE
 // ============================================================================

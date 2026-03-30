@@ -5,8 +5,6 @@ import { TIMING } from '../constants/timing.js';
 import { db, letters, collections } from '../db/index.js';
 import { processLetter, processMetadata } from '../pipeline/processor.js';
 import { runEntityExtractionOnly } from '../pipeline/metadataV2.js';
-import { resolveCollectionEntities, type ResolutionResult } from './entities/resolution.js';
-import { getCollectionByCode } from './collections.js';
 import { createLogger } from '../utils/logger.js';
 import { createNotification } from './notifications.js';
 import { TRANSCRIBABLE_TYPES } from './letter/shared.js';
@@ -21,7 +19,7 @@ export interface ProcessingState {
   isRunning: boolean;
   isPaused: boolean;
   shouldAbort: boolean;
-  currentJob: { letterId: string; type: 'transcription' | 'metadata' | 'entity_extraction' | 'entity_resolution' } | null;
+  currentJob: { letterId: string; type: 'transcription' | 'metadata' | 'entity_extraction' } | null;
   completed: number;
   failed: number;
   total: number;
@@ -548,7 +546,6 @@ export async function getQueueStatus() {
       recentClearedCount: recent.filter(r => r.status === 'CLEARED').length,
     },
     onDemandProcessing: processingState,
-    entityResolution: entityResolutionStatus,
   };
 }
 
@@ -697,112 +694,6 @@ export async function startEntityExtractionProcessing(options: ProcessingFilterO
   processLettersAsync(eligible.map(l => l.id), 'entity_extraction');
 
   return { message: 'Processing started', total: eligible.length };
-}
-
-/**
- * Start collection-level entity resolution (merges, generics, fills, bios).
- * This is a single collection-level job, not per-letter.
- */
-export async function startEntityResolutionProcessing(
-  collectionCode: string,
-): Promise<{ message: string; total: number }> {
-  if (processingState.isRunning) {
-    throw new ProcessingError('Processing already in progress', 400);
-  }
-
-  const collection = await getCollectionByCode(collectionCode);
-  if (!collection) {
-    return { message: 'Collection not found', total: 0 };
-  }
-
-  // Reset state for a single-job run
-  processingState = {
-    isRunning: true,
-    isPaused: false,
-    shouldAbort: false,
-    currentJob: { letterId: collection.id, type: 'entity_resolution' },
-    completed: 0,
-    failed: 0,
-    total: 1,
-    errors: [],
-    lastCompletedAt: null,
-  };
-
-  // Run in background (don't await)
-  processEntityResolutionAsync(collection.id, collectionCode);
-
-  return { message: `Entity resolution started for collection ${collectionCode}`, total: 1 };
-}
-
-/** Entity resolution status, held in memory. */
-export interface EntityResolutionStatus {
-  isRunning: boolean;
-  collectionCode: string | null;
-  startedAt: number | null;
-  completedAt: number | null;
-  result: ResolutionResult | null;
-  error: string | null;
-}
-
-let entityResolutionStatus: EntityResolutionStatus = {
-  isRunning: false,
-  collectionCode: null,
-  startedAt: null,
-  completedAt: null,
-  result: null,
-  error: null,
-};
-
-export function getEntityResolutionStatus(): EntityResolutionStatus {
-  return entityResolutionStatus;
-}
-
-export function getLastEntityResolutionResult(): ResolutionResult | null {
-  return entityResolutionStatus.result;
-}
-
-async function processEntityResolutionAsync(collectionId: string, collectionCode: string): Promise<void> {
-  log.info({ collectionId, collectionCode }, 'Starting async entity resolution');
-  const start = Date.now();
-
-  entityResolutionStatus = {
-    isRunning: true,
-    collectionCode,
-    startedAt: start,
-    completedAt: null,
-    result: null,
-    error: null,
-  };
-
-  try {
-    const result = await resolveCollectionEntities(collectionId);
-    entityResolutionStatus.result = result;
-    entityResolutionStatus.completedAt = Date.now();
-    processingState.completed = 1;
-    processingState.lastCompletedAt = Date.now();
-
-    if (result.errors.length > 0) {
-      processingState.errors = result.errors;
-    }
-
-    const duration = Date.now() - start;
-    log.info(
-      { collectionId, collectionCode, duration, phases: result.phases },
-      'Entity resolution completed',
-    );
-  } catch (error) {
-    processingState.failed = 1;
-    processingState.lastCompletedAt = Date.now();
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    processingState.errors.push(errorMessage);
-    entityResolutionStatus.error = errorMessage;
-    entityResolutionStatus.completedAt = Date.now();
-    log.error({ collectionId, collectionCode, err: error }, 'Entity resolution failed');
-  }
-
-  entityResolutionStatus.isRunning = false;
-  processingState.isRunning = false;
-  processingState.currentJob = null;
 }
 
 /**

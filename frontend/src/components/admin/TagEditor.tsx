@@ -21,7 +21,7 @@ function SenderTagView({ node }: ReactNodeViewProps) {
   }
   return (
     <NodeViewWrapper as="span" className="tag-sender">
-      <NodeViewContent as="span" />
+      <NodeViewContent<'span'> as="span" />
     </NodeViewWrapper>
   );
 }
@@ -37,7 +37,7 @@ function RecipientTagView({ node }: ReactNodeViewProps) {
   }
   return (
     <NodeViewWrapper as="span" className="tag-recipient">
-      <NodeViewContent as="span" />
+      <NodeViewContent<'span'> as="span" />
     </NodeViewWrapper>
   );
 }
@@ -198,8 +198,9 @@ export default function TagEditor({
       const serialized = serializeTaggedText(ed.getJSON());
 
       if (maxLength && serialized.length > maxLength) {
-        // Undo the last change if it would exceed maxLength
-        ed.commands.undo();
+        isUpdatingRef.current = true;
+        ed.commands.setContent(parseTaggedText(lastSerializedRef.current));
+        isUpdatingRef.current = false;
         return;
       }
 

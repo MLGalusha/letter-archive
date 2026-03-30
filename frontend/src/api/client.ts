@@ -338,8 +338,12 @@ export interface FeaturedLetter {
   sender: string | null;
   recipient: string | null;
   letterDate: string | null;
+  dateRaw?: string;
   collectionCode: string;
   collectionTitle: string | null;
+  imageUrl?: string | null;
+  imageType?: string;
+  source: 'manual' | 'auto';
 }
 
 export interface ContentPage {

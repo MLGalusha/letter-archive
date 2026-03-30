@@ -47,6 +47,15 @@ export const ALL_COLUMNS: ColumnDef[] = [
   { id: "updated", label: "Updated", defaultVisible: false },
   { id: "lastOpened", label: "Last Opened", defaultVisible: false },
   { id: "flag", label: "Flag", defaultVisible: true },
+  { id: "type_letter", label: "Letters (type)", defaultVisible: false },
+  { id: "type_cover", label: "Covers (type)", defaultVisible: false },
+  { id: "type_telegram", label: "Telegrams (type)", defaultVisible: false },
+  { id: "type_photo", label: "Photos (type)", defaultVisible: false },
+  { id: "type_card", label: "Cards (type)", defaultVisible: false },
+  { id: "type_ephemera", label: "Ephemera (type)", defaultVisible: false },
+  { id: "type_voice", label: "Voice (type)", defaultVisible: false },
+  { id: "type_article", label: "Articles (type)", defaultVisible: false },
+  { id: "type_diary", label: "Diary (type)", defaultVisible: false },
 ];
 
 export const DEFAULT_VISIBLE_COLUMNS = new Set<ColumnId>(

@@ -10,6 +10,18 @@ import {
 } from "../../../utils/letterContent";
 import type { ColumnId, ExtendedSortField, PendingChange } from "./types";
 
+const FILE_TYPE_COLUMNS: Array<{ id: ColumnId; label: string }> = [
+  { id: "type_letter", label: "Letters" },
+  { id: "type_cover", label: "Covers" },
+  { id: "type_telegram", label: "Telegrams" },
+  { id: "type_photo", label: "Photos" },
+  { id: "type_card", label: "Cards" },
+  { id: "type_ephemera", label: "Ephemera" },
+  { id: "type_voice", label: "Voice" },
+  { id: "type_article", label: "Articles" },
+  { id: "type_diary", label: "Diary" },
+];
+
 interface SortInfo {
   direction: "asc" | "desc";
   priority: number;
@@ -350,6 +362,9 @@ export default function RecentActivityTable({
                   </span>
                 </th>
               )}
+              {FILE_TYPE_COLUMNS.filter(col => visibleColumns.has(col.id)).map(col => (
+                <th key={col.id}>{col.label}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -485,6 +500,11 @@ export default function RecentActivityTable({
                       </button>
                     </td>
                   )}
+                  {FILE_TYPE_COLUMNS.filter(col => visibleColumns.has(col.id)).map(col => {
+                    const typeKey = col.id.replace('type_', '');
+                    const count = letter.images.filter((img) => img.type === typeKey).length;
+                    return <td key={col.id} className="count-cell">{count || '—'}</td>;
+                  })}
                 </tr>
               );
             })}

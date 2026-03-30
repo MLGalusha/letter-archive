@@ -41,7 +41,16 @@ export type ColumnId =
   | "visibility"
   | "created"
   | "updated"
-  | "lastOpened";
+  | "lastOpened"
+  | "type_letter"
+  | "type_cover"
+  | "type_telegram"
+  | "type_photo"
+  | "type_card"
+  | "type_ephemera"
+  | "type_voice"
+  | "type_article"
+  | "type_diary";
 
 export interface ColumnDef {
   id: ColumnId;

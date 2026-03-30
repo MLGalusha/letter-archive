@@ -88,7 +88,9 @@ router.get('/', async (_req, res, next) => {
         count(*) filter (where workflow = 'REVIEWED')::int as reviewed,
         count(*) filter (where transcript_status = 'VERIFIED' AND metadata_content_status = 'VERIFIED')::int as verified,
         min(date_raw) as min_date,
-        max(date_raw) as max_date
+        max(date_raw) as max_date,
+        min(date_raw) filter (where date_raw NOT LIKE '%X%') as min_date_specific,
+        max(date_raw) filter (where date_raw NOT LIKE '%X%') as max_date_specific
       FROM unique_groups
       GROUP BY collection_id
     `);
@@ -107,9 +109,24 @@ router.get('/', async (_req, res, next) => {
       .groupBy(letters.collectionId);
     const pageCountMap = new Map(pageCountRows.map(r => [r.collectionId, r]));
 
+    // Batch type counts query — count of letters by type per collection
+    const typeCountResult = await db.execute(sql`
+      SELECT collection_id, type, count(*)::int as cnt
+      FROM letters
+      GROUP BY collection_id, type
+    `);
+    const typeCountRows = getRows<{ collection_id: string; type: string; cnt: number }>(typeCountResult);
+    const typeCountMap = new Map<string, Record<string, number>>();
+    for (const row of typeCountRows) {
+      const collId = row.collection_id as string;
+      if (!typeCountMap.has(collId)) typeCountMap.set(collId, {});
+      typeCountMap.get(collId)![row.type as string] = Number(row.cnt);
+    }
+
     const collectionsWithStats = allCollections.map((collection) => {
       const stats = statsMap.get(collection.id) || {};
       const pageCounts = pageCountMap.get(collection.id);
+      const typeCounts = typeCountMap.get(collection.id) || {};
 
       return {
         ...collection,
@@ -121,10 +138,23 @@ router.get('/', async (_req, res, next) => {
         metadataReadyCount: Number(stats?.metadata_ready || 0),
         reviewedCount: Number(stats?.reviewed || 0),
         verifiedCount: Number(stats?.verified || 0),
-        minDate: stats?.min_date || null,
-        maxDate: stats?.max_date || null,
+        minDate: stats?.min_date_specific || stats?.min_date || null,
+        maxDate: stats?.max_date_specific || stats?.max_date || null,
+        minDateSpecific: Boolean(stats?.min_date_specific),
+        maxDateSpecific: Boolean(stats?.max_date_specific),
         letterPageCount: pageCounts?.letterPageCount || 0,
         extraContentCount: pageCounts?.extraContentCount || 0,
+        typeCounts: {
+          letter: typeCounts['L'] || 0,
+          photo: typeCounts['P'] || 0,
+          cover: typeCounts['C'] || 0,
+          telegram: typeCounts['T'] || 0,
+          card: typeCounts['N'] || 0,
+          ephemera: typeCounts['E'] || 0,
+          voice: typeCounts['V'] || 0,
+          article: typeCounts['A'] || 0,
+          diary: typeCounts['D'] || 0,
+        },
       };
     });
 
@@ -484,7 +514,7 @@ const updateProfileSchema = z.object({
     hook: z.string().max(500).nullable().optional(),
     biography: z.string().max(10000).nullable().optional(),
   })).optional(),
-  profileStatus: z.enum(['AI_DRAFT', 'EDITED', 'VERIFIED']).optional(),
+  profileStatus: z.enum(['EMPTY', 'AI_DRAFT', 'EDITED', 'VERIFIED']).optional(),
   highlightImageId: z.string().uuid().nullable().optional(),
 });
 
@@ -537,6 +567,20 @@ router.put('/:code/profile', async (req, res, next) => {
     }
     if (data.profileStatus !== undefined) updates.profileStatus = data.profileStatus;
     if (data.highlightImageId !== undefined) updates.highlightImageId = data.highlightImageId;
+
+    // Reset all profile fields when status is set to EMPTY
+    if (data.profileStatus === 'EMPTY') {
+      updates.hook = null;
+      updates.profileNarrative = null;
+      updates.profileCorrespondents = null;
+      updates.profileStartHereLetterId = null;
+      updates.profileStartHereReason = null;
+      updates.profileReadingPaths = null;
+      updates.profileGapAnalysis = null;
+      updates.profileThemes = null;
+      updates.highlightImageId = null;
+      updates.profileGeneratedAt = null;
+    }
 
     // Auto-upgrade status from AI_DRAFT to EDITED if content changes (but not if status is explicitly set)
     if (!data.profileStatus && collection.profileStatus === 'AI_DRAFT' && Object.keys(updates).length > 0) {

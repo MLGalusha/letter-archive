@@ -56,7 +56,9 @@ type DashboardView = 'letters' | 'collections';
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [dashboardView, setDashboardView] = useState<DashboardView>('letters');
+  const [dashboardView, setDashboardView] = useState<DashboardView>(
+    () => (localStorage.getItem('dashboard-view') as DashboardView) || 'letters',
+  );
   const [letters, setLetters] = useState<Letter[]>([]);
   const [loading, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -957,13 +959,13 @@ export default function AdminDashboard() {
       <div className="dashboard-view-toggle">
         <button
           className={`view-toggle-btn ${dashboardView === 'letters' ? 'active' : ''}`}
-          onClick={() => setDashboardView('letters')}
+          onClick={() => { setDashboardView('letters'); localStorage.setItem('dashboard-view', 'letters'); }}
         >
           Letters
         </button>
         <button
           className={`view-toggle-btn ${dashboardView === 'collections' ? 'active' : ''}`}
-          onClick={() => setDashboardView('collections')}
+          onClick={() => { setDashboardView('collections'); localStorage.setItem('dashboard-view', 'collections'); }}
         >
           Collections
         </button>

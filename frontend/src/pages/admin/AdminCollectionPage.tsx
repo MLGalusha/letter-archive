@@ -624,39 +624,193 @@ export default function AdminCollectionPage() {
 
         <div className="acp-editor-grid">
           <div className="acp-section acp-section--profile">
-            <div className="acp-section-heading">
-              <h2>Collection Profile</h2>
-              <p className="acp-hint">Edit the public-facing hook and summary together here. If nothing has been written or generated yet, both fields stay empty.</p>
-            </div>
+            {showLetterPicker ? (
+              <div className="acp-letter-picker-overlay" ref={pickerLayerRef} role="dialog" aria-label="Select featured letter">
+                <div className="acp-picker-toolbar">
+                  <label className="acp-picker-search-shell">
+                    <svg className="acp-picker-search-icon" viewBox="0 0 20 20" aria-hidden="true">
+                      <circle cx="8.75" cy="8.75" r="5.5" />
+                      <path d="m12.5 12.5 4.25 4.25" />
+                    </svg>
+                    <input
+                      type="search"
+                      className="acp-picker-search"
+                      placeholder="Search collection..."
+                      value={pickerSearch}
+                      onChange={(event) => setPickerSearch(event.target.value)}
+                    />
+                  </label>
 
-            <div className="acp-profile-block acp-profile-block--hook">
-              <h3 className="acp-profile-block-title">Collection Hook</h3>
-              <p className="acp-hint">A short teaser for the public collection page. Empty until you write one or generate a profile.</p>
-              <textarea
-                className="acp-textarea"
-                value={hook}
-                onChange={(e) => { setHook(e.target.value); setDirty(true); }}
-                rows={2}
-                placeholder="e.g. A wartime love story told through 27 letters..."
-                maxLength={500}
-              />
-              <p className="acp-hint">{hook.length} / 500</p>
-            </div>
+                  <div className="acp-picker-toolbar-actions">
+                    <div className="acp-picker-dropdown">
+                      <button
+                        type="button"
+                        className={`acp-picker-control${showPickerFilters ? ' is-active' : ''}`}
+                        aria-expanded={showPickerFilters}
+                        aria-haspopup="menu"
+                        onClick={() => {
+                          setShowPickerFilters((current) => {
+                            const next = !current;
+                            if (next) setShowPickerSort(false);
+                            return next;
+                          });
+                        }}
+                      >
+                        <svg viewBox="0 0 14 14" aria-hidden="true">
+                          <path d="M1.5 2.5h11L8 7.5v4l-2 1.5V7.5z" />
+                        </svg>
+                        <span>Filter</span>
+                        {pickerActiveFilterCount > 0 && (
+                          <span className="acp-picker-control-count">{pickerActiveFilterCount}</span>
+                        )}
+                      </button>
+                      {showPickerFilters && (
+                        <div className="acp-picker-menu acp-picker-menu--filters" role="menu">
+                          <div className="acp-picker-menu-header">
+                            <span className="acp-picker-menu-kicker">Media Type</span>
+                            <button
+                              type="button"
+                              className="acp-picker-menu-reset"
+                              onClick={() => setPickerFormat('all')}
+                              disabled={pickerFormat === 'all'}
+                            >
+                              Reset
+                            </button>
+                          </div>
+                          <div className="acp-picker-filter-list">
+                            {pickerFormatOptions.map((option) => (
+                              <button
+                                key={option.value}
+                                type="button"
+                                className={`acp-picker-filter-chip${option.value === pickerFormat ? ' is-active' : ''}`}
+                                onClick={() => {
+                                  setPickerFormat(option.value);
+                                  setShowPickerFilters(false);
+                                }}
+                              >
+                                <span>{option.label}</span>
+                                <span className="acp-picker-filter-count">{option.count}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
-            <div className="acp-profile-block acp-profile-block--summary">
-              <div className="acp-section-heading">
-                <h3 className="acp-profile-block-title">Collection Summary</h3>
-                <p className="acp-hint">Narrative shown on the public collection page. Empty until you write one or generate a profile.</p>
+                    <div className="acp-picker-dropdown">
+                      <button
+                        type="button"
+                        className={`acp-picker-control${showPickerSort ? ' is-active' : ''}`}
+                        aria-expanded={showPickerSort}
+                        aria-haspopup="menu"
+                        onClick={() => {
+                          setShowPickerSort((current) => {
+                            const next = !current;
+                            if (next) setShowPickerFilters(false);
+                            return next;
+                          });
+                        }}
+                      >
+                        <span>Sort</span>
+                        <span className="acp-picker-control-value">{pickerSortLabel}</span>
+                      </button>
+                      {showPickerSort && (
+                        <div className="acp-picker-menu acp-picker-menu--sort" role="menu">
+                          {COLLECTION_PICKER_SORT_OPTIONS.map((option) => {
+                            const isActive = option.value === pickerSort;
+                            const optionOrder = isActive ? pickerSortOrder : option.defaultOrder;
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                className={`acp-picker-sort-option${isActive ? ' is-active' : ''}`}
+                                onClick={() => handlePickerSortChange(option)}
+                              >
+                                <span className="acp-picker-sort-copy">
+                                  <span className="acp-picker-sort-title">{option.label}</span>
+                                  <span className="acp-picker-sort-meta">
+                                    {getCollectionPickerSortLabel(option.value, optionOrder)}
+                                  </span>
+                                </span>
+                                <span className="acp-picker-sort-arrow" aria-hidden="true">
+                                  {optionOrder === 'asc' ? '\u2191' : '\u2193'}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="acp-picker-toolbar-footer">
+                  <p className="acp-picker-results">{pickerResultsLabel}</p>
+                  {pickerActiveFormat && pickerActiveFormat.value !== 'all' && (
+                    <button
+                      type="button"
+                      className="acp-picker-inline-clear"
+                      onClick={() => setPickerFormat('all')}
+                    >
+                      Showing {pickerActiveFormat.label.toLowerCase()}
+                    </button>
+                  )}
+                </div>
+
+                <div className="letter-grid acp-picker-grid">
+                  {filteredLetters.map((letter) => (
+                    <div
+                      key={letter.id}
+                      className={`acp-picker-card${letter.id === featuredLetterId ? ' acp-picker-card--selected' : ''}`}
+                    >
+                      <LetterCard
+                        card={buildLetterCardData(letter)}
+                        onClick={handleSelectFeaturedLetter}
+                      />
+                    </div>
+                  ))}
+                  {filteredLetters.length === 0 && (
+                    <p className="acp-picker-empty">No letters match the current search or filter.</p>
+                  )}
+                </div>
               </div>
-              <textarea
-                className="acp-textarea"
-                value={narrative}
-                onChange={(e) => { setNarrative(e.target.value); setDirty(true); }}
-                rows={12}
-                placeholder="Write or generate a collection summary..."
-              />
-              <p className="acp-hint">{narrative.length} characters</p>
-            </div>
+            ) : (
+              <>
+                <div className="acp-section-heading">
+                  <h2>Collection Profile</h2>
+                  <p className="acp-hint">Edit the public-facing hook and summary together here. If nothing has been written or generated yet, both fields stay empty.</p>
+                </div>
+
+                <div className="acp-profile-block acp-profile-block--hook">
+                  <h3 className="acp-profile-block-title">Collection Hook</h3>
+                  <p className="acp-hint">A short teaser for the public collection page. Empty until you write one or generate a profile.</p>
+                  <textarea
+                    className="acp-textarea"
+                    value={hook}
+                    onChange={(e) => { setHook(e.target.value); setDirty(true); }}
+                    rows={2}
+                    placeholder="Write or generate a collection hook..."
+                    maxLength={500}
+                  />
+                  <p className="acp-hint">{hook.length} / 500</p>
+                </div>
+
+                <div className="acp-profile-block acp-profile-block--summary">
+                  <div className="acp-section-heading">
+                    <h3 className="acp-profile-block-title">Collection Summary</h3>
+                    <p className="acp-hint">Narrative shown on the public collection page. Empty until you write one or generate a profile.</p>
+                  </div>
+                  <textarea
+                    className="acp-textarea"
+                    value={narrative}
+                    onChange={(e) => { setNarrative(e.target.value); setDirty(true); }}
+                    rows={12}
+                    placeholder="Write or generate a collection summary..."
+                  />
+                  <p className="acp-hint">{narrative.length} characters</p>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="acp-section acp-section--picker acp-section--featured">
@@ -671,7 +825,7 @@ export default function AdminCollectionPage() {
                 value={description}
                 onChange={(e) => { setDescription(e.target.value); setDescriptionDirty(true); setDirty(true); }}
                 rows={6}
-                placeholder="e.g. Twenty-seven letters from an American serviceman to the woman he loved in England..."
+                placeholder="Write or add collection notes..."
                 maxLength={2000}
               />
             </div>
@@ -710,161 +864,6 @@ export default function AdminCollectionPage() {
             )}
           </div>
         </div>
-
-        {/* Letter picker — spans full width below the editor grid */}
-        {showLetterPicker && (
-          <div className="acp-section acp-section--picker" ref={pickerLayerRef}>
-            <div className="acp-letter-picker-overlay" role="dialog" aria-label="Select featured letter">
-              <div className="acp-picker-toolbar">
-                <label className="acp-picker-search-shell">
-                  <svg className="acp-picker-search-icon" viewBox="0 0 20 20" aria-hidden="true">
-                    <circle cx="8.75" cy="8.75" r="5.5" />
-                    <path d="m12.5 12.5 4.25 4.25" />
-                  </svg>
-                  <input
-                    type="search"
-                    className="acp-picker-search"
-                    placeholder="Search sender, recipient, date, hook..."
-                    value={pickerSearch}
-                    onChange={(event) => setPickerSearch(event.target.value)}
-                  />
-                </label>
-
-                <div className="acp-picker-toolbar-actions">
-                  <div className="acp-picker-dropdown">
-                    <button
-                      type="button"
-                      className={`acp-picker-control${showPickerFilters ? ' is-active' : ''}`}
-                      aria-expanded={showPickerFilters}
-                      aria-haspopup="menu"
-                      onClick={() => {
-                        setShowPickerFilters((current) => {
-                          const next = !current;
-                          if (next) setShowPickerSort(false);
-                          return next;
-                        });
-                      }}
-                    >
-                      <svg viewBox="0 0 14 14" aria-hidden="true">
-                        <path d="M1.5 2.5h11L8 7.5v4l-2 1.5V7.5z" />
-                      </svg>
-                      <span>Filter</span>
-                      {pickerActiveFilterCount > 0 && (
-                        <span className="acp-picker-control-count">{pickerActiveFilterCount}</span>
-                      )}
-                    </button>
-                          {showPickerFilters && (
-                            <div className="acp-picker-menu acp-picker-menu--filters" role="menu">
-                              <div className="acp-picker-menu-header">
-                                <span className="acp-picker-menu-kicker">Media Type</span>
-                                <button
-                                  type="button"
-                                  className="acp-picker-menu-reset"
-                                  onClick={() => setPickerFormat('all')}
-                                  disabled={pickerFormat === 'all'}
-                                >
-                                  Reset
-                                </button>
-                              </div>
-                              <div className="acp-picker-filter-list">
-                                {pickerFormatOptions.map((option) => (
-                                  <button
-                                    key={option.value}
-                                    type="button"
-                                    className={`acp-picker-filter-chip${option.value === pickerFormat ? ' is-active' : ''}`}
-                                    onClick={() => {
-                                      setPickerFormat(option.value);
-                                      setShowPickerFilters(false);
-                                    }}
-                                  >
-                                    <span>{option.label}</span>
-                                    <span className="acp-picker-filter-count">{option.count}</span>
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="acp-picker-dropdown">
-                          <button
-                            type="button"
-                            className={`acp-picker-control${showPickerSort ? ' is-active' : ''}`}
-                            aria-expanded={showPickerSort}
-                            aria-haspopup="menu"
-                            onClick={() => {
-                              setShowPickerSort((current) => {
-                                const next = !current;
-                                if (next) setShowPickerFilters(false);
-                                return next;
-                              });
-                            }}
-                          >
-                            <span>Sort</span>
-                            <span className="acp-picker-control-value">{pickerSortLabel}</span>
-                          </button>
-                          {showPickerSort && (
-                            <div className="acp-picker-menu acp-picker-menu--sort" role="menu">
-                              {COLLECTION_PICKER_SORT_OPTIONS.map((option) => {
-                                const isActive = option.value === pickerSort;
-                                const optionOrder = isActive ? pickerSortOrder : option.defaultOrder;
-                                return (
-                                  <button
-                                    key={option.value}
-                                    type="button"
-                                    className={`acp-picker-sort-option${isActive ? ' is-active' : ''}`}
-                                    onClick={() => handlePickerSortChange(option)}
-                                  >
-                                    <span className="acp-picker-sort-copy">
-                                      <span className="acp-picker-sort-title">{option.label}</span>
-                                      <span className="acp-picker-sort-meta">
-                                        {getCollectionPickerSortLabel(option.value, optionOrder)}
-                                      </span>
-                                    </span>
-                                    <span className="acp-picker-sort-arrow" aria-hidden="true">
-                                      {optionOrder === 'asc' ? '↑' : '↓'}
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-              <div className="acp-picker-toolbar-footer">
-                <p className="acp-picker-results">{pickerResultsLabel}</p>
-                {pickerActiveFormat && pickerActiveFormat.value !== 'all' && (
-                  <button
-                    type="button"
-                    className="acp-picker-inline-clear"
-                    onClick={() => setPickerFormat('all')}
-                  >
-                    Showing {pickerActiveFormat.label.toLowerCase()}
-                  </button>
-                )}
-              </div>
-
-              <div className="letter-grid acp-picker-grid">
-                {filteredLetters.map((letter) => (
-                  <div
-                    key={letter.id}
-                    className={`acp-picker-card${letter.id === featuredLetterId ? ' acp-picker-card--selected' : ''}`}
-                  >
-                    <LetterCard
-                      card={buildLetterCardData(letter)}
-                      onClick={handleSelectFeaturedLetter}
-                    />
-                  </div>
-                ))}
-                {filteredLetters.length === 0 && (
-                  <p className="acp-picker-empty">No letters match the current search or filter.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Correspondents — collection-scoped rename controls */}
         <div className="acp-section acp-section--correspondents">

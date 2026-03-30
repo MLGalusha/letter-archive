@@ -37,11 +37,26 @@ export interface AdminCollectionInfo extends CollectionInfo {
   extraContentCount: number;
   // Verification and date range stats
   verifiedCount: number;      // Letters with both transcript AND metadata verified
-  minDate: string | null;     // Earliest dateRaw (YYYYMMDD format)
-  maxDate: string | null;     // Latest dateRaw (YYYYMMDD format)
+  minDate: string | null;     // Earliest dateRaw (YYYYMMDD format), prefers specific dates
+  maxDate: string | null;     // Latest dateRaw (YYYYMMDD format), prefers specific dates
+  minDateSpecific: boolean;   // true if minDate has no X placeholders
+  maxDateSpecific: boolean;   // true if maxDate has no X placeholders
   // Profile
   profileStatus?: ContentStatus;
   hook?: string | null;
+  highlightImageId?: string | null;
+  // Per-type counts
+  typeCounts: {
+    letter: number;
+    photo: number;
+    cover: number;
+    telegram: number;
+    card: number;
+    ephemera: number;
+    voice: number;
+    article: number;
+    diary: number;
+  };
 }
 
 let cachedPublicCollections: CollectionInfo[] | null = null;
@@ -356,11 +371,16 @@ export async function updateCollectionProfile(
     profileGapAnalysis?: GapAnalysis[];
     profileThemes?: ThemeGroup[];
     profileCorrespondents?: CollectionProfileCorrespondent[];
-    profileStatus?: 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+    profileStatus?: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
     highlightImageId?: string | null;
   },
 ): Promise<AdminCollectionInfo> {
   return apiPut<AdminCollectionInfo>(`/admin/collections/${code}/profile`, data);
+}
+
+/** Reset a collection profile back to EMPTY, clearing all generated content */
+export async function resetCollectionProfile(code: string): Promise<AdminCollectionInfo> {
+  return updateCollectionProfile(code, { profileStatus: 'EMPTY' });
 }
 
 export async function renameCollectionCorrespondent(

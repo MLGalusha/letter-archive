@@ -264,7 +264,7 @@
 .acp-section--profile {
   display: grid;
   gap: 1.15rem;
-  align-content: start;
+  grid-template-rows: auto auto 1fr;
   padding: 1.5rem;
 }
 
@@ -277,6 +277,12 @@
 .acp-profile-block--summary {
   padding-top: 1.15rem;
   border-top: 1px solid rgba(217, 207, 191, 0.9);
+  display: flex;
+  flex-direction: column;
+}
+
+.acp-profile-block--summary .acp-textarea {
+  flex: 1;
 }
 
 .acp-profile-block-header,
@@ -307,7 +313,7 @@
 .acp-section--featured {
   padding: 1.5rem;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: 1fr auto;
   gap: 0.85rem;
 }
 
@@ -321,6 +327,11 @@
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
+  flex: 1;
+}
+
+.acp-featured-description .acp-textarea {
+  flex: 1;
 }
 
 .acp-featured-desc-header {
@@ -739,7 +750,7 @@
   --shadow-soft: 0 4px 16px rgba(29, 26, 20, 0.08);
   --shadow: 0px 2px 2px hsla(0, 0%, 0%, 0.07), 0px 4px 4px hsla(0, 0%, 0%, 0.15);
 
-  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.7rem;
   align-items: start;
   min-height: 16rem;

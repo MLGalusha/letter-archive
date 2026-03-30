@@ -71,7 +71,7 @@ interface RecentActivityTableProps {
   showColumnMenu: boolean;
   onToggleColumnMenu: () => void;
   onToggleColumn: (id: ColumnId) => void;
-  columnMenuRef: RefObject<HTMLDivElement | null>;
+  columnMenuRef: RefObject<HTMLTableCellElement | null>;
   onToggleFlag: (letterId: string, flagged: boolean) => void;
 }
 

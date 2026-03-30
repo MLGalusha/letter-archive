@@ -45,7 +45,6 @@ const COLLECTION_COLUMNS: Array<{ id: CollectionColumnId; label: string; default
 ];
 
 const COLLECTION_COLUMN_STORAGE_KEY = 'collection-visible-columns';
-const COLLECTION_COLUMN_KNOWN_KEY = 'collection-known-columns';
 
 function loadVisibleColumns(): Set<CollectionColumnId> {
   try {

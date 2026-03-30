@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
 import { Button } from '../../components/common';
 import Icon from '../../components/common/Icon';
@@ -191,7 +191,6 @@ function buildCollectionCorrespondents(
 
 export default function AdminCollectionPage() {
   const { code } = useParams<{ code: string }>();
-  const navigate = useNavigate();
   const { showToast } = useToast();
 
   const [collection, setCollection] = useState<CollectionWithLetters | null>(null);
@@ -306,7 +305,6 @@ export default function AdminCollectionPage() {
   );
 
   const publishedLetterCount = publishedLetters.length;
-  const actualLetterCount = collection?.letters.length ?? collection?.letterCount ?? 0;
   const publishedStats = useMemo(() => computeCollectionStats(publishedLetters), [publishedLetters]);
 
   const dialogCorrespondents = useMemo(

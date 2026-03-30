@@ -74,7 +74,7 @@ describe("RecentActivityTable", () => {
         showColumnMenu={false}
         onToggleColumnMenu={vi.fn()}
         onToggleColumn={vi.fn()}
-        columnMenuRef={createRef<HTMLDivElement>()}
+        columnMenuRef={createRef<HTMLTableCellElement>()}
         onToggleFlag={vi.fn()}
       />,
     );

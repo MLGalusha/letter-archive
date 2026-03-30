@@ -41,7 +41,7 @@ export function useDashboardColumns() {
     return DEFAULT_VISIBLE_COLUMNS;
   });
   const [showColumnMenu, setShowColumnMenu] = useState(false);
-  const columnMenuRef = useRef<HTMLDivElement>(null);
+  const columnMenuRef = useRef<HTMLTableCellElement>(null);
 
   useEffect(() => {
     try {

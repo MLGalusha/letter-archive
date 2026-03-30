@@ -497,7 +497,12 @@ export default function LetterDetailPage() {
               </button>
             </div>
 
-            {letter.transcript.pages.length > 0 ? (
+            {transcriptMode === "reading" && letter.readingText ? (
+              /* ── Saved reading text — render exactly as admin set it ── */
+              <div className={`transcript-text transcript-reading-saved${shortLineClass}`}>
+                {letter.readingText}
+              </div>
+            ) : letter.transcript.pages.length > 0 ? (
               transcriptMode === "reading" && readingSegments ? (
                 /* ── Combined reading view — seamless across pages ── */
                 <div className="transcript-pages-combined">

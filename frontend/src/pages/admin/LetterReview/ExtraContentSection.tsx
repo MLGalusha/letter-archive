@@ -22,7 +22,7 @@ interface ExtraContentSectionProps {
   onExtraContentDoubleClick: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-export const ExtraContentSection: React.FC<ExtraContentSectionProps> = ({
+export const ExtraContentSection = React.memo(function ExtraContentSection({
   letter,
   extraContent,
   extraContentTranscribing,
@@ -38,7 +38,7 @@ export const ExtraContentSection: React.FC<ExtraContentSectionProps> = ({
   onExtraContentKeyDown,
   onExtraContentClick,
   onExtraContentDoubleClick,
-}) => {
+}: ExtraContentSectionProps) {
   return (
     <div className="editor-section extra-content-section">
       <div className="editor-header">
@@ -142,4 +142,6 @@ export const ExtraContentSection: React.FC<ExtraContentSectionProps> = ({
       </div>
     </div>
   );
-};
+});
+
+ExtraContentSection.displayName = "ExtraContentSection";

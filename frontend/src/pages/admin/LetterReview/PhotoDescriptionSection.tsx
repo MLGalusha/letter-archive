@@ -23,7 +23,7 @@ interface PhotoDescriptionSectionProps {
   onPhotoDescriptionDoubleClick: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-export function PhotoDescriptionSection({
+export const PhotoDescriptionSection = React.memo(function PhotoDescriptionSection({
   letter,
   photoDescription,
   photoDescriptionGenerating,
@@ -148,4 +148,6 @@ export function PhotoDescriptionSection({
       </div>
     </div>
   );
-}
+});
+
+PhotoDescriptionSection.displayName = "PhotoDescriptionSection";

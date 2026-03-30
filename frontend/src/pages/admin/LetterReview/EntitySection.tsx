@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { Icon } from "../../../components/common";
 import "./EntitySection.css";
 
@@ -368,12 +368,15 @@ function PlaceCard({
 // EntitySection (exported)
 // ---------------------------------------------------------------------------
 
-export default function EntitySection({
+const EntitySection = memo(function EntitySection({
   entityExtractionJson,
   reExtractState = "idle",
   onReExtractEntities,
 }: EntitySectionProps) {
-  const data = parseEntityData(entityExtractionJson);
+  const data = useMemo(
+    () => parseEntityData(entityExtractionJson),
+    [entityExtractionJson],
+  );
   if (!data) return null;
 
   const totalPeople = data.people.length;
@@ -449,4 +452,8 @@ export default function EntitySection({
       )}
     </div>
   );
-}
+});
+
+EntitySection.displayName = "EntitySection";
+
+export default EntitySection;

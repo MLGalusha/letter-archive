@@ -1,4 +1,5 @@
 import {
+  startTransition,
   useCallback,
   useState,
   type Dispatch,
@@ -67,10 +68,12 @@ export function useTranscriptEditing({
 
   const handleTranscriptInput = useCallback(
     (newText: string) => {
-      setTranscript(newText);
-      setHasTranscriptChanges(
-        originalTranscriptText !== null && newText !== originalTranscriptText,
-      );
+      startTransition(() => {
+        setTranscript(newText);
+        setHasTranscriptChanges(
+          originalTranscriptText !== null && newText !== originalTranscriptText,
+        );
+      });
       void triggerAutoSave({ transcriptionText: newText });
     },
     [originalTranscriptText, setTranscript, triggerAutoSave],

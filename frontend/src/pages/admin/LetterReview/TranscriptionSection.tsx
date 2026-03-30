@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, type RefObject, type CSSProperties } from "react";
+import { memo, useState, useMemo, useEffect, useCallback, type RefObject, type CSSProperties } from "react";
 import { Icon } from "../../../components/common";
 import { countMarkers, highlightTranscriptMarkers, type MarkerType } from "../../../utils/transcriptHighlight";
 import SpacingEditor from "./SpacingEditor";
@@ -43,14 +43,12 @@ interface TranscriptionSectionProps {
 
 const hasContent = (text: string) => text.trim().length > 0;
 
-export default function TranscriptionSection({
+const TranscriptionSection = memo(function TranscriptionSection({
   letter,
   transcriptText,
   letterTranscribeState,
   letterTranscribeMessage,
   isTranscriptEditing,
-  hasTranscriptChanges: _hasTranscriptChanges,
-  originalTranscriptText: _originalTranscriptText,
   transcriptFontSize,
   showEditTooltip,
   tooltipPosition,
@@ -68,11 +66,12 @@ export default function TranscriptionSection({
   onReaderTextChange,
 }: TranscriptionSectionProps) {
   const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
+  const showReadingView = viewMode === "preview" && hasContent(transcriptText);
 
-  const changeViewMode = (mode: "edit" | "preview") => {
+  const changeViewMode = useCallback((mode: "edit" | "preview") => {
     setViewMode(mode);
     onViewModeChange?.(mode);
-  };
+  }, [onViewModeChange]);
 
   // Re-populate editor when switching back from preview to edit.
   useEffect(() => {
@@ -83,6 +82,25 @@ export default function TranscriptionSection({
       }
     }
   }, [viewMode, transcriptText, editorRef]);
+
+  useEffect(() => {
+    if (!showReadingView) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        changeViewMode("edit");
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showReadingView, changeViewMode]);
 
   const markerCounts = useMemo(
     () => countMarkers(transcriptText),
@@ -183,35 +201,24 @@ export default function TranscriptionSection({
         </div>
       </div>
 
-      {viewMode === "preview" && hasContent(transcriptText) ? (
-        /* ── Spacing editor — interactive reading view ── */
-        <div className="editor-container">
-          <SpacingEditor
-            value={readerText}
-            onChange={onReaderTextChange}
-          />
-        </div>
-      ) : (
-        /* ── Edit mode ── */
+      <div
+        className="editor-container"
+        onClick={onTranscriptClick}
+        onDoubleClick={onTranscriptDoubleClick}
+      >
         <div
-          className="editor-container"
-          onClick={onTranscriptClick}
-          onDoubleClick={onTranscriptDoubleClick}
-        >
-          <div
-            ref={editorRef}
-            className={`transcript-editor ${letter.transcriptStatus === "VERIFIED" && !isTranscriptEditing ? "verified" : ""}`}
-            contentEditable={letter.transcriptStatus !== "VERIFIED" || isTranscriptEditing}
-            suppressContentEditableWarning
-            data-placeholder=""
-            style={{ "--transcript-font-size": transcriptFontSize } as CSSProperties}
-            onInput={(e) => {
-              onTranscriptInput(e.currentTarget.innerText);
-            }}
-            onKeyDown={onEditorKeyDown}
-          />
-        </div>
-      )}
+          ref={editorRef}
+          className={`transcript-editor ${letter.transcriptStatus === "VERIFIED" && !isTranscriptEditing ? "verified" : ""}`}
+          contentEditable={letter.transcriptStatus !== "VERIFIED" || isTranscriptEditing}
+          suppressContentEditableWarning
+          data-placeholder=""
+          style={{ "--transcript-font-size": transcriptFontSize } as CSSProperties}
+          onInput={(e) => {
+            onTranscriptInput(e.currentTarget.innerText);
+          }}
+          onKeyDown={onEditorKeyDown}
+        />
+      </div>
 
       {showEditTooltip && (
         <div
@@ -225,6 +232,54 @@ export default function TranscriptionSection({
           Verified. Double-click to edit and unverify.
         </div>
       )}
+
+      {showReadingView && (
+        <div
+          className="reading-view-overlay"
+          onMouseDown={() => changeViewMode("edit")}
+        >
+          <div
+            className="reading-view-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reading-view-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="reading-view-modal-header">
+              <div className="reading-view-modal-copy">
+                <p className="reading-view-modal-eyebrow">Reader spacing</p>
+                <h3 id="reading-view-title">Reading view</h3>
+                <p className="reading-view-modal-note">
+                  This column matches the public transcript width.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="reading-view-close-btn"
+                onClick={() => changeViewMode("edit")}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="reading-view-modal-body">
+              <div className="reading-view-modal-article">
+                <div className="reading-view-modal-label">Transcript</div>
+                <div className="reading-view-modal-column">
+                  <SpacingEditor
+                    value={readerText}
+                    onChange={onReaderTextChange}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+});
+
+TranscriptionSection.displayName = "TranscriptionSection";
+
+export default TranscriptionSection;

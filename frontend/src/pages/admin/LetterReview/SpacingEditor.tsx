@@ -1,51 +1,35 @@
-import { useRef, useCallback, useEffect } from "react";
+import { memo, useRef, useCallback, useEffect } from "react";
 
 interface SpacingEditorProps {
   /** The reading view text (independent from raw transcript) */
   value: string;
   /** Called when the user modifies spacing */
   onChange: (text: string) => void;
+  /** Optional extra class for layout variants */
+  className?: string;
 }
 
 /**
  * A plain textarea for the reading view. The user can only modify
  * whitespace — word content and order are locked by the edit view.
  */
-export default function SpacingEditor({ value, onChange }: SpacingEditorProps) {
+const dispatchInputEvent = (textarea: HTMLTextAreaElement) => {
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
+};
+
+const replaceSelection = (textarea: HTMLTextAreaElement, nextText: string) => {
+  const start = textarea.selectionStart ?? 0;
+  const end = textarea.selectionEnd ?? start;
+  textarea.setRangeText(nextText, start, end, "end");
+  dispatchInputEvent(textarea);
+};
+
+const SpacingEditor = memo(function SpacingEditor({
+  value,
+  onChange,
+  className = "",
+}: SpacingEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const cloneRef = useRef<HTMLTextAreaElement | null>(null);
-
-  // Auto-resize via offscreen clone to avoid scroll jumps (defined first so effects can use it)
-  const autoResize = useCallback((el: HTMLTextAreaElement) => {
-    if (!cloneRef.current) {
-      cloneRef.current = document.createElement("textarea");
-      const s = cloneRef.current.style;
-      s.position = "absolute";
-      s.top = "-9999px";
-      s.left = "-9999px";
-      s.visibility = "hidden";
-      s.height = "auto";
-      s.overflow = "hidden";
-      document.body.appendChild(cloneRef.current);
-    }
-
-    const clone = cloneRef.current;
-    const cs = getComputedStyle(el);
-    clone.style.width = cs.width;
-    clone.style.padding = cs.padding;
-    clone.style.border = cs.border;
-    clone.style.font = cs.font;
-    clone.style.lineHeight = cs.lineHeight;
-    clone.style.letterSpacing = cs.letterSpacing;
-    clone.style.wordSpacing = cs.wordSpacing;
-    clone.style.boxSizing = cs.boxSizing;
-    clone.value = el.value;
-
-    const needed = clone.scrollHeight;
-    if (Math.abs(el.offsetHeight - needed) > 1) {
-      el.style.height = needed + "px";
-    }
-  }, []);
 
   // Sync value into textarea only when it changes externally
   const lastValueRef = useRef(value);
@@ -60,26 +44,14 @@ export default function SpacingEditor({ value, onChange }: SpacingEditorProps) {
     ta.value = value;
     ta.selectionStart = ta.selectionEnd = Math.min(cursor, value.length);
     lastValueRef.current = value;
-    autoResize(ta);
-  }, [value, autoResize]);
+  }, [value]);
 
   // Initial setup
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.value = value;
-      autoResize(textareaRef.current);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Clean up clone on unmount
-  useEffect(() => {
-    return () => {
-      if (cloneRef.current) {
-        document.body.removeChild(cloneRef.current);
-        cloneRef.current = null;
-      }
-    };
-  }, []);
+  }, [value]);
 
   // ── Input filtering ──────────────────────────────────────────────
 
@@ -96,7 +68,7 @@ export default function SpacingEditor({ value, onChange }: SpacingEditorProps) {
     // Tab inserts spaces
     if (e.key === "Tab") {
       e.preventDefault();
-      document.execCommand("insertText", false, "    ");
+      replaceSelection(ta, "    ");
       return;
     }
 
@@ -133,7 +105,7 @@ export default function SpacingEditor({ value, onChange }: SpacingEditorProps) {
         e.preventDefault();
         ta.selectionStart = selectionStart! - 1;
         ta.selectionEnd = selectionStart!;
-        document.execCommand("insertText", false, " ");
+        replaceSelection(ta, " ");
         return;
       }
 
@@ -170,7 +142,7 @@ export default function SpacingEditor({ value, onChange }: SpacingEditorProps) {
         e.preventDefault();
         ta.selectionStart = selectionStart!;
         ta.selectionEnd = selectionStart! + 1;
-        document.execCommand("insertText", false, " ");
+        replaceSelection(ta, " ");
         return;
       }
 
@@ -206,15 +178,14 @@ export default function SpacingEditor({ value, onChange }: SpacingEditorProps) {
   const handleInput = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
-    autoResize(ta);
     lastValueRef.current = ta.value;
     onChange(ta.value);
-  }, [autoResize, onChange]);
+  }, [onChange]);
 
   return (
     <textarea
       ref={textareaRef}
-      className="spacing-editor-textarea"
+      className={["spacing-editor-textarea", className].filter(Boolean).join(" ")}
       defaultValue={value}
       onKeyDown={handleKeyDown}
       onBeforeInput={handleBeforeInput}
@@ -222,4 +193,8 @@ export default function SpacingEditor({ value, onChange }: SpacingEditorProps) {
       spellCheck={false}
     />
   );
-}
+});
+
+SpacingEditor.displayName = "SpacingEditor";
+
+export default SpacingEditor;

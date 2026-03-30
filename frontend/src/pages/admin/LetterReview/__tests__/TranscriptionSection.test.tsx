@@ -26,6 +26,8 @@ const buildProps = (overrides: Partial<ComponentProps<typeof TranscriptionSectio
   onTranscriptDoubleClick: vi.fn(),
   onTranscriptInput: vi.fn(),
   onEditorKeyDown: vi.fn(),
+  readerText: "",
+  onReaderTextChange: vi.fn(),
   ...overrides,
 });
 
@@ -79,5 +81,30 @@ describe("TranscriptionSection", () => {
     expect(props.onTranscriptDoubleClick).toHaveBeenCalledTimes(1);
     expect(props.onTranscriptInput).toHaveBeenCalledWith("updated transcript");
     expect(props.onEditorKeyDown).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the reading view overlay with the spacing editor", () => {
+    const props = buildProps({
+      letter: {
+        transcriptStatus: "EMPTY",
+        transcript: { fullText: "Dear Molly,\n\nWe made it home." },
+      },
+      readerText: "Dear Molly,\n\nWe made it home.",
+    });
+
+    render(<TranscriptionSection {...props} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reading view" }));
+
+    expect(screen.getByRole("dialog", { name: "Reading view" })).toBeInTheDocument();
+
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    textarea.value = "Dear Molly,\n\nWe finally made it home.";
+    fireEvent.input(textarea);
+
+    expect(props.onReaderTextChange).toHaveBeenCalledWith("Dear Molly,\n\nWe finally made it home.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog", { name: "Reading view" })).not.toBeInTheDocument();
   });
 });

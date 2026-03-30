@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { startTransition, useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
 import { getErrorMessage } from "../../api/client";
@@ -218,7 +218,7 @@ export default function LetterReviewPage() {
   } = useTooltip();
 
   // Line highlighting state
-  const [_currentLineIndex, setCurrentLineIndex] = useState<number | null>(
+  const [, setCurrentLineIndex] = useState<number | null>(
     null,
   );
   const [reviewMode, setReviewMode] = useState(false);
@@ -271,6 +271,9 @@ export default function LetterReviewPage() {
   });
   const {
     autoSaveStatus,
+    identityUpdateSecondsRemaining,
+    identityUpdateState,
+    retagState,
     scheduleDebouncedSave,
     scheduleStatusReset,
     triggerAutoSave,
@@ -507,7 +510,7 @@ export default function LetterReviewPage() {
     [letterId, letter, showToast],
   );
 
-  const handleVisibilityChange = async (newVisibility: VisibilityState) => {
+  const handleVisibilityChange = useCallback(async (newVisibility: VisibilityState) => {
     if (!letterId || !letter) return;
     if (letter.visibility === newVisibility) return;
 
@@ -531,16 +534,16 @@ export default function LetterReviewPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [letter, letterId, showToast]);
 
-  const handleConfirmTranscript = () => {
+  const handleConfirmTranscript = useCallback(() => {
     if (!letterId) return;
     setExtractionSender(sender || "");
     setExtractionRecipient(recipient || "");
     setShowExtractionPopup(true);
-  };
+  }, [letterId, recipient, sender]);
 
-  const executeConfirmTranscript = async () => {
+  const executeConfirmTranscript = useCallback(async () => {
     if (!letterId) return;
     setShowExtractionPopup(false);
     setSaving(true);
@@ -565,18 +568,18 @@ export default function LetterReviewPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [applyLetterMetadata, extractionRecipient, extractionSender, letterId, showToast]);
 
   // Regenerate metadata handler — shows popup for options
-  const handleRegenerateMetadata = () => {
+  const handleRegenerateMetadata = useCallback(() => {
     if (!letterId) return;
     setExtractionSender(sender || "");
     setExtractionRecipient(recipient || "");
     setShowMetadataRegeneratePopup(true);
-  };
+  }, [letterId, recipient, sender]);
 
   // Execute metadata regeneration (metadata only)
-  const executeMetadataRegenerate = async () => {
+  const executeMetadataRegenerate = useCallback(async () => {
     if (!letterId) return;
       setShowMetadataRegeneratePopup(false);
       setRegenerateState("regenerating");
@@ -601,7 +604,7 @@ export default function LetterReviewPage() {
       );
       console.error("Regenerate metadata error:", err);
     }
-  };
+  }, [applyLetterMetadata, extractionRecipient, extractionSender, letterId, scheduleStatusReset, showToast]);
 
   // Re-extract handler — calls the re-extract API with corrected sender/recipient
   const handleReExtract = useCallback(
@@ -684,7 +687,7 @@ export default function LetterReviewPage() {
     ],
   );
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!letterId) return;
     if (!window.confirm("Are you sure you want to delete this letter?")) {
       return;
@@ -705,15 +708,23 @@ export default function LetterReviewPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [letterId, navigate, showToast]);
 
   const handlePageChange = useCallback((index: number, image: LetterImage) => {
     setCurrentFilename(image.originalFilename);
     setViewerPageIndex(index);
   }, []);
 
+  const isPageSepNode = useCallback((node: Node): boolean => {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      return el.classList.contains("page-sep");
+    }
+    return false;
+  }, []);
+
   // Handle Tab key to insert spaces instead of changing focus (for transcript editor)
-  const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleEditorKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "Tab") {
       e.preventDefault();
       e.stopPropagation();
@@ -751,18 +762,10 @@ export default function LetterReviewPage() {
         }
       }
     }
-  };
-
-  const isPageSepNode = (node: Node): boolean => {
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      const el = node as HTMLElement;
-      return el.classList.contains("page-sep");
-    }
-    return false;
-  };
+  }, [isPageSepNode]);
 
   // Handle Tab key for extra content editor
-  const handleExtraContentKeyDown = (
+  const handleExtraContentKeyDown = useCallback((
     e: React.KeyboardEvent<HTMLDivElement>,
   ) => {
     if (e.key === "Tab") {
@@ -782,9 +785,9 @@ export default function LetterReviewPage() {
       // Update state
       setExtraContent(editor.innerText);
     }
-  };
+  }, []);
 
-  const handlePhotoDescriptionKeyDown = (
+  const handlePhotoDescriptionKeyDown = useCallback((
     e: React.KeyboardEvent<HTMLDivElement>,
   ) => {
     if (e.key === "Tab") {
@@ -799,7 +802,7 @@ export default function LetterReviewPage() {
       document.execCommand("insertText", false, "    ");
       setPhotoDescription(editor.innerText);
     }
-  };
+  }, []);
 
   const handleVerifyPhotoDescription = useCallback(async () => {
     if (!letterId) return;
@@ -892,7 +895,9 @@ export default function LetterReviewPage() {
 
   const handlePhotoDescriptionChange = useCallback(
     (newContent: string) => {
-      setPhotoDescription(newContent);
+      startTransition(() => {
+        setPhotoDescription(newContent);
+      });
       if (!letterId) return;
 
       scheduleDebouncedSave(
@@ -996,7 +1001,9 @@ export default function LetterReviewPage() {
   // Extra content auto-save
   const handleExtraContentChange = useCallback(
     (newContent: string) => {
-      setExtraContent(newContent);
+      startTransition(() => {
+        setExtraContent(newContent);
+      });
       if (!letterId) return;
 
       scheduleDebouncedSave(
@@ -1058,10 +1065,45 @@ export default function LetterReviewPage() {
     setReviewMode(true);
   }, [isExtraContentEditing, isPhotoDescriptionEditing, isTranscriptEditing, letter]);
 
+  const handleReaderTextChange = useCallback((text: string) => {
+    startTransition(() => {
+      setReaderText(text);
+    });
+    void triggerAutoSave({ readingText: text });
+  }, [triggerAutoSave]);
+
+  const handleMetadataAutoSave = useCallback((updates: Record<string, unknown>) => {
+    void triggerAutoSave(updates as AutoSaveData);
+  }, [triggerAutoSave]);
+
+  const handleReExtractEntities = useCallback(() => {
+    void handleReExtract("entities_only");
+  }, [handleReExtract]);
+
+  const handleTranscriptFromLineReview = useCallback((newText: string) => {
+    startTransition(() => {
+      setTranscript(newText);
+    });
+  }, []);
+
+  const handleLineReviewAutoSave = useCallback((data: AutoSaveData) => {
+    void triggerAutoSave(data);
+  }, [triggerAutoSave]);
+
+  const handlePersonalNotesChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const nextValue = e.target.value;
+    startTransition(() => {
+      setNotes(nextValue);
+    });
+    void triggerAutoSave({ notes: nextValue || null });
+  }, [triggerAutoSave, setNotes]);
+
   // Line highlighting - update on cursor move
   useEffect(() => {
+    const transcriptStatus = letter?.transcriptStatus;
     const isEditing =
-      (letter && letter.transcriptStatus !== "VERIFIED") || isTranscriptEditing;
+      (transcriptStatus !== undefined && transcriptStatus !== "VERIFIED") ||
+      isTranscriptEditing;
 
     const handleSelectionChange = () => {
       const editor = editorRef.current;
@@ -1210,11 +1252,9 @@ export default function LetterReviewPage() {
             ref={lineReviewRef}
             letter={letter}
             transcript={transcript}
-            onTranscriptChange={(newText) => setTranscript(newText)}
+            onTranscriptChange={handleTranscriptFromLineReview}
             onExit={() => setReviewMode(false)}
-            onAutoSave={(data) => {
-              void triggerAutoSave(data);
-            }}
+            onAutoSave={handleLineReviewAutoSave}
             debugMode={debugMode}
             onDebugModeChange={setDebugMode}
             initialPageIndex={viewerPageIndex}
@@ -1326,10 +1366,7 @@ export default function LetterReviewPage() {
                 onEditorKeyDown={handleEditorKeyDown}
                 onViewModeChange={handleViewModeChange}
                 readerText={readerText ?? ""}
-                onReaderTextChange={(text) => {
-                  setReaderText(text);
-                  void triggerAutoSave({ readingText: text });
-                }}
+                onReaderTextChange={handleReaderTextChange}
               />
             )}
 
@@ -1406,10 +1443,11 @@ export default function LetterReviewPage() {
                 onRelationshipChange={setRelationship}
                 onPrimaryTopicsChange={setPrimaryTopics}
                 onTopicsDropdownOpenChange={setTopicsDropdownOpen}
-                onTriggerAutoSave={(updates) =>
-                  void triggerAutoSave(updates as AutoSaveData)
-                }
+                onTriggerAutoSave={handleMetadataAutoSave}
                 regenerateState={regenerateState}
+                identityUpdateState={identityUpdateState}
+                identityUpdateSecondsRemaining={identityUpdateSecondsRemaining}
+                retagState={retagState}
                 onVerifyMetadata={handleVerifyMetadata}
                 onConfirmTranscript={handleConfirmTranscript}
                 onRegenerateMetadata={handleRegenerateMetadata}
@@ -1428,7 +1466,7 @@ export default function LetterReviewPage() {
               <EntitySection
                 entityExtractionJson={letter.entityExtractionJson}
                 reExtractState={entityReExtractState}
-                onReExtractEntities={() => handleReExtract("entities_only")}
+                onReExtractEntities={handleReExtractEntities}
               />
             ) : null}
 
@@ -1456,10 +1494,7 @@ export default function LetterReviewPage() {
                     ref={notesRef}
                     id="notes"
                     value={notes}
-                    onChange={(e) => {
-                      setNotes(e.target.value);
-                      void triggerAutoSave({ notes: e.target.value || null });
-                    }}
+                    onChange={handlePersonalNotesChange}
                     placeholder="Personal notes (not shown publicly)"
                     readOnly={letter.metadataContentStatus === "VERIFIED"}
                     className={

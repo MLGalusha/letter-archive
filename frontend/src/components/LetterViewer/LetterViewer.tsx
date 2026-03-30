@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { memo, useState, useRef, useEffect, useCallback } from "react";
 import type { LetterImage } from "../../types/Letter";
 import { getImageUrl } from "../../api/client";
 import { Icon } from "../common";
@@ -92,7 +92,7 @@ function getInitialStateForLetter(
 // COMPONENT
 // ============================================================================
 
-export default function LetterViewer({
+const LetterViewer = memo(function LetterViewer({
   images,
   letterId,
   showOnlyLetterPages = false,
@@ -232,7 +232,7 @@ export default function LetterViewer({
     // No saved state for this image - reset to defaults
     setScale(1);
     setPosition({ x: 0, y: 0 });
-  }, [currentImageIndex, letterId, displayImages]);
+  }, [currentImageIndex, letterId, displayImages, variant]);
 
   // Notify parent of page changes
   useEffect(() => {
@@ -686,4 +686,8 @@ export default function LetterViewer({
       )}
     </div>
   );
-}
+});
+
+LetterViewer.displayName = "LetterViewer";
+
+export default LetterViewer;

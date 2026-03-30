@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { memo, useState, useMemo } from 'react';
 import Icon from '../../../components/common/Icon';
 import './NotesSection.css';
 
@@ -37,9 +37,8 @@ function formatCategory(cat: string): string {
   return cat.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-export default function NotesSection({
+const NotesSection = memo(function NotesSection({
   notes,
-  letterId: _letterId,
   onNoteStatusChange,
   onAddNote,
 }: NotesSectionProps) {
@@ -222,7 +221,11 @@ export default function NotesSection({
       )}
     </div>
   );
-}
+});
+
+NotesSection.displayName = 'NotesSection';
+
+export default NotesSection;
 
 /* ── Note Card Component ──────────────────────────────── */
 

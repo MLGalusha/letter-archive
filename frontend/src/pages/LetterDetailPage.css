@@ -401,6 +401,11 @@
   height: 1.85em; /* matches line-height for a natural paragraph gap */
 }
 
+/* Saved reading text — render exactly as admin set it */
+.transcript-reading-saved {
+  white-space: pre-wrap;
+}
+
 /* Original formatting mode — 1:1 line match with admin */
 .transcript-original {
   font-family: Georgia, "Times New Roman", serif;

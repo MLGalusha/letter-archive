@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { memo, type RefObject } from "react";
 import { Icon, Dropdown, DropdownItem } from "../../../components/common";
 import TagEditor from "../../../components/admin/TagEditor";
 import type { Letter, EmotionalTone, RelationshipType } from "../../../types/Letter";
@@ -41,6 +41,9 @@ interface MetadataSectionProps {
 
   // Regenerate state
   regenerateState: string;
+  identityUpdateState: "idle" | "pending" | "saving";
+  identityUpdateSecondsRemaining: number;
+  retagState: "idle" | "retagging" | "done";
 
   // Verification and generation handlers
   onVerifyMetadata: () => void;
@@ -60,9 +63,8 @@ interface MetadataSectionProps {
   showToast: (message: string, type: "success" | "error" | "info") => void;
 }
 
-export default function MetadataSection({
+const MetadataSection = memo(function MetadataSection({
   letter,
-  letterId: _letterId,
   sender,
   recipient,
   date,
@@ -85,6 +87,9 @@ export default function MetadataSection({
   onTopicsDropdownOpenChange,
   onTriggerAutoSave,
   regenerateState,
+  identityUpdateState,
+  identityUpdateSecondsRemaining,
+  retagState,
   onVerifyMetadata,
   onConfirmTranscript,
   onRegenerateMetadata,
@@ -94,7 +99,6 @@ export default function MetadataSection({
   metadataTooltipPosition,
   metadataTooltipRef,
   saving,
-  showToast: _showToast,
 }: MetadataSectionProps) {
   return (
     <div className="metadata-section">
@@ -208,6 +212,44 @@ export default function MetadataSection({
             />
           </div>
         </div>
+
+        {identityUpdateState !== "idle" ? (
+          <div
+            className={`retag-indicator ${identityUpdateState}`}
+            aria-live="polite"
+          >
+            {identityUpdateState === "pending" ? (
+              <>
+                <Icon name="edit" size={14} />
+                <span>
+                  Updating in {identityUpdateSecondsRemaining}s...
+                </span>
+              </>
+            ) : (
+              <>
+                <Icon name="process" size={14} className="spinning" />
+                <span>Saving name...</span>
+              </>
+            )}
+          </div>
+        ) : retagState !== "idle" && (
+          <div
+            className={`retag-indicator ${retagState}`}
+            aria-live="polite"
+          >
+            {retagState === "retagging" ? (
+              <>
+                <Icon name="process" size={14} className="spinning" />
+                <span>Updating references...</span>
+              </>
+            ) : (
+              <>
+                <Icon name="check" size={14} />
+                <span>References updated</span>
+              </>
+            )}
+          </div>
+        )}
 
         <div className="form-row">
           <div className="form-group">
@@ -447,4 +489,8 @@ export default function MetadataSection({
       )}
     </div>
   );
-}
+});
+
+MetadataSection.displayName = "MetadataSection";
+
+export default MetadataSection;

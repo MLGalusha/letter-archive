@@ -41,7 +41,7 @@ export async function installMockUploadApi(
   } = {},
 ) {
   await page.addInitScript(() => {
-    sessionStorage.setItem('adminAuth', 'true');
+    localStorage.setItem('adminToken', 'mock-token');
   });
 
   const duplicateRequests: string[][] = [];

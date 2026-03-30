@@ -382,7 +382,7 @@ export async function installMockLetterReviewApi(
   };
 
   await page.addInitScript(() => {
-    sessionStorage.setItem('adminAuth', 'true');
+    localStorage.setItem('adminToken', 'mock-token');
     localStorage.removeItem('letterViewerState');
   });
 

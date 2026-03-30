@@ -174,6 +174,7 @@ export async function fillContentEditable(page: Page, selector: string, text: st
  */
 export async function clearSession(page: Page): Promise<void> {
   await page.evaluate(() => {
+    localStorage.removeItem('adminToken');
     sessionStorage.clear();
   });
 }
@@ -183,7 +184,7 @@ export async function clearSession(page: Page): Promise<void> {
  */
 export async function setLoggedIn(page: Page): Promise<void> {
   await page.evaluate(() => {
-    sessionStorage.setItem('adminAuth', 'true');
+    localStorage.setItem('adminToken', 'mock-token');
   });
 }
 

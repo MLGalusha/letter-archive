@@ -219,7 +219,7 @@ export async function installMockAdminDashboardApi(
   const flagRequests: Array<{ url: string; body: unknown }> = [];
 
   await page.addInitScript(() => {
-    sessionStorage.setItem('adminAuth', 'true');
+    localStorage.setItem('adminToken', 'mock-token');
     localStorage.removeItem('adminDashboardState');
     localStorage.removeItem('adminDashboardColumns');
     sessionStorage.removeItem('adminDashboardState');

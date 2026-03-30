@@ -141,7 +141,7 @@ export async function installMockProcessingQueueApi(
   } = {},
 ) {
   await page.addInitScript(() => {
-    sessionStorage.setItem('adminAuth', 'true');
+    localStorage.setItem('adminToken', 'mock-token');
   });
 
   const state = createMockQueueState();

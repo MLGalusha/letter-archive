@@ -20,11 +20,11 @@ const NAV_SECTIONS: NavSection[] = [
   {
     items: [
       { label: 'Dashboard', path: '/admin', icon: 'edit' },
-      { label: 'Upload', path: '/admin/upload', icon: 'plus' },
+      { label: 'Publish', path: '/admin/content', icon: 'folder' },
       { label: 'Processing', path: '/admin/processing', icon: 'process' },
       { label: 'Notes', path: '/admin/notes', icon: 'file' },
-      { label: 'Publish', path: '/admin/content', icon: 'folder' },
       { label: 'Usage', path: '/admin/usage', icon: 'chart' },
+      { label: 'Upload', path: '/admin/upload', icon: 'plus' },
     ],
   },
 ];

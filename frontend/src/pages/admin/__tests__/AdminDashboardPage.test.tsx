@@ -325,6 +325,9 @@ describe("AdminDashboard processing", () => {
       await screen.findByRole("button", { name: /Extract Metadata \(1\)/ }),
     );
 
+    expect(
+      screen.getByRole("heading", { name: "Generate Metadata" }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Sender")).toBeInTheDocument();
     expect(screen.getByLabelText("Recipient")).toBeInTheDocument();
     expect(
@@ -368,7 +371,7 @@ describe("AdminDashboard processing", () => {
     expect(screen.queryByLabelText("Sender")).not.toBeInTheDocument();
   });
 
-  it("submits single-letter extraction with the provided sender and recipient", async () => {
+  it("submits single-letter generation with the provided sender and recipient", async () => {
     const user = userEvent.setup();
 
     getAdminLettersMock.mockResolvedValue(
@@ -404,7 +407,10 @@ describe("AdminDashboard processing", () => {
 
     await user.type(screen.getByLabelText("Sender"), "Mabel");
     await user.type(screen.getByLabelText("Recipient"), "Theo");
-    await user.click(screen.getByRole("button", { name: "Extract Metadata" }));
+    await user.click(screen.getByRole("button", { name: "Generate Metadata" }));
+    expect(
+      screen.queryByRole("heading", { name: "Generate Metadata" }),
+    ).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(confirmTranscriptMock).toHaveBeenCalledWith("letter-1", {
@@ -413,5 +419,51 @@ describe("AdminDashboard processing", () => {
       });
     });
     expect(regenerateMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it("shows generate copy after metadata has been cleared even when the transcript is confirmed", async () => {
+    const user = userEvent.setup();
+
+    getAdminLettersMock.mockResolvedValue(
+      createLettersResponse([
+        makeLetter({
+          metadataContentStatus: "EMPTY",
+          transcriptConfirmedAt: "2026-03-30T12:00:00.000Z",
+          metadata: {
+            sender: "",
+            recipient: "",
+            dateRaw: "19470810",
+            verified: false,
+          },
+        }),
+      ]),
+    );
+    regenerateMetadataMock.mockResolvedValue(
+      makeLetter({
+        metadataContentStatus: "AI_DRAFT",
+        transcriptConfirmedAt: "2026-03-30T12:00:00.000Z",
+      }),
+    );
+
+    render(
+      <MemoryRouter>
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Select Test Letter" }));
+    await user.click(
+      await screen.findByRole("button", { name: /Extract Metadata \(1\)/ }),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Generate Metadata" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Generate Metadata" }));
+
+    await waitFor(() => {
+      expect(regenerateMetadataMock).toHaveBeenCalledWith("letter-1", {});
+    });
+    expect(showToastMock).toHaveBeenCalledWith("Metadata generated", "success");
   });
 });

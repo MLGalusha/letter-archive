@@ -33,17 +33,17 @@ export default function IdentityExtractionModal({
   const senderInputId = useId();
   const recipientInputId = useId();
   const isRegenerate = mode === "regenerate";
-  const title = isRegenerate ? "Refresh Metadata" : "Extract Metadata";
+  const title = isRegenerate ? "Refresh Metadata" : "Generate Metadata";
   const subtitle = isRegenerate
     ? "Sender and recipient corrections are applied before summaries, relationships, and references are rebuilt."
     : "Sender and recipient hints improve how names, summaries, and quoted references are generated.";
   const confirmLabel = submitting
     ? isRegenerate
       ? "Refreshing..."
-      : "Extracting..."
+      : "Generating..."
     : isRegenerate
       ? "Refresh Metadata"
-      : "Extract Metadata";
+      : "Generate Metadata";
 
   return (
     <Modal

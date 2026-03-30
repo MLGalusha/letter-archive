@@ -474,8 +474,7 @@ export default function AdminDashboard() {
   const singleMetadataMode = useMemo(
     () =>
       singleSelectedLetter &&
-      (Boolean(singleSelectedLetter.transcriptConfirmedAt) ||
-        singleSelectedLetter.metadataContentStatus !== "EMPTY")
+      singleSelectedLetter.metadataContentStatus !== "EMPTY"
         ? "regenerate"
         : "extract",
     [singleSelectedLetter],
@@ -868,14 +867,15 @@ export default function AdminDashboard() {
       confirmedSender: singleMetadataSender.trim() || undefined,
       confirmedRecipient: singleMetadataRecipient.trim() || undefined,
     };
+    const hadExistingMetadata =
+      singleSelectedLetter.metadataContentStatus !== "EMPTY";
 
+    setShowSingleMetadataModal(false);
     setSingleMetadataSubmitting(true);
 
     try {
       let updatedLetter: Letter | null = null;
-      let didRefresh =
-        Boolean(singleSelectedLetter.transcriptConfirmedAt) ||
-        singleSelectedLetter.metadataContentStatus !== "EMPTY";
+      let didRefresh = hadExistingMetadata;
 
       if (!singleSelectedLetter.transcriptConfirmedAt) {
         updatedLetter = await confirmTranscript(
@@ -904,11 +904,10 @@ export default function AdminDashboard() {
         throw new Error("Metadata extraction did not return an updated letter");
       }
 
-      setShowSingleMetadataModal(false);
       showToast(
         didRefresh
           ? "Metadata regenerated"
-          : "Transcript confirmed — metadata extracted",
+          : "Metadata generated",
         "success",
       );
       exitEditMode();

@@ -546,6 +546,7 @@ export default function LetterReviewPage() {
 
   const executeConfirmTranscript = useCallback(async () => {
     if (!letterId) return;
+    setShowExtractionPopup(false);
     setSaving(true);
 
     try {
@@ -555,7 +556,6 @@ export default function LetterReviewPage() {
       });
       setLetter(updated);
       applyLetterMetadata(updated, { includeNotes: false });
-      setShowExtractionPopup(false);
       showToast(
         "Transcript confirmed — metadata extracted",
         "success",

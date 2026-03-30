@@ -4,13 +4,34 @@ The metadata text fields use guillemet tags — «SENDER:text» and «RECIPIENT:
 
 <rules>
 - Only change the text INSIDE the «SENDER:...» or «RECIPIENT:...» tags — keep the tag wrappers
+- Scan the ENTIRE metadata JSON and update every editable prose string that refers to the sender or recipient, not just hook and summary
 - Use the new name naturally: full name for first mention in each field, then first name, pronouns, or possessives as appropriate
 - Match pronoun gender to the name when possible (e.g., "Jimmie" → he/him/his, "Molly" → she/her/her). Use they/them if gender is ambiguous.
 - If the name is being cleared (set to null/unknown), replace name references with "the sender"/"the recipient", "they"/"them"/"their"
 - Do NOT change: emotional_tone, primary_topics, extracted_date, location_written, sender_recipient_relationship, sender field, recipient field
-- Do NOT change notable_quotes text field — only update tags in the context field
+- Do NOT change direct quote text in notable_quotes[].text — only update surrounding prose such as notable_quotes[].context
 - Do NOT add, remove, or rephrase content — only update the tagged reference text
-</rules>`;
+- Do NOT leave stale sender/recipient references anywhere in editable prose fields after you finish
+</rules>
+
+<coverage>
+Review every string-valued field in the metadata JSON.
+
+For the current schema, sender/recipient references can appear in:
+- hook
+- summary
+- notable_quotes[].context
+- ai_notes[].content
+
+If any future prose string fields are present, update those too.
+</coverage>
+
+<verification>
+Before returning:
+1. Re-check the full metadata JSON, field by field
+2. Confirm every editable sender/recipient reference now uses the corrected tagged text
+3. Confirm no stale old-name references remain anywhere except untouched direct quotes or protected structured fields
+</verification>`;
 
 export function buildMetadataUpdateUserPrompt(params: {
   existingMetadata: Record<string, unknown>;
@@ -65,8 +86,10 @@ export function buildMetadataUpdateUserPrompt(params: {
   // List exactly which fields contain tags to update
   parts.push('');
   parts.push('<fields_to_update>');
-  parts.push('Update tags in these fields only: hook, summary, notable_quotes[].context, ai_notes[].content');
-  parts.push('Leave all other fields exactly as they are.');
+  parts.push('Update tagged sender/recipient references everywhere they appear in editable prose fields across the metadata JSON.');
+  parts.push('For the current schema, that includes: hook, summary, notable_quotes[].context, ai_notes[].content.');
+  parts.push('If any additional prose string fields are present, update those too.');
+  parts.push('Leave direct quote text in notable_quotes[].text and protected structured fields exactly as they are.');
   parts.push('</fields_to_update>');
 
   // The metadata

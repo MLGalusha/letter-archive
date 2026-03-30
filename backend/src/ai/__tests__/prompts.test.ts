@@ -3,10 +3,12 @@ import {
   TRANSCRIPTION_SYSTEM_PROMPT,
   PHOTO_DESCRIPTION_SYSTEM_PROMPT,
   METADATA_V2_SYSTEM_PROMPT,
+  METADATA_UPDATE_SYSTEM_PROMPT,
   ENTITY_EXTRACTION_SYSTEM_PROMPT,
   buildTranscriptionUserPrompt,
   buildPhotoDescriptionPrompt,
   buildMetadataV2UserPrompt,
+  buildMetadataUpdateUserPrompt,
   buildEntityExtractionUserPrompt,
 } from '../prompts.js';
 
@@ -56,6 +58,13 @@ describe('AI prompt builders', () => {
     expect(METADATA_V2_SYSTEM_PROMPT).toContain('Hook/summary do not contain invented facts');
   });
 
+  it('requires metadata update retagging to scan the full editable metadata surface', () => {
+    expect(METADATA_UPDATE_SYSTEM_PROMPT).toContain('Scan the ENTIRE metadata JSON');
+    expect(METADATA_UPDATE_SYSTEM_PROMPT).toContain('notable_quotes[].context');
+    expect(METADATA_UPDATE_SYSTEM_PROMPT).toContain('ai_notes[].content');
+    expect(METADATA_UPDATE_SYSTEM_PROMPT).toContain('Do NOT change direct quote text in notable_quotes[].text');
+  });
+
   it('builds metadata v2 prompt with extra content and context blocks', () => {
     const prompt = buildMetadataV2UserPrompt('Letter text', {
       collectionCode: '007',
@@ -71,6 +80,43 @@ describe('AI prompt builders', () => {
     expect(prompt).toContain('<context>');
     expect(prompt).toContain('Collection: 007');
     expect(prompt).toContain('Parsed date from filename: 1942-10-01');
+  });
+
+  it('builds metadata update prompt with explicit nested-field coverage instructions', () => {
+    const prompt = buildMetadataUpdateUserPrompt({
+      existingMetadata: {
+        sender: 'Jimmie',
+        recipient: 'Molly',
+        hook: '«SENDER:Jimmie» writes to «RECIPIENT:Molly».',
+        summary: '«SENDER:He» misses «RECIPIENT:her».',
+        notable_quotes: [
+          {
+            text: 'Molly, Darling...',
+            context: '«SENDER:Jimmie» addresses «RECIPIENT:Molly».',
+            position: 'opening',
+          },
+        ],
+        ai_notes: [
+          {
+            content: '«SENDER:Jimmie» appears in related material.',
+            category: 'identity',
+            priority: 'medium',
+            resolves_when: null,
+          },
+        ],
+      },
+      senderName: 'Jimmy',
+      recipientName: 'Molly',
+      change: {
+        field: 'sender',
+        oldSender: 'Jimmie',
+        newSender: 'Jimmy',
+      },
+    });
+
+    expect(prompt).toContain('For the current schema, that includes: hook, summary, notable_quotes[].context, ai_notes[].content.');
+    expect(prompt).toContain('If any additional prose string fields are present, update those too.');
+    expect(prompt).toContain('Leave direct quote text in notable_quotes[].text');
   });
 
   it('builds entity extraction prompt with prior metadata context', () => {

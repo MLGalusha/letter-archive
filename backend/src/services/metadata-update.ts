@@ -18,6 +18,12 @@ import { MetadataV2Schema } from '../ai/schemas/metadataV2.js';
 import { METADATA_V2_JSON_SCHEMA } from '../ai/schemas/metadataV2.js';
 import { createLogger } from '../utils/logger.js';
 import { logApiUsage } from './usage-tracking.js';
+import {
+  generateNameVariants,
+  getOtherPeopleFirstNames,
+  parseNameComponents,
+  propagateInMetadataV2,
+} from './name-propagation.js';
 
 const log = createLogger({ module: 'metadata-update' });
 
@@ -36,6 +42,50 @@ export interface RetagChange {
 export interface ExecuteRetagResult {
   status: 'updated' | 'skipped' | 'noop';
   reason?: string;
+}
+
+function normalizeRetaggedMetadata(
+  metadata: Record<string, unknown>,
+  letter: Pick<Letter, 'sender' | 'recipient' | 'entityExtractionJson'>,
+  change: RetagChange,
+): Record<string, unknown> {
+  let result: Record<string, unknown> = {
+    ...metadata,
+    sender: letter.sender,
+    recipient: letter.recipient,
+  };
+
+  const entityJson = letter.entityExtractionJson as Record<string, unknown> | null;
+
+  const applyRoleCleanup = (
+    field: 'sender' | 'recipient',
+    oldName: string | null | undefined,
+    newName: string | null | undefined,
+  ) => {
+    if (!newName) {
+      result = { ...result, [field]: newName };
+      return;
+    }
+
+    const variants = oldName
+      ? generateNameVariants(parseNameComponents(oldName), oldName)
+      : [];
+    const collisionNames = oldName
+      ? getOtherPeopleFirstNames(entityJson, oldName, field)
+      : new Set<string>();
+
+    result = propagateInMetadataV2(result, field, variants, newName, collisionNames);
+  };
+
+  if (change.field === 'sender' || change.field === 'both') {
+    applyRoleCleanup('sender', change.oldSender, letter.sender);
+  }
+
+  if (change.field === 'recipient' || change.field === 'both') {
+    applyRoleCleanup('recipient', change.oldRecipient, letter.recipient);
+  }
+
+  return result;
 }
 
 function matchesRetagTarget(letter: Pick<Letter, 'sender' | 'recipient'>, change: RetagChange): boolean {
@@ -164,11 +214,22 @@ export async function executeRetagForLetter(
       return { status: 'skipped', reason: 'stale_before_save' };
     }
 
-    const finalMetadata = {
-      ...updatedMetadata,
-      sender: latestLetter.sender,
-      recipient: latestLetter.recipient,
-    };
+    const normalizedMetadata = normalizeRetaggedMetadata(
+      updatedMetadata as Record<string, unknown>,
+      latestLetter,
+      change,
+    );
+
+    const normalizedValidation = MetadataV2Schema.safeParse(normalizedMetadata);
+    if (!normalizedValidation.success) {
+      letterLog.warn(
+        { duration, errors: normalizedValidation.error.errors },
+        'Normalized AI re-tag response failed validation',
+      );
+      return { status: 'skipped', reason: 'validation_failed' };
+    }
+
+    const finalMetadata = normalizedValidation.data;
 
     // Strip tags for display fields
     const stripTags = (text: string) =>

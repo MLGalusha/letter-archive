@@ -2,8 +2,9 @@
  * Name Propagation Service
  *
  * When a human reviewer changes a sender/recipient name, this service
- * propagates the change through all metadata fields (summary, hook,
- * metadataV2Json, entityExtractionJson) using simple find-replace.
+ * propagates the change through the editable metadata prose fields
+ * (hook, summary, notes, quote contexts, metadataV2Json, entityExtractionJson)
+ * while preserving verbatim quote text.
  *
  * No AI calls — purely deterministic string replacement.
  */
@@ -287,6 +288,89 @@ function applyVariantsToHook(
   return result;
 }
 
+type JsonPath = Array<string | number>;
+
+function isHookPath(path: JsonPath): boolean {
+  return path.length === 1 && path[0] === 'hook';
+}
+
+function shouldSkipMetadataStringPath(path: JsonPath): boolean {
+  const topLevel = path[0];
+
+  if (
+    topLevel === 'sender'
+    || topLevel === 'recipient'
+    || topLevel === 'location_written'
+    || topLevel === 'extracted_date'
+    || topLevel === 'emotional_tone'
+    || topLevel === 'sender_recipient_relationship'
+    || topLevel === 'primary_topics'
+  ) {
+    return true;
+  }
+
+  if (path.length === 3 && path[0] === 'notable_quotes' && path[2] === 'text') {
+    return true;
+  }
+
+  if (path.length === 3 && path[0] === 'notable_quotes' && path[2] === 'position') {
+    return true;
+  }
+
+  if (
+    path.length === 3
+    && path[0] === 'ai_notes'
+    && (path[2] === 'category' || path[2] === 'priority' || path[2] === 'resolves_when')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function replaceRolePhrases(
+  text: string,
+  field: 'sender' | 'recipient',
+  replacement: string,
+): string {
+  if (field === 'sender') {
+    return text
+      .replace(/\bthe sender's\b/gi, `${replacement}'s`)
+      .replace(/\bthe sender\b/gi, replacement);
+  }
+
+  return text
+    .replace(/\bthe recipient's\b/gi, `${replacement}'s`)
+    .replace(/\bthe recipient\b/gi, replacement);
+}
+
+function transformMetadataTextFields(
+  value: unknown,
+  transform: (text: string, path: JsonPath) => string,
+  path: JsonPath = [],
+): unknown {
+  if (typeof value === 'string') {
+    if (shouldSkipMetadataStringPath(path)) {
+      return value;
+    }
+    return transform(value, path);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item, index) => transformMetadataTextFields(item, transform, [...path, index]));
+  }
+
+  if (value !== null && typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      result[key] = transformMetadataTextFields(val, transform, [...path, key]);
+    }
+    return result;
+  }
+
+  return value;
+}
+
 /**
  * Deep-apply name variants throughout a JSON-like object.
  */
@@ -313,82 +397,26 @@ function deepApplyVariants(
 }
 
 /**
- * Deep-replace a name throughout a JSON-like object.
- * Walks all string values and replaces whole-word matches.
- */
-function deepReplaceInValue(value: unknown, oldName: string, newName: string): unknown {
-  if (typeof value === 'string') {
-    return replaceInString(value, oldName, newName);
-  }
-  if (Array.isArray(value)) {
-    return value.map(item => deepReplaceInValue(item, oldName, newName));
-  }
-  if (value !== null && typeof value === 'object') {
-    const result: Record<string, unknown> = {};
-    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-      result[key] = deepReplaceInValue(val, oldName, newName);
-    }
-    return result;
-  }
-  return value;
-}
-
-/**
  * Update metadataV2Json with the new name using variant-based replacement.
  */
-function propagateInMetadataV2(
+export function propagateInMetadataV2(
   metadata: Record<string, unknown>,
   field: 'sender' | 'recipient',
   variants: NameVariant[],
   newName: string,
   collisionNames: Set<string>,
 ): Record<string, unknown> {
-  const updated = { ...metadata };
-
-  // Update the sender/recipient name object (always use full new name)
-  const nameObj = updated[field] as { name?: string | null; confidence?: number } | undefined;
-  if (nameObj && typeof nameObj === 'object' && typeof nameObj.name === 'string') {
-    updated[field] = { ...nameObj, name: applyVariantsToString(nameObj.name, variants, newName, collisionNames) };
-  }
-
-  // Phrase patterns for "the sender"/"the recipient" cleanup
-  const phraseKey = field === 'sender' ? 'sender' : 'recipient';
+  const updated = { ...metadata, [field]: newName };
   const newFirstName = getFirstName(newName);
 
-  // Update summary
-  if (typeof updated.summary === 'string') {
-    let s = applyVariantsToString(updated.summary, variants, newName, collisionNames);
-    s = s.replace(new RegExp(`\\bthe ${phraseKey}'s\\b`, 'gi'), `${newName}'s`);
-    s = s.replace(new RegExp(`\\bthe ${phraseKey}\\b`, 'gi'), newName);
-    updated.summary = s;
-  }
+  return transformMetadataTextFields(updated, (text, path) => {
+    const replacement = isHookPath(path) ? newFirstName : newName;
+    const renamed = isHookPath(path)
+      ? applyVariantsToHook(text, variants, newName, collisionNames)
+      : applyVariantsToString(text, variants, newName, collisionNames);
 
-  // Update hook (use first name for brevity)
-  if (typeof updated.hook === 'string') {
-    let h = applyVariantsToHook(updated.hook, variants, newName, collisionNames);
-    h = h.replace(new RegExp(`\\bthe ${phraseKey}'s\\b`, 'gi'), `${newFirstName}'s`);
-    h = h.replace(new RegExp(`\\bthe ${phraseKey}\\b`, 'gi'), newFirstName);
-    updated.hook = h;
-  }
-
-  // Update ai_notes (structured array in metadataV2Json)
-  if (Array.isArray(updated.ai_notes)) {
-    updated.ai_notes = deepApplyVariants(updated.ai_notes, variants, newName, collisionNames);
-  } else if (typeof updated.ai_notes === 'string') {
-    updated.ai_notes = applyVariantsToString(updated.ai_notes, variants, newName, collisionNames);
-  }
-
-  // Update notable_quotes contexts
-  if (Array.isArray(updated.notable_quotes)) {
-    updated.notable_quotes = (updated.notable_quotes as Record<string, unknown>[]).map(quote => ({
-      ...quote,
-      context: typeof quote.context === 'string'
-        ? applyVariantsToString(quote.context, variants, newName, collisionNames)
-        : quote.context,
-    }));
-  }
-
-  return updated;
+    return replaceRolePhrases(renamed, field, replacement);
+  }) as Record<string, unknown>;
 }
 
 /**
@@ -805,17 +833,18 @@ export async function propagatePlaceholderReplacement(
 
   // 4. Update metadataV2Json (deep traverse)
   if (letter.metadataV2Json && typeof letter.metadataV2Json === 'object') {
-    const updatedMetadata = deepReplacePlaceholder(
-      letter.metadataV2Json,
-      placeholder,
-      newName,
+    const firstName = getFirstName(newName);
+    const updatedMetadata = transformMetadataTextFields(
+      {
+        ...(letter.metadataV2Json as Record<string, unknown>),
+        [field]: newName,
+      },
+      (text, path) => {
+        const replacement = isHookPath(path) ? firstName : newName;
+        const updatedText = replacePlaceholder(text, placeholder, replacement);
+        return replaceRolePhrases(updatedText, field, replacement);
+      },
     ) as Record<string, unknown>;
-
-    // Also update hook within metadataV2Json with first name
-    if (typeof updatedMetadata.hook === 'string') {
-      const firstName = getFirstName(newName);
-      updatedMetadata.hook = replaceInHook(updatedMetadata.hook, newName, firstName);
-    }
 
     dbUpdates.metadataV2Json = updatedMetadata;
     dbUpdates.metadataJson = updatedMetadata;

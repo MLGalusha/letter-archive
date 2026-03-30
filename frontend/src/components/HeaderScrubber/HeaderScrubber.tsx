@@ -285,6 +285,10 @@ export default function HeaderScrubber({
         </button>
 
         <div className="dock-strip-track-wrap">
+          <span ref={posCounterRef} className="dock-strip-pos">
+            <span>{displayPos}</span><span className="dock-strip-pos-sep">/</span>{total}
+          </span>
+
           <div
             ref={trackElRef}
             className="dock-strip-track"
@@ -341,10 +345,6 @@ export default function HeaderScrubber({
               </div>
             )}
           </div>
-
-          <span ref={posCounterRef} className="dock-strip-pos">
-            <span>{displayPos}</span><span className="dock-strip-pos-sep">/</span>{total}
-          </span>
         </div>
 
         <button

@@ -65,6 +65,7 @@ interface InviteResponse {
   token: string;
   expiresAt: string;
   email: string | null;
+  expiresInMs: number;
 }
 
 interface InviteValidation {

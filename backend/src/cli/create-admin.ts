@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { count, eq } from 'drizzle-orm';
 import { db, adminUsers } from '../db/index.js';
 import { hashPassword } from '../auth/jwt.js';
+import { isOwnerAdminEmail } from '../services/admin-ownership.js';
 
 interface ParsedArgs {
   email?: string;
@@ -56,7 +57,7 @@ async function main(): Promise<void> {
   }
 
   const passwordHash = await hashPassword(password);
-  await db.insert(adminUsers).values({ email, passwordHash });
+  await db.insert(adminUsers).values({ email, passwordHash, canDeleteAdminProfiles: isOwnerAdminEmail(email) });
 
   console.log(`Created initial admin user: ${email}`);
 }

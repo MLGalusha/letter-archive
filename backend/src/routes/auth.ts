@@ -9,6 +9,13 @@ import { validateBody } from '../middleware/validate.js';
 import { requireAuth } from '../middleware/auth.js';
 import { authRateLimit } from '../middleware/rate-limit.js';
 import { createNotification } from '../services/notifications.js';
+import {
+  ADMIN_INVITE_TTL_MS,
+  cleanupStaleAdminInvites,
+  createAdminInviteExpiryDate,
+  staleAdminInvitesWhereClause,
+} from '../services/admin-invites.js';
+import { isOwnerAdminEmail } from '../services/admin-ownership.js';
 
 const router = Router();
 
@@ -108,7 +115,7 @@ router.post('/auth/setup', authRateLimit, validateBody(setupSchema), async (req,
     const passwordHash = await hashPassword(password);
     const [user] = await db
       .insert(adminUsers)
-      .values({ email, passwordHash })
+      .values({ email, passwordHash, canDeleteAdminProfiles: isOwnerAdminEmail(email) })
       .returning();
 
     const token = generateToken(user.id, user.email);
@@ -143,8 +150,10 @@ router.post('/auth/invite', requireAuth, validateBody(inviteSchema), async (req,
   const { email } = req.body as z.infer<typeof inviteSchema>;
 
   try {
+    await cleanupStaleAdminInvites();
+
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const expiresAt = createAdminInviteExpiryDate();
 
     const [invite] = await db
       .insert(adminInvites)
@@ -162,6 +171,7 @@ router.post('/auth/invite', requireAuth, validateBody(inviteSchema), async (req,
       token: invite.token,
       expiresAt: invite.expiresAt,
       email: invite.email,
+      expiresInMs: ADMIN_INVITE_TTL_MS,
     });
   } catch (error) {
     req.log?.error({ error }, 'Invite creation error');
@@ -176,6 +186,9 @@ router.post('/auth/invite', requireAuth, validateBody(inviteSchema), async (req,
 router.get('/auth/invite/:token', authRateLimit, async (req, res) => {
   try {
     const inviteToken = Array.isArray(req.params.token) ? req.params.token[0] : req.params.token;
+    const now = new Date();
+
+    await cleanupStaleAdminInvites(now);
 
     const [invite] = await db
       .select()
@@ -184,7 +197,7 @@ router.get('/auth/invite/:token', authRateLimit, async (req, res) => {
         and(
           eq(adminInvites.token, inviteToken),
           isNull(adminInvites.usedBy),
-          gt(adminInvites.expiresAt, new Date()),
+          gt(adminInvites.expiresAt, now),
         )
       )
       .limit(1);
@@ -209,54 +222,51 @@ router.post('/auth/accept-invite', authRateLimit, validateBody(acceptInviteSchem
   const { token, email, password } = req.body as z.infer<typeof acceptInviteSchema>;
 
   try {
-    // Find valid, unused, non-expired invite
-    const [invite] = await db
-      .select()
-      .from(adminInvites)
-      .where(
-        and(
-          eq(adminInvites.token, token),
-          isNull(adminInvites.usedBy),
-          gt(adminInvites.expiresAt, new Date()),
+    const now = new Date();
+
+    const { invite, user } = await db.transaction(async (tx) => {
+      await tx.delete(adminInvites).where(staleAdminInvitesWhereClause(now));
+
+      const [invite] = await tx
+        .select()
+        .from(adminInvites)
+        .where(
+          and(
+            eq(adminInvites.token, token),
+            isNull(adminInvites.usedBy),
+            gt(adminInvites.expiresAt, now),
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (!invite) {
-      res.status(400).json({ error: 'Invite not found, already used, or expired' });
-      return;
-    }
+      if (!invite) {
+        throw new Error('INVITE_NOT_FOUND');
+      }
 
-    // If invite was scoped to a specific email, enforce it
-    if (invite.email && invite.email !== email) {
-      res.status(400).json({ error: 'Email does not match the invite' });
-      return;
-    }
+      if (invite.email && invite.email !== email) {
+        throw new Error('INVITE_EMAIL_MISMATCH');
+      }
 
-    // Check if email already taken
-    const [existing] = await db
-      .select()
-      .from(adminUsers)
-      .where(eq(adminUsers.email, email))
-      .limit(1);
+      const [existing] = await tx
+        .select()
+        .from(adminUsers)
+        .where(eq(adminUsers.email, email))
+        .limit(1);
 
-    if (existing) {
-      res.status(409).json({ error: 'An account with this email already exists' });
-      return;
-    }
+      if (existing) {
+        throw new Error('EMAIL_TAKEN');
+      }
 
-    // Create the admin user
-    const passwordHash = await hashPassword(password);
-    const [user] = await db
-      .insert(adminUsers)
-      .values({ email, passwordHash })
-      .returning();
+      const passwordHash = await hashPassword(password);
+      const [user] = await tx
+        .insert(adminUsers)
+        .values({ email, passwordHash, canDeleteAdminProfiles: isOwnerAdminEmail(email) })
+        .returning();
 
-    // Mark invite as used
-    await db
-      .update(adminInvites)
-      .set({ usedBy: user.id })
-      .where(eq(adminInvites.id, invite.id));
+      await tx.delete(adminInvites).where(eq(adminInvites.id, invite.id));
+
+      return { invite, user };
+    });
 
     const authToken = generateToken(user.id, user.email);
     req.log?.info({ userId: user.id, email, inviteId: invite.id }, 'Admin account created via invite');
@@ -270,6 +280,23 @@ router.post('/auth/accept-invite', authRateLimit, validateBody(acceptInviteSchem
 
     res.status(201).json({ token: authToken, email: user.email });
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === 'INVITE_NOT_FOUND') {
+        res.status(400).json({ error: 'Invite not found, already used, or expired' });
+        return;
+      }
+
+      if (error.message === 'INVITE_EMAIL_MISMATCH') {
+        res.status(400).json({ error: 'Email does not match the invite' });
+        return;
+      }
+
+      if (error.message === 'EMAIL_TAKEN') {
+        res.status(409).json({ error: 'An account with this email already exists' });
+        return;
+      }
+    }
+
     req.log?.error({ error }, 'Accept invite error');
     res.status(500).json({ error: 'Internal server error' });
   }

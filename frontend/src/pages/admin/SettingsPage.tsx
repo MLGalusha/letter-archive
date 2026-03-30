@@ -7,11 +7,15 @@ import {
   getSettings,
   updateSettings,
   getInvites,
+  getAdminUsers,
   revokeInvite,
+  deleteAdminUser,
   changePassword,
   getSystemInfo,
   type SiteSettings,
   type InviteInfo,
+  type AdminUserInfo,
+  type AdminUsersResponse,
   type SystemInfo,
 } from '../../api/admin/settings';
 import AdminLayout from '../../components/AdminLayout';
@@ -26,6 +30,8 @@ export default function SettingsPage() {
 
   // ── Data state ──────────────────────────────────────────
   const [settings, setSettings] = useState<SiteSettings>({});
+  const [adminUsers, setAdminUsers] = useState<AdminUserInfo[]>([]);
+  const [currentUserCanDeleteAdminProfiles, setCurrentUserCanDeleteAdminProfiles] = useState(false);
   const [invites, setInvites] = useState<InviteInfo[]>([]);
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,6 +41,7 @@ export default function SettingsPage() {
   const [inviteLink, setInviteLink] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteFeedback, setInviteFeedback] = useState<FeedbackState>(null);
+  const [adminUsersFeedback, setAdminUsersFeedback] = useState<FeedbackState>(null);
 
   // ── Password state ──────────────────────────────────────
   const [oldPassword, setOldPassword] = useState('');
@@ -68,8 +75,9 @@ export default function SettingsPage() {
   // ── Load data ───────────────────────────────────────────
   const loadData = useCallback(async () => {
     try {
-      const [settingsData, invitesData, sysInfo] = await Promise.allSettled([
+      const [settingsData, adminUsersData, invitesData, sysInfo] = await Promise.allSettled([
         getSettings(),
+        getAdminUsers(),
         getInvites(),
         getSystemInfo(),
       ]);
@@ -86,6 +94,12 @@ export default function SettingsPage() {
         setEmailResearch(s.contactResearch || '');
         setEmailVolunteer(s.contactVolunteer || '');
         setAutoTranscribe(s.auto_transcribe === 'true');
+      }
+
+      if (adminUsersData.status === 'fulfilled') {
+        const adminUserResponse = adminUsersData.value as AdminUsersResponse;
+        setAdminUsers(adminUserResponse.users);
+        setCurrentUserCanDeleteAdminProfiles(adminUserResponse.currentUserCanDeleteAdminProfiles);
       }
 
       if (invitesData.status === 'fulfilled') {
@@ -111,10 +125,10 @@ export default function SettingsPage() {
     setInviteLink('');
     try {
       const result = await createInvite(inviteEmail || undefined);
-      const link = `${window.location.origin}/admin-login?invite=${result.token}`;
+      const link = `${window.location.origin}/admin-invite?token=${result.token}`;
       setInviteLink(link);
       setInviteEmail('');
-      setInviteFeedback({ type: 'success', message: 'Invite link generated.' });
+      setInviteFeedback({ type: 'success', message: 'Invite link generated. It expires in 24 hours.' });
       // Refresh invites list
       try {
         const updated = await getInvites();
@@ -142,6 +156,29 @@ export default function SettingsPage() {
       setInvites(prev => prev.filter(i => i.id !== id));
     } catch (err) {
       setInviteFeedback({ type: 'error', message: getErrorMessage(err, 'Failed to revoke invite.') });
+    }
+  };
+
+  const handleDeleteAdminUser = async (user: AdminUserInfo) => {
+    const confirmed = window.confirm(`Delete admin profile for ${user.email}? This removes their access immediately.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setAdminUsersFeedback(null);
+
+    try {
+      await deleteAdminUser(user.id);
+      setAdminUsers((prev) => prev.filter((adminUser) => adminUser.id !== user.id));
+      try {
+        const updatedInvites = await getInvites();
+        setInvites(updatedInvites);
+      } catch {
+        // non-critical; user deletion already succeeded
+      }
+      setAdminUsersFeedback({ type: 'success', message: `${user.email} was removed from the admin team.` });
+    } catch (err) {
+      setAdminUsersFeedback({ type: 'error', message: getErrorMessage(err, 'Failed to delete admin profile.') });
     }
   };
 
@@ -297,9 +334,68 @@ export default function SettingsPage() {
 
           {/* Invite Admin */}
           <div className="settings-subsection">
+            <h3>Admin Profiles</h3>
+            <p className="settings-subsection-desc">
+              Accepted invites show up here as admin accounts. Only the owner account can delete other admin profiles.
+            </p>
+            {adminUsers.length === 0 ? (
+              <p className="settings-table-empty">No admin profiles found.</p>
+            ) : (
+              <div className="settings-table-wrap">
+                <table className="settings-table">
+                  <thead>
+                    <tr>
+                      <th>Email</th>
+                      <th>Access</th>
+                      <th>Joined</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adminUsers.map((adminUser) => (
+                      <tr key={adminUser.id}>
+                        <td>
+                          {adminUser.email}
+                          {adminUser.isCurrentUser && (
+                            <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>(you)</span>
+                          )}
+                        </td>
+                        <td>{adminUser.canDeleteAdminProfiles ? 'Owner' : 'Admin'}</td>
+                        <td>{formatDate(adminUser.createdAt)}</td>
+                        <td>
+                          {adminUser.canBeDeleted && (
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              onClick={() => handleDeleteAdminUser(adminUser)}
+                            >
+                              Delete
+                            </Button>
+                          )}
+                          {!adminUser.canBeDeleted && !adminUser.canDeleteAdminProfiles && !currentUserCanDeleteAdminProfiles && !adminUser.isCurrentUser && (
+                            <span style={{ color: 'var(--text-muted)' }}>Owner only</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {adminUsersFeedback && (
+              <div className={`settings-feedback ${adminUsersFeedback.type}`}>
+                {adminUsersFeedback.message}
+              </div>
+            )}
+          </div>
+
+          <hr className="settings-divider" />
+
+          {/* Invite Admin */}
+          <div className="settings-subsection">
             <h3>Invite Admin</h3>
             <p className="settings-subsection-desc">
-              Generate a one-time invite link. Optionally lock it to a specific email.
+              Generate a one-time invite link. Optionally lock it to a specific email. Every invite expires after 24 hours.
             </p>
             <div className="settings-invite-row">
               <div className="settings-form-row">
@@ -345,42 +441,36 @@ export default function SettingsPage() {
 
           {/* Active Invites */}
           <div className="settings-subsection">
-            <h3>Active Invites</h3>
+            <h3>Pending Invites ({invites.length})</h3>
             {invites.length === 0 ? (
-              <p className="settings-table-empty">No invites yet.</p>
+              <p className="settings-table-empty">No pending invite links.</p>
             ) : (
               <div className="settings-table-wrap">
                 <table className="settings-table">
                   <thead>
                     <tr>
-                      <th>Status</th>
                       <th>Email</th>
                       <th>Invited By</th>
-                      <th>Date</th>
+                      <th>Created</th>
+                      <th>Expires</th>
                       <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {invites.map(invite => (
                       <tr key={invite.id}>
-                        <td>
-                          <span className={`settings-invite-status ${invite.status}`}>
-                            {invite.status}
-                          </span>
-                        </td>
                         <td>{invite.email || <span style={{ color: 'var(--text-muted)' }}>any</span>}</td>
                         <td>{invite.inviterEmail}</td>
                         <td>{formatDate(invite.createdAt)}</td>
+                        <td>{formatDate(invite.expiresAt)}</td>
                         <td>
-                          {invite.status === 'pending' && (
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              onClick={() => handleRevokeInvite(invite.id)}
-                            >
-                              Revoke
-                            </Button>
-                          )}
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => handleRevokeInvite(invite.id)}
+                          >
+                            Revoke
+                          </Button>
                         </td>
                       </tr>
                     ))}

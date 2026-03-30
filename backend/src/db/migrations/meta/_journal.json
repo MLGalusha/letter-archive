@@ -253,6 +253,13 @@
       "when": 1775644800000,
       "tag": "0035_add_reading_text",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1775731200000,
+      "tag": "0036_admin_access_controls",
+      "breakpoints": true
     }
   ]
 }

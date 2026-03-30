@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { eq, and, or, isNull, gt, count, inArray, sql } from 'drizzle-orm';
+import { eq, and, or, isNull, gt, count, inArray, sql, desc } from 'drizzle-orm';
 import {
   db,
   siteSettings,
@@ -12,6 +12,8 @@ import {
 import { validateBody } from '../../middleware/validate.js';
 import { hashPassword, verifyPassword } from '../../auth/jwt.js';
 import { env, hasOpenAI } from '../../config/env.js';
+import { cleanupStaleAdminInvites, staleAdminInvitesWhereClause } from '../../services/admin-invites.js';
+import { isOwnerAdminEmail } from '../../services/admin-ownership.js';
 
 const router = Router();
 
@@ -84,34 +86,69 @@ router.put('/settings', validateBody(updateSettingsSchema), async (req, res) => 
 });
 
 // ============================================================================
+// GET /settings/admin-users — List admin profiles and current-user capabilities
+// ============================================================================
+
+router.get('/settings/admin-users', async (req, res) => {
+  try {
+    const users = await db
+      .select({
+        id: adminUsers.id,
+        email: adminUsers.email,
+        canDeleteAdminProfiles: adminUsers.canDeleteAdminProfiles,
+        createdAt: adminUsers.createdAt,
+      })
+      .from(adminUsers)
+      .orderBy(adminUsers.createdAt, adminUsers.email);
+
+    res.json({
+      currentUserId: req.adminUser!.id,
+      currentUserCanDeleteAdminProfiles: isOwnerAdminEmail(req.adminUser!.email),
+      users: users.map((user) => ({
+        ...user,
+        canDeleteAdminProfiles: isOwnerAdminEmail(user.email),
+        isCurrentUser: user.id === req.adminUser!.id,
+        canBeDeleted:
+          isOwnerAdminEmail(req.adminUser!.email) &&
+          user.id !== req.adminUser!.id &&
+          !isOwnerAdminEmail(user.email),
+      })),
+    });
+  } catch (error) {
+    req.log?.error({ error }, 'Failed to fetch admin users');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================================
 // GET /settings/invites — List all invites with status
 // ============================================================================
 
 router.get('/settings/invites', async (req, res) => {
   try {
+    const now = new Date();
+    await cleanupStaleAdminInvites(now);
+
     const invites = await db
       .select({
         id: adminInvites.id,
         email: adminInvites.email,
         invitedBy: adminInvites.invitedBy,
-        usedBy: adminInvites.usedBy,
+        inviterEmail: adminUsers.email,
         expiresAt: adminInvites.expiresAt,
         createdAt: adminInvites.createdAt,
       })
       .from(adminInvites)
-      .orderBy(adminInvites.createdAt);
+      .innerJoin(adminUsers, eq(adminInvites.invitedBy, adminUsers.id))
+      .where(
+        and(
+          isNull(adminInvites.usedBy),
+          gt(adminInvites.expiresAt, now),
+        )
+      )
+      .orderBy(desc(adminInvites.createdAt));
 
-    const now = new Date();
-    const result = invites.map((invite) => ({
-      ...invite,
-      status: invite.usedBy
-        ? 'used'
-        : new Date(invite.expiresAt) < now
-          ? 'expired'
-          : 'pending',
-    }));
-
-    res.json(result);
+    res.json(invites);
   } catch (error) {
     req.log?.error({ error }, 'Failed to fetch invites');
     res.status(500).json({ error: 'Internal server error' });
@@ -126,6 +163,9 @@ router.delete('/settings/invites/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
+    const now = new Date();
+    await cleanupStaleAdminInvites(now);
+
     // Only allow deleting pending (unused) invites
     const [invite] = await db
       .select()
@@ -134,6 +174,7 @@ router.delete('/settings/invites/:id', async (req, res) => {
         and(
           eq(adminInvites.id, id),
           isNull(adminInvites.usedBy),
+          gt(adminInvites.expiresAt, now),
         )
       )
       .limit(1);
@@ -149,6 +190,60 @@ router.delete('/settings/invites/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     req.log?.error({ error }, 'Failed to revoke invite');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================================
+// DELETE /settings/admin-users/:id — Delete an invited admin profile
+// ============================================================================
+
+router.delete('/settings/admin-users/:id', async (req, res) => {
+  const { id } = req.params;
+  const currentAdminUser = req.adminUser;
+
+  if (!currentAdminUser || !isOwnerAdminEmail(currentAdminUser.email)) {
+    res.status(403).json({ error: 'Only the owner account can delete admin profiles' });
+    return;
+  }
+
+  if (id === currentAdminUser.id) {
+    res.status(400).json({ error: 'You cannot delete your own admin profile' });
+    return;
+  }
+
+  try {
+    const [targetUser] = await db
+      .select({
+        id: adminUsers.id,
+        email: adminUsers.email,
+        canDeleteAdminProfiles: adminUsers.canDeleteAdminProfiles,
+      })
+      .from(adminUsers)
+      .where(eq(adminUsers.id, id))
+      .limit(1);
+
+    if (!targetUser) {
+      res.status(404).json({ error: 'Admin profile not found' });
+      return;
+    }
+
+    if (isOwnerAdminEmail(targetUser.email)) {
+      res.status(403).json({ error: 'Owner admin profiles cannot be deleted' });
+      return;
+    }
+
+    const now = new Date();
+    await db.transaction(async (tx) => {
+      await tx.delete(adminInvites).where(staleAdminInvitesWhereClause(now));
+      await tx.delete(adminInvites).where(eq(adminInvites.invitedBy, id));
+      await tx.delete(adminUsers).where(eq(adminUsers.id, id));
+    });
+
+    req.log?.info({ deletedAdminUserId: id, deletedAdminUserEmail: targetUser.email }, 'Admin profile deleted');
+    res.json({ success: true });
+  } catch (error) {
+    req.log?.error({ error, adminUserId: id }, 'Failed to delete admin profile');
     res.status(500).json({ error: 'Internal server error' });
   }
 });

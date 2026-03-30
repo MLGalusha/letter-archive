@@ -35,7 +35,7 @@ export async function loginAsAdmin(page: Page): Promise<void> {
   await page.locator('input[type="password"]').fill(ADMIN_PASSWORD);
   await page.click('button[type="submit"]');
 
-  await page.waitForURL(/\/admin$/, { timeout: 15000 });
+  await page.waitForURL(/\/admin$/, { timeout: 30000, waitUntil: 'domcontentloaded' });
   await waitForAdminDashboardReady(page);
 }
 

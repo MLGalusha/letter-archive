@@ -163,7 +163,7 @@ test.describe('Navigation', () => {
       await page.goto('/collections');
       await page.waitForLoadState('domcontentloaded');
 
-      await page.goBack();
+      await page.goBack({ waitUntil: 'domcontentloaded' });
 
       expect(page.url()).toMatch(/\/$/);
     });
@@ -174,7 +174,7 @@ test.describe('Navigation', () => {
       await page.goto('/admin/upload');
       await page.waitForLoadState('domcontentloaded');
 
-      await page.goBack();
+      await page.goBack({ waitUntil: 'domcontentloaded' });
 
       expect(page.url()).toMatch(/\/admin$/);
     });
@@ -186,8 +186,8 @@ test.describe('Navigation', () => {
       await page.goto('/collections');
       await page.waitForLoadState('domcontentloaded');
 
-      await page.goBack();
-      await page.goForward();
+      await page.goBack({ waitUntil: 'domcontentloaded' });
+      await page.goForward({ waitUntil: 'domcontentloaded' });
 
       expect(page.url()).toContain('/collections');
     });

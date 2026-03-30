@@ -27,10 +27,12 @@ if (!("IntersectionObserver" in globalThis)) {
   });
 }
 
-// jsdom doesn't implement window.scrollTo
-if (!window.scrollTo) {
-  window.scrollTo = () => {};
-}
+// jsdom ships a scrollTo stub that throws "Not implemented", so replace it.
+Object.defineProperty(window, "scrollTo", {
+  value: () => {},
+  writable: true,
+  configurable: true,
+});
 
 Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
   value: () => ({

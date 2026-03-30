@@ -37,11 +37,11 @@ describe("Header", () => {
     expect(screen.getByText("Support")).toBeInTheDocument();
   });
 
-  it("renders the site brand with Editorial Archive label", () => {
+  it("renders the current site brand", () => {
     renderHeader();
 
-    expect(screen.getByText("Editorial Archive")).toBeInTheDocument();
-    expect(screen.getByText("Letter Archive")).toBeInTheDocument();
+    expect(screen.getByText("A Letter Archive")).toBeInTheDocument();
+    expect(screen.getByText("Voices That Remain")).toBeInTheDocument();
   });
 
   it("Home link is active when on /", () => {
@@ -127,7 +127,7 @@ describe("Header", () => {
     const nav = container.querySelector("nav");
     expect(nav).toHaveClass("open");
 
-    await user.click(screen.getByText("Letter Archive"));
+    await user.click(screen.getByRole("link", { name: /A Letter Archive/i }));
     expect(nav).not.toHaveClass("open");
   });
 

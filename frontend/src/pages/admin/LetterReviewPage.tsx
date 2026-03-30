@@ -165,8 +165,6 @@ export default function LetterReviewPage() {
     transcript,
     reviewMode,
   );
-  const hookRef = useRef<HTMLTextAreaElement>(null);
-  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const {
     applyLetterMetadata,
@@ -311,8 +309,6 @@ export default function LetterReviewPage() {
     textarea.style.height = Math.max(textarea.scrollHeight, minHeight) + "px";
   };
 
-  useEffect(() => autoResizeTextarea(hookRef.current), [hook]);
-  useEffect(() => autoResizeTextarea(descriptionRef.current), [description]);
   useEffect(() => autoResizeTextarea(notesRef.current), [notes]);
 
   // Clear any pending sync timer
@@ -1300,8 +1296,6 @@ export default function LetterReviewPage() {
                 onTriggerAutoSave={(updates) =>
                   void triggerAutoSave(updates as AutoSaveData)
                 }
-                hookRef={hookRef}
-                descriptionRef={descriptionRef}
                 regenerateState={regenerateState}
                 onVerifyMetadata={handleVerifyMetadata}
                 onConfirmTranscript={handleConfirmTranscript}

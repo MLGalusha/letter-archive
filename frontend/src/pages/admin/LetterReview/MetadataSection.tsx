@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import { Icon, Dropdown, DropdownItem } from "../../../components/common";
+import TagEditor from "../../../components/admin/TagEditor";
 import type { Letter, EmotionalTone, RelationshipType } from "../../../types/Letter";
 import {
   EMOTIONAL_TONE_OPTIONS,
@@ -37,10 +38,6 @@ interface MetadataSectionProps {
 
   // Auto-save
   onTriggerAutoSave: (updates: Record<string, unknown>) => void;
-
-  // Refs
-  hookRef: RefObject<HTMLTextAreaElement | null>;
-  descriptionRef: RefObject<HTMLTextAreaElement | null>;
 
   // Regenerate state
   regenerateState: string;
@@ -87,8 +84,6 @@ export default function MetadataSection({
   onPrimaryTopicsChange,
   onTopicsDropdownOpenChange,
   onTriggerAutoSave,
-  hookRef,
-  descriptionRef,
   regenerateState,
   onVerifyMetadata,
   onConfirmTranscript,
@@ -174,7 +169,7 @@ export default function MetadataSection({
         onDoubleClick={onMetadataFieldDoubleClick}
       >
         <div className="form-row">
-          <div className="form-group">
+          <div className="form-group sender-border">
             <label htmlFor="sender">Sender</label>
             <input
               type="text"
@@ -193,7 +188,7 @@ export default function MetadataSection({
               }
             />
           </div>
-          <div className="form-group">
+          <div className="form-group recipient-border">
             <label htmlFor="recipient">Recipient</label>
             <input
               type="text"
@@ -257,22 +252,16 @@ export default function MetadataSection({
 
         <div className="form-group">
           <label htmlFor="hook">Hook</label>
-          <textarea
-            ref={hookRef}
-            id="hook"
+          <TagEditor
             value={hook}
-            onChange={(e) => {
-              onHookChange(e.target.value);
-              onTriggerAutoSave({ hook: e.target.value || null });
+            onChange={(val) => {
+              onHookChange(val);
+              onTriggerAutoSave({ hook: val || null });
             }}
             placeholder="Short teaser to engage readers (shown in list view)"
             maxLength={150}
+            singleLine
             readOnly={letter.metadataContentStatus === "VERIFIED"}
-            className={
-              letter.metadataContentStatus === "VERIFIED"
-                ? "verified-field"
-                : ""
-            }
           />
           <span className="help-text">
             Max 150 characters - displayed on letter cards
@@ -281,21 +270,15 @@ export default function MetadataSection({
 
         <div className="form-group">
           <label htmlFor="description">Summary</label>
-          <textarea
-            ref={descriptionRef}
-            id="description"
+          <TagEditor
             value={description}
-            onChange={(e) => {
-              onDescriptionChange(e.target.value);
-              onTriggerAutoSave({ summary: e.target.value || null });
+            onChange={(val) => {
+              onDescriptionChange(val);
+              onTriggerAutoSave({ summary: val || null });
             }}
             placeholder="Factual description of letter content (shown in detail view)"
             readOnly={letter.metadataContentStatus === "VERIFIED"}
-            className={
-              letter.metadataContentStatus === "VERIFIED"
-                ? "verified-field"
-                : ""
-            }
+            className="multi-line"
           />
         </div>
 

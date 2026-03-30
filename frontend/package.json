@@ -18,6 +18,12 @@
   "dependencies": {
     "@mdxeditor/editor": "^3.52.5",
     "@tanstack/react-virtual": "^3.13.18",
+    "@tiptap/extension-document": "^3.21.0",
+    "@tiptap/extension-paragraph": "^3.21.0",
+    "@tiptap/extension-text": "^3.21.0",
+    "@tiptap/pm": "^3.21.0",
+    "@tiptap/react": "^3.21.0",
+    "@tiptap/starter-kit": "^3.21.0",
     "@types/d3": "^7.4.3",
     "d3": "^7.9.0",
     "react": "^19.2.0",

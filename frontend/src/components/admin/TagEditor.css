@@ -1,0 +1,129 @@
+/* ─── Tag Color Variables ──────────────────────────────────────────── */
+
+:root {
+  --tag-sender-color: #2563eb;
+  --tag-recipient-color: #16a34a;
+  --tag-sender-bg: rgba(37, 99, 235, 0.08);
+  --tag-recipient-bg: rgba(22, 163, 74, 0.08);
+}
+
+/* ─── Editor Wrapper ──────────────────────────────────────────────── */
+
+.tag-editor-wrapper {
+  position: relative;
+}
+
+.tag-editor-wrapper .tiptap {
+  padding: 0.75rem 1rem;
+  border: solid 1px var(--border);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  background: var(--bg);
+  color: var(--text);
+  transition: all 0.2s ease;
+  outline: none;
+  min-height: 40px;
+}
+
+.tag-editor-wrapper .tiptap:focus {
+  border-color: var(--text-muted);
+  box-shadow: 0 0 0 3px hsla(0, 0%, 50%, 0.1);
+}
+
+.tag-editor-wrapper .tiptap p {
+  margin: 0;
+}
+
+.tag-editor-wrapper .tiptap p + p {
+  margin-top: 0.25em;
+}
+
+/* Single-line mode */
+.tag-editor-wrapper .tiptap .single-line {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Read-only state */
+.tag-editor-wrapper.read-only .tiptap {
+  background: var(--bg-light);
+  cursor: default;
+  opacity: 0.7;
+}
+
+/* Placeholder */
+.tag-editor-wrapper .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--text-muted);
+  pointer-events: none;
+  height: 0;
+  font-style: italic;
+}
+
+/* Use the editor-level data-placeholder attribute */
+.tag-editor-wrapper .tiptap[data-placeholder].is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  pointer-events: none;
+  float: left;
+  height: 0;
+  font-style: italic;
+}
+
+/* ─── Tag Inline Styles ───────────────────────────────────────────── */
+
+.tag-sender {
+  color: var(--tag-sender-color);
+  font-weight: 500;
+}
+
+.tag-recipient {
+  color: var(--tag-recipient-color);
+  font-weight: 500;
+}
+
+/* ─── Empty Tag Chip (pending delete) ─────────────────────────────── */
+
+.tag-empty {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid;
+  border-radius: 3px;
+  font-size: 0.7em;
+  font-weight: 600;
+  line-height: 1.6;
+  vertical-align: baseline;
+  cursor: text;
+  user-select: all;
+}
+
+.tag-sender-empty {
+  color: var(--tag-sender-color);
+  border-color: var(--tag-sender-color);
+  background: var(--tag-sender-bg);
+}
+
+.tag-recipient-empty {
+  color: var(--tag-recipient-color);
+  border-color: var(--tag-recipient-color);
+  background: var(--tag-recipient-bg);
+}
+
+/* ─── Sender/Recipient Input Border Colors ────────────────────────── */
+
+.sender-border input {
+  border-color: var(--tag-sender-color) !important;
+}
+
+.recipient-border input {
+  border-color: var(--tag-recipient-color) !important;
+}
+
+/* Multi-line: min height for summary fields */
+.tag-editor-wrapper.multi-line .tiptap {
+  min-height: 80px;
+  resize: none;
+  overflow: hidden;
+}

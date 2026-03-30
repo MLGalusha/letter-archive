@@ -40,11 +40,39 @@ export interface AdminCollectionInfo extends CollectionInfo {
   hook?: string | null;
 }
 
+let cachedPublicCollections: CollectionInfo[] | null = null;
+let pendingPublicCollections: Promise<CollectionInfo[]> | null = null;
+
+function storePublicCollections(data: CollectionInfo[]): CollectionInfo[] {
+  cachedPublicCollections = data;
+  pendingPublicCollections = null;
+  return data;
+}
+
+export function getCachedCollections(): CollectionInfo[] | null {
+  return cachedPublicCollections;
+}
+
 /**
  * Fetch all collections (public - only shows published letter counts)
  */
 export async function listCollections(): Promise<CollectionInfo[]> {
-  return apiGet<CollectionInfo[]>('/collections');
+  if (cachedPublicCollections) return Promise.resolve(cachedPublicCollections);
+  if (pendingPublicCollections) return pendingPublicCollections;
+
+  pendingPublicCollections = apiGet<CollectionInfo[]>('/collections')
+    .then(storePublicCollections)
+    .catch((error) => {
+      pendingPublicCollections = null;
+      throw error;
+    });
+
+  return pendingPublicCollections;
+}
+
+export function prefetchCollections(): void {
+  if (cachedPublicCollections || pendingPublicCollections) return;
+  void listCollections().catch(() => {});
 }
 
 /**

@@ -7,7 +7,9 @@ import CollectionsPage from "../CollectionsPage";
 const listCollectionsMock = vi.fn();
 
 vi.mock("../../api/collections", () => ({
+  getCachedCollections: () => null,
   listCollections: (...args: unknown[]) => listCollectionsMock(...args),
+  prefetchCollections: vi.fn(),
 }));
 
 const mockCollections = [

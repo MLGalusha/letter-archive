@@ -197,6 +197,97 @@
   gap: 1rem;
 }
 
+.public-collections-grid--loading {
+  min-height: 34rem;
+}
+
+.public-collection-card-skeleton {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 250, 242, 0.98));
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  border-radius: 30px;
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  min-height: 260px;
+  overflow: hidden;
+  padding: 1.3rem 1.4rem 1.1rem;
+  position: relative;
+}
+
+.public-collection-card-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.46) 45%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: collections-skeleton-shimmer 1.4s ease-in-out infinite;
+  transform: translateX(-100%);
+}
+
+.collection-skeleton-title,
+.collection-skeleton-count,
+.collection-skeleton-people,
+.collection-skeleton-meta,
+.collection-skeleton-line,
+.collection-skeleton-cta {
+  border-radius: 999px;
+  background: rgba(217, 207, 191, 0.45);
+}
+
+.collection-skeleton-title {
+  width: 62%;
+  height: 1.65rem;
+}
+
+.collection-skeleton-count {
+  width: 5.25rem;
+  height: 0.95rem;
+  margin-top: 0.2rem;
+}
+
+.collection-skeleton-people {
+  width: 58%;
+  height: 1rem;
+  margin: 0 0 0.7rem;
+}
+
+.collection-skeleton-meta {
+  width: 36%;
+  height: 0.9rem;
+  margin-bottom: 0.9rem;
+}
+
+.collection-skeleton-line {
+  width: 72%;
+  height: 0.9rem;
+  margin-bottom: 0.55rem;
+}
+
+.collection-skeleton-line--long {
+  width: 100%;
+  margin-top: auto;
+}
+
+.collection-skeleton-cta {
+  width: 44%;
+  height: 0.8rem;
+  margin-top: auto;
+}
+
+@keyframes collections-skeleton-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(100%);
+  }
+}
+
 /* ── Card ─────────────────────────────────────────────────── */
 
 .public-collection-card {
@@ -358,6 +449,12 @@
   }
 
   .public-collection-card {
+    min-height: 220px;
+    padding: 1rem 1.1rem 0.9rem;
+    border-radius: 24px;
+  }
+
+  .public-collection-card-skeleton {
     min-height: 220px;
     padding: 1rem 1.1rem 0.9rem;
     border-radius: 24px;

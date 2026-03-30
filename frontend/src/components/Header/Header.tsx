@@ -1,8 +1,14 @@
 import "./Header.css";
 import { Link, NavLink } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useHeaderDock } from "../../contexts/HeaderDockContext";
 import useScrollDirection from "../../hooks/useScrollDirection";
+import { prefetchCollections } from "../../api/collections";
+
+function preloadCollectionsRoute() {
+  void import("../../pages/CollectionsPage");
+  prefetchCollections();
+}
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -10,6 +16,10 @@ export default function Header() {
   const hasDock = Boolean(dock.content) || Boolean(dock.showTitle);
   const isScrollReveal = dock.scrollReveal ?? false;
   const scrollVisible = useScrollDirection(isScrollReveal);
+
+  useEffect(() => {
+    preloadCollectionsRoute();
+  }, []);
 
   const headerClass = [
     "header",
@@ -47,6 +57,8 @@ export default function Header() {
           <NavLink
             to={dock.collectionsLink?.to ?? "/collections"}
             className={({ isActive }) => `page-selector${isActive ? " active" : ""}`}
+            onMouseEnter={preloadCollectionsRoute}
+            onFocus={preloadCollectionsRoute}
             onClick={() => setMenuOpen(false)}
           >
             {dock.collectionsLink?.label ?? "Collections"}

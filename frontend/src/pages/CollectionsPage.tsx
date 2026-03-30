@@ -1,10 +1,9 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
-import { listCollections, type CollectionInfo } from '../api/collections';
+import { getCachedCollections, listCollections, type CollectionInfo } from '../api/collections';
 import Footer from '../components/Footer/Footer';
 import BackToTop from '../components/BackToTop';
-import { useAsync } from '../hooks/useAsync';
 import { saveCollectionsSort, loadCollectionsSort } from '../utils/searchPersistence';
 import './CollectionsPage.css';
 
@@ -40,6 +39,12 @@ function dateVal(range: CollectionInfo['dateRange'], which: 'min' | 'max', fallb
   return range?.[which]?.replace(/[^0-9]/g, '') || fallback;
 }
 
+function hasPublishedLetters(collection: CollectionInfo): boolean {
+  return (collection.letterCount || 0) > 0;
+}
+
+const COLLECTION_SKELETON_COUNT = 6;
+
 export default function CollectionsPage() {
   const savedSort = loadCollectionsSort();
   const [sortField, setSortField] = useState<SortField>(
@@ -65,11 +70,41 @@ export default function CollectionsPage() {
     saveCollectionsSort(sortField, sortOrder);
   }, [sortField, sortOrder]);
 
-  const { data, loading, error } = useAsync(async () => {
-    const collections = await listCollections();
-    return collections.filter((collection) => (collection.letterCount || 0) > 0);
-  }, []);
-  const collections: CollectionInfo[] = data ?? [];
+  const [collectionsData, setCollectionsData] = useState<CollectionInfo[] | null>(() => {
+    const cachedCollections = getCachedCollections();
+    return cachedCollections ? cachedCollections.filter(hasPublishedLetters) : null;
+  });
+  const [loading, setLoading] = useState(collectionsData === null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (collectionsData !== null) return;
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    listCollections()
+      .then((collections) => {
+        if (cancelled) return;
+        setCollectionsData(collections.filter(hasPublishedLetters));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [collectionsData]);
+
+  const collections: CollectionInfo[] = collectionsData ?? [];
+  const showLoadingShell = loading && collections.length === 0 && !error;
 
   const visibleCollections = useMemo(() => {
     const dir = sortOrder === 'asc' ? 1 : -1;
@@ -163,51 +198,66 @@ export default function CollectionsPage() {
           </div>
         </div>
 
-        {loading && <p className="loading-message">Loading collections...</p>}
         {error && <p className="error-message">{error}</p>}
 
-        <div className="public-collections-grid">
-          {visibleCollections.map((collection) => {
-            const dateLabel = formatDateRange(collection.dateRange);
-            const teaser = collection.hook || collection.description;
-            const hasPeople = collection.primarySender || collection.primaryRecipient;
-
-            return (
-              <Link
-                key={collection.id}
-                to={`/collections/${collection.collectionCode}`}
-                className="public-collection-card"
-              >
-                <div className="collection-card-top">
-                  <h3>{collection.title || `Collection ${collection.collectionCode}`}</h3>
-                  <span className="collection-card-count">
-                    {collection.letterCount} letter{collection.letterCount !== 1 ? 's' : ''}
-                  </span>
-                </div>
-
-                {hasPeople && (
-                  <p className="collection-card-people">
-                    {collection.primarySender && collection.primaryRecipient
-                      ? <>{collection.primarySender} <span className="people-arrow">&rarr;</span> {collection.primaryRecipient}</>
-                      : collection.primarySender || collection.primaryRecipient}
-                  </p>
-                )}
-
-                {dateLabel && (
-                  <div className="collection-card-meta">
-                    <span>{dateLabel}</span>
+        {(showLoadingShell || visibleCollections.length > 0) && (
+          <div className={`public-collections-grid${showLoadingShell ? ' public-collections-grid--loading' : ''}`}>
+            {showLoadingShell
+              ? Array.from({ length: COLLECTION_SKELETON_COUNT }, (_, index) => (
+                  <div key={index} className="public-collection-card-skeleton" aria-hidden="true">
+                    <div className="collection-card-top">
+                      <div className="collection-skeleton-title" />
+                      <div className="collection-skeleton-count" />
+                    </div>
+                    <div className="collection-skeleton-people" />
+                    <div className="collection-skeleton-meta" />
+                    <div className="collection-skeleton-line collection-skeleton-line--long" />
+                    <div className="collection-skeleton-line" />
+                    <div className="collection-skeleton-cta" />
                   </div>
-                )}
+                ))
+              : visibleCollections.map((collection) => {
+                  const dateLabel = formatDateRange(collection.dateRange);
+                  const teaser = collection.hook || collection.description;
+                  const hasPeople = collection.primarySender || collection.primaryRecipient;
 
-                {teaser && (
-                  <p className="collection-card-teaser">{teaser}</p>
-                )}
+                  return (
+                    <Link
+                      key={collection.id}
+                      to={`/collections/${collection.collectionCode}`}
+                      className="public-collection-card"
+                    >
+                      <div className="collection-card-top">
+                        <h3>{collection.title || `Collection ${collection.collectionCode}`}</h3>
+                        <span className="collection-card-count">
+                          {collection.letterCount} letter{collection.letterCount !== 1 ? 's' : ''}
+                        </span>
+                      </div>
 
-                <span className="collection-card-cta">Read the letters &rarr;</span>
-              </Link>
-            );
-          })}
-        </div>
+                      {hasPeople && (
+                        <p className="collection-card-people">
+                          {collection.primarySender && collection.primaryRecipient
+                            ? <>{collection.primarySender} <span className="people-arrow">&rarr;</span> {collection.primaryRecipient}</>
+                            : collection.primarySender || collection.primaryRecipient}
+                        </p>
+                      )}
+
+                      {dateLabel && (
+                        <div className="collection-card-meta">
+                          <span>{dateLabel}</span>
+                        </div>
+                      )}
+
+                      {teaser && (
+                        <p className="collection-card-teaser">{teaser}</p>
+                      )}
+
+                      <span className="collection-card-cta">Read the letters &rarr;</span>
+                    </Link>
+                  );
+                })}
+          </div>
+        )}
 
         {!loading && visibleCollections.length === 0 && !error && (
           <div className="no-results">

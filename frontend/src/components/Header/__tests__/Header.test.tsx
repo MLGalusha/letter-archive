@@ -10,6 +10,12 @@ vi.mock("../../../hooks/useScrollDirection", () => ({
   default: () => true, // always visible
 }));
 
+vi.mock("../../../api/collections", () => ({
+  getCachedCollections: () => null,
+  listCollections: vi.fn(),
+  prefetchCollections: vi.fn(),
+}));
+
 function renderHeader(initialEntries: string[] = ["/"]) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>

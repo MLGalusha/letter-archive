@@ -1,139 +1,169 @@
-# Letter Archive
+# Voices That Remain
 
-A full-stack platform for preserving and exploring historical letter collections. Transforms physical letters into a searchable digital archive using AI-powered transcription, structured metadata extraction, and a human-in-the-loop verification workflow.
+A full-stack platform that turns boxes of handwritten historical letters into a searchable, browsable digital archive. AI handles transcription and metadata extraction; humans verify and curate.
 
-> This is a personal project built around a private collection of historical letters. The archive data is not included in this repository — the codebase is shared to showcase the architecture and engineering.
-
-<!-- Screenshots: crop browser chrome before adding -->
-<!-- ![Admin Review](docs/screenshots/admin-review.png) -->
-<!-- ![Public Browse](docs/screenshots/public-browse.png) -->
+**[voicesthatremain.com](https://voicesthatremain.com)**
 
 ## What It Does
 
 **For the archivist (admin):**
 
-- Upload scanned letter images organized by collection
-- AI transcribes handwritten text from letter scans
-- AI extracts structured metadata: dates, senders, recipients, locations, topics, emotional tone, and a narrative "hook" line
-- Two-track verification workflow — transcript and metadata reviewed independently
-- Entity management — merge duplicate people/places, track relationships across letters
-- Resync system to propagate identity corrections across all derived metadata
+- Upload scanned letter images — filenames encode collection, date, document type, and page number, parsed automatically
+- AI transcribes handwritten text from multi-page scans using vision models
+- AI extracts structured metadata: dates, senders, recipients, locations, topics, emotional tone, and a narrative hook
+- Two independent verification tracks — transcript accuracy and metadata correctness reviewed separately
+- Entity management with canonical person/place registries and a letter-scoped extraction review queue
+- Collection profiles with AI-generated narratives, reading paths, and correspondent summaries
+- Blog editor (MDX) for publishing journal entries and project updates
+- Block-based page editor for About, Support, and Contact pages (9 section types)
+- OpenAI usage dashboard with per-call token and cost tracking
 
 **For the visitor (public):**
 
-- Browse and search digitized collections
-- View high-resolution scans with zoom/pan alongside verified transcriptions
-- Filter by date, person, location, collection, or topic
-- Explore connections — follow a person, place, or theme across letters
-- Discovery navigation — jump between related entities while reading
+- Browse collections with rich profile cards, highlight images, and curated reading paths
+- Read letters with a high-res lightbox (zoom/pan), reading-mode transcript, and original-formatting view
+- Search and filter by date, person, location, collection, topic, transcript status, and verification state
+- Explore an interactive relationship graph connecting people across the archive
+- Read journal entries and project updates
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  React Frontend (Vite + TypeScript + React Router)      │
-│  ┌───────────┐ ┌─────────────────┐ ┌────────────────────┐
-│  │ Public UI │ │ Admin Dashboard │ │ Image Viewer       │
-│  └───────────┘ └─────────────────┘ └────────────────────┘
-└────────────────────────┬────────────────────────────────┘
-                         │ REST API
-┌────────────────────────┴────────────────────────────────┐
-│  Express Backend (Node.js + TypeScript)                 │
-│  ┌──────────┐ ┌──────────────┐ ┌──────────────────────┐ │
-│  │ Routes   │ │ AI Pipeline  │ │ Processing Engine    │ │
-│  └──────────┘ └──────┬───────┘ └──────────────────────┘ │
-└───────────┬──────────┼──────────────────────────────────┘
-            │          │
-     ┌──────┴───┐  ┌───┴──────┐
-     │ Postgres │  │ OpenAI   │
-     │ (Drizzle)│  │ API      │
-     └──────────┘  └──────────┘
+                          ┌──────────────────────────────┐
+                          │     React + Vite Frontend     │
+                          │  Public UI  ·  Admin Dashboard │
+                          └──────────────┬───────────────┘
+                                         │ REST
+┌──────────┐  ┌──────────────────────────┴────────────────────────┐  ┌───────────┐
+│ Google    │  │            Express Backend (TypeScript)           │  │  OpenAI   │
+│ Cloud     │◄─┤  Routes · Services · Pipeline · Auth · Middleware │─►│  API      │
+│ Storage   │  └──────────┬──────────────────────────┬────────────┘  │ (Vision + │
+└──────────┘              │                          │               │ Structured│
+                          │                   ┌──────┴──────┐       │ Outputs)  │
+                   ┌──────┴──────┐            │  Background │       └───────────┘
+                   │  PostgreSQL │            │   Worker    │
+                   │  (Drizzle)  │            └─────────────┘
+                   └─────────────┘
 ```
 
-### Tech Stack
+## Engineering Highlights
 
-| Layer         | Technology                                                        |
-| ------------- | ----------------------------------------------------------------- |
-| Frontend      | React, TypeScript, Vite, React Router                             |
-| Backend       | Node.js, Express, TypeScript                                      |
-| Database      | PostgreSQL with Drizzle ORM                                       |
-| AI            | OpenAI structured outputs for transcription + metadata extraction |
-| Image Viewing | Pan/zoom viewer for high-res letter scans                         |
+**AI Pipeline with Structured Outputs** — Transcription uses OpenAI's vision API to read handwritten text from scans. Metadata extraction uses structured output mode to return validated JSON matching TypeScript schemas — enforcing controlled vocabularies for emotional tone, topics, and relationship types without post-processing. A guillemet tagging system (`«SENDER:name»`, `«RECIPIENT:name»`) marks identity references in summaries and hooks so they can be linked to canonical entities.
 
-## Key Engineering Decisions
+**Two-Track Verification** — Transcript status and metadata status advance independently (`EMPTY → AI_DRAFT → EDITED → VERIFIED`), decoupled from publication visibility. An archivist can verify a transcript while metadata is still in draft, or vice versa.
 
-**AI Pipeline with Structured Outputs** — Transcription and metadata extraction use OpenAI's structured output mode to return validated JSON matching TypeScript schemas. This ensures consistent enum values (relationship types, emotional tones, topics) without post-processing.
+**Filename-Driven Ingest** — Images follow a structured naming convention (`{collection}-{date}-{type}{seq}-{page}.ext`) that encodes collection, document type (letter, telegram, cover, photo, ephemera), date, and page number. The upload pipeline parses filenames, creates collection/letter/page records, and routes documents into the appropriate processing workflow automatically.
 
-**Two-Track Verification** — Transcript status and metadata status are tracked independently (`EMPTY` → `AI_DRAFT` → `EDITED` → `VERIFIED`), separate from publication visibility. An archivist can verify a transcript while metadata is still in AI draft.
+**Block-Based Content System** — Public pages (About, Support) use a JSON block schema with 9 section types (hero, richtext, cards, stats, steps, CTA, quote, two-column, contact) rendered by a shared `BlockRenderer` and edited inline through the admin UI.
 
-**Entity Resolution** — People and places extracted from letters are linked to canonical entities. When duplicates are discovered and merged, a resync system re-evaluates all affected letters using a two-model approach: one model audits what changed, another regenerates derived fields.
+**Entity Extraction Review** — AI suggests person and place entities from letter text. Suggestions enter a review queue where an admin confirms, rejects, or links them to existing canonical records. The canonical registry tracks biographical details and hooks for each person.
 
-**Controlled Vocabularies** — Metadata fields like relationship types, emotional tones, and topics use fixed enums enforced at the AI prompt level and validated in the schema. This keeps the archive consistent and filterable without manual tagging.
+## Tech Stack
 
-**Filename-Driven Organization** — Letter images follow a structured naming convention (`{collection}-{type}-{date}-{page}.jpg`) that encodes collection, document type (letter/envelope/cover), date, and page number — parsed automatically on upload.
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 19, TypeScript, Vite, React Router |
+| Rich Text | TipTap (inline tag editor), MDXEditor (blog posts) |
+| Data Viz | D3 (relationship graph), Recharts (usage analytics) |
+| Backend | Node.js, Express, TypeScript |
+| Database | PostgreSQL 16, Drizzle ORM |
+| AI | OpenAI (vision + structured outputs), Google Cloud Vision (OCR) |
+| Image Processing | Sharp |
+| Auth | JWT + bcrypt |
+| Validation | Zod |
+| Testing | Vitest (unit), Playwright (E2E + accessibility via axe-core) |
+| Deployment | Google Cloud Run, Cloud Build, Artifact Registry |
 
 ## Project Structure
 
 ```
-letter-archive/
-├── frontend/src/
-│   ├── components/common/   # Reusable UI component library
-│   ├── pages/               # Route pages (public + admin)
-│   ├── api/                 # API client layer
-│   └── styles/              # CSS custom properties design system
-│
+voices-that-remain/
 ├── backend/src/
-│   ├── routes/              # Express route handlers
-│   ├── services/            # Business logic
-│   ├── db/                  # Drizzle schema + migrations
-│   ├── ai/                  # OpenAI integration + prompt templates
-│   └── pipeline/            # Processing workflows
+│   ├── routes/            # Express route handlers (public + admin)
+│   │   └── admin/         # Admin API with letter, entity, collection management
+│   ├── services/          # Business logic and external integrations
+│   ├── pipeline/          # Processing workflows (transcription, metadata, entities)
+│   ├── ai/                # OpenAI + Google Vision integration, prompt templates
+│   ├── db/                # Drizzle schema (19 tables), migrations
+│   ├── schemas/           # Zod request validation
+│   ├── auth/              # JWT authentication
+│   └── middleware/        # Error handling, rate limiting, validation
 │
-└── .claude/docs/            # Architecture documentation
+├── frontend/src/
+│   ├── pages/             # Public pages + admin dashboard
+│   ├── components/        # UI component library (common, search, viewers, editors)
+│   ├── api/               # API client layer
+│   ├── hooks/             # Custom React hooks
+│   ├── contexts/          # React context providers
+│   └── styles/            # CSS custom properties design system
+│
+├── e2e/                   # Playwright tests (live + mocked configurations)
+├── deploy/                # Cloud Run service manifests
+└── scripts/               # Utility and verification scripts
 ```
 
-## Not a Template
+## AI Pipeline
 
-This repository is shared as a portfolio piece, not a reusable starter kit. The application is built around a specific private letter collection and requires:
+Letters move through a multi-stage processing pipeline:
 
-- The original scanned letter images (not included)
-- A PostgreSQL database with the archive data
-- An OpenAI API key for the AI pipeline
+```
+Upload → Transcription → Metadata Extraction → Entity Extraction → Review
+```
 
-The codebase demonstrates the architecture, AI integration patterns, and full-stack workflow — but is not designed to be cloned and run as-is.
+1. **Transcription** — Vision model reads handwritten text from each page image. Multi-page letters are transcribed page-by-page and concatenated. Extra content (telegrams, envelopes, covers) goes through a separate check to determine if it contains transcribable text.
 
-## Documentation
+2. **Metadata Extraction** — Structured output model extracts dates, senders, recipients, locations, topics, emotional tone, a narrative hook, and a summary. Uses controlled enum vocabularies enforced at the prompt level. Identity references in free-text fields are tagged with guillemet markers for downstream entity linking.
 
-See [.claude/docs/](.claude/docs/) for detailed architecture docs:
+3. **Entity Extraction** — Mentioned people and places are matched against canonical registries or queued for admin review as new entity candidates.
 
-- [About This Project](.claude/docs/about-this-project.md) — Vision and goals
-- [API Reference](.claude/docs/api/) — Endpoint documentation
-- [Database Schema](.claude/docs/database.md) — Table structures and relationships
-- [AI Integration](.claude/docs/ai.md) — Prompt design and structured outputs
-- [Processing Pipeline](.claude/docs/processing.md) — Transcription and extraction workflow
-- [Entity Management](.claude/docs/entities.md) — People, places, and relationship tracking
-- [Components](.claude/docs/components.md) — Frontend UI component library
+4. **Collection Profiles** — AI generates collection-level narratives, correspondent summaries, and reading path suggestions from the aggregated letter metadata.
 
-## Verification
+All AI stages run in a background worker process. Without an OpenAI API key, the system operates in stub mode with mock responses for development and testing.
 
-Run the full local regression stack from the repo root:
+## Database
+
+19 tables organized across four domains:
+
+- **Archive** — `collections`, `letters`, `letter_pages`, `letter_versions`, `letter_views`
+- **Entities** — `canonical_persons`, `canonical_places`, `letter_persons`, `letter_places`, `person_relationships`, `entity_review_queue`
+- **Content** — `update_posts`, `content_pages`, `site_settings`
+- **Admin** — `admin_users`, `admin_invites`, `admin_notifications`, `audit_log`, `api_usage_logs`
+
+## Testing
+
+- **Unit tests** — Vitest across both backend and frontend
+- **E2E tests** — Playwright with two configurations: live (against running servers) and mocked (no database required, runs in CI)
+- **Accessibility** — axe-core integration in E2E specs
+- **CI** — Smoke E2E suite on pull requests; full suite available via manual dispatch
+
+## Development
+
+Monorepo with three packages — no root `package.json`. Each runs independently.
 
 ```bash
-./scripts/verify-all.sh
+# Backend (terminal 1)
+cd backend && npm run dev          # API on port 3002
+
+# Worker (terminal 2)
+cd backend && npm run worker       # Background processing
+
+# Frontend (terminal 3)
+cd frontend && npm run dev         # Vite on port 5174
 ```
 
-Useful toggles:
+Postgres runs natively on port 5432. A dev admin account (`dev@localhost.test` / `dev`) is auto-seeded in non-production environments.
 
-- `VERIFY_SKIP_TYPECHECK=1 ./scripts/verify-all.sh`
-- `VERIFY_SKIP_BUILD=1 ./scripts/verify-all.sh`
+| Task | Command |
+|------|---------|
+| Run backend tests | `cd backend && npm test` |
+| Run frontend tests | `cd frontend && npm test` |
+| Run E2E tests | `cd e2e && npx playwright test` |
+| Typecheck backend | `cd backend && npm run typecheck` |
+| Generate migration | `cd backend && npm run drizzle:generate` |
+| Apply migration | `cd backend && npm run drizzle:migrate` |
+| Full verification | `./scripts/verify-all.sh` |
 
-Run mocked Playwright coverage separately:
-
-```bash
-cd e2e && npm run test:mocked
-```
-
-For request-level debugging after a failure, use the structured backend log queries documented in [backend/README.md](backend/README.md).
+Without an `OPENAI_API_KEY`, the AI pipeline runs in stub mode with mock responses.
 
 ## License
 

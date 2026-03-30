@@ -5,13 +5,22 @@ import * as schema from './schema.js';
 const connectionString = process.env.DATABASE_URL || 'postgresql://app:app@localhost:5432/app';
 const isProduction = process.env.NODE_ENV === 'production';
 
+// The postgres driver ignores ?host= in the URL, so extract it for Unix socket connections (Cloud SQL).
+function extractSocketHost(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.searchParams.get('host');
+    return host?.startsWith('/') ? host : undefined;
+  } catch { return undefined; }
+}
+
+const socketHost = extractSocketHost(connectionString);
+
 const client = postgres(connectionString, {
-  // Cloud SQL basic tier allows ~100 total connections.
-  // With max 5 API instances + 1 worker, keep per-instance pool modest.
   max: isProduction ? 10 : 20,
   idle_timeout: isProduction ? 30 : 20,
   connect_timeout: isProduction ? 15 : 10,
-  // Cloud SQL connections via Unix socket can be slower to establish
+  ...(socketHost && { host: socketHost }),
   connection: {
     application_name: 'letter-archive',
   },

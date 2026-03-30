@@ -1,0 +1,29 @@
+# Dependencies — installed inside Docker builds
+**/node_modules/
+
+# Python venv — rebuilt inside Docker
+backend/python/venv/
+backend/python/.venv/
+
+# Git history
+.git/
+
+# Local dev data
+**/storage/
+**/logs/
+**/uploads/
+.env
+.env.*
+
+# Build output
+**/dist/
+
+# Test artifacts
+e2e/test-results/
+e2e/playwright-report/
+**/coverage/
+screenshots/
+
+# IDE
+.vscode/
+.idea/

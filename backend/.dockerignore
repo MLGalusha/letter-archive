@@ -13,5 +13,6 @@ test-results
 logs
 storage
 uploads
-python
+python/venv
+python/.venv
 docker-compose.yml

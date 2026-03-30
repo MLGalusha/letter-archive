@@ -4,19 +4,21 @@
 # Trigger: push to main branch (or manual)
 #
 # Usage:
-#   gcloud builds submit --config=cloudbuild.yaml
+#   gcloud builds submit --config=cloudbuild.yaml \
+#     --substitutions=_TAG=$(git rev-parse --short HEAD)
 
 substitutions:
+  _TAG: latest
   _REGION: us-east1
-  _REPO: letter-archive
   _CLOUD_SQL_INSTANCE: letter-archive-db
   _ARCHIVE_BUCKET: letter-archive-485110-archive
   _DOMAIN: voicesthatremain.com
   _SERVICE_ACCOUNT: 'letter-archive-runner@${PROJECT_ID}.iam.gserviceaccount.com'
-  _BACKEND_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/backend'
-  _FRONTEND_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/frontend'
+  _BACKEND_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/letter-archive/backend'
+  _FRONTEND_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/letter-archive/frontend'
 
 options:
+  dynamic_substitutions: true
   logging: CLOUD_LOGGING_ONLY
   machineType: E2_HIGHCPU_8
 
@@ -27,7 +29,7 @@ steps:
     args:
       - build
       - -t
-      - '${_BACKEND_IMAGE}:${SHORT_SHA}'
+      - '${_BACKEND_IMAGE}:${_TAG}'
       - -t
       - '${_BACKEND_IMAGE}:latest'
       - -f
@@ -40,7 +42,7 @@ steps:
     args:
       - build
       - -t
-      - '${_FRONTEND_IMAGE}:${SHORT_SHA}'
+      - '${_FRONTEND_IMAGE}:${_TAG}'
       - -t
       - '${_FRONTEND_IMAGE}:latest'
       - --build-arg
@@ -75,8 +77,8 @@ steps:
             -e "s|SERVICE_ACCOUNT_EMAIL|${_SERVICE_ACCOUNT}|g" \
             -e "s|CLOUD_SQL_INSTANCE|${_CLOUD_SQL_INSTANCE}|g" \
             -e "s|ARCHIVE_BUCKET|${_ARCHIVE_BUCKET}|g" \
-            -e "s|BACKEND_IMAGE|${_BACKEND_IMAGE}:${SHORT_SHA}|g" \
-            -e "s|FRONTEND_IMAGE|${_FRONTEND_IMAGE}:${SHORT_SHA}|g" \
+            -e "s|BACKEND_IMAGE|${_BACKEND_IMAGE}:${_TAG}|g" \
+            -e "s|FRONTEND_IMAGE|${_FRONTEND_IMAGE}:${_TAG}|g" \
             -e "s|PROJECT_NUMBER|${PROJECT_ID}|g" \
             -e "s|PROJECT_ID|${PROJECT_ID}|g" \
             -e "s|YOUR_DOMAIN|${_DOMAIN}|g" \
@@ -119,7 +121,8 @@ steps:
         gcloud run services replace deploy/cloudrun/backend-service.yaml \
           --region=${_REGION}
         gcloud run services add-iam-policy-binding letter-archive-backend \
-          --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet
+          --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet || \
+        echo "WARNING: Could not set IAM policy — set public access manually"
     waitFor: ['run-migrations', 'prepare-manifests']
 
   # ── Deploy frontend service ─────────────────────────────────
@@ -132,7 +135,8 @@ steps:
         gcloud run services replace deploy/cloudrun/frontend-service.yaml \
           --region=${_REGION}
         gcloud run services add-iam-policy-binding letter-archive-frontend \
-          --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet
+          --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet || \
+        echo "WARNING: Could not set IAM policy — set public access manually"
     waitFor: ['push-frontend', 'prepare-manifests']
 
   # ── Deploy worker pool ──────────────────────────────────────
@@ -146,13 +150,13 @@ steps:
           --region=${_REGION} 2>/dev/null || \
         gcloud run worker-pools update letter-archive-worker \
           --region=${_REGION} \
-          --image=${_BACKEND_IMAGE}:${SHORT_SHA}
+          --image=${_BACKEND_IMAGE}:${_TAG}
     waitFor: ['run-migrations', 'prepare-manifests']
 
 images:
-  - '${_BACKEND_IMAGE}:${SHORT_SHA}'
+  - '${_BACKEND_IMAGE}:${_TAG}'
   - '${_BACKEND_IMAGE}:latest'
-  - '${_FRONTEND_IMAGE}:${SHORT_SHA}'
+  - '${_FRONTEND_IMAGE}:${_TAG}'
   - '${_FRONTEND_IMAGE}:latest'
 
 timeout: 1200s

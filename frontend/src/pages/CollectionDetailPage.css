@@ -50,14 +50,6 @@
   letter-spacing: -0.04em;
 }
 
-.cd-description {
-  margin: 0.8rem 0 0;
-  max-width: 42rem;
-  font-size: 1rem;
-  color: var(--text-muted);
-  line-height: 1.7;
-}
-
 .cd-stats-line {
   margin: 0.5rem 0 0;
   font-size: 0.88rem;
@@ -216,6 +208,155 @@
 
 /* ShowcaseCard styles are now in components/ShowcaseCard.css */
 
+/* ---- Notes card (bottom of people column) ---- */
+
+.cd-notes-card {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0.55rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-top: 1px solid rgba(217, 207, 191, 0.5);
+}
+
+.cd-notes-card:hover .cd-people-title {
+  color: var(--accent-strong);
+}
+
+.cd-notes-preview {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ════════════════════════════════════════════════════════════
+   Popup / Modal
+   ════════════════════════════════════════════════════════════ */
+
+.cd-popup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 17, 14, 0.45);
+  backdrop-filter: blur(4px);
+  animation: cd-fade-in 0.15s ease;
+}
+
+.cd-popup {
+  width: min(28rem, calc(100vw - 3rem));
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
+  background: linear-gradient(180deg, rgba(255, 250, 242, 0.99), rgba(255, 255, 255, 0.97));
+  border: 1px solid rgba(217, 207, 191, 0.88);
+  border-radius: 24px;
+  box-shadow: 0 24px 48px rgba(29, 26, 20, 0.18);
+  animation: cd-popup-in 0.2s ease;
+}
+
+.cd-popup-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.4rem 0;
+}
+
+.cd-popup-title {
+  margin: 0;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.4rem;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.cd-popup-close {
+  appearance: none;
+  border: none;
+  background: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.15rem 0.35rem;
+  border-radius: 8px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.cd-popup-close:hover {
+  color: var(--text);
+  background: rgba(217, 207, 191, 0.3);
+}
+
+.cd-popup-body {
+  padding: 1rem 1.4rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.cd-popup-role {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.cd-popup-hook {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.cd-popup-biography {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: var(--text-muted);
+}
+
+.cd-popup-notes {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--text);
+  white-space: pre-line;
+}
+
+@keyframes cd-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes cd-popup-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* ════════════════════════════════════════════════════════════
    4. Archive Surface (unchanged)
    ════════════════════════════════════════════════════════════ */
@@ -267,11 +408,6 @@
 
   .cd-header h1 {
     font-size: clamp(1.9rem, 12vw, 2.8rem);
-  }
-
-  .cd-description {
-    font-size: 0.92rem;
-    line-height: 1.6;
   }
 
   .cd-highlights-col {

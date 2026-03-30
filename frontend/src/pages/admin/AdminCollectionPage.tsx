@@ -6,6 +6,7 @@ import { getErrorMessage } from '../../api/client';
 import {
   getAdminCollectionByCode,
   generateCollectionProfile,
+  updateCollection,
   updateCollectionProfile,
   type CollectionWithLetters,
   type CollectionProfileCorrespondent,
@@ -17,6 +18,7 @@ import ShowcaseCard, { type ShowcaseItem } from '../../components/ShowcaseCard';
 import LetterCard from '../../components/LetterCard/LetterCard';
 import { buildLetterCardData, getPrimaryMediaType } from '../../utils/letterPreview';
 import type { Letter } from '../../types/Letter';
+import { computeCollectionStats } from '../collection-detail-utils';
 import {
   COLLECTION_PICKER_DEFAULT_SORT,
   COLLECTION_PICKER_DEFAULT_SORT_ORDER,
@@ -197,12 +199,18 @@ export default function AdminCollectionPage() {
   const [showPickerFilters, setShowPickerFilters] = useState(false);
   const [showPickerSort, setShowPickerSort] = useState(false);
   const pickerLayerRef = useRef<HTMLDivElement | null>(null);
+  const changeBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // Editable profile fields (only hook + summary now)
   const [hook, setHook] = useState('');
   const [narrative, setNarrative] = useState('');
   const [profileStatus, setProfileStatus] = useState<ContentStatus>('EMPTY');
   const [dirty, setDirty] = useState(false);
+
+  // Collection description (admin-written extra info)
+  const [description, setDescription] = useState('');
+  const [descriptionDirty, setDescriptionDirty] = useState(false);
+  const [descriptionSaving, setDescriptionSaving] = useState(false);
 
   // Collection-scoped correspondent renames
   const [correspondentEdits, setCorrespondentEdits] = useState<Map<string, CorrespondentEditState>>(new Map());
@@ -289,6 +297,7 @@ export default function AdminCollectionPage() {
 
   const publishedLetterCount = publishedLetters.length;
   const actualLetterCount = collection?.letters.length ?? collection?.letterCount ?? 0;
+  const publishedStats = useMemo(() => computeCollectionStats(publishedLetters), [publishedLetters]);
 
   const resetLetterPickerControls = useCallback(() => {
     setPickerSearch('');
@@ -310,6 +319,7 @@ export default function AdminCollectionPage() {
 
     const handlePointerDown = (event: MouseEvent) => {
       if (pickerLayerRef.current?.contains(event.target as Node)) return;
+      if (changeBtnRef.current?.contains(event.target as Node)) return;
       closeLetterPicker();
     };
 
@@ -350,7 +360,9 @@ export default function AdminCollectionPage() {
       setProfileStatus((c.profileStatus as ContentStatus) || 'EMPTY');
 
       setFeaturedLetterId((c.profileStartHereLetterId as string) || null);
+      setDescription((coll.description as string) || '');
       setDirty(false);
+      setDescriptionDirty(false);
 
       const nextCorrespondentEdits = new Map<string, CorrespondentEditState>();
       for (const correspondent of buildCollectionCorrespondents(coll.letters || [], coll.profileCorrespondents || [])) {
@@ -412,6 +424,20 @@ export default function AdminCollectionPage() {
       showToast(getErrorMessage(err, 'An error occurred'), 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveDescription = async () => {
+    if (!code || !descriptionDirty) return;
+    setDescriptionSaving(true);
+    try {
+      await updateCollection(code, { description: description.trim() || null });
+      setDescriptionDirty(false);
+      showToast('Description saved', 'success');
+    } catch (err) {
+      showToast(getErrorMessage(err, 'An error occurred'), 'error');
+    } finally {
+      setDescriptionSaving(false);
     }
   };
 
@@ -562,6 +588,9 @@ export default function AdminCollectionPage() {
               <p className="acp-subtitle">
                 Collection {collection.collectionCode} · {actualLetterCount} items · {publishedLetterCount} published
               </p>
+              {publishedStats.formatBreakdown && (
+                <p className="acp-subtitle acp-format-breakdown">{publishedStats.formatBreakdown}</p>
+              )}
               <div className="acp-header-metrics">
                 <span className="acp-metric-pill">{correspondents.length} correspondents</span>
                 <span className={`acp-status-badge ${statusClass(profileStatus)}`}>
@@ -603,11 +632,11 @@ export default function AdminCollectionPage() {
             <div className="acp-profile-block acp-profile-block--hook">
               <h3 className="acp-profile-block-title">Collection Hook</h3>
               <p className="acp-hint">A short teaser for the public collection page. Empty until you write one or generate a profile.</p>
-              <input
-                type="text"
-                className="acp-input acp-full-width"
+              <textarea
+                className="acp-textarea"
                 value={hook}
                 onChange={(e) => { setHook(e.target.value); setDirty(true); }}
+                rows={2}
                 placeholder="e.g. A wartime love story told through 27 letters..."
                 maxLength={500}
               />
@@ -642,63 +671,106 @@ export default function AdminCollectionPage() {
           </div>
 
           <div className="acp-section acp-section--picker acp-section--featured">
-            <div className="acp-section-header">
-              <div className="acp-section-heading">
-                <h2>Featured Letter</h2>
-                <p className="acp-hint">Shown on the public collection page. Auto-picks once when empty, then stays fixed until you change it or the selected letter is unpublished.</p>
+            <div className="acp-featured-description">
+              <div className="acp-featured-desc-header">
+                <h3 className="acp-profile-block-title">Collection Notes</h3>
+                <p className="acp-hint">Visible on the public page — add context or background for visitors.</p>
               </div>
-              <div className="acp-picker-anchor" ref={pickerLayerRef}>
-                <button
-                  type="button"
-                  className={`acp-text-btn${showLetterPicker ? ' is-active' : ''}`}
-                  aria-expanded={showLetterPicker}
-                  aria-haspopup="dialog"
-                  onClick={handleToggleLetterPicker}
-                  disabled={publishedLetters.length === 0}
-                >
-                  {showLetterPicker ? 'Close' : featuredLetter ? 'Change' : 'Select'}
-                </button>
+              <textarea
+                id="collection-description"
+                className="acp-textarea acp-featured-desc-input"
+                value={description}
+                onChange={(e) => { setDescription(e.target.value); setDescriptionDirty(true); }}
+                rows={6}
+                placeholder="e.g. Twenty-seven letters from an American serviceman to the woman he loved in England..."
+                maxLength={2000}
+              />
+              {descriptionDirty && (
+                <div className="acp-featured-desc-footer">
+                  <Button variant="secondary" size="sm" onClick={handleSaveDescription} disabled={descriptionSaving}>
+                    {descriptionSaving ? 'Saving...' : 'Save info'}
+                  </Button>
+                </div>
+              )}
+            </div>
 
-                {showLetterPicker && (
-                  <div className="acp-letter-picker-overlay" role="dialog" aria-label="Select featured letter">
-                    <div className="acp-picker-toolbar">
-                      <label className="acp-picker-search-shell">
-                        <svg className="acp-picker-search-icon" viewBox="0 0 20 20" aria-hidden="true">
-                          <circle cx="8.75" cy="8.75" r="5.5" />
-                          <path d="m12.5 12.5 4.25 4.25" />
-                        </svg>
-                        <input
-                          type="search"
-                          className="acp-picker-search"
-                          placeholder="Search sender, recipient, date, hook..."
-                          value={pickerSearch}
-                          onChange={(event) => setPickerSearch(event.target.value)}
-                        />
-                      </label>
+            {featuredLetter && showcaseItems.length > 0 ? (
+              <div className="acp-featured-showcase">
+                <div className="acp-featured-card-wrapper">
+                  <div className="acp-featured-controls">
+                    <button
+                      ref={changeBtnRef}
+                      type="button"
+                      className="acp-featured-change"
+                      onClick={handleToggleLetterPicker}
+                      disabled={publishedLetters.length === 0}
+                    >
+                      {showLetterPicker ? 'Close' : 'Change'}
+                    </button>
+                  </div>
+                  <ShowcaseCard
+                    items={showcaseItems}
+                    onNavigate={() => {/* no-op on admin — no navigation */}}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="acp-empty-state">
+                {publishedLetters.length === 0
+                  ? 'No published letters are available to feature yet.'
+                  : (
+                    <>
+                      No featured letter selected.{' '}
+                      <button type="button" className="acp-text-btn" onClick={handleToggleLetterPicker}>Select one</button>
+                    </>
+                  )}
+              </div>
+            )}
+          </div>
+        </div>
 
-                      <div className="acp-picker-toolbar-actions">
-                        <div className="acp-picker-dropdown">
-                          <button
-                            type="button"
-                            className={`acp-picker-control${showPickerFilters ? ' is-active' : ''}`}
-                            aria-expanded={showPickerFilters}
-                            aria-haspopup="menu"
-                            onClick={() => {
-                              setShowPickerFilters((current) => {
-                                const next = !current;
-                                if (next) setShowPickerSort(false);
-                                return next;
-                              });
-                            }}
-                          >
-                            <svg viewBox="0 0 14 14" aria-hidden="true">
-                              <path d="M1.5 2.5h11L8 7.5v4l-2 1.5V7.5z" />
-                            </svg>
-                            <span>Filter</span>
-                            {pickerActiveFilterCount > 0 && (
-                              <span className="acp-picker-control-count">{pickerActiveFilterCount}</span>
-                            )}
-                          </button>
+        {/* Letter picker — spans full width below the editor grid */}
+        {showLetterPicker && (
+          <div className="acp-section acp-section--picker" ref={pickerLayerRef}>
+            <div className="acp-letter-picker-overlay" role="dialog" aria-label="Select featured letter">
+              <div className="acp-picker-toolbar">
+                <label className="acp-picker-search-shell">
+                  <svg className="acp-picker-search-icon" viewBox="0 0 20 20" aria-hidden="true">
+                    <circle cx="8.75" cy="8.75" r="5.5" />
+                    <path d="m12.5 12.5 4.25 4.25" />
+                  </svg>
+                  <input
+                    type="search"
+                    className="acp-picker-search"
+                    placeholder="Search sender, recipient, date, hook..."
+                    value={pickerSearch}
+                    onChange={(event) => setPickerSearch(event.target.value)}
+                  />
+                </label>
+
+                <div className="acp-picker-toolbar-actions">
+                  <div className="acp-picker-dropdown">
+                    <button
+                      type="button"
+                      className={`acp-picker-control${showPickerFilters ? ' is-active' : ''}`}
+                      aria-expanded={showPickerFilters}
+                      aria-haspopup="menu"
+                      onClick={() => {
+                        setShowPickerFilters((current) => {
+                          const next = !current;
+                          if (next) setShowPickerSort(false);
+                          return next;
+                        });
+                      }}
+                    >
+                      <svg viewBox="0 0 14 14" aria-hidden="true">
+                        <path d="M1.5 2.5h11L8 7.5v4l-2 1.5V7.5z" />
+                      </svg>
+                      <span>Filter</span>
+                      {pickerActiveFilterCount > 0 && (
+                        <span className="acp-picker-control-count">{pickerActiveFilterCount}</span>
+                      )}
+                    </button>
                           {showPickerFilters && (
                             <div className="acp-picker-menu acp-picker-menu--filters" role="menu">
                               <div className="acp-picker-menu-header">
@@ -779,56 +851,38 @@ export default function AdminCollectionPage() {
                       </div>
                     </div>
 
-                    <div className="acp-picker-toolbar-footer">
-                      <p className="acp-picker-results">{pickerResultsLabel}</p>
-                      {pickerActiveFormat && pickerActiveFormat.value !== 'all' && (
-                        <button
-                          type="button"
-                          className="acp-picker-inline-clear"
-                          onClick={() => setPickerFormat('all')}
-                        >
-                          Showing {pickerActiveFormat.label.toLowerCase()}
-                        </button>
-                      )}
-                    </div>
+              <div className="acp-picker-toolbar-footer">
+                <p className="acp-picker-results">{pickerResultsLabel}</p>
+                {pickerActiveFormat && pickerActiveFormat.value !== 'all' && (
+                  <button
+                    type="button"
+                    className="acp-picker-inline-clear"
+                    onClick={() => setPickerFormat('all')}
+                  >
+                    Showing {pickerActiveFormat.label.toLowerCase()}
+                  </button>
+                )}
+              </div>
 
-                    <div className="letter-grid acp-picker-grid">
-                      {filteredLetters.map((letter) => (
-                        <div
-                          key={letter.id}
-                          className={`acp-picker-card${letter.id === featuredLetterId ? ' acp-picker-card--selected' : ''}`}
-                        >
-                          <LetterCard
-                            card={buildLetterCardData(letter)}
-                            onClick={handleSelectFeaturedLetter}
-                          />
-                        </div>
-                      ))}
-                      {filteredLetters.length === 0 && (
-                        <p className="acp-picker-empty">No letters match the current search or filter.</p>
-                      )}
-                    </div>
+              <div className="letter-grid acp-picker-grid">
+                {filteredLetters.map((letter) => (
+                  <div
+                    key={letter.id}
+                    className={`acp-picker-card${letter.id === featuredLetterId ? ' acp-picker-card--selected' : ''}`}
+                  >
+                    <LetterCard
+                      card={buildLetterCardData(letter)}
+                      onClick={handleSelectFeaturedLetter}
+                    />
                   </div>
+                ))}
+                {filteredLetters.length === 0 && (
+                  <p className="acp-picker-empty">No letters match the current search or filter.</p>
                 )}
               </div>
             </div>
-
-            {featuredLetter && showcaseItems.length > 0 ? (
-              <div className="acp-featured-showcase">
-                <ShowcaseCard
-                  items={showcaseItems}
-                  onNavigate={() => {/* no-op on admin — no navigation */}}
-                />
-              </div>
-            ) : (
-              <div className="acp-empty-state">
-                {publishedLetters.length === 0
-                  ? 'No published letters are available to feature yet.'
-                  : 'No featured letter selected yet. Open the picker to choose one.'}
-              </div>
-            )}
           </div>
-        </div>
+        )}
 
         {/* Correspondents — collection-scoped rename controls */}
         <div className="acp-section acp-section--correspondents">
@@ -844,6 +898,10 @@ export default function AdminCollectionPage() {
                 const edit = correspondentEdits.get(person.key);
                 if (!edit) return null;
                 const trimmedName = edit.name.trim();
+                const editedKey = normalizeCorrespondentName(trimmedName);
+                const mergeTarget = editedKey && editedKey !== person.key
+                  ? correspondents.find((c) => c.key === editedKey)
+                  : null;
                 const roleLabel = person.roles.length === 2
                   ? 'Sender + recipient'
                   : person.roles[0] === 'sender'
@@ -881,13 +939,17 @@ export default function AdminCollectionPage() {
                         placeholder="Rename this correspondent for the whole collection..."
                         maxLength={255}
                       />
+                      {mergeTarget && (
+                        <p className="acp-person-merge-hint">
+                          Will merge with {mergeTarget.name} ({mergeTarget.totalLetters} letters)
+                        </p>
+                      )}
                     </div>
                     <div className="acp-person-field">
                       <label htmlFor={`correspondent-hook-${person.key}`}>Hook</label>
-                      <input
+                      <textarea
                         id={`correspondent-hook-${person.key}`}
-                        type="text"
-                        className="acp-input acp-full-width"
+                        className="acp-textarea"
                         value={edit.hook}
                         onChange={(e) => {
                           const nextHook = e.target.value;
@@ -901,6 +963,7 @@ export default function AdminCollectionPage() {
                             return next;
                           });
                         }}
+                        rows={2}
                         placeholder="Short hook for this sender or recipient..."
                         maxLength={500}
                       />
@@ -934,7 +997,7 @@ export default function AdminCollectionPage() {
                         disabled={saveDisabled}
                         onClick={() => handleSaveCorrespondent(person)}
                       >
-                        {edit.saving ? 'Saving...' : 'Save correspondent'}
+                        {edit.saving ? 'Saving...' : mergeTarget ? 'Merge & save' : 'Save correspondent'}
                       </Button>
                     </div>
                   </div>

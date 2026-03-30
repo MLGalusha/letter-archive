@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import SEO from '../components/SEO';
 import SearchBar from '../components/SearchBar/SearchBar';
@@ -33,6 +33,9 @@ export default function CollectionDetailPage() {
   const [profile, setProfile] = useState<CollectionProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  /* ---- Popup state ---- */
+  const [popup, setPopup] = useState<{ title: string; content: ReactNode } | null>(null);
 
   /* ---- Archive search (extracted hook) ---- */
   const fixedFilters = useMemo(
@@ -273,7 +276,8 @@ export default function CollectionDetailPage() {
     return { start: sorted[0], end: sorted[sorted.length - 1] };
   }, [collectionLetters]);
 
-  const hasExploreContent = correspondents.length > 0 || highlights.length > 0 || gallery.length > 0;
+  const collectionNotes = collection?.description || '';
+  const hasExploreContent = correspondents.length > 0 || highlights.length > 0 || gallery.length > 0 || collectionNotes.length > 0;
 
   /* ---- Loading / error states ---- */
   if (loading) {
@@ -321,9 +325,6 @@ export default function CollectionDetailPage() {
         {/* ---- 1. Header + Inline Stats ---- */}
         <header className="cd-header">
           <h1>{collection.title || `Collection ${collection.collectionCode}`}</h1>
-          {collection.description && (
-            <p className="cd-description">{collection.description}</p>
-          )}
           <div className="cd-stats-line">
             {stats.dateSpan && (
               <span className="cd-stat-date">{stats.dateSpan.label}</span>
@@ -343,36 +344,64 @@ export default function CollectionDetailPage() {
         {/* ---- 3. People + Highlights (side by side) ---- */}
         {hasExploreContent && (
           <section className="cd-explore">
-            {correspondents.length > 0 && (
+            {(correspondents.length > 0 || collectionNotes) && (
               <div className="cd-people-col">
-                <h3 className="cd-people-title">People</h3>
-                {correspondents.map((person) => (
+                {correspondents.length > 0 && (
+                  <>
+                    <h3 className="cd-people-title">People</h3>
+                    {correspondents.map((person) => (
+                      <button
+                        type="button"
+                        key={person.name}
+                        className="cd-person-card"
+                        onClick={() => {
+                          if (person.hook || person.biography) {
+                            setPopup({
+                              title: person.name,
+                              content: (
+                                <>
+                                  <div className="cd-popup-role">
+                                    {person.sentCount > 0 && <span>Sent {person.sentCount}</span>}
+                                    {person.sentCount > 0 && person.receivedCount > 0 && <span className="cd-person-divider">&middot;</span>}
+                                    {person.receivedCount > 0 && <span>Received {person.receivedCount}</span>}
+                                  </div>
+                                  {person.hook && <p className="cd-popup-hook">{person.hook}</p>}
+                                  {person.biography && <p className="cd-popup-biography">{person.biography}</p>}
+                                </>
+                              ),
+                            });
+                          } else {
+                            navigate(`/collections/${collectionCode}?sender=${encodeURIComponent(person.name)}`);
+                            setTimeout(() => archiveSearchRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+                          }
+                        }}
+                      >
+                        <h3 className="cd-person-name">{person.name}</h3>
+                        <div className="cd-person-role">
+                          {person.sentCount > 0 && (
+                            <span>Sent {person.sentCount}</span>
+                          )}
+                          {person.sentCount > 0 && person.receivedCount > 0 && (
+                            <span className="cd-person-divider">&middot;</span>
+                          )}
+                          {person.receivedCount > 0 && (
+                            <span>Received {person.receivedCount}</span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
+                {collectionNotes && (
                   <button
                     type="button"
-                    key={person.name}
-                    className="cd-person-card"
-                    onClick={() => {
-                      navigate(`/collections/${collectionCode}?sender=${encodeURIComponent(person.name)}`);
-                      setTimeout(() => archiveSearchRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-                    }}
+                    className="cd-notes-card"
+                    onClick={() => setPopup({ title: 'Notes', content: <p className="cd-popup-notes">{collectionNotes}</p> })}
                   >
-                    <h3 className="cd-person-name">{person.name}</h3>
-                    <div className="cd-person-role">
-                      {person.sentCount > 0 && (
-                        <span>Sent {person.sentCount}</span>
-                      )}
-                      {person.sentCount > 0 && person.receivedCount > 0 && (
-                        <span className="cd-person-divider">&middot;</span>
-                      )}
-                      {person.receivedCount > 0 && (
-                        <span>Received {person.receivedCount}</span>
-                      )}
-                    </div>
-                    {person.hook && (
-                      <p className="cd-person-hook">{person.hook}</p>
-                    )}
+                    <h3 className="cd-people-title">Notes</h3>
+                    <p className="cd-notes-preview">{collectionNotes}</p>
                   </button>
-                ))}
+                )}
               </div>
             )}
 
@@ -445,6 +474,21 @@ export default function CollectionDetailPage() {
       </div>
       <Footer />
       <BackToTop />
+
+      {/* ---- Popup overlay ---- */}
+      {popup && (
+        <div className="cd-popup-overlay" onClick={() => setPopup(null)}>
+          <div className="cd-popup" onClick={(e) => e.stopPropagation()}>
+            <div className="cd-popup-header">
+              <h2 className="cd-popup-title">{popup.title}</h2>
+              <button type="button" className="cd-popup-close" onClick={() => setPopup(null)}>&times;</button>
+            </div>
+            <div className="cd-popup-body">
+              {popup.content}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

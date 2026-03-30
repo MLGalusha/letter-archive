@@ -3,9 +3,12 @@ import { invokeRouter } from '../../../test/express-test-utils.js';
 
 const {
   getCollectionByCodeMock,
-  transformLettersToDTOMock,
+  resolveCollectionFeaturedLetterIdMock,
+  transformLettersWithRelatedToDTOMock,
   getRowsMock,
   analyzeCollectionMock,
+  propagateNameMock,
+  syncLetterParticipantsFromMetadataMock,
   queryCollectionsFindManyMock,
   queryLettersFindManyMock,
   executeMock,
@@ -22,9 +25,12 @@ const {
   sqlMock,
 } = vi.hoisted(() => ({
   getCollectionByCodeMock: vi.fn(),
-  transformLettersToDTOMock: vi.fn(),
+  resolveCollectionFeaturedLetterIdMock: vi.fn(),
+  transformLettersWithRelatedToDTOMock: vi.fn(),
   getRowsMock: vi.fn(),
   analyzeCollectionMock: vi.fn(),
+  propagateNameMock: vi.fn(),
+  syncLetterParticipantsFromMetadataMock: vi.fn(),
   queryCollectionsFindManyMock: vi.fn(),
   queryLettersFindManyMock: vi.fn(),
   executeMock: vi.fn(),
@@ -49,10 +55,11 @@ vi.mock('drizzle-orm', () => ({
 
 vi.mock('../../../services/collections.js', () => ({
   getCollectionByCode: getCollectionByCodeMock,
+  resolveCollectionFeaturedLetterId: resolveCollectionFeaturedLetterIdMock,
 }));
 
 vi.mock('../../../dto/index.js', () => ({
-  transformLettersToDTO: transformLettersToDTOMock,
+  transformLettersWithRelatedToDTO: transformLettersWithRelatedToDTOMock,
 }));
 
 vi.mock('../../../services/letter-queries.js', () => ({
@@ -61,6 +68,14 @@ vi.mock('../../../services/letter-queries.js', () => ({
 
 vi.mock('../../../ai/analyze-collection.js', () => ({
   analyzeCollection: analyzeCollectionMock,
+}));
+
+vi.mock('../../../services/name-propagation.js', () => ({
+  propagateName: propagateNameMock,
+}));
+
+vi.mock('../../../services/entities/participant-sync.js', () => ({
+  syncLetterParticipantsFromMetadata: syncLetterParticipantsFromMetadataMock,
 }));
 
 vi.mock('../../../db/index.js', () => ({
@@ -122,7 +137,12 @@ describe('admin collections route integration', () => {
       set: updateSetMock,
     });
 
-    transformLettersToDTOMock.mockImplementation((letters) => letters);
+    transformLettersWithRelatedToDTOMock.mockImplementation((groups: Array<{ letter: unknown }>) =>
+      groups.map(({ letter }) => letter),
+    );
+    resolveCollectionFeaturedLetterIdMock.mockResolvedValue(null);
+    propagateNameMock.mockResolvedValue(undefined);
+    syncLetterParticipantsFromMetadataMock.mockResolvedValue(undefined);
   });
 
   it('returns admin collection stats with page counts and verification totals', async () => {
@@ -221,12 +241,13 @@ describe('admin collections route integration', () => {
       description: 'Ninth set',
     });
     queryLettersFindManyMock.mockResolvedValueOnce([
-      { id: 'letter-1' },
-      { id: 'letter-2' },
+      { id: 'letter-1', dateRaw: '19470810', typeSequence: '01', type: 'L' },
+      { id: 'letter-2', dateRaw: '19470810', typeSequence: '01', type: 'C' },
+      { id: 'letter-3', dateRaw: '19470811', typeSequence: '01', type: 'L' },
     ]);
-    transformLettersToDTOMock.mockReturnValueOnce([
+    transformLettersWithRelatedToDTOMock.mockReturnValueOnce([
       { id: 'letter-1', title: 'First letter' },
-      { id: 'letter-2', title: 'Second letter' },
+      { id: 'letter-3', title: 'Second letter' },
     ]);
 
     const response = await invokeRouter(adminCollectionsRouter, {
@@ -242,12 +263,106 @@ describe('admin collections route integration', () => {
       collectionCode: '009',
       title: 'Collection Nine',
       description: 'Ninth set',
+      profileStartHereLetterId: null,
+      profileCorrespondents: [],
       letters: [
         { id: 'letter-1', title: 'First letter' },
-        { id: 'letter-2', title: 'Second letter' },
+        { id: 'letter-3', title: 'Second letter' },
       ],
       letterCount: 2,
     });
+    expect(transformLettersWithRelatedToDTOMock).toHaveBeenCalledWith([
+      {
+        letter: { id: 'letter-1', dateRaw: '19470810', typeSequence: '01', type: 'L' },
+        relatedItems: [
+          { id: 'letter-2', dateRaw: '19470810', typeSequence: '01', type: 'C' },
+        ],
+      },
+      {
+        letter: { id: 'letter-3', dateRaw: '19470811', typeSequence: '01', type: 'L' },
+        relatedItems: [],
+      },
+    ]);
+  });
+
+  it('persists an auto-picked featured letter when the saved selection is missing', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      description: 'Ninth set',
+      profileStartHereLetterId: null,
+    });
+    queryLettersFindManyMock.mockResolvedValueOnce([
+      { id: 'letter-1', dateRaw: '19470810', typeSequence: '01', type: 'L' },
+    ]);
+    transformLettersWithRelatedToDTOMock.mockReturnValueOnce([
+      { id: 'letter-1', title: 'First letter' },
+    ]);
+    resolveCollectionFeaturedLetterIdMock.mockResolvedValueOnce('letter-1');
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'GET',
+      url: '/009',
+      path: '/009',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      profileStartHereLetterId: 'letter-1',
+      profileCorrespondents: [],
+      letterCount: 1,
+    });
+    expect(updateSetMock).toHaveBeenCalledWith({
+      profileStartHereLetterId: 'letter-1',
+    });
+  });
+
+  it('renames a correspondent across matching letters in a collection only', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      description: 'Ninth set',
+    });
+    queryLettersFindManyMock.mockResolvedValueOnce([
+      { id: 'letter-1', sender: 'Jimmie', recipient: 'Molly' },
+      { id: 'letter-2', sender: 'Jimmie', recipient: 'Molly' },
+      { id: 'letter-3', sender: 'Someone Else', recipient: 'Molly' },
+    ]);
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PATCH',
+      url: '/009/correspondents',
+      path: '/009/correspondents',
+      body: {
+        oldName: 'Jimmie',
+        newName: 'Jimmy',
+        roles: ['sender'],
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({
+      updatedCount: 2,
+      message: 'Updated 2 letters',
+    });
+    expect(propagateNameMock).toHaveBeenCalledTimes(2);
+    expect(propagateNameMock).toHaveBeenNthCalledWith(1, {
+      letterId: 'letter-1',
+      field: 'sender',
+      oldName: 'Jimmie',
+      newName: 'Jimmy',
+    });
+    expect(propagateNameMock).toHaveBeenNthCalledWith(2, {
+      letterId: 'letter-2',
+      field: 'sender',
+      oldName: 'Jimmie',
+      newName: 'Jimmy',
+    });
+    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenCalledTimes(2);
   });
 
   it('injects request ids into invalid update payload responses', async () => {

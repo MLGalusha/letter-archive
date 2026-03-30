@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
 import { Button } from '../../components/common';
@@ -7,28 +7,174 @@ import {
   getAdminCollectionByCode,
   generateCollectionProfile,
   updateCollectionProfile,
-  getCollectionProfile,
   type CollectionWithLetters,
-  type KeyPerson,
+  type CollectionProfileCorrespondent,
   type ContentStatus,
+  renameCollectionCorrespondent,
 } from '../../api/collections';
-import {
-  generateBiography as generatePersonBiography,
-  saveBiography as savePersonBiography,
-} from '../../api/entities/persons';
 import { useToast } from '../../contexts/ToastContext';
 import ShowcaseCard, { type ShowcaseItem } from '../../components/ShowcaseCard';
 import LetterCard from '../../components/LetterCard/LetterCard';
-import { buildLetterCardData, getPrimaryMediaType, getMediaLabel } from '../../utils/letterPreview';
+import { buildLetterCardData, getPrimaryMediaType } from '../../utils/letterPreview';
 import type { Letter } from '../../types/Letter';
+import {
+  COLLECTION_PICKER_DEFAULT_SORT,
+  COLLECTION_PICKER_DEFAULT_SORT_ORDER,
+  COLLECTION_PICKER_SORT_OPTIONS,
+  filterAndSortCollectionPickerLetters,
+  getCollectionPickerFormatOptions,
+  getCollectionPickerSortLabel,
+  type CollectionPickerFormat,
+  type CollectionPickerSortField,
+  type CollectionPickerSortOption,
+} from './adminCollectionPicker';
 import './AdminCollectionPage.css';
 
-interface PersonEditState {
-  biography: string;
+interface CorrespondentEditState {
+  name: string;
   hook: string;
+  biography: string;
   dirty: boolean;
-  generating: boolean;
   saving: boolean;
+}
+
+interface CollectionCorrespondent {
+  key: string;
+  name: string;
+  senderCount: number;
+  recipientCount: number;
+  totalLetters: number;
+  roles: Array<'sender' | 'recipient'>;
+  hook: string | null;
+  biography: string | null;
+}
+
+function normalizeCorrespondentName(value: string | null | undefined) {
+  return value?.trim().toLowerCase() || '';
+}
+
+function normalizeOptionalProfileText(value: string | null | undefined) {
+  const normalized = value?.trim() || '';
+  return normalized.length > 0 ? normalized : null;
+}
+
+function buildNextProfileCorrespondents(
+  current: CollectionProfileCorrespondent[],
+  previousName: string,
+  nextName: string,
+  hook: string,
+  biography: string,
+): CollectionProfileCorrespondent[] {
+  const entries = new Map<string, CollectionProfileCorrespondent>();
+
+  for (const person of current) {
+    const key = normalizeCorrespondentName(person.name);
+    if (!key) continue;
+    entries.set(key, {
+      name: person.name.trim(),
+      hook: normalizeOptionalProfileText(person.hook),
+      biography: normalizeOptionalProfileText(person.biography),
+    });
+  }
+
+  entries.delete(normalizeCorrespondentName(previousName));
+
+  const normalizedName = nextName.trim();
+  const normalizedHook = normalizeOptionalProfileText(hook);
+  const normalizedBiography = normalizeOptionalProfileText(biography);
+
+  if (normalizedHook || normalizedBiography) {
+    entries.set(normalizeCorrespondentName(normalizedName), {
+      name: normalizedName,
+      hook: normalizedHook,
+      biography: normalizedBiography,
+    });
+  }
+
+  return Array.from(entries.values()).sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function isCorrespondentDirty(
+  correspondent: CollectionCorrespondent,
+  name: string,
+  hook: string,
+  biography: string,
+) {
+  return name.trim() !== correspondent.name
+    || normalizeOptionalProfileText(hook) !== normalizeOptionalProfileText(correspondent.hook)
+    || normalizeOptionalProfileText(biography) !== normalizeOptionalProfileText(correspondent.biography);
+}
+
+function buildCollectionCorrespondents(
+  letters: Letter[],
+  profileCorrespondents: CollectionProfileCorrespondent[] = [],
+): CollectionCorrespondent[] {
+  const map = new Map<string, CollectionCorrespondent & { letterIds: Set<string> }>();
+
+  for (const letter of letters) {
+    const sender = letter.metadata.sender?.trim();
+    const recipient = letter.metadata.recipient?.trim();
+
+    if (sender) {
+      const key = normalizeCorrespondentName(sender);
+      const existing = map.get(key);
+      if (existing) {
+        existing.senderCount += 1;
+        existing.letterIds.add(letter.id);
+        if (!existing.roles.includes('sender')) existing.roles.push('sender');
+      } else {
+        map.set(key, {
+          key,
+          name: sender,
+          senderCount: 1,
+          recipientCount: 0,
+          totalLetters: 0,
+          roles: ['sender'],
+          hook: null,
+          biography: null,
+          letterIds: new Set([letter.id]),
+        });
+      }
+    }
+
+    if (recipient) {
+      const key = normalizeCorrespondentName(recipient);
+      const existing = map.get(key);
+      if (existing) {
+        existing.recipientCount += 1;
+        existing.letterIds.add(letter.id);
+        if (!existing.roles.includes('recipient')) existing.roles.push('recipient');
+      } else {
+        map.set(key, {
+          key,
+          name: recipient,
+          senderCount: 0,
+          recipientCount: 1,
+          totalLetters: 0,
+          roles: ['recipient'],
+          hook: null,
+          biography: null,
+          letterIds: new Set([letter.id]),
+        });
+      }
+    }
+  }
+
+  const overrideMap = new Map(
+    profileCorrespondents
+      .filter((person) => person.name.trim().length > 0)
+      .map((person) => [normalizeCorrespondentName(person.name), person] as const),
+  );
+
+  return Array.from(map.values()).map(({ letterIds, ...person }) => ({
+    ...person,
+    totalLetters: letterIds.size,
+    hook: overrideMap.get(person.key)?.hook || null,
+    biography: overrideMap.get(person.key)?.biography || null,
+  })).sort((left, right) => {
+    if (right.totalLetters !== left.totalLetters) return right.totalLetters - left.totalLetters;
+    return left.name.localeCompare(right.name);
+  });
 }
 
 export default function AdminCollectionPage() {
@@ -45,6 +191,12 @@ export default function AdminCollectionPage() {
   const [featuredLetterId, setFeaturedLetterId] = useState<string | null>(null);
   const [showLetterPicker, setShowLetterPicker] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
+  const [pickerFormat, setPickerFormat] = useState<CollectionPickerFormat>('all');
+  const [pickerSort, setPickerSort] = useState<CollectionPickerSortField>(COLLECTION_PICKER_DEFAULT_SORT);
+  const [pickerSortOrder, setPickerSortOrder] = useState<'asc' | 'desc'>(COLLECTION_PICKER_DEFAULT_SORT_ORDER);
+  const [showPickerFilters, setShowPickerFilters] = useState(false);
+  const [showPickerSort, setShowPickerSort] = useState(false);
+  const pickerLayerRef = useRef<HTMLDivElement | null>(null);
 
   // Editable profile fields (only hook + summary now)
   const [hook, setHook] = useState('');
@@ -52,22 +204,27 @@ export default function AdminCollectionPage() {
   const [profileStatus, setProfileStatus] = useState<ContentStatus>('EMPTY');
   const [dirty, setDirty] = useState(false);
 
-  // Correspondents (senders & recipients only)
-  const [keyPeople, setKeyPeople] = useState<KeyPerson[]>([]);
-  const [personEdits, setPersonEdits] = useState<Map<string, PersonEditState>>(new Map());
+  // Collection-scoped correspondent renames
+  const [correspondentEdits, setCorrespondentEdits] = useState<Map<string, CorrespondentEditState>>(new Map());
+
+  const publishedLetters = useMemo(
+    () => (collection?.letters ?? []).filter((letter) => letter.visibility === 'PUBLISHED'),
+    [collection?.letters],
+  );
 
   // Look up featured letter by ID (auto-pick happens in fetchData, not here)
   const featuredLetter = useMemo<Letter | null>(() => {
-    if (!collection?.letters?.length || !featuredLetterId) return null;
-    return collection.letters.find(l => l.id === featuredLetterId) || null;
-  }, [collection?.letters, featuredLetterId]);
+    if (!featuredLetterId) return null;
+    return publishedLetters.find((letter) => letter.id === featuredLetterId)
+      || collection?.letters.find((letter) => letter.id === featuredLetterId)
+      || null;
+  }, [collection?.letters, featuredLetterId, publishedLetters]);
 
   // Build ShowcaseCard items from featured letter
   const showcaseItems = useMemo<ShowcaseItem[]>(() => {
     if (!featuredLetter) return [];
     const images = featuredLetter.images || [];
     const mediaType = getPrimaryMediaType(featuredLetter);
-    const mediaLabel = getMediaLabel(mediaType);
     const sender = featuredLetter.metadata.sender?.trim();
     const recipient = featuredLetter.metadata.recipient?.trim();
     const peopleLine = sender && recipient
@@ -77,7 +234,7 @@ export default function AdminCollectionPage() {
     const letterHook = mediaType === 'photo'
       ? (featuredLetter.photoDescription || featuredLetter.metadata.hook || '')
       : (featuredLetter.metadata.hook || featuredLetter.photoDescription || '');
-    const label = 'Featured';
+    const label = 'Featured Letter';
 
     if (images.length > 0) {
       return images.map((img) => ({
@@ -103,23 +260,82 @@ export default function AdminCollectionPage() {
   }, [featuredLetter, featuredLetterId]);
 
   // Filter letters for picker
-  const filteredLetters = useMemo(() => {
-    if (!collection?.letters) return [];
-    if (!pickerSearch.trim()) return collection.letters;
-    const q = pickerSearch.toLowerCase();
-    return collection.letters.filter(l => {
-      const sender = l.metadata.sender?.toLowerCase() || '';
-      const recipient = l.metadata.recipient?.toLowerCase() || '';
-      const hookText = l.metadata.hook?.toLowerCase() || '';
-      const date = l.metadata.date?.toLowerCase() || l.metadata.dateRaw || '';
-      return sender.includes(q) || recipient.includes(q) || hookText.includes(q) || date.includes(q);
-    });
-  }, [collection?.letters, pickerSearch]);
+  const pickerFormatOptions = useMemo(
+    () => getCollectionPickerFormatOptions(publishedLetters),
+    [publishedLetters],
+  );
 
-  // Filter key people to senders & recipients only
-  const correspondents = useMemo(() => {
-    return keyPeople.filter(p => p.roles.sender > 0 || p.roles.recipient > 0);
-  }, [keyPeople]);
+  const filteredLetters = useMemo(() => {
+    return filterAndSortCollectionPickerLetters(publishedLetters, {
+      search: pickerSearch,
+      format: pickerFormat,
+      sort: pickerSort,
+      sortOrder: pickerSortOrder,
+    });
+  }, [pickerFormat, pickerSearch, pickerSort, pickerSortOrder, publishedLetters]);
+
+  const pickerSortLabel = useMemo(
+    () => getCollectionPickerSortLabel(pickerSort, pickerSortOrder),
+    [pickerSort, pickerSortOrder],
+  );
+
+  const pickerActiveFilterCount = pickerFormat === 'all' ? 0 : 1;
+  const pickerActiveFormat = pickerFormatOptions.find((option) => option.value === pickerFormat) || null;
+
+  const correspondents = useMemo(
+    () => buildCollectionCorrespondents(collection?.letters ?? [], collection?.profileCorrespondents ?? []),
+    [collection?.letters, collection?.profileCorrespondents],
+  );
+
+  const publishedLetterCount = publishedLetters.length;
+  const actualLetterCount = collection?.letters.length ?? collection?.letterCount ?? 0;
+
+  const resetLetterPickerControls = useCallback(() => {
+    setPickerSearch('');
+    setPickerFormat('all');
+    setPickerSort(COLLECTION_PICKER_DEFAULT_SORT);
+    setPickerSortOrder(COLLECTION_PICKER_DEFAULT_SORT_ORDER);
+    setShowPickerFilters(false);
+    setShowPickerSort(false);
+  }, []);
+
+  const closeLetterPicker = useCallback(() => {
+    setShowLetterPicker(false);
+    setShowPickerFilters(false);
+    setShowPickerSort(false);
+  }, []);
+
+  useEffect(() => {
+    if (!showLetterPicker) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (pickerLayerRef.current?.contains(event.target as Node)) return;
+      closeLetterPicker();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+
+      if (showPickerFilters) {
+        setShowPickerFilters(false);
+        return;
+      }
+
+      if (showPickerSort) {
+        setShowPickerSort(false);
+        return;
+      }
+
+      closeLetterPicker();
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [closeLetterPicker, showLetterPicker, showPickerFilters, showPickerSort]);
 
   const fetchData = useCallback(async () => {
     if (!code) return;
@@ -133,34 +349,20 @@ export default function AdminCollectionPage() {
       setNarrative((c.profileNarrative as string) || '');
       setProfileStatus((c.profileStatus as ContentStatus) || 'EMPTY');
 
-      // Featured letter: use saved value, or random-pick and persist
-      let savedFeaturedId = (c.profileStartHereLetterId as string) || null;
-      if (!savedFeaturedId && coll.letters?.length) {
-        const randomIndex = Math.floor(Math.random() * coll.letters.length);
-        savedFeaturedId = coll.letters[randomIndex].id;
-        await updateCollectionProfile(code, { profileStartHereLetterId: savedFeaturedId }).catch(() => {});
-      }
-      setFeaturedLetterId(savedFeaturedId);
+      setFeaturedLetterId((c.profileStartHereLetterId as string) || null);
       setDirty(false);
 
-      // Fetch key people
-      try {
-        const profileData = await getCollectionProfile(code);
-        setKeyPeople(profileData.keyPeople || []);
-        const edits = new Map<string, PersonEditState>();
-        for (const person of profileData.keyPeople || []) {
-          edits.set(person.id, {
-            biography: person.biography || '',
-            hook: person.hook || '',
-            dirty: false,
-            generating: false,
-            saving: false,
-          });
-        }
-        setPersonEdits(edits);
-      } catch {
-        // Profile may not exist yet
+      const nextCorrespondentEdits = new Map<string, CorrespondentEditState>();
+      for (const correspondent of buildCollectionCorrespondents(coll.letters || [], coll.profileCorrespondents || [])) {
+        nextCorrespondentEdits.set(correspondent.key, {
+          name: correspondent.name,
+          hook: correspondent.hook || '',
+          biography: correspondent.biography || '',
+          dirty: false,
+          saving: false,
+        });
       }
+      setCorrespondentEdits(nextCorrespondentEdits);
     } catch (err) {
       showToast(getErrorMessage(err, 'An error occurred'), 'error');
     } finally {
@@ -214,11 +416,40 @@ export default function AdminCollectionPage() {
   };
 
   const handleSelectFeaturedLetter = (letterId: string) => {
+    const changed = letterId !== featuredLetterId;
     setFeaturedLetterId(letterId);
-    setShowLetterPicker(false);
-    setPickerSearch('');
-    setDirty(true);
+    resetLetterPickerControls();
+    closeLetterPicker();
+    setDirty((current) => current || changed);
   };
+
+  const handleToggleLetterPicker = () => {
+    if (showLetterPicker) {
+      closeLetterPicker();
+      return;
+    }
+
+    resetLetterPickerControls();
+    setShowLetterPicker(true);
+  };
+
+  const handlePickerSortChange = (option: CollectionPickerSortOption) => {
+    if (pickerSort === option.value) {
+      setPickerSortOrder((current) => current === 'asc' ? 'desc' : 'asc');
+    } else {
+      setPickerSort(option.value);
+      setPickerSortOrder(option.defaultOrder);
+    }
+    setShowPickerSort(false);
+  };
+
+  const pickerResultsLabel = (() => {
+    if (publishedLetterCount === 0) return 'No published letters in this collection yet';
+    if (filteredLetters.length === publishedLetterCount) {
+      return `${publishedLetterCount} ${publishedLetterCount === 1 ? 'published letter' : 'published letters'} ready to browse`;
+    }
+    return `${filteredLetters.length} of ${publishedLetterCount} ${publishedLetterCount === 1 ? 'published letter' : 'published letters'} showing`;
+  })();
 
   const statusLabel = (status: ContentStatus) => {
     switch (status) {
@@ -235,6 +466,65 @@ export default function AdminCollectionPage() {
       case 'AI_DRAFT': return 'status-draft';
       case 'EDITED': return 'status-edited';
       case 'VERIFIED': return 'status-verified';
+    }
+  };
+
+  const handleSaveCorrespondent = async (correspondent: CollectionCorrespondent) => {
+    if (!code || !collection) return;
+    const edit = correspondentEdits.get(correspondent.key);
+    const nextName = edit?.name.trim() || '';
+    const nextHook = normalizeOptionalProfileText(edit?.hook);
+    const nextBiography = normalizeOptionalProfileText(edit?.biography);
+    const currentHook = normalizeOptionalProfileText(correspondent.hook);
+    const currentBiography = normalizeOptionalProfileText(correspondent.biography);
+    const nameChanged = nextName.length > 0 && nextName !== correspondent.name;
+    const profileChanged = nextHook !== currentHook || nextBiography !== currentBiography;
+    const shouldSaveProfile = profileChanged || (nameChanged && Boolean(currentHook || currentBiography));
+
+    if (!edit || !edit.dirty || nextName.length === 0 || (!nameChanged && !shouldSaveProfile)) {
+      return;
+    }
+
+    setCorrespondentEdits((previous) => {
+      const next = new Map(previous);
+      next.set(correspondent.key, { ...edit, saving: true });
+      return next;
+    });
+
+    try {
+      if (nameChanged) {
+        const response = await renameCollectionCorrespondent(code, {
+          oldName: correspondent.name,
+          newName: nextName,
+          roles: correspondent.roles,
+        });
+        showToast(response.message, 'success');
+      }
+
+      if (shouldSaveProfile) {
+        await updateCollectionProfile(code, {
+          profileCorrespondents: buildNextProfileCorrespondents(
+            collection.profileCorrespondents || [],
+            correspondent.name,
+            nextName,
+            edit.hook,
+            edit.biography,
+          ),
+        });
+      }
+
+      if (!nameChanged && shouldSaveProfile) {
+        showToast('Correspondent details saved', 'success');
+      }
+
+      await fetchData();
+    } catch (err) {
+      showToast(getErrorMessage(err, 'Failed to rename correspondent'), 'error');
+      setCorrespondentEdits((previous) => {
+        const next = new Map(previous);
+        next.set(correspondent.key, { ...edit, saving: false });
+        return next;
+      });
     }
   };
 
@@ -266,32 +556,26 @@ export default function AdminCollectionPage() {
         {/* Header */}
         <div className="acp-header">
           <div className="acp-header-top">
-            <div>
-              <span className="acp-code-badge">Collection {collection.collectionCode}</span>
+            <div className="acp-header-copy">
+              <p className="acp-kicker">Admin Collection</p>
               <h1 className="acp-title">{collection.title || `Collection ${collection.collectionCode}`}</h1>
               <p className="acp-subtitle">
-                {collection.letterCount} letters
+                Collection {collection.collectionCode} · {actualLetterCount} items · {publishedLetterCount} published
               </p>
-            </div>
-            <div className="acp-header-right">
-              <span className={`acp-status-badge ${statusClass(profileStatus)}`}>
-                {statusLabel(profileStatus)}
-              </span>
-              <div className="acp-actions-row">
-                <Button
-                  onClick={() => handleGenerate(profileStatus !== 'EMPTY')}
-                  disabled={generating}
-                  size="sm"
-                >
-                  {generating ? 'Generating...' : profileStatus === 'EMPTY' ? 'Generate' : 'Regenerate'}
-                </Button>
-                {dirty && (
-                  <Button onClick={handleSave} disabled={saving} size="sm">
-                    {saving ? 'Saving...' : 'Save'}
-                  </Button>
-                )}
+              <div className="acp-header-metrics">
+                <span className="acp-metric-pill">{correspondents.length} correspondents</span>
+                <span className={`acp-status-badge ${statusClass(profileStatus)}`}>
+                  {statusLabel(profileStatus)}
+                </span>
               </div>
             </div>
+            {dirty && (
+              <div className="acp-header-right">
+                <Button onClick={handleSave} disabled={saving} size="sm">
+                  {saving ? 'Saving...' : 'Save'}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -309,215 +593,354 @@ export default function AdminCollectionPage() {
           </div>
         )}
 
-        {/* Featured Letter */}
-        <div className="acp-section">
-          <div className="acp-section-header">
-            <h2>Featured Letter</h2>
-            <button
-              className="acp-text-btn"
-              onClick={() => { setShowLetterPicker(!showLetterPicker); setPickerSearch(''); }}
-            >
-              {showLetterPicker ? 'Close' : featuredLetter ? 'Change' : 'Select'}
-            </button>
-          </div>
-
-          {featuredLetter && showcaseItems.length > 0 ? (
-            <div className="acp-featured-showcase">
-              <ShowcaseCard
-                items={showcaseItems}
-                onNavigate={() => {/* no-op on admin — no navigation */}}
-              />
+        <div className="acp-editor-grid">
+          <div className="acp-section acp-section--profile">
+            <div className="acp-section-heading">
+              <h2>Collection Profile</h2>
+              <p className="acp-hint">Edit the public-facing hook and summary together here. If nothing has been written or generated yet, both fields stay empty.</p>
             </div>
-          ) : (
-            <div className="acp-empty-state">
-              No featured letter selected. Click &ldquo;Select&rdquo; to choose one.
-            </div>
-          )}
 
-          {/* Letter Picker */}
-          {showLetterPicker && (
-            <div className="acp-letter-picker">
+            <div className="acp-profile-block acp-profile-block--hook">
+              <h3 className="acp-profile-block-title">Collection Hook</h3>
+              <p className="acp-hint">A short teaser for the public collection page. Empty until you write one or generate a profile.</p>
               <input
                 type="text"
-                className="acp-picker-search"
-                placeholder="Filter by sender, recipient, date, hook..."
-                value={pickerSearch}
-                onChange={(e) => setPickerSearch(e.target.value)}
+                className="acp-input acp-full-width"
+                value={hook}
+                onChange={(e) => { setHook(e.target.value); setDirty(true); }}
+                placeholder="e.g. A wartime love story told through 27 letters..."
+                maxLength={500}
               />
-              <div className="letter-grid acp-picker-grid">
-                {filteredLetters.map((letter) => (
-                  <LetterCard
-                    key={letter.id}
-                    card={buildLetterCardData(letter)}
-                    onClick={handleSelectFeaturedLetter}
-                  />
-                ))}
-                {filteredLetters.length === 0 && (
-                  <p className="acp-picker-empty">No letters match your search.</p>
+              <p className="acp-hint">{hook.length} / 500</p>
+            </div>
+
+            <div className="acp-profile-block acp-profile-block--summary">
+              <div className="acp-profile-block-header">
+                <div className="acp-section-heading">
+                  <h3 className="acp-profile-block-title">Collection Summary</h3>
+                  <p className="acp-hint">Narrative shown on the public collection page. Empty until you write one or generate a profile.</p>
+                </div>
+                <div className="acp-profile-actions">
+                  <Button
+                    onClick={() => handleGenerate(profileStatus !== 'EMPTY')}
+                    disabled={generating}
+                    size="sm"
+                  >
+                    {generating ? 'Generating...' : profileStatus === 'EMPTY' ? 'Generate profile' : 'Regenerate profile'}
+                  </Button>
+                </div>
+              </div>
+              <textarea
+                className="acp-textarea"
+                value={narrative}
+                onChange={(e) => { setNarrative(e.target.value); setDirty(true); }}
+                rows={12}
+                placeholder="Write or generate a collection summary..."
+              />
+              <p className="acp-hint">{narrative.length} characters</p>
+            </div>
+          </div>
+
+          <div className="acp-section acp-section--picker acp-section--featured">
+            <div className="acp-section-header">
+              <div className="acp-section-heading">
+                <h2>Featured Letter</h2>
+                <p className="acp-hint">Shown on the public collection page. Auto-picks once when empty, then stays fixed until you change it or the selected letter is unpublished.</p>
+              </div>
+              <div className="acp-picker-anchor" ref={pickerLayerRef}>
+                <button
+                  type="button"
+                  className={`acp-text-btn${showLetterPicker ? ' is-active' : ''}`}
+                  aria-expanded={showLetterPicker}
+                  aria-haspopup="dialog"
+                  onClick={handleToggleLetterPicker}
+                  disabled={publishedLetters.length === 0}
+                >
+                  {showLetterPicker ? 'Close' : featuredLetter ? 'Change' : 'Select'}
+                </button>
+
+                {showLetterPicker && (
+                  <div className="acp-letter-picker-overlay" role="dialog" aria-label="Select featured letter">
+                    <div className="acp-picker-toolbar">
+                      <label className="acp-picker-search-shell">
+                        <svg className="acp-picker-search-icon" viewBox="0 0 20 20" aria-hidden="true">
+                          <circle cx="8.75" cy="8.75" r="5.5" />
+                          <path d="m12.5 12.5 4.25 4.25" />
+                        </svg>
+                        <input
+                          type="search"
+                          className="acp-picker-search"
+                          placeholder="Search sender, recipient, date, hook..."
+                          value={pickerSearch}
+                          onChange={(event) => setPickerSearch(event.target.value)}
+                        />
+                      </label>
+
+                      <div className="acp-picker-toolbar-actions">
+                        <div className="acp-picker-dropdown">
+                          <button
+                            type="button"
+                            className={`acp-picker-control${showPickerFilters ? ' is-active' : ''}`}
+                            aria-expanded={showPickerFilters}
+                            aria-haspopup="menu"
+                            onClick={() => {
+                              setShowPickerFilters((current) => {
+                                const next = !current;
+                                if (next) setShowPickerSort(false);
+                                return next;
+                              });
+                            }}
+                          >
+                            <svg viewBox="0 0 14 14" aria-hidden="true">
+                              <path d="M1.5 2.5h11L8 7.5v4l-2 1.5V7.5z" />
+                            </svg>
+                            <span>Filter</span>
+                            {pickerActiveFilterCount > 0 && (
+                              <span className="acp-picker-control-count">{pickerActiveFilterCount}</span>
+                            )}
+                          </button>
+                          {showPickerFilters && (
+                            <div className="acp-picker-menu acp-picker-menu--filters" role="menu">
+                              <div className="acp-picker-menu-header">
+                                <span className="acp-picker-menu-kicker">Media Type</span>
+                                <button
+                                  type="button"
+                                  className="acp-picker-menu-reset"
+                                  onClick={() => setPickerFormat('all')}
+                                  disabled={pickerFormat === 'all'}
+                                >
+                                  Reset
+                                </button>
+                              </div>
+                              <div className="acp-picker-filter-list">
+                                {pickerFormatOptions.map((option) => (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    className={`acp-picker-filter-chip${option.value === pickerFormat ? ' is-active' : ''}`}
+                                    onClick={() => {
+                                      setPickerFormat(option.value);
+                                      setShowPickerFilters(false);
+                                    }}
+                                  >
+                                    <span>{option.label}</span>
+                                    <span className="acp-picker-filter-count">{option.count}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="acp-picker-dropdown">
+                          <button
+                            type="button"
+                            className={`acp-picker-control${showPickerSort ? ' is-active' : ''}`}
+                            aria-expanded={showPickerSort}
+                            aria-haspopup="menu"
+                            onClick={() => {
+                              setShowPickerSort((current) => {
+                                const next = !current;
+                                if (next) setShowPickerFilters(false);
+                                return next;
+                              });
+                            }}
+                          >
+                            <span>Sort</span>
+                            <span className="acp-picker-control-value">{pickerSortLabel}</span>
+                          </button>
+                          {showPickerSort && (
+                            <div className="acp-picker-menu acp-picker-menu--sort" role="menu">
+                              {COLLECTION_PICKER_SORT_OPTIONS.map((option) => {
+                                const isActive = option.value === pickerSort;
+                                const optionOrder = isActive ? pickerSortOrder : option.defaultOrder;
+                                return (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    className={`acp-picker-sort-option${isActive ? ' is-active' : ''}`}
+                                    onClick={() => handlePickerSortChange(option)}
+                                  >
+                                    <span className="acp-picker-sort-copy">
+                                      <span className="acp-picker-sort-title">{option.label}</span>
+                                      <span className="acp-picker-sort-meta">
+                                        {getCollectionPickerSortLabel(option.value, optionOrder)}
+                                      </span>
+                                    </span>
+                                    <span className="acp-picker-sort-arrow" aria-hidden="true">
+                                      {optionOrder === 'asc' ? '↑' : '↓'}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="acp-picker-toolbar-footer">
+                      <p className="acp-picker-results">{pickerResultsLabel}</p>
+                      {pickerActiveFormat && pickerActiveFormat.value !== 'all' && (
+                        <button
+                          type="button"
+                          className="acp-picker-inline-clear"
+                          onClick={() => setPickerFormat('all')}
+                        >
+                          Showing {pickerActiveFormat.label.toLowerCase()}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="letter-grid acp-picker-grid">
+                      {filteredLetters.map((letter) => (
+                        <div
+                          key={letter.id}
+                          className={`acp-picker-card${letter.id === featuredLetterId ? ' acp-picker-card--selected' : ''}`}
+                        >
+                          <LetterCard
+                            card={buildLetterCardData(letter)}
+                            onClick={handleSelectFeaturedLetter}
+                          />
+                        </div>
+                      ))}
+                      {filteredLetters.length === 0 && (
+                        <p className="acp-picker-empty">No letters match the current search or filter.</p>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
-          )}
+
+            {featuredLetter && showcaseItems.length > 0 ? (
+              <div className="acp-featured-showcase">
+                <ShowcaseCard
+                  items={showcaseItems}
+                  onNavigate={() => {/* no-op on admin — no navigation */}}
+                />
+              </div>
+            ) : (
+              <div className="acp-empty-state">
+                {publishedLetters.length === 0
+                  ? 'No published letters are available to feature yet.'
+                  : 'No featured letter selected yet. Open the picker to choose one.'}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Collection Hook */}
-        <div className="acp-section">
-          <h2>Collection Hook</h2>
-          <p className="acp-hint">A 1-2 sentence teaser for the collection.</p>
-          <input
-            type="text"
-            className="acp-input acp-full-width"
-            value={hook}
-            onChange={(e) => { setHook(e.target.value); setDirty(true); }}
-            placeholder="e.g. A wartime love story told through 27 letters..."
-            maxLength={500}
-          />
-          <p className="acp-hint">{hook.length} / 500</p>
-        </div>
-
-        {/* Collection Summary */}
-        <div className="acp-section">
-          <h2>Collection Summary</h2>
-          <p className="acp-hint">Narrative about the collection, shown on the public page.</p>
-          <textarea
-            className="acp-textarea"
-            value={narrative}
-            onChange={(e) => { setNarrative(e.target.value); setDirty(true); }}
-            rows={12}
-            placeholder="Write or generate a collection summary..."
-          />
-          <p className="acp-hint">{narrative.length} characters</p>
-        </div>
-
-        {/* Correspondents — senders & recipients only */}
-        <div className="acp-section">
-          <h2>Correspondents {correspondents.length > 0 && `(${correspondents.length})`}</h2>
-          <p className="acp-hint">Hooks and biographies for senders and recipients in this collection.</p>
+        {/* Correspondents — collection-scoped rename controls */}
+        <div className="acp-section acp-section--correspondents">
+          <div className="acp-section-heading">
+            <h2>Correspondents {correspondents.length > 0 && `(${correspondents.length})`}</h2>
+            <p className="acp-hint">Rename a sender or recipient across every matching letter in this collection only. This does not rely on old collection-profile drafts.</p>
+          </div>
           {correspondents.length === 0 ? (
-            <p className="acp-empty-note">No correspondents found yet. Generate a profile to populate.</p>
+            <p className="acp-empty-note">No sender or recipient names exist in this collection yet.</p>
           ) : (
-            correspondents.map((person) => {
-              const edit = personEdits.get(person.id);
-              if (!edit) return null;
-              const roleLabel = [
-                person.roles.sender > 0 ? `Sent ${person.roles.sender}` : '',
-                person.roles.recipient > 0 ? `Received ${person.roles.recipient}` : '',
-              ].filter(Boolean).join(' · ');
+            <div className="acp-correspondent-grid">
+              {correspondents.map((person) => {
+                const edit = correspondentEdits.get(person.key);
+                if (!edit) return null;
+                const trimmedName = edit.name.trim();
+                const roleLabel = person.roles.length === 2
+                  ? 'Sender + recipient'
+                  : person.roles[0] === 'sender'
+                    ? 'Sender'
+                    : 'Recipient';
+                const saveDisabled = edit.saving
+                  || trimmedName.length === 0
+                  || !edit.dirty;
 
-              return (
-                <div key={person.id} className="acp-person-card">
-                  <div className="acp-person-header">
-                    <strong>{person.name}</strong>
-                    <span className="acp-person-stats">{roleLabel}</span>
-                  </div>
-                  <div className="acp-person-field">
-                    <label>Hook</label>
-                    <input
-                      type="text"
-                      className="acp-input acp-full-width"
-                      value={edit.hook}
-                      onChange={(e) => {
-                        setPersonEdits(prev => {
-                          const next = new Map(prev);
-                          next.set(person.id, { ...edit, hook: e.target.value, dirty: true });
-                          return next;
-                        });
-                      }}
-                      placeholder="A single compelling sentence about this person..."
-                      maxLength={200}
-                    />
-                  </div>
-                  <div className="acp-person-field">
-                    <label>Biography</label>
-                    <textarea
-                      className="acp-person-bio"
-                      value={edit.biography}
-                      onChange={(e) => {
-                        setPersonEdits(prev => {
-                          const next = new Map(prev);
-                          next.set(person.id, { ...edit, biography: e.target.value, dirty: true });
-                          return next;
-                        });
-                      }}
-                      rows={4}
-                      placeholder="Biography..."
-                    />
-                  </div>
-                  <div className="acp-person-actions">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={edit.generating}
-                      onClick={async () => {
-                        setPersonEdits(prev => {
-                          const next = new Map(prev);
-                          next.set(person.id, { ...edit, generating: true });
-                          return next;
-                        });
-                        try {
-                          const { person: updated } = await generatePersonBiography(person.id);
-                          setPersonEdits(prev => {
-                            const next = new Map(prev);
-                            next.set(person.id, {
-                              biography: updated.biography || '',
-                              hook: updated.hook || '',
-                              dirty: false,
-                              generating: false,
-                              saving: false,
+                return (
+                  <div key={person.key} className="acp-person-card">
+                    <div className="acp-person-header">
+                      <span className="acp-person-label">{roleLabel}</span>
+                      <span className="acp-person-total">{person.totalLetters} letters</span>
+                    </div>
+                    <div className="acp-person-field">
+                      <label htmlFor={`correspondent-${person.key}`}>Name</label>
+                      <input
+                        id={`correspondent-${person.key}`}
+                        type="text"
+                        className="acp-input acp-full-width"
+                        value={edit.name}
+                        onChange={(e) => {
+                          const nextName = e.target.value;
+                          setCorrespondentEdits((previous) => {
+                            const next = new Map(previous);
+                            next.set(person.key, {
+                              ...edit,
+                              name: nextName,
+                              dirty: isCorrespondentDirty(person, nextName, edit.hook, edit.biography),
                             });
                             return next;
                           });
-                          showToast(`Generated bio for ${person.name}`, 'success');
-                        } catch (err) {
-                          showToast(getErrorMessage(err, 'An error occurred'), 'error');
-                          setPersonEdits(prev => {
-                            const next = new Map(prev);
-                            next.set(person.id, { ...edit, generating: false });
-                            return next;
-                          });
-                        }
-                      }}
-                    >
-                      {edit.generating ? 'Generating...' : 'Generate'}
-                    </Button>
-                    {edit.dirty && (
-                      <Button
-                        size="sm"
-                        disabled={edit.saving}
-                        onClick={async () => {
-                          setPersonEdits(prev => {
-                            const next = new Map(prev);
-                            next.set(person.id, { ...edit, saving: true });
-                            return next;
-                          });
-                          try {
-                            await savePersonBiography(person.id, {
-                              biography: edit.biography,
-                              hook: edit.hook,
-                            });
-                            setPersonEdits(prev => {
-                              const next = new Map(prev);
-                              next.set(person.id, { ...edit, dirty: false, saving: false });
-                              return next;
-                            });
-                            showToast(`Saved ${person.name}`, 'success');
-                          } catch (err) {
-                            showToast(getErrorMessage(err, 'An error occurred'), 'error');
-                            setPersonEdits(prev => {
-                              const next = new Map(prev);
-                              next.set(person.id, { ...edit, saving: false });
-                              return next;
-                            });
-                          }
                         }}
+                        placeholder="Rename this correspondent for the whole collection..."
+                        maxLength={255}
+                      />
+                    </div>
+                    <div className="acp-person-field">
+                      <label htmlFor={`correspondent-hook-${person.key}`}>Hook</label>
+                      <input
+                        id={`correspondent-hook-${person.key}`}
+                        type="text"
+                        className="acp-input acp-full-width"
+                        value={edit.hook}
+                        onChange={(e) => {
+                          const nextHook = e.target.value;
+                          setCorrespondentEdits((previous) => {
+                            const next = new Map(previous);
+                            next.set(person.key, {
+                              ...edit,
+                              hook: nextHook,
+                              dirty: isCorrespondentDirty(person, edit.name, nextHook, edit.biography),
+                            });
+                            return next;
+                          });
+                        }}
+                        placeholder="Short hook for this sender or recipient..."
+                        maxLength={500}
+                      />
+                    </div>
+                    <div className="acp-person-field">
+                      <label htmlFor={`correspondent-bio-${person.key}`}>Biography</label>
+                      <textarea
+                        id={`correspondent-bio-${person.key}`}
+                        className="acp-textarea acp-person-biography"
+                        value={edit.biography}
+                        onChange={(e) => {
+                          const nextBiography = e.target.value;
+                          setCorrespondentEdits((previous) => {
+                            const next = new Map(previous);
+                            next.set(person.key, {
+                              ...edit,
+                              biography: nextBiography,
+                              dirty: isCorrespondentDirty(person, edit.name, edit.hook, nextBiography),
+                            });
+                            return next;
+                          });
+                        }}
+                        rows={5}
+                        placeholder="Collection-specific description or biography..."
+                      />
+                    </div>
+                    <div className="acp-person-actions">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={saveDisabled}
+                        onClick={() => handleSaveCorrespondent(person)}
                       >
-                        {edit.saving ? 'Saving...' : 'Save'}
+                        {edit.saving ? 'Saving...' : 'Save correspondent'}
                       </Button>
-                    )}
+                    </div>
                   </div>
-                </div>
-              );
-            })
+                );
+              })}
+            </div>
           )}
         </div>
       </div>

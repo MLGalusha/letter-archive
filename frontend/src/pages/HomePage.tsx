@@ -1,13 +1,20 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { useNavigate, Link } from "react-router-dom";
 import SEO from "../components/SEO";
 import SearchBar from "../components/SearchBar/SearchBar";
 import ArchiveList from "../components/ArchiveList/ArchiveList";
 import Footer from "../components/Footer/Footer";
 import BackToTop from "../components/BackToTop";
-import { getImageUrl, listBlogPosts, type BlogPost } from "../api/client";
-import { getArchiveShelfItems, getLetterById } from "../api/letters";
-import type { ArchiveShelfItem, LetterImage } from "../types/Letter";
+import { getContentPage, getFeaturedLetter, getImageUrl, listBlogPosts, type BlogPost, type FeaturedLetter } from "../api/client";
+import { getLetterById } from "../api/letters";
+import type { LetterImage } from "../types/Letter";
 import { buildHomeSeo } from "../utils/seo";
 import { EMPTY_DOCK, useHeaderDock } from "../contexts/HeaderDockContext";
 import useArchiveSearch from "../hooks/useArchiveSearch";
@@ -28,7 +35,11 @@ function formatDateParts(yearText: string, monthText: string, dayText: string): 
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
 
   const date = new Date(Date.UTC(year, month - 1, day));
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+  if (
+    date.getUTCFullYear() !== year
+    || date.getUTCMonth() !== month - 1
+    || date.getUTCDate() !== day
+  ) {
     return null;
   }
 
@@ -52,37 +63,24 @@ function formatFeaturedLetterDate(dateStr?: string | null): string | null {
     return formatDateParts(compactMatch[1], compactMatch[2], compactMatch[3]) || trimmed;
   }
 
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    return formatDateParts(isoMatch[1], isoMatch[2], isoMatch[3]) || trimmed;
+  }
+
   const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (slashMatch) {
-    return formatDateParts(
-      slashMatch[3],
-      slashMatch[1].padStart(2, "0"),
-      slashMatch[2].padStart(2, "0"),
-    ) || trimmed;
+    return formatDateParts(slashMatch[3], slashMatch[1], slashMatch[2]) || trimmed;
   }
 
   return trimmed;
 }
 
-function getCorrespondentLine(letter: Pick<ArchiveShelfItem, "sender" | "recipient">): string | null {
+function getCorrespondentLine(letter: { sender?: string | null; recipient?: string | null }): string | null {
   const sender = letter.sender?.trim();
   const recipient = letter.recipient?.trim();
   if (sender && recipient) return `${sender} \u2192 ${recipient}`;
   return sender || recipient || null;
-}
-
-function pickHeroLetter(items: ArchiveShelfItem[]): ArchiveShelfItem | null {
-  const visualLetters = items.filter((item) => item.imageType === "letter" && item.imageUrl);
-  const fallbackLetters = items.filter((item) => item.imageType === "letter");
-  const pool = visualLetters.length > 0
-    ? visualLetters
-    : fallbackLetters.length > 0
-      ? fallbackLetters
-      : items;
-
-  if (pool.length === 0) return null;
-  const index = Math.floor(Math.random() * pool.length);
-  return pool[index] || null;
 }
 
 const HOME_SEARCH_SCROLL_GAP = 20;
@@ -97,7 +95,7 @@ function HeroLetterCard({
   ariaLabel,
   onNavigate,
 }: {
-  heroLetter: ArchiveShelfItem;
+  heroLetter: FeaturedLetter;
   heroImages: LetterImage[];
   heroPageIndex: number;
   setHeroPageIndex: React.Dispatch<React.SetStateAction<number>>;
@@ -107,19 +105,39 @@ function HeroLetterCard({
   const currentImage = heroImages[heroPageIndex] || null;
   const hasMultiplePages = heroImages.length > 1;
   const heroPeopleLine = getCorrespondentLine(heroLetter);
-  const heroDate = formatFeaturedLetterDate(heroLetter.date || heroLetter.dateRaw);
+  const heroDate = formatFeaturedLetterDate(heroLetter.letterDate || heroLetter.dateRaw);
+  const navigateToLetter = () => {
+    const params = new URLSearchParams();
+    params.set("from", "highlight");
+    if (currentImage) params.set("image", currentImage.id);
+    onNavigate(heroLetter.id, params);
+  };
+  const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      navigateToLetter();
+    }
+  };
+  const handlePrevPage = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setHeroPageIndex((i) => (i === 0 ? heroImages.length - 1 : i - 1));
+  };
+  const handleNextPage = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setHeroPageIndex((i) => (i === heroImages.length - 1 ? 0 : i + 1));
+  };
 
   return (
-    <button
-      type="button"
-      className={`letter-card home-hero-feature-card letter-card--${heroLetter.imageType}`}
+    <div
+      role="button"
+      tabIndex={0}
+      className={`letter-card home-hero-feature-card letter-card--${heroLetter.imageType || 'letter'}`}
       aria-label={ariaLabel}
-      onClick={() => {
-        const params = new URLSearchParams();
-        params.set("from", "highlight");
-        if (currentImage) params.set("image", currentImage.id);
-        onNavigate(heroLetter.id, params);
-      }}
+      onClick={navigateToLetter}
+      onKeyDown={handleCardKeyDown}
     >
       {heroImages.length > 0 ? (
         heroImages.map((img, idx) => (
@@ -137,7 +155,7 @@ function HeroLetterCard({
       ) : heroLetter.imageUrl ? (
         <img
           className="letter-card-image"
-          src={getImageUrl(heroLetter.imageUrl, { width: 1200 })}
+          src={heroLetter.imageUrl.startsWith('/') ? getImageUrl(heroLetter.imageUrl, { width: 1200 }) : heroLetter.imageUrl}
           alt=""
           loading="eager"
           fetchPriority="high"
@@ -165,19 +183,21 @@ function HeroLetterCard({
       </div>
       {hasMultiplePages && (
         <>
-          <div
+          <button
+            type="button"
             className="home-hero-zone home-hero-zone--prev"
-            onClick={(e) => { e.stopPropagation(); setHeroPageIndex((i) => (i === 0 ? heroImages.length - 1 : i - 1)); }}
+            onClick={handlePrevPage}
             aria-label="Previous page"
           />
-          <div
+          <button
+            type="button"
             className="home-hero-zone home-hero-zone--next"
-            onClick={(e) => { e.stopPropagation(); setHeroPageIndex((i) => (i === heroImages.length - 1 ? 0 : i + 1)); }}
+            onClick={handleNextPage}
             aria-label="Next page"
           />
         </>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -188,8 +208,15 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { setDock } = useHeaderDock();
 
+  // ── Hero content (editable from admin) ──
+  const [heroCopy, setHeroCopy] = useState({
+    kicker: 'Real Letters, Real Lives',
+    heading: 'Follow real lives through letters, telegrams, photographs, and the paper trail they left behind.',
+    subtitle: 'Search names, places, dates, and remembered phrases across the archive, or open a collection to stay inside one family, one romance, or one moment at a time.',
+  });
+
   // ── Hero state ──
-  const [heroLetter, setHeroLetter] = useState<ArchiveShelfItem | null>(null);
+  const [heroLetter, setHeroLetter] = useState<FeaturedLetter | null>(null);
   const [heroImages, setHeroImages] = useState<LetterImage[]>([]);
   const [heroPageIndex, setHeroPageIndex] = useState(0);
   const [heroLoaded, setHeroLoaded] = useState(false);
@@ -213,22 +240,27 @@ export default function HomePage() {
 
     Promise.all([
       listBlogPosts({ limit: 1 }).catch(() => ({ posts: [], total: 0 })),
-      getArchiveShelfItems({
-        collection: "009",
-        limit: 100,
-        sort: "createdAt",
-        sortOrder: "desc",
-      }).catch(() => null),
-    ]).then(([blogData, heroData]) => {
+      getFeaturedLetter().catch(() => null),
+      getContentPage('home').catch(() => null),
+    ]).then(([blogData, featured, homePage]) => {
       if (cancelled) return;
       if (blogData.posts.length > 0) setLatestBlogPost(blogData.posts[0]);
-      const picked = pickHeroLetter(heroData?.letters || []);
-      setHeroLetter(picked);
+      if (homePage) {
+        const json = homePage.contentJson as { hero?: { kicker?: string; heading?: string; subtitle?: string } };
+        if (json?.hero) {
+          setHeroCopy((prev) => ({
+            kicker: json.hero!.kicker || prev.kicker,
+            heading: json.hero!.heading || prev.heading,
+            subtitle: json.hero!.subtitle || prev.subtitle,
+          }));
+        }
+      }
+      setHeroLetter(featured);
       setHeroLoaded(true);
-      if (picked) {
+      if (featured) {
         setHeroImages([]);
         setHeroPageIndex(0);
-        getLetterById(picked.id).then((full) => {
+        getLetterById(featured.id).then((full) => {
           if (cancelled) return;
           setHeroImages(full.images || []);
         }).catch(() => {});
@@ -305,26 +337,25 @@ export default function HomePage() {
     const target = searchPanelRef.current ?? archiveSearchRef.current;
     if (!target) return;
 
-    const header = document.querySelector(".header") as HTMLElement | null;
+    const header = document.querySelector('.header') as HTMLElement | null;
     const headerHeight = header?.offsetHeight ?? 0;
     const targetTop = window.scrollY + target.getBoundingClientRect().top - headerHeight - HOME_SEARCH_SCROLL_GAP;
-    const prefersReducedMotion = typeof window.matchMedia === "function"
-      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const prefersReducedMotion = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     window.scrollTo({
       top: Math.max(0, targetTop),
-      behavior: prefersReducedMotion ? "auto" : "smooth",
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
     });
   }, []);
 
   const heroPeopleLine = heroLetter ? getCorrespondentLine(heroLetter) : null;
-  const heroDate = formatFeaturedLetterDate(heroLetter?.date || heroLetter?.dateRaw);
+  const heroDate = formatFeaturedLetterDate(heroLetter?.letterDate || heroLetter?.dateRaw);
   const heroAriaLabel = heroLetter
     ? [
         "Featured letter",
         heroPeopleLine,
         heroDate,
-        heroLetter.primaryChip,
         heroLetter.hook,
       ].filter((value): value is string => Boolean(value)).join(", ")
     : "Featured letter";
@@ -339,17 +370,15 @@ export default function HomePage() {
       />
       <section className="home-hero">
         <div className="home-hero-copy">
-          <p className="home-kicker">Real Letters, Real Lives</p>
-          <h1 className="home-headline">
-            Follow real lives through letters, telegrams, photographs, and the paper trail they left behind.
-          </h1>
-          <p className="home-subtitle">
-            Search names, places, dates, and remembered phrases across the archive,
-            or open a collection to stay inside one family, one romance, or one moment
-            at a time.
-          </p>
+          <p className="home-kicker">{heroCopy.kicker}</p>
+          <h1 className="home-headline">{heroCopy.heading}</h1>
+          <p className="home-subtitle">{heroCopy.subtitle}</p>
           <div className="home-hero-actions">
-            <a href="#archive-search" className="btn-card home-primary-action" onClick={handleScrollToArchiveSearch}>
+            <a
+              href="#archive-search"
+              className="btn-card home-primary-action"
+              onClick={handleScrollToArchiveSearch}
+            >
               Search the Archive
             </a>
             <Link to="/collections" className="btn-card home-secondary-action">

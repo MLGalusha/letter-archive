@@ -1,4 +1,4 @@
-import type { KeyPerson } from "../api/collections";
+import type { CollectionProfileCorrespondent, KeyPerson } from "../api/collections";
 import type { Letter, LetterImageType } from "../types/Letter";
 import { getMediaLabel, getPrimaryMediaType } from "../utils/letterPreview";
 
@@ -74,8 +74,19 @@ export function computeCollectionStats(letters: Letter[]): CollectionStats {
   // Format breakdown
   const formatCounts = new Map<LetterImageType, number>();
   for (const letter of letters) {
-    const mediaType = getPrimaryMediaType(letter);
-    formatCounts.set(mediaType, (formatCounts.get(mediaType) || 0) + 1);
+    const presentTypes = new Set<LetterImageType>();
+
+    for (const image of letter.images) {
+      presentTypes.add(image.type);
+    }
+
+    if (presentTypes.size === 0) {
+      presentTypes.add(getPrimaryMediaType(letter));
+    }
+
+    for (const mediaType of presentTypes) {
+      formatCounts.set(mediaType, (formatCounts.get(mediaType) || 0) + 1);
+    }
   }
   const formatParts = FORMAT_DISPLAY_ORDER
     .filter((type) => formatCounts.has(type))
@@ -99,9 +110,27 @@ export interface LetterHighlight {
 }
 
 /**
- * Pick up to 2 highlights:
- *   1. Pinned / Featured (admin pin, or middle letter as fallback)
- *   2. Photo (first photo-type item, if one exists; otherwise second featured letter)
+ * Quality tier for a letter (lower = better):
+ *   1 = Fully verified (transcript AND metadata VERIFIED)
+ *   2 = Half verified (transcript OR metadata VERIFIED)
+ *   3 = Has metadata  (metadata is AI_DRAFT or EDITED)
+ *   4 = Any
+ */
+function qualityTier(letter: Letter): number {
+  const tv = letter.transcriptStatus === "VERIFIED";
+  const mv = letter.metadataContentStatus === "VERIFIED";
+  if (tv && mv) return 1;
+  if (tv || mv) return 2;
+  if (letter.metadataContentStatus === "AI_DRAFT" || letter.metadataContentStatus === "EDITED") return 3;
+  return 4;
+}
+
+/**
+ * Pick the best highlight letter using priority tiers:
+ *   1. If admin pinned a start-here letter, use that
+ *   2. Otherwise, pick the best letter by verification quality
+ *      (fully verified > half verified > has metadata > any),
+ *      preferring letters with images, random within the top tier
  */
 export function pickLetterHighlights(
   letters: Letter[],
@@ -109,14 +138,8 @@ export function pickLetterHighlights(
 ): LetterHighlight[] {
   if (letters.length === 0) return [];
 
-  const sorted = [...letters].sort((a, b) => {
-    const aRaw = a.metadata.dateRaw || "";
-    const bRaw = b.metadata.dateRaw || "";
-    return aRaw.localeCompare(bRaw);
-  });
-
-  const used = new Set<string>();
   const highlights: LetterHighlight[] = [];
+  const used = new Set<string>();
 
   const add = (letter: Letter, label: string) => {
     if (used.has(letter.id)) return;
@@ -124,19 +147,24 @@ export function pickLetterHighlights(
     highlights.push({ letter, label });
   };
 
-  // 1. Pinned / start-here
+  // 1. Pinned / start-here (admin override)
   if (startHereLetterId) {
     const pinned = letters.find((l) => l.id === startHereLetterId);
     if (pinned) add(pinned, "Pinned");
   }
+
+  // 2. Auto-select best letter by quality tier
   if (highlights.length === 0) {
-    const candidates = sorted.filter((l) => !used.has(l.id));
-    // Prefer letters that have images
-    const withImages = candidates.filter((l) => l.images.length > 0 && l.images[0].imageUrl);
-    const pool = withImages.length > 0 ? withImages : candidates;
-    if (pool.length > 0) {
-      const mid = Math.floor(pool.length / 2);
-      add(pool[mid], "Featured");
+    const candidates = letters.filter((l) => !used.has(l.id));
+    if (candidates.length > 0) {
+      const bestTier = Math.min(...candidates.map(qualityTier));
+      const tierPool = candidates.filter((l) => qualityTier(l) === bestTier);
+      // Prefer letters with images
+      const withImages = tierPool.filter((l) => l.images.length > 0 && l.images[0].imageUrl);
+      const pool = withImages.length > 0 ? withImages : tierPool;
+      // Random from pool
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      if (pick) add(pick, "Featured");
     }
   }
 
@@ -247,6 +275,7 @@ export interface Correspondent {
 export function buildCorrespondents(
   letters: Letter[],
   keyPeople?: KeyPerson[] | null,
+  profileCorrespondents?: CollectionProfileCorrespondent[] | null,
 ): Correspondent[] {
   const map = new Map<string, { name: string; sent: number; received: number }>();
 
@@ -279,6 +308,15 @@ export function buildCorrespondents(
   const bioLookup = new Map<string, { biography: string | null; hook: string | null }>();
   if (keyPeople) {
     for (const person of keyPeople) {
+      bioLookup.set(normalizeValue(person.name), {
+        biography: person.biography || null,
+        hook: person.hook || null,
+      });
+    }
+  }
+
+  if (profileCorrespondents) {
+    for (const person of profileCorrespondents) {
       bioLookup.set(normalizeValue(person.name), {
         biography: person.biography || null,
         hook: person.hook || null,

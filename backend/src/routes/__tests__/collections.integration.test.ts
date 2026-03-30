@@ -4,12 +4,18 @@ import { invokeRouter } from '../../test/express-test-utils.js';
 const {
   listCollectionsMock,
   getCollectionByCodeMock,
+  resolveCollectionFeaturedLetterIdMock,
+  getCollectionAggregationsMock,
   transformLettersWithRelatedToDTOMock,
   selectMock,
   selectFromMock,
   countWhereMock,
   executeMock,
   lettersFindManyMock,
+  lettersFindFirstMock,
+  updateMock,
+  updateSetMock,
+  updateWhereMock,
   eqMock,
   andMock,
   ascMock,
@@ -17,12 +23,18 @@ const {
 } = vi.hoisted(() => ({
   listCollectionsMock: vi.fn(),
   getCollectionByCodeMock: vi.fn(),
+  resolveCollectionFeaturedLetterIdMock: vi.fn(),
+  getCollectionAggregationsMock: vi.fn(),
   transformLettersWithRelatedToDTOMock: vi.fn(),
   selectMock: vi.fn(),
   selectFromMock: vi.fn(),
   countWhereMock: vi.fn(),
   executeMock: vi.fn(),
   lettersFindManyMock: vi.fn(),
+  lettersFindFirstMock: vi.fn(),
+  updateMock: vi.fn(),
+  updateSetMock: vi.fn(),
+  updateWhereMock: vi.fn(),
   eqMock: vi.fn(),
   andMock: vi.fn(),
   ascMock: vi.fn(),
@@ -39,6 +51,7 @@ vi.mock('drizzle-orm', () => ({
 vi.mock('../../services/collections.js', () => ({
   listCollections: listCollectionsMock,
   getCollectionByCode: getCollectionByCodeMock,
+  resolveCollectionFeaturedLetterId: resolveCollectionFeaturedLetterIdMock,
 }));
 
 vi.mock('../../dto/index.js', () => ({
@@ -46,25 +59,31 @@ vi.mock('../../dto/index.js', () => ({
 }));
 
 vi.mock('../../services/collection-profile.js', () => ({
-  getCollectionAggregations: vi.fn().mockResolvedValue({}),
+  getCollectionAggregations: getCollectionAggregationsMock,
 }));
 
 vi.mock('../../db/index.js', () => ({
   db: {
     select: selectMock,
     execute: executeMock,
+    update: updateMock,
     query: {
       letters: {
         findMany: lettersFindManyMock,
+        findFirst: lettersFindFirstMock,
       },
     },
   },
   letters: {
+    id: 'letters.id',
+    hook: 'letters.hook',
+    dateRaw: 'letters.dateRaw',
     collectionId: 'letters.collectionId',
     visibility: 'letters.visibility',
     letterDate: 'letters.letterDate',
   },
   collections: {
+    id: 'collections.id',
     collectionCode: 'collections.collectionCode',
   },
 }));
@@ -93,6 +112,13 @@ describe('collections route integration', () => {
 
     // db.execute() — used for top senders/recipients
     executeMock.mockResolvedValue([]);
+    updateWhereMock.mockResolvedValue(undefined);
+    updateSetMock.mockReturnValue({
+      where: updateWhereMock,
+    });
+    updateMock.mockReturnValue({
+      set: updateSetMock,
+    });
 
     listCollectionsMock.mockResolvedValue([
       {
@@ -117,6 +143,13 @@ describe('collections route integration', () => {
       (enriched: Array<{ letter: { id: string }; relatedItems: unknown[] }>) =>
         enriched.map((e) => e.letter),
     );
+    resolveCollectionFeaturedLetterIdMock.mockResolvedValue(null);
+    getCollectionAggregationsMock.mockResolvedValue({
+      sentimentArc: [],
+      topicEvolution: [],
+      correspondents: [],
+      formatBreakdown: [],
+    });
   });
 
   it('returns public collections with published letter counts', async () => {
@@ -273,5 +306,51 @@ describe('collections route integration', () => {
     expect(response.headers['x-request-id']).toBe(
       (response.body as { requestId: string }).requestId,
     );
+  });
+
+  it('auto-picks and persists a featured letter for the public collection profile when none is saved', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      description: 'Ninth set',
+      hook: null,
+      profileNarrative: null,
+      profileStatus: 'EMPTY',
+      profileStartHereLetterId: null,
+      profileStartHereReason: '',
+      profileReadingPaths: [],
+      profileGapAnalysis: [],
+      profileThemes: [],
+    });
+    resolveCollectionFeaturedLetterIdMock.mockResolvedValueOnce('letter-1');
+    lettersFindFirstMock.mockResolvedValueOnce({
+      id: 'letter-1',
+      hook: 'Start here',
+      letterDate: '1947-08-10',
+      dateRaw: '19470810',
+    });
+
+    const response = await invokeRouter(collectionsRouter, {
+      method: 'GET',
+      url: '/collections/009/profile',
+      path: '/collections/009/profile',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      profileStatus: 'EMPTY',
+      profileCorrespondents: [],
+      startHere: {
+        letterId: 'letter-1',
+        reason: '',
+        hook: 'Start here',
+        date: '1947-08-10',
+      },
+    });
+    expect(updateSetMock).toHaveBeenCalledWith({
+      profileStartHereLetterId: 'letter-1',
+    });
   });
 });

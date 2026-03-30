@@ -142,6 +142,7 @@ export const collections = pgTable('collections', {
   profileReadingPaths: jsonb('profile_reading_paths'), // Array<{ title, description, letterIds[] }>
   profileGapAnalysis: jsonb('profile_gap_analysis'),   // Array<{ startDate, endDate, description }>
   profileThemes: jsonb('profile_themes'),               // Array<{ name, description, letterIds[] }>
+  profileCorrespondents: jsonb('profile_correspondents'), // Array<{ name, hook, biography }>
   profileStatus: contentStatusEnum('profile_status').notNull().default('EMPTY'),
   profileGeneratedAt: timestamp('profile_generated_at', { withTimezone: true }),
   hook: text('hook'),

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { pickFeaturedLetter } from '../../services/pick-featured-letter.js';
+import { resolveRepresentativeLetterId } from '../../services/letters.js';
 import {
   db,
   updatePosts,
@@ -444,17 +445,19 @@ router.put('/content/featured-letter', validateBody(featuredLetterSchema), async
       return;
     }
 
+    const resolvedId = await resolveRepresentativeLetterId(letterId, { publishedOnly: true }) ?? letterId;
+
     // Upsert into site_settings
     await db
       .insert(siteSettings)
-      .values({ key: 'featured_letter_id', value: letterId })
+      .values({ key: 'featured_letter_id', value: resolvedId })
       .onConflictDoUpdate({
         target: siteSettings.key,
-        set: { value: letterId, updatedAt: new Date() },
+        set: { value: resolvedId, updatedAt: new Date() },
       });
 
-    req.log?.info({ letterId }, 'Featured letter set');
-    res.json({ success: true, letterId });
+    req.log?.info({ letterId, resolvedId }, 'Featured letter set');
+    res.json({ success: true, letterId: resolvedId });
   } catch (error) {
     req.log?.error({ error }, 'Failed to set featured letter');
     res.status(500).json({ error: 'Internal server error' });
@@ -509,9 +512,20 @@ router.get('/content/featured-letter', async (req, res) => {
       .limit(1);
 
     if (manualSetting?.value) {
-      const letter = await fetchLetterDetails(manualSetting.value);
+      const resolvedId = await resolveRepresentativeLetterId(manualSetting.value, { publishedOnly: true });
+      const letter = resolvedId ? await fetchLetterDetails(resolvedId) : null;
       if (letter?.id && letter.visibility === 'PUBLISHED') {
-        res.json({ letter_id: manualSetting.value, letter, source: 'manual' });
+        const normalizedId = resolvedId ?? letter.id;
+        if (normalizedId !== manualSetting.value) {
+          await db
+            .insert(siteSettings)
+            .values({ key: 'featured_letter_id', value: normalizedId })
+            .onConflictDoUpdate({
+              target: siteSettings.key,
+              set: { value: normalizedId, updatedAt: new Date() },
+            });
+        }
+        res.json({ letter_id: normalizedId, letter, source: 'manual' });
         return;
       }
       // Stale — clear it
@@ -526,9 +540,20 @@ router.get('/content/featured-letter', async (req, res) => {
       .limit(1);
 
     if (autoSetting?.value) {
-      const letter = await fetchLetterDetails(autoSetting.value);
+      const resolvedId = await resolveRepresentativeLetterId(autoSetting.value, { publishedOnly: true });
+      const letter = resolvedId ? await fetchLetterDetails(resolvedId) : null;
       if (letter?.id && letter.visibility === 'PUBLISHED') {
-        res.json({ letter_id: autoSetting.value, letter, source: 'auto' });
+        const normalizedId = resolvedId ?? letter.id;
+        if (normalizedId !== autoSetting.value) {
+          await db
+            .insert(siteSettings)
+            .values({ key: 'auto_featured_letter_id', value: normalizedId })
+            .onConflictDoUpdate({
+              target: siteSettings.key,
+              set: { value: normalizedId, updatedAt: new Date() },
+            });
+        }
+        res.json({ letter_id: normalizedId, letter, source: 'auto' });
         return;
       }
       // Stale — clear it
@@ -538,13 +563,19 @@ router.get('/content/featured-letter', async (req, res) => {
     // 3. Auto-select and persist
     const auto = await pickFeaturedLetter();
     if (auto) {
+      const resolvedId = await resolveRepresentativeLetterId(auto.id, { publishedOnly: true }) ?? auto.id;
       await db
         .insert(siteSettings)
-        .values({ key: 'auto_featured_letter_id', value: auto.id })
+        .values({ key: 'auto_featured_letter_id', value: resolvedId })
         .onConflictDoUpdate({
           target: siteSettings.key,
-          set: { value: auto.id, updatedAt: new Date() },
+          set: { value: resolvedId, updatedAt: new Date() },
         });
+      const resolvedLetter = await fetchLetterDetails(resolvedId);
+      if (resolvedLetter?.id) {
+        res.json({ letter_id: resolvedId, letter: resolvedLetter, source: 'auto' });
+        return;
+      }
       res.json({ letter_id: auto.id, letter: auto, source: 'auto' });
       return;
     }

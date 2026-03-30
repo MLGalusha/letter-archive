@@ -84,6 +84,56 @@ export async function getLetterById(letterId: string): Promise<Letter | undefine
 }
 
 /**
+ * Resolve any letter id in a grouped correspondence unit to its representative
+ * record, preferring the primary L-type row when present.
+ */
+export async function resolveRepresentativeLetterId(
+  letterId: string,
+  options: { publishedOnly?: boolean } = {},
+): Promise<string | null> {
+  const target = await db.query.letters.findFirst({
+    where: eq(letters.id, letterId),
+    columns: {
+      id: true,
+      collectionId: true,
+      dateRaw: true,
+      typeSequence: true,
+    },
+  });
+
+  if (!target) return null;
+
+  const conditions = [
+    eq(letters.collectionId, target.collectionId),
+    eq(letters.dateRaw, target.dateRaw),
+    eq(letters.typeSequence, target.typeSequence),
+  ];
+
+  if (options.publishedOnly) {
+    conditions.push(eq(letters.visibility, 'PUBLISHED'));
+  }
+
+  const groupedLetters = await db.query.letters.findMany({
+    where: and(...conditions),
+    columns: {
+      id: true,
+      type: true,
+    },
+  });
+
+  if (groupedLetters.length === 0) return null;
+
+  const [representative] = [...groupedLetters].sort((a, b) => {
+    const aRank = a.type === 'L' ? 0 : 1;
+    const bRank = b.type === 'L' ? 0 : 1;
+    if (aRank !== bRank) return aRank - bRank;
+    return a.type.localeCompare(b.type);
+  });
+
+  return representative?.id ?? null;
+}
+
+/**
  * Atomically claim a job by transitioning its status from expectedStatus to RUNNING.
  * Returns true if the claim succeeded (status was expectedStatus), false if someone else got it first.
  * This prevents the worker and on-demand processing from double-processing the same item.

@@ -2,17 +2,56 @@ import { Router } from 'express';
 import { eq, sql, asc } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, letters, collections, letterPages } from '../../db/index.js';
-import { getCollectionByCode } from '../../services/collections.js';
-import { transformLettersToDTO, type LetterWithRelations } from '../../dto/index.js';
+import {
+  getCollectionByCode,
+  resolveCollectionFeaturedLetterId,
+} from '../../services/collections.js';
+import { transformLettersWithRelatedToDTO, type LetterWithRelations } from '../../dto/index.js';
 import { getRows } from '../../services/letter-queries.js';
 import { analyzeCollection } from '../../ai/analyze-collection.js';
 import { resolveCollectionEntities } from '../../services/entities/resolution.js';
+import { resolveRepresentativeLetterId } from '../../services/letters.js';
+import { propagateName } from '../../services/name-propagation.js';
+import { syncLetterParticipantsFromMetadata } from '../../services/entities/participant-sync.js';
 import {
   assessCollectionCompleteness,
   generateCollectionProfile,
 } from '../../ai/generate-collection-profile.js';
 
 const router = Router();
+
+interface ProfileCorrespondent {
+  name: string;
+  biography: string | null;
+  hook: string | null;
+}
+
+function normalizeProfileCorrespondents(input: unknown): ProfileCorrespondent[] {
+  if (!Array.isArray(input)) return [];
+
+  const correspondents = new Map<string, ProfileCorrespondent>();
+
+  for (const item of input) {
+    if (!item || typeof item !== 'object') continue;
+    const rawName = 'name' in item && typeof item.name === 'string' ? item.name.trim() : '';
+    if (!rawName) continue;
+
+    const hook = 'hook' in item && typeof item.hook === 'string'
+      ? item.hook.trim() || null
+      : null;
+    const biography = 'biography' in item && typeof item.biography === 'string'
+      ? item.biography.trim() || null
+      : null;
+
+    correspondents.set(rawName.toLowerCase(), {
+      name: rawName,
+      hook,
+      biography,
+    });
+  }
+
+  return Array.from(correspondents.values());
+}
 
 const updateCollectionSchema = z.object({
   title: z.string().min(1).max(255).optional(),
@@ -109,7 +148,7 @@ router.get('/:code', async (req, res, next) => {
       return;
     }
 
-    const collectionLetters = await db.query.letters.findMany({
+    const allLetters = await db.query.letters.findMany({
       where: eq(letters.collectionId, collection.id),
       with: {
         collection: true,
@@ -120,9 +159,46 @@ router.get('/:code', async (req, res, next) => {
       orderBy: [asc(letters.letterDate)],
     });
 
+    // Group by (dateRaw, typeSequence) so companion rows like covers, telegrams,
+    // and photos are attached to their primary letter instead of counted separately.
+    const groupMap = new Map<string, (typeof allLetters)[number][]>();
+    for (const letter of allLetters) {
+      const key = `${letter.dateRaw}|${letter.typeSequence}`;
+      const group = groupMap.get(key);
+      if (group) {
+        group.push(letter);
+      } else {
+        groupMap.set(key, [letter]);
+      }
+    }
+
+    const groupedLetters: Array<{ letter: LetterWithRelations; relatedItems: LetterWithRelations[] }> = [];
+    for (const [, group] of groupMap) {
+      const primary = group.find((letter) => letter.type === 'L') || group[0];
+      const relatedItems = group.filter((letter) => letter.id !== primary.id);
+      groupedLetters.push({
+        letter: primary as LetterWithRelations,
+        relatedItems: relatedItems as LetterWithRelations[],
+      });
+    }
+
+    const collectionLetters = transformLettersWithRelatedToDTO(groupedLetters);
+    const resolvedStartHereLetterId = await resolveCollectionFeaturedLetterId(
+      collection.id,
+      collection.profileStartHereLetterId,
+    );
+
+    if (resolvedStartHereLetterId !== (collection.profileStartHereLetterId ?? null)) {
+      await db.update(collections).set({
+        profileStartHereLetterId: resolvedStartHereLetterId,
+      }).where(eq(collections.id, collection.id));
+    }
+
     res.json({
       ...collection,
-      letters: transformLettersToDTO(collectionLetters as LetterWithRelations[]),
+      profileStartHereLetterId: resolvedStartHereLetterId,
+      profileCorrespondents: normalizeProfileCorrespondents(collection.profileCorrespondents),
+      letters: collectionLetters,
       letterCount: collectionLetters.length,
     });
   } catch (error) {
@@ -161,6 +237,106 @@ router.put('/:code', async (req, res, next) => {
       .returning();
 
     res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const renameCorrespondentSchema = z.object({
+  oldName: z.string().trim().min(1),
+  newName: z.string().trim().min(1),
+  roles: z.array(z.enum(['sender', 'recipient'])).min(1),
+});
+
+router.patch('/:code/correspondents', async (req, res, next) => {
+  try {
+    const { code } = req.params;
+    const collection = await getCollectionByCode(code);
+
+    if (!collection) {
+      res.status(404).json({ error: 'Collection not found' });
+      return;
+    }
+
+    const data = renameCorrespondentSchema.parse(req.body ?? {});
+    const normalizedOldName = data.oldName.trim().toLowerCase();
+    const normalizedNewName = data.newName.trim();
+
+    if (normalizedOldName === normalizedNewName.toLowerCase()) {
+      res.json({ updatedCount: 0, message: 'No changes needed' });
+      return;
+    }
+
+    const collectionLetters = await db.query.letters.findMany({
+      where: eq(letters.collectionId, collection.id),
+      columns: {
+        id: true,
+        sender: true,
+        recipient: true,
+      },
+    });
+
+    let updatedCount = 0;
+
+    for (const letter of collectionLetters) {
+      const senderMatches = data.roles.includes('sender')
+        && letter.sender?.trim().toLowerCase() === normalizedOldName;
+      const recipientMatches = data.roles.includes('recipient')
+        && letter.recipient?.trim().toLowerCase() === normalizedOldName;
+
+      if (!senderMatches && !recipientMatches) continue;
+
+      if (senderMatches && letter.sender && letter.sender !== normalizedNewName) {
+        try {
+          await propagateName({
+            letterId: letter.id,
+            field: 'sender',
+            oldName: letter.sender,
+            newName: normalizedNewName,
+          });
+        } catch (error) {
+          req.log.warn({ error, letterId: letter.id }, 'Bulk sender propagation failed, falling back to direct update');
+          await db.update(letters).set({
+            sender: normalizedNewName,
+            updatedAt: new Date(),
+          }).where(eq(letters.id, letter.id));
+        }
+      }
+
+      if (recipientMatches && letter.recipient && letter.recipient !== normalizedNewName) {
+        try {
+          await propagateName({
+            letterId: letter.id,
+            field: 'recipient',
+            oldName: letter.recipient,
+            newName: normalizedNewName,
+          });
+        } catch (error) {
+          req.log.warn({ error, letterId: letter.id }, 'Bulk recipient propagation failed, falling back to direct update');
+          await db.update(letters).set({
+            recipient: normalizedNewName,
+            updatedAt: new Date(),
+          }).where(eq(letters.id, letter.id));
+        }
+      }
+
+      await syncLetterParticipantsFromMetadata({
+        letterId: letter.id,
+        sender: senderMatches ? normalizedNewName : undefined,
+        recipient: recipientMatches ? normalizedNewName : undefined,
+      }).catch((error) => {
+        req.log.warn({ error, letterId: letter.id }, 'Participant sync failed after collection correspondent rename');
+      });
+
+      updatedCount += 1;
+    }
+
+    res.json({
+      updatedCount,
+      message: updatedCount === 0
+        ? 'No matching correspondents found'
+        : `Updated ${updatedCount} ${updatedCount === 1 ? 'letter' : 'letters'}`,
+    });
   } catch (error) {
     next(error);
   }
@@ -264,12 +440,15 @@ router.post('/:code/generate-profile', async (req, res, next) => {
     }
 
     const result = await generateCollectionProfile(collection.id);
+    const resolvedStartHereLetterId = result.startHereLetterId
+      ? await resolveRepresentativeLetterId(result.startHereLetterId)
+      : null;
 
     // Store results
     await db.update(collections).set({
       hook: result.hook,
       profileNarrative: result.narrative,
-      profileStartHereLetterId: result.startHereLetterId,
+      profileStartHereLetterId: resolvedStartHereLetterId,
       profileStartHereReason: result.startHereReason,
       profileReadingPaths: result.readingPaths,
       profileGapAnalysis: result.gapAnalysis,
@@ -280,6 +459,7 @@ router.post('/:code/generate-profile', async (req, res, next) => {
 
     res.json({
       ...result,
+      startHereLetterId: resolvedStartHereLetterId,
       profileStatus: 'AI_DRAFT',
     });
   } catch (error) {
@@ -306,6 +486,11 @@ const updateProfileSchema = z.object({
     name: z.string(),
     description: z.string(),
     letterIds: z.array(z.string().uuid()),
+  })).optional(),
+  profileCorrespondents: z.array(z.object({
+    name: z.string().trim().min(1).max(255),
+    hook: z.string().max(500).nullable().optional(),
+    biography: z.string().max(10000).nullable().optional(),
   })).optional(),
   profileStatus: z.enum(['AI_DRAFT', 'EDITED', 'VERIFIED']).optional(),
   highlightImageId: z.string().uuid().nullable().optional(),
@@ -339,11 +524,25 @@ router.put('/:code/profile', async (req, res, next) => {
 
     if (data.hook !== undefined) updates.hook = data.hook;
     if (data.profileNarrative !== undefined) updates.profileNarrative = data.profileNarrative;
-    if (data.profileStartHereLetterId !== undefined) updates.profileStartHereLetterId = data.profileStartHereLetterId;
+    if (data.profileStartHereLetterId !== undefined) {
+      if (data.profileStartHereLetterId === null) {
+        updates.profileStartHereLetterId = null;
+      } else {
+        const resolvedStartHereLetterId = await resolveRepresentativeLetterId(data.profileStartHereLetterId, { publishedOnly: true });
+        if (!resolvedStartHereLetterId) {
+          res.status(400).json({ error: 'Featured letter must be published' });
+          return;
+        }
+        updates.profileStartHereLetterId = resolvedStartHereLetterId;
+      }
+    }
     if (data.profileStartHereReason !== undefined) updates.profileStartHereReason = data.profileStartHereReason;
     if (data.profileReadingPaths !== undefined) updates.profileReadingPaths = data.profileReadingPaths;
     if (data.profileGapAnalysis !== undefined) updates.profileGapAnalysis = data.profileGapAnalysis;
     if (data.profileThemes !== undefined) updates.profileThemes = data.profileThemes;
+    if (data.profileCorrespondents !== undefined) {
+      updates.profileCorrespondents = normalizeProfileCorrespondents(data.profileCorrespondents);
+    }
     if (data.profileStatus !== undefined) updates.profileStatus = data.profileStatus;
     if (data.highlightImageId !== undefined) updates.highlightImageId = data.highlightImageId;
 

@@ -2,7 +2,7 @@
  * Collections API service
  */
 
-import { apiGet, apiPut, apiPost } from './client';
+import { apiGet, apiPut, apiPost, apiPatch } from './client';
 import type { Letter } from '../types/Letter';
 
 export interface CollectionInfo {
@@ -20,6 +20,10 @@ export interface CollectionInfo {
 
 export interface CollectionWithLetters extends CollectionInfo {
   letters: Letter[];
+  profileNarrative?: string | null;
+  profileStatus?: ContentStatus;
+  profileStartHereLetterId?: string | null;
+  profileCorrespondents?: CollectionProfileCorrespondent[];
 }
 
 export interface AdminCollectionInfo extends CollectionInfo {
@@ -293,6 +297,12 @@ export interface FormatCount {
   count: number;
 }
 
+export interface CollectionProfileCorrespondent {
+  name: string;
+  biography: string | null;
+  hook: string | null;
+}
+
 export type ContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
 
 export interface CollectionProfile {
@@ -304,6 +314,7 @@ export interface CollectionProfile {
   readingPaths: ReadingPath[];
   gapAnalysis: GapAnalysis[];
   themes: ThemeGroup[];
+  profileCorrespondents: CollectionProfileCorrespondent[];
   // Computed aggregations
   sentimentArc: SentimentPoint[];
   topicEvolution: TopicPoint[];
@@ -348,11 +359,23 @@ export async function updateCollectionProfile(
     profileReadingPaths?: ReadingPath[];
     profileGapAnalysis?: GapAnalysis[];
     profileThemes?: ThemeGroup[];
+    profileCorrespondents?: CollectionProfileCorrespondent[];
     profileStatus?: 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
     highlightImageId?: string | null;
   },
 ): Promise<AdminCollectionInfo> {
   return apiPut<AdminCollectionInfo>(`/admin/collections/${code}/profile`, data);
+}
+
+export async function renameCollectionCorrespondent(
+  code: string,
+  data: {
+    oldName: string;
+    newName: string;
+    roles: Array<'sender' | 'recipient'>;
+  },
+): Promise<{ updatedCount: number; message: string }> {
+  return apiPatch<{ updatedCount: number; message: string }>(`/admin/collections/${code}/correspondents`, data);
 }
 
 /** Get the full public collection profile (AI + aggregations) */

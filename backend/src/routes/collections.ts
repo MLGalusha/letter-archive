@@ -1,11 +1,65 @@
 import { Router } from 'express';
 import { eq, and, sql, asc } from 'drizzle-orm';
 import { db, letters, collections } from '../db/index.js';
-import { listCollections, getCollectionByCode } from '../services/collections.js';
+import {
+  listCollections,
+  getCollectionByCode,
+  resolveCollectionFeaturedLetterId,
+} from '../services/collections.js';
 import { transformLettersWithRelatedToDTO, type LetterWithRelations } from '../dto/index.js';
 import { getCollectionAggregations } from '../services/collection-profile.js';
 
 const router = Router();
+
+interface ProfileCorrespondent {
+  name: string;
+  biography: string | null;
+  hook: string | null;
+}
+
+function normalizeProfileCorrespondents(input: unknown): ProfileCorrespondent[] {
+  if (!Array.isArray(input)) return [];
+
+  const correspondents = new Map<string, ProfileCorrespondent>();
+
+  for (const item of input) {
+    if (!item || typeof item !== 'object') continue;
+    const rawName = 'name' in item && typeof item.name === 'string' ? item.name.trim() : '';
+    if (!rawName) continue;
+
+    const hook = 'hook' in item && typeof item.hook === 'string'
+      ? item.hook.trim() || null
+      : null;
+    const biography = 'biography' in item && typeof item.biography === 'string'
+      ? item.biography.trim() || null
+      : null;
+
+    correspondents.set(rawName.toLowerCase(), {
+      name: rawName,
+      hook,
+      biography,
+    });
+  }
+
+  return Array.from(correspondents.values());
+}
+
+function applyProfileCorrespondentOverrides<
+  T extends { name: string; biography: string | null; hook: string | null }
+>(people: T[], overrides: ProfileCorrespondent[]): T[] {
+  if (overrides.length === 0) return people;
+
+  const overrideMap = new Map(overrides.map((person) => [person.name.trim().toLowerCase(), person]));
+  return people.map((person) => {
+    const override = overrideMap.get(person.name.trim().toLowerCase());
+    if (!override) return person;
+    return {
+      ...person,
+      biography: override.biography,
+      hook: override.hook,
+    };
+  });
+}
 
 // Note: Request logging is handled by the request-logger middleware
 
@@ -190,20 +244,31 @@ router.get('/collections/:code/profile', async (req, res, next) => {
     }
 
     const aggregations = await getCollectionAggregations(collection.id);
+    const profileCorrespondents = normalizeProfileCorrespondents(collection.profileCorrespondents);
+    const featuredLetterId = await resolveCollectionFeaturedLetterId(
+      collection.id,
+      collection.profileStartHereLetterId,
+    );
+
+    if (featuredLetterId !== (collection.profileStartHereLetterId ?? null)) {
+      await db.update(collections).set({
+        profileStartHereLetterId: featuredLetterId,
+      }).where(eq(collections.id, collection.id));
+    }
 
     // Build start-here with letter context if available
     let startHere: { letterId: string; reason: string; hook: string | null; date: string | null } | null = null;
-    if (collection.profileStartHereLetterId) {
+    if (featuredLetterId) {
       const startLetter = await db.query.letters.findFirst({
         where: and(
-          eq(letters.id, collection.profileStartHereLetterId),
+          eq(letters.id, featuredLetterId),
           eq(letters.visibility, 'PUBLISHED'),
         ),
         columns: { id: true, hook: true, letterDate: true, dateRaw: true },
       });
       if (startLetter) {
         startHere = {
-          letterId: startLetter.id,
+          letterId: featuredLetterId,
           reason: collection.profileStartHereReason || '',
           hook: startLetter.hook,
           date: startLetter.letterDate || startLetter.dateRaw,
@@ -226,8 +291,10 @@ router.get('/collections/:code/profile', async (req, res, next) => {
       readingPaths: collection.profileReadingPaths || [],
       gapAnalysis: collection.profileGapAnalysis || [],
       themes: collection.profileThemes || [],
+      profileCorrespondents,
       // Computed aggregations
       ...aggregations,
+      keyPeople: applyProfileCorrespondentOverrides(aggregations.keyPeople, profileCorrespondents),
     });
   } catch (error) {
     next(error);

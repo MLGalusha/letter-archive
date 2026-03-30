@@ -1,5 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db, collections, type Collection } from '../db/index.js';
+import { resolveRepresentativeLetterId } from './letters.js';
+import { pickFeaturedLetter } from './pick-featured-letter.js';
 
 /**
  * Finds an existing collection by code, or creates a new one.
@@ -51,4 +53,26 @@ export async function listCollections(): Promise<Collection[]> {
   return db.query.collections.findMany({
     orderBy: (cols, { asc }) => [asc(cols.collectionCode)],
   });
+}
+
+/**
+ * Resolve a collection's saved featured/start-here letter to a published
+ * representative row, or auto-pick a new published one when the saved value
+ * is missing/stale.
+ */
+export async function resolveCollectionFeaturedLetterId(
+  collectionId: string,
+  currentLetterId: string | null | undefined,
+): Promise<string | null> {
+  if (currentLetterId) {
+    const resolvedCurrentId = await resolveRepresentativeLetterId(currentLetterId, { publishedOnly: true });
+    if (resolvedCurrentId) {
+      return resolvedCurrentId;
+    }
+  }
+
+  const autoPick = await pickFeaturedLetter(collectionId);
+  if (!autoPick?.id) return null;
+
+  return await resolveRepresentativeLetterId(autoPick.id, { publishedOnly: true }) ?? autoPick.id;
 }

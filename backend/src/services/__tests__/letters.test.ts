@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   findFirstMock,
+  findManyMock,
   dbInsertMock,
   insertValuesMock,
   insertReturningMock,
@@ -10,6 +11,7 @@ const {
   updateWhereMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
+  findManyMock: vi.fn(),
   dbInsertMock: vi.fn(),
   insertValuesMock: vi.fn(),
   insertReturningMock: vi.fn(),
@@ -47,6 +49,7 @@ vi.mock('../../db/index.js', () => {
       query: {
         letters: {
           findFirst: findFirstMock,
+          findMany: findManyMock,
         },
       },
       insert: dbInsertMock,
@@ -58,6 +61,7 @@ vi.mock('../../db/index.js', () => {
       dateRaw: 'letters.dateRaw',
       type: 'letters.type',
       typeSequence: 'letters.typeSequence',
+      visibility: 'letters.visibility',
       transcriptionAttemptCount: 'letters.transcriptionAttemptCount',
       metadataAttemptCount: 'letters.metadataAttemptCount',
     },
@@ -66,6 +70,7 @@ vi.mock('../../db/index.js', () => {
 
 import {
   findOrCreateLetter,
+  resolveRepresentativeLetterId,
   resetLetterForProcessing,
   updateMetadataStatus,
   updateTranscriptionStatus,
@@ -75,6 +80,7 @@ describe('letters service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     findFirstMock.mockResolvedValue(undefined);
+    findManyMock.mockResolvedValue([]);
     insertReturningMock.mockResolvedValue([
       {
         id: 'letter-new',
@@ -108,6 +114,41 @@ describe('letters service', () => {
 
     expect(result).toBe(existing);
     expect(dbInsertMock).not.toHaveBeenCalled();
+  });
+
+  it('resolves a companion row to the primary L-type representative', async () => {
+    findFirstMock.mockResolvedValueOnce({
+      id: 'telegram-row',
+      collectionId: 'collection-1',
+      dateRaw: '19470810',
+      typeSequence: 1,
+    });
+    findManyMock.mockResolvedValueOnce([
+      { id: 'telegram-row', type: 'T' },
+      { id: 'letter-row', type: 'L' },
+      { id: 'cover-row', type: 'C' },
+    ]);
+
+    const result = await resolveRepresentativeLetterId('telegram-row');
+
+    expect(result).toBe('letter-row');
+  });
+
+  it('can restrict representative resolution to published rows', async () => {
+    findFirstMock.mockResolvedValueOnce({
+      id: 'cover-row',
+      collectionId: 'collection-1',
+      dateRaw: '19470810',
+      typeSequence: 1,
+    });
+    findManyMock.mockResolvedValueOnce([
+      { id: 'cover-row', type: 'C' },
+      { id: 'published-letter-row', type: 'L' },
+    ]);
+
+    const result = await resolveRepresentativeLetterId('cover-row', { publishedOnly: true });
+
+    expect(result).toBe('published-letter-row');
   });
 
   it('marks successful transcription results as AI drafts', async () => {

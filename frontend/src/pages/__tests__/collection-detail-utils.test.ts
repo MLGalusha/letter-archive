@@ -90,6 +90,27 @@ describe("collection detail utils", () => {
     expect(stats.formatBreakdown).toContain("photo");
   });
 
+  it("counts attached extra content formats in the header breakdown", () => {
+    const lettersWithAttachedExtras: Letter[] = [
+      makeLetter({
+        id: "grouped-letter",
+        images: [
+          { id: "img-letter", type: "letter", imageUrl: "/img/letter" },
+          { id: "img-cover", type: "cover", imageUrl: "/img/cover" },
+          { id: "img-telegram", type: "telegram", imageUrl: "/img/telegram" },
+        ],
+        metadata: {
+          dateRaw: "19320415",
+          verified: false,
+        },
+      }),
+    ];
+
+    const stats = computeCollectionStats(lettersWithAttachedExtras);
+
+    expect(stats.formatBreakdown).toBe("1 letter · 1 telegram · 1 cover");
+  });
+
   it("picks 1 featured highlight, preferring items with images", () => {
     const highlights = pickLetterHighlights(letters);
 

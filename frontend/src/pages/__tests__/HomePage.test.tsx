@@ -7,18 +7,22 @@ import { HeaderDockProvider } from "../../contexts/HeaderDockContext";
 import type { ArchiveShelfItem } from "../../types/Letter";
 
 const listBlogPostsMock = vi.fn();
-const getArchiveShelfItemsMock = vi.fn();
 const searchArchiveShelfMock = vi.fn();
+const getFeaturedLetterMock = vi.fn();
+const getContentPageMock = vi.fn();
+const getLetterByIdMock = vi.fn();
 
 vi.mock("../../api/client", () => ({
   getImageUrl: (url: string) => url,
   listBlogPosts: (...args: unknown[]) => listBlogPostsMock(...args),
+  getFeaturedLetter: (...args: unknown[]) => getFeaturedLetterMock(...args),
+  getContentPage: (...args: unknown[]) => getContentPageMock(...args),
+  ApiError: class ApiError extends Error { status: number; constructor(m: string, s: number) { super(m); this.status = s; } },
 }));
 
 vi.mock("../../api/letters", () => ({
-  getArchiveShelfItems: (...args: unknown[]) => getArchiveShelfItemsMock(...args),
   searchArchiveShelf: (...args: unknown[]) => searchArchiveShelfMock(...args),
-  getLetterById: vi.fn().mockResolvedValue({ images: [] }),
+  getLetterById: (...args: unknown[]) => getLetterByIdMock(...args),
 }));
 
 vi.mock("../../components/SEO", () => ({
@@ -48,16 +52,15 @@ function makeShelfItem(index: number): ArchiveShelfItem {
 describe("HomePage archive browsing", () => {
   beforeEach(() => {
     listBlogPostsMock.mockReset();
-    getArchiveShelfItemsMock.mockReset();
     searchArchiveShelfMock.mockReset();
+    getFeaturedLetterMock.mockReset();
+    getContentPageMock.mockReset();
+    getLetterByIdMock.mockReset();
 
     listBlogPostsMock.mockResolvedValue({ posts: [], total: 0 });
-    getArchiveShelfItemsMock.mockResolvedValue({
-      letters: [makeShelfItem(101)],
-      page: 1,
-      limit: 100,
-      total: 1,
-    });
+    getFeaturedLetterMock.mockResolvedValue(null);
+    getContentPageMock.mockResolvedValue(null);
+    getLetterByIdMock.mockResolvedValue({ images: [] });
 
     searchArchiveShelfMock
       .mockResolvedValueOnce({
@@ -127,6 +130,45 @@ describe("HomePage archive browsing", () => {
     );
   });
 
+  it("cycles featured letter pages from the hero controls", async () => {
+    const user = userEvent.setup();
+
+    getFeaturedLetterMock.mockResolvedValueOnce({
+      id: "featured-letter",
+      hook: "A featured note.",
+      summary: null,
+      sender: "Jimmie",
+      recipient: "Molly",
+      letterDate: "August 10, 1947",
+      dateRaw: "19470810",
+      collectionCode: "009",
+      collectionTitle: "Collection Nine",
+      imageUrl: "/images/featured-page-1",
+      imageType: "letter",
+      source: "manual",
+    });
+    getLetterByIdMock.mockResolvedValueOnce({
+      images: [
+        { id: "page-1", type: "letter", imageUrl: "/images/featured-page-1" },
+        { id: "page-2", type: "letter", imageUrl: "/images/featured-page-2" },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <HeaderDockProvider>
+          <HomePage />
+        </HeaderDockProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("1/2")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Next page" }));
+
+    expect(await screen.findByText("2/2")).toBeInTheDocument();
+  });
+
   it("smoothly scrolls the hero CTA to the full search panel below the header", async () => {
     const user = userEvent.setup();
     const scrollToMock = vi.fn();
@@ -192,11 +234,19 @@ describe("HomePage archive browsing", () => {
   });
 
   it("formats featured letter dates into human-readable month names", async () => {
-    getArchiveShelfItemsMock.mockResolvedValueOnce({
-      letters: [{ ...makeShelfItem(101), date: "09/21/2000", dateRaw: "20000921" }],
-      page: 1,
-      limit: 100,
-      total: 1,
+    getFeaturedLetterMock.mockResolvedValueOnce({
+      id: "featured-letter",
+      hook: "A featured note.",
+      summary: null,
+      sender: "Jimmie",
+      recipient: "Molly",
+      letterDate: "09/21/2000",
+      dateRaw: "20000921",
+      collectionCode: "009",
+      collectionTitle: "Collection Nine",
+      imageUrl: "/images/featured-page-1",
+      imageType: "letter",
+      source: "manual",
     });
 
     render(

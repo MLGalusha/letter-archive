@@ -7,7 +7,7 @@ import Footer from '../components/Footer/Footer';
 import BackToTop from '../components/BackToTop';
 import { getCollectionByCode, getCollectionProfile, type CollectionWithLetters, type CollectionProfile } from '../api/collections';
 import { EMPTY_DOCK, useHeaderDock } from '../contexts/HeaderDockContext';
-import { getPrimaryMediaType, getMediaLabel } from '../utils/letterPreview';
+import { getPrimaryMediaType } from '../utils/letterPreview';
 import {
   computeCollectionStats,
   pickLetterHighlights,
@@ -69,8 +69,8 @@ export default function CollectionDetailPage() {
   );
 
   const correspondents = useMemo(
-    () => buildCorrespondents(collectionLetters, profile?.keyPeople),
-    [collectionLetters, profile?.keyPeople],
+    () => buildCorrespondents(collectionLetters, profile?.keyPeople, profile?.profileCorrespondents),
+    [collectionLetters, profile?.keyPeople, profile?.profileCorrespondents],
   );
 
   const gallery = useMemo(
@@ -204,10 +204,9 @@ export default function CollectionDetailPage() {
 
   /* ---- Build ShowcaseCard items from highlights ---- */
   const highlightShowcaseItems = useMemo(() => {
-    return highlights.map(({ letter, label }) => {
+    return highlights.map(({ letter }) => {
       const images = letter.images || [];
       const mediaType = getPrimaryMediaType(letter);
-      const mediaLabel = getMediaLabel(mediaType);
       const sender = letter.metadata.sender?.trim();
       const recipient = letter.metadata.recipient?.trim();
       const peopleLine = sender && recipient
@@ -217,9 +216,7 @@ export default function CollectionDetailPage() {
       const hook = mediaType === 'photo'
         ? (letter.photoDescription || letter.metadata.hook || '')
         : (letter.metadata.hook || letter.photoDescription || '');
-      const chipLabel = label.toLowerCase() === mediaLabel.toLowerCase()
-        ? label
-        : `${label} \u00B7 ${mediaLabel}`;
+      const chipLabel = 'Featured Letter';
 
       return {
         key: letter.id,

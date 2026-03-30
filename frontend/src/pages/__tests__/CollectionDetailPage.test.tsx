@@ -193,7 +193,7 @@ describe("CollectionDetailPage", () => {
     expect(screen.getByText("Alice Smith")).toBeInTheDocument();
 
     // Highlights (featured letter + gallery)
-    expect(screen.getByText(/Featured/)).toBeInTheDocument();
+    expect(screen.getByText("Featured Letter")).toBeInTheDocument();
     expect(screen.getByText("Photo")).toBeInTheDocument();
 
     // Archive search components
@@ -259,8 +259,27 @@ describe("CollectionDetailPage", () => {
     expect(screen.queryByText(/narrative/i)).not.toBeInTheDocument();
 
     // But highlights and archive should still render
-    expect(screen.getByText(/Featured/)).toBeInTheDocument();
+    expect(screen.getByText("Featured Letter")).toBeInTheDocument();
     expect(screen.getByTestId("archive-list")).toBeInTheDocument();
+  });
+
+  it("keeps the collection highlight label as Featured Letter even for a start-here selection", async () => {
+    getCollectionProfileMock.mockResolvedValue({
+      profileStatus: "AI_DRAFT",
+      startHere: {
+        letterId: "letter-1",
+        reason: "Begin here.",
+        hook: "First travel note",
+        date: "1947-08-10",
+      },
+    });
+
+    renderCollectionDetailPage();
+
+    await screen.findByRole("heading", { name: "Collection Nine" });
+
+    expect(screen.getByText("Featured Letter")).toBeInTheDocument();
+    expect(screen.queryByText("Pinned")).not.toBeInTheDocument();
   });
 
   it("shows narrative when profile has one", async () => {

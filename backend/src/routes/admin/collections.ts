@@ -308,6 +308,7 @@ const updateProfileSchema = z.object({
     letterIds: z.array(z.string().uuid()),
   })).optional(),
   profileStatus: z.enum(['AI_DRAFT', 'EDITED', 'VERIFIED']).optional(),
+  highlightImageId: z.string().uuid().nullable().optional(),
 });
 
 /**
@@ -344,6 +345,7 @@ router.put('/:code/profile', async (req, res, next) => {
     if (data.profileGapAnalysis !== undefined) updates.profileGapAnalysis = data.profileGapAnalysis;
     if (data.profileThemes !== undefined) updates.profileThemes = data.profileThemes;
     if (data.profileStatus !== undefined) updates.profileStatus = data.profileStatus;
+    if (data.highlightImageId !== undefined) updates.highlightImageId = data.highlightImageId;
 
     // Auto-upgrade status from AI_DRAFT to EDITED if content changes (but not if status is explicitly set)
     if (!data.profileStatus && collection.profileStatus === 'AI_DRAFT' && Object.keys(updates).length > 0) {

@@ -1,19 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
 import { Button } from '../../components/common';
 import { getErrorMessage } from '../../api/client';
 import {
   getAdminCollectionByCode,
-  getCollectionCompleteness,
   generateCollectionProfile,
   updateCollectionProfile,
   getCollectionProfile,
-  type CollectionCompleteness,
   type CollectionWithLetters,
   type KeyPerson,
-  type ReadingPath,
-  type ThemeGroup,
   type ContentStatus,
 } from '../../api/collections';
 import {
@@ -21,17 +17,11 @@ import {
   saveBiography as savePersonBiography,
 } from '../../api/entities/persons';
 import { useToast } from '../../contexts/ToastContext';
+import ShowcaseCard, { type ShowcaseItem } from '../../components/ShowcaseCard';
+import LetterCard from '../../components/LetterCard/LetterCard';
+import { buildLetterCardData, getPrimaryMediaType, getMediaLabel } from '../../utils/letterPreview';
+import type { Letter } from '../../types/Letter';
 import './AdminCollectionPage.css';
-
-type ProfileData = {
-  hook: string;
-  narrative: string;
-  startHereLetterId: string | null;
-  startHereReason: string;
-  readingPaths: ReadingPath[];
-  themes: ThemeGroup[];
-  profileStatus: ContentStatus;
-};
 
 interface PersonEditState {
   biography: string;
@@ -46,57 +36,117 @@ export default function AdminCollectionPage() {
   const { showToast } = useToast();
 
   const [collection, setCollection] = useState<CollectionWithLetters | null>(null);
-  const [completeness, setCompleteness] = useState<CollectionCompleteness | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showWarningDialog, setShowWarningDialog] = useState(false);
 
-  // Editable profile state
-  const [profile, setProfile] = useState<ProfileData>({
-    hook: '',
-    narrative: '',
-    startHereLetterId: null,
-    startHereReason: '',
-    readingPaths: [],
-    themes: [],
-    profileStatus: 'EMPTY',
-  });
+  // Featured letter
+  const [featuredLetterId, setFeaturedLetterId] = useState<string | null>(null);
+  const [showLetterPicker, setShowLetterPicker] = useState(false);
+  const [pickerSearch, setPickerSearch] = useState('');
+
+  // Editable profile fields (only hook + summary now)
+  const [hook, setHook] = useState('');
+  const [narrative, setNarrative] = useState('');
+  const [profileStatus, setProfileStatus] = useState<ContentStatus>('EMPTY');
   const [dirty, setDirty] = useState(false);
 
-  // Key people state
+  // Correspondents (senders & recipients only)
   const [keyPeople, setKeyPeople] = useState<KeyPerson[]>([]);
   const [personEdits, setPersonEdits] = useState<Map<string, PersonEditState>>(new Map());
+
+  // Look up featured letter by ID (auto-pick happens in fetchData, not here)
+  const featuredLetter = useMemo<Letter | null>(() => {
+    if (!collection?.letters?.length || !featuredLetterId) return null;
+    return collection.letters.find(l => l.id === featuredLetterId) || null;
+  }, [collection?.letters, featuredLetterId]);
+
+  // Build ShowcaseCard items from featured letter
+  const showcaseItems = useMemo<ShowcaseItem[]>(() => {
+    if (!featuredLetter) return [];
+    const images = featuredLetter.images || [];
+    const mediaType = getPrimaryMediaType(featuredLetter);
+    const mediaLabel = getMediaLabel(mediaType);
+    const sender = featuredLetter.metadata.sender?.trim();
+    const recipient = featuredLetter.metadata.recipient?.trim();
+    const peopleLine = sender && recipient
+      ? `${sender} \u2192 ${recipient}`
+      : sender || recipient || '';
+    const date = featuredLetter.metadata.date || featuredLetter.metadata.dateRaw || '';
+    const letterHook = mediaType === 'photo'
+      ? (featuredLetter.photoDescription || featuredLetter.metadata.hook || '')
+      : (featuredLetter.metadata.hook || featuredLetter.photoDescription || '');
+    const label = 'Featured';
+
+    if (images.length > 0) {
+      return images.map((img) => ({
+        letterId: featuredLetter.id,
+        imageId: img.id,
+        imageUrl: img.imageUrl || '',
+        label,
+        peopleLine,
+        date,
+        hook: letterHook,
+        mediaType,
+      }));
+    }
+    return [{
+      letterId: featuredLetter.id,
+      imageUrl: '',
+      label,
+      peopleLine,
+      date,
+      hook: letterHook,
+      mediaType,
+    }];
+  }, [featuredLetter, featuredLetterId]);
+
+  // Filter letters for picker
+  const filteredLetters = useMemo(() => {
+    if (!collection?.letters) return [];
+    if (!pickerSearch.trim()) return collection.letters;
+    const q = pickerSearch.toLowerCase();
+    return collection.letters.filter(l => {
+      const sender = l.metadata.sender?.toLowerCase() || '';
+      const recipient = l.metadata.recipient?.toLowerCase() || '';
+      const hookText = l.metadata.hook?.toLowerCase() || '';
+      const date = l.metadata.date?.toLowerCase() || l.metadata.dateRaw || '';
+      return sender.includes(q) || recipient.includes(q) || hookText.includes(q) || date.includes(q);
+    });
+  }, [collection?.letters, pickerSearch]);
+
+  // Filter key people to senders & recipients only
+  const correspondents = useMemo(() => {
+    return keyPeople.filter(p => p.roles.sender > 0 || p.roles.recipient > 0);
+  }, [keyPeople]);
 
   const fetchData = useCallback(async () => {
     if (!code) return;
     setLoading(true);
     try {
-      const [coll, comp] = await Promise.all([
-        getAdminCollectionByCode(code),
-        getCollectionCompleteness(code),
-      ]);
+      const coll = await getAdminCollectionByCode(code);
       setCollection(coll);
-      setCompleteness(comp);
 
-      // Populate profile from collection data
       const c = coll as unknown as Record<string, unknown>;
-      setProfile({
-        hook: (c.hook as string) || '',
-        narrative: (c.profileNarrative as string) || '',
-        startHereLetterId: (c.profileStartHereLetterId as string) || null,
-        startHereReason: (c.profileStartHereReason as string) || '',
-        readingPaths: (c.profileReadingPaths as ReadingPath[]) || [],
-        themes: (c.profileThemes as ThemeGroup[]) || [],
-        profileStatus: (c.profileStatus as ContentStatus) || 'EMPTY',
-      });
+      setHook((c.hook as string) || '');
+      setNarrative((c.profileNarrative as string) || '');
+      setProfileStatus((c.profileStatus as ContentStatus) || 'EMPTY');
+
+      // Featured letter: use saved value, or random-pick and persist
+      let savedFeaturedId = (c.profileStartHereLetterId as string) || null;
+      if (!savedFeaturedId && coll.letters?.length) {
+        const randomIndex = Math.floor(Math.random() * coll.letters.length);
+        savedFeaturedId = coll.letters[randomIndex].id;
+        await updateCollectionProfile(code, { profileStartHereLetterId: savedFeaturedId }).catch(() => {});
+      }
+      setFeaturedLetterId(savedFeaturedId);
       setDirty(false);
 
-      // Fetch key people from public profile endpoint
+      // Fetch key people
       try {
         const profileData = await getCollectionProfile(code);
         setKeyPeople(profileData.keyPeople || []);
-        // Initialize person edit states
         const edits = new Map<string, PersonEditState>();
         for (const person of profileData.keyPeople || []) {
           edits.set(person.id, {
@@ -109,7 +159,7 @@ export default function AdminCollectionPage() {
         }
         setPersonEdits(edits);
       } catch {
-        // Profile may not exist yet — that's fine
+        // Profile may not exist yet
       }
     } catch (err) {
       showToast(getErrorMessage(err, 'An error occurred'), 'error');
@@ -122,28 +172,20 @@ export default function AdminCollectionPage() {
 
   const handleGenerate = async (force = false) => {
     if (!code) return;
-
-    // Show warning if completeness is low
-    if (!force && completeness && completeness.completenessScore < 50 && !showWarningDialog) {
+    if (!force && profileStatus !== 'EMPTY') {
       setShowWarningDialog(true);
       return;
     }
     setShowWarningDialog(false);
-
     setGenerating(true);
     try {
-      const result = await generateCollectionProfile(code, force || profile.profileStatus !== 'EMPTY');
-      setProfile({
-        hook: result.hook || '',
-        narrative: result.narrative,
-        startHereLetterId: result.startHereLetterId,
-        startHereReason: result.startHereReason,
-        readingPaths: result.readingPaths,
-        themes: result.themes,
-        profileStatus: result.profileStatus,
-      });
+      const result = await generateCollectionProfile(code, force || profileStatus !== 'EMPTY');
+      setHook(result.hook || '');
+      setNarrative(result.narrative || '');
+      if (result.startHereLetterId) setFeaturedLetterId(result.startHereLetterId);
+      setProfileStatus(result.profileStatus);
       setDirty(false);
-      showToast(result.isStub ? 'Stub profile generated (no API key)' : 'Profile generated successfully', 'success');
+      showToast(result.isStub ? 'Stub profile generated (no API key)' : 'Profile generated', 'success');
       fetchData();
     } catch (err) {
       showToast(getErrorMessage(err, 'An error occurred'), 'error');
@@ -157,15 +199,12 @@ export default function AdminCollectionPage() {
     setSaving(true);
     try {
       await updateCollectionProfile(code, {
-        hook: profile.hook || null,
-        profileNarrative: profile.narrative,
-        profileStartHereLetterId: profile.startHereLetterId,
-        profileStartHereReason: profile.startHereReason,
-        profileReadingPaths: profile.readingPaths,
-        profileThemes: profile.themes,
+        hook: hook || null,
+        profileNarrative: narrative,
+        profileStartHereLetterId: featuredLetterId,
       });
       setDirty(false);
-      showToast('Profile saved', 'success');
+      showToast('Saved', 'success');
       fetchData();
     } catch (err) {
       showToast(getErrorMessage(err, 'An error occurred'), 'error');
@@ -174,15 +213,11 @@ export default function AdminCollectionPage() {
     }
   };
 
-  const handleVerify = async () => {
-    if (!code) return;
-    try {
-      await updateCollectionProfile(code, { profileStatus: 'VERIFIED' });
-      setProfile(p => ({ ...p, profileStatus: 'VERIFIED' }));
-      showToast('Profile marked as verified', 'success');
-    } catch (err) {
-      showToast(getErrorMessage(err, 'An error occurred'), 'error');
-    }
+  const handleSelectFeaturedLetter = (letterId: string) => {
+    setFeaturedLetterId(letterId);
+    setShowLetterPicker(false);
+    setPickerSearch('');
+    setDirty(true);
   };
 
   const statusLabel = (status: ContentStatus) => {
@@ -219,8 +254,6 @@ export default function AdminCollectionPage() {
     );
   }
 
-  const letterOptions = collection.letters || [];
-
   return (
     <AdminLayout
       headerActions={
@@ -238,404 +271,255 @@ export default function AdminCollectionPage() {
               <h1 className="acp-title">{collection.title || `Collection ${collection.collectionCode}`}</h1>
               <p className="acp-subtitle">
                 {collection.letterCount} letters
-                {completeness && ` \u00b7 ${completeness.publishedLetters} published`}
               </p>
             </div>
-            <div className="acp-header-status">
-              <span className={`acp-status-badge ${statusClass(profile.profileStatus)}`}>
-                {statusLabel(profile.profileStatus)}
+            <div className="acp-header-right">
+              <span className={`acp-status-badge ${statusClass(profileStatus)}`}>
+                {statusLabel(profileStatus)}
               </span>
+              <div className="acp-actions-row">
+                <Button
+                  onClick={() => handleGenerate(profileStatus !== 'EMPTY')}
+                  disabled={generating}
+                  size="sm"
+                >
+                  {generating ? 'Generating...' : profileStatus === 'EMPTY' ? 'Generate' : 'Regenerate'}
+                </Button>
+                {dirty && (
+                  <Button onClick={handleSave} disabled={saving} size="sm">
+                    {saving ? 'Saving...' : 'Save'}
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Completeness Panel */}
-        {completeness && (
-          <div className="acp-section acp-completeness">
-            <h2>Data Completeness</h2>
-            <div className="acp-completeness-bar-container">
-              <div
-                className="acp-completeness-bar"
-                style={{ width: `${Math.min(completeness.completenessScore, 100)}%` }}
-              />
-              <span className="acp-completeness-score">{Math.round(completeness.completenessScore)}%</span>
-            </div>
-            <div className="acp-completeness-stats">
-              <span>{completeness.withTranscripts} / {completeness.totalLetters} transcripts</span>
-              <span>{completeness.withMetadata} / {completeness.totalLetters} metadata</span>
-              <span>{completeness.withEmotionalTone} tones</span>
-              <span>{completeness.withTopics} topics</span>
-            </div>
-            {completeness.warnings.length > 0 && (
-              <ul className="acp-warnings">
-                {completeness.warnings.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-
-        {/* Generate / Regenerate */}
-        <div className="acp-section acp-generate">
-          <div className="acp-generate-row">
-            <Button
-              onClick={() => handleGenerate(profile.profileStatus !== 'EMPTY')}
-              disabled={generating}
-            >
-              {generating ? 'Generating...' : profile.profileStatus === 'EMPTY' ? 'Generate Profile' : 'Regenerate Profile'}
-            </Button>
-            {profile.profileStatus !== 'EMPTY' && profile.profileStatus !== 'VERIFIED' && (
-              <Button onClick={handleVerify} variant="secondary">
-                Mark as Verified
-              </Button>
-            )}
-            {dirty && (
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving...' : 'Save Changes'}
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Warning Dialog */}
+        {/* Regenerate Warning Dialog */}
         {showWarningDialog && (
           <div className="acp-dialog-overlay">
             <div className="acp-dialog">
-              <h3>Low Data Completeness</h3>
-              <p>
-                Only {Math.round(completeness?.completenessScore || 0)}% of data is available.
-                The generated profile may be sparse or inaccurate.
-              </p>
-              {completeness?.warnings.map((w, i) => (
-                <p key={i} className="acp-dialog-warning">{w}</p>
-              ))}
+              <h3>Regenerate Profile?</h3>
+              <p>This will overwrite the current hook, summary, and featured letter with AI-generated content.</p>
               <div className="acp-dialog-actions">
                 <Button onClick={() => setShowWarningDialog(false)} variant="secondary">Cancel</Button>
-                <Button onClick={() => handleGenerate(true)}>Generate Anyway</Button>
+                <Button onClick={() => handleGenerate(true)}>Regenerate</Button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Profile Editor */}
-        {profile.profileStatus !== 'EMPTY' && (
-          <>
-            {/* Hook */}
-            <div className="acp-section">
-              <h2>Collection Hook</h2>
-              <p className="acp-hint">A 1-2 sentence teaser that makes someone want to explore this collection.</p>
+        {/* Featured Letter */}
+        <div className="acp-section">
+          <div className="acp-section-header">
+            <h2>Featured Letter</h2>
+            <button
+              className="acp-text-btn"
+              onClick={() => { setShowLetterPicker(!showLetterPicker); setPickerSearch(''); }}
+            >
+              {showLetterPicker ? 'Close' : featuredLetter ? 'Change' : 'Select'}
+            </button>
+          </div>
+
+          {featuredLetter && showcaseItems.length > 0 ? (
+            <div className="acp-featured-showcase">
+              <ShowcaseCard
+                items={showcaseItems}
+                onNavigate={() => {/* no-op on admin — no navigation */}}
+              />
+            </div>
+          ) : (
+            <div className="acp-empty-state">
+              No featured letter selected. Click &ldquo;Select&rdquo; to choose one.
+            </div>
+          )}
+
+          {/* Letter Picker */}
+          {showLetterPicker && (
+            <div className="acp-letter-picker">
               <input
                 type="text"
-                className="acp-input acp-hook-input"
-                value={profile.hook}
-                onChange={(e) => {
-                  setProfile(p => ({ ...p, hook: e.target.value }));
-                  setDirty(true);
-                }}
-                placeholder="e.g. A wartime love story told through 27 letters..."
-                maxLength={500}
+                className="acp-picker-search"
+                placeholder="Filter by sender, recipient, date, hook..."
+                value={pickerSearch}
+                onChange={(e) => setPickerSearch(e.target.value)}
               />
-              <p className="acp-hint">{profile.hook.length} / 500</p>
-            </div>
-
-            {/* Narrative */}
-            <div className="acp-section">
-              <h2>Narrative Essay</h2>
-              <textarea
-                className="acp-narrative-editor"
-                value={profile.narrative}
-                onChange={(e) => {
-                  setProfile(p => ({ ...p, narrative: e.target.value }));
-                  setDirty(true);
-                }}
-                rows={16}
-                placeholder="Collection narrative essay..."
-              />
-              <p className="acp-hint">{profile.narrative.length} characters</p>
-            </div>
-
-            {/* Start Here */}
-            <div className="acp-section">
-              <h2>Start Here Letter</h2>
-              <div className="acp-start-here-row">
-                <select
-                  className="acp-select"
-                  value={profile.startHereLetterId || ''}
-                  onChange={(e) => {
-                    setProfile(p => ({ ...p, startHereLetterId: e.target.value || null }));
-                    setDirty(true);
-                  }}
-                >
-                  <option value="">— None —</option>
-                  {letterOptions.map(l => (
-                    <option key={l.id} value={l.id}>
-                      {l.metadata.dateRaw || l.title} — {l.metadata.sender || '?'} to {l.metadata.recipient || '?'}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="text"
-                  className="acp-input"
-                  value={profile.startHereReason}
-                  onChange={(e) => {
-                    setProfile(p => ({ ...p, startHereReason: e.target.value }));
-                    setDirty(true);
-                  }}
-                  placeholder="Why start here?"
-                />
+              <div className="letter-grid acp-picker-grid">
+                {filteredLetters.map((letter) => (
+                  <LetterCard
+                    key={letter.id}
+                    card={buildLetterCardData(letter)}
+                    onClick={handleSelectFeaturedLetter}
+                  />
+                ))}
+                {filteredLetters.length === 0 && (
+                  <p className="acp-picker-empty">No letters match your search.</p>
+                )}
               </div>
             </div>
+          )}
+        </div>
 
-            {/* Reading Paths */}
-            <div className="acp-section">
-              <h2>Reading Paths ({profile.readingPaths.length})</h2>
-              {profile.readingPaths.map((path, i) => (
-                <div key={i} className="acp-path-card">
-                  <div className="acp-path-header">
+        {/* Collection Hook */}
+        <div className="acp-section">
+          <h2>Collection Hook</h2>
+          <p className="acp-hint">A 1-2 sentence teaser for the collection.</p>
+          <input
+            type="text"
+            className="acp-input acp-full-width"
+            value={hook}
+            onChange={(e) => { setHook(e.target.value); setDirty(true); }}
+            placeholder="e.g. A wartime love story told through 27 letters..."
+            maxLength={500}
+          />
+          <p className="acp-hint">{hook.length} / 500</p>
+        </div>
+
+        {/* Collection Summary */}
+        <div className="acp-section">
+          <h2>Collection Summary</h2>
+          <p className="acp-hint">Narrative about the collection, shown on the public page.</p>
+          <textarea
+            className="acp-textarea"
+            value={narrative}
+            onChange={(e) => { setNarrative(e.target.value); setDirty(true); }}
+            rows={12}
+            placeholder="Write or generate a collection summary..."
+          />
+          <p className="acp-hint">{narrative.length} characters</p>
+        </div>
+
+        {/* Correspondents — senders & recipients only */}
+        <div className="acp-section">
+          <h2>Correspondents {correspondents.length > 0 && `(${correspondents.length})`}</h2>
+          <p className="acp-hint">Hooks and biographies for senders and recipients in this collection.</p>
+          {correspondents.length === 0 ? (
+            <p className="acp-empty-note">No correspondents found yet. Generate a profile to populate.</p>
+          ) : (
+            correspondents.map((person) => {
+              const edit = personEdits.get(person.id);
+              if (!edit) return null;
+              const roleLabel = [
+                person.roles.sender > 0 ? `Sent ${person.roles.sender}` : '',
+                person.roles.recipient > 0 ? `Received ${person.roles.recipient}` : '',
+              ].filter(Boolean).join(' · ');
+
+              return (
+                <div key={person.id} className="acp-person-card">
+                  <div className="acp-person-header">
+                    <strong>{person.name}</strong>
+                    <span className="acp-person-stats">{roleLabel}</span>
+                  </div>
+                  <div className="acp-person-field">
+                    <label>Hook</label>
                     <input
                       type="text"
-                      className="acp-input"
-                      value={path.title}
+                      className="acp-input acp-full-width"
+                      value={edit.hook}
                       onChange={(e) => {
-                        const updated = [...profile.readingPaths];
-                        updated[i] = { ...updated[i], title: e.target.value };
-                        setProfile(p => ({ ...p, readingPaths: updated }));
-                        setDirty(true);
+                        setPersonEdits(prev => {
+                          const next = new Map(prev);
+                          next.set(person.id, { ...edit, hook: e.target.value, dirty: true });
+                          return next;
+                        });
                       }}
-                      placeholder="Path title"
+                      placeholder="A single compelling sentence about this person..."
+                      maxLength={200}
                     />
-                    <button
-                      className="acp-remove-btn"
-                      onClick={() => {
-                        setProfile(p => ({
-                          ...p,
-                          readingPaths: p.readingPaths.filter((_, j) => j !== i),
-                        }));
-                        setDirty(true);
+                  </div>
+                  <div className="acp-person-field">
+                    <label>Biography</label>
+                    <textarea
+                      className="acp-person-bio"
+                      value={edit.biography}
+                      onChange={(e) => {
+                        setPersonEdits(prev => {
+                          const next = new Map(prev);
+                          next.set(person.id, { ...edit, biography: e.target.value, dirty: true });
+                          return next;
+                        });
+                      }}
+                      rows={4}
+                      placeholder="Biography..."
+                    />
+                  </div>
+                  <div className="acp-person-actions">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={edit.generating}
+                      onClick={async () => {
+                        setPersonEdits(prev => {
+                          const next = new Map(prev);
+                          next.set(person.id, { ...edit, generating: true });
+                          return next;
+                        });
+                        try {
+                          const { person: updated } = await generatePersonBiography(person.id);
+                          setPersonEdits(prev => {
+                            const next = new Map(prev);
+                            next.set(person.id, {
+                              biography: updated.biography || '',
+                              hook: updated.hook || '',
+                              dirty: false,
+                              generating: false,
+                              saving: false,
+                            });
+                            return next;
+                          });
+                          showToast(`Generated bio for ${person.name}`, 'success');
+                        } catch (err) {
+                          showToast(getErrorMessage(err, 'An error occurred'), 'error');
+                          setPersonEdits(prev => {
+                            const next = new Map(prev);
+                            next.set(person.id, { ...edit, generating: false });
+                            return next;
+                          });
+                        }
                       }}
                     >
-                      &times;
-                    </button>
+                      {edit.generating ? 'Generating...' : 'Generate'}
+                    </Button>
+                    {edit.dirty && (
+                      <Button
+                        size="sm"
+                        disabled={edit.saving}
+                        onClick={async () => {
+                          setPersonEdits(prev => {
+                            const next = new Map(prev);
+                            next.set(person.id, { ...edit, saving: true });
+                            return next;
+                          });
+                          try {
+                            await savePersonBiography(person.id, {
+                              biography: edit.biography,
+                              hook: edit.hook,
+                            });
+                            setPersonEdits(prev => {
+                              const next = new Map(prev);
+                              next.set(person.id, { ...edit, dirty: false, saving: false });
+                              return next;
+                            });
+                            showToast(`Saved ${person.name}`, 'success');
+                          } catch (err) {
+                            showToast(getErrorMessage(err, 'An error occurred'), 'error');
+                            setPersonEdits(prev => {
+                              const next = new Map(prev);
+                              next.set(person.id, { ...edit, saving: false });
+                              return next;
+                            });
+                          }
+                        }}
+                      >
+                        {edit.saving ? 'Saving...' : 'Save'}
+                      </Button>
+                    )}
                   </div>
-                  <textarea
-                    className="acp-path-desc"
-                    value={path.description}
-                    onChange={(e) => {
-                      const updated = [...profile.readingPaths];
-                      updated[i] = { ...updated[i], description: e.target.value };
-                      setProfile(p => ({ ...p, readingPaths: updated }));
-                      setDirty(true);
-                    }}
-                    rows={2}
-                    placeholder="Description"
-                  />
-                  <p className="acp-hint">{path.letterIds.length} letters in this path</p>
                 </div>
-              ))}
-              <button
-                className="acp-add-btn"
-                onClick={() => {
-                  setProfile(p => ({
-                    ...p,
-                    readingPaths: [...p.readingPaths, { title: '', description: '', letterIds: [] }],
-                  }));
-                  setDirty(true);
-                }}
-              >
-                + Add Reading Path
-              </button>
-            </div>
-
-            {/* Themes */}
-            <div className="acp-section">
-              <h2>Themes ({profile.themes.length})</h2>
-              {profile.themes.map((theme, i) => (
-                <div key={i} className="acp-path-card">
-                  <div className="acp-path-header">
-                    <input
-                      type="text"
-                      className="acp-input"
-                      value={theme.name}
-                      onChange={(e) => {
-                        const updated = [...profile.themes];
-                        updated[i] = { ...updated[i], name: e.target.value };
-                        setProfile(p => ({ ...p, themes: updated }));
-                        setDirty(true);
-                      }}
-                      placeholder="Theme name"
-                    />
-                    <button
-                      className="acp-remove-btn"
-                      onClick={() => {
-                        setProfile(p => ({
-                          ...p,
-                          themes: p.themes.filter((_, j) => j !== i),
-                        }));
-                        setDirty(true);
-                      }}
-                    >
-                      &times;
-                    </button>
-                  </div>
-                  <textarea
-                    className="acp-path-desc"
-                    value={theme.description}
-                    onChange={(e) => {
-                      const updated = [...profile.themes];
-                      updated[i] = { ...updated[i], description: e.target.value };
-                      setProfile(p => ({ ...p, themes: updated }));
-                      setDirty(true);
-                    }}
-                    rows={2}
-                    placeholder="Description"
-                  />
-                  <p className="acp-hint">{theme.letterIds.length} letters in this theme</p>
-                </div>
-              ))}
-              <button
-                className="acp-add-btn"
-                onClick={() => {
-                  setProfile(p => ({
-                    ...p,
-                    themes: [...p.themes, { name: '', description: '', letterIds: [] }],
-                  }));
-                  setDirty(true);
-                }}
-              >
-                + Add Theme
-              </button>
-            </div>
-
-            {/* Key People */}
-            {keyPeople.length > 0 && (
-              <div className="acp-section">
-                <h2>Key People ({keyPeople.length})</h2>
-                <p className="acp-hint">Edit hooks and biographies for people in this collection. Generate uses AI.</p>
-                {keyPeople.map((person) => {
-                  const edit = personEdits.get(person.id);
-                  if (!edit) return null;
-                  return (
-                    <div key={person.id} className="acp-person-card">
-                      <div className="acp-person-header">
-                        <strong>{person.name}</strong>
-                        <span className="acp-person-stats">
-                          {person.letterCount} letters &middot;
-                          {person.roles.sender} sent, {person.roles.recipient} received
-                        </span>
-                      </div>
-                      <div className="acp-person-field">
-                        <label>Hook</label>
-                        <input
-                          type="text"
-                          className="acp-input"
-                          value={edit.hook}
-                          onChange={(e) => {
-                            setPersonEdits(prev => {
-                              const next = new Map(prev);
-                              next.set(person.id, { ...edit, hook: e.target.value, dirty: true });
-                              return next;
-                            });
-                          }}
-                          placeholder="A single compelling sentence about this person..."
-                          maxLength={200}
-                        />
-                      </div>
-                      <div className="acp-person-field">
-                        <label>Biography</label>
-                        <textarea
-                          className="acp-person-bio"
-                          value={edit.biography}
-                          onChange={(e) => {
-                            setPersonEdits(prev => {
-                              const next = new Map(prev);
-                              next.set(person.id, { ...edit, biography: e.target.value, dirty: true });
-                              return next;
-                            });
-                          }}
-                          rows={4}
-                          placeholder="Biography..."
-                        />
-                      </div>
-                      <div className="acp-person-actions">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={edit.generating}
-                          onClick={async () => {
-                            setPersonEdits(prev => {
-                              const next = new Map(prev);
-                              next.set(person.id, { ...edit, generating: true });
-                              return next;
-                            });
-                            try {
-                              const { person: updated } = await generatePersonBiography(person.id);
-                              setPersonEdits(prev => {
-                                const next = new Map(prev);
-                                next.set(person.id, {
-                                  biography: updated.biography || '',
-                                  hook: updated.hook || '',
-                                  dirty: false,
-                                  generating: false,
-                                  saving: false,
-                                });
-                                return next;
-                              });
-                              showToast(`Generated bio for ${person.name}`, 'success');
-                            } catch (err) {
-                              showToast(getErrorMessage(err, 'An error occurred'), 'error');
-                              setPersonEdits(prev => {
-                                const next = new Map(prev);
-                                next.set(person.id, { ...edit, generating: false });
-                                return next;
-                              });
-                            }
-                          }}
-                        >
-                          {edit.generating ? 'Generating...' : 'Generate Bio + Hook'}
-                        </Button>
-                        {edit.dirty && (
-                          <Button
-                            size="sm"
-                            disabled={edit.saving}
-                            onClick={async () => {
-                              setPersonEdits(prev => {
-                                const next = new Map(prev);
-                                next.set(person.id, { ...edit, saving: true });
-                                return next;
-                              });
-                              try {
-                                await savePersonBiography(person.id, {
-                                  biography: edit.biography,
-                                  hook: edit.hook,
-                                });
-                                setPersonEdits(prev => {
-                                  const next = new Map(prev);
-                                  next.set(person.id, { ...edit, dirty: false, saving: false });
-                                  return next;
-                                });
-                                showToast(`Saved ${person.name}`, 'success');
-                              } catch (err) {
-                                showToast(getErrorMessage(err, 'An error occurred'), 'error');
-                                setPersonEdits(prev => {
-                                  const next = new Map(prev);
-                                  next.set(person.id, { ...edit, saving: false });
-                                  return next;
-                                });
-                              }
-                            }}
-                          >
-                            {edit.saving ? 'Saving...' : 'Save'}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
+              );
+            })
+          )}
+        </div>
       </div>
     </AdminLayout>
   );

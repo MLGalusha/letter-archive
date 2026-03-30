@@ -145,6 +145,7 @@ export const collections = pgTable('collections', {
   profileStatus: contentStatusEnum('profile_status').notNull().default('EMPTY'),
   profileGeneratedAt: timestamp('profile_generated_at', { withTimezone: true }),
   hook: text('hook'),
+  highlightImageId: uuid('highlight_image_id'), // FK to letter_pages(id) — the featured image for this collection
 });
 
 // Letters table

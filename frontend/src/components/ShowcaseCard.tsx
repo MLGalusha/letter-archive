@@ -1,6 +1,7 @@
 import { useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { getImageUrl } from '../api/client';
 import type { LetterImageType } from '../types/Letter';
+import './ShowcaseCard.css';
 
 export interface ShowcaseItem {
   letterId: string;

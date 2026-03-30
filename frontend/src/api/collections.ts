@@ -321,6 +321,7 @@ export async function updateCollectionProfile(
     profileGapAnalysis?: GapAnalysis[];
     profileThemes?: ThemeGroup[];
     profileStatus?: 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+    highlightImageId?: string | null;
   },
 ): Promise<AdminCollectionInfo> {
   return apiPut<AdminCollectionInfo>(`/admin/collections/${code}/profile`, data);

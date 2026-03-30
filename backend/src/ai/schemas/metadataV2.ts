@@ -5,7 +5,6 @@
  * Following best practices:
  * - All fields required with nullable() for optional values
  * - Controlled vocabularies for enums
- * - Confidence scores for extracted values
  *
  * Note: Entity extraction (people/places) is handled by a separate prompt.
  * See entityExtraction.ts for that schema.
@@ -22,12 +21,14 @@ import { z } from 'zod';
  */
 export const EmotionalToneEnum = z.enum([
   'joyful',
+  'affectionate',
   'hopeful',
-  'neutral',
+  'grateful',
+  'matter-of-fact',
+  'nostalgic',
   'anxious',
   'sad',
   'angry',
-  'desperate',
 ]);
 export type EmotionalTone = z.infer<typeof EmotionalToneEnum>;
 
@@ -36,22 +37,14 @@ export type EmotionalTone = z.infer<typeof EmotionalToneEnum>;
  */
 export const RelationshipEnum = z.enum([
   'spouse',
-  'fiancé/fiancée',
   'romantic-partner',
-  'parent',
-  'child',
+  'parent-child',
   'sibling',
-  'grandparent',
-  'grandchild',
-  'aunt/uncle',
-  'nephew/niece',
-  'cousin',
-  'in-law',
+  'extended-family',
   'friend',
   'acquaintance',
-  'business-associate',
-  'employer',
-  'employee',
+  'professional',
+  'institutional',
   'unknown',
 ]);
 export type Relationship = z.infer<typeof RelationshipEnum>;
@@ -64,37 +57,28 @@ export const PRIMARY_TOPICS = [
   'family/marriage',
   'family/children',
   'family/death-grief',
-  'family/separation',
-  'family/reunion',
+  'family/separation-reunion',
+  'family/courtship-romance',
   // Health
-  'health/illness',
-  'health/recovery',
+  'health/illness-injury',
   'health/pregnancy-birth',
-  // Work & Money
+  // Work & Economy
   'work/employment',
-  'work/job-loss',
-  'finances/hardship',
-  'finances/prosperity',
+  'finances/hardship-prosperity',
   // Movement & Place
   'travel/journey',
   'travel/immigration',
-  'home/moving',
-  'home/property',
-  // Communication
-  'correspondence/news-sharing',
-  'correspondence/advice',
-  'correspondence/gratitude',
-  'correspondence/apology',
-  // Society & Events
-  'war/service',
-  'war/homefront',
+  'home/property-housing',
+  // Society
+  'war/military',
   'religion/faith',
-  'community/local-events',
+  'politics/governance',
+  'education/school',
+  'legal/property-estate',
   // Daily Life
-  'daily-life/weather',
-  'daily-life/farming',
-  'daily-life/household',
-  'daily-life/social',
+  'daily-life/farming-weather',
+  'daily-life/household-social',
+  'community/local-events',
 ] as const;
 
 export const PrimaryTopicEnum = z.enum(PRIMARY_TOPICS);
@@ -194,15 +178,6 @@ export interface StructuredNote {
 // ============================================================================
 
 /**
- * Name with confidence (for sender, recipient, location)
- */
-export const NameWithConfidenceSchema = z.object({
-  name: z.string().nullable(),
-  confidence: z.number().min(0).max(1),
-});
-export type NameWithConfidence = z.infer<typeof NameWithConfidenceSchema>;
-
-/**
  * Notable quote from the letter
  */
 export const NotableQuoteSchema = z.object({
@@ -224,9 +199,9 @@ export type NotableQuote = z.infer<typeof NotableQuoteSchema>;
  */
 export const MetadataV2Schema = z.object({
   // Core identifiers
-  sender: NameWithConfidenceSchema,
-  recipient: NameWithConfidenceSchema,
-  location_written: NameWithConfidenceSchema,
+  sender: z.string().nullable(),
+  recipient: z.string().nullable(),
+  location_written: z.string().nullable(),
 
   // Date extraction
   extracted_date: z.string().nullable(), // ISO format YYYY-MM-DD or partial
@@ -266,50 +241,22 @@ export type MetadataV2 = z.infer<typeof MetadataV2Schema>;
 export const METADATA_V2_JSON_SCHEMA = {
   type: 'object',
   properties: {
-    sender: {
-      type: 'object',
-      properties: {
-        name: { type: ['string', 'null'] },
-        confidence: { type: 'number', minimum: 0, maximum: 1 },
-      },
-      required: ['name', 'confidence'],
-      additionalProperties: false,
-    },
-    recipient: {
-      type: 'object',
-      properties: {
-        name: { type: ['string', 'null'] },
-        confidence: { type: 'number', minimum: 0, maximum: 1 },
-      },
-      required: ['name', 'confidence'],
-      additionalProperties: false,
-    },
-    location_written: {
-      type: 'object',
-      properties: {
-        name: { type: ['string', 'null'] },
-        confidence: { type: 'number', minimum: 0, maximum: 1 },
-      },
-      required: ['name', 'confidence'],
-      additionalProperties: false,
-    },
+    sender: { type: ['string', 'null'] },
+    recipient: { type: ['string', 'null'] },
+    location_written: { type: ['string', 'null'] },
     extracted_date: { type: ['string', 'null'] },
     hook: { type: ['string', 'null'] },
     summary: { type: ['string', 'null'] },
     emotional_tone: {
       type: ['string', 'null'],
-      enum: ['joyful', 'hopeful', 'neutral', 'anxious', 'sad', 'angry', 'desperate', null],
+      enum: ['joyful', 'affectionate', 'hopeful', 'grateful', 'matter-of-fact', 'nostalgic', 'anxious', 'sad', 'angry', null],
     },
     sender_recipient_relationship: {
       type: ['string', 'null'],
       enum: [
-        'spouse', 'fiancé/fiancée', 'romantic-partner',
-        'parent', 'child', 'sibling',
-        'grandparent', 'grandchild',
-        'aunt/uncle', 'nephew/niece', 'cousin',
-        'in-law', 'friend', 'acquaintance',
-        'business-associate', 'employer', 'employee',
-        'unknown', null
+        'spouse', 'romantic-partner', 'parent-child', 'sibling',
+        'extended-family', 'friend', 'acquaintance',
+        'professional', 'institutional', 'unknown', null
       ],
     },
     primary_topics: {

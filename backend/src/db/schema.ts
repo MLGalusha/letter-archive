@@ -50,34 +50,44 @@ export const dateConfidenceEnum = pgEnum('date_confidence', [
 // Emotional tone for V2 metadata
 export const emotionalToneEnum = pgEnum('emotional_tone', [
   'joyful',
+  'affectionate',
   'hopeful',
-  'neutral',
+  'grateful',
+  'matter-of-fact',
+  'nostalgic',
   'anxious',
   'sad',
   'angry',
+  // Legacy values (no longer assigned, but exist in DB)
+  'neutral',
   'desperate',
 ]);
 
 // Sender-recipient relationship for V2 metadata
 export const relationshipEnum = pgEnum('relationship_type', [
   'spouse',
-  'fiancé/fiancée',
   'romantic-partner',
+  'parent-child',
+  'sibling',
+  'extended-family',
+  'friend',
+  'acquaintance',
+  'professional',
+  'institutional',
+  'unknown',
+  // Legacy values (no longer assigned, but exist in DB)
+  'fiancé/fiancée',
   'parent',
   'child',
-  'sibling',
   'grandparent',
   'grandchild',
   'aunt/uncle',
   'nephew/niece',
   'cousin',
   'in-law',
-  'friend',
-  'acquaintance',
   'business-associate',
   'employer',
   'employee',
-  'unknown',
 ]);
 
 // Content status for transcript and metadata (two-track workflow system)
@@ -800,8 +810,8 @@ export type DateConfidence = 'exact' | 'unknown' | 'inferred';
 export type ContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
 
 // V2 Metadata types
-export type EmotionalTone = 'joyful' | 'hopeful' | 'neutral' | 'anxious' | 'sad' | 'angry' | 'desperate';
-export type RelationshipType = 'spouse' | 'fiancé/fiancée' | 'romantic-partner' | 'parent' | 'child' | 'sibling' | 'grandparent' | 'grandchild' | 'aunt/uncle' | 'nephew/niece' | 'cousin' | 'in-law' | 'friend' | 'acquaintance' | 'business-associate' | 'employer' | 'employee' | 'unknown';
+export type EmotionalTone = (typeof emotionalToneEnum.enumValues)[number];
+export type RelationshipType = (typeof relationshipEnum.enumValues)[number];
 
 // Entity types
 export type CanonicalPerson = typeof canonicalPersons.$inferSelect;

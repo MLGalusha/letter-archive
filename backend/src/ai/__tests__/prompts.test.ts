@@ -27,9 +27,8 @@ describe('AI prompt builders', () => {
 
   it('keeps controlled vocabulary anchors in metadata v2 system prompt', () => {
     expect(METADATA_V2_SYSTEM_PROMPT).toContain('"romantic-partner"');
-    expect(METADATA_V2_SYSTEM_PROMPT).toContain('"fiancé/fiancée"');
     expect(METADATA_V2_SYSTEM_PROMPT).toContain('"spouse"');
-    expect(METADATA_V2_SYSTEM_PROMPT).toContain('COMMON MISTAKES TO AVOID');
+    expect(METADATA_V2_SYSTEM_PROMPT).toContain('<controlled_vocabularies>');
   });
 
   it('builds photo description prompts with reviewer and linked-letter context blocks', () => {

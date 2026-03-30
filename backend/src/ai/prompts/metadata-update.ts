@@ -1,62 +1,82 @@
-export const METADATA_UPDATE_SYSTEM_PROMPT = `You are updating existing metadata for a historical letter.
-A human reviewer has provided new information about the sender and/or recipient.
+export const METADATA_UPDATE_SYSTEM_PROMPT = `You are updating tagged references in letter metadata after a name correction.
 
-You will receive the existing extracted metadata and the correction.
-Update the metadata to incorporate the new information.
+The metadata text fields use guillemet tags — «SENDER:text» and «RECIPIENT:text» — to mark every reference to the sender or recipient. When a name is corrected, you must update the text inside every relevant tag to read naturally with the new name.
 
-Rules:
-- Keep all existing information that is still valid
-- Update the summary to naturally incorporate the identified sender/recipient
-- Update the hook if it references the sender/recipient (hooks should use first names, be 1-2 sentences, max 150 chars)
-- Update entity roles if sender/recipient identity changes who the sender/recipient is
-- Do NOT change dates, locations, topics, emotional tone, or other metadata unless directly affected by the identity change
-- Return the COMPLETE updated metadata in the same format as the input`;
+<rules>
+- Only change the text INSIDE the «SENDER:...» or «RECIPIENT:...» tags — keep the tag wrappers
+- Use the new name naturally: full name for first mention in each field, then first name, pronouns, or possessives as appropriate
+- Match pronoun gender to the name when possible (e.g., "Jimmie" → he/him/his, "Molly" → she/her/her). Use they/them if gender is ambiguous.
+- If the name is being cleared (set to null/unknown), replace name references with "the sender"/"the recipient", "they"/"them"/"their"
+- Do NOT change: emotional_tone, primary_topics, extracted_date, location_written, sender_recipient_relationship, sender field, recipient field
+- Do NOT change notable_quotes text field — only update tags in the context field
+- Do NOT add, remove, or rephrase content — only update the tagged reference text
+</rules>`;
 
 export function buildMetadataUpdateUserPrompt(params: {
   existingMetadata: Record<string, unknown>;
-  existingEntities: Record<string, unknown> | null;
-  correction: {
+  senderName: string | null;
+  recipientName: string | null;
+  change: {
     field: 'sender' | 'recipient' | 'both';
     oldSender?: string | null;
-    newSender?: string;
+    newSender?: string | null;
     oldRecipient?: string | null;
-    newRecipient?: string;
+    newRecipient?: string | null;
   };
 }): string {
-  let prompt = '';
+  const parts: string[] = [];
 
-  prompt += '<existing_metadata>\n';
-  prompt += JSON.stringify(params.existingMetadata, null, 2);
-  prompt += '\n</existing_metadata>\n';
+  // Describe exactly what changed
+  parts.push('<change>');
+  const { change } = params;
 
-  if (params.existingEntities) {
-    prompt += '\n<existing_entities>\n';
-    prompt += JSON.stringify(params.existingEntities, null, 2);
-    prompt += '\n</existing_entities>\n';
-  }
+  if (change.field === 'sender' || change.field === 'both') {
+    const oldLabel = change.oldSender ? `"${change.oldSender}"` : 'unknown';
+    const newLabel = change.newSender ? `"${change.newSender}"` : 'unknown';
+    parts.push(`SENDER changed: ${oldLabel} → ${newLabel}`);
 
-  prompt += '\n<correction>\n';
-
-  const { correction } = params;
-
-  if (correction.newSender) {
-    if (correction.oldSender) {
-      prompt += `The sender was previously identified as "${correction.oldSender}" but should be "${correction.newSender}".\n`;
+    if (change.newSender) {
+      parts.push(`Update the text inside every «SENDER:...» tag to reflect that the sender is "${change.newSender}".`);
     } else {
-      prompt += `The sender was previously unknown. The human reviewer has identified the sender as: "${correction.newSender}".\n`;
+      parts.push(`The sender is now unknown. Update the text inside every «SENDER:...» tag to use "the sender", "they", "their", etc.`);
     }
   }
 
-  if (correction.newRecipient) {
-    if (correction.oldRecipient) {
-      prompt += `The recipient was previously identified as "${correction.oldRecipient}" but should be "${correction.newRecipient}".\n`;
+  if (change.field === 'recipient' || change.field === 'both') {
+    const oldLabel = change.oldRecipient ? `"${change.oldRecipient}"` : 'unknown';
+    const newLabel = change.newRecipient ? `"${change.newRecipient}"` : 'unknown';
+    parts.push(`RECIPIENT changed: ${oldLabel} → ${newLabel}`);
+
+    if (change.newRecipient) {
+      parts.push(`Update the text inside every «RECIPIENT:...» tag to reflect that the recipient is "${change.newRecipient}".`);
     } else {
-      prompt += `The recipient was previously unknown. The human reviewer has identified the recipient as: "${correction.newRecipient}".\n`;
+      parts.push(`The recipient is now unknown. Update the text inside every «RECIPIENT:...» tag to use "the recipient", "they", "their", etc.`);
     }
   }
 
-  prompt += '</correction>\n\n';
-  prompt += 'Update the metadata to incorporate the correction. Return the COMPLETE updated metadata JSON.';
+  // Tell it what NOT to touch
+  const unchangedRole = change.field === 'sender' ? 'RECIPIENT' : change.field === 'recipient' ? 'SENDER' : null;
+  if (unchangedRole) {
+    parts.push(`Do NOT change any «${unchangedRole}:...» tags — only update the changed role.`);
+  }
 
-  return prompt;
+  parts.push('</change>');
+
+  // List exactly which fields contain tags to update
+  parts.push('');
+  parts.push('<fields_to_update>');
+  parts.push('Update tags in these fields only: hook, summary, notable_quotes[].context, ai_notes[].content');
+  parts.push('Leave all other fields exactly as they are.');
+  parts.push('</fields_to_update>');
+
+  // The metadata
+  parts.push('');
+  parts.push('<existing_metadata>');
+  parts.push(JSON.stringify(params.existingMetadata, null, 2));
+  parts.push('</existing_metadata>');
+
+  parts.push('');
+  parts.push('Return the COMPLETE updated metadata JSON.');
+
+  return parts.join('\n');
 }

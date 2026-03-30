@@ -19,7 +19,7 @@ import {
   type UpdateLetterInput,
 } from '../../../services/letter-operations.js';
 import { resetLetterForProcessing } from '../../../services/letters.js';
-import { propagateName, propagatePlaceholderReplacement } from '../../../services/name-propagation.js';
+import { scheduleMetadataRetag } from '../../../services/metadata-update.js';
 import { checkNoteAutoResolutions } from '../../../services/note-resolution.js';
 import { addAliasToCanonicalPerson } from '../../../services/entities/persons.js';
 import { syncLetterParticipantsFromMetadata } from '../../../services/entities/participant-sync.js';
@@ -268,67 +268,43 @@ router.patch('/:letterId/identity', async (req, res, next) => {
     }
 
     const letter = await requireLetter(letterId);
-    const updatePaths: string[] = [];
 
-    if (newSender !== undefined) {
-      const oldSender = letter.sender;
+    // Save name fields immediately
+    const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
+    if (newSender !== undefined) dbUpdates.sender = newSender || null;
+    if (newRecipient !== undefined) dbUpdates.recipient = newRecipient || null;
 
-      if ((isPlaceholderValue(oldSender) || !oldSender) && newSender) {
-        try {
-          await propagatePlaceholderReplacement({ letterId, field: 'sender', newName: newSender });
-          updatePaths.push('sender:placeholder-replaced');
-        } catch (err) {
-          req.log.warn({ letterId, err }, 'Placeholder replacement failed for sender, falling back to simple update');
-          await db.update(letters).set({ sender: newSender, updatedAt: new Date() }).where(eq(letters.id, letterId));
-          updatePaths.push('sender:simple-fallback');
-        }
-      } else if (oldSender && newSender) {
-        if (oldSender !== newSender) {
-          try {
-            await propagateName({ letterId, field: 'sender', oldName: oldSender, newName: newSender });
-            updatePaths.push('sender:propagated');
-          } catch (err) {
-            req.log.warn({ letterId, err }, 'Name propagation failed for sender, falling back to simple update');
-            await db.update(letters).set({ sender: newSender, updatedAt: new Date() }).where(eq(letters.id, letterId));
-            updatePaths.push('sender:simple-fallback');
-          }
-        }
-      } else if (oldSender && !newSender) {
-        await db.update(letters).set({ sender: null, updatedAt: new Date() }).where(eq(letters.id, letterId));
-        updatePaths.push('sender:cleared');
-      }
+    // Also update metadataV2Json name fields
+    if (letter.metadataV2Json && typeof letter.metadataV2Json === 'object') {
+      const metadata = { ...(letter.metadataV2Json as Record<string, unknown>) };
+      if (newSender !== undefined) metadata.sender = newSender || null;
+      if (newRecipient !== undefined) metadata.recipient = newRecipient || null;
+      dbUpdates.metadataV2Json = metadata;
+      dbUpdates.metadataJson = metadata;
     }
 
-    if (newRecipient !== undefined) {
-      const oldRecipient = letter.recipient;
+    await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
 
-      if ((isPlaceholderValue(oldRecipient) || !oldRecipient) && newRecipient) {
-        try {
-          await propagatePlaceholderReplacement({ letterId, field: 'recipient', newName: newRecipient });
-          updatePaths.push('recipient:placeholder-replaced');
-        } catch (err) {
-          req.log.warn({ letterId, err }, 'Placeholder replacement failed for recipient, falling back to simple update');
-          await db.update(letters).set({ recipient: newRecipient, updatedAt: new Date() }).where(eq(letters.id, letterId));
-          updatePaths.push('recipient:simple-fallback');
-        }
-      } else if (oldRecipient && newRecipient) {
-        if (oldRecipient !== newRecipient) {
-          try {
-            await propagateName({ letterId, field: 'recipient', oldName: oldRecipient, newName: newRecipient });
-            updatePaths.push('recipient:propagated');
-          } catch (err) {
-            req.log.warn({ letterId, err }, 'Name propagation failed for recipient, falling back to simple update');
-            await db.update(letters).set({ recipient: newRecipient, updatedAt: new Date() }).where(eq(letters.id, letterId));
-            updatePaths.push('recipient:simple-fallback');
-          }
-        }
-      } else if (oldRecipient && !newRecipient) {
-        await db.update(letters).set({ recipient: null, updatedAt: new Date() }).where(eq(letters.id, letterId));
-        updatePaths.push('recipient:cleared');
-      }
+    // Schedule debounced AI re-tag of metadata text fields
+    const oldSender = letter.sender;
+    const oldRecipient = letter.recipient;
+    const senderChanged = newSender !== undefined && newSender !== oldSender;
+    const recipientChanged = newRecipient !== undefined && newRecipient !== oldRecipient;
+
+    if (senderChanged || recipientChanged) {
+      scheduleMetadataRetag({
+        letterId,
+        senderName: newSender !== undefined ? (newSender || null) : letter.sender,
+        recipientName: newRecipient !== undefined ? (newRecipient || null) : letter.recipient,
+        change: {
+          field: senderChanged && recipientChanged ? 'both' : senderChanged ? 'sender' : 'recipient',
+          ...(senderChanged ? { oldSender, newSender: newSender || null } : {}),
+          ...(recipientChanged ? { oldRecipient, newRecipient: newRecipient || null } : {}),
+        },
+      });
     }
 
-    req.log.info({ letterId, newSender, newRecipient, updatePaths }, 'Smart identity update completed');
+    req.log.info({ letterId, newSender, newRecipient, senderChanged, recipientChanged }, 'Identity update completed');
 
     if (newSender !== undefined && newSender) {
       checkNoteAutoResolutions(letterId, 'sender').catch(err =>

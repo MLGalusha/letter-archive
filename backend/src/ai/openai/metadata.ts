@@ -1,8 +1,6 @@
 import { env, hasOpenAI } from '../../config/env.js';
 import {
-  METADATA_SYSTEM_PROMPT,
   METADATA_V2_SYSTEM_PROMPT,
-  buildMetadataUserPrompt,
   buildMetadataV2UserPrompt,
 } from '../prompts.js';
 import {
@@ -13,147 +11,6 @@ import {
 import { logIfSlow, TIMING_THRESHOLDS } from '../../utils/logger.js';
 import { log, openai } from './client.js';
 import { logApiUsage } from '../../services/usage-tracking.js';
-
-export interface ExtractMetadataParams {
-  transcriptionText: string;
-  letterId?: string;
-  context?: {
-    collectionCode?: string;
-    dateRaw?: string;
-    dateFromFilename?: string | null;
-  };
-}
-
-export interface ExtractedMetadata {
-  sender: string | null;
-  recipient: string | null;
-  locationWritten: string | null;
-  hook: string | null;
-  summary: string | null;
-  tags: string[];
-  extractedDate: string | null;
-}
-
-export async function extractMetadata(
-  params: ExtractMetadataParams,
-): Promise<ExtractedMetadata> {
-  const context = {
-    letterId: params.letterId,
-    collectionCode: params.context?.collectionCode,
-    dateRaw: params.context?.dateRaw,
-    transcriptLength: params.transcriptionText.length,
-  };
-
-  if (!hasOpenAI || !openai) {
-    log.debug(context, 'Using stub metadata (no API key)');
-    return generateStubMetadata(params);
-  }
-
-  log.debug(context, 'Starting metadata extraction');
-  const start = Date.now();
-
-  try {
-    const response = await openai.chat.completions.create({
-      model: env.OPENAI_MODEL,
-      messages: [
-        { role: 'system', content: METADATA_SYSTEM_PROMPT },
-        { role: 'user', content: buildMetadataUserPrompt(params.transcriptionText, params.context) },
-      ],
-      response_format: { type: 'json_object' },
-      max_completion_tokens: 1024,
-    });
-
-    const duration = Date.now() - start;
-    const content = response.choices[0]?.message?.content;
-    const usage = response.usage;
-
-    if (!content) {
-      log.error({ ...context, duration }, 'No response content from OpenAI for metadata extraction');
-      throw new Error('No response from OpenAI for metadata extraction');
-    }
-
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(content);
-    } catch (parseError) {
-      log.error(
-        { ...context, duration, content: content.substring(0, 500), err: parseError },
-        'Failed to parse JSON response from OpenAI',
-      );
-      throw new Error('Invalid JSON response from OpenAI for metadata extraction');
-    }
-
-    const metadata: ExtractedMetadata = {
-      sender: typeof parsed.sender === 'string' ? parsed.sender : null,
-      recipient: typeof parsed.recipient === 'string' ? parsed.recipient : null,
-      locationWritten: typeof parsed.location_written === 'string' ? parsed.location_written : null,
-      hook: typeof parsed.hook === 'string' ? parsed.hook : null,
-      summary: typeof parsed.summary === 'string' ? parsed.summary : null,
-      tags: Array.isArray(parsed.tags) ? parsed.tags.filter((t: unknown): t is string => typeof t === 'string') : [],
-      extractedDate: typeof parsed.extracted_date === 'string' ? parsed.extracted_date : null,
-    };
-
-    log.info(
-      {
-        ...context,
-        duration,
-        model: env.OPENAI_MODEL,
-        promptTokens: usage?.prompt_tokens,
-        completionTokens: usage?.completion_tokens,
-        totalTokens: usage?.total_tokens,
-        fieldsExtracted: Object.values(metadata).filter(
-          (v) => v !== null && (Array.isArray(v) ? v.length > 0 : true),
-        ).length,
-        tagsCount: metadata.tags.length,
-      },
-      'Metadata extraction completed',
-    );
-
-    logIfSlow(log, 'OpenAI metadata extraction', duration, TIMING_THRESHOLDS.OPENAI_API, context);
-
-    // Fire-and-forget usage tracking
-    logApiUsage({
-      letterId: params.letterId,
-      callType: 'metadata',
-      model: env.OPENAI_MODEL,
-      inputTokens: usage?.prompt_tokens ?? 0,
-      outputTokens: usage?.completion_tokens ?? 0,
-      durationMs: duration,
-    });
-
-    return metadata;
-  } catch (error) {
-    const duration = Date.now() - start;
-    if (!(error instanceof Error && error.message.includes('Invalid JSON'))) {
-      log.error(
-        {
-          ...context,
-          duration,
-          err: error,
-          model: env.OPENAI_MODEL,
-        },
-        'Metadata extraction failed',
-      );
-    }
-    throw error;
-  }
-}
-
-function generateStubMetadata(params: ExtractMetadataParams): ExtractedMetadata {
-  const hasStubMarker = params.transcriptionText.includes('[STUB TRANSCRIPTION');
-
-  return {
-    sender: hasStubMarker ? 'Unknown (stub)' : null,
-    recipient: hasStubMarker ? 'Unknown (stub)' : null,
-    locationWritten: null,
-    hook: hasStubMarker ? 'A placeholder letter awaits your review.' : null,
-    summary: hasStubMarker
-      ? '[STUB] This is placeholder metadata. Set OPENAI_API_KEY for real extraction.'
-      : 'Unable to extract summary from transcription.',
-    tags: hasStubMarker ? ['stub', 'placeholder'] : [],
-    extractedDate: null,
-  };
-}
 
 export interface ExtractionCorrections {
   confirmedSender?: string;
@@ -328,15 +185,15 @@ function generateStubMetadataV2(params: ExtractMetadataV2Params): ExtractMetadat
 
   return {
     metadata: {
-      sender: { name: hasStubMarker ? 'Unknown (stub)' : null, confidence: 0 },
-      recipient: { name: hasStubMarker ? 'Unknown (stub)' : null, confidence: 0 },
-      location_written: { name: null, confidence: 0 },
+      sender: hasStubMarker ? 'Unknown (stub)' : null,
+      recipient: hasStubMarker ? 'Unknown (stub)' : null,
+      location_written: null,
       extracted_date: null,
       hook: hasStubMarker ? 'A placeholder letter awaits review.' : null,
       summary: hasStubMarker
         ? '[STUB] This is placeholder metadata. Set OPENAI_API_KEY for real extraction.'
         : null,
-      emotional_tone: 'neutral',
+      emotional_tone: 'matter-of-fact',
       sender_recipient_relationship: 'unknown',
       primary_topics: [],
       notable_quotes: [],

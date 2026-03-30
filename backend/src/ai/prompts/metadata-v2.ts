@@ -1,132 +1,6 @@
 import { PRIMARY_TOPICS } from '../schemas/metadataV2.js';
 
-const RELATIONSHIP_DEFINITIONS: Record<string, { definition: string; indicators: string[] }> = {
-  'spouse': {
-    definition: 'Married couple - husband and wife',
-    indicators: ['my dear wife', 'your loving husband', 'Mrs.', 'married', 'matrimony']
-  },
-  'fiancé/fiancée': {
-    definition: 'Engaged to be married, not yet wed',
-    indicators: ['my betrothed', 'future wife', 'future husband', 'engagement', 'wedding plans', 'engaged']
-  },
-  'romantic-partner': {
-    definition: 'Romantic relationship, not engaged or married',
-    indicators: ['sweetheart', 'darling', 'my love', 'courting', 'dearest', 'devoted admirer']
-  },
-  'parent': {
-    definition: 'Parent writing to or about their child',
-    indicators: ['my son', 'my daughter', 'your mother', 'your father', 'my child']
-  },
-  'child': {
-    definition: 'Child writing to or about their parent',
-    indicators: ['dear mother', 'dear father', 'mom', 'dad', 'papa', 'mama', 'ma', 'pa']
-  },
-  'sibling': {
-    definition: 'Brothers or sisters',
-    indicators: ['dear brother', 'dear sister', 'sis', 'bro']
-  },
-  'grandparent': {
-    definition: 'Grandparent writing to or about grandchild',
-    indicators: ['my grandchild', 'grandmother', 'grandfather', 'grandma', 'grandpa']
-  },
-  'grandchild': {
-    definition: 'Grandchild writing to or about grandparent',
-    indicators: ['dear grandma', 'dear grandpa', 'grandmother', 'grandfather']
-  },
-  'aunt/uncle': {
-    definition: 'Aunt or uncle relationship',
-    indicators: ['dear aunt', 'dear uncle', 'auntie']
-  },
-  'nephew/niece': {
-    definition: 'Nephew or niece relationship',
-    indicators: ['my nephew', 'my niece']
-  },
-  'cousin': {
-    definition: 'Cousin relationship',
-    indicators: ['dear cousin', 'my cousin', 'coz']
-  },
-  'in-law': {
-    definition: 'Related by marriage (mother-in-law, brother-in-law, etc.)',
-    indicators: ['mother-in-law', 'father-in-law', 'sister-in-law', 'son-in-law']
-  },
-  'friend': {
-    definition: 'Close personal friend, non-romantic',
-    indicators: ['dear friend', 'old friend', 'my friend', 'pal', 'chum']
-  },
-  'acquaintance': {
-    definition: 'Known person, not close friend or family',
-    indicators: ['Mr.', 'Mrs.', 'formal address', 'sir', 'madam', 'respectfully']
-  },
-  'business-associate': {
-    definition: 'Professional or business relationship',
-    indicators: ['colleague', 'partner', 'business matters', 'regards', 'firm']
-  },
-  'employer': {
-    definition: 'Writing to an employee',
-    indicators: ['your employer', 'the company', 'your position', 'employment']
-  },
-  'employee': {
-    definition: 'Writing to an employer',
-    indicators: ['my employer', 'the boss', 'work', 'job', 'position']
-  },
-  'unknown': {
-    definition: 'Relationship cannot be determined from letter content',
-    indicators: []
-  }
-};
-
-const EMOTIONAL_TONE_DEFINITIONS: Record<string, { definition: string; indicators: string[] }> = {
-  'joyful': {
-    definition: 'Expressing happiness, celebration, or good news',
-    indicators: ['wonderful news', 'so happy', 'delighted', 'thrilled', 'celebrating']
-  },
-  'hopeful': {
-    definition: 'Expressing optimism, anticipation, or looking forward',
-    indicators: ['looking forward', 'hope', 'soon', 'anticipate', 'expect']
-  },
-  'neutral': {
-    definition: 'Informational, matter-of-fact, reporting without strong emotion',
-    indicators: ['informing you', 'to let you know', 'update', 'news']
-  },
-  'anxious': {
-    definition: 'Expressing worry, concern, or uncertainty',
-    indicators: ['worried', 'concerned', 'uncertain', "don't know", 'anxious']
-  },
-  'sad': {
-    definition: 'Expressing grief, loss, or disappointment',
-    indicators: ['sorry to hear', 'miss you', 'regret', 'loss', 'passed away']
-  },
-  'angry': {
-    definition: 'Expressing frustration, conflict, or resentment',
-    indicators: ['frustrated', 'cannot believe', 'upset', 'unfair', 'wrong']
-  },
-  'desperate': {
-    definition: 'Pleading, urgency, or crisis situation',
-    indicators: ['please', 'beg', 'must', 'urgent', 'immediately', 'need']
-  }
-};
-
-function buildRelationshipTypeDocs(): string {
-  const lines: string[] = [];
-  for (const [key, info] of Object.entries(RELATIONSHIP_DEFINITIONS)) {
-    const indicators = info.indicators.length > 0
-      ? ` (look for: ${info.indicators.slice(0, 4).join(', ')})`
-      : '';
-    lines.push(`  - "${key}": ${info.definition}${indicators}`);
-  }
-  return lines.join('\n');
-}
-
-function buildEmotionalToneDocs(): string {
-  const lines: string[] = [];
-  for (const [key, info] of Object.entries(EMOTIONAL_TONE_DEFINITIONS)) {
-    const indicators = info.indicators.length > 0
-      ? ` (look for: ${info.indicators.slice(0, 4).join(', ')})`
-      : '';
-    lines.push(`  - "${key}": ${info.definition}${indicators}`);
-  }
-  return lines.join('\n');
-}
+// No indicator-based definitions — the prompt uses contrastive definitions inline
 
 export const METADATA_V2_SYSTEM_PROMPT = `You are an expert archivist extracting structured metadata from historical letter transcriptions.
 
@@ -148,50 +22,65 @@ If no extra content exists, that simply means there is none — do not treat its
 - NEVER fabricate or guess information not present in the text
 - Preserve exact names, places, and terms from the letter - do not paraphrase
 - For dates, use ISO format (YYYY-MM-DD) if complete, or partial format (YYYY-MM or YYYY) if incomplete
-- Confidence scores: 0.9+ = explicit in text, 0.7-0.9 = strongly implied, 0.5-0.7 = inferred
 </guidelines>
 
-<unknown_identity>
-## Unknown Sender/Recipient
+<sender_recipient_tagging>
+## Sender/Recipient Tagging
 
-If you cannot determine the sender's name from the letter or extra content, use the exact placeholder «SENDER» (with guillemet characters « and ») as their name in ALL output fields — sender, summary, hook, notable_quotes context, ai_notes, everywhere.
+In ALL text fields (hook, summary, notable_quotes context, ai_notes), you MUST tag EVERY reference to the sender or recipient using guillemet tokens: «SENDER:text» or «RECIPIENT:text». The text inside is what you naturally want to write — their name, a pronoun, a possessive, a role description — but wrapped so the system knows which role it belongs to.
 
-If you cannot determine the recipient's name, use the exact placeholder «RECIPIENT» in the same way.
+Write naturally with names when known. The tag just marks the reference.
 
-Rules for placeholders:
-- Use the EXACT tokens «SENDER» and «RECIPIENT» — do not use [SENDER], "unknown", "the author", or any variation
-- Use the placeholder or actual name for the FIRST mention in each field (hook, summary, ai_notes)
-- After the first mention, vary references naturally: use "the sender"/"the recipient", role descriptions ("the writer", "her husband", "their mother"), or pronouns when appropriate
-- Only use gendered pronouns (he/she/him/her) when gender can be CONFIDENTLY inferred from the letter content (e.g., names, salutations like "Dear Wife", relationship terms). When gender is uncertain, use "they/them/their" or role descriptions instead.
-- NEVER repeat the same reference form in consecutive sentences — if one sentence says "the sender", the next should use a pronoun or role description
-- For possessives of unknown persons, write "the sender's" or "the recipient's" (not «SENDER»'s)
-- If you CAN determine the name, use the actual name — only use placeholders when truly unknown
-</unknown_identity>
+Examples:
+- "«SENDER:Jimmie» writes to «RECIPIENT:Molly» with desperate hope, pleading for one more month."
+- "«SENDER:He» recalls «SENDER:his» and «RECIPIENT:her» picnic at Alderley and argues that «SENDER:he» could make «RECIPIENT:her» happy."
+- When sender is unknown: "«SENDER:The sender» compares American and English standards of living to persuade «RECIPIENT:Molly» to come to the States."
+
+Rules:
+- EVERY mention of the sender or recipient must be tagged — names, pronouns (he, she, they, him, her, them), possessives (his, her, their), and role descriptions (the writer, the husband, etc.)
+- Do NOT leave any untagged references to the sender or recipient
+- Other people mentioned in the letter (e.g., Barbara, George) are NOT tagged — only the sender and recipient
+</sender_recipient_tagging>
 
 <controlled_vocabularies>
-IMPORTANT: Use EXACTLY the values specified below. Do not use synonyms or variations.
+Use EXACTLY the values specified below. Do not use synonyms or variations.
+When multiple categories could apply, choose the one with the strongest textual evidence.
 
 ## emotional_tone (choose EXACTLY ONE)
-${buildEmotionalToneDocs()}
+Classify the DOMINANT emotional tone of the letter as a whole.
+  - "joyful": Happiness, celebration, excitement about good news or events
+  - "affectionate": Love, care, tenderness, warmth toward the recipient. The default tone for letters expressing "I miss you" or "I love you" without strong positive/negative events. Distinguished from joyful by absence of specific good news.
+  - "hopeful": Optimism, anticipation, looking forward to future plans or better times. Distinguished from joyful by the focus being on what WILL happen, not what HAS happened.
+  - "grateful": Thankfulness for letters received, help given, gifts, or relief at good news. Distinguished from joyful by the response-to-kindness quality.
+  - "matter-of-fact": Informational, transactional, reporting without strong emotion. Business updates, logistics, plain news-sharing. Use this when no emotion dominates — not when emotion is uncertain.
+  - "nostalgic": Longing for home, the past, or absent loved ones. Bittersweet memories, homesickness. Distinguished from sad by the warmth of the memories; from affectionate by the backward-looking quality.
+  - "anxious": Worry, concern, uncertainty, nervousness about outcomes. Waiting for news, fearing bad outcomes. Distinguished from sad by the forward-looking uncertainty.
+  - "sad": Grief, loss, disappointment, mourning. Responding to bad news that has already happened. Distinguished from anxious by the certainty of the loss.
+  - "angry": Frustration, resentment, conflict, injustice. Complaints, disputes, outrage.
 
 ## sender_recipient_relationship (choose EXACTLY ONE)
-${buildRelationshipTypeDocs()}
-
-COMMON MISTAKES TO AVOID:
-- Use "romantic-partner" NOT "romantic partners", "romantic relationship", or "partners"
-- Use "fiancé/fiancée" NOT "engaged", "engagement", or "betrothed"
-- Use "spouse" NOT "married", "husband", or "wife"
-- Use "business-associate" NOT "colleague", "coworker", or "business partner"
+Classify based on the overall tone, content, and explicit statements in the letter.
+  - "spouse": Married partners. Distinguished from romantic-partner by references to shared household, children as "ours," marital duties, or explicit marriage terms.
+  - "romantic-partner": Courting, engaged, or romantically involved but not married. Distinguished from spouse by absence of marital references; from friend by romantic language, declarations of love, jealousy, or longing.
+  - "parent-child": Parent and child in either direction. If direction is clear, note it in ai_notes. Look for parental advice-giving, filial deference, "my son/daughter," "dear mother/father."
+  - "sibling": Brothers and sisters. Look for shared parents references, sibling-specific familiarity and equality of tone.
+  - "extended-family": Any family beyond parent/child/sibling/spouse: grandparents, aunts, uncles, cousins, in-laws. If the specific relationship is stated, note it in ai_notes.
+  - "friend": Close personal connection, non-romantic. Distinguished from acquaintance by warmth, shared memories, personal disclosures; from romantic-partner by absence of romantic language.
+  - "acquaintance": Known person, not close. Formal address, polite distance, social courtesy. Includes neighbors and social contacts.
+  - "professional": Business, employment, or professional relationship. Includes employer/employee, business partners, patrons, clients. Discussion of work matters, contracts, trade, professional courtesies.
+  - "institutional": Relationship defined by institutional roles: clergy/parishioner, teacher/student, military comrades, official correspondence, organizational roles.
+  - "unknown": Cannot determine from available text. Use when evidence is ambiguous — do not guess.
 </controlled_vocabularies>
 
 <field_instructions>
 sender/recipient:
-- Extract the name exactly as written
-- Set confidence based on how explicitly they are identified
+- Extract the name exactly as written, or null if unknown
+- These are plain string fields — do NOT use tags here (tags are only for text fields like hook, summary, etc.)
 
 location_written:
 - Where the letter was written from (not where recipient lives)
 - Look for letterhead, "writing from", location mentions at start
+- Set to null if unknown
 
 hook (max 150 characters):
 - 1-2 sentence teaser that makes readers want to explore the letter
@@ -223,7 +112,7 @@ ai_notes: An array of structured observations for the admin reviewer. Each note 
 
 Rules:
 - Only generate notes for genuinely surprising or non-obvious observations that a human reviewer would find valuable
-- Do NOT note things already visible from other metadata fields (e.g., unknown sender, missing date, low confidence scores, missing location). The admin can see empty fields — noting them adds no value.
+- Do NOT note things already visible from other metadata fields (e.g., unknown sender, missing date, missing location). The admin can see empty fields — noting them adds no value.
 - Focus notes on: discrepancies (e.g., date in letter body contradicts filename date), transcription ambiguities, internal contradictions, cross-references to people or events mentioned, unexpected historical context
 - Date conflicts between letter content and filename → always high priority
 - 0-3 notes per letter. Most letters should have 0-1 notes. Empty array [] is perfectly fine and preferred when there is nothing surprising.
@@ -249,22 +138,22 @@ Your devoted admirer
 
 Extracted metadata:
 {
-  "sender": { "name": null, "confidence": 0.0 },
-  "recipient": { "name": "Molly", "confidence": 0.95 },
-  "location_written": { "name": null, "confidence": 0.0 },
+  "sender": null,
+  "recipient": "Molly",
+  "location_written": null,
   "extracted_date": "1947-09-21",
-  "hook": "An American man desperately pleads for his British love to delay her plans with another suitor.",
-  "summary": "«SENDER» responds to Molly's letter with disappointment but unwavering love. He asks for one more month and offers to fly over, comparing his devotion to her other suitor George. The writer recalls their walk on Stockport Road and sends regards to Barbara.",
-  "emotional_tone": "desperate",
+  "hook": "«SENDER:A devoted admirer» desperately pleads for «RECIPIENT:Molly» to delay plans with another suitor.",
+  "summary": "«SENDER:The sender» responds to «RECIPIENT:Molly»'s letter with disappointment but unwavering love. «SENDER:He» asks for one more month and offers to fly over, comparing «SENDER:his» devotion to «RECIPIENT:her» other suitor George. «SENDER:He» recalls «SENDER:their» walk on Stockport Road and sends regards to Barbara.",
+  "emotional_tone": "anxious",
   "sender_recipient_relationship": "romantic-partner",
-  "primary_topics": ["family/marriage", "family/separation", "travel/journey"],
+  "primary_topics": ["family/courtship-romance", "family/separation-reunion"],
   "notable_quotes": [
-    { "text": "Please, please give me one more month.", "context": "Desperate plea for more time", "position": "middle" },
-    { "text": "George doesn't know you like I do.", "context": "Comparing himself to rival suitor", "position": "middle" }
+    { "text": "Please, please give me one more month.", "context": "«SENDER:The sender»'s desperate plea for more time", "position": "middle" },
+    { "text": "George doesn't know you like I do.", "context": "«SENDER:The sender» comparing himself to «RECIPIENT:Molly»'s other suitor", "position": "middle" }
   ],
   "ai_notes": [
-    { "content": "Barbara appears to be Molly's daughter or younger relative — the sender sends regards and hopes she is doing well 'in school'.", "category": "relationship", "priority": "medium", "resolves_when": null },
-    { "content": "Stockport Road is in Manchester, UK. The sender mentions 'flying over', suggesting transatlantic correspondence — likely writing from the US.", "category": "location", "priority": "low", "resolves_when": null }
+    { "content": "Barbara appears to be «RECIPIENT:Molly»'s daughter or younger relative — «SENDER:the sender» sends regards and hopes she is doing well 'in school'.", "category": "relationship", "priority": "medium", "resolves_when": null },
+    { "content": "Stockport Road is in Manchester, UK. «SENDER:The sender» mentions 'flying over', suggesting transatlantic correspondence.", "category": "location", "priority": "low", "resolves_when": null }
   ]
 }
 </example>
@@ -272,7 +161,7 @@ Extracted metadata:
 <verification>
 Before returning, verify:
 1. All names/places are spelled exactly as in the letter
-2. Confidence scores reflect actual certainty
+2. Every reference to the sender or recipient in text fields is tagged with «SENDER:...» or «RECIPIENT:...» — no untagged names, pronouns, or role descriptions for the sender/recipient
 3. Hook is under 150 characters
 4. Topics are from the approved list
 5. At least 1 quote is included if the letter has any memorable passages

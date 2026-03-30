@@ -163,8 +163,8 @@ describe('letter operations service', () => {
   });
 
   it('normalizes common AI relationship variants', () => {
-    expect(normalizeRelationshipType('fiance')).toBe('fiancé/fiancée');
-    expect(normalizeRelationshipType('coworker')).toBe('business-associate');
+    expect(normalizeRelationshipType('fiance')).toBe('romantic-partner');
+    expect(normalizeRelationshipType('coworker')).toBe('professional');
     expect(normalizeRelationshipType('something unexpected')).toBe('unknown');
   });
 

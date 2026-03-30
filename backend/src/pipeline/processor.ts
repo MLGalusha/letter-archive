@@ -1,5 +1,4 @@
 import { runTranscription } from './transcription.js';
-import { runMetadataExtraction } from './metadata.js';
 import { runMetadataExtractionV2 } from './metadataV2.js';
 import { getLetterById } from '../services/letters.js';
 import { isTranscribableType } from '../services/letter/shared.js';
@@ -69,5 +68,4 @@ export async function processMetadata(letterId: string): Promise<void> {
 }
 
 export { runTranscription } from './transcription.js';
-export { runMetadataExtraction } from './metadata.js';
 export { runMetadataExtractionV2 } from './metadataV2.js';

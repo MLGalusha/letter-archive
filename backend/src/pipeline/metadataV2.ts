@@ -134,16 +134,16 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
         relationship: metadataResult.metadata.sender_recipient_relationship,
         topicsCount: metadataResult.metadata.primary_topics.length,
         quotesCount: metadataResult.metadata.notable_quotes.length,
-        hasSender: !!metadataResult.metadata.sender.name,
-        hasRecipient: !!metadataResult.metadata.recipient.name,
+        hasSender: !!metadataResult.metadata.sender,
+        hasRecipient: !!metadataResult.metadata.recipient,
         usage: metadataResult.usage,
       },
       'Phase 1 (basic metadata) completed successfully'
     );
 
     // Notification: metadata extracted
-    const senderName = metadataResult.metadata.sender?.name || 'Unknown';
-    const recipientName = metadataResult.metadata.recipient?.name || 'Unknown';
+    const senderName = metadataResult.metadata.sender || 'Unknown';
+    const recipientName = metadataResult.metadata.recipient || 'Unknown';
     createNotification({
       type: 'metadata',
       title: 'Metadata extracted',
@@ -198,8 +198,8 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
       transcriptionText: letter.transcriptionText,
       letterId,
       basicMetadata: {
-        sender: metadataResult.metadata.sender.name,
-        recipient: metadataResult.metadata.recipient.name,
+        sender: metadataResult.metadata.sender,
+        recipient: metadataResult.metadata.recipient,
         senderRecipientRelationship: metadataResult.metadata.sender_recipient_relationship,
         summary: metadataResult.metadata.summary,
       },

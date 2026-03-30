@@ -1,9 +1,9 @@
 /**
  * AI-Assisted Metadata Update Service
  *
- * When a sender/recipient is set for the first time (was null/empty),
- * this service calls OpenAI to intelligently update the metadata
- * (summary, hook, entity roles, etc.) incorporating the new identity.
+ * When a sender/recipient name is changed, this service debounces for 2 minutes
+ * then calls OpenAI to re-tag all «SENDER:...» and «RECIPIENT:...» references
+ * in the metadata text fields with natural language using the corrected names.
  *
  * Falls back to simple field update in stub mode (no OPENAI_API_KEY).
  */
@@ -11,7 +11,7 @@
 import { eq } from 'drizzle-orm';
 import { db, letters, type Letter } from '../db/index.js';
 import { env, hasOpenAI } from '../config/env.js';
-import { openai, log as openaiLog } from '../ai/openai/client.js';
+import { openai } from '../ai/openai/client.js';
 import {
   METADATA_UPDATE_SYSTEM_PROMPT,
   buildMetadataUpdateUserPrompt,
@@ -23,71 +23,121 @@ import { logApiUsage } from './usage-tracking.js';
 
 const log = createLogger({ module: 'metadata-update' });
 
-export interface AiUpdateParams {
-  letterId: string;
-  newSender?: string;
-  newRecipient?: string;
+const RETAG_DELAY_MS = 2 * 60 * 1000; // 2 minutes
+
+// ============================================================================
+// DEBOUNCE TIMER
+// ============================================================================
+
+interface PendingRetag {
+  timer: ReturnType<typeof setTimeout>;
+  senderName: string | null;
+  recipientName: string | null;
+  change: {
+    field: 'sender' | 'recipient' | 'both';
+    oldSender?: string | null;
+    newSender?: string | null;
+    oldRecipient?: string | null;
+    newRecipient?: string | null;
+  };
 }
 
-export interface AiUpdateResult {
-  letter: Letter;
-  method: 'ai' | 'simple';
-  fieldsUpdated: string[];
-}
+const pendingRetags = new Map<string, PendingRetag>();
 
 /**
- * Use AI to update metadata when a sender/recipient is being set for the first time.
- *
- * If OpenAI is not available (stub mode), falls back to a simple field update.
+ * Schedule a debounced AI re-tag for a letter's metadata.
+ * Resets the timer if called again within the delay window.
  */
-export async function aiUpdateMetadata(params: AiUpdateParams): Promise<AiUpdateResult> {
-  const { letterId, newSender, newRecipient } = params;
-  const letterLog = log.child({ letterId, newSender, newRecipient });
+export function scheduleMetadataRetag(params: {
+  letterId: string;
+  senderName: string | null;
+  recipientName: string | null;
+  change: PendingRetag['change'];
+}): void {
+  const { letterId } = params;
 
-  letterLog.info('Starting AI metadata update');
+  // Clear existing timer for this letter
+  const existing = pendingRetags.get(letterId);
+  if (existing) {
+    clearTimeout(existing.timer);
+    // Merge changes: if previous was sender-only and now recipient, make it both
+    if (existing.change.field !== params.change.field && params.change.field !== 'both') {
+      params.change = {
+        field: 'both',
+        oldSender: existing.change.oldSender ?? params.change.oldSender,
+        newSender: params.change.newSender ?? existing.change.newSender ?? params.senderName,
+        oldRecipient: existing.change.oldRecipient ?? params.change.oldRecipient,
+        newRecipient: params.change.newRecipient ?? existing.change.newRecipient ?? params.recipientName,
+      };
+    }
+  }
+
+  const timer = setTimeout(() => {
+    pendingRetags.delete(letterId);
+    void executeRetag(letterId).catch((err) => {
+      log.error({ letterId, err }, 'Scheduled metadata re-tag failed');
+    });
+  }, RETAG_DELAY_MS);
+
+  pendingRetags.set(letterId, {
+    timer,
+    senderName: params.senderName,
+    recipientName: params.recipientName,
+    change: params.change,
+  });
+
+  log.info({ letterId, delay: RETAG_DELAY_MS }, 'Metadata re-tag scheduled');
+}
+
+/** Check if a retag is pending for a letter (for testing/status) */
+export function isRetagPending(letterId: string): boolean {
+  return pendingRetags.has(letterId);
+}
+
+/** Cancel a pending retag (e.g., if letter is deleted) */
+export function cancelPendingRetag(letterId: string): void {
+  const existing = pendingRetags.get(letterId);
+  if (existing) {
+    clearTimeout(existing.timer);
+    pendingRetags.delete(letterId);
+    log.debug({ letterId }, 'Pending metadata re-tag cancelled');
+  }
+}
+
+// ============================================================================
+// AI RE-TAG EXECUTION
+// ============================================================================
+
+async function executeRetag(letterId: string): Promise<void> {
+  const pending = pendingRetags.get(letterId);
+  // May have been cancelled
+  if (!pending) return;
+
+  const letterLog = log.child({ letterId });
+  letterLog.info('Executing scheduled metadata re-tag');
 
   const letter = await db.query.letters.findFirst({
     where: eq(letters.id, letterId),
   });
 
   if (!letter) {
-    throw new Error(`Letter not found: ${letterId}`);
+    letterLog.warn('Letter not found for re-tag, skipping');
+    return;
   }
 
-  // If no OpenAI key or no existing metadata to update, do simple field update
-  if (!hasOpenAI || !openai || !letter.metadataV2Json) {
-    letterLog.debug('Using simple field update (no OpenAI or no existing metadata)');
-    return simpleFieldUpdate(letter, newSender, newRecipient);
+  if (!letter.metadataV2Json || !hasOpenAI || !openai) {
+    letterLog.debug('Skipping AI re-tag (no metadata or no API key)');
+    return;
   }
 
   const existingMetadata = letter.metadataV2Json as Record<string, unknown>;
-  const existingEntities = letter.entityExtractionJson as Record<string, unknown> | null;
-
-  // Determine what changed
-  const correction: {
-    field: 'sender' | 'recipient' | 'both';
-    oldSender?: string | null;
-    newSender?: string;
-    oldRecipient?: string | null;
-    newRecipient?: string;
-  } = {
-    field: (newSender && newRecipient) ? 'both' : newSender ? 'sender' : 'recipient',
-  };
-
-  if (newSender) {
-    correction.oldSender = letter.sender;
-    correction.newSender = newSender;
-  }
-  if (newRecipient) {
-    correction.oldRecipient = letter.recipient;
-    correction.newRecipient = newRecipient;
-  }
 
   try {
     const userPrompt = buildMetadataUpdateUserPrompt({
       existingMetadata,
-      existingEntities,
-      correction,
+      senderName: letter.sender,
+      recipientName: letter.recipient,
+      change: pending.change,
     });
 
     const start = Date.now();
@@ -110,42 +160,60 @@ export async function aiUpdateMetadata(params: AiUpdateParams): Promise<AiUpdate
 
     const duration = Date.now() - start;
 
-    if (response.status === 'incomplete' && response.incomplete_details?.reason === 'content_filter') {
-      letterLog.warn({ duration }, 'AI metadata update refused by content filter, falling back to simple update');
-      return simpleFieldUpdate(letter, newSender, newRecipient);
+    if (response.status === 'incomplete') {
+      letterLog.warn({ duration }, 'AI re-tag incomplete, skipping update');
+      return;
     }
 
     const outputItem = response.output.find((item) => item.type === 'message');
     if (!outputItem || outputItem.type !== 'message') {
-      letterLog.warn({ duration }, 'No message in AI update response, falling back to simple update');
-      return simpleFieldUpdate(letter, newSender, newRecipient);
+      letterLog.warn({ duration }, 'No message in AI re-tag response');
+      return;
     }
 
     const textContent = outputItem.content.find((c) => c.type === 'output_text');
     if (!textContent || textContent.type !== 'output_text') {
-      letterLog.warn({ duration }, 'No text content in AI update response, falling back to simple update');
-      return simpleFieldUpdate(letter, newSender, newRecipient);
+      letterLog.warn({ duration }, 'No text content in AI re-tag response');
+      return;
     }
 
     let parsed: unknown;
     try {
       parsed = JSON.parse(textContent.text);
     } catch {
-      letterLog.warn({ duration }, 'Failed to parse AI update response JSON, falling back to simple update');
-      return simpleFieldUpdate(letter, newSender, newRecipient);
+      letterLog.warn({ duration }, 'Failed to parse AI re-tag response JSON');
+      return;
     }
 
     const validationResult = MetadataV2Schema.safeParse(parsed);
     if (!validationResult.success) {
       letterLog.warn(
         { duration, errors: validationResult.error.errors },
-        'AI update response failed validation, falling back to simple update',
+        'AI re-tag response failed validation',
       );
-      return simpleFieldUpdate(letter, newSender, newRecipient);
+      return;
     }
 
     const updatedMetadata = validationResult.data;
     const usage = response.usage;
+
+    // Strip tags for display fields
+    const stripTags = (text: string) =>
+      text.replace(/«(?:SENDER|RECIPIENT):([^»]*)»/g, '$1');
+
+    const dbUpdates: Record<string, unknown> = {
+      updatedAt: new Date(),
+      hook: updatedMetadata.hook ? stripTags(updatedMetadata.hook) : updatedMetadata.hook,
+      summary: updatedMetadata.summary ? stripTags(updatedMetadata.summary) : updatedMetadata.summary,
+      metadataV2Json: updatedMetadata,
+      metadataJson: updatedMetadata,
+    };
+
+    // Preserve the current sender/recipient names (don't let AI override them)
+    dbUpdates.sender = letter.sender;
+    dbUpdates.recipient = letter.recipient;
+
+    await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
 
     letterLog.info(
       {
@@ -153,87 +221,37 @@ export async function aiUpdateMetadata(params: AiUpdateParams): Promise<AiUpdate
         promptTokens: usage?.input_tokens,
         completionTokens: usage?.output_tokens,
       },
-      'AI metadata update completed',
+      'Metadata re-tag completed',
     );
 
-    // Fire-and-forget usage tracking
     logApiUsage({
       letterId,
-      callType: 'metadata_update',
+      callType: 'metadata_retag',
       model: env.OPENAI_MODEL,
       inputTokens: usage?.input_tokens ?? 0,
       outputTokens: usage?.output_tokens ?? 0,
       durationMs: duration,
     });
-
-    // Apply the AI-updated metadata to the DB
-    return applyMetadataUpdate(letter, updatedMetadata, newSender, newRecipient, 'ai');
   } catch (error) {
-    letterLog.error({ err: error }, 'AI metadata update failed, falling back to simple update');
-    return simpleFieldUpdate(letter, newSender, newRecipient);
+    letterLog.error({ err: error }, 'AI metadata re-tag failed');
   }
 }
 
-/**
- * Apply an AI-generated metadata update to the database.
- */
-async function applyMetadataUpdate(
-  letter: Letter,
-  metadata: MetadataV2,
-  newSender: string | undefined,
-  newRecipient: string | undefined,
-  method: 'ai' | 'simple',
-): Promise<AiUpdateResult> {
-  const dbUpdates: Record<string, unknown> = {
-    updatedAt: new Date(),
-    // V1 compatible fields
-    sender: metadata.sender.name,
-    recipient: metadata.recipient.name,
-    locationWritten: metadata.location_written.name,
-    hook: metadata.hook,
-    summary: metadata.summary,
-    extractedDate: metadata.extracted_date,
-    tags: metadata.primary_topics,
-    // V2 specific fields
-    emotionalTone: metadata.emotional_tone,
-    senderRecipientRelationship: metadata.sender_recipient_relationship,
-    primaryTopics: metadata.primary_topics,
-    aiNotes: metadata.ai_notes,
-    // Full JSON
-    metadataV2Json: metadata,
-    metadataJson: metadata,
-  };
+// ============================================================================
+// LEGACY EXPORTS (used by identity endpoint for immediate field updates)
+// ============================================================================
 
-  // Ensure the new sender/recipient values are set even if AI returned different names
-  if (newSender !== undefined) {
-    dbUpdates.sender = newSender;
-  }
-  if (newRecipient !== undefined) {
-    dbUpdates.recipient = newRecipient;
-  }
-
-  await db.update(letters).set(dbUpdates).where(eq(letters.id, letter.id));
-
-  const fieldsUpdated = ['metadataV2Json', 'summary', 'hook'];
-  if (newSender) fieldsUpdated.push('sender');
-  if (newRecipient) fieldsUpdated.push('recipient');
-
-  const updatedLetter = await db.query.letters.findFirst({
-    where: eq(letters.id, letter.id),
-  });
-
-  return {
-    letter: updatedLetter!,
-    method,
-    fieldsUpdated,
-  };
+export interface AiUpdateResult {
+  letter: Letter;
+  method: 'ai' | 'simple';
+  fieldsUpdated: string[];
 }
 
 /**
- * Simple field update — no AI. Just set the sender/recipient fields.
- * Used as fallback when AI is unavailable or fails.
+ * Simple field update — no AI. Sets sender/recipient fields immediately
+ * and updates the metadataV2Json name fields.
  */
-async function simpleFieldUpdate(
+export async function simpleFieldUpdate(
   letter: Letter,
   newSender: string | undefined,
   newRecipient: string | undefined,
@@ -250,17 +268,15 @@ async function simpleFieldUpdate(
     fieldsUpdated.push('recipient');
   }
 
-  // Also update metadataV2Json sender/recipient if it exists
+  // Update metadataV2Json sender/recipient fields
   if (letter.metadataV2Json && typeof letter.metadataV2Json === 'object') {
     const metadata = { ...(letter.metadataV2Json as Record<string, unknown>) };
 
     if (newSender !== undefined) {
-      const senderObj = metadata.sender as Record<string, unknown> | undefined;
-      metadata.sender = { ...(senderObj || {}), name: newSender, confidence: 1.0 };
+      metadata.sender = newSender;
     }
     if (newRecipient !== undefined) {
-      const recipientObj = metadata.recipient as Record<string, unknown> | undefined;
-      metadata.recipient = { ...(recipientObj || {}), name: newRecipient, confidence: 1.0 };
+      metadata.recipient = newRecipient;
     }
 
     dbUpdates.metadataV2Json = metadata;

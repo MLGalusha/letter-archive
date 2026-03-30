@@ -1,5 +1,4 @@
 export * from './transcription.js';
-export * from './metadata.js';
 export * from './metadata-v2.js';
 export * from './entities.js';
 export * from './biography.js';

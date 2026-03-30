@@ -29,17 +29,13 @@ describe('OpenAI modules stub mode', () => {
     expect(result.text).toContain('[STUB TRANSCRIPTION');
   });
 
-  it('returns stub metadata for v1 and v2 extraction', async () => {
-    const v1 = await metadataModule.extractMetadata({
-      transcriptionText: '[STUB TRANSCRIPTION - test]',
-    });
-    expect(v1.sender).toBe('Unknown (stub)');
-
+  it('returns stub metadata for v2 extraction', async () => {
     const v2 = await metadataModule.extractMetadataV2({
       transcriptionText: '[STUB TRANSCRIPTION - test]',
     });
     expect(v2.isStub).toBe(true);
-    expect(v2.metadata.emotional_tone).toBe('neutral');
+    expect(v2.metadata.sender).toBe('Unknown (stub)');
+    expect(v2.metadata.emotional_tone).toBe('matter-of-fact');
   });
 
   it('returns empty stub entity extraction', async () => {

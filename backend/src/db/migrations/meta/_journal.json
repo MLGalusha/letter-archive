@@ -239,6 +239,13 @@
       "when": 1775472000000,
       "tag": "0033_add_collection_profile_correspondents",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1775558400000,
+      "tag": "0034_update_emotional_tone_and_relationship_enums",
+      "breakpoints": true
     }
   ]
 }

@@ -320,44 +320,24 @@ export async function updateMetadataV2(
 
   if (metadata) {
     // V1 compatible fields (for existing queries/UI)
-    updates.sender = metadata.sender.name;
-    updates.recipient = metadata.recipient.name;
-    updates.locationWritten = metadata.location_written.name;
+    updates.sender = metadata.sender;
+    updates.recipient = metadata.recipient;
+    updates.locationWritten = metadata.location_written;
     updates.hook = metadata.hook;
     updates.summary = metadata.summary;
     updates.extractedDate = metadata.extracted_date;
     // Generate tags from topics for V1 compatibility
     updates.tags = metadata.primary_topics;
 
-    // Clean up stray "the sender"/"the recipient" prose in hook and summary
-    // when the AI identified actual names but still used generic phrases in text
-    const senderName = metadata.sender.name;
-    const recipientName = metadata.recipient.name;
-    if (senderName && !isPlaceholderValue(senderName)) {
-      const firstName = senderName.split(' ')[0];
-      if (updates.hook) {
-        updates.hook = updates.hook
-          .replace(/\bthe sender's\b/gi, `${firstName}'s`)
-          .replace(/\bthe sender\b/gi, firstName);
-      }
-      if (updates.summary) {
-        updates.summary = updates.summary
-          .replace(/\bthe sender's\b/gi, `${senderName}'s`)
-          .replace(/\bthe sender\b/gi, senderName);
-      }
+    // Strip «SENDER:...» and «RECIPIENT:...» tags, keeping the inner text
+    // The raw tagged text is preserved in metadataV2Json for future re-processing
+    const stripTags = (text: string) =>
+      text.replace(/«(?:SENDER|RECIPIENT):([^»]*)»/g, '$1');
+    if (updates.hook) {
+      updates.hook = stripTags(updates.hook);
     }
-    if (recipientName && !isPlaceholderValue(recipientName)) {
-      const firstName = recipientName.split(' ')[0];
-      if (updates.hook) {
-        updates.hook = updates.hook
-          .replace(/\bthe recipient's\b/gi, `${firstName}'s`)
-          .replace(/\bthe recipient\b/gi, firstName);
-      }
-      if (updates.summary) {
-        updates.summary = updates.summary
-          .replace(/\bthe recipient's\b/gi, `${recipientName}'s`)
-          .replace(/\bthe recipient\b/gi, recipientName);
-      }
+    if (updates.summary) {
+      updates.summary = stripTags(updates.summary);
     }
 
     // V2 specific fields

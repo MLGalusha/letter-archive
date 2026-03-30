@@ -43,46 +43,6 @@ describe('OpenAI modules parsing path', () => {
     vi.clearAllMocks();
   });
 
-  it('maps JSON metadata extraction response', async () => {
-    chatCompletionsCreate.mockResolvedValue({
-      choices: [
-        {
-          message: {
-            content: JSON.stringify({
-              sender: 'Alice',
-              recipient: 'Bob',
-              location_written: 'New York',
-              hook: 'A short hook',
-              summary: 'A summary',
-              tags: ['family', 'travel'],
-              extracted_date: '1942-05-01',
-            }),
-          },
-        },
-      ],
-      usage: {
-        prompt_tokens: 10,
-        completion_tokens: 12,
-        total_tokens: 22,
-      },
-    });
-
-    const { metadataModule } = await loadModules();
-    const result = await metadataModule.extractMetadata({
-      transcriptionText: 'Example transcript',
-    });
-
-    expect(result).toEqual({
-      sender: 'Alice',
-      recipient: 'Bob',
-      locationWritten: 'New York',
-      hook: 'A short hook',
-      summary: 'A summary',
-      tags: ['family', 'travel'],
-      extractedDate: '1942-05-01',
-    });
-  });
-
   it('throws on invalid V2 metadata JSON', async () => {
     responsesCreate.mockResolvedValue({
       status: 'completed',

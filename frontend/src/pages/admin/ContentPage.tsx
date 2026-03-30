@@ -294,7 +294,7 @@ function LetterPicker({
   const [results, setResults] = useState<ArchiveShelfItem[]>([]);
   const [searching, setSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     inputRef.current?.focus();

@@ -216,18 +216,22 @@ describe("CollectionDetailPage", () => {
 
   it("navigates to the selected letter when a highlight is clicked", async () => {
     const user = userEvent.setup();
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.4);
+    try {
+      renderCollectionDetailPage();
 
-    renderCollectionDetailPage();
+      await screen.findByRole("heading", { name: "Collection Nine" });
+      const highlightButtons = screen.getAllByRole("button").filter(
+        (btn) => btn.classList.contains("cd-highlight-card"),
+      );
+      await user.click(highlightButtons[0]);
 
-    await screen.findByRole("heading", { name: "Collection Nine" });
-    const highlightButtons = screen.getAllByRole("button").filter(
-      (btn) => btn.classList.contains("cd-highlight-card"),
-    );
-    await user.click(highlightButtons[0]);
-
-    expect(mockNavigate).toHaveBeenCalledWith(
-      expect.stringContaining("/letter/letter-2"),
-    );
+      expect(mockNavigate).toHaveBeenCalledWith(
+        expect.stringContaining("/letter/letter-2"),
+      );
+    } finally {
+      randomSpy.mockRestore();
+    }
   });
 
   it("shows the not-found state and returns to collections when loading fails", async () => {

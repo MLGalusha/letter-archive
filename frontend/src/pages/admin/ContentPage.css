@@ -1060,10 +1060,11 @@ body.dark .jn-status.draft {
 .pe-shell {
   min-height: 0;
   overflow-x: auto;
+  background: transparent;
 }
 
 .pe-shell::before {
-  position: absolute;
+  display: none;
 }
 
 .pe-shell .body-layout {

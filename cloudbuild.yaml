@@ -2,15 +2,17 @@
 # Builds backend + frontend images, runs migrations, deploys to Cloud Run.
 #
 # Trigger: push to main branch (or manual)
-# Required substitutions: _REGION, _CLOUD_SQL_INSTANCE, _ARCHIVE_BUCKET
 #
 # Usage:
-#   gcloud builds submit \
-#     --substitutions=_REGION=us-central1,_CLOUD_SQL_INSTANCE=letter-archive-db,_ARCHIVE_BUCKET=letter-archive-storage
+#   gcloud builds submit --config=cloudbuild.yaml
 
 substitutions:
-  _REGION: us-central1
+  _REGION: us-east1
   _REPO: letter-archive
+  _CLOUD_SQL_INSTANCE: letter-archive-db
+  _ARCHIVE_BUCKET: letter-archive-485110-archive
+  _DOMAIN: voicesthatremain.com
+  _SERVICE_ACCOUNT: 'letter-archive-runner@${PROJECT_ID}.iam.gserviceaccount.com'
   _BACKEND_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/backend'
   _FRONTEND_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/frontend'
 
@@ -19,7 +21,7 @@ options:
   machineType: E2_HIGHCPU_8
 
 steps:
-  # ── Step 1: Build backend image ──────────────────────────
+  # ── Build images (parallel) ────────────────────────────────
   - name: gcr.io/cloud-builders/docker
     id: build-backend
     args:
@@ -33,7 +35,6 @@ steps:
       - backend
     waitFor: ['-']
 
-  # ── Step 2: Build frontend image ─────────────────────────
   - name: gcr.io/cloud-builders/docker
     id: build-frontend
     args:
@@ -51,7 +52,7 @@ steps:
       - frontend
     waitFor: ['-']
 
-  # ── Step 3: Push images (parallel after builds) ──────────
+  # ── Push images (parallel after builds) ─────────────────────
   - name: gcr.io/cloud-builders/docker
     id: push-backend
     args: ['push', '--all-tags', '${_BACKEND_IMAGE}']
@@ -62,7 +63,40 @@ steps:
     args: ['push', '--all-tags', '${_FRONTEND_IMAGE}']
     waitFor: ['build-frontend']
 
-  # ── Step 4: Run database migrations ──────────────────────
+  # ── Prepare deploy manifests (substitute placeholders) ──────
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: prepare-manifests
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        for f in deploy/cloudrun/*.yaml; do
+          sed -i \
+            -e "s|SERVICE_ACCOUNT_EMAIL|${_SERVICE_ACCOUNT}|g" \
+            -e "s|CLOUD_SQL_INSTANCE|${_CLOUD_SQL_INSTANCE}|g" \
+            -e "s|ARCHIVE_BUCKET|${_ARCHIVE_BUCKET}|g" \
+            -e "s|BACKEND_IMAGE|${_BACKEND_IMAGE}:${SHORT_SHA}|g" \
+            -e "s|FRONTEND_IMAGE|${_FRONTEND_IMAGE}:${SHORT_SHA}|g" \
+            -e "s|PROJECT_NUMBER|${PROJECT_ID}|g" \
+            -e "s|PROJECT_ID|${PROJECT_ID}|g" \
+            -e "s|YOUR_DOMAIN|${_DOMAIN}|g" \
+            -e "s|REGION|${_REGION}|g" \
+            "$$f"
+        done
+    waitFor: ['-']
+
+  # ── Deploy + run migrations ─────────────────────────────────
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-migrate-job
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - replace
+      - deploy/cloudrun/backend-migrate-job.yaml
+      - --region=${_REGION}
+    waitFor: ['push-backend', 'prepare-manifests']
+
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: run-migrations
     entrypoint: gcloud
@@ -72,49 +106,48 @@ steps:
       - execute
       - letter-archive-migrate
       - --region=${_REGION}
-      - --update-containers
-      - --image=${_BACKEND_IMAGE}:${SHORT_SHA}
       - --wait
-    waitFor: ['push-backend']
+    waitFor: ['deploy-migrate-job']
 
-  # ── Step 5: Deploy backend service ───────────────────────
+  # ── Deploy backend service ──────────────────────────────────
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy-backend
-    entrypoint: gcloud
+    entrypoint: bash
     args:
-      - run
-      - services
-      - update
-      - letter-archive-backend
-      - --region=${_REGION}
-      - --image=${_BACKEND_IMAGE}:${SHORT_SHA}
-    waitFor: ['run-migrations']
+      - -c
+      - |
+        gcloud run services replace deploy/cloudrun/backend-service.yaml \
+          --region=${_REGION}
+        gcloud run services add-iam-policy-binding letter-archive-backend \
+          --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet
+    waitFor: ['run-migrations', 'prepare-manifests']
 
-  # ── Step 6: Deploy frontend service ──────────────────────
+  # ── Deploy frontend service ─────────────────────────────────
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy-frontend
-    entrypoint: gcloud
+    entrypoint: bash
     args:
-      - run
-      - services
-      - update
-      - letter-archive-frontend
-      - --region=${_REGION}
-      - --image=${_FRONTEND_IMAGE}:${SHORT_SHA}
-    waitFor: ['push-frontend']
+      - -c
+      - |
+        gcloud run services replace deploy/cloudrun/frontend-service.yaml \
+          --region=${_REGION}
+        gcloud run services add-iam-policy-binding letter-archive-frontend \
+          --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet
+    waitFor: ['push-frontend', 'prepare-manifests']
 
-  # ── Step 7: Deploy worker ────────────────────────────────
+  # ── Deploy worker pool ──────────────────────────────────────
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy-worker
-    entrypoint: gcloud
+    entrypoint: bash
     args:
-      - run
-      - worker-pools
-      - update
-      - letter-archive-worker
-      - --region=${_REGION}
-      - --image=${_BACKEND_IMAGE}:${SHORT_SHA}
-    waitFor: ['run-migrations']
+      - -c
+      - |
+        gcloud run worker-pools replace deploy/cloudrun/backend-workerpool.yaml \
+          --region=${_REGION} 2>/dev/null || \
+        gcloud run worker-pools update letter-archive-worker \
+          --region=${_REGION} \
+          --image=${_BACKEND_IMAGE}:${SHORT_SHA}
+    waitFor: ['run-migrations', 'prepare-manifests']
 
 images:
   - '${_BACKEND_IMAGE}:${SHORT_SHA}'

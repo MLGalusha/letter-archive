@@ -64,10 +64,10 @@ describe("HomePage archive browsing", () => {
 
     searchArchiveShelfMock
       .mockResolvedValueOnce({
-        letters: Array.from({ length: 24 }, (_, index) => makeShelfItem(index + 1)),
+        letters: Array.from({ length: 12 }, (_, index) => makeShelfItem(index + 1)),
         page: 1,
-        limit: 24,
-        total: 30,
+        limit: 12,
+        total: 18,
         facets: {
           formats: [],
           collections: [],
@@ -80,10 +80,10 @@ describe("HomePage archive browsing", () => {
         },
       })
       .mockResolvedValueOnce({
-        letters: Array.from({ length: 6 }, (_, index) => makeShelfItem(index + 25)),
+        letters: Array.from({ length: 6 }, (_, index) => makeShelfItem(index + 13)),
         page: 2,
-        limit: 24,
-        total: 30,
+        limit: 12,
+        total: 18,
         facets: {
           formats: [],
           collections: [],
@@ -120,13 +120,13 @@ describe("HomePage archive browsing", () => {
     await user.click(screen.getByRole("button", { name: "Load next 6" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Hook 30")).toBeInTheDocument();
+      expect(screen.getByText("Hook 18")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("All 30 archive items are loaded.")).toBeInTheDocument();
+    expect(screen.getByText("All 18 archive items are loaded.")).toBeInTheDocument();
     expect(searchArchiveShelfMock).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ page: 2, limit: 24 }),
+      expect.objectContaining({ page: 2, limit: 12 }),
     );
   });
 

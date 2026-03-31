@@ -1,2 +1,10 @@
 commit_hash	p75_lcp_ms	status	description
 4cf25a82	9236	baseline	Initial measurement after tiered loading + width reductions
+9f5e0dfe	8140	improved	Reduce archive page size from 24 to 12
+-	8960	reverted	Add fetchPriority=low to archive cards — made LCP worse
+2e0e3d2b	8012	improved	Reduce archive card image width from 480px to 320px
+b93801e6	7532	improved	Reduce hero mid-quality image from 640px to 480px
+e614df76	7464	improved	Reduce showcase card mid-quality from 480px to 320px
+-	7560	reverted	Lower WebP quality 76→65, JPEG 78→68 — no improvement (likely cached)
+-	8100	reverted	Remove hero idle upgrade (just 480px) — made LCP worse, mid-tier load is key
+-	7996	reverted	content-visibility: auto on archive cards — worse (interferes with lazy loading)

@@ -7,6 +7,7 @@ import { ApiError } from '../../../api/client';
 const {
   navigateMock,
   showToastMock,
+  startUploadMock,
   uploadFilesMock,
   checkDuplicatesMock,
   createObjectURLMock,
@@ -14,6 +15,7 @@ const {
 } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   showToastMock: vi.fn(),
+  startUploadMock: vi.fn(),
   uploadFilesMock: vi.fn(),
   checkDuplicatesMock: vi.fn(),
   createObjectURLMock: vi.fn(() => 'blob:preview'),
@@ -31,6 +33,15 @@ vi.mock('react-router-dom', async (importOriginal) => {
 vi.mock('../../../contexts/ToastContext', () => ({
   useToast: () => ({
     showToast: showToastMock,
+  }),
+}));
+
+vi.mock('../../../contexts/UploadContext', () => ({
+  useUpload: () => ({
+    job: null,
+    startUpload: startUploadMock,
+    clearJob: vi.fn(),
+    isUploading: false,
   }),
 }));
 
@@ -240,11 +251,8 @@ describe('UploadLetterPage', () => {
     expect(uploadFilesMock).not.toHaveBeenCalled();
   });
 
-  it('shows request ids in failed upload results', async () => {
+  it('hands off files to upload context on submit', async () => {
     const user = userEvent.setup();
-    uploadFilesMock.mockRejectedValueOnce(
-      new ApiError(500, 'Archive unavailable', undefined, 'req-upload-123'),
-    );
 
     const { container } = render(<UploadLetterPage />);
     await user.upload(
@@ -256,13 +264,13 @@ describe('UploadLetterPage', () => {
     await user.click(screen.getByRole('button', { name: 'Upload' }));
 
     await waitFor(() => {
-      expect(uploadFilesMock).toHaveBeenCalledTimes(1);
+      expect(startUploadMock).toHaveBeenCalledTimes(1);
     });
 
-    expect(await screen.findByText('Failed (1)')).toBeInTheDocument();
-    expect(
-      screen.getByText('Archive unavailable (Request ID: req-upload-123)'),
-    ).toBeInTheDocument();
+    const files = startUploadMock.mock.calls[0][0] as Array<{ file: File; force: boolean }>;
+    expect(files).toHaveLength(1);
+    expect(files[0].file.name).toBe('001-18860314-L01-01.jpg');
+    expect(files[0].force).toBe(false);
   });
 
   it('surfaces duplicate check failures while still importing files', async () => {
@@ -290,19 +298,13 @@ describe('UploadLetterPage', () => {
     expect(await screen.findByText('Collection 001')).toBeInTheDocument();
   });
 
-  it('asks how to handle duplicates and can skip them during upload', async () => {
+  it('asks how to handle duplicates and skips them during upload', async () => {
     const user = userEvent.setup();
     checkDuplicatesMock.mockResolvedValueOnce({
       duplicates: {
         '001-18860314-L01-01.jpg': true,
         '001-18860314-L01-02.jpg': false,
       },
-    });
-    uploadFilesMock.mockResolvedValueOnce({
-      success: 1,
-      failed: 0,
-      results: [makeUploadResult('001-18860314-L01-02.jpg')],
-      errors: [],
     });
 
     const { container } = render(<UploadLetterPage />);
@@ -318,12 +320,12 @@ describe('UploadLetterPage', () => {
     await user.click(screen.getByRole('button', { name: /Skip Duplicates/i }));
 
     await waitFor(() => {
-      expect(uploadFilesMock).toHaveBeenCalledTimes(1);
+      expect(startUploadMock).toHaveBeenCalledTimes(1);
     });
 
-    const [files, force] = uploadFilesMock.mock.calls[0] as [File[], boolean];
-    expect(files.map((file) => file.name)).toEqual(['001-18860314-L01-02.jpg']);
-    expect(force).toBe(false);
+    const files = startUploadMock.mock.calls[0][0] as Array<{ file: File; force: boolean }>;
+    expect(files.map((f) => f.file.name)).toEqual(['001-18860314-L01-02.jpg']);
+    expect(files[0].force).toBe(false);
     await waitFor(() => {
       expect(document.querySelector('.upload-banner')).toHaveTextContent('1 skipped');
     });

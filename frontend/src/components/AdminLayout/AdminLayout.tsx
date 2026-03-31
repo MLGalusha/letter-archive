@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { isAuthenticated } from '../../api/auth';
 import AdminSidebar from '../AdminSidebar';
+import UploadStatusBanner from '../UploadStatusBanner';
 import './AdminLayout.css';
 
 interface AdminLayoutProps {
@@ -61,6 +62,8 @@ export default function AdminLayout({ children, headerActions, fullHeight }: Adm
         <header className="admin-header">
           {headerActions && <div className="header-center">{headerActions}</div>}
         </header>
+
+        <UploadStatusBanner />
 
         <main
           className={`admin-content${fullHeight ? ' full-height' : ''}`}

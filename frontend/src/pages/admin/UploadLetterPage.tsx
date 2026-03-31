@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
-import { uploadFiles, checkDuplicates, type UploadResult, type UploadError } from "../../api/admin";
+import { checkDuplicates } from "../../api/admin";
+import { useUpload, type QueuedFile } from "../../contexts/UploadContext";
 import { getErrorMessage } from "../../api/client";
 import {
   parseFilename,
@@ -17,7 +18,6 @@ import type {
   UploadedImage,
   EditState,
   LightboxState,
-  UploadProgress,
   UploadResultsState,
   UploadBannerState,
   DeleteDialogState,
@@ -34,13 +34,12 @@ import "./UploadLetterPage.css";
 export default function UploadLetterPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { startUpload, job, isUploading } = useUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   // State
   const [images, setImages] = useState<UploadedImage[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [message, setMessage] = useState("");
   const [editState, setEditState] = useState<EditState>({
     active: false,
@@ -70,6 +69,20 @@ export default function UploadLetterPage() {
     skippedCount: 0,
     excludedCount: 0,
   });
+  // Sync upload context results into local state when job completes
+  useEffect(() => {
+    if (job?.status === 'complete') {
+      const uploaded = job.results.filter(r => !r.alreadyExists);
+      const replaced = job.results.filter(r => r.alreadyExists);
+      setUploadResults({
+        uploaded,
+        replaced,
+        failed: job.errors,
+        show: job.errors.length > 0,
+      });
+    }
+  }, [job?.status, job?.results, job?.errors]);
+
   const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState>({
     show: false,
     type: 'collection',
@@ -412,30 +425,16 @@ export default function UploadLetterPage() {
     doUpload("skip");
   };
 
-  const doUpload = async (duplicateStrategy: "skip" | "replace") => {
+  const doUpload = (duplicateStrategy: "skip" | "replace") => {
     setDuplicateDialog({ show: false, duplicateCount: 0 });
-    setUploading(true);
     setMessage("");
     setUploadBanner(prev => ({ ...prev, show: false }));
 
-    const allUploaded: UploadResult[] = [];
-    const allReplaced: UploadResult[] = [];
-    const allFailed: UploadError[] = [];
+    const queued: QueuedFile[] = [];
     let skippedCount = 0;
     let totalBytes = 0;
 
-    // Upload each collection as a batch
-    for (let i = 0; i < collections.length; i++) {
-      const collection = collections[i];
-      setUploadProgress({
-        current: i + 1,
-        total: collections.length,
-        collectionCode: collection.collectionCode,
-      });
-
-      const newFiles: File[] = [];
-      const replaceFiles: File[] = [];
-
+    for (const collection of collections) {
       for (const letter of collection.letters) {
         for (const img of letter.images) {
           const file = img.originalFilename !== img.file.name
@@ -444,91 +443,51 @@ export default function UploadLetterPage() {
 
           if (img.isDuplicate) {
             if (duplicateStrategy === "replace") {
-              replaceFiles.push(file);
+              queued.push({ file, force: true });
+              totalBytes += file.size;
             } else {
               skippedCount++;
             }
           } else {
-            newFiles.push(file);
+            queued.push({ file, force: false });
+            totalBytes += file.size;
           }
-        }
-      }
-
-      // Upload new files (force=false)
-      if (newFiles.length > 0) {
-        newFiles.forEach(f => totalBytes += f.size);
-        try {
-          const response = await uploadFiles(newFiles, false);
-          allUploaded.push(...response.results);
-          if (response.errors) allFailed.push(...response.errors);
-        } catch (err) {
-          newFiles.forEach(f => {
-            allFailed.push({
-              filename: f.name,
-              error: err instanceof Error ? err.message : "Upload failed",
-            });
-          });
-        }
-      }
-
-      // Upload replace files (force=true)
-      if (replaceFiles.length > 0) {
-        replaceFiles.forEach(f => totalBytes += f.size);
-        try {
-          const response = await uploadFiles(replaceFiles, true);
-          allReplaced.push(...response.results);
-          if (response.errors) allFailed.push(...response.errors);
-        } catch (err) {
-          replaceFiles.forEach(f => {
-            allFailed.push({
-              filename: f.name,
-              error: err instanceof Error ? err.message : "Upload failed",
-            });
-          });
         }
       }
     }
 
-    setUploadProgress(null);
-    setUploading(false);
+    if (queued.length === 0) {
+      setMessage("No files to upload (all duplicates were skipped).");
+      return;
+    }
 
-    // Remove all categorized images from state
-    const uploadedFilenames = new Set([
-      ...allUploaded.map(r => r.filename),
-      ...allReplaced.map(r => r.filename),
-    ]);
+    // Hand off to the upload context — it chunks and processes in the background
+    startUpload(queued);
+
+    // Remove categorized images from local state immediately
+    const queuedNames = new Set(queued.map(q => q.file.name));
     setImages(prev => prev.filter(img => {
       if (!img.parsed) return true; // Keep uncategorized
-      if (uploadedFilenames.has(img.originalFilename)) return false;
+      if (queuedNames.has(img.originalFilename)) return false;
       if (img.isDuplicate) return false; // Remove skipped duplicates too
       return true;
     }));
 
     const excludedCount = uncategorizedImages.length;
 
-    // Show success banner
     setUploadBanner({
       show: true,
-      fileCount: allUploaded.length,
+      fileCount: queued.length,
       totalSize: formatFileSize(totalBytes),
       collectionCount: collections.length,
-      replacedCount: allReplaced.length,
+      replacedCount: queued.filter(q => q.force).length,
       skippedCount,
       excludedCount,
     });
 
-    // Auto-dismiss banner after 8 seconds
     setTimeout(() => {
       setUploadBanner(prev => ({ ...prev, show: false }));
     }, 8000);
-
-    // Update results - only show panel if there are failures
-    setUploadResults({
-      uploaded: allUploaded,
-      replaced: allReplaced,
-      failed: allFailed,
-      show: allFailed.length > 0,
-    });
   };
 
   const handleClearResults = () => {
@@ -797,11 +756,11 @@ export default function UploadLetterPage() {
         {images.length > 0 && (
           <Button
             icon="upload"
-            disabled={uploading}
+            disabled={isUploading}
             onClick={handleSubmit}
           >
-            {uploadProgress
-              ? `${uploadProgress.current}/${uploadProgress.total}`
+            {isUploading && job
+              ? `${job.completedFiles}/${job.totalFiles}`
               : "Upload"}
           </Button>
         )}

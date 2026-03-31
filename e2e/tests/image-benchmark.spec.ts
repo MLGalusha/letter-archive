@@ -69,7 +69,7 @@ async function measurePage(
 
   // Wait for network idle + extra settle time
   await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(500);
 
   // Collect LCP from PerformanceObserver
   const lcp = await page.evaluate(() => {

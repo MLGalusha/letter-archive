@@ -3,12 +3,15 @@ import { getLetterWithPages, updateTranscriptionStatus, updateLetterWorkflow, in
 import { getAbsoluteStoragePath } from '../services/storage.js';
 import { detectAndStoreLinesForPages } from '../services/line-finder.js';
 import { createLogger } from '../utils/logger.js';
-import { updateJobProgress, clearJobProgress } from '../services/processing-queue.js';
+import { updateJobProgress, clearJobProgress, shouldAbortProcessing } from '../services/processing-queue.js';
 import { isTranscribableType, getDocumentTypeFromCode } from '../services/letter/shared.js';
 import { db, letters } from '../db/index.js';
 import { eq, and, inArray } from 'drizzle-orm';
 
 const log = createLogger({ module: 'transcription-pipeline' });
+
+/** Max concurrent page transcriptions per letter */
+const PAGE_CONCURRENCY = 3;
 
 /**
  * Runs transcription for a letter or other transcribable document type.
@@ -67,49 +70,73 @@ export async function runTranscription(letterId: string): Promise<void> {
 
     if (letter.type === 'L') {
       // === LETTER TYPE: use standard transcription prompt ===
-      for (const page of pages) {
-        const pageStart = Date.now();
-        updateJobProgress(letterId, 'transcription', page.pageNumber - 1, pages.length, `Page ${page.pageNumber} of ${pages.length}`);
-        letterLog.debug(
-          { pageNumber: page.pageNumber, totalPages: pages.length },
-          'Transcribing page'
-        );
+      // Process pages in parallel batches for speed, with abort checks between batches
+      const results: (string | null)[] = new Array(pages.length).fill(null);
+      let completedCount = 0;
 
-        const absolutePath = getAbsoluteStoragePath(page.storagePath);
+      for (let batchStart = 0; batchStart < pages.length; batchStart += PAGE_CONCURRENCY) {
+        // Check for abort between batches
+        if (shouldAbortProcessing()) {
+          letterLog.info('Transcription aborted between page batches');
+          throw new Error('Processing aborted');
+        }
 
-        const result = await transcribeImage({
-          filePath: absolutePath,
-          letterId,
-          context: {
-            collectionCode: letter.collection.collectionCode,
-            dateRaw: letter.dateRaw,
-            pageNumber: page.pageNumber,
-            totalPages: pages.length,
-          },
-        });
+        const batch = pages.slice(batchStart, batchStart + PAGE_CONCURRENCY);
 
-        pageTranscriptions.push(result.text);
-        stubMode = result.isStub;
+        await Promise.all(batch.map(async (page) => {
+          const pageStart = Date.now();
+          letterLog.debug(
+            { pageNumber: page.pageNumber, totalPages: pages.length },
+            'Transcribing page'
+          );
 
-        updateJobProgress(letterId, 'transcription', page.pageNumber, pages.length, `Page ${page.pageNumber} of ${pages.length}`);
+          const absolutePath = getAbsoluteStoragePath(page.storagePath);
 
-        const pageDuration = Date.now() - pageStart;
-        letterLog.debug(
-          {
-            pageNumber: page.pageNumber,
-            textLength: result.text.length,
-            duration: pageDuration,
-            isStub: result.isStub,
-          },
-          'Page transcription completed'
-        );
+          const result = await transcribeImage({
+            filePath: absolutePath,
+            letterId,
+            context: {
+              collectionCode: letter.collection.collectionCode,
+              dateRaw: letter.dateRaw,
+              pageNumber: page.pageNumber,
+              totalPages: pages.length,
+            },
+          });
 
+          // Store at correct index to preserve page order
+          results[page.pageNumber - 1] = result.text;
+          stubMode = result.isStub;
+          completedCount++;
+
+          updateJobProgress(letterId, 'transcription', completedCount, pages.length, `${completedCount} of ${pages.length} pages`);
+
+          const pageDuration = Date.now() - pageStart;
+          letterLog.debug(
+            {
+              pageNumber: page.pageNumber,
+              textLength: result.text.length,
+              duration: pageDuration,
+              isStub: result.isStub,
+            },
+            'Page transcription completed'
+          );
+        }));
+      }
+
+      for (const text of results) {
+        if (text !== null) pageTranscriptions.push(text);
       }
     } else {
       // === NON-LETTER TYPE: use extra content transcription prompt ===
+      // Extra content processed sequentially (usually 1-2 pages, needs text-check first)
       const docType = getDocumentTypeFromCode(letter.type);
 
       for (const page of pages) {
+        if (shouldAbortProcessing()) {
+          letterLog.info('Extra content transcription aborted');
+          throw new Error('Processing aborted');
+        }
+
         const pageStart = Date.now();
         updateJobProgress(letterId, 'transcription', page.pageNumber - 1, pages.length, `Page ${page.pageNumber} of ${pages.length}`);
 

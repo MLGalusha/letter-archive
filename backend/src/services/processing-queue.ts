@@ -740,6 +740,14 @@ export function abortProcessing(): { message: string } {
   return { message: 'Processing aborted — batch will stop after current job finishes' };
 }
 
+/**
+ * Check whether the current processing batch should abort.
+ * Called by pipeline functions between page batches for responsive abort.
+ */
+export function shouldAbortProcessing(): boolean {
+  return processingState.shouldAbort;
+}
+
 // ============================================================================
 // QUEUE MANAGEMENT
 // ============================================================================

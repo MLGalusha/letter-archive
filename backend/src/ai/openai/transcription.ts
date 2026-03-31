@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import sharp from 'sharp';
 import { env, hasOpenAI } from '../../config/env.js';
 import {
   TRANSCRIPTION_SYSTEM_PROMPT,
@@ -13,6 +14,43 @@ import {
 import { logIfSlow, TIMING_THRESHOLDS } from '../../utils/logger.js';
 import { log, openai } from './client.js';
 import { logApiUsage } from '../../services/usage-tracking.js';
+
+/** Max width for images sent to OpenAI — keeps quality high for handwriting while reducing payload */
+const AI_IMAGE_MAX_WIDTH = 2000;
+
+/**
+ * Load and resize an image for OpenAI vision calls.
+ * Downscales to AI_IMAGE_MAX_WIDTH if wider, converts to JPEG for consistent compression.
+ */
+async function prepareImageForAI(filePath: string): Promise<{ base64: string; mimeType: string; sizeKb: number }> {
+  const imageBuffer = await readFile(filePath);
+  const metadata = await sharp(imageBuffer).metadata();
+  const needsResize = metadata.width && metadata.width > AI_IMAGE_MAX_WIDTH;
+
+  let outputBuffer: Buffer;
+  if (needsResize) {
+    outputBuffer = await sharp(imageBuffer)
+      .resize({ width: AI_IMAGE_MAX_WIDTH, withoutEnlargement: true })
+      .jpeg({ quality: 85, mozjpeg: true })
+      .toBuffer();
+  } else {
+    // Still re-encode to JPEG for consistent compression (unless already small)
+    const ext = filePath.toLowerCase().split('.').pop();
+    if (ext === 'png' || imageBuffer.length > 500_000) {
+      outputBuffer = await sharp(imageBuffer)
+        .jpeg({ quality: 85, mozjpeg: true })
+        .toBuffer();
+    } else {
+      outputBuffer = imageBuffer;
+    }
+  }
+
+  return {
+    base64: outputBuffer.toString('base64'),
+    mimeType: 'image/jpeg',
+    sizeKb: Math.round(outputBuffer.length / 1024),
+  };
+}
 
 export interface TranscribeImageParams {
   filePath: string;
@@ -51,14 +89,9 @@ export async function transcribeImage(
   const start = Date.now();
 
   try {
-    const imageBuffer = await readFile(params.filePath);
-    const base64Image = imageBuffer.toString('base64');
-    const imageSizeKb = Math.round(imageBuffer.length / 1024);
+    const { base64, mimeType, sizeKb } = await prepareImageForAI(params.filePath);
 
-    log.debug({ ...context, imageSizeKb }, 'Image loaded for transcription');
-
-    const ext = params.filePath.toLowerCase().split('.').pop();
-    const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+    log.debug({ ...context, imageSizeKb: sizeKb }, 'Image prepared for transcription');
 
     const response = await openai.chat.completions.create({
       model: env.OPENAI_MODEL,
@@ -70,7 +103,7 @@ export async function transcribeImage(
             { type: 'text', text: buildTranscriptionUserPrompt(params.context) },
             {
               type: 'image_url',
-              image_url: { url: `data:${mimeType};base64,${base64Image}` },
+              image_url: { url: `data:${mimeType};base64,${base64}` },
             },
           ],
         },
@@ -198,11 +231,7 @@ export async function checkExtraContentForText(
   const start = Date.now();
 
   try {
-    const imageBuffer = await readFile(params.filePath);
-    const base64Image = imageBuffer.toString('base64');
-
-    const ext = params.filePath.toLowerCase().split('.').pop();
-    const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+    const { base64, mimeType } = await prepareImageForAI(params.filePath);
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -214,7 +243,7 @@ export async function checkExtraContentForText(
             { type: 'text', text: buildExtraContentCheckPrompt({ documentType: params.documentType }) },
             {
               type: 'image_url',
-              image_url: { url: `data:${mimeType};base64,${base64Image}` },
+              image_url: { url: `data:${mimeType};base64,${base64}` },
             },
           ],
         },
@@ -352,14 +381,9 @@ File: ${params.filePath}
   const start = Date.now();
 
   try {
-    const imageBuffer = await readFile(params.filePath);
-    const base64Image = imageBuffer.toString('base64');
-    const imageSizeKb = Math.round(imageBuffer.length / 1024);
+    const { base64, mimeType, sizeKb } = await prepareImageForAI(params.filePath);
 
-    log.debug({ ...context, imageSizeKb }, 'Image loaded for extra content transcription');
-
-    const ext = params.filePath.toLowerCase().split('.').pop();
-    const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+    log.debug({ ...context, imageSizeKb: sizeKb }, 'Image prepared for extra content transcription');
 
     const response = await openai.chat.completions.create({
       model: env.OPENAI_MODEL,
@@ -378,7 +402,7 @@ File: ${params.filePath}
             },
             {
               type: 'image_url',
-              image_url: { url: `data:${mimeType};base64,${base64Image}` },
+              image_url: { url: `data:${mimeType};base64,${base64}` },
             },
           ],
         },
@@ -464,14 +488,9 @@ A historical photograph or visual image from the archive. ${contextNotes.join(' 
   const start = Date.now();
 
   try {
-    const imageBuffer = await readFile(params.filePath);
-    const base64Image = imageBuffer.toString('base64');
-    const imageSizeKb = Math.round(imageBuffer.length / 1024);
+    const { base64, mimeType, sizeKb } = await prepareImageForAI(params.filePath);
 
-    log.debug({ ...context, imageSizeKb }, 'Image loaded for photo description');
-
-    const ext = params.filePath.toLowerCase().split('.').pop();
-    const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+    log.debug({ ...context, imageSizeKb: sizeKb }, 'Image prepared for photo description');
 
     const response = await openai.chat.completions.create({
       model: env.OPENAI_MODEL,
@@ -493,7 +512,7 @@ A historical photograph or visual image from the archive. ${contextNotes.join(' 
             },
             {
               type: 'image_url',
-              image_url: { url: `data:${mimeType};base64,${base64Image}` },
+              image_url: { url: `data:${mimeType};base64,${base64}` },
             },
           ],
         },

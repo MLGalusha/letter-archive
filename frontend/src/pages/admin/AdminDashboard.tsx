@@ -956,11 +956,21 @@ export default function AdminDashboard() {
   ]);
 
 
+  const [pausePending, setPausePending] = useState(false);
+  const [abortPending, setAbortPending] = useState(false);
+
+  // Reset pending states when processing status changes
+  useEffect(() => {
+    if (processingStatus?.isPaused) setPausePending(false);
+    if (!processingStatus?.isRunning) { setPausePending(false); setAbortPending(false); }
+  }, [processingStatus?.isPaused, processingStatus?.isRunning]);
+
   const handlePauseProcessing = async () => {
+    setPausePending(true);
     try {
       await pauseProcessing();
-      showToast('Processing paused', 'info');
     } catch (err) {
+      setPausePending(false);
       console.error("Failed to pause processing:", err);
       showToast(err instanceof Error ? err.message : "Failed to pause processing", 'error');
     }
@@ -977,10 +987,11 @@ export default function AdminDashboard() {
   };
 
   const handleAbortProcessing = async () => {
+    setAbortPending(true);
     try {
       await abortProcessing();
-      showToast('Processing aborted', 'info');
     } catch (err) {
+      setAbortPending(false);
       console.error("Failed to abort processing:", err);
       showToast(err instanceof Error ? err.message : "Failed to abort processing", 'error');
     }
@@ -1653,12 +1664,20 @@ export default function AdminDashboard() {
                       Resume
                     </button>
                   ) : (
-                    <button onClick={handlePauseProcessing} className="toolbar-process-btn toolbar-process-pause">
-                      Pause
+                    <button
+                      onClick={handlePauseProcessing}
+                      className="toolbar-process-btn toolbar-process-pause"
+                      disabled={pausePending || abortPending}
+                    >
+                      {pausePending ? 'Pausing\u2026' : 'Pause'}
                     </button>
                   )}
-                  <button onClick={handleAbortProcessing} className="toolbar-process-btn toolbar-process-abort">
-                    Abort
+                  <button
+                    onClick={handleAbortProcessing}
+                    className="toolbar-process-btn toolbar-process-abort"
+                    disabled={abortPending}
+                  >
+                    {abortPending ? 'Aborting\u2026' : 'Abort'}
                   </button>
                 </div>
               ) : (

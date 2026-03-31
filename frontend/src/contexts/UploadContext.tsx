@@ -63,11 +63,17 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     // Group by force flag so we batch new and replace files separately
     const newFiles = queued.filter(f => !f.force);
     const replaceFiles = queued.filter(f => f.force);
-    const ordered = [...newFiles, ...replaceFiles];
+    const groups: { files: QueuedFile[]; force: boolean }[] = [];
+    for (let i = 0; i < newFiles.length; i += BATCH_SIZE) {
+      groups.push({ files: newFiles.slice(i, i + BATCH_SIZE), force: false });
+    }
+    for (let i = 0; i < replaceFiles.length; i += BATCH_SIZE) {
+      groups.push({ files: replaceFiles.slice(i, i + BATCH_SIZE), force: true });
+    }
 
-    for (let i = 0; i < ordered.length; i += BATCH_SIZE) {
-      const batch = ordered.slice(i, i + BATCH_SIZE);
-      const force = batch[0].force;
+    for (const group of groups) {
+      const batch = group.files;
+      const force = group.force;
       const batchFilenames = new Set(batch.map(f => f.file.name));
 
       // Mark batch as uploading

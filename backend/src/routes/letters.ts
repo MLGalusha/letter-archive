@@ -258,9 +258,24 @@ router.get('/letters', async (req, res, next) => {
     // Note: We fetch more than limit to account for filtering after grouping
     const results = await db.query.letters.findMany({
       where: and(...conditions),
+      columns: {
+        // Exclude large text/JSONB fields not needed for list view
+        transcriptionText: false,
+        entityExtractionJson: false,
+        metadataV2Json: false,
+        metadataJson: false,
+        aiNotes: false,
+        readingText: false,
+        extraContentTranscript: false,
+      },
       with: {
         collection: true,
         pages: {
+          columns: {
+            id: true,
+            pageNumber: true,
+            checksumSha256: true,
+          },
           orderBy: (p, { asc: pageAsc }) => [pageAsc(p.pageNumber)],
         },
       },

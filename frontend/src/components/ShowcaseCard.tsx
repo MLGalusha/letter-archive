@@ -48,7 +48,7 @@ export default function ShowcaseCard({ items, onNavigate }: ShowcaseCardProps) {
           <ProgressiveImage
             key={gi.imageId || idx}
             className="cd-highlight-img"
-            src={getImageUrl(gi.imageUrl, { width: 960 })}
+            src={getImageUrl(gi.imageUrl, { width: 640 })}
             thumbSrc={getImageUrl(gi.imageUrl, { width: 32 })}
             midSrc={getImageUrl(gi.imageUrl, { width: 320 })}
             alt={idx === index ? (gi.hook || gi.label) : ''}

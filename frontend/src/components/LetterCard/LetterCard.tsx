@@ -226,7 +226,7 @@ function LetterCard({
         {hasImage ? (
           <ProgressiveImage
             className="letter-card-image"
-            src={getImageUrl(card.imageUrl!, { width: 320 })}
+            src={getImageUrl(card.imageUrl!, { width: 240 })}
             thumbSrc={getImageUrl(card.imageUrl!, { width: 32 })}
             alt=""
             loading="lazy"

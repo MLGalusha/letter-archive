@@ -83,6 +83,7 @@ router.get('/images/:pageId', async (req, res, next) => {
 
     // Set headers
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Timing-Allow-Origin', '*');
     res.setHeader('X-Content-Type-Options', 'nosniff');
 
     if (requestedWidth) {

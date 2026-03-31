@@ -7,6 +7,7 @@ metadata:
     cloud.googleapis.com/location: REGION
   annotations:
     run.googleapis.com/launch-stage: BETA
+    run.googleapis.com/scalingMode: manual
     run.googleapis.com/manualInstanceCount: "1"
 spec:
   template:

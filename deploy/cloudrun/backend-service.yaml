@@ -24,8 +24,6 @@ spec:
           env:
             - name: NODE_ENV
               value: production
-            - name: PORT
-              value: "8080"
             - name: SITE_URL
               value: https://YOUR_DOMAIN
             - name: CORS_ORIGINS

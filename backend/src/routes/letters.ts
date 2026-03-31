@@ -803,223 +803,176 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
   const orderBy = buildArchiveSearchOrderBy(query);
   const offset = (query.page - 1) * query.limit;
 
-  const [
-    rowsResult,
-    formatsResult,
-    collectionsResult,
-    correspondentsResult,
-    placesResult,
-    yearsResult,
-    topicsResult,
-    tonesResult,
-    relationshipsResult,
-  ] =
-    await Promise.all([
-      db.execute(sql`
-        ${ctes}
-        , primary_page_counts AS (
-          SELECT
-            sg."collectionId",
-            sg."dateRaw",
-            sg."typeSequence",
-            COUNT(${letterPages.id})::int AS "primaryPageCount"
-          FROM scoped_groups sg
-          INNER JOIN letters l
-            ON l.collection_id = sg."collectionId"
-            AND l.date_raw = sg."dateRaw"
-            AND l.type_sequence = sg."typeSequence"
-            AND l.type = sg."primaryType"
-            AND l.visibility = 'PUBLISHED'
-          INNER JOIN letter_pages ON letter_pages.letter_id = l.id
-          GROUP BY sg."collectionId", sg."dateRaw", sg."typeSequence"
-        )
-        , display_pages AS (
-          SELECT DISTINCT ON (sg."collectionId", sg."dateRaw", sg."typeSequence")
-            sg."collectionId",
-            sg."dateRaw",
-            sg."typeSequence",
-            letter_pages.id AS "pageId",
-            letter_pages.checksum_sha256 AS "checksumSha256"
-          FROM scoped_groups sg
-          INNER JOIN letters l
-            ON l.collection_id = sg."collectionId"
-            AND l.date_raw = sg."dateRaw"
-            AND l.type_sequence = sg."typeSequence"
-            AND l.type = sg."primaryType"
-            AND l.visibility = 'PUBLISHED'
-          INNER JOIN letter_pages ON letter_pages.letter_id = l.id
-          ORDER BY
-            sg."collectionId",
-            sg."dateRaw",
-            sg."typeSequence",
-            letter_pages.page_number ASC
-        )
+  // Run main rows query and combined facets query in parallel (2 queries instead of 9)
+  // This evaluates the expensive CTE only twice instead of 9 times
+  const [rowsResult, facetsResult] = await Promise.all([
+    db.execute(sql`
+      ${ctes}
+      , primary_page_counts AS (
         SELECT
-          sg.id,
           sg."collectionId",
-          sg."collectionCode",
-          sg."collectionTitle",
           sg."dateRaw",
-          sg."createdAt",
-          sg."primaryType",
-          COALESCE(ppc."primaryPageCount", 0) AS "primaryPageCount",
-          sg.sender,
-          sg.recipient,
-          sg.location,
-          sg.hook,
-          sg."metadataVerified",
-          dp."pageId",
-          dp."checksumSha256",
-          sg.formats,
-          sg.senders,
-          sg.recipients,
-          sg.places,
-          sg.hooks,
-          sg.summaries,
-          sg.topics,
-          sg.tones,
-          sg.relationships,
-          sg."photoDescriptions",
-          COUNT(*) OVER()::int AS "totalCount"
+          sg."typeSequence",
+          COUNT(${letterPages.id})::int AS "primaryPageCount"
         FROM scoped_groups sg
-        LEFT JOIN primary_page_counts ppc
-          ON ppc."collectionId" = sg."collectionId"
-          AND ppc."dateRaw" = sg."dateRaw"
-          AND ppc."typeSequence" = sg."typeSequence"
-        LEFT JOIN display_pages dp
-          ON dp."collectionId" = sg."collectionId"
-          AND dp."dateRaw" = sg."dateRaw"
-          AND dp."typeSequence" = sg."typeSequence"
-        ORDER BY ${orderBy}
-        LIMIT ${query.limit}
-        OFFSET ${offset}
-      `),
-      db.execute(sql`
-        ${ctes}
-        SELECT format AS value, COUNT(*)::int AS count
+        INNER JOIN letters l
+          ON l.collection_id = sg."collectionId"
+          AND l.date_raw = sg."dateRaw"
+          AND l.type_sequence = sg."typeSequence"
+          AND l.type = sg."primaryType"
+          AND l.visibility = 'PUBLISHED'
+        INNER JOIN letter_pages ON letter_pages.letter_id = l.id
+        GROUP BY sg."collectionId", sg."dateRaw", sg."typeSequence"
+      )
+      , display_pages AS (
+        SELECT DISTINCT ON (sg."collectionId", sg."dateRaw", sg."typeSequence")
+          sg."collectionId",
+          sg."dateRaw",
+          sg."typeSequence",
+          letter_pages.id AS "pageId",
+          letter_pages.checksum_sha256 AS "checksumSha256"
+        FROM scoped_groups sg
+        INNER JOIN letters l
+          ON l.collection_id = sg."collectionId"
+          AND l.date_raw = sg."dateRaw"
+          AND l.type_sequence = sg."typeSequence"
+          AND l.type = sg."primaryType"
+          AND l.visibility = 'PUBLISHED'
+        INNER JOIN letter_pages ON letter_pages.letter_id = l.id
+        ORDER BY
+          sg."collectionId",
+          sg."dateRaw",
+          sg."typeSequence",
+          letter_pages.page_number ASC
+      )
+      SELECT
+        sg.id,
+        sg."collectionId",
+        sg."collectionCode",
+        sg."collectionTitle",
+        sg."dateRaw",
+        sg."createdAt",
+        sg."primaryType",
+        COALESCE(ppc."primaryPageCount", 0) AS "primaryPageCount",
+        sg.sender,
+        sg.recipient,
+        sg.location,
+        sg.hook,
+        sg."metadataVerified",
+        dp."pageId",
+        dp."checksumSha256",
+        sg.formats,
+        sg.senders,
+        sg.recipients,
+        sg.places,
+        sg.hooks,
+        sg.summaries,
+        sg.topics,
+        sg.tones,
+        sg.relationships,
+        sg."photoDescriptions",
+        COUNT(*) OVER()::int AS "totalCount"
+      FROM scoped_groups sg
+      LEFT JOIN primary_page_counts ppc
+        ON ppc."collectionId" = sg."collectionId"
+        AND ppc."dateRaw" = sg."dateRaw"
+        AND ppc."typeSequence" = sg."typeSequence"
+      LEFT JOIN display_pages dp
+        ON dp."collectionId" = sg."collectionId"
+        AND dp."dateRaw" = sg."dateRaw"
+        AND dp."typeSequence" = sg."typeSequence"
+      ORDER BY ${orderBy}
+      LIMIT ${query.limit}
+      OFFSET ${offset}
+    `),
+    // Combined facets query — evaluates the CTE once for all 8 facets
+    db.execute(sql`
+      ${ctes}
+      SELECT 'formats' AS facet, value, label, count FROM (
+        SELECT format AS value, NULL AS label, COUNT(*)::int AS count
         FROM (
-          SELECT DISTINCT
-            bsg."collectionId",
-            bsg."dateRaw",
-            bsg."typeSequence",
-            UNNEST(bsg.formats) AS format
+          SELECT DISTINCT bsg."collectionId", bsg."dateRaw", bsg."typeSequence", UNNEST(bsg.formats) AS format
           FROM base_scoped_groups bsg
-        ) grouped_formats
-        GROUP BY format
-        ORDER BY COUNT(*) DESC, format ASC
-        LIMIT 6
-      `),
-      db.execute(sql`
-        ${ctes}
-        SELECT
-          sg."collectionCode" AS value,
+        ) gf
+        GROUP BY format ORDER BY count DESC, format ASC LIMIT 6
+      ) f
+      UNION ALL
+      SELECT 'collections' AS facet, value, label, count FROM (
+        SELECT sg."collectionCode" AS value,
           COALESCE(NULLIF(sg."collectionTitle", ''), sg."collectionCode") AS label,
           COUNT(*)::int AS count
         FROM scoped_groups sg
         GROUP BY sg."collectionCode", sg."collectionTitle"
-        ORDER BY COUNT(*) DESC, sg."collectionCode" ASC
-        LIMIT 8
-      `),
-      db.execute(sql`
-        ${ctes}
-        SELECT value, COUNT(*)::int AS count
-        FROM (
-          SELECT DISTINCT
-            sg."collectionId",
-            sg."dateRaw",
-            sg."typeSequence",
-            person_name AS value
+        ORDER BY count DESC, sg."collectionCode" ASC LIMIT 8
+      ) c
+      UNION ALL
+      SELECT 'correspondents' AS facet, value, NULL AS label, count FROM (
+        SELECT value, COUNT(*)::int AS count FROM (
+          SELECT DISTINCT sg."collectionId", sg."dateRaw", sg."typeSequence", person_name AS value
           FROM scoped_groups sg
-          CROSS JOIN LATERAL UNNEST(
-            COALESCE(sg.senders, ARRAY[]::text[]) || COALESCE(sg.recipients, ARRAY[]::text[])
-          ) AS person_name
+          CROSS JOIN LATERAL UNNEST(COALESCE(sg.senders, ARRAY[]::text[]) || COALESCE(sg.recipients, ARRAY[]::text[])) AS person_name
           WHERE person_name IS NOT NULL AND person_name <> ''
-        ) grouped_people
-        GROUP BY value
-        ORDER BY COUNT(*) DESC, value ASC
-        LIMIT 8
-      `),
-      db.execute(sql`
-        ${ctes}
-        SELECT value, COUNT(*)::int AS count
-        FROM (
-          SELECT DISTINCT
-            sg."collectionId",
-            sg."dateRaw",
-            sg."typeSequence",
-            place_name AS value
+        ) gp GROUP BY value ORDER BY count DESC, value ASC LIMIT 8
+      ) p
+      UNION ALL
+      SELECT 'places' AS facet, value, NULL AS label, count FROM (
+        SELECT value, COUNT(*)::int AS count FROM (
+          SELECT DISTINCT sg."collectionId", sg."dateRaw", sg."typeSequence", place_name AS value
           FROM scoped_groups sg
           CROSS JOIN LATERAL UNNEST(COALESCE(sg.places, ARRAY[]::text[])) AS place_name
           WHERE place_name IS NOT NULL AND place_name <> ''
-        ) grouped_places
-        GROUP BY value
-        ORDER BY COUNT(*) DESC, value ASC
-        LIMIT 8
-      `),
-      db.execute(sql`
-        ${ctes}
+        ) gpl GROUP BY value ORDER BY count DESC, value ASC LIMIT 8
+      ) pl
+      UNION ALL
+      SELECT 'years' AS facet, value::text, NULL AS label, count FROM (
         SELECT SUBSTRING("dateRaw", 1, 4)::int AS value, COUNT(*)::int AS count
         FROM scoped_groups
         WHERE SUBSTRING("dateRaw", 1, 4) ~ '^[0-9]{4}$'
         GROUP BY SUBSTRING("dateRaw", 1, 4)
-        ORDER BY SUBSTRING("dateRaw", 1, 4) DESC
-        LIMIT 8
-      `),
-      db.execute(sql`
-        ${ctes}
-        SELECT value, COUNT(*)::int AS count
-        FROM (
-          SELECT DISTINCT
-            sg."collectionId",
-            sg."dateRaw",
-            sg."typeSequence",
-            topic_name AS value
+        ORDER BY SUBSTRING("dateRaw", 1, 4) DESC LIMIT 8
+      ) y
+      UNION ALL
+      SELECT 'topics' AS facet, value, NULL AS label, count FROM (
+        SELECT value, COUNT(*)::int AS count FROM (
+          SELECT DISTINCT sg."collectionId", sg."dateRaw", sg."typeSequence", topic_name AS value
           FROM scoped_groups sg
           CROSS JOIN LATERAL UNNEST(COALESCE(sg.topics, ARRAY[]::text[])) AS topic_name
           WHERE topic_name IS NOT NULL AND topic_name <> ''
-        ) grouped_topics
-        GROUP BY value
-        ORDER BY COUNT(*) DESC, value ASC
-        LIMIT 10
-      `),
-      db.execute(sql`
-        ${ctes}
-        SELECT value, COUNT(*)::int AS count
-        FROM (
-          SELECT DISTINCT
-            sg."collectionId",
-            sg."dateRaw",
-            sg."typeSequence",
-            tone_name AS value
+        ) gt GROUP BY value ORDER BY count DESC, value ASC LIMIT 10
+      ) t
+      UNION ALL
+      SELECT 'tones' AS facet, value, NULL AS label, count FROM (
+        SELECT value, COUNT(*)::int AS count FROM (
+          SELECT DISTINCT sg."collectionId", sg."dateRaw", sg."typeSequence", tone_name AS value
           FROM scoped_groups sg
           CROSS JOIN LATERAL UNNEST(COALESCE(sg.tones, ARRAY[]::text[])) AS tone_name
           WHERE tone_name IS NOT NULL AND tone_name <> ''
-        ) grouped_tones
-        GROUP BY value
-        ORDER BY COUNT(*) DESC, value ASC
-        LIMIT 8
-      `),
-      db.execute(sql`
-        ${ctes}
-        SELECT value, COUNT(*)::int AS count
-        FROM (
-          SELECT DISTINCT
-            sg."collectionId",
-            sg."dateRaw",
-            sg."typeSequence",
-            relationship_name AS value
+        ) gtn GROUP BY value ORDER BY count DESC, value ASC LIMIT 8
+      ) tn
+      UNION ALL
+      SELECT 'relationships' AS facet, value, NULL AS label, count FROM (
+        SELECT value, COUNT(*)::int AS count FROM (
+          SELECT DISTINCT sg."collectionId", sg."dateRaw", sg."typeSequence", relationship_name AS value
           FROM scoped_groups sg
           CROSS JOIN LATERAL UNNEST(COALESCE(sg.relationships, ARRAY[]::text[])) AS relationship_name
           WHERE relationship_name IS NOT NULL AND relationship_name <> ''
-        ) grouped_relationships
-        GROUP BY value
-        ORDER BY COUNT(*) DESC, value ASC
-        LIMIT 8
-      `),
-    ]);
+        ) gr GROUP BY value ORDER BY count DESC, value ASC LIMIT 8
+      ) r
+    `),
+  ]);
 
   const rows = getRows<ArchiveSearchRow & { totalCount?: number }>(rowsResult);
   const total = Number(rows[0]?.totalCount || 0);
+
+  // Split combined facets result by facet type
+  type FacetRow = { facet: string; value: string | number | null; label: string | null; count: number | string | bigint };
+  const allFacets = getRows<FacetRow>(facetsResult);
+  const facetsByType = new Map<string, FacetRow[]>();
+  for (const row of allFacets) {
+    const list = facetsByType.get(row.facet) || [];
+    list.push(row);
+    facetsByType.set(row.facet, list);
+  }
 
   return {
     letters: rows.map((row) => transformArchiveSearchRow(row, query)),
@@ -1027,14 +980,14 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
     limit: query.limit,
     total,
     facets: {
-      formats: mapArchiveFormatFacets(getRows<ArchiveFacetRow>(formatsResult)),
-      collections: mapArchiveCollectionFacets(getRows<ArchiveLabeledFacetRow>(collectionsResult)),
-      correspondents: mapArchiveTextFacets(getRows<ArchiveFacetRow>(correspondentsResult)),
-      places: mapArchiveTextFacets(getRows<ArchiveFacetRow>(placesResult)),
-      years: mapArchiveYearFacets(getRows<ArchiveFacetRow>(yearsResult)),
-      topics: mapArchiveTextFacets(getRows<ArchiveFacetRow>(topicsResult)),
-      tones: mapArchiveTextFacets(getRows<ArchiveFacetRow>(tonesResult)),
-      relationships: mapArchiveTextFacets(getRows<ArchiveFacetRow>(relationshipsResult)),
+      formats: mapArchiveFormatFacets(facetsByType.get('formats') || []),
+      collections: mapArchiveCollectionFacets((facetsByType.get('collections') || []) as unknown as ArchiveLabeledFacetRow[]),
+      correspondents: mapArchiveTextFacets(facetsByType.get('correspondents') || []),
+      places: mapArchiveTextFacets(facetsByType.get('places') || []),
+      years: mapArchiveYearFacets(facetsByType.get('years') || []),
+      topics: mapArchiveTextFacets(facetsByType.get('topics') || []),
+      tones: mapArchiveTextFacets(facetsByType.get('tones') || []),
+      relationships: mapArchiveTextFacets(facetsByType.get('relationships') || []),
     },
   };
 }

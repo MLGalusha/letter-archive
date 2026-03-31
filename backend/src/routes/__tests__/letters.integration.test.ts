@@ -519,14 +519,16 @@ describe('letters route integration', () => {
         totalCount: 1,
       },
     ])
-      .mockResolvedValueOnce([{ value: 'letter', count: 1 }])
-      .mockResolvedValueOnce([{ value: '009', label: 'Collection Nine', count: 1 }])
-      .mockResolvedValueOnce([{ value: 'Jimmie', count: 1 }])
-      .mockResolvedValueOnce([{ value: 'Overland Park, Kans.', count: 1 }])
-      .mockResolvedValueOnce([{ value: 1947, count: 1 }])
-      .mockResolvedValueOnce([{ value: 'family/marriage', count: 1 }])
-      .mockResolvedValueOnce([{ value: 'hopeful', count: 1 }])
-      .mockResolvedValueOnce([{ value: 'romantic-partner', count: 1 }]);
+      .mockResolvedValueOnce([
+        { facet: 'formats', value: 'letter', label: null, count: 1 },
+        { facet: 'collections', value: '009', label: 'Collection Nine', count: 1 },
+        { facet: 'correspondents', value: 'Jimmie', label: null, count: 1 },
+        { facet: 'places', value: 'Overland Park, Kans.', label: null, count: 1 },
+        { facet: 'years', value: '1947', label: null, count: 1 },
+        { facet: 'topics', value: 'family/marriage', label: null, count: 1 },
+        { facet: 'tones', value: 'hopeful', label: null, count: 1 },
+        { facet: 'relationships', value: 'romantic-partner', label: null, count: 1 },
+      ]);
 
     const response = await invokeRouter(lettersRouter, {
       method: 'GET',
@@ -625,18 +627,11 @@ describe('letters route integration', () => {
         ],
       },
     });
-    expect(executeMock).toHaveBeenCalledTimes(9);
+    expect(executeMock).toHaveBeenCalledTimes(2);
   });
 
   it('accepts repeated format filters on archive search', async () => {
     executeMock
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
@@ -657,7 +652,7 @@ describe('letters route integration', () => {
       total: 0,
       limit: 5,
     });
-    expect(executeMock).toHaveBeenCalledTimes(9);
+    expect(executeMock).toHaveBeenCalledTimes(2);
   });
 
   it('centers long search previews around the visible match', async () => {
@@ -692,14 +687,16 @@ describe('letters route integration', () => {
           totalCount: 1,
         },
       ])
-      .mockResolvedValueOnce([{ value: 'letter', count: 1 }])
-      .mockResolvedValueOnce([{ value: '009', label: 'Collection Nine', count: 1 }])
-      .mockResolvedValueOnce([{ value: 'Jimmie', count: 1 }])
-      .mockResolvedValueOnce([{ value: 'Overland Park, Kans.', count: 1 }])
-      .mockResolvedValueOnce([{ value: 1947, count: 1 }])
-      .mockResolvedValueOnce([{ value: 'family/marriage', count: 1 }])
-      .mockResolvedValueOnce([{ value: 'hopeful', count: 1 }])
-      .mockResolvedValueOnce([{ value: 'romantic-partner', count: 1 }]);
+      .mockResolvedValueOnce([
+        { facet: 'formats', value: 'letter', label: null, count: 1 },
+        { facet: 'collections', value: '009', label: 'Collection Nine', count: 1 },
+        { facet: 'correspondents', value: 'Jimmie', label: null, count: 1 },
+        { facet: 'places', value: 'Overland Park, Kans.', label: null, count: 1 },
+        { facet: 'years', value: '1947', label: null, count: 1 },
+        { facet: 'topics', value: 'family/marriage', label: null, count: 1 },
+        { facet: 'tones', value: 'hopeful', label: null, count: 1 },
+        { facet: 'relationships', value: 'romantic-partner', label: null, count: 1 },
+      ]);
 
     const response = await invokeRouter(lettersRouter, {
       method: 'GET',

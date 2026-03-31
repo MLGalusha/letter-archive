@@ -64,7 +64,16 @@ export async function buildLetterUpdates(
     if (updates.visibility === 'PUBLISHED') {
       dbUpdates.reviewedAt = new Date();
       dbUpdates.reviewedBy = userId;
+      // Auto-set content publish flags based on verification status
+      dbUpdates.transcriptPublished = existingLetter.transcriptStatus === 'VERIFIED';
+      dbUpdates.metadataPublished = existingLetter.metadataContentStatus === 'VERIFIED';
     }
+  }
+  if (updates.transcriptPublished !== undefined) {
+    dbUpdates.transcriptPublished = updates.transcriptPublished;
+  }
+  if (updates.metadataPublished !== undefined) {
+    dbUpdates.metadataPublished = updates.metadataPublished;
   }
 
   if (updates.transcriptionText !== undefined) {

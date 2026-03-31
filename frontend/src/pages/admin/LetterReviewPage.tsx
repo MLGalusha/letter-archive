@@ -537,6 +537,27 @@ export default function LetterReviewPage() {
     }
   }, [letter, letterId, showToast]);
 
+  const handleContentPublishToggle = useCallback(async (
+    field: 'transcriptPublished' | 'metadataPublished',
+    value: boolean,
+  ) => {
+    if (!letterId || !letter) return;
+    setSaving(true);
+    try {
+      const updated = await updateLetter(letterId, { [field]: value });
+      setLetter(updated);
+      const label = field === 'transcriptPublished' ? 'Transcript' : 'Metadata';
+      showToast(`${label} ${value ? 'published' : 'hidden'}`, 'success');
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : 'Failed to update content visibility',
+        'error',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [letter, letterId, showToast]);
+
   const handleConfirmTranscript = useCallback(() => {
     if (!letterId) return;
     setExtractionSender(sender || "");
@@ -1341,6 +1362,48 @@ export default function LetterReviewPage() {
                   </button>
                 </div>
               </div>
+              {letter.visibility === "PUBLISHED" && !showPhotoDescriptionSection && (
+                <>
+                  <div className="status-item">
+                    <span className="status-label">Transcript</span>
+                    <div className="visibility-toggle">
+                      <button
+                        className={`toggle-btn ${!letter.transcriptPublished ? "active hidden" : ""}`}
+                        onClick={() => handleContentPublishToggle("transcriptPublished", false)}
+                        disabled={saving}
+                      >
+                        {!letter.transcriptPublished ? "Hidden" : "Hide"}
+                      </button>
+                      <button
+                        className={`toggle-btn ${letter.transcriptPublished ? "active published" : ""}`}
+                        onClick={() => handleContentPublishToggle("transcriptPublished", true)}
+                        disabled={saving}
+                      >
+                        {letter.transcriptPublished ? "Published" : "Publish"}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="status-item">
+                    <span className="status-label">Metadata</span>
+                    <div className="visibility-toggle">
+                      <button
+                        className={`toggle-btn ${!letter.metadataPublished ? "active hidden" : ""}`}
+                        onClick={() => handleContentPublishToggle("metadataPublished", false)}
+                        disabled={saving}
+                      >
+                        {!letter.metadataPublished ? "Hidden" : "Hide"}
+                      </button>
+                      <button
+                        className={`toggle-btn ${letter.metadataPublished ? "active published" : ""}`}
+                        onClick={() => handleContentPublishToggle("metadataPublished", true)}
+                        disabled={saving}
+                      >
+                        {letter.metadataPublished ? "Published" : "Publish"}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Transcription Editor - only shown when letter has letter-type images */}

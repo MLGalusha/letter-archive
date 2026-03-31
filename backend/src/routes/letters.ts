@@ -15,8 +15,55 @@ import {
 } from '../dto/index.js';
 import { getRows } from '../services/letter-queries.js';
 import { logIfSlow, TIMING_THRESHOLDS } from '../utils/logger.js';
+import type { FrontendLetter } from '../dto/letter.dto.js';
 
 const router = Router();
+
+// Photo-only types where photoDescription is always visible (no content toggles)
+const PHOTO_ONLY_TYPES = new Set(['photo']);
+
+/**
+ * Strips unpublished transcript/metadata content from a letter DTO
+ * for public-facing responses. Photo-only records are exempt.
+ */
+function stripUnpublishedContent(dto: FrontendLetter): FrontendLetter {
+  // Guard: if publish flags aren't present, return as-is
+  if (dto.transcriptPublished === undefined && dto.metadataPublished === undefined) return dto;
+
+  const images = dto.images ?? [];
+  const primaryType = images[0]?.type;
+  const isPhotoOnly = primaryType && PHOTO_ONLY_TYPES.has(primaryType) &&
+    images.every((img) => img.type === 'photo');
+
+  if (isPhotoOnly) return dto;
+
+  const result = { ...dto };
+
+  if (!dto.transcriptPublished && dto.transcript) {
+    result.transcript = { pages: [], fullText: '', verified: dto.transcript.verified };
+    result.extraContentTranscript = undefined;
+    result.extraContentItems = undefined;
+    result.readingText = undefined;
+  }
+
+  if (!dto.metadataPublished && dto.metadata) {
+    result.metadata = {
+      ...dto.metadata,
+      sender: undefined,
+      recipient: undefined,
+      location: undefined,
+      hook: undefined,
+      description: undefined,
+      tags: undefined,
+      emotionalTone: undefined,
+      senderRecipientRelationship: undefined,
+      primaryTopics: undefined,
+      notableQuotes: undefined,
+    };
+  }
+
+  return result;
+}
 
 const MEDIA_COUNT_LABELS = {
   letter: ['page', 'pages'],
@@ -48,6 +95,8 @@ type SummaryLetterWithRelations = {
   extraContentTranscript: string | null;
   photoDescription: string | null;
   metadataContentStatus: LetterWithRelations['metadataContentStatus'];
+  transcriptPublished: boolean;
+  metadataPublished: boolean;
   collection: {
     title: string | null;
     collectionCode: string;
@@ -338,6 +387,8 @@ router.get('/letters/summaries', async (req, res, next) => {
         extraContentTranscript: true,
         photoDescription: true,
         metadataContentStatus: true,
+        transcriptPublished: true,
+        metadataPublished: true,
       },
       with: {
         collection: {
@@ -486,7 +537,8 @@ router.get('/letters/:letterId', async (req, res, next) => {
     const relatedItems = related as LetterWithRelations[];
 
     // Transform to frontend-compatible format, including related items
-    res.json(transformLetterWithRelatedToDTO(letter as LetterWithRelations, relatedItems));
+    const dto = transformLetterWithRelatedToDTO(letter as LetterWithRelations, relatedItems);
+    res.json(stripUnpublishedContent(dto));
   } catch (error) {
     next(error);
   }
@@ -656,6 +708,10 @@ function transformLetterSummary(
   const primaryCount = letter.pages.length;
   const primaryPage = letter.pages[0];
 
+  // Photo-only records always show all content
+  const isPhotoOnly = primaryType === 'photo';
+  const showMetadata = isPhotoOnly || letter.metadataPublished;
+
   return {
     id: letter.id,
     title: generateTitle(letter as never, letter.collection as never),
@@ -666,14 +722,14 @@ function transformLetterSummary(
     primaryChip: primaryCount > 0
       ? `${primaryCount} ${primaryCount === 1 ? singular : plural}`
       : undefined,
-    sender: letter.sender || undefined,
-    recipient: letter.recipient || undefined,
+    sender: showMetadata ? (letter.sender || undefined) : undefined,
+    recipient: showMetadata ? (letter.recipient || undefined) : undefined,
     collectionCode: letter.collection.collectionCode,
     createdAt: toIsoDateString(letter.createdAt),
     date: formatLetterDate(letter as never),
     dateRaw: letter.dateRaw,
-    hook: letter.hook || letter.photoDescription || undefined,
-    location: letter.locationWritten || undefined,
+    hook: showMetadata ? (letter.hook || letter.photoDescription || undefined) : (isPhotoOnly ? (letter.photoDescription || undefined) : undefined),
+    location: showMetadata ? (letter.locationWritten || undefined) : undefined,
     verified: letter.metadataContentStatus === 'VERIFIED',
     searchText: buildShelfSearchText(letter, relatedItems),
   };

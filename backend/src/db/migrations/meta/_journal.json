@@ -260,6 +260,13 @@
       "when": 1775731200000,
       "tag": "0036_admin_access_controls",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1775817600000,
+      "tag": "0037_content_publish_flags",
+      "breakpoints": true
     }
   ]
 }

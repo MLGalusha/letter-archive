@@ -70,6 +70,8 @@ function makeLetter(overrides: Partial<Letter> = {}): Letter {
     status: 'needs_review',
     workflowState: 'TRANSCRIBED',
     visibility: 'HIDDEN',
+    transcriptPublished: false,
+    metadataPublished: false,
     transcriptStatus: 'AI_DRAFT',
     metadataContentStatus: 'EMPTY',
     extraContentStatus: 'EMPTY',

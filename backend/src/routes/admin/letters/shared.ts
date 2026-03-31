@@ -27,6 +27,8 @@ export const updateLetterSchema = z.object({
   extractedDate: z.string().nullable().optional(),
   tags: z.array(z.string()).nullable().optional(),
   visibility: z.enum(['PUBLISHED', 'HIDDEN']).optional(),
+  transcriptPublished: z.boolean().optional(),
+  metadataPublished: z.boolean().optional(),
   notes: z.string().nullable().optional(),
   readingText: z.string().nullable().optional(),
 });

@@ -44,3 +44,13 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkUpdate
 export async function bulkUpdateFields(updates: BulkFieldUpdate[]): Promise<BulkUpdateResponse> {
   return apiPatch<BulkUpdateResponse>("/admin/letters/bulk/update-fields", { updates });
 }
+
+export async function bulkUpdateContentVisibility(
+  letterIds: string[],
+  updates: { transcriptPublished?: boolean; metadataPublished?: boolean },
+): Promise<{ updated: number }> {
+  return apiPatch<{ updated: number }>("/admin/letters/bulk/content-visibility", {
+    letterIds,
+    ...updates,
+  });
+}

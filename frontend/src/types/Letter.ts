@@ -267,6 +267,8 @@ export interface Letter {
   status: LetterStatus;
   workflowState: WorkflowState;
   visibility: VisibilityState;
+  transcriptPublished: boolean;
+  metadataPublished: boolean;
   // Two-track content status system
   transcriptStatus: ContentStatus;
   metadataContentStatus: ContentStatus;

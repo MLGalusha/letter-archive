@@ -130,6 +130,8 @@ export interface UpdateLetterInput {
   extractedDate?: string | null;
   tags?: string[] | null;
   visibility?: 'PUBLISHED' | 'HIDDEN';
+  transcriptPublished?: boolean;
+  metadataPublished?: boolean;
   notes?: string | null;
   readingText?: string | null;
 }

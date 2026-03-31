@@ -37,6 +37,8 @@ function makeLetter(params: {
     status: "uploaded",
     workflowState: "UPLOADED",
     visibility: "HIDDEN",
+    transcriptPublished: false,
+    metadataPublished: false,
     transcriptStatus: "EMPTY",
     metadataContentStatus: "EMPTY",
     extraContentStatus: "EMPTY",

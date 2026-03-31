@@ -150,6 +150,8 @@ export interface FrontendLetter {
   status: FrontendLetterStatus;
   workflowState: WorkflowState;
   visibility: VisibilityState;
+  transcriptPublished: boolean;
+  metadataPublished: boolean;
   // Two-track content status system
   transcriptStatus: ContentStatus;
   metadataContentStatus: ContentStatus;
@@ -472,6 +474,8 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
     status: mapWorkflowVisibilityToStatus(letter.workflow, letter.visibility),
     workflowState: letter.workflow,
     visibility: letter.visibility,
+    transcriptPublished: letter.transcriptPublished,
+    metadataPublished: letter.metadataPublished,
     // Two-track content status
     transcriptStatus: letter.transcriptStatus,
     metadataContentStatus: letter.metadataContentStatus,

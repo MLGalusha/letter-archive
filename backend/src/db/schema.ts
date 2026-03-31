@@ -178,6 +178,8 @@ export const letters = pgTable(
     // Pipeline + visibility (legacy workflow kept for backward compat)
     workflow: workflowStateEnum('workflow').notNull().default('UPLOADED'),
     visibility: visibilityStateEnum('visibility').notNull().default('HIDDEN'),
+    transcriptPublished: boolean('transcript_published').notNull().default(false),
+    metadataPublished: boolean('metadata_published').notNull().default(false),
 
     // Two-track content status system (replaces workflow)
     transcriptStatus: contentStatusEnum('transcript_status').notNull().default('EMPTY'),

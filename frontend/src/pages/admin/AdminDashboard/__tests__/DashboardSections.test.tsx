@@ -16,6 +16,8 @@ function makeLetter(): Letter {
     status: "uploaded",
     workflowState: "UPLOADED",
     visibility: "HIDDEN",
+    transcriptPublished: false,
+    metadataPublished: false,
     transcriptStatus: "AI_DRAFT",
     metadataContentStatus: "AI_DRAFT",
     extraContentStatus: "EMPTY",

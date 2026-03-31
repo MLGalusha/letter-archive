@@ -12,6 +12,8 @@ function buildLetter(overrides: Partial<Letter> = {}): Letter {
     status: overrides.status || "published",
     workflowState: overrides.workflowState || "REVIEWED",
     visibility: overrides.visibility || "PUBLISHED",
+    transcriptPublished: overrides.transcriptPublished ?? false,
+    metadataPublished: overrides.metadataPublished ?? false,
     transcriptStatus: overrides.transcriptStatus || "VERIFIED",
     metadataContentStatus: overrides.metadataContentStatus || "VERIFIED",
     extraContentStatus: overrides.extraContentStatus || "EMPTY",

@@ -18,6 +18,7 @@ import {
   bulkTranscribe,
   bulkExtractMetadata,
   bulkUpdateFields,
+  bulkUpdateContentVisibility,
   type ProcessingStatus,
 } from "../../api/admin";
 import { useToast } from "../../contexts/ToastContext";
@@ -729,6 +730,29 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error("Failed to hide:", err);
       showToast(err instanceof Error ? err.message : "Failed to hide letters", 'error');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkContentVisibility = async (
+    field: 'transcriptPublished' | 'metadataPublished',
+    value: boolean,
+  ) => {
+    if (selectedIds.size === 0) return;
+    setBulkActionLoading(true);
+    const count = selectedIds.size;
+    const label = field === 'transcriptPublished' ? 'transcript' : 'metadata';
+    try {
+      await bulkUpdateContentVisibility(Array.from(selectedIds), { [field]: value });
+      showToast(
+        `${value ? 'Published' : 'Hid'} ${label} for ${count} letter${count === 1 ? '' : 's'}`,
+        'success',
+      );
+      await fetchLetters();
+    } catch (err) {
+      console.error(`Failed to update ${label} visibility:`, err);
+      showToast(err instanceof Error ? err.message : `Failed to update ${label} visibility`, 'error');
     } finally {
       setBulkActionLoading(false);
     }
@@ -1679,6 +1703,23 @@ export default function AdminDashboard() {
                   disabled={selectedIds.size === 0 || bulkActionLoading}
                 >
                   Hide
+                </button>
+              </div>
+              <div className="toolbar-divider" />
+              <div className="toolbar-visibility-actions">
+                <button
+                  className="toolbar-process-btn"
+                  onClick={() => handleBulkContentVisibility('transcriptPublished', true)}
+                  disabled={selectedIds.size === 0 || bulkActionLoading}
+                >
+                  Publish Transcripts
+                </button>
+                <button
+                  className="toolbar-process-btn"
+                  onClick={() => handleBulkContentVisibility('metadataPublished', true)}
+                  disabled={selectedIds.size === 0 || bulkActionLoading}
+                >
+                  Publish Metadata
                 </button>
               </div>
               <div className="toolbar-divider" />

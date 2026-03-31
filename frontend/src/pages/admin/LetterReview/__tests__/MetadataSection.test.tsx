@@ -14,6 +14,8 @@ const buildLetter = (overrides: Partial<Letter> = {}): Letter => ({
   status: "needs_review",
   workflowState: "REVIEWED",
   visibility: "HIDDEN",
+  transcriptPublished: false,
+  metadataPublished: false,
   transcriptStatus: "EDITED",
   metadataContentStatus: "EMPTY",
   extraContentStatus: "EMPTY",

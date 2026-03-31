@@ -1,4 +1,5 @@
 import { memo, useState, useMemo, useEffect, useCallback, type RefObject, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "../../../components/common";
 import { countMarkers, highlightTranscriptMarkers, type MarkerType } from "../../../utils/transcriptHighlight";
 import SpacingEditor from "./SpacingEditor";
@@ -233,7 +234,7 @@ const TranscriptionSection = memo(function TranscriptionSection({
         </div>
       )}
 
-      {showReadingView && (
+      {showReadingView && createPortal(
         <div
           className="reading-view-overlay"
           onMouseDown={() => changeViewMode("edit")}
@@ -274,7 +275,8 @@ const TranscriptionSection = memo(function TranscriptionSection({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

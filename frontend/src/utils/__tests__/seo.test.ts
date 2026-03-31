@@ -324,6 +324,8 @@ describe('buildLetterSeo', () => {
     status: 'published',
     workflowState: 'REVIEWED',
     visibility: 'PUBLISHED',
+    transcriptPublished: true,
+    metadataPublished: true,
     transcriptStatus: 'VERIFIED',
     metadataContentStatus: 'VERIFIED',
     extraContentStatus: 'EMPTY',

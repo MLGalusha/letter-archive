@@ -597,7 +597,10 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
         photoDescription: true,
       },
       with: {
-        pages: { columns: { id: true } },
+        pages: {
+          columns: { id: true, pageNumber: true, checksumSha256: true },
+          orderBy: (p, { asc: pageAsc }) => [pageAsc(p.pageNumber)],
+        },
       },
       orderBy: [asc(letters.dateRaw), asc(letters.createdAt)],
     });
@@ -651,6 +654,12 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
         }
       }
 
+      // First page of the primary letter for image preloading
+      const firstPage = l.pages?.[0];
+      const imageUrl = firstPage
+        ? `/images/${firstPage.id}${firstPage.checksumSha256 ? `?v=${firstPage.checksumSha256.slice(0, 8)}` : ''}`
+        : undefined;
+
       return {
         id: l.id,
         dateRaw: l.dateRaw,
@@ -659,6 +668,7 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
         recipient: l.recipient || undefined,
         hook: l.hook || l.photoDescription || undefined,
         contentLabels: contentLabels.length > 0 ? contentLabels : undefined,
+        imageUrl,
       };
     }
 

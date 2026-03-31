@@ -216,6 +216,16 @@ export default function LetterDetailPage() {
     return () => controller.abort();
   }, [letterId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Preload adjacent letter images for instant navigation
+  useEffect(() => {
+    if (!adjacent) return;
+    const urls: string[] = [];
+    if (adjacent.prev?.imageUrl) urls.push(getImageUrl(adjacent.prev.imageUrl, { width: 1200 }));
+    if (adjacent.next?.imageUrl) urls.push(getImageUrl(adjacent.next.imageUrl, { width: 1200 }));
+    const images = urls.map((url) => { const img = new Image(); img.src = url; return img; });
+    return () => { images.forEach((img) => { img.src = ''; }); };
+  }, [adjacent]);
+
   // Keyboard nav
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

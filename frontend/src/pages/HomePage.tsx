@@ -56,6 +56,25 @@ function formatFeaturedLetterDate(dateStr?: string | null): string | null {
 
   const trimmed = dateStr.trim();
   if (!trimmed) return null;
+
+  // Handle dateRaw format with X placeholders (e.g. 1947XXXX, 19470810, 1947XX14)
+  const rawMatch = trimmed.match(/^(\d{4})([\dX]{2})([\dX]{2})$/);
+  if (rawMatch) {
+    const [, yearStr, monthStr, dayStr] = rawMatch;
+    const monthKnown = !monthStr.includes('X');
+    const dayKnown = !dayStr.includes('X');
+    if (monthKnown && dayKnown) {
+      return formatDateParts(yearStr, monthStr, dayStr) || yearStr;
+    }
+    if (monthKnown) {
+      const month = parseInt(monthStr, 10);
+      const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      return month >= 1 && month <= 12 ? `${MONTHS[month - 1]} ${yearStr}` : yearStr;
+    }
+    return yearStr;
+  }
+
+  // Already-formatted text (contains letters other than X)
   if (/[A-Za-z]/.test(trimmed)) return trimmed;
 
   const compactMatch = trimmed.match(/^(\d{4})(\d{2})(\d{2})$/);

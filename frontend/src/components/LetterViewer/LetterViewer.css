@@ -48,12 +48,22 @@
   -webkit-backface-visibility: hidden;
 }
 
-.viewer-image--thumb {
+.viewer-image-thumb {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  user-select: none;
+  will-change: transform;
   position: absolute;
   z-index: 1;
   pointer-events: none;
   filter: blur(20px);
-  transform-origin: center center;
+}
+
+.viewer-image-thumb.animating {
+  transition: transform 150ms ease-out;
 }
 
 /* Single compact bottom overlay */
@@ -303,7 +313,8 @@
   background: transparent;
 }
 
-.letter-viewer--lightbox .viewer-image {
+.letter-viewer--lightbox .viewer-image,
+.letter-viewer--lightbox .viewer-image-thumb {
   max-width: calc(100% - 6rem);
   max-height: calc(100% - 3rem);
 }

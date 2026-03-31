@@ -563,7 +563,7 @@ const LetterViewer = memo(function LetterViewer({
           <img
             src={thumbSrc}
             alt=""
-            className={`viewer-image viewer-image--thumb ${isAnimating ? "animating" : ""}`}
+            className={`viewer-image-thumb ${isAnimating ? "animating" : ""}`}
             style={{
               transform: `scale(${scale}) translate(${position.x / scale}px, ${
                 position.y / scale

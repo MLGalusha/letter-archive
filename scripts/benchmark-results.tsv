@@ -8,3 +8,13 @@ e614df76	7464	improved	Reduce showcase card mid-quality from 480px to 320px
 -	7560	reverted	Lower WebP quality 76→65, JPEG 78→68 — no improvement (likely cached)
 -	8100	reverted	Remove hero idle upgrade (just 480px) — made LCP worse, mid-tier load is key
 -	7996	reverted	content-visibility: auto on archive cards — worse (interferes with lazy loading)
+-	7908	reverted	Reduce thumbnails 32→20px — no improvement
+-	8072	reverted	Add mid+idle to archive cards — more requests hurt more than savings
+-	7564	reverted	Delay initial archive load by 800ms — no improvement
+-	7948	reverted	Reduce carousel 800→640px — within noise, quality tradeoff not worth it
+-	7540	reverted	Remove showcase idle upgrade — no improvement
+-	8932	reverted	Hero mid 480→320px — upgrade re-triggers LCP with bigger image
+c0a215eb	7452	improved	Reduce archive card image width from 320px to 240px
+-	7496	reverted	Page size 12→8 — more images loaded from eager load-more trigger
+-	8084	reverted	Module-scope hero fetch — worse in Vite dev mode
+959888b4	7268	improved	Add Timing-Allow-Origin header to image responses

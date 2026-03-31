@@ -11,6 +11,27 @@ import { logIfSlow, TIMING_THRESHOLDS } from '../utils/logger.js';
 
 const router = Router();
 
+// In-memory LRU cache for resized images (avoids re-encoding on repeated requests)
+const IMAGE_CACHE_MAX = 200;
+const imageCache = new Map<string, { buffer: Buffer; contentType: string }>();
+
+function getCachedImage(key: string) {
+  const entry = imageCache.get(key);
+  if (entry) {
+    imageCache.delete(key);
+    imageCache.set(key, entry);
+  }
+  return entry ?? null;
+}
+
+function setCachedImage(key: string, buffer: Buffer, contentType: string) {
+  if (imageCache.size >= IMAGE_CACHE_MAX) {
+    const oldest = imageCache.keys().next().value;
+    if (oldest !== undefined) imageCache.delete(oldest);
+  }
+  imageCache.set(key, { buffer, contentType });
+}
+
 const MIME_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -89,6 +110,16 @@ router.get('/images/:pageId', async (req, res, next) => {
     if (requestedWidth) {
       const acceptHeader = req.headers.accept || '';
       const useWebp = acceptHeader.includes('image/webp');
+      const cacheKey = `${pageId}:${requestedWidth}:${useWebp ? 'webp' : 'jpeg'}`;
+
+      const cached = getCachedImage(cacheKey);
+      if (cached) {
+        res.setHeader('Content-Type', cached.contentType);
+        res.setHeader('Vary', 'Accept');
+        res.send(cached.buffer);
+        return;
+      }
+
       const pipeline = sharp(absolutePath)
         .rotate()
         .resize({
@@ -102,7 +133,10 @@ router.get('/images/:pageId', async (req, res, next) => {
         : pipeline.jpeg({ quality: 78, progressive: true, mozjpeg: true });
 
       const outputBuffer = await transformed.toBuffer();
-      res.setHeader('Content-Type', useWebp ? 'image/webp' : 'image/jpeg');
+      const contentType = useWebp ? 'image/webp' : 'image/jpeg';
+      setCachedImage(cacheKey, outputBuffer, contentType);
+
+      res.setHeader('Content-Type', contentType);
       res.setHeader('Vary', 'Accept');
       res.send(outputBuffer);
 

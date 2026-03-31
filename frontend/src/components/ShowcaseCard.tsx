@@ -53,6 +53,7 @@ export default function ShowcaseCard({ items, onNavigate }: ShowcaseCardProps) {
             midSrc={getImageUrl(gi.imageUrl, { width: 320 })}
             alt={idx === index ? (gi.hook || gi.label) : ''}
             loading={idx === 0 ? 'eager' : 'lazy'}
+            fetchPriority={idx === 0 ? 'high' : undefined}
             style={{ opacity: idx === index ? 1 : 0 }}
             idleUpgrade
             context="showcase"

@@ -30,14 +30,15 @@ Lower is better. The benchmark uses Chrome DevTools Protocol to simulate 4G (4 M
 
 | Context | Component | Width | File |
 |---------|-----------|-------|------|
-| Archive grid cards | LetterCard | 480px | `frontend/src/components/LetterCard/LetterCard.tsx` |
-| Collection highlights | ShowcaseCard | 480px initial → 960px idle | `frontend/src/components/ShowcaseCard.tsx` |
-| Homepage hero | HeroLetterCard | 640px initial → 960px idle | `frontend/src/pages/HomePage.tsx` |
+| Archive grid cards | LetterCard | 240px | `frontend/src/components/LetterCard/LetterCard.tsx` |
+| Collection highlights | ShowcaseCard | 320px initial → 640px idle | `frontend/src/components/ShowcaseCard.tsx` |
+| Homepage hero | HeroLetterCard | 480px initial → 640px idle | `frontend/src/pages/HomePage.tsx` |
 | Letter detail carousel | LetterDetailPage | 800px | `frontend/src/pages/LetterDetailPage.tsx` |
 | Letter viewer (panel) | LetterViewer | 1200px initial → full on zoom | `frontend/src/components/LetterViewer/LetterViewer.tsx` |
 | Letter viewer (lightbox) | LetterViewer | 1600px initial → full on zoom | Same as above |
 | Adjacent letter preload | LetterDetailPage | 800px | `frontend/src/pages/LetterDetailPage.tsx` |
 | Blur-up thumbnails | All | 32px | All image components |
+| Archive page size | useArchiveSearch | 12 items | `frontend/src/hooks/useArchiveSearch.ts` |
 
 ## Optimization Levers
 

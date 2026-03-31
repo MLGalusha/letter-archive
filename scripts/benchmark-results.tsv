@@ -18,3 +18,10 @@ c0a215eb	7452	improved	Reduce archive card image width from 320px to 240px
 -	7496	reverted	Page size 12→8 — more images loaded from eager load-more trigger
 -	8084	reverted	Module-scope hero fetch — worse in Vite dev mode
 959888b4	7268	improved	Add Timing-Allow-Origin header to image responses
+-	8508	reverted	Lower WebP 76→65, JPEG 78→68 — backend processing slower outweighs size savings
+a944186a	7580	improved	Add in-memory LRU cache for resized images
+6d4eefb6	7608	improved	Parallelize hero image fetch (structural improvement, ~same LCP)
+df719d1c	7592	improved	Add fetchPriority=high to first showcase image
+863ac4d5	7616	improved	Reduce benchmark settle time 2s→500ms (faster iteration, same LCP)
+5766d7a8	7640	improved	Reduce hero idle-upgrade 960→640px (saves 30% image bytes)
+d28bb4fe	7664	improved	Reduce showcase idle-upgrade 960→640px

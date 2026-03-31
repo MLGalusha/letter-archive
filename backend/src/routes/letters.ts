@@ -805,7 +805,6 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
 
   const [
     rowsResult,
-    totalResult,
     formatsResult,
     collectionsResult,
     correspondentsResult,
@@ -880,7 +879,8 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
           sg.topics,
           sg.tones,
           sg.relationships,
-          sg."photoDescriptions"
+          sg."photoDescriptions",
+          COUNT(*) OVER()::int AS "totalCount"
         FROM scoped_groups sg
         LEFT JOIN primary_page_counts ppc
           ON ppc."collectionId" = sg."collectionId"
@@ -893,11 +893,6 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
         ORDER BY ${orderBy}
         LIMIT ${query.limit}
         OFFSET ${offset}
-      `),
-      db.execute(sql`
-        ${ctes}
-        SELECT COUNT(*)::int AS count
-        FROM scoped_groups
       `),
       db.execute(sql`
         ${ctes}
@@ -1023,14 +1018,14 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
       `),
     ]);
 
-  const rows = getRows<ArchiveSearchRow>(rowsResult);
-  const totalRows = getRows<{ count: number | string | bigint }>(totalResult);
+  const rows = getRows<ArchiveSearchRow & { totalCount?: number }>(rowsResult);
+  const total = Number(rows[0]?.totalCount || 0);
 
   return {
     letters: rows.map((row) => transformArchiveSearchRow(row, query)),
     page: query.page,
     limit: query.limit,
-    total: Number(totalRows[0]?.count || 0),
+    total,
     facets: {
       formats: mapArchiveFormatFacets(getRows<ArchiveFacetRow>(formatsResult)),
       collections: mapArchiveCollectionFacets(getRows<ArchiveLabeledFacetRow>(collectionsResult)),

@@ -516,9 +516,9 @@ describe('letters route integration', () => {
         tones: ['hopeful'],
         relationships: ['romantic-partner'],
         photoDescriptions: [],
+        totalCount: 1,
       },
     ])
-      .mockResolvedValueOnce([{ count: 1 }])
       .mockResolvedValueOnce([{ value: 'letter', count: 1 }])
       .mockResolvedValueOnce([{ value: '009', label: 'Collection Nine', count: 1 }])
       .mockResolvedValueOnce([{ value: 'Jimmie', count: 1 }])
@@ -625,13 +625,12 @@ describe('letters route integration', () => {
         ],
       },
     });
-    expect(executeMock).toHaveBeenCalledTimes(10);
+    expect(executeMock).toHaveBeenCalledTimes(9);
   });
 
   it('accepts repeated format filters on archive search', async () => {
     executeMock
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ count: 0 }])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
@@ -658,7 +657,7 @@ describe('letters route integration', () => {
       total: 0,
       limit: 5,
     });
-    expect(executeMock).toHaveBeenCalledTimes(10);
+    expect(executeMock).toHaveBeenCalledTimes(9);
   });
 
   it('centers long search previews around the visible match', async () => {
@@ -690,9 +689,9 @@ describe('letters route integration', () => {
           tones: ['hopeful'],
           relationships: ['romantic-partner'],
           photoDescriptions: [],
+          totalCount: 1,
         },
       ])
-      .mockResolvedValueOnce([{ count: 1 }])
       .mockResolvedValueOnce([{ value: 'letter', count: 1 }])
       .mockResolvedValueOnce([{ value: '009', label: 'Collection Nine', count: 1 }])
       .mockResolvedValueOnce([{ value: 'Jimmie', count: 1 }])

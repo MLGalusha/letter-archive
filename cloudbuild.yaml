@@ -23,11 +23,26 @@ options:
   machineType: E2_HIGHCPU_8
 
 steps:
+  # ── Pull cached images for layer reuse ───────────────────────
+  - name: gcr.io/cloud-builders/docker
+    id: pull-backend-cache
+    entrypoint: bash
+    args: ['-c', 'docker pull ${_BACKEND_IMAGE}:latest || true']
+    waitFor: ['-']
+
+  - name: gcr.io/cloud-builders/docker
+    id: pull-frontend-cache
+    entrypoint: bash
+    args: ['-c', 'docker pull ${_FRONTEND_IMAGE}:latest || true']
+    waitFor: ['-']
+
   # ── Build images (parallel) ────────────────────────────────
   - name: gcr.io/cloud-builders/docker
     id: build-backend
     args:
       - build
+      - --cache-from
+      - '${_BACKEND_IMAGE}:latest'
       - -t
       - '${_BACKEND_IMAGE}:${_TAG}'
       - -t
@@ -35,12 +50,14 @@ steps:
       - -f
       - backend/Dockerfile
       - backend
-    waitFor: ['-']
+    waitFor: ['pull-backend-cache']
 
   - name: gcr.io/cloud-builders/docker
     id: build-frontend
     args:
       - build
+      - --cache-from
+      - '${_FRONTEND_IMAGE}:latest'
       - -t
       - '${_FRONTEND_IMAGE}:${_TAG}'
       - -t
@@ -52,7 +69,7 @@ steps:
       - -f
       - frontend/Dockerfile
       - frontend
-    waitFor: ['-']
+    waitFor: ['pull-frontend-cache']
 
   # ── Push images (parallel after builds) ─────────────────────
   - name: gcr.io/cloud-builders/docker

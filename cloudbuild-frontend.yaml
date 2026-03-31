@@ -1,0 +1,71 @@
+# Cloud Build — frontend only
+# Triggered when only frontend/ files change.
+
+substitutions:
+  _TAG: latest
+  _REGION: us-east1
+  _DOMAIN: voicesthatremain.com
+  _SERVICE_ACCOUNT: 'letter-archive-runner@${PROJECT_ID}.iam.gserviceaccount.com'
+  _FRONTEND_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/letter-archive/frontend'
+
+options:
+  dynamic_substitutions: true
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build-frontend
+    args:
+      - build
+      - -t
+      - '${_FRONTEND_IMAGE}:${_TAG}'
+      - -t
+      - '${_FRONTEND_IMAGE}:latest'
+      - --cache-from
+      - '${_FRONTEND_IMAGE}:latest'
+      - --build-arg
+      - 'VITE_API_URL=https://api.${_DOMAIN}'
+      - --build-arg
+      - 'VITE_SITE_URL=https://${_DOMAIN}'
+      - -f
+      - frontend/Dockerfile
+      - frontend
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-frontend
+    args: ['push', '--all-tags', '${_FRONTEND_IMAGE}']
+    waitFor: ['build-frontend']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: prepare-manifests
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        sed -i \
+          -e "s|SERVICE_ACCOUNT_EMAIL|${_SERVICE_ACCOUNT}|g" \
+          -e "s|FRONTEND_IMAGE|${_FRONTEND_IMAGE}:${_TAG}|g" \
+          -e "s|PROJECT_NUMBER|${PROJECT_ID}|g" \
+          -e "s|PROJECT_ID|${PROJECT_ID}|g" \
+          -e "s|REGION|${_REGION}|g" \
+          deploy/cloudrun/frontend-service.yaml
+    waitFor: ['-']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-frontend
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud run services replace deploy/cloudrun/frontend-service.yaml \
+          --region=${_REGION}
+        gcloud run services add-iam-policy-binding letter-archive-frontend \
+          --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet || \
+        echo "WARNING: Could not set IAM policy — set public access manually"
+    waitFor: ['push-frontend', 'prepare-manifests']
+
+images:
+  - '${_FRONTEND_IMAGE}:${_TAG}'
+  - '${_FRONTEND_IMAGE}:latest'
+
+timeout: 600s

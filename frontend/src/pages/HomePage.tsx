@@ -164,7 +164,7 @@ function HeroLetterCard({
           <ProgressiveImage
             key={img.id}
             className="letter-card-image"
-            src={getImageUrl(img.imageUrl, { width: 960 })}
+            src={getImageUrl(img.imageUrl, { width: 640 })}
             thumbSrc={getImageUrl(img.imageUrl, { width: 32 })}
             midSrc={getImageUrl(img.imageUrl, { width: 480 })}
             alt=""
@@ -179,7 +179,7 @@ function HeroLetterCard({
       ) : heroLetter.imageUrl ? (
         <ProgressiveImage
           className="letter-card-image"
-          src={heroLetter.imageUrl.startsWith('/') ? getImageUrl(heroLetter.imageUrl, { width: 960 }) : heroLetter.imageUrl}
+          src={heroLetter.imageUrl.startsWith('/') ? getImageUrl(heroLetter.imageUrl, { width: 640 }) : heroLetter.imageUrl}
           thumbSrc={heroLetter.imageUrl.startsWith('/') ? getImageUrl(heroLetter.imageUrl, { width: 32 }) : heroLetter.imageUrl}
           alt=""
           loading="eager"

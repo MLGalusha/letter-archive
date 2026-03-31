@@ -516,8 +516,6 @@ describe('letters route integration', () => {
         tones: ['hopeful'],
         relationships: ['romantic-partner'],
         photoDescriptions: [],
-        extraContentTranscripts: [],
-        transcriptionTexts: ['Dear Molly, please write soon because I still love you dearly.'],
       },
     ])
       .mockResolvedValueOnce([{ count: 1 }])
@@ -560,12 +558,12 @@ describe('letters route integration', () => {
           location: 'Overland Park, Kans.',
           verified: true,
           searchPreview: {
-            excerpt: 'Dear Molly, please write soon because I still love you dearly.',
+            excerpt: 'Jimmie pleads with Molly for a reply.',
             matchCount: 1,
             highlightRanges: [
               {
-                start: 5,
-                end: 10,
+                start: 19,
+                end: 24,
               },
             ],
           },
@@ -692,10 +690,6 @@ describe('letters route integration', () => {
           tones: ['hopeful'],
           relationships: ['romantic-partner'],
           photoDescriptions: [],
-          extraContentTranscripts: [],
-          transcriptionTexts: [
-            'Jimmie spends the first part of the letter talking about delayed trains, long shifts at work, money worries, and the weather before finally asking Molly to write soon.',
-          ],
         },
       ])
       .mockResolvedValueOnce([{ count: 1 }])
@@ -731,9 +725,9 @@ describe('letters route integration', () => {
     }).letters[0]?.searchPreview;
 
     expect(searchPreview).toBeDefined();
-    expect(searchPreview.excerpt.startsWith('…')).toBe(true);
+    // Without transcription text in search results, preview falls back to hook text
+    expect(searchPreview.excerpt).toBe('Jimmie pleads with Molly for a reply.');
     expect(searchPreview.excerpt.indexOf('Molly')).toBeGreaterThanOrEqual(0);
-    expect(searchPreview.excerpt.indexOf('Molly')).toBeLessThanOrEqual(28);
     expect(
       searchPreview.excerpt.slice(
         searchPreview.highlightRanges[0]!.start,

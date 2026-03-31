@@ -875,9 +875,7 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
           sg.topics,
           sg.tones,
           sg.relationships,
-          sg."photoDescriptions",
-          sg."extraContentTranscripts",
-          sg."transcriptionTexts"
+          sg."photoDescriptions"
         FROM scoped_groups sg
         LEFT JOIN primary_page_counts ppc
           ON ppc."collectionId" = sg."collectionId"
@@ -1253,9 +1251,7 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(topic_name), '')), NULL) AS topics,
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.emotional_tone::text), '')), NULL) AS tones,
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.sender_recipient_relationship::text), '')), NULL) AS relationships,
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.photo_description), '')), NULL) AS "photoDescriptions",
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.extra_content_transcript), '')), NULL) AS "extraContentTranscripts",
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.transcription_text), '')), NULL) AS "transcriptionTexts"
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.photo_description), '')), NULL) AS "photoDescriptions"
       FROM matching_groups mg
       INNER JOIN letters l
         ON l.collection_id = mg."collectionId"
@@ -1312,8 +1308,6 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         gf.tones,
         gf.relationships,
         gf."photoDescriptions",
-        gf."extraContentTranscripts",
-        gf."transcriptionTexts",
         pr.id,
         pr."primaryType",
         pr.sender,
@@ -1553,8 +1547,6 @@ function buildArchiveSearchPreview(
   const searchTerms = getArchiveSearchTerms(search);
   const prioritizedGroups = [
     dedupeArchivePreviewValues([
-      ...(row.transcriptionTexts || []),
-      ...(row.extraContentTranscripts || []),
       ...(row.photoDescriptions || []),
     ]),
     dedupeArchivePreviewValues([

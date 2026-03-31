@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: 'image-benchmark.spec.ts',
+  testMatch: /benchmark\.spec\.ts$/,
   timeout: 300_000,
   retries: 0,
   workers: 1,

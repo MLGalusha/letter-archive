@@ -5,7 +5,7 @@ import { searchArchiveShelf, type ArchiveSearchResponse } from '../api/letters';
 import { saveSearchState, loadSearchState } from '../utils/searchPersistence';
 import { mergeArchiveItems, getResolvedArchiveSort } from '../utils/archiveSearch';
 
-const ARCHIVE_PAGE_SIZE = 24;
+const ARCHIVE_PAGE_SIZE = 12;
 
 const EMPTY_FACETS: ArchiveSearchResponse['facets'] = {
   formats: [],

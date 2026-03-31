@@ -764,6 +764,11 @@ function buildShelfSearchText(
   letter: SummaryLetterWithRelations,
   relatedItems: SummaryLetterWithRelations[],
 ): string {
+  // Truncate long text fields to keep response payload small while preserving
+  // enough content for client-side search (most search terms appear early)
+  const truncate = (s: string | null, maxLen = 500) =>
+    s && s.length > maxLen ? s.slice(0, maxLen) : s;
+
   return [
     letter.sender,
     letter.recipient,
@@ -771,8 +776,8 @@ function buildShelfSearchText(
     letter.hook,
     letter.summary,
     letter.photoDescription,
-    letter.extraContentTranscript,
-    letter.transcriptionText,
+    truncate(letter.extraContentTranscript),
+    truncate(letter.transcriptionText),
     ...relatedItems.flatMap((item) => [
       item.sender,
       item.recipient,
@@ -780,8 +785,8 @@ function buildShelfSearchText(
       item.hook,
       item.summary,
       item.photoDescription,
-      item.extraContentTranscript,
-      item.transcriptionText,
+      truncate(item.extraContentTranscript),
+      truncate(item.transcriptionText),
     ]),
   ]
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)

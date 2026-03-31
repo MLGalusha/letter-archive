@@ -48,6 +48,14 @@
   -webkit-backface-visibility: hidden;
 }
 
+.viewer-image--thumb {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  filter: blur(20px);
+  transform-origin: center center;
+}
+
 /* Single compact bottom overlay */
 .viewer-overlay {
   position: absolute;

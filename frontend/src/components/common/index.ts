@@ -42,3 +42,6 @@ export {
 
 // Layout
 export { ResizableSplitPane, type ResizableSplitPaneProps } from './ResizableSplitPane';
+
+// Images
+export { ProgressiveImage, type ProgressiveImageProps } from './ProgressiveImage';

@@ -1,0 +1,26 @@
+.progressive-image {
+  position: relative;
+  overflow: hidden;
+}
+
+.progressive-image__thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  filter: blur(20px);
+  transform: scale(1.05);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.progressive-image__full {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transition: opacity 400ms ease-out;
+}
+
+.progressive-image__full--loading {
+  opacity: 0;
+}

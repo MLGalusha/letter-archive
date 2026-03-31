@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState, type MouseEvent, type ReactNode } fr
 import "../ArchiveList/ArchiveList.css";
 import type { ArchiveSearchHighlightRange, LetterCardData } from "../../types/Letter";
 import { getImageUrl } from "../../api/client";
+import { ProgressiveImage } from "../common";
 import { getMediaLabel } from "../../utils/letterPreview";
 
 interface LetterCardProps {
@@ -223,9 +224,10 @@ function LetterCard({
         aria-label={ariaLabel || `${mediaLabel}: ${card.title || "Unknown item"}`}
       >
         {hasImage ? (
-          <img
+          <ProgressiveImage
             className="letter-card-image"
-            src={card.imageUrl ? getImageUrl(card.imageUrl, { width: 720 }) : undefined}
+            src={getImageUrl(card.imageUrl!, { width: 720 })}
+            thumbSrc={getImageUrl(card.imageUrl!, { width: 32 })}
             alt=""
             loading="lazy"
             decoding="async"

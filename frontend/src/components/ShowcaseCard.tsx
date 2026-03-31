@@ -1,5 +1,6 @@
 import { useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { getImageUrl } from '../api/client';
+import { ProgressiveImage } from './common';
 import type { LetterImageType } from '../types/Letter';
 import './ShowcaseCard.css';
 
@@ -44,10 +45,11 @@ export default function ShowcaseCard({ items, onNavigate }: ShowcaseCardProps) {
     >
       {items.map((gi, idx) => (
         gi.imageUrl ? (
-          <img
+          <ProgressiveImage
             key={gi.imageId || idx}
             className="cd-highlight-img"
             src={getImageUrl(gi.imageUrl, { width: 720 })}
+            thumbSrc={getImageUrl(gi.imageUrl, { width: 32 })}
             alt={idx === index ? (gi.hook || gi.label) : ''}
             loading={idx === 0 ? 'eager' : 'lazy'}
             style={{ opacity: idx === index ? 1 : 0 }}

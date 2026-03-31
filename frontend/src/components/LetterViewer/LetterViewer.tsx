@@ -1,6 +1,7 @@
 import { memo, useState, useRef, useEffect, useCallback } from "react";
 import type { LetterImage } from "../../types/Letter";
 import { getImageUrl } from "../../api/client";
+import { useProgressiveImage } from "../../hooks/useProgressiveImage";
 import { Icon } from "../common";
 import "./LetterViewer.css";
 
@@ -161,6 +162,11 @@ const LetterViewer = memo(function LetterViewer({
   }, [currentImageIndex]);
 
   const currentImage = displayImages[currentImageIndex];
+
+  // Progressive image loading (blur-up)
+  const thumbSrc = getImageUrl(currentImage.imageUrl, { width: 32 });
+  const fullSrc = getImageUrl(currentImage.imageUrl);
+  const { fullLoaded } = useProgressiveImage(thumbSrc, fullSrc);
 
   // ============================================================================
   // PERSISTENCE: Save state to localStorage
@@ -553,9 +559,23 @@ const LetterViewer = memo(function LetterViewer({
         onTouchEnd={handleTouchEnd}
         onDoubleClick={isLightbox ? handleDoubleClick : undefined}
       >
+        {!fullLoaded && (
+          <img
+            src={thumbSrc}
+            alt=""
+            className={`viewer-image viewer-image--thumb ${isAnimating ? "animating" : ""}`}
+            style={{
+              transform: `scale(${scale}) translate(${position.x / scale}px, ${
+                position.y / scale
+              }px)`,
+            }}
+            draggable={false}
+            aria-hidden
+          />
+        )}
         <img
           ref={imageRef}
-          src={getImageUrl(currentImage.imageUrl)}
+          src={fullSrc}
           alt={
             getImageAlt
               ? getImageAlt(currentImage)
@@ -576,6 +596,8 @@ const LetterViewer = memo(function LetterViewer({
                   : onImageClick
                     ? "pointer"
                     : "default",
+            opacity: fullLoaded ? 1 : 0,
+            transition: 'opacity 400ms ease-out',
           }}
           draggable={false}
         />

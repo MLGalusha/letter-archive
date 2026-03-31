@@ -159,4 +159,4 @@ images:
   - '${_FRONTEND_IMAGE}:${_TAG}'
   - '${_FRONTEND_IMAGE}:latest'
 
-timeout: 1200s
+timeout: 2400s

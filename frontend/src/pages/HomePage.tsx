@@ -264,11 +264,20 @@ export default function HomePage() {
   useEffect(() => {
     let cancelled = false;
 
+    // Start featured letter fetch, and eagerly chain getLetterById as soon as it resolves
+    // (don't wait for blogPosts/contentPage before fetching images)
+    const featuredPromise = getFeaturedLetter().catch(() => null);
+    const imagesPromise = featuredPromise.then((featured) => {
+      if (!featured || cancelled) return null;
+      return getLetterById(featured.id).catch(() => null);
+    });
+
     Promise.all([
       listBlogPosts({ limit: 1 }).catch(() => ({ posts: [], total: 0 })),
-      getFeaturedLetter().catch(() => null),
+      featuredPromise,
       getContentPage('home').catch(() => null),
-    ]).then(([blogData, featured, homePage]) => {
+      imagesPromise,
+    ]).then(([blogData, featured, homePage, letterDetails]) => {
       if (cancelled) return;
       if (blogData.posts.length > 0) setLatestBlogPost(blogData.posts[0]);
       if (homePage) {
@@ -284,12 +293,8 @@ export default function HomePage() {
       setHeroLetter(featured);
       setHeroLoaded(true);
       if (featured) {
-        setHeroImages([]);
         setHeroPageIndex(0);
-        getLetterById(featured.id).then((full) => {
-          if (cancelled) return;
-          setHeroImages(full.images || []);
-        }).catch(() => {});
+        setHeroImages(letterDetails?.images || []);
       }
     });
 

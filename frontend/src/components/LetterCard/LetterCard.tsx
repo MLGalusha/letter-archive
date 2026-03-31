@@ -226,11 +226,12 @@ function LetterCard({
         {hasImage ? (
           <ProgressiveImage
             className="letter-card-image"
-            src={getImageUrl(card.imageUrl!, { width: 720 })}
+            src={getImageUrl(card.imageUrl!, { width: 480 })}
             thumbSrc={getImageUrl(card.imageUrl!, { width: 32 })}
             alt=""
             loading="lazy"
             decoding="async"
+            context="archive-card"
           />
         ) : (
           <div className="letter-card-fallback" aria-hidden="true">

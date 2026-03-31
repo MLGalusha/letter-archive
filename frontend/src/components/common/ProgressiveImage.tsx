@@ -5,6 +5,7 @@ import './ProgressiveImage.css';
 export interface ProgressiveImageProps {
   src: string;
   thumbSrc: string;
+  midSrc?: string;
   alt: string;
   className?: string;
   imgClassName?: string;
@@ -15,6 +16,9 @@ export interface ProgressiveImageProps {
   decoding?: 'sync' | 'async';
   draggable?: boolean;
   fetchPriority?: 'high' | 'low' | 'auto';
+  idleUpgrade?: boolean;
+  context?: string;
+  onLoad?: () => void;
 }
 
 export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImageProps>(
@@ -22,6 +26,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
     {
       src,
       thumbSrc,
+      midSrc,
       alt,
       className,
       imgClassName,
@@ -32,26 +37,48 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       decoding,
       draggable,
       fetchPriority,
+      idleUpgrade,
+      context,
+      onLoad,
     },
     ref,
   ) {
-    const { fullLoaded } = useProgressiveImage(thumbSrc, src);
+    const { thumbLoaded, midLoaded, fullLoaded, currentSrc } = useProgressiveImage({
+      thumbSrc,
+      midSrc,
+      fullSrc: src,
+      idleUpgrade,
+      context,
+    });
+
+    // Best non-full source for the placeholder layer
+    const showPlaceholder = !fullLoaded;
+    const placeholderSrc = midLoaded && midSrc ? midSrc : thumbLoaded ? thumbSrc : '';
+    const isThumbOnly = !midLoaded || !midSrc;
+
+    // Fire onLoad when best quality is ready
+    if (fullLoaded && onLoad) onLoad();
 
     return (
       <div className={`progressive-image ${className ?? ''}`} style={style}>
-        {!fullLoaded && (
+        {showPlaceholder && placeholderSrc && (
           <img
-            src={thumbSrc}
+            src={placeholderSrc}
             alt=""
             className={`progressive-image__thumb ${imgClassName ?? ''}`}
-            style={{ ...imgStyle, objectFit }}
+            style={{
+              ...imgStyle,
+              objectFit,
+              filter: isThumbOnly ? 'blur(20px)' : undefined,
+              transform: isThumbOnly ? 'scale(1.05)' : undefined,
+            }}
             draggable={false}
             aria-hidden
           />
         )}
         <img
           ref={ref}
-          src={src}
+          src={currentSrc || src}
           alt={alt}
           className={`progressive-image__full ${imgClassName ?? ''} ${fullLoaded ? '' : 'progressive-image__full--loading'}`}
           style={{ ...imgStyle, objectFit }}

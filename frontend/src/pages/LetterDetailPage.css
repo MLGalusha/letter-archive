@@ -184,10 +184,10 @@
   pointer-events: none;
 }
 
+/* ProgressiveImage wrapper — acts as the card */
 .scan-slide-img {
   display: block;
-  width: auto;
-  height: auto;
+  position: relative;
   max-width: 100%;
   max-height: 72vh;
   border-radius: 14px;
@@ -196,7 +196,39 @@
     0 0 0 1px rgba(217, 207, 191, 0.25);
   transition: box-shadow 0.3s ease;
   user-select: none;
+  overflow: hidden;
+  /* Placeholder sizing before image loads */
+  aspect-ratio: 3 / 4;
+  min-height: 40vh;
+  background: linear-gradient(
+    110deg,
+    rgba(232, 220, 207, 0.25) 25%,
+    rgba(232, 220, 207, 0.55) 50%,
+    rgba(232, 220, 207, 0.25) 75%
+  );
+  background-size: 200% 100%;
+  animation: scan-shimmer 1.5s ease-in-out infinite;
+}
+
+/* Stop shimmer once any image has loaded into the wrapper */
+.scan-slide-img:has(.progressive-image__full:not(.progressive-image__full--loading)),
+.scan-slide-img:has(.progressive-image__thumb) {
+  animation: none;
   background: transparent;
+}
+
+/* Inner img elements fill the wrapper */
+.scan-slide-img-inner {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 72vh;
+  object-fit: contain;
+}
+
+@keyframes scan-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 .scan-slide:hover .scan-slide-img {

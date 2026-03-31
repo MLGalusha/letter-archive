@@ -6,6 +6,7 @@ import LetterViewer from "../components/LetterViewer/LetterViewer";
 import { getAdjacentLetters, getLetterById, type AdjacentLettersResponse } from "../api/letters";
 import type { Letter, LetterImage, LetterImageType } from "../types/Letter";
 import { getImageUrl } from "../api/client";
+import { ProgressiveImage } from "../components/common";
 import { buildLetterSeo } from "../utils/seo";
 import {
   shouldShowPublicTranscript,
@@ -220,8 +221,8 @@ export default function LetterDetailPage() {
   useEffect(() => {
     if (!adjacent) return;
     const urls: string[] = [];
-    if (adjacent.prev?.imageUrl) urls.push(getImageUrl(adjacent.prev.imageUrl, { width: 1200 }));
-    if (adjacent.next?.imageUrl) urls.push(getImageUrl(adjacent.next.imageUrl, { width: 1200 }));
+    if (adjacent.prev?.imageUrl) urls.push(getImageUrl(adjacent.prev.imageUrl, { width: 800 }));
+    if (adjacent.next?.imageUrl) urls.push(getImageUrl(adjacent.next.imageUrl, { width: 800 }));
     const images = urls.map((url) => { const img = new Image(); img.src = url; return img; });
     return () => { images.forEach((img) => { img.src = ''; }); };
   }, [adjacent]);
@@ -451,17 +452,21 @@ export default function LetterDetailPage() {
                         : `View ${typeLabel} full size`
                     }
                   >
-                    <img
-                      src={getImageUrl(img.imageUrl, { width: 1200 })}
+                    <ProgressiveImage
+                      src={getImageUrl(img.imageUrl, { width: 800 })}
+                      thumbSrc={getImageUrl(img.imageUrl, { width: 32 })}
                       alt={
                         isLetter
                           ? `Page ${img.pageNumber ?? idx + 1} of letter`
                           : `${typeLabel}`
                       }
                       className="scan-slide-img"
+                      imgClassName="scan-slide-img-inner"
+                      objectFit="contain"
                       draggable={false}
                       loading={idx === 0 ? "eager" : "lazy"}
                       decoding="async"
+                      context="carousel"
                     />
                     {typeLabel && (
                       <span className="scan-slide-type-label">{typeLabel}</span>

@@ -164,9 +164,19 @@ const LetterViewer = memo(function LetterViewer({
   const currentImage = displayImages[currentImageIndex];
 
   // Progressive image loading (blur-up)
+  // Panel: 1200px initial, full on zoom. Lightbox: 1600px initial, full on zoom.
+  const initialWidth = variant === "lightbox" ? 1600 : 1200;
+  const needsFullRes = scale > 1;
   const thumbSrc = getImageUrl(currentImage.imageUrl, { width: 32 });
-  const fullSrc = getImageUrl(currentImage.imageUrl);
-  const { fullLoaded } = useProgressiveImage(thumbSrc, fullSrc);
+  const midSrc = getImageUrl(currentImage.imageUrl, { width: initialWidth });
+  const fullSrc = needsFullRes ? getImageUrl(currentImage.imageUrl) : midSrc;
+  const { fullLoaded, midLoaded } = useProgressiveImage({
+    thumbSrc,
+    midSrc,
+    fullSrc,
+    context: variant === "lightbox" ? 'viewer-lightbox' : 'viewer-panel',
+  });
+  const viewerReady = fullLoaded || midLoaded;
 
   // ============================================================================
   // PERSISTENCE: Save state to localStorage
@@ -559,7 +569,7 @@ const LetterViewer = memo(function LetterViewer({
         onTouchEnd={handleTouchEnd}
         onDoubleClick={isLightbox ? handleDoubleClick : undefined}
       >
-        {!fullLoaded && (
+        {!viewerReady && (
           <img
             src={thumbSrc}
             alt=""
@@ -575,7 +585,7 @@ const LetterViewer = memo(function LetterViewer({
         )}
         <img
           ref={imageRef}
-          src={fullSrc}
+          src={viewerReady ? fullSrc : midSrc}
           alt={
             getImageAlt
               ? getImageAlt(currentImage)
@@ -596,7 +606,7 @@ const LetterViewer = memo(function LetterViewer({
                   : onImageClick
                     ? "pointer"
                     : "default",
-            opacity: fullLoaded ? 1 : 0,
+            opacity: viewerReady ? 1 : 0,
             transition: 'opacity 400ms ease-out',
           }}
           draggable={false}

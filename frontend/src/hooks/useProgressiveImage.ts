@@ -1,54 +1,134 @@
 import { useState, useEffect, useRef } from 'react';
+import { recordImageLoad } from '../utils/imagePerformance';
 
-interface UseProgressiveImageResult {
-  thumbLoaded: boolean;
-  fullLoaded: boolean;
+export interface ProgressiveImageOptions {
+  thumbSrc: string;
+  midSrc?: string;
+  fullSrc: string;
+  idleUpgrade?: boolean;
+  context?: string;
 }
 
-export function useProgressiveImage(thumbSrc: string, fullSrc: string): UseProgressiveImageResult {
+export interface UseProgressiveImageResult {
+  thumbLoaded: boolean;
+  midLoaded: boolean;
+  fullLoaded: boolean;
+  /** Best available src (full > mid > thumb > '') */
+  currentSrc: string;
+}
+
+const scheduleIdle: (cb: () => void) => number =
+  typeof requestIdleCallback === 'function'
+    ? requestIdleCallback
+    : (cb) => setTimeout(cb, 200) as unknown as number;
+
+const cancelIdle: (id: number) => void =
+  typeof cancelIdleCallback === 'function'
+    ? cancelIdleCallback
+    : (id) => clearTimeout(id);
+
+function loadImage(
+  src: string,
+  tier: string,
+  context: string,
+  cancelled: { current: boolean },
+  onLoad: () => void,
+): HTMLImageElement {
+  const start = performance.now();
+  const img = new Image();
+  img.onload = () => {
+    if (cancelled.current) return;
+    const durationMs = performance.now() - start;
+    recordImageLoad({
+      url: src,
+      tier: tier as 'thumb' | 'mid' | 'full',
+      context,
+      durationMs,
+      cached: durationMs < 15,
+    });
+    onLoad();
+  };
+  img.src = src;
+  if (img.complete) {
+    if (!cancelled.current) {
+      recordImageLoad({
+        url: src,
+        tier: tier as 'thumb' | 'mid' | 'full',
+        context,
+        durationMs: 0,
+        cached: true,
+      });
+      onLoad();
+    }
+  }
+  return img;
+}
+
+// Overload: 2-arg legacy signature
+export function useProgressiveImage(thumbSrc: string, fullSrc: string): UseProgressiveImageResult;
+// Overload: options object
+export function useProgressiveImage(options: ProgressiveImageOptions): UseProgressiveImageResult;
+// Implementation
+export function useProgressiveImage(
+  thumbSrcOrOpts: string | ProgressiveImageOptions,
+  fullSrcArg?: string,
+): UseProgressiveImageResult {
+  const opts: ProgressiveImageOptions =
+    typeof thumbSrcOrOpts === 'string'
+      ? { thumbSrc: thumbSrcOrOpts, fullSrc: fullSrcArg! }
+      : thumbSrcOrOpts;
+
+  const { thumbSrc, midSrc, fullSrc, idleUpgrade = false, context = 'unknown' } = opts;
+
   const [thumbLoaded, setThumbLoaded] = useState(false);
+  const [midLoaded, setMidLoaded] = useState(false);
   const [fullLoaded, setFullLoaded] = useState(false);
-  const fullImgRef = useRef<HTMLImageElement | null>(null);
-  const thumbImgRef = useRef<HTMLImageElement | null>(null);
+  const imgsRef = useRef<HTMLImageElement[]>([]);
+  const idleRef = useRef<number | null>(null);
 
   useEffect(() => {
     setThumbLoaded(false);
+    setMidLoaded(false);
     setFullLoaded(false);
 
-    let cancelled = false;
+    const cancelled = { current: false };
+    const imgs: HTMLImageElement[] = [];
 
-    // Load thumbnail
-    const thumb = new Image();
-    thumbImgRef.current = thumb;
-    thumb.onload = () => {
-      if (!cancelled) setThumbLoaded(true);
-    };
-    thumb.src = thumbSrc;
-    // Handle already-cached thumbnails
-    if (thumb.complete) {
-      if (!cancelled) setThumbLoaded(true);
+    // 1. Load thumbnail immediately
+    imgs.push(loadImage(thumbSrc, 'thumb', context, cancelled, () => setThumbLoaded(true)));
+
+    // 2. Load mid-quality immediately (if provided)
+    if (midSrc) {
+      imgs.push(loadImage(midSrc, 'mid', context, cancelled, () => setMidLoaded(true)));
     }
 
-    // Load full image
-    const full = new Image();
-    fullImgRef.current = full;
-    full.onload = () => {
-      if (!cancelled) setFullLoaded(true);
+    // 3. Load full — either immediately or deferred via idle callback
+    const startFull = () => {
+      imgs.push(loadImage(fullSrc, 'full', context, cancelled, () => setFullLoaded(true)));
     };
-    full.src = fullSrc;
-    // Handle already-cached full images
-    if (full.complete) {
-      if (!cancelled) setFullLoaded(true);
+
+    if (idleUpgrade && midSrc) {
+      // Defer full-quality load until browser is idle
+      idleRef.current = scheduleIdle(startFull);
+    } else {
+      // No idle deferral — load full immediately
+      startFull();
     }
+
+    imgsRef.current = imgs;
 
     return () => {
-      cancelled = true;
-      thumb.onload = null;
-      full.onload = null;
-      thumbImgRef.current = null;
-      fullImgRef.current = null;
+      cancelled.current = true;
+      for (const img of imgs) img.onload = null;
+      if (idleRef.current !== null) {
+        cancelIdle(idleRef.current);
+        idleRef.current = null;
+      }
+      imgsRef.current = [];
     };
-  }, [thumbSrc, fullSrc]);
+  }, [thumbSrc, midSrc, fullSrc, idleUpgrade, context]);
 
-  return { thumbLoaded, fullLoaded };
+  const currentSrc = fullLoaded ? fullSrc : midLoaded && midSrc ? midSrc : thumbLoaded ? thumbSrc : '';
+
+  return { thumbLoaded, midLoaded, fullLoaded, currentSrc };
 }

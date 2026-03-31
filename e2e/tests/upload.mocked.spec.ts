@@ -171,6 +171,8 @@ test.describe('@mocked Upload Page', () => {
     await page.getByRole('button', { name: /Replace Duplicates/i }).click();
 
     await expect(page.locator('.upload-banner')).toContainText('1 replaced');
+    // Wait for both batch requests to complete (new files + force replacements)
+    await expect.poll(() => mockedApi.uploadRequests.length, { timeout: 5000 }).toBe(2);
     expect(mockedApi.uploadRequests).toEqual([
       {
         url: expect.stringMatching(/\/admin\/uploads$/),

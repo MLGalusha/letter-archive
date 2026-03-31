@@ -48,11 +48,14 @@ export default function ShowcaseCard({ items, onNavigate }: ShowcaseCardProps) {
           <ProgressiveImage
             key={gi.imageId || idx}
             className="cd-highlight-img"
-            src={getImageUrl(gi.imageUrl, { width: 720 })}
+            src={getImageUrl(gi.imageUrl, { width: 960 })}
             thumbSrc={getImageUrl(gi.imageUrl, { width: 32 })}
+            midSrc={getImageUrl(gi.imageUrl, { width: 480 })}
             alt={idx === index ? (gi.hook || gi.label) : ''}
             loading={idx === 0 ? 'eager' : 'lazy'}
             style={{ opacity: idx === index ? 1 : 0 }}
+            idleUpgrade
+            context="showcase"
           />
         ) : null
       ))}

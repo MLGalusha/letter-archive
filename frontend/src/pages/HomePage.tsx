@@ -13,6 +13,7 @@ import ArchiveList from "../components/ArchiveList/ArchiveList";
 import Footer from "../components/Footer/Footer";
 import BackToTop from "../components/BackToTop";
 import { getContentPage, getFeaturedLetter, getImageUrl, listBlogPosts, type BlogPost, type FeaturedLetter } from "../api/client";
+import { ProgressiveImage } from "../components/common";
 import { getLetterById } from "../api/letters";
 import type { LetterImage } from "../types/Letter";
 import { buildHomeSeo } from "../utils/seo";
@@ -160,25 +161,31 @@ function HeroLetterCard({
     >
       {heroImages.length > 0 ? (
         heroImages.map((img, idx) => (
-          <img
+          <ProgressiveImage
             key={img.id}
             className="letter-card-image"
-            src={getImageUrl(img.imageUrl, { width: 1200 })}
+            src={getImageUrl(img.imageUrl, { width: 960 })}
+            thumbSrc={getImageUrl(img.imageUrl, { width: 32 })}
+            midSrc={getImageUrl(img.imageUrl, { width: 640 })}
             alt=""
             loading={idx === 0 ? "eager" : "lazy"}
             fetchPriority={idx === 0 ? "high" : undefined}
             decoding="async"
             style={{ opacity: idx === heroPageIndex ? 1 : 0 }}
+            idleUpgrade
+            context="hero"
           />
         ))
       ) : heroLetter.imageUrl ? (
-        <img
+        <ProgressiveImage
           className="letter-card-image"
-          src={heroLetter.imageUrl.startsWith('/') ? getImageUrl(heroLetter.imageUrl, { width: 1200 }) : heroLetter.imageUrl}
+          src={heroLetter.imageUrl.startsWith('/') ? getImageUrl(heroLetter.imageUrl, { width: 960 }) : heroLetter.imageUrl}
+          thumbSrc={heroLetter.imageUrl.startsWith('/') ? getImageUrl(heroLetter.imageUrl, { width: 32 }) : heroLetter.imageUrl}
           alt=""
           loading="eager"
           fetchPriority="high"
           decoding="async"
+          context="hero"
         />
       ) : (
         <div className="letter-card-fallback" aria-hidden="true">

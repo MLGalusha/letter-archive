@@ -166,7 +166,7 @@ function HeroLetterCard({
             className="letter-card-image"
             src={getImageUrl(img.imageUrl, { width: 960 })}
             thumbSrc={getImageUrl(img.imageUrl, { width: 32 })}
-            midSrc={getImageUrl(img.imageUrl, { width: 640 })}
+            midSrc={getImageUrl(img.imageUrl, { width: 480 })}
             alt=""
             loading={idx === 0 ? "eager" : "lazy"}
             fetchPriority={idx === 0 ? "high" : undefined}

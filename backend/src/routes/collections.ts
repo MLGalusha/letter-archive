@@ -63,12 +63,21 @@ function applyProfileCorrespondentOverrides<
 
 // Note: Request logging is handled by the request-logger middleware
 
+// Simple TTL cache for collections list — invalidated after 30s
+let collectionsCache: { data: unknown; timestamp: number } | null = null;
+const COLLECTIONS_CACHE_TTL_MS = 30_000;
+
 /**
  * GET /collections
  * List all collections with letter counts (published only)
  */
 router.get('/collections', async (req, res, next) => {
   try {
+    if (collectionsCache && Date.now() - collectionsCache.timestamp < COLLECTIONS_CACHE_TTL_MS) {
+      res.json(collectionsCache.data);
+      return;
+    }
+
     const allCollections = await listCollections();
 
     // Run all aggregation queries in parallel
@@ -133,6 +142,7 @@ router.get('/collections', async (req, res, next) => {
       primaryRecipient: recipientMap.get(collection.id) || null,
     }));
 
+    collectionsCache = { data: collectionsWithDetails, timestamp: Date.now() };
     req.log.debug({ collectionCount: collectionsWithDetails.length }, 'Collections list fetched');
     res.json(collectionsWithDetails);
   } catch (error) {

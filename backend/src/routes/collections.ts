@@ -63,8 +63,9 @@ function applyProfileCorrespondentOverrides<
 
 // Note: Request logging is handled by the request-logger middleware
 
-// Simple TTL cache for collections list — invalidated after 30s
+// Simple TTL caches — collections change rarely (only on publish/unpublish)
 let collectionsCache: { data: unknown; timestamp: number } | null = null;
+const collectionDetailCache = new Map<string, { data: unknown; timestamp: number }>();
 const COLLECTIONS_CACHE_TTL_MS = 30_000;
 
 /**
@@ -175,6 +176,13 @@ router.get('/collections/next-number', async (_req, res, next) => {
 router.get('/collections/:code', async (req, res, next) => {
   try {
     const { code } = req.params;
+
+    const cached = collectionDetailCache.get(code);
+    if (cached && Date.now() - cached.timestamp < COLLECTIONS_CACHE_TTL_MS) {
+      res.json(cached.data);
+      return;
+    }
+
     const collection = await getCollectionByCode(code);
 
     if (!collection) {
@@ -229,11 +237,13 @@ router.get('/collections/:code', async (req, res, next) => {
       'Collection fetched with letters'
     );
 
-    res.json({
+    const result = {
       ...collection,
       letters: collectionLetters,
       letterCount: collectionLetters.length,
-    });
+    };
+    collectionDetailCache.set(code, { data: result, timestamp: Date.now() });
+    res.json(result);
   } catch (error) {
     next(error);
   }

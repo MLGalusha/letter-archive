@@ -128,6 +128,18 @@ steps:
       - --wait
     waitFor: ['deploy-migrate-job']
 
+  # ── Deploy backfill job (run manually via gcloud) ───────────
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-backfill-job
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - replace
+      - deploy/cloudrun/backend-backfill-dimensions-job.yaml
+      - --region=${_REGION}
+    waitFor: ['push-backend', 'prepare-manifests']
+
   # ── Deploy backend service ──────────────────────────────────
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy-backend

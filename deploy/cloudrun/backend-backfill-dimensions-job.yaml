@@ -1,0 +1,53 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: letter-archive-backfill-dimensions
+  namespace: PROJECT_NUMBER
+  labels:
+    cloud.googleapis.com/location: REGION
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/cloudsql-instances: PROJECT_ID:REGION:CLOUD_SQL_INSTANCE
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      taskCount: 1
+      parallelism: 1
+      template:
+        spec:
+          maxRetries: 0
+          timeoutSeconds: 900
+          serviceAccountName: SERVICE_ACCOUNT_EMAIL
+          containers:
+            - image: BACKEND_IMAGE
+              command:
+                - node
+              args:
+                - dist/cli/backfill-dimensions.js
+              env:
+                - name: NODE_ENV
+                  value: production
+                - name: STORAGE_DIR
+                  value: /mnt/archive
+                - name: LOG_TO_FILES
+                  value: "false"
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: database-url
+                      key: latest
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              volumeMounts:
+                - name: archive-storage
+                  mountPath: /mnt/archive
+          volumes:
+            - name: archive-storage
+              csi:
+                driver: gcsfuse.run.googleapis.com
+                readOnly: true
+                volumeAttributes:
+                  bucketName: ARCHIVE_BUCKET

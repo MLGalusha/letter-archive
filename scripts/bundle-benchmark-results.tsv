@@ -11,3 +11,8 @@ aa398c38	969.99	881.75	79.43	406.45	45	improved	Replace react-helmet-async with 
 -	947.43	859.29	77.29	373.54	45	reverted	manualChunks markdown-vendor — +0.14 kB gzip overhead
 36f2893f	946.31	858.18	80.71	386.65	45	improved	manualPureFunctions: strip console.log + Object.freeze — -0.98 kB
 ed56a42a	945.17	857.03	80.37	386.30	45	improved	esbuild drop console+debugger, legalComments none — -1.14 kB
+ba5c3837	945.17	857.03	80.37	386.30	45	no-change	Remove dead code + unused deps — no bundle impact (already excluded by Vite)
+-	-	-	-	-	-	reverted	recharts submodule imports — TS type errors with es6/ paths
+fba1a589	944.90	856.76	80.13	386.30	45	improved	modulePreload polyfill disabled — -0.27 kB from entry
+6c57c46f	944.22	856.08	82.73	386.30	43	improved	experimentalMinChunkSize 20000 — merged 2 more chunks, -0.68 kB
+-	944.22	856.08	82.73	386.30	43	reverted	propertyReadSideEffects: false — already covered by smallest preset

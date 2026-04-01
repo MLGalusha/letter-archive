@@ -1,0 +1,16 @@
+commit_hash	p75_lcp_ms	p75_cls	p75_transition_ms	status	description
+-	884	0.026	127	baseline	Initial measurement — 6 public pages, 2 transitions, unthrottled
+899bd516	476	0.01	139	improved	React.memo on Footer — static content, prevents re-renders on every parent update
+eeafa182	712	0.026	127	improved	React.memo on Header — prevents re-renders from parent Route re-renders
+046d49c7	716	0.026	143	improved	Extract ReactMarkdown components to module scope — stable references prevent child re-renders
+6c32e6da	520	0.026	128	improved	useCallback for SearchBar updateFilter, toggleFormatFilter, clearAll
+4a203b55	532	0.007	137	improved	Remove unused Playfair Display weight 800 — saves one font file download
+7cc2ba90	524	0.026	121	improved	Prefetch Blog and About routes on nav link hover — pre-warm lazy chunks
+eda2b8e1	852	0.025	132	improved	content-visibility: auto on collection cards, update cards, person letter items
+a14f4131	488	0.025	140	improved	React.memo on FacetRow with custom comparator — skip re-renders when data unchanged
+1fa00142	500	0.025	134	improved	React.memo on FilterChoiceField — prevent re-renders when props unchanged
+e56c80a7	860	0.065	125	improved	Move hero page index into HeroLetterCard — isolate page-flip re-renders
+deaee28b	508	0.025	135	improved	will-change: transform, opacity on scroll-reveal header — GPU compositing hint
+4664c674	520	0.025	137	improved	useCallback for Modal overlay click handler
+51e96ed6	496	0.025	139	improved	Fix letter-detail CLS: keep carousel aspect-ratio after image load (CLS 0.18→0.105)
+-	480	0.025	136	reverted	aspect-ratio on page thumbnails — CLS went from 0.105 to 0.149, non-3:4 images conflict

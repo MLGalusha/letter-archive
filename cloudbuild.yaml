@@ -126,7 +126,6 @@ steps:
       - letter-archive-migrate
       - --region=${_REGION}
       - --wait
-      - --wait-timeout=300
     waitFor: ['deploy-migrate-job']
 
   # ── Deploy backend service ──────────────────────────────────

@@ -25,6 +25,13 @@ export default defineConfig({
     rollupOptions: {
       treeshake: {
         preset: 'smallest',
+        manualPureFunctions: [
+          'console.log',
+          'console.warn',
+          'console.info',
+          'console.debug',
+          'Object.freeze',
+        ],
       },
       output: {
         // Ensure CSS files get hashed names

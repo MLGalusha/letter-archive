@@ -25,6 +25,7 @@ export default defineConfig({
     legalComments: 'none',
   },
   build: {
+    modulePreload: { polyfill: false },
     // Add content hashes to filenames for cache busting in production
     rollupOptions: {
       treeshake: {

@@ -8,6 +8,8 @@ export interface ProgressiveImageOptions {
   fullSrc: string;
   idleUpgrade?: boolean;
   context?: string;
+  /** Delay in ms before starting the full-quality load (gives priority images a head start) */
+  fullDelay?: number;
 }
 
 export interface UseProgressiveImageResult {
@@ -83,27 +85,30 @@ export function useProgressiveImage(
       ? { thumbSrc: thumbSrcOrOpts, fullSrc: fullSrcArg! }
       : thumbSrcOrOpts;
 
-  const { thumbSrc, midSrc, fullSrc, idleUpgrade = false, context = 'unknown' } = opts;
+  const { thumbSrc, midSrc, fullSrc, idleUpgrade = false, context = 'unknown', fullDelay = 0 } = opts;
 
-  // If the preload service already has this image, start as loaded
+  // If the preload service already has this image, start as loaded with known dimensions
   const preloaded = imagePreloadService.isPreloaded(fullSrc);
+  const preloadedDims = preloaded ? imagePreloadService.getDimensions(fullSrc) : null;
   const [thumbLoaded, setThumbLoaded] = useState(false);
   const [midLoaded, setMidLoaded] = useState(false);
   const [fullLoaded, setFullLoaded] = useState(preloaded);
-  const [naturalWidth, setNaturalWidth] = useState<number | null>(null);
-  const [naturalHeight, setNaturalHeight] = useState<number | null>(null);
+  const [naturalWidth, setNaturalWidth] = useState<number | null>(preloadedDims?.width ?? null);
+  const [naturalHeight, setNaturalHeight] = useState<number | null>(preloadedDims?.height ?? null);
   const imgsRef = useRef<HTMLImageElement[]>([]);
   const idleRef = useRef<number | null>(null);
+  const delayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dimsSetRef = useRef(false);
 
   useEffect(() => {
     const alreadyPreloaded = imagePreloadService.isPreloaded(fullSrc);
+    const dims = alreadyPreloaded ? imagePreloadService.getDimensions(fullSrc) : null;
     setThumbLoaded(false);
     setMidLoaded(false);
     setFullLoaded(alreadyPreloaded);
-    setNaturalWidth(null);
-    setNaturalHeight(null);
-    dimsSetRef.current = false;
+    setNaturalWidth(dims?.width ?? null);
+    setNaturalHeight(dims?.height ?? null);
+    dimsSetRef.current = !!dims;
 
     const cancelled = { current: false };
     const imgs: HTMLImageElement[] = [];
@@ -116,7 +121,7 @@ export function useProgressiveImage(
       }
     };
 
-    // 1. Load thumbnail immediately
+    // 1. Load thumbnail immediately (even for deferred images — it's tiny)
     imgs.push(loadImage(thumbSrc, 'thumb', context, cancelled, (img) => {
       setThumbLoaded(true);
       captureDims(img);
@@ -133,6 +138,7 @@ export function useProgressiveImage(
     // 3. Load full — skip if preload service already has it, otherwise load
     if (!alreadyPreloaded) {
       const startFull = () => {
+        if (cancelled.current) return;
         imgs.push(loadImage(fullSrc, 'full', context, cancelled, (img) => {
           setFullLoaded(true);
           captureDims(img);
@@ -141,6 +147,9 @@ export function useProgressiveImage(
 
       if (idleUpgrade && midSrc) {
         idleRef.current = scheduleIdle(startFull);
+      } else if (fullDelay > 0) {
+        // Delay full-quality load to give priority images a head start
+        delayRef.current = setTimeout(startFull, fullDelay);
       } else {
         startFull();
       }
@@ -155,9 +164,13 @@ export function useProgressiveImage(
         cancelIdle(idleRef.current);
         idleRef.current = null;
       }
+      if (delayRef.current !== null) {
+        clearTimeout(delayRef.current);
+        delayRef.current = null;
+      }
       imgsRef.current = [];
     };
-  }, [thumbSrc, midSrc, fullSrc, idleUpgrade, context]);
+  }, [thumbSrc, midSrc, fullSrc, idleUpgrade, context, fullDelay]);
 
   const currentSrc = fullLoaded ? fullSrc : midLoaded && midSrc ? midSrc : thumbLoaded ? thumbSrc : '';
 

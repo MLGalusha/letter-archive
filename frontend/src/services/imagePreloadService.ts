@@ -24,12 +24,14 @@ const scheduleIdle: (cb: () => void) => number =
 
 class ImagePreloadService {
   private preloaded = new Set<string>();
+  private dimensions = new Map<string, { width: number; height: number }>();
   private queue: QueueEntry[] = [];
   private active = 0;
   private inflight = new Map<string, HTMLImageElement>();
   private collectionLetterIds: string[] = [];
   private currentLetterId: string | null = null;
   private idleHandle: number | null = null;
+  private startupTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * Called from collection page after data loads.
@@ -39,7 +41,8 @@ class ImagePreloadService {
   preloadCollection(letters: { id: string; images: LetterImageInfo[] }[]) {
     this.collectionLetterIds = letters.map((l) => l.id);
 
-    // Phase 1: First image of each letter
+    // Phase 1: First image of each letter — enqueue but delay start
+    // so the collection page can finish rendering before we compete for network
     for (const letter of letters) {
       if (letter.images[0]) {
         this.enqueue({
@@ -70,7 +73,12 @@ class ImagePreloadService {
       this.processQueue();
     });
 
-    this.processQueue();
+    // Delay the initial batch so the page renders smoothly first
+    if (this.startupTimer !== null) clearTimeout(this.startupTimer);
+    this.startupTimer = setTimeout(() => {
+      this.startupTimer = null;
+      this.processQueue();
+    }, 600);
   }
 
   /**
@@ -111,6 +119,14 @@ class ImagePreloadService {
   }
 
   /**
+   * Get stored dimensions for a preloaded image.
+   * Returns null if the image hasn't been preloaded or dimensions aren't available.
+   */
+  getDimensions(url: string): { width: number; height: number } | null {
+    return this.dimensions.get(url) ?? null;
+  }
+
+  /**
    * Reset the service (e.g., when leaving a collection).
    */
   clear() {
@@ -128,7 +144,11 @@ class ImagePreloadService {
       (typeof cancelIdleCallback === 'function' ? cancelIdleCallback : clearTimeout)(this.idleHandle);
       this.idleHandle = null;
     }
-    // Keep preloaded set — those URLs are still in browser cache
+    if (this.startupTimer !== null) {
+      clearTimeout(this.startupTimer);
+      this.startupTimer = null;
+    }
+    // Keep preloaded set and dimensions — those URLs are still in browser cache
   }
 
   private enqueue(entry: QueueEntry) {
@@ -179,12 +199,20 @@ class ImagePreloadService {
       const done = () => {
         this.active--;
         this.preloaded.add(entry.url);
+        if (img.naturalWidth && img.naturalHeight) {
+          this.dimensions.set(entry.url, { width: img.naturalWidth, height: img.naturalHeight });
+        }
         this.inflight.delete(entry.url);
         this.processQueue();
       };
 
       img.onload = done;
-      img.onerror = done; // Still mark as "attempted" to avoid retrying
+      img.onerror = () => {
+        this.active--;
+        this.preloaded.add(entry.url); // Mark as attempted to avoid retrying
+        this.inflight.delete(entry.url);
+        this.processQueue();
+      };
       img.src = entry.url;
 
       // Handle synchronously cached images

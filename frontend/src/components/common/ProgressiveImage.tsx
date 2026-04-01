@@ -21,6 +21,8 @@ export interface ProgressiveImageProps {
   onLoad?: () => void;
   /** Known aspect ratio (width/height) from DB — used for placeholder sizing */
   aspectRatio?: number;
+  /** Delay in ms before starting the full-quality load (gives priority images a head start) */
+  fullDelay?: number;
 }
 
 export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImageProps>(
@@ -43,6 +45,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       context,
       onLoad,
       aspectRatio: knownAspectRatio,
+      fullDelay,
     },
     ref,
   ) {
@@ -52,6 +55,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       fullSrc: src,
       idleUpgrade,
       context,
+      fullDelay,
     });
 
     // Best non-full source for the placeholder layer

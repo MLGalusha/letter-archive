@@ -20,6 +20,10 @@ export default defineConfig({
       '/blog-images': 'http://localhost:3002',
     },
   },
+  esbuild: {
+    drop: ['console', 'debugger'],
+    legalComments: 'none',
+  },
   build: {
     // Add content hashes to filenames for cache busting in production
     rollupOptions: {

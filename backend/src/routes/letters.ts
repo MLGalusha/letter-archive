@@ -476,12 +476,39 @@ router.get('/letters/summaries', async (req, res, next) => {
   }
 });
 
+// Short TTL cache for search results (search queries are expensive and results change infrequently)
+const SEARCH_CACHE_TTL_MS = 10_000;
+const SEARCH_CACHE_MAX = 50;
+const searchCache = new Map<string, { data: unknown; timestamp: number }>();
+
+function getSearchCacheKey(query: Record<string, unknown>): string {
+  return JSON.stringify(query);
+}
+
 router.get('/letters/search', async (req, res, next) => {
   const start = Date.now();
   try {
     const query = archiveSearchQuerySchema.parse(req.query);
+
+    const cacheKey = getSearchCacheKey(query);
+    const cached = searchCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < SEARCH_CACHE_TTL_MS) {
+      // Move to end for LRU ordering
+      searchCache.delete(cacheKey);
+      searchCache.set(cacheKey, cached);
+      res.json(cached.data);
+      return;
+    }
+
     const response = await searchArchiveSummaries(query);
     const duration = Date.now() - start;
+
+    // Cache the result
+    if (searchCache.size >= SEARCH_CACHE_MAX) {
+      const oldest = searchCache.keys().next().value;
+      if (oldest !== undefined) searchCache.delete(oldest);
+    }
+    searchCache.set(cacheKey, { data: response, timestamp: Date.now() });
 
     req.log.info(
       {

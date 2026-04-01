@@ -174,9 +174,25 @@ const LetterViewer = memo(function LetterViewer({
     thumbSrc,
     midSrc,
     fullSrc,
+    idleUpgrade: variant === "panel",
     context: variant === "lightbox" ? 'viewer-lightbox' : 'viewer-panel',
   });
   const viewerReady = fullLoaded || midLoaded;
+
+  // Preload adjacent images so page navigation feels instant
+  useEffect(() => {
+    if (displayImages.length <= 1) return;
+    const nextIdx = (currentImageIndex + 1) % displayImages.length;
+    const prevIdx = (currentImageIndex - 1 + displayImages.length) % displayImages.length;
+    const toPreload = [displayImages[nextIdx], displayImages[prevIdx]].filter(Boolean);
+    const imgs: HTMLImageElement[] = [];
+    for (const img of toPreload) {
+      const el = new Image();
+      el.src = getImageUrl(img.imageUrl, { width: initialWidth });
+      imgs.push(el);
+    }
+    return () => { for (const el of imgs) el.onload = null; };
+  }, [currentImageIndex, displayImages, initialWidth]);
 
   // ============================================================================
   // PERSISTENCE: Save state to localStorage

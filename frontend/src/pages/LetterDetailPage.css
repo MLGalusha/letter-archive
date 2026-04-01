@@ -210,11 +210,13 @@
   animation: scan-shimmer 1.5s ease-in-out infinite;
 }
 
-/* Stop shimmer once any image has loaded — keep aspect-ratio to prevent CLS */
+/* Stop shimmer once any image has loaded — let natural aspect ratio take over */
 .scan-slide-img:has(.progressive-image__full:not(.progressive-image__full--loading)),
 .scan-slide-img:has(.progressive-image__thumb) {
   animation: none;
   background: transparent;
+  aspect-ratio: auto;
+  min-height: auto;
 }
 
 /* Inner img elements fill the wrapper */

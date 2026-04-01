@@ -120,6 +120,7 @@
 .letter-card-image {
   display: block;
   object-fit: cover;
+  background: rgba(45, 38, 32, 0.85);
 }
 
 .archive-load-more-sentinel {

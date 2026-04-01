@@ -568,24 +568,6 @@ router.get('/letters/:letterId', async (req, res, next) => {
       return;
     }
 
-    if (SUPPLEMENTARY_TYPES.has(letter.type)) {
-      // Check if there's a primary letter in the same group
-      const hasPrimary = await db.query.letters.findFirst({
-        where: and(
-          eq(letters.collectionId, letter.collectionId),
-          eq(letters.dateRaw, letter.dateRaw),
-          eq(letters.typeSequence, letter.typeSequence),
-          sql`${letters.type} NOT IN ('C', 'T', 'E', 'N')`,
-          eq(letters.visibility, 'PUBLISHED'),
-        ),
-        columns: { id: true },
-      });
-      if (!hasPrimary) {
-        res.status(404).json({ error: 'Letter not found' });
-        return;
-      }
-    }
-
     // Fetch related items (all other types with same date/sequence)
     const related = await db.query.letters.findMany({
       where: and(

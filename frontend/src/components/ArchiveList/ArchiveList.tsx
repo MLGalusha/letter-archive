@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import "./ArchiveList.css";
 import LetterCard from "../LetterCard/LetterCard";
 import type { ArchiveShelfItem } from "../../types/Letter";
+import { getImageUrl } from "../../api/client";
+import { imagePreloadService } from "../../services/imagePreloadService";
 
 interface ArchiveListProps {
   letters: ArchiveShelfItem[];
@@ -46,6 +48,22 @@ export default function ArchiveList({
   const previousHeightRef = useRef<number | null>(null);
   const collapseAnimationFrameRef = useRef<number | null>(null);
   const isSparseResultSet = !loading && !loadingMore && !error && total <= 8;
+
+  // When the result set is small (e.g. filtered down), preload all carousel images
+  // since the user is likely to click through several of them
+  const PRELOAD_THRESHOLD = 20;
+  useEffect(() => {
+    if (loading || letters.length === 0 || total > PRELOAD_THRESHOLD) return;
+    for (const letter of letters) {
+      if (letter.imageUrl) {
+        const url = getImageUrl(letter.imageUrl, { width: 800 });
+        if (!imagePreloadService.isPreloaded(url)) {
+          const img = new Image();
+          img.src = url;
+        }
+      }
+    }
+  }, [letters, loading, total]);
 
   const sortCueMap = useMemo(() => {
     if (!sortCueField) return null;

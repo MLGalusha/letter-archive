@@ -171,9 +171,9 @@ steps:
     args:
       - -c
       - |
-        gcloud run worker-pools replace deploy/cloudrun/backend-workerpool.yaml \
+        gcloud beta run worker-pools replace deploy/cloudrun/backend-workerpool.yaml \
           --region=${_REGION} 2>/dev/null || \
-        gcloud run worker-pools update letter-archive-worker \
+        gcloud beta run worker-pools update letter-archive-worker \
           --region=${_REGION} \
           --image=${_BACKEND_IMAGE}:${_TAG}
     waitFor: ['run-migrations', 'prepare-manifests']

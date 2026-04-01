@@ -14,6 +14,7 @@ import Footer from "../components/Footer/Footer";
 import BackToTop from "../components/BackToTop";
 import { getContentPage, getFeaturedLetter, getImageUrl, listBlogPosts, type BlogPost, type FeaturedLetter } from "../api/client";
 import { ProgressiveImage } from "../components/common";
+import { imagePreloadService } from "../services/imagePreloadService";
 import { getLetterById } from "../api/letters";
 import type { LetterImage } from "../types/Letter";
 import { buildHomeSeo } from "../utils/seo";
@@ -147,6 +148,17 @@ function HeroLetterCard({
     setHeroPageIndex((i) => (i === heroImages.length - 1 ? 0 : i + 1));
   };
 
+  const handleHeroHover = () => {
+    // Preload all hero images at carousel width for instant letter detail view
+    for (const img of heroImages) {
+      const url = getImageUrl(img.imageUrl, { width: 800 });
+      if (!imagePreloadService.isPreloaded(url)) {
+        const preload = new Image();
+        preload.src = url;
+      }
+    }
+  };
+
   return (
     <div
       role="button"
@@ -155,6 +167,7 @@ function HeroLetterCard({
       aria-label={ariaLabel}
       onClick={navigateToLetter}
       onKeyDown={handleCardKeyDown}
+      onMouseEnter={handleHeroHover}
     >
       {heroImages.length > 0 ? (
         heroImages.map((img, idx) => (

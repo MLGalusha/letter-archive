@@ -216,6 +216,7 @@
   left: 0;
   right: 0;
   transition: opacity 0.25s ease, transform 0.25s ease;
+  will-change: transform, opacity;
 }
 
 .header--scroll-reveal.header--hidden {

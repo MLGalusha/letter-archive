@@ -126,6 +126,7 @@ steps:
       - letter-archive-migrate
       - --region=${_REGION}
       - --wait
+      - --wait-timeout=300
     waitFor: ['deploy-migrate-job']
 
   # ── Deploy backend service ──────────────────────────────────
@@ -135,11 +136,15 @@ steps:
     args:
       - -c
       - |
+        set -e
         gcloud run services replace deploy/cloudrun/backend-service.yaml \
           --region=${_REGION}
+        set +e
         gcloud run services add-iam-policy-binding letter-archive-backend \
-          --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet || \
-        echo "WARNING: Could not set IAM policy — set public access manually"
+          --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet
+        if [ $$? -ne 0 ]; then
+          echo "WARNING: Could not set IAM policy — set public access manually"
+        fi
     waitFor: ['run-migrations', 'prepare-manifests']
 
   # ── Deploy frontend service ─────────────────────────────────
@@ -149,11 +154,15 @@ steps:
     args:
       - -c
       - |
+        set -e
         gcloud run services replace deploy/cloudrun/frontend-service.yaml \
           --region=${_REGION}
+        set +e
         gcloud run services add-iam-policy-binding letter-archive-frontend \
-          --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet || \
-        echo "WARNING: Could not set IAM policy — set public access manually"
+          --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet
+        if [ $$? -ne 0 ]; then
+          echo "WARNING: Could not set IAM policy — set public access manually"
+        fi
     waitFor: ['push-frontend', 'prepare-manifests']
 
   # ── Deploy worker pool ──────────────────────────────────────

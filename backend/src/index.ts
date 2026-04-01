@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import compression from 'compression';
 import cors from 'cors';
 import { eq } from 'drizzle-orm';
 import routes from './routes/index.js';
@@ -66,6 +67,14 @@ app.get('/debug/health', async (_req, res) => {
 
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
+
+// Compress JSON/text responses (skip images — already optimized by sharp)
+app.use(compression({
+  filter: (req, res) => {
+    if (req.path.startsWith('/images/') || req.path.startsWith('/blog-images/')) return false;
+    return compression.filter(req, res);
+  },
+}));
 
 // Request logging (must be first to capture all requests)
 app.use(requestLogger);

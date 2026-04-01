@@ -12,7 +12,7 @@ import { logIfSlow, TIMING_THRESHOLDS } from '../utils/logger.js';
 const router = Router();
 
 // In-memory LRU cache for resized images (avoids re-encoding on repeated requests)
-const IMAGE_CACHE_MAX = 200;
+const IMAGE_CACHE_MAX = 300;
 const imageCache = new Map<string, { buffer: Buffer; contentType: string }>();
 
 function getCachedImage(key: string) {
@@ -109,8 +109,10 @@ router.get('/images/:pageId', async (req, res, next) => {
 
     if (requestedWidth) {
       const acceptHeader = req.headers.accept || '';
-      const useWebp = acceptHeader.includes('image/webp');
-      const cacheKey = `${pageId}:${requestedWidth}:${useWebp ? 'webp' : 'jpeg'}`;
+      const format = acceptHeader.includes('image/avif') ? 'avif'
+        : acceptHeader.includes('image/webp') ? 'webp'
+        : 'jpeg';
+      const cacheKey = `${pageId}:${requestedWidth}:${format}`;
 
       const cached = getCachedImage(cacheKey);
       if (cached) {
@@ -128,12 +130,14 @@ router.get('/images/:pageId', async (req, res, next) => {
           withoutEnlargement: true,
         });
 
-      const transformed = useWebp
+      const transformed = format === 'avif'
+        ? pipeline.avif({ quality: 60, effort: 4 })
+        : format === 'webp'
         ? pipeline.webp({ quality: 76, effort: 4 })
         : pipeline.jpeg({ quality: 78, progressive: true, mozjpeg: true });
 
       const outputBuffer = await transformed.toBuffer();
-      const contentType = useWebp ? 'image/webp' : 'image/jpeg';
+      const contentType = `image/${format}`;
       setCachedImage(cacheKey, outputBuffer, contentType);
 
       res.setHeader('Content-Type', contentType);

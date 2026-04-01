@@ -1,0 +1,13 @@
+commit_hash	total_gzip_kb	total_js_gzip_kb	initial_js_gzip_kb	largest_chunk_gzip_kb	chunk_count	status	description
+3c0ae25d	979.30	891.07	84.31	418.51	58	baseline	Initial measurement — routes already lazy-loaded, no manual chunks
+-	979.30	891.07	84.31	418.51	58	reverted	Tree-shake d3 subpackage imports — Vite already tree-shakes named imports
+-	979.38	891.15	81.47	390.50	58	reverted	manualChunks for markdown vendor — marginally increased total (+0.08 kB gzip overhead)
+-	979.07	890.99	84.30	406.52	58	reverted	build.target esnext — negligible improvement (0.23 kB), likely noise
+d44af60b	975.50	887.26	84.87	406.45	45	improved	experimentalMinChunkSize: 5000 — merged 13 small chunks, -3.80 kB gzip
+-	975.50	887.26	84.89	406.45	45	reverted	experimentalMinChunkSize: 10000 — no additional improvement over 5000
+aa398c38	969.99	881.75	79.43	406.45	45	improved	Replace react-helmet-async with vanilla DOM SEO — entry -5.44 kB, total -5.51 kB
+2bb46487	947.29	859.16	80.73	386.98	45	improved	Rollup treeshake preset: smallest — aggressive dead code elimination, -22.70 kB
+-	947.15	859.16	80.74	386.98	45	reverted	esnext target on top of smallest treeshake — negligible (-0.14 kB)
+-	947.43	859.29	77.29	373.54	45	reverted	manualChunks markdown-vendor — +0.14 kB gzip overhead
+36f2893f	946.31	858.18	80.71	386.65	45	improved	manualPureFunctions: strip console.log + Object.freeze — -0.98 kB
+ed56a42a	945.17	857.03	80.37	386.30	45	improved	esbuild drop console+debugger, legalComments none — -1.14 kB

@@ -162,6 +162,8 @@
   border-radius: 30px;
   box-shadow: var(--shadow-soft);
   color: inherit;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 200px;
   display: flex;
   flex-direction: column;
   overflow: hidden;

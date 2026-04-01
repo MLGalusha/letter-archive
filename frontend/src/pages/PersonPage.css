@@ -158,6 +158,8 @@
 
 .person-page .letter-item {
   color: inherit;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 80px;
   display: block;
   padding: 1rem;
   border-radius: 24px;

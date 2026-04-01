@@ -23,6 +23,9 @@ export default defineConfig({
   build: {
     // Add content hashes to filenames for cache busting in production
     rollupOptions: {
+      treeshake: {
+        preset: 'smallest',
+      },
       output: {
         // Ensure CSS files get hashed names
         assetFileNames: 'assets/[name]-[hash][extname]',

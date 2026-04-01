@@ -1,6 +1,6 @@
 import "./Header.css";
 import { Link, NavLink } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { useHeaderDock } from "../../contexts/HeaderDockContext";
 import useScrollDirection from "../../hooks/useScrollDirection";
 import { prefetchCollections } from "../../api/collections";
@@ -10,7 +10,7 @@ function preloadCollectionsRoute() {
   prefetchCollections();
 }
 
-export default function Header() {
+export default memo(function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { dock } = useHeaderDock();
   const hasDock = Boolean(dock.content) || Boolean(dock.showTitle);
@@ -76,4 +76,4 @@ export default function Header() {
       </div>
     </header>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type Ref } from "react";
 import type { ArchiveSearchFacets, LetterImageType } from "../../types/Letter";
 import "./SearchBar.css";
 import {
@@ -162,12 +162,12 @@ export default function SearchBar({
     return `${total} published archive item${total === 1 ? "" : "s"}`;
   }, [hasActiveFilters, hasQuery, loading, query, total]);
 
-  const updateFilter = (partial: Partial<SearchFilters>) => {
+  const updateFilter = useCallback((partial: Partial<SearchFilters>) => {
     onFiltersChange({
       ...filters,
       ...partial,
     });
-  };
+  }, [filters, onFiltersChange]);
 
   // Count active filters for the badge on the refine button.
   // In compact mode, format chips are inside the flyout so they count.
@@ -366,7 +366,7 @@ export default function SearchBar({
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [facets.topics]);
 
-  const toggleFormatFilter = (format: LetterImageType) => {
+  const toggleFormatFilter = useCallback((format: LetterImageType) => {
     const nextFormats = selectedFormats?.includes(format)
       ? selectedFormats.filter((value) => value !== format)
       : [...(selectedFormats || []), format];
@@ -374,15 +374,15 @@ export default function SearchBar({
     updateFilter({
       format: nextFormats.length > 0 ? nextFormats : null,
     });
-  };
+  }, [selectedFormats, updateFilter]);
 
-  const clearAll = () => {
+  const clearAll = useCallback(() => {
     onQueryChange("");
     onFiltersChange({});
     if (isCompact) {
       setRefineOpen(false);
     }
-  };
+  }, [onQueryChange, onFiltersChange, isCompact]);
 
   const collectionFilterId = `${searchIdBase}-collection`;
   const senderFilterId = `${searchIdBase}-sender`;

@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 export interface FacetItem {
   key: string;
   label: string;
@@ -6,7 +8,7 @@ export interface FacetItem {
   onClick: () => void;
 }
 
-export default function FacetRow({
+export default memo(function FacetRow({
   label,
   items,
 }: {
@@ -31,4 +33,13 @@ export default function FacetRow({
       </div>
     </div>
   );
-}
+}, (prev, next) => {
+  if (prev.label !== next.label) return false;
+  if (prev.items.length !== next.items.length) return false;
+  return prev.items.every((item, i) =>
+    item.key === next.items[i].key &&
+    item.label === next.items[i].label &&
+    item.count === next.items[i].count &&
+    item.active === next.items[i].active
+  );
+});

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { FilterChoiceOption } from "./searchBarUtils";
 import { filterChoiceOptions, formatFacetLabel } from "./searchBarUtils";
 import useTimerDropdown from "./useTimerDropdown";
 
-export default function FilterChoiceField({
+export default memo(function FilterChoiceField({
   id,
   label,
   value,
@@ -207,4 +207,4 @@ export default function FilterChoiceField({
       )}
     </div>
   );
-}
+});

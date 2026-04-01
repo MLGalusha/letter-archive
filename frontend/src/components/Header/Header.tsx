@@ -10,6 +10,14 @@ function preloadCollectionsRoute() {
   prefetchCollections();
 }
 
+function preloadBlogRoute() {
+  void import("../../pages/UpdatesPage");
+}
+
+function preloadAboutRoute() {
+  void import("../../pages/AboutPage");
+}
+
 export default memo(function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { dock } = useHeaderDock();
@@ -63,10 +71,10 @@ export default memo(function Header() {
           >
             {dock.collectionsLink?.label ?? "Collections"}
           </NavLink>
-          <NavLink to="/blog" className={({ isActive }) => `page-selector${isActive ? " active" : ""}`} onClick={() => setMenuOpen(false)}>
+          <NavLink to="/blog" className={({ isActive }) => `page-selector${isActive ? " active" : ""}`} onMouseEnter={preloadBlogRoute} onFocus={preloadBlogRoute} onClick={() => setMenuOpen(false)}>
             Journal
           </NavLink>
-          <NavLink to="/about" className={({ isActive }) => `page-selector${isActive ? " active" : ""}`} onClick={() => setMenuOpen(false)}>
+          <NavLink to="/about" className={({ isActive }) => `page-selector${isActive ? " active" : ""}`} onMouseEnter={preloadAboutRoute} onFocus={preloadAboutRoute} onClick={() => setMenuOpen(false)}>
             About
           </NavLink>
           <NavLink to="/support" className={({ isActive }) => `page-selector${isActive ? " active" : ""}`} onClick={() => setMenuOpen(false)}>

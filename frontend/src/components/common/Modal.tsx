@@ -1,4 +1,4 @@
-import type { ReactNode, MouseEvent } from 'react';
+import { useCallback, type ReactNode, type MouseEvent } from 'react';
 import './Modal.css';
 
 export interface ModalProps {
@@ -33,13 +33,13 @@ export function Modal({
   closeOnOverlayClick = true,
   showCloseButton = true,
 }: ModalProps) {
-  if (!isOpen) return null;
-
-  const handleOverlayClick = (e: MouseEvent) => {
+  const handleOverlayClick = useCallback((e: MouseEvent) => {
     if (closeOnOverlayClick && e.target === e.currentTarget) {
       onClose();
     }
-  };
+  }, [closeOnOverlayClick, onClose]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>

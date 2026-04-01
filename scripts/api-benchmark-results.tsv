@@ -1,1 +1,12 @@
 commit_hash	p75_api_ms	total_api_ms	status	description
+fde6ffeb	250.26	808.45	baseline	Initial measurement — /letters 250ms (912KB), /search 529ms
+7d5f4085	10.38	387.36	improved	Exclude large text/JSONB fields from /letters query — 24x faster, 68x smaller
+c857c92d	12.94	218.62	improved	Remove transcription text aggregation from search CTE — search 2x faster
+-	184.20	233.83	reverted	Remove transcription text from ILIKE search — no improvement with 132 records
+7e43dddc	15.60	275.73	improved	Truncate searchText to 500 chars — summaries 55KB→10KB (same timing, big payload win)
+429b5a68	14.92	273.35	improved	Merge count into rows query via COUNT(*) OVER() — 10→9 parallel queries
+-	271.82	319.38	reverted	Remove similarity() from search — not the bottleneck, lost fuzzy matching
+45769566	9.92	138.22	improved	Combine 8 facet queries into 1 UNION ALL — search 175→103ms, total 273→138ms
+ebc37bbd	9.27	136.21	improved	Add 30s TTL cache for collections list — 3.5→1.4ms
+6cdaa1fb	8.75	132.14	improved	Add 30s TTL cache for collection detail — 4.5→1.5ms
+60bf59c1	10.69	41.65	improved	Add 10s TTL LRU cache for search — 102→1.5ms on hit, total 138→42ms

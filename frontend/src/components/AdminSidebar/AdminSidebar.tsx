@@ -19,10 +19,10 @@ interface NavSection {
 const NAV_SECTIONS: NavSection[] = [
   {
     items: [
-      { label: 'Dashboard', path: '/admin', icon: 'edit' },
-      { label: 'Publish', path: '/admin/content', icon: 'folder' },
+      { label: 'Dashboard', path: '/admin', icon: 'table' },
+      { label: 'Content', path: '/admin/content', icon: 'newspaper' },
       { label: 'Processing', path: '/admin/processing', icon: 'process' },
-      { label: 'Notes', path: '/admin/notes', icon: 'file' },
+      { label: 'Notes', path: '/admin/notes', icon: 'sticky-note' },
       { label: 'Usage', path: '/admin/usage', icon: 'chart' },
       { label: 'Upload', path: '/admin/upload', icon: 'plus' },
     ],

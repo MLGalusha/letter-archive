@@ -21,7 +21,7 @@ describe("AdminSidebar", () => {
     const links = within(nav as HTMLElement).getAllByRole("link");
     expect(links.map((link) => link.textContent?.trim())).toEqual([
       "Dashboard",
-      "Publish",
+      "Content",
       "Processing",
       "Notes",
       "Usage",

@@ -12,7 +12,7 @@ import { logIfSlow, TIMING_THRESHOLDS } from '../utils/logger.js';
 const router = Router();
 
 // In-memory LRU cache for resized images (avoids re-encoding on repeated requests)
-const IMAGE_CACHE_MAX = 300;
+const IMAGE_CACHE_MAX = 1000;
 const imageCache = new Map<string, { buffer: Buffer; contentType: string }>();
 
 function getCachedImage(key: string) {
@@ -131,7 +131,7 @@ router.get('/images/:pageId', async (req, res, next) => {
         });
 
       const transformed = format === 'avif'
-        ? pipeline.avif({ quality: 60, effort: 4 })
+        ? pipeline.avif({ quality: 60, effort: 2 })
         : format === 'webp'
         ? pipeline.webp({ quality: 76, effort: 4 })
         : pipeline.jpeg({ quality: 78, progressive: true, mozjpeg: true });
@@ -177,6 +177,34 @@ router.get('/images/:pageId', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+/**
+ * POST /images/perf - Receive frontend image load telemetry
+ */
+router.post('/images/perf', (req, res) => {
+  const entries = req.body;
+  if (!Array.isArray(entries) || entries.length === 0) {
+    res.status(400).json({ error: 'Expected non-empty array' });
+    return;
+  }
+
+  // Cap at 50 entries per request
+  const batch = entries.slice(0, 50);
+  for (const entry of batch) {
+    req.log.info(
+      {
+        imgUrl: entry.url,
+        tier: entry.tier,
+        context: entry.context,
+        durationMs: entry.durationMs,
+        cached: entry.cached,
+      },
+      'client image load',
+    );
+  }
+
+  res.status(204).end();
 });
 
 export default router;

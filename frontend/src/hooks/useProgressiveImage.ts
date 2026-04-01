@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { recordImageLoad } from '../utils/imagePerformance';
+import { imagePreloadService } from '../services/imagePreloadService';
 
 export interface ProgressiveImageOptions {
   thumbSrc: string;
@@ -15,6 +16,10 @@ export interface UseProgressiveImageResult {
   fullLoaded: boolean;
   /** Best available src (full > mid > thumb > '') */
   currentSrc: string;
+  /** Natural width from the first loaded tier (for aspect ratio) */
+  naturalWidth: number | null;
+  /** Natural height from the first loaded tier (for aspect ratio) */
+  naturalHeight: number | null;
 }
 
 const scheduleIdle: (cb: () => void) => number =
@@ -32,7 +37,7 @@ function loadImage(
   tier: string,
   context: string,
   cancelled: { current: boolean },
-  onLoad: () => void,
+  onLoad: (img: HTMLImageElement) => void,
 ): HTMLImageElement {
   const start = performance.now();
   const img = new Image();
@@ -46,7 +51,7 @@ function loadImage(
       durationMs,
       cached: durationMs < 15,
     });
-    onLoad();
+    onLoad(img);
   };
   img.src = src;
   if (img.complete) {
@@ -58,7 +63,7 @@ function loadImage(
         durationMs: 0,
         cached: true,
       });
-      onLoad();
+      onLoad(img);
     }
   }
   return img;
@@ -80,39 +85,65 @@ export function useProgressiveImage(
 
   const { thumbSrc, midSrc, fullSrc, idleUpgrade = false, context = 'unknown' } = opts;
 
+  // If the preload service already has this image, start as loaded
+  const preloaded = imagePreloadService.isPreloaded(fullSrc);
   const [thumbLoaded, setThumbLoaded] = useState(false);
   const [midLoaded, setMidLoaded] = useState(false);
-  const [fullLoaded, setFullLoaded] = useState(false);
+  const [fullLoaded, setFullLoaded] = useState(preloaded);
+  const [naturalWidth, setNaturalWidth] = useState<number | null>(null);
+  const [naturalHeight, setNaturalHeight] = useState<number | null>(null);
   const imgsRef = useRef<HTMLImageElement[]>([]);
   const idleRef = useRef<number | null>(null);
+  const dimsSetRef = useRef(false);
 
   useEffect(() => {
+    const alreadyPreloaded = imagePreloadService.isPreloaded(fullSrc);
     setThumbLoaded(false);
     setMidLoaded(false);
-    setFullLoaded(false);
+    setFullLoaded(alreadyPreloaded);
+    setNaturalWidth(null);
+    setNaturalHeight(null);
+    dimsSetRef.current = false;
 
     const cancelled = { current: false };
     const imgs: HTMLImageElement[] = [];
 
+    const captureDims = (img: HTMLImageElement) => {
+      if (!dimsSetRef.current && img.naturalWidth && img.naturalHeight) {
+        dimsSetRef.current = true;
+        setNaturalWidth(img.naturalWidth);
+        setNaturalHeight(img.naturalHeight);
+      }
+    };
+
     // 1. Load thumbnail immediately
-    imgs.push(loadImage(thumbSrc, 'thumb', context, cancelled, () => setThumbLoaded(true)));
+    imgs.push(loadImage(thumbSrc, 'thumb', context, cancelled, (img) => {
+      setThumbLoaded(true);
+      captureDims(img);
+    }));
 
     // 2. Load mid-quality immediately (if provided)
     if (midSrc) {
-      imgs.push(loadImage(midSrc, 'mid', context, cancelled, () => setMidLoaded(true)));
+      imgs.push(loadImage(midSrc, 'mid', context, cancelled, (img) => {
+        setMidLoaded(true);
+        captureDims(img);
+      }));
     }
 
-    // 3. Load full — either immediately or deferred via idle callback
-    const startFull = () => {
-      imgs.push(loadImage(fullSrc, 'full', context, cancelled, () => setFullLoaded(true)));
-    };
+    // 3. Load full — skip if preload service already has it, otherwise load
+    if (!alreadyPreloaded) {
+      const startFull = () => {
+        imgs.push(loadImage(fullSrc, 'full', context, cancelled, (img) => {
+          setFullLoaded(true);
+          captureDims(img);
+        }));
+      };
 
-    if (idleUpgrade && midSrc) {
-      // Defer full-quality load until browser is idle
-      idleRef.current = scheduleIdle(startFull);
-    } else {
-      // No idle deferral — load full immediately
-      startFull();
+      if (idleUpgrade && midSrc) {
+        idleRef.current = scheduleIdle(startFull);
+      } else {
+        startFull();
+      }
     }
 
     imgsRef.current = imgs;
@@ -130,5 +161,5 @@ export function useProgressiveImage(
 
   const currentSrc = fullLoaded ? fullSrc : midLoaded && midSrc ? midSrc : thumbLoaded ? thumbSrc : '';
 
-  return { thumbLoaded, midLoaded, fullLoaded, currentSrc };
+  return { thumbLoaded, midLoaded, fullLoaded, currentSrc, naturalWidth, naturalHeight };
 }

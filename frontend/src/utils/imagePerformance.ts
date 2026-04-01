@@ -78,11 +78,58 @@ export function getRecentEntries(n = 20): ImageLoadEntry[] {
   return getEntries().slice(-n);
 }
 
+// ── Beacon telemetry ────────────────────────────────────────
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
+const FLUSH_INTERVAL_MS = 60_000;
+let lastFlushIndex = 0;
+
+function getUnflushedEntries(): ImageLoadEntry[] {
+  const all = getEntries();
+  // Only send entries recorded since last flush
+  const unflushed = all.filter((e) => e.timestamp > lastFlushIndex);
+  return unflushed;
+}
+
+function flushToServer() {
+  const entries = getUnflushedEntries();
+  if (entries.length === 0) return;
+
+  lastFlushIndex = Date.now();
+
+  const payload = JSON.stringify(
+    entries.map(({ url, tier, context, durationMs, cached }) => ({
+      url, tier, context, durationMs, cached,
+    })),
+  );
+
+  // Use sendBeacon for reliability during page unload
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon(
+      `${API_BASE_URL}/images/perf`,
+      new Blob([payload], { type: 'application/json' }),
+    );
+  }
+}
+
+// Flush on page hide (tab switch, navigation away)
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushToServer();
+  });
+
+  // Periodic flush while page is active
+  setInterval(() => {
+    if (document.visibilityState === 'visible') flushToServer();
+  }, FLUSH_INTERVAL_MS);
+}
+
 // Expose in dev mode for console inspection
 if (import.meta.env.DEV) {
   (window as unknown as Record<string, unknown>).__imagePerf = {
     getSummary: getImagePerfSummary,
     getRecent: getRecentEntries,
     getAll: getEntries,
+    flush: flushToServer,
   };
 }

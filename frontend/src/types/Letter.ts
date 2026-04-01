@@ -154,6 +154,8 @@ export interface LetterImage {
   pageNumber?: number; // only for letter pages
   imageUrl: string;
   originalFilename?: string;
+  width?: number;
+  height?: number;
   lineSegments?: LineSegment[];
   ocrWordBoxes?: OcrWordBox[];
 }

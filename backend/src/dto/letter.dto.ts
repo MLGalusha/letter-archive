@@ -66,6 +66,8 @@ export interface FrontendLetterImage {
   pageNumber?: number;
   imageUrl: string;
   originalFilename?: string;
+  width?: number;
+  height?: number;
   lineSegments?: FrontendLineSegment[];
   ocrWordBoxes?: FrontendOcrWordBox[];
 }
@@ -431,6 +433,8 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
       pageNumber: page.pageNumber,
       imageUrl: `/images/${page.id}${page.checksumSha256 ? `?v=${page.checksumSha256.slice(0, 8)}` : ''}`,
       originalFilename: page.originalFilename,
+      width: page.width ?? undefined,
+      height: page.height ?? undefined,
       lineSegments: Array.isArray(page.lineSegments)
         ? page.lineSegments as FrontendLineSegment[]
         : undefined,

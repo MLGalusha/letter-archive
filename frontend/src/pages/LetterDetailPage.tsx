@@ -7,6 +7,7 @@ import { getAdjacentLetters, getLetterById, type AdjacentLettersResponse } from 
 import type { Letter, LetterImage, LetterImageType } from "../types/Letter";
 import { getImageUrl } from "../api/client";
 import { ProgressiveImage } from "../components/common";
+import { imagePreloadService } from "../services/imagePreloadService";
 import { buildLetterSeo } from "../utils/seo";
 import {
   shouldShowPublicTranscript,
@@ -217,15 +218,11 @@ export default function LetterDetailPage() {
     return () => controller.abort();
   }, [letterId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Preload adjacent letter images for instant navigation
+  // Tell preload service to prioritize images around the current letter
   useEffect(() => {
-    if (!adjacent) return;
-    const urls: string[] = [];
-    if (adjacent.prev?.imageUrl) urls.push(getImageUrl(adjacent.prev.imageUrl, { width: 800 }));
-    if (adjacent.next?.imageUrl) urls.push(getImageUrl(adjacent.next.imageUrl, { width: 800 }));
-    const images = urls.map((url) => { const img = new Image(); img.src = url; return img; });
-    return () => { images.forEach((img) => { img.src = ''; }); };
-  }, [adjacent]);
+    if (!letterId) return;
+    imagePreloadService.focusLetter(letterId);
+  }, [letterId]);
 
   // Keyboard nav
   useEffect(() => {
@@ -467,6 +464,7 @@ export default function LetterDetailPage() {
                       loading={idx === 0 ? "eager" : "lazy"}
                       decoding="async"
                       context="carousel"
+                      aspectRatio={img.width && img.height ? img.width / img.height : undefined}
                     />
                     {typeLabel && (
                       <span className="scan-slide-type-label">{typeLabel}</span>

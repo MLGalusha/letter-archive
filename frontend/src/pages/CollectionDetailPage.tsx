@@ -6,6 +6,7 @@ import ArchiveList from '../components/ArchiveList/ArchiveList';
 import Footer from '../components/Footer/Footer';
 import BackToTop from '../components/BackToTop';
 import { getCollectionByCode, getCollectionProfile, type CollectionWithLetters, type CollectionProfile } from '../api/collections';
+import { imagePreloadService } from '../services/imagePreloadService';
 import { EMPTY_DOCK, useHeaderDock } from '../contexts/HeaderDockContext';
 import { getPrimaryMediaType } from '../utils/letterPreview';
 import {
@@ -100,6 +101,10 @@ export default function CollectionDetailPage() {
         if (cancelled) return;
         setCollection(data);
         setProfile(profileData);
+        // Start preloading carousel-width images for all letters in this collection
+        if (data?.letters) {
+          imagePreloadService.preloadCollection(data.letters);
+        }
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Collection not found');

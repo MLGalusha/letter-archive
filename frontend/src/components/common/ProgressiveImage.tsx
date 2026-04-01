@@ -19,6 +19,8 @@ export interface ProgressiveImageProps {
   idleUpgrade?: boolean;
   context?: string;
   onLoad?: () => void;
+  /** Known aspect ratio (width/height) from DB — used for placeholder sizing */
+  aspectRatio?: number;
 }
 
 export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImageProps>(
@@ -40,10 +42,11 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       idleUpgrade,
       context,
       onLoad,
+      aspectRatio: knownAspectRatio,
     },
     ref,
   ) {
-    const { thumbLoaded, midLoaded, fullLoaded, currentSrc } = useProgressiveImage({
+    const { thumbLoaded, midLoaded, fullLoaded, currentSrc, naturalWidth, naturalHeight } = useProgressiveImage({
       thumbSrc,
       midSrc,
       fullSrc: src,
@@ -56,11 +59,20 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
     const placeholderSrc = midLoaded && midSrc ? midSrc : thumbLoaded ? thumbSrc : '';
     const isThumbOnly = !midLoaded || !midSrc;
 
+    // Aspect ratio: prefer DB value, fall back to natural dims from thumb
+    const resolvedAspectRatio = knownAspectRatio
+      ?? (naturalWidth && naturalHeight ? naturalWidth / naturalHeight : undefined);
+
     // Fire onLoad when best quality is ready
     if (fullLoaded && onLoad) onLoad();
 
+    const containerStyle: CSSProperties = {
+      ...style,
+      ...(resolvedAspectRatio && !fullLoaded ? { aspectRatio: resolvedAspectRatio } : {}),
+    };
+
     return (
-      <div className={`progressive-image ${className ?? ''}`} style={style}>
+      <div className={`progressive-image ${className ?? ''}`} style={containerStyle}>
         {showPlaceholder && placeholderSrc && (
           <img
             src={placeholderSrc}

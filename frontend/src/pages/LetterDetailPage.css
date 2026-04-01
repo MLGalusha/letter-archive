@@ -197,7 +197,7 @@
   transition: box-shadow 0.3s ease;
   user-select: none;
   overflow: hidden;
-  /* Placeholder sizing before image loads */
+  /* Fallback placeholder sizing before JS sets the real aspect ratio */
   aspect-ratio: 3 / 4;
   min-height: 40vh;
   background: linear-gradient(
@@ -208,6 +208,11 @@
   );
   background-size: 200% 100%;
   animation: scan-shimmer 1.5s ease-in-out infinite;
+}
+
+/* When JS has set a real aspect-ratio via style attr, use it instead of the CSS fallback */
+.scan-slide-img[style*="aspect-ratio"] {
+  aspect-ratio: unset; /* let inline style take precedence */
 }
 
 /* Stop shimmer once any image has loaded — let natural aspect ratio take over */

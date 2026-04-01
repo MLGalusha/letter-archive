@@ -1,4 +1,4 @@
-import { Helmet } from "react-helmet-async";
+import { useEffect } from "react";
 import type { JsonLdObject } from "../utils/seo";
 
 const SITE_NAME = "Letter Archive";
@@ -20,6 +20,21 @@ interface SEOProps {
   publishedTime?: string;
   modifiedTime?: string;
   jsonLd?: JsonLdObject | JsonLdObject[];
+}
+
+function setMeta(attr: string, key: string, content: string | undefined) {
+  if (!content) return;
+  let el = document.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
+  if (!el) {
+    el = document.createElement("meta");
+    el.setAttribute(attr, key);
+    document.head.appendChild(el);
+  }
+  el.setAttribute("content", content);
+}
+
+function removeMeta(attr: string, key: string) {
+  document.querySelector(`meta[${attr}="${key}"]`)?.remove();
 }
 
 export default function SEO({
@@ -53,38 +68,61 @@ export default function SEO({
   const resolvedOgImage = ogImage ? new URL(ogImage, `${baseUrl}/`).toString() : undefined;
   const jsonLdEntries = jsonLd ? (Array.isArray(jsonLd) ? jsonLd : [jsonLd]) : [];
 
-  return (
-    <Helmet>
-      <title>{fullTitle}</title>
-      <meta name="description" content={description} />
-      {robots && <meta name="robots" content={robots} />}
+  useEffect(() => {
+    document.title = fullTitle;
 
-      {/* Open Graph */}
-      <meta property="og:title" content={resolvedOgTitle} />
-      <meta property="og:description" content={resolvedOgDescription} />
-      <meta property="og:type" content={ogType} />
-      <meta property="og:site_name" content={SITE_NAME} />
-      {resolvedOgUrl && <meta property="og:url" content={resolvedOgUrl} />}
-      {resolvedOgImage && <meta property="og:image" content={resolvedOgImage} />}
-      {imageAlt && <meta property="og:image:alt" content={imageAlt} />}
-      {publishedTime && <meta property="article:published_time" content={publishedTime} />}
-      {modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
+    setMeta("name", "description", description);
+    if (robots) setMeta("name", "robots", robots);
+    else removeMeta("name", "robots");
 
-      {/* Twitter Card */}
-      <meta name="twitter:card" content={resolvedOgImage ? "summary_large_image" : "summary"} />
-      <meta name="twitter:title" content={resolvedOgTitle} />
-      <meta name="twitter:description" content={resolvedOgDescription} />
-      {resolvedOgImage && <meta name="twitter:image" content={resolvedOgImage} />}
-      {imageAlt && <meta name="twitter:image:alt" content={imageAlt} />}
+    // Open Graph
+    setMeta("property", "og:title", resolvedOgTitle);
+    setMeta("property", "og:description", resolvedOgDescription);
+    setMeta("property", "og:type", ogType);
+    setMeta("property", "og:site_name", SITE_NAME);
+    if (resolvedOgUrl) setMeta("property", "og:url", resolvedOgUrl);
+    else removeMeta("property", "og:url");
+    if (resolvedOgImage) setMeta("property", "og:image", resolvedOgImage);
+    else removeMeta("property", "og:image");
+    if (imageAlt) setMeta("property", "og:image:alt", imageAlt);
+    else removeMeta("property", "og:image:alt");
+    if (publishedTime) setMeta("property", "article:published_time", publishedTime);
+    else removeMeta("property", "article:published_time");
+    if (modifiedTime) setMeta("property", "article:modified_time", modifiedTime);
+    else removeMeta("property", "article:modified_time");
 
-      {/* Canonical */}
-      {resolvedCanonical && <link rel="canonical" href={resolvedCanonical} />}
+    // Twitter Card
+    setMeta("name", "twitter:card", resolvedOgImage ? "summary_large_image" : "summary");
+    setMeta("name", "twitter:title", resolvedOgTitle);
+    setMeta("name", "twitter:description", resolvedOgDescription);
+    if (resolvedOgImage) setMeta("name", "twitter:image", resolvedOgImage);
+    else removeMeta("name", "twitter:image");
+    if (imageAlt) setMeta("name", "twitter:image:alt", imageAlt);
+    else removeMeta("name", "twitter:image:alt");
 
-      {jsonLdEntries.map((entry, index) => (
-        <script key={`json-ld-${index}`} type="application/ld+json">
-          {JSON.stringify(entry)}
-        </script>
-      ))}
-    </Helmet>
-  );
+    // Canonical
+    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (resolvedCanonical) {
+      if (!canonical) {
+        canonical = document.createElement("link");
+        canonical.setAttribute("rel", "canonical");
+        document.head.appendChild(canonical);
+      }
+      canonical.setAttribute("href", resolvedCanonical);
+    } else {
+      canonical?.remove();
+    }
+
+    // JSON-LD
+    document.querySelectorAll('script[data-seo-jsonld]').forEach(el => el.remove());
+    for (const entry of jsonLdEntries) {
+      const script = document.createElement("script");
+      script.setAttribute("type", "application/ld+json");
+      script.setAttribute("data-seo-jsonld", "");
+      script.textContent = JSON.stringify(entry);
+      document.head.appendChild(script);
+    }
+  });
+
+  return null;
 }

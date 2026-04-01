@@ -1,6 +1,5 @@
 import { Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { HelmetProvider } from "react-helmet-async";
 import Header from "./components/Header/Header";
 import ScrollToTop from "./components/ScrollToTop";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -43,7 +42,6 @@ function RouteLoading() {
 
 function App() {
   return (
-    <HelmetProvider>
     <ErrorBoundary>
     <Router>
       <ScrollToTop />
@@ -96,7 +94,6 @@ function App() {
       </Suspense>
     </Router>
     </ErrorBoundary>
-    </HelmetProvider>
   );
 }
 

@@ -110,18 +110,15 @@ const HOME_SEARCH_SCROLL_GAP = 20;
 function HeroLetterCard({
   heroLetter,
   heroImages,
-  heroPageIndex,
-  setHeroPageIndex,
   ariaLabel,
   onNavigate,
 }: {
   heroLetter: FeaturedLetter;
   heroImages: LetterImage[];
-  heroPageIndex: number;
-  setHeroPageIndex: React.Dispatch<React.SetStateAction<number>>;
   ariaLabel: string;
   onNavigate: (letterId: string, params: URLSearchParams) => void;
 }) {
+  const [heroPageIndex, setHeroPageIndex] = useState(0);
   const currentImage = heroImages[heroPageIndex] || null;
   const hasMultiplePages = heroImages.length > 1;
   const heroPeopleLine = getCorrespondentLine(heroLetter);
@@ -244,7 +241,6 @@ export default function HomePage() {
   // ── Hero state ──
   const [heroLetter, setHeroLetter] = useState<FeaturedLetter | null>(null);
   const [heroImages, setHeroImages] = useState<LetterImage[]>([]);
-  const [heroPageIndex, setHeroPageIndex] = useState(0);
   const [heroLoaded, setHeroLoaded] = useState(false);
   const [latestBlogPost, setLatestBlogPost] = useState<BlogPost | null>(null);
 
@@ -293,7 +289,6 @@ export default function HomePage() {
       setHeroLetter(featured);
       setHeroLoaded(true);
       if (featured) {
-        setHeroPageIndex(0);
         setHeroImages(letterDetails?.images || []);
       }
     });
@@ -424,8 +419,6 @@ export default function HomePage() {
           <HeroLetterCard
             heroLetter={heroLetter}
             heroImages={heroImages}
-            heroPageIndex={heroPageIndex}
-            setHeroPageIndex={setHeroPageIndex}
             ariaLabel={heroAriaLabel}
             onNavigate={handleHeroNavigate}
           />

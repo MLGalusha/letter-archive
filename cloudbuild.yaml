@@ -138,12 +138,12 @@ steps:
         set -e
         gcloud run services replace deploy/cloudrun/backend-service.yaml \
           --region=${_REGION}
-        set +e
-        gcloud run services add-iam-policy-binding letter-archive-backend \
-          --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet
-        if [ $$? -ne 0 ]; then
-          echo "WARNING: Could not set IAM policy — set public access manually"
-        fi
+        for i in 1 2 3; do
+          gcloud run services add-iam-policy-binding letter-archive-backend \
+            --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet && break
+          echo "IAM binding retry $$i/3 (backend)..."
+          sleep $$((i * 2))
+        done
     waitFor: ['run-migrations', 'prepare-manifests']
 
   # ── Deploy frontend service ─────────────────────────────────
@@ -156,12 +156,12 @@ steps:
         set -e
         gcloud run services replace deploy/cloudrun/frontend-service.yaml \
           --region=${_REGION}
-        set +e
-        gcloud run services add-iam-policy-binding letter-archive-frontend \
-          --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet
-        if [ $$? -ne 0 ]; then
-          echo "WARNING: Could not set IAM policy — set public access manually"
-        fi
+        for i in 1 2 3; do
+          gcloud run services add-iam-policy-binding letter-archive-frontend \
+            --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet && break
+          echo "IAM binding retry $$i/3 (frontend)..."
+          sleep $$((i * 2))
+        done
     waitFor: ['push-frontend', 'prepare-manifests']
 
   # ── Deploy worker pool ──────────────────────────────────────

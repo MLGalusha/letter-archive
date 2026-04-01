@@ -9,6 +9,48 @@ import Footer from '../components/Footer/Footer';
 import { buildBlogPostSeo, stripMarkdown, truncateText } from '../utils/seo';
 import './UpdateDetailPage.css';
 
+const MARKDOWN_COMPONENTS: import('react-markdown').Components = {
+  img({ alt, src, title }) {
+    if (!src) return null;
+    const resolvedSrc = (src.startsWith('/images/') || src.startsWith('/blog-images/'))
+      ? getImageUrl(src, { publicOnly: true })
+      : src;
+    return (
+      <img
+        className="markdown-inline-image"
+        src={resolvedSrc}
+        alt={alt || ''}
+        title={title || undefined}
+        loading="lazy"
+      />
+    );
+  },
+  a({ href, children, ...props }) {
+    let resolvedHref = href || '';
+    if (resolvedHref && !/^(https?:\/\/|mailto:|tel:|\/|#)/.test(resolvedHref)) {
+      resolvedHref = `https://${resolvedHref}`;
+    }
+    const isExternal = /^https?:\/\//.test(resolvedHref);
+    return (
+      <a
+        href={resolvedHref}
+        {...props}
+        target={isExternal ? '_blank' : undefined}
+        rel={isExternal ? 'noopener noreferrer' : undefined}
+      >
+        {children}
+      </a>
+    );
+  },
+  table({ children }) {
+    return (
+      <div className="markdown-table-wrap">
+        <table>{children}</table>
+      </div>
+    );
+  },
+};
+
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -110,50 +152,7 @@ export default function BlogDetailPage() {
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeSanitize]}
-            components={{
-              img({ alt, src, title }) {
-                if (!src) return null;
-                // Resolve relative backend paths to full URLs
-                const resolvedSrc = (src.startsWith('/images/') || src.startsWith('/blog-images/'))
-                  ? getImageUrl(src, { publicOnly: true })
-                  : src;
-                return (
-                  <img
-                    className="markdown-inline-image"
-                    src={resolvedSrc}
-                    alt={alt || ''}
-                    title={title || undefined}
-                    loading="lazy"
-                  />
-                );
-              },
-              a({ href, children, ...props }) {
-                let resolvedHref = href || '';
-                // Auto-prefix URLs that look like domains but lack a protocol
-                if (resolvedHref && !/^(https?:\/\/|mailto:|tel:|\/|#)/.test(resolvedHref)) {
-                  resolvedHref = `https://${resolvedHref}`;
-                }
-                const isExternal = /^https?:\/\//.test(resolvedHref);
-
-                return (
-                  <a
-                    href={resolvedHref}
-                    {...props}
-                    target={isExternal ? '_blank' : undefined}
-                    rel={isExternal ? 'noopener noreferrer' : undefined}
-                  >
-                    {children}
-                  </a>
-                );
-              },
-              table({ children }) {
-                return (
-                  <div className="markdown-table-wrap">
-                    <table>{children}</table>
-                  </div>
-                );
-              },
-            }}
+            components={MARKDOWN_COMPONENTS}
           >
             {post.bodyMarkdown}
           </ReactMarkdown>

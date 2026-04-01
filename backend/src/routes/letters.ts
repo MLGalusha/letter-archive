@@ -22,6 +22,10 @@ const router = Router();
 // Photo-only types where photoDescription is always visible (no content toggles)
 const PHOTO_ONLY_TYPES = new Set(['photo']);
 
+// Supplementary types that should not appear as standalone public entries.
+// These only make sense alongside a primary content type (L, P, A, D, V).
+const SUPPLEMENTARY_TYPES = new Set(['C', 'T', 'E', 'N']);
+
 /**
  * Strips unpublished transcript/metadata content from a letter DTO
  * for public-facing responses. Photo-only records are exempt.
@@ -299,6 +303,11 @@ router.get('/letters', async (req, res, next) => {
     for (const [_key, group] of groupMap) {
       const primary = group.find((l) => l.type === 'L') || group[0];
 
+      // Skip groups that only contain supplementary types (no letter/photo/etc.)
+      if (query.visibility === 'PUBLISHED' && group.every((l) => SUPPLEMENTARY_TYPES.has(l.type))) {
+        continue;
+      }
+
       // Apply workflow filter to PRIMARY's workflow state
       if (query.workflow && primary.workflow !== query.workflow) {
         continue; // Skip entire group if primary doesn't match workflow filter
@@ -557,6 +566,24 @@ router.get('/letters/:letterId', async (req, res, next) => {
       req.log.debug({ letterId }, 'Letter not found or not published');
       res.status(404).json({ error: 'Letter not found' });
       return;
+    }
+
+    if (SUPPLEMENTARY_TYPES.has(letter.type)) {
+      // Check if there's a primary letter in the same group
+      const hasPrimary = await db.query.letters.findFirst({
+        where: and(
+          eq(letters.collectionId, letter.collectionId),
+          eq(letters.dateRaw, letter.dateRaw),
+          eq(letters.typeSequence, letter.typeSequence),
+          sql`${letters.type} NOT IN ('C', 'T', 'E', 'N')`,
+          eq(letters.visibility, 'PUBLISHED'),
+        ),
+        columns: { id: true },
+      });
+      if (!hasPrimary) {
+        res.status(404).json({ error: 'Letter not found' });
+        return;
+      }
     }
 
     // Fetch related items (all other types with same date/sequence)

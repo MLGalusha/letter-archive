@@ -1,7 +1,8 @@
+import { memo } from "react";
 import { Link } from "react-router-dom";
 import "./Footer.css";
 
-export default function Footer() {
+export default memo(function Footer() {
   return (
     <footer className="footer">
       <div className="footer-inner">
@@ -52,4 +53,4 @@ export default function Footer() {
       </div>
     </footer>
   );
-}
+});

@@ -25,10 +25,10 @@ export interface BreadcrumbItemInput {
   href?: string;
 }
 
-const DEFAULT_SITE_URL = 'https://letterarchive.org';
-const SITE_NAME = 'Letter Archive';
+const DEFAULT_SITE_URL = 'https://voicesthatremain.com';
+const SITE_NAME = 'Voices That Remain';
 const DEFAULT_DESCRIPTION =
-  'A digital archive preserving personal letters and historical correspondence.';
+  'A digital archive of personal letters and historical correspondence, preserved for future generations.';
 
 function getSiteUrl(): string {
   const candidate =
@@ -151,9 +151,9 @@ export function buildBreadcrumbJsonLd(items: BreadcrumbItemInput[]): JsonLdObjec
 export function buildHomeSeo(): SeoPayload {
   const websiteUrl = absoluteUrl('/');
   return {
-    title: 'Preserving Personal Correspondence',
+    title: 'A Letter Archive',
     description:
-      'A digital archive preserving personal letters and historical correspondence. Browse, search, and explore letters from across generations.',
+      'A digital archive of personal letters and historical correspondence, preserved for future generations. Browse, search, and explore letters from across the decades.',
     canonicalPath: '/',
     jsonLd: [
       {
@@ -176,7 +176,7 @@ export function buildHomeSeo(): SeoPayload {
 export function buildBlogIndexSeo(page: number): SeoPayload {
   const title = page > 1 ? `Journal - Page ${page}` : 'Journal';
   const description =
-    'Read field notes, collection highlights, and essays from Letter Archive as the project grows.';
+    'Read field notes, collection highlights, and essays from Voices That Remain as the project grows.';
   const canonicalPath = page > 1 ? `/blog?page=${page}` : '/blog';
   const breadcrumb = buildBreadcrumbJsonLd([
     { label: 'Home', href: '/' },
@@ -284,7 +284,7 @@ export function buildLetterDescription(letter: Letter): string {
     return transcriptExcerpt;
   }
 
-  return 'Read this historical letter in the Letter Archive.';
+  return 'Read this historical letter on Voices That Remain.';
 }
 
 export function buildLetterSeo(letter: Letter): SeoPayload {

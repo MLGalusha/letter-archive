@@ -34,7 +34,7 @@ export default function AboutPage() {
     <div className="body-layout">
       <SEO
         title="About"
-        description="Learn about Letter Archive -- a project to digitize, transcribe, and preserve personal letters and historical correspondence for future generations."
+        description="Learn about Voices That Remain — a project to digitize, transcribe, and preserve personal letters and historical correspondence for future generations."
         canonicalUrl="/about"
       />
       <div className="about-page" style={{ width: '100%', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>

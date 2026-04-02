@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import type { JsonLdObject } from "../utils/seo";
 
-const SITE_NAME = "Letter Archive";
+const SITE_NAME = "Voices That Remain";
 const DEFAULT_DESCRIPTION =
-  "A digital archive preserving personal letters and historical correspondence.";
-const DEFAULT_BASE_URL = "https://letterarchive.org";
+  "A digital archive of personal letters and historical correspondence, preserved for future generations.";
+const DEFAULT_BASE_URL = "https://voicesthatremain.com";
 
 interface SEOProps {
   title?: string;

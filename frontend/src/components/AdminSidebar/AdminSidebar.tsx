@@ -66,7 +66,7 @@ export default function AdminSidebar({ collapsed = false, onToggle }: AdminSideb
     <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-header">
         <Link to="/admin" className="sidebar-brand">
-          <span className="brand-text">Letter Archive</span>
+          <span className="brand-text">Voices That Remain</span>
           <span className="brand-sub">Admin</span>
         </Link>
         {onToggle && (

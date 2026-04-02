@@ -106,7 +106,7 @@ export default function AcceptInvitePage() {
       <div className="admin-login-container">
         <h1>Create Admin Account</h1>
         <p className="setup-notice">
-          You've been invited to join the Letter Archive admin team.
+          You've been invited to join the Voices That Remain admin team.
         </p>
         <form onSubmit={handleSubmit} className="admin-login-form">
           <div className="form-group">

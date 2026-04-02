@@ -17,7 +17,7 @@ function aboutBlocks(): ContentBlock[] {
       kicker: 'About the Archive',
       heading: 'Every letter is a conversation across time',
       subtitle:
-        'Letter Archive preserves personal correspondence \u2014 the handwritten notes passed between lovers, the telegrams sent home from war, the postcards scribbled on train platforms. We digitize, transcribe, and publish these documents so the voices inside them outlast the paper they were written on.',
+        'Voices That Remain preserves personal correspondence \u2014 the handwritten notes passed between lovers, the telegrams sent home from war, the postcards scribbled on train platforms. We digitize, transcribe, and publish these documents so the voices inside them outlast the paper they were written on.',
     }),
     createStatsBlock({
       items: [
@@ -32,7 +32,7 @@ function aboutBlocks(): ContentBlock[] {
         'History remembers the speeches, the treaties, the declarations. But it forgets the letters \u2014 the ones that say the milk is too expensive, or that the baby learned to walk, or please come home soon. Those are the ones that tell you what it was really like.',
       attribution: '',
       bodyText:
-        'Personal letters are among the most honest documents we have. They were never written for posterity \u2014 they were written for one person, in one moment, with no expectation that anyone else would ever read them. That honesty is what makes them irreplaceable. But paper is fragile. Every year, floods, fires, estate sales, and simple neglect destroy correspondence that can never be recovered. Letter Archive exists to intervene before it\u2019s too late.',
+        'Personal letters are among the most honest documents we have. They were never written for posterity \u2014 they were written for one person, in one moment, with no expectation that anyone else would ever read them. That honesty is what makes them irreplaceable. But paper is fragile. Every year, floods, fires, estate sales, and simple neglect destroy correspondence that can never be recovered. Voices That Remain exists to intervene before it\u2019s too late.',
     }),
     createStepsBlock({
       eyebrow: 'How it works',
@@ -85,7 +85,7 @@ function supportBlocks(): ContentBlock[] {
       kicker: 'Support & Contact',
       heading: 'Help us keep these voices alive',
       subtitle:
-        'Letter Archive runs on real resources \u2014 equipment, storage, hosting, and a lot of careful human work. There are no corporate sponsors or institutional grants behind this project. It exists because people like you believe these voices deserve to be heard.',
+        'Voices That Remain runs on real resources \u2014 equipment, storage, hosting, and a lot of careful human work. There are no corporate sponsors or institutional grants behind this project. It exists because people like you believe these voices deserve to be heard.',
     }),
     createQuoteBlock({
       eyebrow: 'Why your support matters',

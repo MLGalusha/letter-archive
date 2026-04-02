@@ -192,7 +192,7 @@ describe('getTranscriptExcerpt', () => {
 describe('buildHomeSeo', () => {
   it('returns the correct title', () => {
     const seo = buildHomeSeo();
-    expect(seo.title).toBe('Preserving Personal Correspondence');
+    expect(seo.title).toBe('A Letter Archive');
   });
 
   it('returns a description mentioning archive', () => {
@@ -568,7 +568,7 @@ describe('buildBlogPostSeo', () => {
     const posting = seo.jsonLd!.find((item) => item['@type'] === 'BlogPosting');
     const author = posting!.author as { '@type': string; name: string };
     expect(author['@type']).toBe('Organization');
-    expect(author.name).toBe('Letter Archive');
+    expect(author.name).toBe('Voices That Remain');
   });
 
   it('includes breadcrumb JSON-LD', () => {

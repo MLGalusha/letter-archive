@@ -1,4 +1,5 @@
-import { useRef, useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { usePretextFontSize } from '../../hooks/usePretextFontSize.js';
 import './DynamicEditor.css';
 
 export interface DynamicEditorRef {
@@ -44,8 +45,8 @@ interface DynamicEditorProps {
 /**
  * A contentEditable editor with dynamic font sizing.
  *
- * The font automatically shrinks to fit the longest line without horizontal scrolling,
- * making it ideal for monospace transcription text where line breaks should be preserved.
+ * Uses Pretext for cached text measurement — prepare() runs once when text changes,
+ * resize only compares cached width to container width (essentially free).
  */
 export const DynamicEditor = forwardRef<DynamicEditorRef, DynamicEditorProps>(({
   value,
@@ -63,7 +64,6 @@ export const DynamicEditor = forwardRef<DynamicEditorRef, DynamicEditorProps>(({
   onDoubleClick,
 }, ref) => {
   const editorRef = useRef<HTMLDivElement>(null);
-  const [fontSize, setFontSize] = useState(`${baseFontSize}rem`);
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
@@ -77,69 +77,11 @@ export const DynamicEditor = forwardRef<DynamicEditorRef, DynamicEditorProps>(({
     getElement: () => editorRef.current,
   }));
 
-  // Calculate font size based on longest line to prevent wrapping
-  const calculateFontSize = useCallback(() => {
-    const editor = editorRef.current;
-    if (!editor || !value) {
-      setFontSize(`${baseFontSize}rem`);
-      return;
-    }
-
-    // Get computed styles for padding and font
-    const computedStyle = window.getComputedStyle(editor);
-    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-    const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
-    const containerWidth = editor.clientWidth - paddingLeft - paddingRight;
-    const lines = value.split('\n');
-
-    // Create canvas for measuring text
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Use computed font to match actual rendering
-    const fontFamily = computedStyle.fontFamily || 'monospace';
-    ctx.font = `${baseFontSize * 16}px ${fontFamily}`; // Convert rem to px (assuming 16px base)
-
-    // Find the widest line
-    let maxWidth = 0;
-    for (const line of lines) {
-      if (line.trim()) {
-        const width = ctx.measureText(line).width;
-        if (width > maxWidth) maxWidth = width;
-      }
-    }
-
-    // Calculate scale factor (with a minimum to prevent text being too small)
-    if (maxWidth > containerWidth) {
-      const scale = Math.max(minFontScale, containerWidth / maxWidth);
-      setFontSize(`${baseFontSize * scale}rem`);
-    } else {
-      setFontSize(`${baseFontSize}rem`);
-    }
-  }, [value, baseFontSize, minFontScale]);
-
-  // Recalculate font size when value changes or on container resize
-  useEffect(() => {
-    calculateFontSize();
-
-    // Use ResizeObserver to detect container size changes (from split pane drag)
-    const editor = editorRef.current;
-    const editorContainer = editor?.parentElement;
-
-    if (editor || editorContainer) {
-      const resizeObserver = new ResizeObserver(() => {
-        calculateFontSize();
-      });
-      if (editor) resizeObserver.observe(editor);
-      if (editorContainer) resizeObserver.observe(editorContainer);
-      return () => resizeObserver.disconnect();
-    }
-
-    // Fallback: window resize
-    window.addEventListener('resize', calculateFontSize);
-    return () => window.removeEventListener('resize', calculateFontSize);
-  }, [calculateFontSize]);
+  // Use Pretext-backed font sizing
+  const fontSize = usePretextFontSize(editorRef, value, {
+    baseFontSize,
+    minScale: minFontScale,
+  });
 
   // Set initial content in contenteditable when value changes externally
   useEffect(() => {

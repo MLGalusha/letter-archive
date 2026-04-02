@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, useEffect, type CSSProperties } from "react";
+import { usePretextFontSize } from "../../hooks/usePretextFontSize.js";
 import type { Letter, LetterImage } from "../../types/Letter";
 import LetterViewer from "../LetterViewer/LetterViewer";
 import { ResizableSplitPane } from "../common";
@@ -20,64 +21,15 @@ interface LetterDisplayProps {
 export default function LetterDisplay({ letter }: LetterDisplayProps) {
   const transcriptRef = useRef<HTMLDivElement>(null);
   const [isTranscriptVisible, setIsTranscriptVisible] = useState(true);
-  const [transcriptFontSize, setTranscriptFontSize] = useState("1.1rem");
 
   // Count letter pages for single-page header hiding
   const letterPageCount = letter.images.filter(img => img.type === 'letter').length;
 
   const fullText = letter.transcript.fullText;
 
-  // Calculate font size so the longest line fits the container width
-  const calculateFontSize = useCallback(() => {
-    const container = transcriptRef.current;
-    if (!container || !fullText) {
-      setTranscriptFontSize("1.1rem");
-      return;
-    }
-
-    const computedStyle = window.getComputedStyle(container);
-    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-    const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
-    const containerWidth = container.clientWidth - paddingLeft - paddingRight;
-    const baseFontSize = 1.1; // rem
-
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Use the actual transcript text element's font for accurate measurement
-    const textEl = container.querySelector(".transcript-text");
-    const fontFamily = textEl
-      ? window.getComputedStyle(textEl).fontFamily
-      : "'Courier New', Courier, monospace";
-    ctx.font = `${baseFontSize * 16}px ${fontFamily}`;
-
-    let maxWidth = 0;
-    for (const line of fullText.split("\n")) {
-      if (line.trim()) {
-        const width = ctx.measureText(line).width;
-        if (width > maxWidth) maxWidth = width;
-      }
-    }
-
-    if (maxWidth > containerWidth) {
-      const scale = Math.max(0.4, containerWidth / maxWidth);
-      setTranscriptFontSize(`${baseFontSize * scale}rem`);
-    } else {
-      setTranscriptFontSize(`${baseFontSize}rem`);
-    }
-  }, [fullText]);
-
-  // Recalculate font size on mount, text change, and container resize
-  useEffect(() => {
-    calculateFontSize();
-    const container = transcriptRef.current;
-    if (!container) return;
-
-    const resizeObserver = new ResizeObserver(() => calculateFontSize());
-    resizeObserver.observe(container);
-    return () => resizeObserver.disconnect();
-  }, [calculateFontSize]);
+  // Pretext-backed font sizing — prepare() runs once per text change,
+  // resize only compares cached width to container (essentially free)
+  const transcriptFontSize = usePretextFontSize(transcriptRef, fullText);
 
   // Track transcript visibility with Intersection Observer
   useEffect(() => {

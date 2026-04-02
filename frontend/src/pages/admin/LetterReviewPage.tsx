@@ -58,7 +58,7 @@ import {
 } from "./LetterReview/useAutoSave";
 import { useMetadataEditing } from "./LetterReview/useMetadataEditing";
 import { useTranscriptEditing } from "./LetterReview/useTranscriptEditing";
-import { useTranscriptFontSize } from "./LetterReview/useTranscriptFontSize";
+import { usePretextFontSize } from "../../hooks/usePretextFontSize";
 import LineReviewMode, {
   type LineReviewModeHandle,
 } from "../../components/LineReviewMode/LineReviewMode";
@@ -226,10 +226,10 @@ export default function LetterReviewPage() {
   const [debugMode, setDebugMode] = useState(false);
   const [viewerPageIndex, setViewerPageIndex] = useState(0);
 
-  const transcriptFontSize = useTranscriptFontSize(
+  const transcriptFontSize = usePretextFontSize(
     editorRef,
     transcript,
-    reviewMode,
+    { fontFamily: "Georgia, 'Times New Roman', serif" },
   );
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const {

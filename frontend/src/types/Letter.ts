@@ -253,10 +253,26 @@ export interface LetterPageTranscript {
   confidence?: number;
 }
 
+export type TranscriptLineRole = 'date' | 'salutation' | 'body' | 'closing' | 'signature' | 'postscript' | 'margin-note' | 'address';
+
+export interface TranscriptLine {
+  text: string;
+  x: number;
+  paragraph: number | null;
+  continues: boolean;
+  role: TranscriptLineRole | null;
+}
+
+export interface StructuredPage {
+  pageNumber: number;
+  lines: TranscriptLine[];
+}
+
 export interface LetterTranscript {
   pages: LetterPageTranscript[];
   fullText: string;
   verified: boolean;
+  structuredPages?: StructuredPage[];
 }
 
 export interface Letter {

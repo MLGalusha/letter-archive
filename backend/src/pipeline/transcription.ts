@@ -7,6 +7,8 @@ import { updateJobProgress, clearJobProgress, shouldAbortProcessing } from '../s
 import { isTranscribableType, getDocumentTypeFromCode } from '../services/letter/shared.js';
 import { db, letters } from '../db/index.js';
 import { eq, and, inArray } from 'drizzle-orm';
+import type { TranscriptLine, StructuredTranscript } from '../ai/schemas/structuredTranscript.js';
+import { generateReadingText } from '../utils/readingTextGenerator.js';
 
 const log = createLogger({ module: 'transcription-pipeline' });
 
@@ -66,12 +68,13 @@ export async function runTranscription(letterId: string): Promise<void> {
     letterLog.debug({ pageCount: pages.length }, 'Processing pages');
 
     const pageTranscriptions: string[] = [];
+    const pageStructuredLines: (TranscriptLine[] | null)[] = [];
     let stubMode = false;
 
     if (letter.type === 'L') {
       // === LETTER TYPE: use standard transcription prompt ===
       // Process pages in parallel batches for speed, with abort checks between batches
-      const results: (string | null)[] = new Array(pages.length).fill(null);
+      const results: { text: string; structured: TranscriptLine[] | null }[] = new Array(pages.length).fill(null);
       let completedCount = 0;
 
       for (let batchStart = 0; batchStart < pages.length; batchStart += PAGE_CONCURRENCY) {
@@ -104,7 +107,7 @@ export async function runTranscription(letterId: string): Promise<void> {
           });
 
           // Store at correct index to preserve page order
-          results[page.pageNumber - 1] = result.text;
+          results[page.pageNumber - 1] = { text: result.text, structured: result.structured };
           stubMode = result.isStub;
           completedCount++;
 
@@ -115,6 +118,7 @@ export async function runTranscription(letterId: string): Promise<void> {
             {
               pageNumber: page.pageNumber,
               textLength: result.text.length,
+              hasStructured: result.structured !== null,
               duration: pageDuration,
               isStub: result.isStub,
             },
@@ -123,8 +127,11 @@ export async function runTranscription(letterId: string): Promise<void> {
         }));
       }
 
-      for (const text of results) {
-        if (text !== null) pageTranscriptions.push(text);
+      for (const r of results) {
+        if (r !== null) {
+          pageTranscriptions.push(r.text);
+          pageStructuredLines.push(r.structured);
+        }
       }
     } else {
       // === NON-LETTER TYPE: use extra content transcription prompt ===
@@ -222,10 +229,36 @@ export async function runTranscription(letterId: string): Promise<void> {
       return;
     }
 
+    // Build structured transcript if all pages have structured data
+    let structuredTranscript: StructuredTranscript | null = null;
+    if (letter.type === 'L' && pageStructuredLines.every((s) => s !== null)) {
+      structuredTranscript = {
+        pages: pageStructuredLines.map((lines, i) => ({
+          pageNumber: i + 1,
+          lines: lines!,
+        })),
+      };
+      letterLog.info(
+        { pageCount: structuredTranscript.pages.length, totalLines: pageStructuredLines.reduce((sum, l) => sum + (l?.length ?? 0), 0) },
+        'Built structured transcript',
+      );
+    } else if (letter.type === 'L' && pageStructuredLines.some((s) => s !== null)) {
+      letterLog.warn('Some pages have structured data but not all — skipping structured transcript');
+    }
+
+    // Auto-generate reading text from structured data
+    let readingText: string | null = null;
+    if (structuredTranscript) {
+      readingText = generateReadingText(structuredTranscript);
+      letterLog.debug({ readingTextLength: readingText.length }, 'Auto-generated reading text from structured data');
+    }
+
     // Update letter with transcription - all status updates in one operation
     // to avoid inconsistent state if the process crashes between updates
     await db.update(letters).set({
       transcriptionText: combinedTranscription,
+      transcriptionJson: structuredTranscript,
+      ...(readingText ? { readingText } : {}),
       transcriptionStatus: 'SUCCESS',
       transcriptionError: null,
       transcribedAt: new Date(),

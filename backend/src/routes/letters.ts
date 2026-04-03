@@ -265,6 +265,7 @@ router.get('/letters', async (req, res, next) => {
       columns: {
         // Exclude large text/JSONB fields not needed for list view
         transcriptionText: false,
+        transcriptionJson: false,
         entityExtractionJson: false,
         metadataV2Json: false,
         metadataJson: false,

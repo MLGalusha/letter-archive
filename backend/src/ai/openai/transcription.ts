@@ -2,15 +2,22 @@ import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { env, hasOpenAI } from '../../config/env.js';
 import {
-  TRANSCRIPTION_SYSTEM_PROMPT,
+  LEGACY_TRANSCRIPTION_SYSTEM_PROMPT,
+  STRUCTURED_TRANSCRIPTION_SYSTEM_PROMPT,
   EXTRA_CONTENT_CHECK_SYSTEM_PROMPT,
   EXTRA_CONTENT_TRANSCRIPTION_SYSTEM_PROMPT,
   PHOTO_DESCRIPTION_SYSTEM_PROMPT,
   buildTranscriptionUserPrompt,
+  buildStructuredTranscriptionUserPrompt,
   buildExtraContentCheckPrompt,
   buildExtraContentTranscriptionPrompt,
   buildPhotoDescriptionPrompt,
 } from '../prompts.js';
+import {
+  TranscriptionOutputSchema,
+  STRUCTURED_TRANSCRIPTION_JSON_SCHEMA,
+  type TranscriptLine,
+} from '../schemas/structuredTranscript.js';
 import { logIfSlow, TIMING_THRESHOLDS } from '../../utils/logger.js';
 import { log, openai } from './client.js';
 import { logApiUsage } from '../../services/usage-tracking.js';
@@ -65,7 +72,77 @@ export interface TranscribeImageParams {
 
 export interface TranscribeImageResult {
   text: string;
+  structured: TranscriptLine[] | null;
   isStub: boolean;
+}
+
+/**
+ * Derive flat text from structured lines for backward compatibility.
+ * Uses spaces to approximate the original horizontal positioning.
+ */
+function structuredLinesToText(lines: TranscriptLine[]): string {
+  const result: string[] = [];
+  for (const line of lines) {
+    if (line.text === '') {
+      result.push('');
+      continue;
+    }
+    // Convert x (0-999) to approximate leading spaces (0-60 range)
+    const spaces = Math.round((line.x / 999) * 60);
+    result.push(spaces > 0 ? ' '.repeat(spaces) + line.text : line.text);
+  }
+  return result.join('\n');
+}
+
+/**
+ * Fallback: transcribe using legacy flat-text prompt.
+ * Used when structured output fails.
+ */
+async function transcribeImageLegacy(
+  params: TranscribeImageParams,
+  preparedImage: { base64: string; mimeType: string },
+  logContext: Record<string, unknown>,
+): Promise<TranscribeImageResult> {
+  log.warn(logContext, 'Falling back to legacy flat-text transcription');
+  const start = Date.now();
+
+  const response = await openai!.chat.completions.create({
+    model: env.OPENAI_MODEL,
+    messages: [
+      { role: 'system', content: LEGACY_TRANSCRIPTION_SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: buildTranscriptionUserPrompt(params.context) },
+          {
+            type: 'image_url',
+            image_url: { url: `data:${preparedImage.mimeType};base64,${preparedImage.base64}` },
+          },
+        ],
+      },
+    ],
+    max_completion_tokens: 4096,
+  });
+
+  const duration = Date.now() - start;
+  const text = response.choices[0]?.message?.content ?? '';
+  const usage = response.usage;
+
+  log.info(
+    { ...logContext, duration, textLength: text.length, promptTokens: usage?.prompt_tokens, completionTokens: usage?.completion_tokens },
+    'Legacy fallback transcription completed',
+  );
+
+  logApiUsage({
+    letterId: params.letterId,
+    callType: 'transcription',
+    model: env.OPENAI_MODEL,
+    inputTokens: usage?.prompt_tokens ?? 0,
+    outputTokens: usage?.completion_tokens ?? 0,
+    durationMs: duration,
+  });
+
+  return { text: text.replace(/^\n+|\n+$/g, ''), structured: null, isStub: false };
 }
 
 export async function transcribeImage(
@@ -85,114 +162,147 @@ export async function transcribeImage(
     return generateStubTranscription(params);
   }
 
-  log.debug(context, 'Starting image transcription');
+  log.debug(context, 'Starting structured image transcription');
   const start = Date.now();
 
+  const preparedImage = await prepareImageForAI(params.filePath);
+  log.debug({ ...context, imageSizeKb: preparedImage.sizeKb }, 'Image prepared for transcription');
+
   try {
-    const { base64, mimeType, sizeKb } = await prepareImageForAI(params.filePath);
-
-    log.debug({ ...context, imageSizeKb: sizeKb }, 'Image prepared for transcription');
-
-    const response = await openai.chat.completions.create({
+    const response = await openai.responses.create({
       model: env.OPENAI_MODEL,
-      messages: [
-        { role: 'system', content: TRANSCRIPTION_SYSTEM_PROMPT },
+      input: [
+        { role: 'system', content: STRUCTURED_TRANSCRIPTION_SYSTEM_PROMPT },
         {
           role: 'user',
           content: [
-            { type: 'text', text: buildTranscriptionUserPrompt(params.context) },
+            { type: 'input_text', text: buildStructuredTranscriptionUserPrompt(params.context) },
             {
-              type: 'image_url',
-              image_url: { url: `data:${mimeType};base64,${base64}` },
+              type: 'input_image',
+              image_url: `data:${preparedImage.mimeType};base64,${preparedImage.base64}`,
+              detail: 'high',
             },
           ],
         },
       ],
-      max_completion_tokens: 4096,
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'structured_transcription',
+          strict: true,
+          schema: STRUCTURED_TRANSCRIPTION_JSON_SCHEMA,
+        },
+      },
+      max_output_tokens: 8192,
     });
 
     const duration = Date.now() - start;
-    const text = response.choices[0]?.message?.content ?? '';
-    const usage = response.usage;
 
+    // Check for content filter refusal
+    if (response.status === 'incomplete' && response.incomplete_details?.reason === 'content_filter') {
+      log.warn({ ...context, duration }, 'Structured transcription refused by content filter');
+      return transcribeImageLegacy(params, preparedImage, context);
+    }
+
+    // Extract structured output (same pattern as metadata.ts)
+    const outputItem = response.output.find((item) => item.type === 'message');
+    if (!outputItem || outputItem.type !== 'message') {
+      log.error({ ...context, duration, output: response.output }, 'No message in structured transcription response');
+      return transcribeImageLegacy(params, preparedImage, context);
+    }
+
+    const textContent = outputItem.content.find((c) => c.type === 'output_text');
+    if (!textContent || textContent.type !== 'output_text') {
+      log.error({ ...context, duration }, 'No text content in structured transcription response');
+      return transcribeImageLegacy(params, preparedImage, context);
+    }
+
+    // Parse and validate JSON
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(textContent.text);
+    } catch (parseError) {
+      log.error(
+        { ...context, duration, text: textContent.text.substring(0, 500), err: parseError },
+        'Failed to parse structured transcription JSON',
+      );
+      return transcribeImageLegacy(params, preparedImage, context);
+    }
+
+    const validated = TranscriptionOutputSchema.safeParse(parsed);
+    if (!validated.success) {
+      log.error(
+        { ...context, duration, errors: validated.error.issues },
+        'Structured transcription failed Zod validation',
+      );
+      return transcribeImageLegacy(params, preparedImage, context);
+    }
+
+    const lines = validated.data.lines;
+    const flatText = structuredLinesToText(lines);
+
+    // Log usage
+    const usage = response.usage;
     log.info(
       {
         ...context,
         duration,
         model: env.OPENAI_MODEL,
-        textLength: text.length,
-        promptTokens: usage?.prompt_tokens,
-        completionTokens: usage?.completion_tokens,
-        totalTokens: usage?.total_tokens,
+        lineCount: lines.length,
+        textLength: flatText.length,
+        inputTokens: usage?.input_tokens,
+        outputTokens: usage?.output_tokens,
       },
-      'Transcription completed',
+      'Structured transcription completed',
     );
 
-    logIfSlow(log, 'OpenAI transcription', duration, TIMING_THRESHOLDS.OPENAI_API, context);
+    logIfSlow(log, 'OpenAI structured transcription', duration, TIMING_THRESHOLDS.OPENAI_API, context);
 
-    // Fire-and-forget usage tracking
     logApiUsage({
       letterId: params.letterId,
       callType: 'transcription',
       model: env.OPENAI_MODEL,
-      inputTokens: usage?.prompt_tokens ?? 0,
-      outputTokens: usage?.completion_tokens ?? 0,
+      inputTokens: usage?.input_tokens ?? 0,
+      outputTokens: usage?.output_tokens ?? 0,
       durationMs: duration,
     });
 
-    return {
-      text: text.replace(/^\n+|\n+$/g, ''),
-      isStub: false,
-    };
+    return { text: flatText, structured: lines, isStub: false };
   } catch (error) {
     const duration = Date.now() - start;
-    log.error(
-      {
-        ...context,
-        duration,
-        err: error,
-        model: env.OPENAI_MODEL,
-      },
-      'Transcription failed',
-    );
-    throw error;
+    log.error({ ...context, duration, err: error, model: env.OPENAI_MODEL }, 'Structured transcription failed');
+
+    // Try legacy fallback
+    try {
+      return await transcribeImageLegacy(params, preparedImage, context);
+    } catch (fallbackError) {
+      log.error({ ...context, err: fallbackError }, 'Legacy fallback also failed');
+      throw error; // Throw original error
+    }
   }
 }
 
 function generateStubTranscription(params: TranscribeImageParams): TranscribeImageResult {
-  const contextParts: string[] = [];
-  if (params.context?.collectionCode) {
-    contextParts.push(`Collection: ${params.context.collectionCode}`);
-  }
-  if (params.context?.dateRaw) {
-    contextParts.push(`Date: ${params.context.dateRaw}`);
-  }
-  if (params.context?.pageNumber) {
-    contextParts.push(`Page: ${params.context.pageNumber}`);
-  }
+  const stubLines: TranscriptLine[] = [
+    { text: 'September 12, 1943', x: 500, paragraph: null, continues: false, role: 'date' },
+    { text: '', x: 0, paragraph: null, continues: false, role: null },
+    { text: 'Dear [recipient],', x: 0, paragraph: null, continues: false, role: 'salutation' },
+    { text: '', x: 0, paragraph: null, continues: false, role: null },
+    { text: 'I hope this letter finds you well.', x: 0, paragraph: 1, continues: false, role: 'body' },
+    { text: '[illegible] the weather has been quite', x: 0, paragraph: 1, continues: false, role: 'body' },
+    { text: 'pleasant this [unclear: week/month].', x: 0, paragraph: 1, continues: true, role: 'body' },
+    { text: '', x: 0, paragraph: null, continues: false, role: null },
+    { text: 'The family sends their regards, and', x: 0, paragraph: 2, continues: false, role: 'body' },
+    { text: 'we look forward to hearing from you', x: 0, paragraph: 2, continues: true, role: 'body' },
+    { text: 'soon.', x: 0, paragraph: 2, continues: true, role: 'body' },
+    { text: '', x: 0, paragraph: null, continues: false, role: null },
+    { text: 'With warm regards,', x: 300, paragraph: null, continues: false, role: 'closing' },
+    { text: '[sender]', x: 350, paragraph: null, continues: false, role: 'signature' },
+  ];
 
-  const contextStr = contextParts.length > 0 ? contextParts.join(', ') : 'No context provided';
+  const text = structuredLinesToText(stubLines);
 
-  return {
-    text: `[STUB TRANSCRIPTION - OpenAI API key not configured]
-
-This is placeholder transcription text for development and testing purposes.
-
-File: ${params.filePath}
-Context: ${contextStr}
-
-Dear [recipient],
-
-I hope this letter finds you well. [illegible] the weather has been quite pleasant this [unclear: week/month].
-
-The family sends their regards, and we look forward to hearing from you soon.
-
-With warm regards,
-[sender]
-
-[Note: This is stub data. Set OPENAI_API_KEY for real transcription.]`,
-    isStub: true,
-  };
+  return { text, structured: stubLines, isStub: true };
 }
 
 export interface CheckExtraContentParams {

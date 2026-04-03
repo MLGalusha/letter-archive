@@ -14,6 +14,10 @@ import {
   shouldShowPhotoDescriptionWorkflow,
 } from "../utils/letterContent";
 import { reflowTranscript, renderTranscriptLines, computeReferenceWidth } from "../utils/transcriptRendering";
+import {
+  renderStructuredOriginalView,
+  renderStructuredReadingView,
+} from "../utils/structuredTranscriptRendering";
 import { useHeaderDock, EMPTY_DOCK } from "../contexts/HeaderDockContext";
 import HeaderScrubber from "../components/HeaderScrubber/HeaderScrubber";
 import useLetterScrubber from "../components/LetterHeaderDock/useLetterScrubber";
@@ -300,6 +304,8 @@ export default function LetterDetailPage() {
     }));
   }, [letter]);
 
+  const structuredPages = letter?.transcript?.structuredPages ?? null;
+
   const seo = useMemo(() => (letter ? buildLetterSeo(letter) : null), [letter]);
 
 
@@ -516,6 +522,11 @@ export default function LetterDetailPage() {
               <div className={`transcript-text transcript-reading-saved${shortLineClass}`}>
                 {letter.readingText}
               </div>
+            ) : transcriptMode === "reading" && structuredPages ? (
+              /* ── Structured reading view — from AI line annotations ── */
+              <div className={`transcript-text${shortLineClass}`}>
+                {renderStructuredReadingView(structuredPages)}
+              </div>
             ) : letter.transcript.pages.length > 0 ? (
               transcriptMode === "reading" && readingSegments ? (
                 /* ── Combined reading view — seamless across pages ── */
@@ -560,6 +571,7 @@ export default function LetterDetailPage() {
                     const pageImage = letterTypeImages.find((img) => img.pageNumber === page.pageNumber);
                     const side = idx % 2 === 0 ? "left" : "right";
                     const isOriginal = transcriptMode === "original";
+                    const sp = structuredPages?.find(s => s.pageNumber === page.pageNumber);
                     return (
                       <div key={page.pageNumber} className="transcript-page" data-page={page.pageNumber}>
                         {pageImage && (
@@ -584,7 +596,13 @@ export default function LetterDetailPage() {
                           <div className="page-marker">Page {page.pageNumber}</div>
                         )}
                         {isOriginal ? (
-                          <pre className={`transcript-text transcript-original${shortLineClass}`}>{page.text}</pre>
+                          sp ? (
+                            <div className={`transcript-text transcript-original${shortLineClass}`}>
+                              {renderStructuredOriginalView([sp])}
+                            </div>
+                          ) : (
+                            <pre className={`transcript-text transcript-original${shortLineClass}`}>{page.text}</pre>
+                          )
                         ) : (
                           <div className={`transcript-text${shortLineClass}`}>
                             {renderTranscriptLines(reflowTranscript(page.text), referenceWidth)}

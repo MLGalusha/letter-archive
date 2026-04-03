@@ -7,6 +7,9 @@
 
 import { and, eq, ne } from 'drizzle-orm';
 import { db, letters } from '../db/index.js';
+import type { StructuredTranscript } from '../ai/schemas/structuredTranscript.js';
+import { syncStructuredTranscript } from '../utils/structuredTranscriptSync.js';
+import { generateReadingText } from '../utils/readingTextGenerator.js';
 import { syncLetterParticipantsFromMetadata } from './entities/participant-sync.js';
 import { getLetterById } from './letters.js';
 import { log, type UpdateLetterInput, type UpdateLetterResult } from './letter/shared.js';
@@ -27,6 +30,19 @@ export async function buildLetterUpdates(
 
   if (updates.transcriptionText !== undefined) {
     dbUpdates.transcriptionText = updates.transcriptionText;
+
+    // Sync structured data if it exists
+    if (existingLetter.transcriptionJson) {
+      const synced = syncStructuredTranscript(
+        existingLetter.transcriptionJson as StructuredTranscript,
+        existingLetter.transcriptionText,
+        updates.transcriptionText,
+      );
+      dbUpdates.transcriptionJson = synced;
+      if (synced) {
+        dbUpdates.readingText = generateReadingText(synced);
+      }
+    }
   }
   if (updates.sender !== undefined) {
     dbUpdates.sender = updates.sender;

@@ -129,10 +129,24 @@ export interface FrontendLetterPageTranscript {
   confidence?: number;
 }
 
+export interface FrontendTranscriptLine {
+  text: string;
+  x: number;
+  paragraph: number | null;
+  continues: boolean;
+  role: string | null;
+}
+
+export interface FrontendStructuredPage {
+  pageNumber: number;
+  lines: FrontendTranscriptLine[];
+}
+
 export interface FrontendLetterTranscript {
   pages: FrontendLetterPageTranscript[];
   fullText: string;
   verified: boolean;
+  structuredPages?: FrontendStructuredPage[];
 }
 
 export interface FrontendExtraContentItem {
@@ -453,6 +467,9 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
         : [],
       fullText: letter.transcriptionText || '',
       verified: letter.transcriptStatus === 'VERIFIED',
+      ...(letter.transcriptionJson ? {
+        structuredPages: (letter.transcriptionJson as { pages: FrontendStructuredPage[] }).pages,
+      } : {}),
     },
     metadata: {
       sender: letter.sender || undefined,

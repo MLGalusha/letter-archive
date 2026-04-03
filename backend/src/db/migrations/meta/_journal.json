@@ -274,6 +274,13 @@
       "when": 1775904000000,
       "tag": "0038_add_image_dimensions",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1775990400000,
+      "tag": "0039_add_structured_transcription",
+      "breakpoints": true
     }
   ]
 }

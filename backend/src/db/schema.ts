@@ -192,6 +192,7 @@ export const letters = pgTable(
     // Transcription fields
     transcriptionStatus: jobStatusEnum('transcription_status').notNull().default('PENDING'),
     transcriptionText: text('transcription_text'),
+    transcriptionJson: jsonb('transcription_json'),
     transcriptionError: text('transcription_error'),
     transcriptionAttemptCount: integer('transcription_attempt_count').notNull().default(0),
     transcribedAt: timestamp('transcribed_at', { withTimezone: true }),

@@ -38,6 +38,7 @@ import {
 import { trackEdit } from "../../utils/recentEdits";
 import { highlightTranscriptMarkers } from "../../utils/transcriptHighlight";
 import { reflowTranscript } from "../../utils/transcriptRendering";
+import { generateReadingTextFromStructured } from "../../utils/structuredTranscriptRendering";
 import { useTooltip } from "../../hooks/useTooltip";
 import type { Letter, LetterImage, VisibilityState } from "../../types/Letter";
 import {
@@ -86,13 +87,15 @@ export default function LetterReviewPage() {
     if (mode === "preview" && readerText === null) {
       if (letter?.readingText) {
         setReaderText(letter.readingText);
+      } else if (letter?.transcript?.structuredPages) {
+        setReaderText(generateReadingTextFromStructured(letter.transcript.structuredPages));
       } else {
         const stripped = transcript.replace(/^---\s*Page\s+\d+\s*---$/gm, "").replace(/\n{3,}/g, "\n\n");
         setReaderText(reflowTranscript(stripped));
       }
       prevTranscriptRef.current = transcript;
     }
-  }, [readerText, transcript, letter?.readingText]);
+  }, [readerText, transcript, letter?.readingText, letter?.transcript?.structuredPages]);
 
   // When transcript changes in edit mode, patch ONLY text changes into reader text.
   // Whitespace-only changes (line splits, spacing) are ignored — the reader view
@@ -132,12 +135,15 @@ export default function LetterReviewPage() {
       if (patched !== readerText) {
         setReaderText(patched);
       }
+    } else if (letter?.transcript?.structuredPages) {
+      // Word count changed — regenerate from structured data
+      setReaderText(generateReadingTextFromStructured(letter.transcript.structuredPages));
     } else {
-      // Word count changed — regenerate reader text fully
+      // Word count changed — regenerate reader text fully via heuristic
       const stripped = transcript.replace(/^---\s*Page\s+\d+\s*---$/gm, "").replace(/\n{3,}/g, "\n\n");
       setReaderText(reflowTranscript(stripped));
     }
-  }, [transcript, readerText]);
+  }, [transcript, readerText, letter?.transcript?.structuredPages]);
 
   // Photo description state
   const [photoDescription, setPhotoDescription] = useState("");

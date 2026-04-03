@@ -172,7 +172,8 @@ export function buildPhotoDescriptionPrompt(context?: {
   return blocks.join('\n\n');
 }
 
-export const TRANSCRIPTION_SYSTEM_PROMPT = `You are an expert archivist specializing in historical document transcription. Your task is to accurately transcribe handwritten letters from images.
+/** Legacy flat-text prompt — used as fallback when structured output fails */
+export const LEGACY_TRANSCRIPTION_SYSTEM_PROMPT = `You are an expert archivist specializing in historical document transcription. Your task is to accurately transcribe handwritten letters from images.
 
 CRITICAL GUIDELINES:
 - Transcribe the text exactly as written, preserving original spelling, punctuation, and capitalization
@@ -204,6 +205,82 @@ HANDLING UNCERTAINTY:
 
 OUTPUT FORMAT:
 Return ONLY the transcription text, nothing else. No headers, no explanations, no "Here is the transcription:" - just the transcribed text.`;
+
+/** @deprecated Use LEGACY_TRANSCRIPTION_SYSTEM_PROMPT for the flat-text fallback */
+export const TRANSCRIPTION_SYSTEM_PROMPT = LEGACY_TRANSCRIPTION_SYSTEM_PROMPT;
+
+/**
+ * Structured transcription prompt — returns JSON with per-line annotations.
+ * Used with OpenAI responses.create + strict json_schema.
+ */
+export const STRUCTURED_TRANSCRIPTION_SYSTEM_PROMPT = `You are an expert archivist specializing in historical document transcription. Your task is to accurately transcribe handwritten letters from images, producing structured line-by-line data.
+
+CRITICAL GUIDELINES:
+- Transcribe the text exactly as written, preserving original spelling, punctuation, and capitalization
+- DO NOT fabricate missing text, names, dates, or context
+- Each physical line of handwriting in the image = one entry in the lines array
+
+FOR EACH LINE, PROVIDE:
+
+1. "text" — The transcribed text content. Do NOT add leading spaces for positioning; positioning is handled by the "x" field. Preserve the original spelling, punctuation, and capitalization exactly.
+
+2. "x" — The approximate horizontal starting position of the first character, as an integer from 0 to 999 where 0 is the left edge and 999 is the right edge of the writing area. Most body text starts near 0-50. Dates or locations positioned on the right side of the page would be 400-800. Centered text would be around 200-500 depending on length.
+
+3. "paragraph" — An integer grouping body text into paragraphs. Increment the number when there is a clear paragraph break (blank line, significant vertical gap, or new topic indentation). Set to null for non-body elements (dates, salutations, closings, signatures, etc.).
+
+4. "continues" — Set to true ONLY when a line is a margin continuation of the previous line — meaning the writer ran out of horizontal space and continued writing on the next physical line, NOT starting a new thought. This is the key distinction: if removing the line break would create a natural flowing sentence with the previous line, it continues. If the line starts a new thought or structural element, it does not continue.
+
+5. "role" — The structural role of this line:
+   - "date" — A date line, typically at the top (e.g., "September 12, 1943", "Sept. 12th")
+   - "salutation" — The greeting (e.g., "Dear Mother,", "My dearest John,")
+   - "body" — Regular letter body text (most common)
+   - "closing" — The sign-off phrase (e.g., "Yours truly,", "With love,", "Your affectionate son,")
+   - "signature" — The writer's name after the closing
+   - "postscript" — Text after the signature (e.g., "P.S. ...", "P.P.S. ...")
+   - "margin-note" — Text written in margins, sideways, or squeezed into unusual positions
+   - "address" — Mailing address, typically on envelopes or letter headers
+   - null — When the role is ambiguous or doesn't fit the categories above
+
+BLANK LINES:
+- When there is a blank line (paragraph break) in the original, include a line entry with empty text "", x: 0, paragraph: null, continues: false, role: null.
+
+HANDLING UNCERTAINTY:
+- Use [illegible] for words that cannot be read at all
+- Note crossed-out text as [crossed out]
+- In typewritten text, ignore characters overtyped with "x" (typist corrections)
+- Indicate inserted text as [insertion: text]
+- Indicate marginal notes as separate lines with role "margin-note"`;
+
+export function buildStructuredTranscriptionUserPrompt(context?: {
+  collectionCode?: string;
+  dateRaw?: string;
+  pageNumber?: number;
+  totalPages?: number;
+}): string {
+  let prompt = 'Transcribe this handwritten document image line by line.';
+
+  if (context) {
+    const parts: string[] = [];
+    if (context.collectionCode) {
+      parts.push(`Collection: ${context.collectionCode}`);
+    }
+    if (context.dateRaw) {
+      parts.push(`Date from filename: ${context.dateRaw}`);
+    }
+    if (context.pageNumber !== undefined) {
+      const pageInfo = context.totalPages
+        ? `Page ${context.pageNumber} of ${context.totalPages}`
+        : `Page ${context.pageNumber}`;
+      parts.push(pageInfo);
+    }
+
+    if (parts.length > 0) {
+      prompt += `\n\nContext (for reference only, do not include in transcription):\n${parts.join('\n')}`;
+    }
+  }
+
+  return prompt;
+}
 
 export function buildTranscriptionUserPrompt(context?: {
   collectionCode?: string;

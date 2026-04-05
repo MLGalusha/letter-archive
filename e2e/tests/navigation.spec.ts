@@ -112,9 +112,9 @@ test.describe('Navigation', () => {
       expect(page.url()).toContain('/admin/notes');
     });
 
-    test('can navigate to publish page', async ({ page }) => {
-      const publishLink = page.locator('a.nav-item:has-text("Publish")');
-      await publishLink.click();
+    test('can navigate to content page', async ({ page }) => {
+      const contentLink = page.locator('a.nav-item:has-text("Content")');
+      await contentLink.click();
 
       await page.waitForURL(/\/admin\/content/);
       expect(page.url()).toContain('/admin/content');
@@ -157,15 +157,12 @@ test.describe('Navigation', () => {
 
   test.describe('Browser Navigation', () => {
     test('back button works on public pages', async ({ page }) => {
-      await page.goto('/');
-      await page.waitForLoadState('domcontentloaded');
+      await page.goto('/', { waitUntil: 'networkidle' });
+      await page.goto('/collections', { waitUntil: 'networkidle' });
 
-      await page.goto('/collections');
-      await page.waitForLoadState('domcontentloaded');
+      await page.goBack();
+      await page.waitForURL(/^\/?$|^http:\/\/[^/]+\/?$/, { timeout: 10000 });
 
-      await page.goBack({ waitUntil: 'domcontentloaded' });
-
-      // SPA router may resolve to "/" or keep the base URL without trailing slash
       const url = new URL(page.url());
       expect(url.pathname).toMatch(/^\/?$/);
     });
@@ -173,26 +170,24 @@ test.describe('Navigation', () => {
     test('back button works on admin pages', async ({ page }) => {
       await loginAsAdmin(page);
 
-      await page.goto('/admin/upload');
-      await page.waitForLoadState('domcontentloaded');
+      await page.goto('/admin', { waitUntil: 'networkidle' });
+      await page.goto('/admin/upload', { waitUntil: 'networkidle' });
 
-      await page.goBack({ waitUntil: 'domcontentloaded' });
+      await page.goBack();
+      await page.waitForURL(/\/admin$/, { timeout: 10000 });
 
       expect(page.url()).toMatch(/\/admin$/);
     });
 
     test('forward button works', async ({ page }) => {
-      await page.goto('/');
-      await page.waitForLoadState('domcontentloaded');
+      await page.goto('/', { waitUntil: 'networkidle' });
+      await page.goto('/collections', { waitUntil: 'networkidle' });
 
-      await page.goto('/collections');
-      await page.waitForLoadState('domcontentloaded');
+      await page.goBack();
+      await page.waitForURL(/^\/?$|^http:\/\/[^/]+\/?$/, { timeout: 10000 });
 
-      await page.goBack({ waitUntil: 'domcontentloaded' });
-      // SPA client-side routing may not trigger a real page load on goForward,
-      // so skip waitUntil and poll for the URL change instead
       await page.goForward();
-      await page.waitForURL(/\/collections/, { timeout: 15000 });
+      await page.waitForURL(/\/collections/, { timeout: 10000 });
 
       expect(page.url()).toContain('/collections');
     });

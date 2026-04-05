@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 const outputPath = path.join(rootDir, 'public', 'robots.txt');
-const siteUrl = (process.env.VITE_SITE_URL || 'https://letterarchive.org').replace(/\/+$/, '');
+const siteUrl = (process.env.VITE_SITE_URL || 'https://voicesthatremain.com').replace(/\/+$/, '');
 
 const content = `User-agent: *
 Allow: /

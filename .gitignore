@@ -65,6 +65,9 @@ backend/test-line-overlay.png
 
 # Screenshots (design artifacts)
 *.png
+!frontend/public/favicon-*.png
+!frontend/public/apple-touch-icon.png
+!frontend/public/og-default.png
 
 # Claude
 CLAUDE.md

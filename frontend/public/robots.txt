@@ -3,4 +3,4 @@ Allow: /
 Disallow: /admin
 Disallow: /admin-login
 
-Sitemap: https://letterarchive.org/sitemap.xml
+Sitemap: https://voicesthatremain.com/sitemap.xml

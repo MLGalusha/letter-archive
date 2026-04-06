@@ -520,13 +520,73 @@ export default function LetterDetailPage() {
 
             {transcriptMode === "reading" && letter.readingText ? (
               /* ── Saved reading text — render exactly as admin set it ── */
-              <div className={`transcript-text transcript-reading-saved${shortLineClass}`}>
-                {letter.readingText}
+              <div className="transcript-pages-combined">
+                <div className="transcript-page-region">
+                  <div className="transcript-page-body">
+                    {letterTypeImages.length > 0 && letterTypeImages.map((pageImage, idx) => {
+                      const side = idx % 2 === 0 ? "left" : "right";
+                      return (
+                        <button
+                          key={pageImage.id}
+                          type="button"
+                          className={`page-thumb page-thumb-${side}${transcriptVerifClass}`}
+                          onClick={() => openViewer(Math.max(0, allImages.indexOf(pageImage)))}
+                          aria-label={`View page ${pageImage.pageNumber ?? idx + 1}`}
+                          style={idx > 0 ? { top: `${idx * 14}rem` } : undefined}
+                        >
+                          <span className="page-thumb-inner">
+                            <img
+                              src={getImageUrl(pageImage.imageUrl, { width: 300 })}
+                              alt={`Page ${pageImage.pageNumber ?? idx + 1}`}
+                              className="page-thumb-img"
+                              loading="lazy"
+                            />
+                            <span className="page-thumb-label">Page {pageImage.pageNumber ?? idx + 1}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                    <div className={`transcript-text transcript-reading-saved${shortLineClass}`}>
+                      {letter.readingText}
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : transcriptMode === "reading" && structuredPages ? (
               /* ── Structured reading view — from AI line annotations ── */
-              <div className={`transcript-text${shortLineClass}`}>
-                {renderStructuredReadingView(structuredPages)}
+              <div className="transcript-pages-combined">
+                {structuredPages.map((sp, idx) => {
+                  const pageImage = letterTypeImages.find((img) => img.pageNumber === sp.pageNumber);
+                  const side = idx % 2 === 0 ? "left" : "right";
+                  return (
+                    <div key={sp.pageNumber} className="transcript-page-region">
+                      {idx > 0 && <div className="page-boundary-mark" />}
+                      <div className="transcript-page-body">
+                        {pageImage && (
+                          <button
+                            type="button"
+                            className={`page-thumb page-thumb-${side}${transcriptVerifClass}`}
+                            onClick={() => openViewer(Math.max(0, allImages.indexOf(pageImage)))}
+                            aria-label={`View page ${sp.pageNumber}`}
+                          >
+                            <span className="page-thumb-inner">
+                              <img
+                                src={getImageUrl(pageImage.imageUrl, { width: 300 })}
+                                alt={`Page ${sp.pageNumber}`}
+                                className="page-thumb-img"
+                                loading="lazy"
+                              />
+                              <span className="page-thumb-label">Page {sp.pageNumber}</span>
+                            </span>
+                          </button>
+                        )}
+                        <div className={`transcript-text${shortLineClass}`}>
+                          {renderStructuredReadingView([sp])}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : letter.transcript.pages.length > 0 ? (
               transcriptMode === "reading" && readingSegments ? (

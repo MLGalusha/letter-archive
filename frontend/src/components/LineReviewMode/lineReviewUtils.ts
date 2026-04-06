@@ -88,6 +88,47 @@ export function measureRenderedTextWidth(
   return width;
 }
 
+/**
+ * Computes the font size for a single line's editable input, scaling up
+ * for short text while respecting available width and height constraints.
+ * Uses Pretext (via measureRenderedTextWidth) for measurement.
+ */
+export function computeLineFontSize(
+  text: string,
+  ocrWords: { bbox: [number, number, number, number] }[] | undefined,
+  lineBbox: [number, number, number, number] | undefined,
+  scaleFactor: number,
+  maxHeight: number,
+): number {
+  const words = text.split(/\s+/).filter(w => w.length > 0);
+  if (words.length === 0) return 16;
+  const joined = words.join(' ');
+
+  let lineLeftX: number;
+  let lineRightX: number;
+  if (ocrWords && ocrWords.length > 0) {
+    lineLeftX = Math.min(...ocrWords.map(w => w.bbox[0]));
+    lineRightX = Math.max(...ocrWords.map(w => w.bbox[2]));
+  } else if (lineBbox) {
+    lineLeftX = lineBbox[0];
+    lineRightX = lineBbox[2];
+  } else {
+    return 16;
+  }
+
+  const targetWidth = (lineRightX - lineLeftX) * scaleFactor;
+  if (targetWidth <= 0) return 16;
+
+  const REF_SIZE = 16;
+  const refWidth = measureRenderedTextWidth(joined, REF_SIZE);
+  if (refWidth <= 0) return 16;
+
+  const fontFromWidth = REF_SIZE * targetWidth / refWidth;
+  const fontFromHeight = maxHeight - CSS_BORDER_PADDING * 2;
+
+  return Math.max(8, Math.min(fontFromWidth, fontFromHeight, 72));
+}
+
 export function normalizeReviewLineText(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }

@@ -165,7 +165,7 @@ export function generateReadingTextFromStructured(pages: StructuredPage[]): stri
       continue;
     }
 
-    // Continuation: join with previous line
+    // Continuation: join with previous line (hyphen-aware)
     if (line.continues && result.length > 0) {
       const prev = result[result.length - 1];
       if (/[a-zA-Z]-$/.test(prev) && /^[a-z]/.test(line.text)) {
@@ -185,8 +185,13 @@ export function generateReadingTextFromStructured(pages: StructuredPage[]): stri
       result.push('');
     }
 
-    // Add indentation for positioned non-body elements
-    if (line.role && line.role !== 'body' && line.x > 100) {
+    // Same body paragraph as previous line — join into flowing text
+    const sameParagraph = line.paragraph !== null && line.paragraph === lastParagraph
+      && line.role === 'body' && lastRole === 'body';
+    if (sameParagraph && result.length > 0 && result[result.length - 1] !== '') {
+      result[result.length - 1] = result[result.length - 1] + ' ' + line.text;
+    } else if (line.role && line.role !== 'body' && line.x > 100) {
+      // Add indentation for positioned non-body elements
       const spaces = Math.round((line.x / 999) * 40);
       result.push(' '.repeat(spaces) + line.text);
     } else {

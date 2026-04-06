@@ -26,8 +26,8 @@ import { useToast } from '../../contexts/ToastContext';
 import { highlightTranscriptMarkers } from '../../utils/transcriptHighlight';
 import {
   CSS_BORDER_PADDING,
-  FONT_FAMILY,
   computeLineInputHeight,
+  computeLineFontSize,
   measureRenderedTextWidth,
   mergeEditedTextWithOriginalSpacing,
   normalizeReviewLineText,
@@ -126,20 +126,14 @@ export function computeAutoScrollTop(params: {
 }
 
 /**
- * Computes a representative font size for the page (used for input overlay height).
- * Compares OCR line widths to rendered text widths at a reference size.
+ * Computes a representative font size for the page (used as fallback).
+ * Compares OCR line widths to rendered text widths using Pretext measurement.
  */
 function computePageFontSize(
   alignedLines: AlignedLine[],
   scaleFactor: number,
 ): number {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return 14;
-
   const REF_SIZE = 16;
-  ctx.font = `${REF_SIZE}px ${FONT_FAMILY}`;
-
   let totalOcrWidth = 0;
   let totalRenderedWidth = 0;
 
@@ -152,7 +146,7 @@ function computePageFontSize(
     const lineLeft = Math.min(...line.words.map(w => w.bbox[0]));
     const lineRight = Math.max(...line.words.map(w => w.bbox[2]));
     totalOcrWidth += (lineRight - lineLeft) * scaleFactor;
-    totalRenderedWidth += ctx.measureText(text).width;
+    totalRenderedWidth += measureRenderedTextWidth(text, REF_SIZE);
   }
 
   if (totalRenderedWidth <= 0 || totalOcrWidth <= 0) return 14;
@@ -173,6 +167,7 @@ function buildWordPositionedContent(
   contentAreaLeftDisplay: number,
   scaleFactor: number,
   lineBbox?: [number, number, number, number],
+  maxFontSize = 72,
 ): void {
   div.innerHTML = '';
   div.style.fontSize = '';
@@ -215,7 +210,7 @@ function buildWordPositionedContent(
   const refWidth = measureRenderedTextWidth(joined, REF_SIZE);
   if (refWidth <= 0) { div.innerHTML = highlightTranscriptMarkers(joined); return; }
 
-  const fontSize = Math.max(8, Math.min(36, REF_SIZE * targetWidth / refWidth));
+  const fontSize = Math.max(8, Math.min(maxFontSize, REF_SIZE * targetWidth / refWidth));
 
   // Fine-tune with word-spacing using real DOM-rendered widths.
   let wordSpacing = 0;
@@ -848,6 +843,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const overlayLeft = Math.max(0, (leftX - pad) * scaleFactor);
     const contentAreaLeft = overlayLeft + CSS_BORDER_PADDING;
 
+    // Compute max font for this line (matches render-time computation)
+    const displayedImgH = imageDisplaySize.height || (imageNaturalSize.height * scaleFactor);
+    const lineBottom = line.bbox[3] * scaleFactor + 4; // LINE_GAP
+    const maxH = Math.min(displayedImgH - lineBottom, 150);
+    const lineFontMax = computeLineFontSize(line.transcriptText, line.words, line.bbox, scaleFactor, maxH);
+
     buildWordPositionedContent(
       inputRef.current,
       line.transcriptText,
@@ -855,6 +856,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       contentAreaLeft,
       scaleFactor,
       line.bbox,
+      lineFontMax,
     );
 
     inputRef.current.focus();
@@ -862,7 +864,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (sel && inputRef.current.firstChild) {
       sel.collapse(inputRef.current.firstChild, 0);
     }
-  }, [currentLineIndex, currentPageIndex, alignedLines, scaleFactor, imageNaturalSize.width]);
+  }, [currentLineIndex, currentPageIndex, alignedLines, scaleFactor, imageNaturalSize.width, imageDisplaySize.height, imageNaturalSize.height]);
 
   // Re-run line detection for the current page
   const redetectLines = useCallback(() => {
@@ -990,8 +992,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   if (!currentPage) return null;
 
   // Dynamic height for the editable strip — based on current line's word heights and font size
-  const INPUT_DISPLAY_HEIGHT = computeLineInputHeight(currentLine?.bbox, scaleFactor, pageFontSize);
-
   // Compute overlay positions
   const displayedImageHeight = imageDisplaySize.height || (imageNaturalSize.height * scaleFactor);
   const imgW = imageDisplaySize.width;
@@ -1015,8 +1015,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const inputRight = currentLine ? Math.min(imgW, (ocrRightX + linePad) * scaleFactor + rightExtra) : imgW;
   const inputWidth = inputRight - inputLeft;
 
-  // Use the page-global font size for the editable div
-  const fontSize = pageFontSize;
+  // Per-line font size: scales up for short text, bounded by available height below line
+  const maxInputHeight = Math.min(displayedImageHeight - inputTop, 150);
+  const fontSize = currentLine
+    ? computeLineFontSize(currentLine.transcriptText, currentLine.words, currentLine.bbox, scaleFactor, maxInputHeight)
+    : pageFontSize;
+  const INPUT_DISPLAY_HEIGHT = fontSize + CSS_BORDER_PADDING * 2;
 
   // Build highlight polygon points from Kraken boundary (or bbox fallback).
   const highlightPoints = useMemo(() => {

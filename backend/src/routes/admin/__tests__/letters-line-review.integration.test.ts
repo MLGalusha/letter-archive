@@ -223,7 +223,7 @@ describe('admin letters line review route integration', () => {
   });
 
   it('returns detected line data with stored OCR fallbacks when the detector omits them', async () => {
-    findFirstMock.mockResolvedValueOnce(createStoredPage());
+    findFirstMock.mockResolvedValueOnce(createStoredPage({ lineSegments: [] }));
     getAbsoluteStoragePathMock.mockReturnValueOnce('/tmp/collection-009-page-1.jpg');
     detectAndStorePageLinesMock.mockResolvedValueOnce({
       lineSegments: [{ id: 999, bbox: [1, 2, 3, 4] }],
@@ -252,7 +252,7 @@ describe('admin letters line review route integration', () => {
   });
 
   it('propagates line-detection failures as an SSE error event', async () => {
-    findFirstMock.mockResolvedValueOnce(createStoredPage());
+    findFirstMock.mockResolvedValueOnce(createStoredPage({ lineSegments: [] }));
     getAbsoluteStoragePathMock.mockReturnValueOnce('/tmp/collection-009-page-1.jpg');
     detectAndStorePageLinesMock.mockRejectedValueOnce(new Error('opencv offline'));
 

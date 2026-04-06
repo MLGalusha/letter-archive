@@ -40,6 +40,8 @@ interface TranscriptionSectionProps {
   onViewModeChange?: (mode: "edit" | "preview") => void;
   readerText: string;
   onReaderTextChange: (text: string) => void;
+  /** Hide the reading view toggle (e.g. for non-letter types like telegrams, covers) */
+  hideReadingView?: boolean;
 }
 
 const hasContent = (text: string) => text.trim().length > 0;
@@ -65,9 +67,10 @@ const TranscriptionSection = memo(function TranscriptionSection({
   onViewModeChange,
   readerText,
   onReaderTextChange,
+  hideReadingView,
 }: TranscriptionSectionProps) {
   const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
-  const showReadingView = viewMode === "preview" && hasContent(transcriptText);
+  const showReadingView = !hideReadingView && viewMode === "preview" && hasContent(transcriptText);
 
   const changeViewMode = useCallback((mode: "edit" | "preview") => {
     setViewMode(mode);
@@ -138,7 +141,7 @@ const TranscriptionSection = memo(function TranscriptionSection({
           )}
         </h2>
         <div className="header-right">
-          {hasContent(transcriptText) && (
+          {!hideReadingView && hasContent(transcriptText) && (
             <div className="view-mode-toggle">
               <button
                 type="button"

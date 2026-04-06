@@ -42,6 +42,7 @@ import { generateReadingTextFromStructured } from "../../utils/structuredTranscr
 import { useTooltip } from "../../hooks/useTooltip";
 import type { Letter, LetterImage, VisibilityState } from "../../types/Letter";
 import {
+  getPrimaryImageType,
   hasPrimaryTranscriptContent,
   hasRelatedExtraContent,
   shouldShowPhotoDescriptionWorkflow,
@@ -1437,6 +1438,7 @@ export default function LetterReviewPage() {
                 onViewModeChange={handleViewModeChange}
                 readerText={readerText ?? ""}
                 onReaderTextChange={handleReaderTextChange}
+                hideReadingView={getPrimaryImageType(letter) !== "letter"}
               />
             )}
 

@@ -49,8 +49,16 @@ EPHEMERA:
 - Preserve original layout where possible
 - Note printed vs handwritten text
 
-HANDLING UNCERTAINTY:
-- Never mark text as [illegible]. Instead, use surrounding context, common phrases, names, and letter conventions to make your best educated guess at what the word likely says.
+HANDLING UNCERTAINTY (CRITICAL — read carefully):
+Your #1 job is faithful, word-for-word transcription. Never rewrite or rephrase what the writer wrote. Every word you CAN read must appear exactly as written, even if surrounding words are hard to read.
+
+When you encounter a difficult word:
+1. FIRST, try harder — zoom in mentally, use letter shapes, surrounding context, common phrases, names, and letter-writing conventions to determine the word.
+2. If you are fairly confident but not certain, write your best guess wrapped in [?guess?] — e.g., [?Tuesday?]. This flags it for human review.
+3. If a word is truly unreadable despite your best effort (damaged, smudged, overlapping), write [illegible]. This is a last resort, not a first instinct.
+
+CRITICAL RULE: A hard-to-read word must NEVER cause you to change the words around it. Transcribe every readable word exactly as written. If one word in a sentence is unclear, transcribe the clear words faithfully and mark only the unclear word. Do not rewrite the sentence to fit a guess.
+
 - Note crossed-out text as [crossed out]
 
 OUTPUT FORMAT:
@@ -197,8 +205,16 @@ SPACING AND LAYOUT RULES (VERY IMPORTANT):
 - The goal is that the transcription looks like a text-art version of the original layout
 - Think of the output as a fixed-width representation where spacing matters
 
-HANDLING UNCERTAINTY:
-- Never mark text as [illegible]. Instead, use surrounding context, common phrases, names, and letter conventions to make your best educated guess at what the word likely says.
+HANDLING UNCERTAINTY (CRITICAL — read carefully):
+Your #1 job is faithful, word-for-word transcription. Never rewrite or rephrase what the writer wrote. Every word you CAN read must appear exactly as written, even if surrounding words are hard to read.
+
+When you encounter a difficult word:
+1. FIRST, try harder — zoom in mentally, use letter shapes, surrounding context, common phrases, names, and letter-writing conventions to determine the word.
+2. If you are fairly confident but not certain, write your best guess wrapped in [?guess?] — e.g., [?Tuesday?]. This flags it for human review.
+3. If a word is truly unreadable despite your best effort (damaged, smudged, overlapping), write [illegible]. This is a last resort, not a first instinct.
+
+CRITICAL RULE: A hard-to-read word must NEVER cause you to change the words around it. Transcribe every readable word exactly as written. If one word in a sentence is unclear, transcribe the clear words faithfully and mark only the unclear word. Do not rewrite the sentence to fit a guess.
+
 - Note crossed-out text as [crossed out]
 - In typewritten text, ignore characters or words overtyped with "x" (typist corrections). Transcribe only the intended text, not the struck-through error.
 - Indicate inserted text or marginal notes as [insertion: text] or [margin: text]
@@ -264,8 +280,16 @@ IMPORTANT: Not every margin-note or postscript is a special area. Only mark text
 
 If there are no special areas on a page, return an empty "specialAreas" array.
 
-HANDLING UNCERTAINTY:
-- Never mark text as [illegible]. Instead, use surrounding context, common phrases, names, and letter conventions to make your best educated guess at what the word likely says.
+HANDLING UNCERTAINTY (CRITICAL — read carefully):
+Your #1 job is faithful, word-for-word transcription. Never rewrite or rephrase what the writer wrote. Every word you CAN read must appear exactly as written, even if surrounding words are hard to read.
+
+When you encounter a difficult word:
+1. FIRST, try harder — zoom in mentally, use letter shapes, surrounding context, common phrases, names, and letter-writing conventions to determine the word.
+2. If you are fairly confident but not certain, write your best guess wrapped in [?guess?] — e.g., [?Tuesday?]. This flags it for human review.
+3. If a word is truly unreadable despite your best effort (damaged, smudged, overlapping), write [illegible]. This is a last resort, not a first instinct.
+
+CRITICAL RULE: A hard-to-read word must NEVER cause you to change the words around it. Transcribe every readable word exactly as written. If one word in a sentence is unclear, transcribe the clear words faithfully and mark only the unclear word. Do not rewrite the sentence to fit a guess.
+
 - Note crossed-out text as [crossed out]
 - In typewritten text, ignore characters overtyped with "x" (typist corrections)
 - Indicate inserted text as [insertion: text]

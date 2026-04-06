@@ -194,7 +194,6 @@ function createStoredPage(overrides: Record<string, unknown> = {}) {
     id: PAGE_ID,
     storagePath: 'collections/009/19470810/L01/009-19470810-L01-01.jpg',
     lineSegments: [{ id: 10 }],
-    ocrWordBoxes: [{ text: 'Dear', bbox: [10, 20, 30, 10] }],
     ...overrides,
   };
 }
@@ -249,7 +248,6 @@ describe('admin letters line review route integration', () => {
     );
     expect(response.body).toEqual({
       lineSegments: [{ id: 999, bbox: [1, 2, 3, 4] }],
-      ocrWordBoxes: [{ text: 'Dear', bbox: [10, 20, 30, 10] }],
     });
   });
 

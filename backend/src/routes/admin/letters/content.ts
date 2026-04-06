@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { and, eq } from 'drizzle-orm';
 import { db, canonicalPersons, letterPages, letterPersons, letters } from '../../../db/index.js';
 import type { StructuredNote, NoteCategory, NotePriority } from '../../../ai/schemas/metadataV2.js';
-import { detectAndStorePageLines } from '../../../services/line-finder.js';
+import { detectAndStorePageLines, savePageLineSegments } from '../../../services/line-finder.js';
 import {
   buildLetterUpdates,
   createVersion,
@@ -624,6 +624,27 @@ router.delete('/:letterId', async (req, res, next) => {
   }
 });
 
+// Save manually edited line segments for a page
+router.patch('/pages/:pageId/line-segments', async (req, res, next) => {
+  try {
+    const page = await db.query.letterPages.findFirst({
+      where: eq(letterPages.id, req.params.pageId),
+    });
+    if (!page) throw new NotFoundError('Page not found');
+
+    const { lineSegments } = req.body;
+    if (!Array.isArray(lineSegments)) {
+      throw new BadRequestError('lineSegments must be an array');
+    }
+
+    await savePageLineSegments(req.params.pageId, lineSegments);
+    req.log.info({ pageId: req.params.pageId, segmentCount: lineSegments.length }, 'Line segments updated manually');
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/pages/:pageId/detect-lines', async (req, res, next) => {
   try {
     const page = await db.query.letterPages.findFirst({
@@ -648,7 +669,6 @@ router.post('/pages/:pageId/detect-lines', async (req, res, next) => {
     res.write(`data: ${JSON.stringify({
       type: 'result',
       lineSegments: result.lineSegments ?? (Array.isArray(page.lineSegments) ? page.lineSegments : []),
-      ocrWordBoxes: result.ocrWordBoxes ?? (Array.isArray(page.ocrWordBoxes) ? page.ocrWordBoxes : null),
     })}\n\n`);
 
     res.end();

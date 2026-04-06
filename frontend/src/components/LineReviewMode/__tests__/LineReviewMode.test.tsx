@@ -19,7 +19,7 @@ vi.mock('../../../api/client', () => ({
 
 // Mock the detect-lines API call to resolve immediately with empty (triggers pixel fallback)
 vi.mock('../../../api/admin/letters', () => ({
-  detectPageLines: vi.fn().mockResolvedValue({ lineSegments: [], ocrWordBoxes: [] }),
+  detectPageLines: vi.fn().mockResolvedValue({ lineSegments: [] }),
 }));
 
 // Mock detectImageLines since jsdom can't do real pixel analysis

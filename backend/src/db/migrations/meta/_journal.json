@@ -281,6 +281,13 @@
       "when": 1775990400000,
       "tag": "0039_add_structured_transcription",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1776076800000,
+      "tag": "0040_drop_ocr_word_boxes",
+      "breakpoints": true
     }
   ]
 }

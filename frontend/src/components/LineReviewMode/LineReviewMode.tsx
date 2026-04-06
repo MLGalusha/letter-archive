@@ -8,9 +8,10 @@ import {
   useImperativeHandle,
 } from 'react';
 import { getErrorMessage, getImageUrl } from '../../api/client';
-import { detectPageLines } from '../../api/admin/letters';
-import type { Letter, LineSegment, LineSegmentWord, OcrWordBox } from '../../types/Letter';
-import { attachWordsToSegments } from '../../utils/attachWordsToSegments';
+import { detectPageLines, savePageLineSegments } from '../../api/admin/letters';
+import type { Letter, LineSegment } from '../../types/Letter';
+import { useSegmentEditor } from '../../hooks/useSegmentEditor';
+import SegmentEditorOverlay from './SegmentEditorOverlay';
 import { constrainedGrouping, eastEdgeY, westEdgeY } from '../../utils/constrainedGrouping';
 import { matchTranscriptToLines, type MatchedLine } from '../../utils/transcriptMatcher';
 import {
@@ -235,63 +236,6 @@ function buildWordPositionedContent(
   div.innerHTML = highlightTranscriptMarkers(joined);
 }
 
-/**
- * Find the Vision word that best represents a Kraken segment at a merge
- * junction. Uses the word's connecting-side edge to measure both:
- *   - vertical coverage: how much of the segment's height the word spans
- *   - proximity: how close the word's edge is to the segment's edge
- *
- * @param side 'right' = merge at segment's right edge (use word's right edge)
- *             'left'  = merge at segment's left edge (use word's left edge)
- */
-function findLargestEdgeWord(
-  segBbox: [number, number, number, number],
-  side: 'left' | 'right',
-  segmentWords: OcrWordBox[],
-  allWords: OcrWordBox[],
-): OcrWordBox | null {
-  const segH = segBbox[3] - segBbox[1];
-  const edgeX = side === 'right' ? segBbox[2] : segBbox[0];
-
-  function pickBest(words: OcrWordBox[]): OcrWordBox | null {
-    let best: OcrWordBox | null = null;
-    let bestScore = -Infinity;
-
-    for (const w of words) {
-      // Must overlap vertically with the segment
-      const vTop = Math.max(w.bbox[1], segBbox[1]);
-      const vBot = Math.min(w.bbox[3], segBbox[3]);
-      if (vBot <= vTop) continue;
-
-      // Must overlap horizontally with the segment
-      if (w.bbox[2] <= segBbox[0] || w.bbox[0] >= segBbox[2]) continue;
-
-      // Vertical coverage: how much of the segment's height this word spans (0–1)
-      const vCoverage = (vBot - vTop) / Math.max(segH, 1);
-
-      // Proximity: how close the word's connecting edge is to the
-      // segment's connecting edge. Uses sharp decay (normalized by
-      // segment height) so near-perfect alignment gets a huge boost.
-      const wordEdge = side === 'left' ? w.bbox[0] : w.bbox[2];
-      const edgeDist = Math.abs(wordEdge - edgeX);
-      const proximity = 1 / (1 + edgeDist / Math.max(segH * 0.5, 1));
-
-      // Combined: proximity weighted 2× — a word whose edge nearly
-      // aligns with the segment edge wins even if it's shorter.
-      const score = vCoverage + proximity * 2;
-      if (score > bestScore) {
-        bestScore = score;
-        best = w;
-      }
-    }
-
-    return best;
-  }
-
-  // Prefer assigned words, fallback to global pool
-  return pickBest(segmentWords) ?? pickBest(allWords);
-}
-
 const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(function LineReviewMode({
   letter,
   transcript,
@@ -367,7 +311,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   // Debug overlay layer toggles
   const [showKrakenLines, setShowKrakenLines] = useState(true);
-  const [showVisionWords, setShowVisionWords] = useState(false);
   const [showGroupedLines, setShowGroupedLines] = useState(true);
   const [showUnifiedLines, setShowUnifiedLines] = useState(false);
   const [showExcludedContent, setShowExcludedContent] = useState(false);
@@ -383,17 +326,21 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     return initial;
   });
 
-  // Vision word boxes per page (cached across page switches)
-  // undefined = not attempted, null = in progress, OcrWordBox[] = done
-  const [visionBoxesMap, setVisionBoxesMap] = useState<Record<number, OcrWordBox[] | null | undefined>>(() => {
-    const initial: Record<number, OcrWordBox[] | null | undefined> = {};
-    letterPages.forEach((page, index) => {
-      if (Array.isArray(page.ocrWordBoxes)) {
-        initial[index] = page.ocrWordBoxes;
-      }
-    });
-    return initial;
-  });
+  // Segment editor — admin controls for editing Kraken segments
+  const currentKrakenSegments = useMemo(
+    () => (currentLetterPageIndex !== undefined ? krakenSegmentsMap[currentLetterPageIndex] ?? [] : []),
+    [krakenSegmentsMap, currentLetterPageIndex],
+  );
+  const segmentEditor = useSegmentEditor(currentKrakenSegments);
+
+  // Sync segment editor when source segments change (page switch or redetect)
+  const lastSourceRef = useRef(currentKrakenSegments);
+  useEffect(() => {
+    if (currentKrakenSegments !== lastSourceRef.current) {
+      lastSourceRef.current = currentKrakenSegments;
+      segmentEditor.resetFromSource(currentKrakenSegments);
+    }
+  }, [currentKrakenSegments, segmentEditor]);
 
   // Detection progress steps (shown in loading overlay for current page)
   const [detectionSteps, setDetectionSteps] = useState<string[]>([]);
@@ -427,24 +374,20 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const pipelineResult = useMemo(() => {
     if (currentLetterPageIndex === undefined) return null;
     const rawSegments = krakenSegmentsMap[currentLetterPageIndex] ?? [];
-    const wordBoxes = letterPages[currentLetterPageIndex]?.ocrWordBoxes
-      ?? visionBoxesMap[currentLetterPageIndex]
-      ?? [];
 
-    if (rawSegments.length === 0) return null;
+    // Filter out excluded segments before grouping
+    const activeSegments = rawSegments.filter(s => !s.excluded);
+    if (activeSegments.length === 0) return null;
 
-    // Phase 2: Attach Vision words to Kraken segments
-    const { enriched, unassigned } = attachWordsToSegments(rawSegments, wordBoxes);
+    // Phase 1: Constrained grouping
+    const { lines: groupedLines, marginalSegments } = constrainedGrouping(activeSegments);
 
-    // Phase 3: Constrained grouping
-    const { lines: groupedLines, marginalSegments, visionRejections } = constrainedGrouping(enriched);
-
-    // Phase 4-5: Match transcript to grouped lines
+    // Phase 2: Match transcript to grouped lines
     const transcriptLines = pageLineTexts[currentLetterPageIndex] ?? [];
-    const matchResult = matchTranscriptToLines(transcriptLines, groupedLines, unassigned);
+    const matchResult = matchTranscriptToLines(transcriptLines, groupedLines);
 
-    return { enriched, unassigned, groupedLines, marginalSegments, matchResult, visionRejections };
-  }, [krakenSegmentsMap, currentLetterPageIndex, letterPages, visionBoxesMap, pageLineTexts]);
+    return { groupedLines, marginalSegments, matchResult };
+  }, [krakenSegmentsMap, currentLetterPageIndex, pageLineTexts]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -490,7 +433,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     })
       .then(result => {
         setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: result.lineSegments }));
-        setVisionBoxesMap(prev => ({ ...prev, [lpIdx]: result.ocrWordBoxes ?? [] }));
+
         setKrakenSegmentsMap(prev => ({ ...prev, [lpIdx]: result.lineSegments ?? [] }));
         setDetectionSteps([]);
       })
@@ -529,7 +472,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       detectPageLines(page.id)
         .then(result => {
           setAiSegmentsMap(prev => ({ ...prev, [idx]: result.lineSegments }));
-          setVisionBoxesMap(prev => ({ ...prev, [idx]: result.ocrWordBoxes ?? [] }));
           setKrakenSegmentsMap(prev => ({ ...prev, [idx]: result.lineSegments ?? [] }));
         })
         .catch(() => {
@@ -539,7 +481,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       // Only start one at a time to avoid overloading the backend
       break;
     }
-  }, [aiSegmentsMap, visionBoxesMap, currentLetterPageIndex, letterPages, pageLineTexts]);
+  }, [aiSegmentsMap, currentLetterPageIndex, letterPages, pageLineTexts]);
 
   // Whether we're still waiting for AI detection for the current letter page
   const isDetecting = currentLetterPageIndex !== undefined && aiSegmentsMap[currentLetterPageIndex] === null;
@@ -724,6 +666,33 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     onAutoSave({ transcriptionText: fullText });
   }, [currentLetterPageIndex, currentLineIndex, alignedLines, pageNonBlankMap, onTranscriptChange, onAutoSave, pageRawTexts]);
 
+  // Save segment edits and exit edit mode
+  const handleSaveSegmentEdits = useCallback(async () => {
+    if (!segmentEditor.isDirty || currentLetterPageIndex === undefined) {
+      segmentEditor.setSegmentEditMode(false);
+      return;
+    }
+    const pageId = letterPages[currentLetterPageIndex]?.id;
+    if (!pageId) return;
+    const segments = segmentEditor.getSegmentsForSave();
+    try {
+      await savePageLineSegments(pageId, segments);
+      // Update local kraken map so pipeline recomputes
+      setKrakenSegmentsMap(prev => ({ ...prev, [currentLetterPageIndex]: segments }));
+      setAiSegmentsMap(prev => ({ ...prev, [currentLetterPageIndex]: segments }));
+      segmentEditor.markClean();
+    } catch (err) {
+      showToast(getErrorMessage(err, 'Failed to save segment edits'), 'error');
+    }
+  }, [segmentEditor, currentLetterPageIndex, letterPages, showToast]);
+
+  const handleExitSegmentEditMode = useCallback(async () => {
+    if (segmentEditor.isDirty) {
+      await handleSaveSegmentEdits();
+    }
+    segmentEditor.setSegmentEditMode(false);
+  }, [segmentEditor, handleSaveSegmentEdits]);
+
   // Navigate to next line (cross-page: skips to next letter page)
   const goToNextLine = useCallback(() => {
     saveCurrentLine();
@@ -764,15 +733,21 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const goToNextPage = useCallback(() => {
     if (currentPageIndex >= allPages.length - 1) return;
     saveCurrentLine();
+    if (segmentEditor.segmentEditMode && segmentEditor.isDirty) {
+      handleSaveSegmentEdits();
+    }
     setCurrentPageIndex(currentPageIndex + 1);
     setCurrentLineIndex(0);
     containerRef.current?.scrollTo({ top: 0 });
-  }, [currentPageIndex, allPages.length, saveCurrentLine]);
+  }, [currentPageIndex, allPages.length, saveCurrentLine, segmentEditor, handleSaveSegmentEdits]);
 
   // Navigate to previous page (any type)
   const goToPrevPage = useCallback(() => {
     if (currentPageIndex <= 0) return;
     saveCurrentLine();
+    if (segmentEditor.segmentEditMode && segmentEditor.isDirty) {
+      handleSaveSegmentEdits();
+    }
     setCurrentPageIndex(currentPageIndex - 1);
     setCurrentLineIndex(0);
     containerRef.current?.scrollTo({ top: 0 });
@@ -790,7 +765,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (!currentLine || !containerRef.current || fitHeight) return;
 
     // Visible region: from highlight top (bbox[1]) to bottom of input
-    const lineInputH = computeLineInputHeight(currentLine.words, scaleFactor, pageFontSize);
+    const lineInputH = computeLineInputHeight(currentLine.bbox, scaleFactor, pageFontSize);
     const regionTop = currentLine.bbox[1] * scaleFactor;
     const regionBottom = currentLine.bbox[3] * scaleFactor + lineInputH;
     const container = containerRef.current;
@@ -862,7 +837,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     }
   }, [currentLineIndex, currentPageIndex, alignedLines, scaleFactor, imageNaturalSize.width]);
 
-  // Re-run line detection for the current page (Kraken + Vision in parallel)
+  // Re-run line detection for the current page
   const redetectLines = useCallback(() => {
     if (!currentPage || isDetecting || currentLetterPageIndex === undefined) return;
 
@@ -871,7 +846,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     // Immediately show spinner and clear stale data
     setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: null }));
-    setVisionBoxesMap(prev => ({ ...prev, [lpIdx]: undefined }));
     setKrakenSegmentsMap(prev => ({ ...prev, [lpIdx]: undefined }));
     setCurrentLineIndex(0);
     setDetectionSteps([]);
@@ -881,7 +855,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     })
       .then(result => {
         setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: result.lineSegments }));
-        setVisionBoxesMap(prev => ({ ...prev, [lpIdx]: result.ocrWordBoxes ?? [] }));
+
         setKrakenSegmentsMap(prev => ({ ...prev, [lpIdx]: result.lineSegments ?? [] }));
         setDetectionSteps([]);
       })
@@ -901,6 +875,26 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   // Keyboard handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Segment edit mode keyboard handling
+      if (segmentEditor.segmentEditMode) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          handleExitSegmentEditMode();
+          return;
+        }
+        if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && segmentEditor.canUndo) {
+          e.preventDefault();
+          segmentEditor.undo();
+          return;
+        }
+        // Block line navigation keys in edit mode
+        if (['Enter', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+          e.preventDefault();
+          return;
+        }
+        return; // Don't process other keys in edit mode
+      }
+
       // Only handle when our input is focused or the container is active
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -964,12 +958,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [saveCurrentLine, onExit, goToNextLine, goToPrevLine, goToNextPage, goToPrevPage, onLetterPage, overlayEnabled, redetectLines, debugLines, onDebugModeChange]);
+  }, [saveCurrentLine, onExit, goToNextLine, goToPrevLine, goToNextPage, goToPrevPage, onLetterPage, overlayEnabled, redetectLines, debugLines, onDebugModeChange, segmentEditor, handleExitSegmentEditMode]);
 
   if (!currentPage) return null;
 
   // Dynamic height for the editable strip — based on current line's word heights and font size
-  const INPUT_DISPLAY_HEIGHT = computeLineInputHeight(currentLine?.words, scaleFactor, pageFontSize);
+  const INPUT_DISPLAY_HEIGHT = computeLineInputHeight(currentLine?.bbox, scaleFactor, pageFontSize);
 
   // Compute overlay positions
   const displayedImageHeight = imageDisplaySize.height || (imageNaturalSize.height * scaleFactor);
@@ -1014,22 +1008,20 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     return `${sx1},${sy1} ${sx2},${sy1} ${sx2},${sy2} ${sx1},${sy2}`;
   }, [currentLine, scaleFactor]);
 
-  // Flat list of ALL Vision words for fallback junction rendering
-  const allVisionWords = useMemo(() => {
-    if (!pipelineResult) return [];
-    return [
-      ...pipelineResult.enriched.flatMap((s) => s.visionWords),
-      ...(pipelineResult.unassigned ?? []),
-    ];
-  }, [pipelineResult]);
+  const handleFullExit = useCallback(() => {
+    saveCurrentLine();
+    if (segmentEditor.segmentEditMode && segmentEditor.isDirty) {
+      handleSaveSegmentEdits();
+    }
+    onExit();
+  }, [saveCurrentLine, segmentEditor, handleSaveSegmentEdits, onExit]);
 
   const handleContainerClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     // Only exit when clicking directly on the dark background (not the image or overlays)
     if (e.target === containerRef.current) {
-      saveCurrentLine();
-      onExit();
+      handleFullExit();
     }
-  }, [saveCurrentLine, onExit]);
+  }, [handleFullExit]);
 
   return (
     <div
@@ -1040,7 +1032,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       {/* Close button */}
       <button
         className="line-review-close-btn"
-        onClick={() => { saveCurrentLine(); onExit(); }}
+        onClick={handleFullExit}
         aria-label="Exit review mode"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -1072,7 +1064,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         />
 
         {/* Dimmer with polygon cutout — shadows everything except the active line */}
-        {overlayEnabled && currentLine && imgW > 0 && (
+        {overlayEnabled && currentLine && imgW > 0 && !segmentEditor.segmentEditMode && (
           <svg
             className="line-review-highlight-svg"
             width={imgW}
@@ -1098,7 +1090,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         )}
 
         {/* Input overlay — positioned below the clear strip, sized to the line */}
-        {overlayEnabled && currentLine && (
+        {overlayEnabled && currentLine && !segmentEditor.segmentEditMode && (
           <div
             className="line-review-input-overlay"
             style={{
@@ -1155,34 +1147,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                 />
               ),
             )}
-          </svg>
-        )}
-
-        {/* Debug overlay — Vision word bounding boxes */}
-        {debugLines && showVisionWords && imageDisplaySize.width > 0 && (
-          <svg
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: imageDisplaySize.width,
-              height: displayedImageHeight,
-              pointerEvents: 'none',
-              zIndex: 6,
-            }}
-          >
-            {(currentLetterPageIndex !== undefined ? visionBoxesMap[currentLetterPageIndex] ?? [] : []).map((box, i) => (
-              <rect
-                key={`vision-${i}`}
-                className={box.hasContent === false
-                  ? 'line-review-debug-vision-empty'
-                  : 'line-review-debug-vision-word'}
-                x={box.bbox[0] * scaleFactor}
-                y={box.bbox[1] * scaleFactor}
-                width={(box.bbox[2] - box.bbox[0]) * scaleFactor}
-                height={(box.bbox[3] - box.bbox[1]) * scaleFactor}
-              />
-            ))}
           </svg>
         )}
 
@@ -1345,129 +1309,23 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                   );
                 }),
               )}
-            {/* Vision junction debug: show the Vision word boxes being compared
-                at each merge junction. Each Kraken segment maps to a Vision word:
-                assigned word if available, otherwise nearest word from global pool.
-                Spanning words that bridge the gap show as a single box. */}
-            {pipelineResult?.groupedLines
-              .filter((gl) => gl.merged && gl.constituents.length > 1)
-              .flatMap((gl, gi) =>
-                gl.constituents.slice(0, -1).map((seg, si) => {
-                  const next = gl.constituents[si + 1];
-                  const s = scaleFactor;
-
-                  // Check for a spanning word that bridges the gap
-                  const gapStart = seg.bbox[2];
-                  const gapEnd = next.bbox[0];
-                  const juncWords = [...seg.visionWords, ...next.visionWords];
-                  const spanWord = juncWords.find(
-                    (w) => w.bbox[0] <= gapStart && w.bbox[2] >= gapEnd,
-                  );
-                  if (spanWord) {
-                    return (
-                      <g key={`vjunc-${gi}-${si}`}>
-                        <rect
-                          className="line-review-debug-vision-junction"
-                          x={spanWord.bbox[0] * s}
-                          y={spanWord.bbox[1] * s}
-                          width={(spanWord.bbox[2] - spanWord.bbox[0]) * s}
-                          height={(spanWord.bbox[3] - spanWord.bbox[1]) * s}
-                        />
-                      </g>
-                    );
-                  }
-
-                  // Each Kraken segment picks the largest Vision word on its merge side
-                  const leftWord = findLargestEdgeWord(seg.bbox, 'right', seg.visionWords, allVisionWords);
-                  const rightWord = findLargestEdgeWord(next.bbox, 'left', next.visionWords, allVisionWords);
-                  if (!leftWord && !rightWord) return null;
-
-                  return (
-                    <g key={`vjunc-${gi}-${si}`}>
-                      {leftWord && (
-                        <rect
-                          className="line-review-debug-vision-junction"
-                          x={leftWord.bbox[0] * s}
-                          y={leftWord.bbox[1] * s}
-                          width={(leftWord.bbox[2] - leftWord.bbox[0]) * s}
-                          height={(leftWord.bbox[3] - leftWord.bbox[1]) * s}
-                        />
-                      )}
-                      {rightWord && (
-                        <rect
-                          className="line-review-debug-vision-junction"
-                          x={rightWord.bbox[0] * s}
-                          y={rightWord.bbox[1] * s}
-                          width={(rightWord.bbox[2] - rightWord.bbox[0]) * s}
-                          height={(rightWord.bbox[3] - rightWord.bbox[1]) * s}
-                        />
-                      )}
-                      {/* Connecting lines top-top and bottom-bottom */}
-                      {leftWord && rightWord && (
-                        <>
-                          <line className="line-review-debug-vision-connector"
-                            x1={leftWord.bbox[2] * s} y1={leftWord.bbox[1] * s}
-                            x2={rightWord.bbox[0] * s} y2={rightWord.bbox[1] * s} />
-                          <line className="line-review-debug-vision-connector"
-                            x1={leftWord.bbox[2] * s} y1={leftWord.bbox[3] * s}
-                            x2={rightWord.bbox[0] * s} y2={rightWord.bbox[3] * s} />
-                        </>
-                      )}
-                    </g>
-                  );
-                }).filter(Boolean),
-              )}
-            {/* Vision-rejected merges: Kraken wanted these but Vision said no.
-                Show with red boxes + red connectors so you can see what was rejected.
-                Each Kraken segment maps to a Vision word (assigned or nearest fallback). */}
-            {(pipelineResult?.visionRejections ?? []).map((rej, ri) => {
-              const s = scaleFactor;
-              // Each Kraken segment picks the largest Vision word on its merge side
-              const leftWord = findLargestEdgeWord(rej.left.bbox, 'right', rej.left.visionWords, allVisionWords);
-              const rightWord = findLargestEdgeWord(rej.right.bbox, 'left', rej.right.visionWords, allVisionWords);
-              // Kraken edge coords for orange connectors
-              const segEast = eastEdgeY(rej.left);
-              const nextWest = westEdgeY(rej.right);
-              const rx = rej.left.bbox[2] * s;
-              const lx = rej.right.bbox[0] * s;
-
-              return (
-                <g key={`vrej-${ri}`}>
-                  {/* Kraken's intended merge (orange dashed) */}
-                  <line className="line-review-debug-connector"
-                    x1={rx} y1={segEast[0] * s}
-                    x2={lx} y2={nextWest[0] * s} />
-                  <line className="line-review-debug-connector"
-                    x1={rx} y1={segEast[1] * s}
-                    x2={lx} y2={nextWest[1] * s} />
-                  {/* Vision boxes for each Kraken segment */}
-                  {leftWord && (
-                    <rect className="line-review-debug-vision-rejected"
-                      x={leftWord.bbox[0] * s} y={leftWord.bbox[1] * s}
-                      width={(leftWord.bbox[2] - leftWord.bbox[0]) * s}
-                      height={(leftWord.bbox[3] - leftWord.bbox[1]) * s} />
-                  )}
-                  {rightWord && (
-                    <rect className="line-review-debug-vision-rejected"
-                      x={rightWord.bbox[0] * s} y={rightWord.bbox[1] * s}
-                      width={(rightWord.bbox[2] - rightWord.bbox[0]) * s}
-                      height={(rightWord.bbox[3] - rightWord.bbox[1]) * s} />
-                  )}
-                  {/* Red connectors showing Vision mismatch */}
-                  {leftWord && rightWord && (
-                    <>
-                      <line className="line-review-debug-vision-rejected-connector"
-                        x1={leftWord.bbox[2] * s} y1={leftWord.bbox[1] * s}
-                        x2={rightWord.bbox[0] * s} y2={rightWord.bbox[1] * s} />
-                      <line className="line-review-debug-vision-rejected-connector"
-                        x1={leftWord.bbox[2] * s} y1={leftWord.bbox[3] * s}
-                        x2={rightWord.bbox[0] * s} y2={rightWord.bbox[3] * s} />
-                    </>
-                  )}
-                </g>
-              );
-            })}
           </svg>
+        )}
+
+        {/* Segment editor overlay — interactive segment editing */}
+        {segmentEditor.segmentEditMode && imageDisplaySize.width > 0 && (
+          <SegmentEditorOverlay
+            segments={segmentEditor.editedSegments}
+            selectedSegmentId={segmentEditor.selectedSegmentId}
+            scaleFactor={scaleFactor}
+            imageWidth={imageDisplaySize.width}
+            imageHeight={displayedImageHeight}
+            onSelect={segmentEditor.selectSegment}
+            onResize={segmentEditor.resizeSegment}
+            onDelete={segmentEditor.deleteSegment}
+            onToggleExcluded={segmentEditor.toggleExcluded}
+            onAddSegment={segmentEditor.addSegment}
+          />
         )}
 
         {/* Detecting lines — detection in progress */}
@@ -1523,13 +1381,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             Kraken Lines
           </button>
           <button
-            className={`debug-legend-toggle${showVisionWords ? ' debug-legend-toggle-active' : ''}`}
-            onClick={() => setShowVisionWords(v => !v)}
-          >
-            <span className="debug-legend-swatch debug-legend-vision" />
-            Vision Words
-          </button>
-          <button
             className={`debug-legend-toggle${showGroupedLines ? ' debug-legend-toggle-active' : ''}`}
             onClick={() => setShowGroupedLines(v => !v)}
           >
@@ -1579,6 +1430,38 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         </>
       )}
 
+      {/* Segment editor mini-toolbar — shown only in edit mode */}
+      {segmentEditor.segmentEditMode && (
+        <div className="segment-editor-toolbar">
+          <button
+            className="segment-editor-toolbar-btn primary"
+            onClick={handleExitSegmentEditMode}
+          >
+            Done
+          </button>
+          <button
+            className="segment-editor-toolbar-btn"
+            onClick={() => segmentEditor.undo()}
+            disabled={!segmentEditor.canUndo}
+            title="Undo (Ctrl+Z)"
+          >
+            Undo
+          </button>
+          <button
+            className="segment-editor-toolbar-btn danger"
+            onClick={() => {
+              segmentEditor.resetFromSource(currentKrakenSegments);
+            }}
+            disabled={!segmentEditor.isDirty}
+          >
+            Discard
+          </button>
+          {segmentEditor.isDirty && (
+            <span className="segment-editor-dirty-indicator">unsaved</span>
+          )}
+        </div>
+      )}
+
       {/* Bottom toolbar — overlay + fit-height toggles */}
       <div className="line-review-toolbar">
         <button
@@ -1615,6 +1498,24 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             <span className="line-review-toolbar-zoom">{Math.round(fitZoom * 100)}%</span>
           </>
         )}
+        <span className="line-review-toolbar-divider" />
+        <button
+          className={`line-review-toolbar-btn${segmentEditor.segmentEditMode ? ' active' : ''}`}
+          onClick={() => {
+            if (segmentEditor.segmentEditMode) {
+              handleExitSegmentEditMode();
+            } else {
+              segmentEditor.setSegmentEditMode(true);
+            }
+          }}
+          title={segmentEditor.segmentEditMode ? 'Exit segment editor' : 'Edit segments'}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M11.5 1.5l3 3-9 9H2.5v-3l9-9z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M9.5 3.5l3 3" stroke="currentColor" strokeWidth="1.5"/>
+          </svg>
+          Segments
+        </button>
       </div>
 
       {/* Exit hint */}

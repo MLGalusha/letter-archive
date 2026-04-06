@@ -124,28 +124,12 @@ export interface LineSegment {
   ocrText: string;
   words?: LineSegmentWord[];
   boundary?: { x: number; y: number }[];
+  excluded?: boolean;
 }
 
 export interface MergedLineSegment extends LineSegment {
   merged: boolean;
   constituents: LineSegment[];
-}
-
-export interface BoxPixelStats {
-  inkDensity: number;
-  variance: number;
-  minValue: number;
-  meanValue: number;
-}
-
-export interface OcrWordBox {
-  text: string;
-  bbox: [number, number, number, number];
-  confidence: number;
-  blockIndex?: number;
-  paragraphIndex?: number;
-  pixelStats?: BoxPixelStats;
-  hasContent?: boolean;
 }
 
 export interface LetterImage {
@@ -157,7 +141,6 @@ export interface LetterImage {
   width?: number;
   height?: number;
   lineSegments?: LineSegment[];
-  ocrWordBoxes?: OcrWordBox[];
 }
 
 export interface LetterCardData {

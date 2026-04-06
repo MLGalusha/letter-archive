@@ -324,11 +324,6 @@
   border: 1px solid rgba(0, 200, 80, 0.8);
 }
 
-.debug-legend-vision {
-  background: rgba(60, 130, 240, 0.5);
-  border: 1px solid rgba(60, 130, 240, 0.8);
-}
-
 .debug-legend-toggle {
   display: flex;
   align-items: center;
@@ -372,20 +367,6 @@
   stroke-width: 1;
 }
 
-/* Vision word-level bounding boxes — has content (blue) */
-.line-review-debug-vision-word {
-  fill: rgba(60, 130, 240, 0.2);
-  stroke: rgba(60, 130, 240, 1);
-  stroke-width: 2;
-}
-
-/* Vision word-level bounding boxes — empty/bleed (red) */
-.line-review-debug-vision-empty {
-  fill: rgba(220, 50, 50, 0.2);
-  stroke: rgba(220, 50, 50, 1);
-  stroke-width: 2;
-}
-
 /* Merged line boundary (orange) */
 .line-review-debug-merged {
   fill: rgba(255, 160, 0, 0.15);
@@ -424,34 +405,6 @@
 .line-review-edge-east {
   stroke: rgba(240, 60, 60, 0.6);
   stroke-width: 2;
-}
-
-/* Vision junction word boxes (cyan) */
-.line-review-debug-vision-junction {
-  fill: rgba(0, 220, 220, 0.15);
-  stroke: rgba(0, 220, 220, 0.9);
-  stroke-width: 2;
-}
-
-/* Vision junction connector lines (cyan dashed) */
-.line-review-debug-vision-connector {
-  stroke: rgba(0, 220, 220, 0.8);
-  stroke-width: 2;
-  stroke-dasharray: 4 3;
-}
-
-/* Vision-rejected junction word boxes (red) */
-.line-review-debug-vision-rejected {
-  fill: rgba(255, 40, 40, 0.2);
-  stroke: rgba(255, 40, 40, 0.9);
-  stroke-width: 2;
-}
-
-/* Vision-rejected connector lines (red dashed) */
-.line-review-debug-vision-rejected-connector {
-  stroke: rgba(255, 40, 40, 0.8);
-  stroke-width: 2;
-  stroke-dasharray: 4 3;
 }
 
 /* Debug legend swatch for merged/grouped lines */
@@ -605,5 +558,122 @@
 
 .line-review-resize-right {
   right: -2px;
+}
+
+/* ── Segment Editor ── */
+
+/* Interactive segment polygons/rects */
+.segment-editor-rect,
+.segment-editor-poly {
+  fill: rgba(0, 200, 80, 0.12);
+  stroke: rgba(0, 200, 80, 0.6);
+  stroke-width: 1.5;
+  cursor: pointer;
+  transition: fill 0.1s, stroke 0.1s;
+}
+
+.segment-editor-rect:hover,
+.segment-editor-poly:hover {
+  fill: rgba(0, 200, 80, 0.22);
+  stroke: rgba(0, 200, 80, 0.9);
+}
+
+.segment-editor-rect.selected,
+.segment-editor-poly.selected {
+  fill: rgba(25, 118, 210, 0.15);
+  stroke: #1976d2;
+  stroke-width: 2;
+}
+
+.segment-editor-rect.excluded,
+.segment-editor-poly.excluded {
+  fill: rgba(255, 40, 40, 0.08);
+  stroke: rgba(255, 40, 40, 0.5);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 3;
+  opacity: 0.5;
+}
+
+.segment-editor-rect.excluded.selected,
+.segment-editor-poly.excluded.selected {
+  fill: rgba(255, 40, 40, 0.15);
+  stroke: rgba(255, 40, 40, 0.8);
+  opacity: 0.7;
+}
+
+/* Rubber-band draw rectangle */
+.segment-editor-rubber-band {
+  fill: rgba(25, 118, 210, 0.1);
+  stroke: #1976d2;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+  pointer-events: none;
+}
+
+/* Segment editor mini-toolbar (top center) */
+.segment-editor-toolbar {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(13, 18, 26, 0.92);
+  border-radius: 8px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 200;
+  backdrop-filter: blur(8px);
+  user-select: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.segment-editor-toolbar-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  padding: 4px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.segment-editor-toolbar-btn:hover:not(:disabled) {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.segment-editor-toolbar-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.segment-editor-toolbar-btn.primary {
+  background: rgba(25, 118, 210, 0.7);
+  border-color: rgba(25, 118, 210, 0.9);
+  color: white;
+}
+
+.segment-editor-toolbar-btn.primary:hover {
+  background: rgba(25, 118, 210, 0.9);
+}
+
+.segment-editor-toolbar-btn.danger {
+  color: rgba(239, 68, 68, 0.8);
+}
+
+.segment-editor-toolbar-btn.danger:hover:not(:disabled) {
+  color: rgba(239, 68, 68, 1);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.segment-editor-dirty-indicator {
+  color: rgba(245, 158, 11, 0.8);
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  padding: 0 4px;
 }
 

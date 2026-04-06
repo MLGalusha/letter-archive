@@ -106,25 +106,17 @@ export async function detectAndStorePageLines(
   imagePath: string,
   transcriptLines?: string[],
   onProgress?: OnProgress,
-): Promise<{ lineSegments: LineSegment[] | null; ocrWordBoxes: import('./vision-ocr.js').OcrWordBox[] | null }> {
-  // Run Kraken line detection and Vision OCR word detection in parallel
+): Promise<{ lineSegments: LineSegment[] | null }> {
   onProgress?.('Detecting line positions');
 
-  const visionPromise = import('./vision-ocr.js')
-    .then(({ detectAndStorePageOcrWords }) => detectAndStorePageOcrWords(pageId, imagePath, onProgress))
-    .catch(() => null as null);
-
-  const [segments, ocrWordBoxes] = await Promise.all([
-    runLineFinder(imagePath),
-    visionPromise,
-  ]);
+  const segments = await runLineFinder(imagePath);
 
   if (segments) {
     onProgress?.('Saving line segments');
     await savePageLineSegments(pageId, segments);
   }
 
-  return { lineSegments: segments, ocrWordBoxes };
+  return { lineSegments: segments };
 }
 
 export async function detectAndStoreLinesForPages(

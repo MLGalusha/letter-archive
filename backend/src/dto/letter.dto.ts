@@ -45,21 +45,6 @@ export interface FrontendLineSegment {
   boundary?: { x: number; y: number }[];
 }
 
-export interface FrontendBoxPixelStats {
-  inkDensity: number;
-  variance: number;
-  minValue: number;
-  meanValue: number;
-}
-
-export interface FrontendOcrWordBox {
-  text: string;
-  bbox: [number, number, number, number];
-  confidence: number;
-  pixelStats?: FrontendBoxPixelStats;
-  hasContent?: boolean;
-}
-
 export interface FrontendLetterImage {
   id: string;
   type: FrontendLetterImageType;
@@ -69,7 +54,6 @@ export interface FrontendLetterImage {
   width?: number;
   height?: number;
   lineSegments?: FrontendLineSegment[];
-  ocrWordBoxes?: FrontendOcrWordBox[];
 }
 
 // V2 Metadata types
@@ -452,9 +436,6 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
       lineSegments: Array.isArray(page.lineSegments)
         ? page.lineSegments as FrontendLineSegment[]
         : undefined,
-      ocrWordBoxes: Array.isArray(page.ocrWordBoxes)
-        ? page.ocrWordBoxes as FrontendOcrWordBox[]
-        : undefined,
     })),
     transcript: {
       pages: letter.transcriptionText
@@ -637,9 +618,6 @@ export function transformLetterWithRelatedToDTO(
         lineSegments: Array.isArray(page.lineSegments)
           ? page.lineSegments as FrontendLineSegment[]
           : undefined,
-        ocrWordBoxes: Array.isArray(page.ocrWordBoxes)
-          ? page.ocrWordBoxes as FrontendOcrWordBox[]
-          : undefined,
       });
     }
   }
@@ -656,9 +634,6 @@ export function transformLetterWithRelatedToDTO(
         originalFilename: page.originalFilename,
         lineSegments: Array.isArray(page.lineSegments)
           ? page.lineSegments as FrontendLineSegment[]
-          : undefined,
-        ocrWordBoxes: Array.isArray(page.ocrWordBoxes)
-          ? page.ocrWordBoxes as FrontendOcrWordBox[]
           : undefined,
       });
     }

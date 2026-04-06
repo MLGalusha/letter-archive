@@ -26,7 +26,6 @@
     "db:test-migrations": "bash scripts/test-migrations.sh"
   },
   "dependencies": {
-    "@google-cloud/vision": "^5.3.4",
     "@types/compression": "^1.8.1",
     "bcrypt": "^6.0.0",
     "compression": "^1.8.1",

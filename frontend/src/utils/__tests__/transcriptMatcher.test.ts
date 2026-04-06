@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { matchTranscriptToLines } from '../transcriptMatcher';
 import type { GroupedLine } from '../constrainedGrouping';
-import type { OcrWordBox } from '../../types/Letter';
 
 function makeGroupedLine(
   overrides: Partial<GroupedLine> & {
     bbox: [number, number, number, number];
-    visionText: string;
+    wordText: string;
   },
 ): GroupedLine {
   return {
@@ -16,20 +15,12 @@ function makeGroupedLine(
       [overrides.bbox[0], overrides.bbox[3]],
       [overrides.bbox[2], overrides.bbox[3]],
     ],
-    visionWords: overrides.visionWords ?? [],
-    visionText: overrides.visionText,
+    words: overrides.words ?? [],
+    wordText: overrides.wordText,
     constituents: overrides.constituents ?? [],
     merged: overrides.merged ?? false,
     region: overrides.region ?? 'body',
   };
-}
-
-function makeWord(
-  text: string,
-  bbox: [number, number, number, number],
-  confidence = 0.95,
-): OcrWordBox {
-  return { text, bbox, confidence };
 }
 
 describe('matchTranscriptToLines', () => {
@@ -38,7 +29,7 @@ describe('matchTranscriptToLines', () => {
       makeGroupedLine({
         line: 1,
         bbox: [100, 100, 500, 130],
-        visionText: 'Dear Mother I hope',
+        wordText: 'Dear Mother I hope',
       }),
     ];
 
@@ -48,7 +39,7 @@ describe('matchTranscriptToLines', () => {
     );
 
     expect(result.matched).toHaveLength(1);
-    expect(result.matched[0].matchSource).toBe('kraken+vision');
+    expect(result.matched[0].matchSource).toBe('kraken');
     expect(result.matched[0].confidence).toBeGreaterThan(0.5);
     expect(result.matched[0].bbox).toEqual([100, 100, 500, 130]);
     expect(result.excludedContent).toHaveLength(0);
@@ -59,17 +50,17 @@ describe('matchTranscriptToLines', () => {
       makeGroupedLine({
         line: 1,
         bbox: [100, 100, 500, 130],
-        visionText: 'Line one text here',
+        wordText: 'Line one text here',
       }),
       makeGroupedLine({
         line: 2,
         bbox: [100, 150, 500, 180],
-        visionText: 'Line two more text',
+        wordText: 'Line two more text',
       }),
       makeGroupedLine({
         line: 3,
         bbox: [100, 200, 500, 230],
-        visionText: 'Line three final words',
+        wordText: 'Line three final words',
       }),
     ];
 
@@ -79,39 +70,9 @@ describe('matchTranscriptToLines', () => {
     );
 
     expect(result.matched).toHaveLength(3);
-    // Assignments should follow order
     expect(result.matched[0].groupedLine).toBe(grouped[0]);
     expect(result.matched[1].groupedLine).toBe(grouped[1]);
     expect(result.matched[2].groupedLine).toBe(grouped[2]);
-  });
-
-  it('unmatched transcript line gets Vision-only fallback', () => {
-    const grouped = [
-      makeGroupedLine({
-        line: 1,
-        bbox: [100, 100, 500, 130],
-        visionText: 'Completely different text',
-      }),
-    ];
-
-    const unassigned = [
-      makeWord('Missing', [50, 300, 120, 330]),
-      makeWord('line', [130, 300, 170, 330]),
-      makeWord('text', [180, 300, 220, 330]),
-    ];
-
-    const result = matchTranscriptToLines(
-      ['Missing line text'],
-      grouped,
-      unassigned,
-    );
-
-    // The transcript line should match unassigned words, not the grouped line
-    // (depends on scores — grouped line text is "Completely different text"
-    // which won't match "Missing line text" well)
-    expect(result.matched).toHaveLength(1);
-    // The grouped line with no transcript match goes to excluded
-    expect(result.excludedContent.length).toBeGreaterThanOrEqual(0);
   });
 
   it('margin-region lines go to excludedContent', () => {
@@ -119,13 +80,13 @@ describe('matchTranscriptToLines', () => {
       makeGroupedLine({
         line: 1,
         bbox: [100, 50, 500, 80],
-        visionText: 'PRINTED HEADER',
+        wordText: 'PRINTED HEADER',
         region: 'margin',
       }),
       makeGroupedLine({
         line: 2,
         bbox: [100, 100, 500, 130],
-        visionText: 'Dear Mother',
+        wordText: 'Dear Mother',
       }),
     ];
 
@@ -136,9 +97,8 @@ describe('matchTranscriptToLines', () => {
 
     expect(result.matched).toHaveLength(1);
     expect(result.matched[0].transcriptText).toBe('Dear Mother');
-    // The margin-region line should be in excluded content
     expect(result.excludedContent).toHaveLength(1);
-    expect(result.excludedContent[0].visionText).toBe('PRINTED HEADER');
+    expect(result.excludedContent[0].wordText).toBe('PRINTED HEADER');
   });
 
   it('empty transcript returns all grouped lines as excluded', () => {
@@ -146,12 +106,12 @@ describe('matchTranscriptToLines', () => {
       makeGroupedLine({
         line: 1,
         bbox: [100, 100, 500, 130],
-        visionText: 'Some text',
+        wordText: 'Some text',
       }),
       makeGroupedLine({
         line: 2,
         bbox: [100, 150, 500, 180],
-        visionText: 'More text',
+        wordText: 'More text',
       }),
     ];
 
@@ -166,7 +126,7 @@ describe('matchTranscriptToLines', () => {
       makeGroupedLine({
         line: 1,
         bbox: [100, 100, 500, 130],
-        visionText: 'Hello dear world',
+        wordText: 'Hello dear world',
       }),
     ];
 
@@ -177,7 +137,7 @@ describe('matchTranscriptToLines', () => {
 
     expect(result.matched).toHaveLength(1);
     expect(result.matched[0].confidence).toBeGreaterThanOrEqual(0.9);
-    expect(result.matched[0].matchSource).toBe('kraken+vision');
+    expect(result.matched[0].matchSource).toBe('kraken');
   });
 
   it('partial text match works', () => {
@@ -185,7 +145,7 @@ describe('matchTranscriptToLines', () => {
       makeGroupedLine({
         line: 1,
         bbox: [100, 100, 500, 130],
-        visionText: 'Dear Mother I hope you are well',
+        wordText: 'Dear Mother I hope you are well',
       }),
     ];
 
@@ -195,32 +155,25 @@ describe('matchTranscriptToLines', () => {
     );
 
     expect(result.matched).toHaveLength(1);
-    expect(result.matched[0].matchSource).toBe('kraken+vision');
+    expect(result.matched[0].matchSource).toBe('kraken');
     expect(result.matched[0].confidence).toBeGreaterThan(0.3);
   });
 
-  it('no grouped lines falls back to Vision words', () => {
-    const unassigned = [
-      makeWord('Hello', [50, 100, 120, 130]),
-      makeWord('world', [130, 100, 200, 130]),
-    ];
-
+  it('no grouped lines returns unmatched', () => {
     const result = matchTranscriptToLines(
       ['Hello world'],
       [],
-      unassigned,
     );
 
     expect(result.matched).toHaveLength(1);
-    expect(result.matched[0].matchSource).toBe('vision-only');
-    expect(result.matched[0].bbox).not.toBeNull();
+    expect(result.matched[0].matchSource).toBe('unmatched');
+    expect(result.matched[0].bbox).toBeNull();
     expect(result.excludedContent).toHaveLength(0);
   });
 
   it('completely unmatched line when no data available', () => {
     const result = matchTranscriptToLines(
       ['Some text with no visual match'],
-      [],
       [],
     );
 
@@ -235,12 +188,12 @@ describe('matchTranscriptToLines', () => {
       makeGroupedLine({
         line: 1,
         bbox: [100, 100, 500, 130],
-        visionText: 'First line of the letter',
+        wordText: 'First line of the letter',
       }),
       makeGroupedLine({
         line: 2,
         bbox: [100, 150, 500, 180],
-        visionText: 'Second line continues here',
+        wordText: 'Second line continues here',
       }),
     ];
 

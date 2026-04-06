@@ -193,14 +193,12 @@ const defaultDetectLinesByPageId = {
       createLineSegment(1, [170, 210, 1480, 280]),
       createLineSegment(2, [185, 320, 1495, 390]),
     ],
-    ocrWordBoxes: [],
   },
   'collection-009-page-2': {
     lineSegments: [
       createLineSegment(1, [175, 205, 1490, 275]),
       createLineSegment(2, [190, 315, 1505, 385]),
     ],
-    ocrWordBoxes: [],
   },
 } as const;
 
@@ -209,7 +207,6 @@ export function createMockDetectLinesByPageId() {
     string,
     {
       lineSegments: Array<ReturnType<typeof createLineSegment>>;
-      ocrWordBoxes: unknown[];
     }
   >;
 }
@@ -326,7 +323,6 @@ export async function installMockLetterReviewApi(
       string,
       {
         lineSegments: unknown[];
-        ocrWordBoxes: unknown[];
       }
     >;
     detectLinesFailuresByPageId?: Record<
@@ -706,7 +702,6 @@ export async function installMockLetterReviewApi(
       body: JSON.stringify(
         result ?? {
           lineSegments: [],
-          ocrWordBoxes: [],
         },
       ),
     });

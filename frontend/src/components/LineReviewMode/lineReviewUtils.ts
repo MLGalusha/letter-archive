@@ -1,4 +1,4 @@
-import type { LineSegmentWord } from '../../types/Letter';
+import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext';
 
 export const PAGE_SEPARATOR_REGEX = /\n*---\s*Page\s*\d+\s*---\n*/i;
 export const FONT_FAMILY = "Georgia, 'Times New Roman', serif";
@@ -34,51 +34,56 @@ export function reconstructTranscript(pageTexts: string[]): string {
 }
 
 export function computeLineInputHeight(
-  words: LineSegmentWord[] | undefined,
+  lineBbox: [number, number, number, number] | undefined,
   scaleFactor: number,
   fontSize: number,
 ): number {
   const fontBasedMin = fontSize + CSS_BORDER_PADDING * 2;
 
-  if (!words || words.length === 0) {
+  if (!lineBbox) {
     return Math.max(30, fontBasedMin);
   }
 
-  let totalHeight = 0;
-  for (const word of words) {
-    totalHeight += word.bbox[3] - word.bbox[1];
-  }
-
-  const avgWordHeight = totalHeight / words.length;
-  const scaled = avgWordHeight * scaleFactor + CSS_BORDER_PADDING * 2;
-  return Math.max(20, fontBasedMin, Math.min(80, scaled));
+  const krakenHeight = (lineBbox[3] - lineBbox[1]) * scaleFactor + CSS_BORDER_PADDING * 2;
+  return Math.max(20, fontBasedMin, Math.min(80, krakenHeight));
 }
 
+// Measurement cache: keyed by "text|fontSize" to avoid re-preparing the same text.
+const measureCache = new Map<string, number>();
+const MAX_CACHE = 500;
+
+/**
+ * Measures the rendered width of text using Pretext's canvas-based measurement.
+ * Much faster than DOM-based measurement and avoids layout thrash.
+ */
 export function measureRenderedTextWidth(
   text: string,
   fontSize: number,
   wordSpacing = 0,
 ): number {
-  const measureNode = document.createElement('span');
-  measureNode.textContent = text;
-  measureNode.style.position = 'absolute';
-  measureNode.style.left = '-99999px';
-  measureNode.style.top = '0';
-  measureNode.style.visibility = 'hidden';
-  measureNode.style.whiteSpace = 'pre';
-  measureNode.style.margin = '0';
-  measureNode.style.padding = '0';
-  measureNode.style.border = '0';
-  measureNode.style.lineHeight = '1';
-  measureNode.style.fontFamily = FONT_FAMILY;
-  measureNode.style.fontSize = `${fontSize}px`;
-  measureNode.style.wordSpacing = `${wordSpacing}px`;
-  measureNode.style.fontKerning = 'none';
-  measureNode.style.fontVariantLigatures = 'none';
+  const cacheKey = `${text}|${fontSize}|${wordSpacing}`;
+  const cached = measureCache.get(cacheKey);
+  if (cached !== undefined) return cached;
 
-  document.body.appendChild(measureNode);
-  const width = measureNode.getBoundingClientRect().width;
-  measureNode.remove();
+  const fontString = `${fontSize}px ${FONT_FAMILY}`;
+  const prepared = prepareWithSegments(text, fontString, {
+    whiteSpace: 'pre',
+  });
+  const result = layoutWithLines(prepared, 1e6, fontSize);
+  let width = result.lines[0]?.width ?? 0;
+
+  // Adjust for word-spacing if specified
+  if (wordSpacing !== 0 && width > 0) {
+    const spaceCount = (text.match(/ /g) || []).length;
+    width += spaceCount * wordSpacing;
+  }
+
+  // Maintain cache size
+  if (measureCache.size >= MAX_CACHE) {
+    const firstKey = measureCache.keys().next().value;
+    if (firstKey !== undefined) measureCache.delete(firstKey);
+  }
+  measureCache.set(cacheKey, width);
 
   return width;
 }

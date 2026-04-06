@@ -1,5 +1,5 @@
 import { apiPost, apiPut, apiPatch, ApiError, API_BASE_URL, getAuthHeaders } from "../client";
-import type { Letter, LineSegment, OcrWordBox } from "../../types/Letter";
+import type { Letter, LineSegment } from "../../types/Letter";
 
 export interface UpdateLetterData {
   transcriptionText?: string;
@@ -75,7 +75,11 @@ export async function unverifyMetadata(letterId: string): Promise<Letter> {
   return apiPost<Letter>(`/admin/letters/${letterId}/unverify-metadata`);
 }
 
-export type DetectLinesResult = { lineSegments: LineSegment[]; ocrWordBoxes: OcrWordBox[] | null };
+export async function savePageLineSegments(pageId: string, segments: LineSegment[]): Promise<void> {
+  await apiPatch(`/admin/letters/pages/${pageId}/line-segments`, { lineSegments: segments });
+}
+
+export type DetectLinesResult = { lineSegments: LineSegment[] };
 
 /**
  * Detect page lines with SSE progress streaming.
@@ -135,7 +139,6 @@ export async function detectPageLines(
       } else if (data.type === 'result') {
         result = {
           lineSegments: data.lineSegments as LineSegment[],
-          ocrWordBoxes: data.ocrWordBoxes as OcrWordBox[] | null,
         };
       } else if (data.type === 'error') {
         throw new Error(data.message as string);

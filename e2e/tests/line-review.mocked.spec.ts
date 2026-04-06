@@ -100,7 +100,6 @@ test.describe('@mocked Line Review', () => {
     const detectLinesByPageId = createMockDetectLinesByPageId();
     Object.values(detectLinesByPageId).forEach((result) => {
       result.lineSegments = [];
-      result.ocrWordBoxes = [];
     });
 
     const mockedApi = await openLineReview(

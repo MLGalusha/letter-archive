@@ -299,7 +299,6 @@ export const letterPages = pgTable(
     originalFilename: text('original_filename').notNull(),
     checksumSha256: text('checksum_sha256'),
     lineSegments: jsonb('line_segments'),
-    ocrWordBoxes: jsonb('ocr_word_boxes'),
     width: integer('width'),
     height: integer('height'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

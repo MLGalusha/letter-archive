@@ -242,7 +242,27 @@ FOR EACH LINE, PROVIDE:
    - null — When the role is ambiguous or doesn't fit the categories above
 
 BLANK LINES:
-- When there is a blank line (paragraph break) in the original, include a line entry with empty text "", x: 0, paragraph: null, continues: false, role: null.
+- When there is a blank line (paragraph break) in the original, include a line entry with empty text "", x: 0, paragraph: null, continues: false, role: null, areaId: null.
+
+SPECIAL AREAS:
+When text appears outside the normal line flow — in margins, squeezed into corners, written sideways, or added in unusual positions — identify these as special areas.
+
+For each special area, include an entry in the "specialAreas" array:
+- "id": Sequential integer starting at 1, ordered left-to-right, top-to-bottom on the page
+- "label": A descriptive name (e.g., "Left margin note", "Bottom-right postscript", "Top corner addition")
+- "type": Classification of how this area relates to the main text:
+  - "continuation" — The writer ran out of room and continued the letter text in a margin or corner. Removing the line break between the main text and this area would produce a natural flowing sentence.
+  - "addition" — A separate thought: a postscript, a note, an address change, a later addition. Not a direct continuation of the preceding text.
+- "position": Where on the page: "top", "bottom", "left-margin", "right-margin", "corner", or "between-lines"
+- "orientation": Text direction: "normal", "sideways-left", "sideways-right", or "inverted"
+- "continuesFromLine": For "continuation" type ONLY — the 0-based index of the line in the main text that this area continues from. Set to null for "addition" type.
+- "readingOrder": The paragraph number this area appears near or should be read after. For continuations, this is the paragraph being continued. For additions, this is the nearest body paragraph. Set to null if unclear.
+
+For each line that belongs to a special area, set "areaId" to the area's id number. Lines in the main flow should have "areaId": null.
+
+IMPORTANT: Not every margin-note or postscript is a special area. Only mark text as a special area when it is physically positioned outside the normal line flow of the document. A postscript that simply follows the signature in a normal vertical position is just a line with role "postscript" and areaId null. Only use special areas when the spatial positioning is unusual — sideways writing, text squeezed into a margin, text at an angle, text added between existing lines.
+
+If there are no special areas on a page, return an empty "specialAreas" array.
 
 HANDLING UNCERTAINTY:
 - Use [illegible] for words that cannot be read at all

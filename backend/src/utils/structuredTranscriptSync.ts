@@ -73,12 +73,16 @@ export function syncStructuredTranscript(
       if (!synced) return null; // too dramatic on this page
       fixContinuesFlags(synced);
       renumberParagraphs(synced);
-      resultPages.push({ pageNumber: newPages[i].pageNumber, lines: synced });
+      resultPages.push({
+        pageNumber: newPages[i].pageNumber,
+        lines: synced,
+        specialAreas: existingPages[i].specialAreas ?? [],
+      });
     } else {
       // New page with no prior structured data — create defaults
       const lines = newPages[i].lines.map(rawLine => createDefaultLine(rawLine));
       renumberParagraphs(lines);
-      resultPages.push({ pageNumber: newPages[i].pageNumber, lines });
+      resultPages.push({ pageNumber: newPages[i].pageNumber, lines, specialAreas: [] });
     }
   }
 
@@ -279,7 +283,7 @@ function buildSyncedLines(
     const trimmed = rawLine.trim();
 
     if (trimmed === '') {
-      result.push({ text: '', x: 0, paragraph: null, continues: false, role: null });
+      result.push({ text: '', x: 0, paragraph: null, continues: false, role: null, areaId: null });
       continue;
     }
 
@@ -301,6 +305,7 @@ function buildSyncedLines(
         paragraph: old.paragraph,
         continues: old.continues,
         role: old.role,
+        areaId: old.areaId ?? null,
       });
     } else {
       // New line — derive defaults
@@ -335,7 +340,7 @@ function createDefaultLine(
   const trimmed = rawLine.trim();
 
   if (trimmed === '') {
-    return { text: '', x: 0, paragraph: null, continues: false, role: null };
+    return { text: '', x: 0, paragraph: null, continues: false, role: null, areaId: null };
   }
 
   const x = textToX(rawLine);
@@ -357,6 +362,7 @@ function createDefaultLine(
     paragraph: null, // assigned by renumberParagraphs
     continues: false,
     role,
+    areaId: null,
   };
 }
 

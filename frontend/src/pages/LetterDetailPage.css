@@ -439,6 +439,43 @@
   height: 1.85em; /* matches line-height for a natural paragraph gap */
 }
 
+/* ── Special area annotations (margin notes, postscripts) ── */
+
+.transcript-special-area {
+  position: relative;
+  margin: 0.3em 0;
+}
+
+.transcript-special-area-addition {
+  border-left: 2px solid rgba(59, 130, 246, 0.4);
+  padding-left: 0.75em;
+}
+
+.transcript-special-area-addition .special-area-label {
+  display: block;
+  font-size: 0.72em;
+  font-style: italic;
+  color: rgba(59, 130, 246, 0.7);
+  letter-spacing: 0.03em;
+  margin-bottom: 0.15em;
+}
+
+.transcript-special-area-continuation {
+  border-left: 2px solid rgba(217, 119, 6, 0.3);
+  padding-left: 0.75em;
+}
+
+/* On wide screens, float the addition label into the gutter */
+@media (min-width: 769px) {
+  .transcript-special-area-addition .special-area-label {
+    position: absolute;
+    right: calc(100% + 1rem);
+    top: 0;
+    width: max-content;
+    text-align: right;
+  }
+}
+
 /* Saved reading text — render exactly as admin set it */
 .transcript-reading-saved {
   white-space: pre-wrap;

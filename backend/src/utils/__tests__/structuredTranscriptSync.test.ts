@@ -10,19 +10,19 @@ import {
 // ── Helpers ──────────────────────────────────────────────
 
 function line(text: string, overrides?: Partial<TranscriptLine>): TranscriptLine {
-  return { text, x: 0, paragraph: null, continues: false, role: null, ...overrides };
+  return { text, x: 0, paragraph: null, continues: false, role: null, areaId: null, ...overrides };
 }
 
 function bodyLine(text: string, para: number, overrides?: Partial<TranscriptLine>): TranscriptLine {
-  return { text, x: 0, paragraph: para, continues: false, role: 'body', ...overrides };
+  return { text, x: 0, paragraph: para, continues: false, role: 'body', areaId: null, ...overrides };
 }
 
 function blankLine(): TranscriptLine {
-  return { text: '', x: 0, paragraph: null, continues: false, role: null };
+  return { text: '', x: 0, paragraph: null, continues: false, role: null, areaId: null };
 }
 
 function makeStructured(pages: TranscriptLine[][]): StructuredTranscript {
-  return { pages: pages.map((lines, i) => ({ pageNumber: i + 1, lines })) };
+  return { pages: pages.map((lines, i) => ({ pageNumber: i + 1, lines, specialAreas: [] })) };
 }
 
 /**

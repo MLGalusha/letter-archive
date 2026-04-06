@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import type { TranscriptLine, StructuredPage } from '../types/Letter';
+import type { TranscriptLine, StructuredPage, SpecialArea, SpecialAreaType } from '../types/Letter';
 
 /**
  * Rendering utilities for structured transcript data.
@@ -9,6 +9,74 @@ import type { TranscriptLine, StructuredPage } from '../types/Letter';
  * reflowTranscript/renderTranscriptLines pipeline with deterministic
  * rendering from structured data.
  */
+
+/**
+ * Reorder page lines to splice special area lines into reading order.
+ * Continuations insert after the line they continue from;
+ * additions insert after the paragraph matching readingOrder.
+ */
+function reorderPageLines(page: StructuredPage): TranscriptLine[] {
+  const areas = page.specialAreas;
+  if (!areas || areas.length === 0) return page.lines;
+
+  const mainLines: TranscriptLine[] = [];
+  const areaLineGroups = new Map<number, TranscriptLine[]>();
+
+  for (const line of page.lines) {
+    if (line.areaId != null) {
+      if (!areaLineGroups.has(line.areaId)) areaLineGroups.set(line.areaId, []);
+      areaLineGroups.get(line.areaId)!.push(line);
+    } else {
+      mainLines.push(line);
+    }
+  }
+
+  if (areaLineGroups.size === 0) return page.lines;
+
+  const result: TranscriptLine[] = [...mainLines];
+  const additionAreas: { area: SpecialArea; lines: TranscriptLine[] }[] = [];
+
+  for (const area of areas) {
+    const areaLines = areaLineGroups.get(area.id);
+    if (!areaLines || areaLines.length === 0) continue;
+
+    if (area.type === 'continuation' && area.continuesFromLine != null) {
+      const targetLine = page.lines[area.continuesFromLine];
+      if (targetLine) {
+        const insertIdx = result.indexOf(targetLine);
+        if (insertIdx >= 0) {
+          result.splice(insertIdx + 1, 0, ...areaLines);
+          continue;
+        }
+      }
+      result.push(...areaLines);
+    } else {
+      additionAreas.push({ area, lines: areaLines });
+    }
+  }
+
+  additionAreas.sort((a, b) => (b.area.readingOrder ?? Infinity) - (a.area.readingOrder ?? Infinity));
+
+  for (const { area, lines: aLines } of additionAreas) {
+    if (area.readingOrder != null) {
+      let insertIdx = -1;
+      for (let i = result.length - 1; i >= 0; i--) {
+        if (result[i].paragraph === area.readingOrder) {
+          insertIdx = i + 1;
+          break;
+        }
+      }
+      if (insertIdx >= 0) {
+        const blank: TranscriptLine = { text: '', x: 0, paragraph: null, continues: false, role: null };
+        result.splice(insertIdx, 0, blank, ...aLines);
+        continue;
+      }
+    }
+    result.push({ text: '', x: 0, paragraph: null, continues: false, role: null }, ...aLines);
+  }
+
+  return result;
+}
 
 // ============================================================================
 // ORIGINAL VIEW — positioned lines matching handwriting layout
@@ -82,7 +150,7 @@ export function renderStructuredOriginalView(
 export function generateReadingTextFromStructured(pages: StructuredPage[]): string {
   const allLines: TranscriptLine[] = [];
   for (const page of pages) {
-    allLines.push(...page.lines);
+    allLines.push(...reorderPageLines(page));
   }
 
   const result: string[] = [];
@@ -144,14 +212,32 @@ export function generateReadingTextFromStructured(pages: StructuredPage[]): stri
 export function renderStructuredReadingView(
   pages: StructuredPage[],
 ): JSX.Element[] {
+  // Collect all special areas across pages for annotation lookup
+  const areaMap = new Map<number, SpecialArea>();
+  for (const page of pages) {
+    if (page.specialAreas) {
+      for (const area of page.specialAreas) {
+        areaMap.set(area.id, area);
+      }
+    }
+  }
+
   const allLines: TranscriptLine[] = [];
   for (const page of pages) {
-    allLines.push(...page.lines);
+    allLines.push(...reorderPageLines(page));
   }
 
   // Build logical blocks (paragraphs / role groups) from lines
-  const blocks: { lines: string[]; role: string | null; x: number }[] = [];
-  let currentBlock: { lines: string[]; role: string | null; x: number } | null = null;
+  interface Block {
+    lines: string[];
+    role: string | null;
+    x: number;
+    areaId: number | null;
+    areaType: SpecialAreaType | null;
+  }
+
+  const blocks: Block[] = [];
+  let currentBlock: Block | null = null;
   let lastParagraph: number | null = null;
   let lastRole: string | null = null;
 
@@ -179,16 +265,25 @@ export function renderStructuredReadingView(
     }
 
     // Check if we need a new block
+    const lineAreaId = line.areaId ?? null;
     const isNewParagraph = line.paragraph !== null && line.paragraph !== lastParagraph;
     const isRoleChange = line.role !== lastRole && line.role !== 'body';
+    const isAreaChange = currentBlock && lineAreaId !== currentBlock.areaId;
 
-    if (currentBlock && (isNewParagraph || isRoleChange)) {
+    if (currentBlock && (isNewParagraph || isRoleChange || isAreaChange)) {
       blocks.push(currentBlock);
       currentBlock = null;
     }
 
     if (!currentBlock) {
-      currentBlock = { lines: [], role: line.role, x: line.x };
+      const area = lineAreaId != null ? areaMap.get(lineAreaId) : null;
+      currentBlock = {
+        lines: [],
+        role: line.role,
+        x: line.x,
+        areaId: lineAreaId,
+        areaType: area?.type ?? null,
+      };
     }
 
     currentBlock.lines.push(line.text);
@@ -212,6 +307,9 @@ export function renderStructuredReadingView(
       elements.push(<div key={`gap-${bi}`} className="transcript-blank" />);
     }
 
+    // Special area annotation for addition-type areas
+    const area = block.areaId != null ? areaMap.get(block.areaId) : null;
+
     // Positioned non-body elements (dates, closings, signatures)
     if (block.role && block.role !== 'body' && block.x > 100) {
       const indentPct = Math.min((block.x / 999) * 100, 90);
@@ -221,6 +319,19 @@ export function renderStructuredReadingView(
           className="transcript-line transcript-line-positioned"
           style={{ paddingLeft: `${indentPct}%` }}
         >
+          {text}
+        </div>,
+      );
+    } else if (area && area.type === 'addition') {
+      elements.push(
+        <div key={`block-${bi}`} className="transcript-special-area transcript-special-area-addition">
+          <span className="special-area-label">{area.label}</span>
+          <div className="transcript-line">{text}</div>
+        </div>,
+      );
+    } else if (area && area.type === 'continuation') {
+      elements.push(
+        <div key={`block-${bi}`} className="transcript-line transcript-special-area-continuation">
           {text}
         </div>,
       );

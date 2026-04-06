@@ -238,17 +238,33 @@ export interface LetterPageTranscript {
 
 export type TranscriptLineRole = 'date' | 'salutation' | 'body' | 'closing' | 'signature' | 'postscript' | 'margin-note' | 'address';
 
+export type SpecialAreaType = 'continuation' | 'addition';
+export type SpecialAreaPosition = 'top' | 'bottom' | 'left-margin' | 'right-margin' | 'corner' | 'between-lines';
+export type SpecialAreaOrientation = 'normal' | 'sideways-left' | 'sideways-right' | 'inverted';
+
+export interface SpecialArea {
+  id: number;
+  label: string;
+  type: SpecialAreaType;
+  position: SpecialAreaPosition;
+  orientation: SpecialAreaOrientation;
+  continuesFromLine: number | null;
+  readingOrder: number | null;
+}
+
 export interface TranscriptLine {
   text: string;
   x: number;
   paragraph: number | null;
   continues: boolean;
   role: TranscriptLineRole | null;
+  areaId?: number | null;
 }
 
 export interface StructuredPage {
   pageNumber: number;
   lines: TranscriptLine[];
+  specialAreas?: SpecialArea[];
 }
 
 export interface LetterTranscript {

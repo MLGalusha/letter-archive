@@ -119,11 +119,23 @@ export interface FrontendTranscriptLine {
   paragraph: number | null;
   continues: boolean;
   role: string | null;
+  areaId?: number | null;
+}
+
+export interface FrontendSpecialArea {
+  id: number;
+  label: string;
+  type: 'continuation' | 'addition';
+  position: string;
+  orientation: string;
+  continuesFromLine: number | null;
+  readingOrder: number | null;
 }
 
 export interface FrontendStructuredPage {
   pageNumber: number;
   lines: FrontendTranscriptLine[];
+  specialAreas?: FrontendSpecialArea[];
 }
 
 export interface FrontendLetterTranscript {

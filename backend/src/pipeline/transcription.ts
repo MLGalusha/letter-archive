@@ -7,7 +7,7 @@ import { updateJobProgress, clearJobProgress, shouldAbortProcessing } from '../s
 import { isTranscribableType, getDocumentTypeFromCode } from '../services/letter/shared.js';
 import { db, letters } from '../db/index.js';
 import { eq, and, inArray } from 'drizzle-orm';
-import type { TranscriptLine, StructuredTranscript } from '../ai/schemas/structuredTranscript.js';
+import type { TranscriptLine, SpecialArea, StructuredTranscript } from '../ai/schemas/structuredTranscript.js';
 import { generateReadingText } from '../utils/readingTextGenerator.js';
 
 const log = createLogger({ module: 'transcription-pipeline' });
@@ -69,12 +69,13 @@ export async function runTranscription(letterId: string): Promise<void> {
 
     const pageTranscriptions: string[] = [];
     const pageStructuredLines: (TranscriptLine[] | null)[] = [];
+    const pageSpecialAreas: (SpecialArea[] | undefined)[] = [];
     let stubMode = false;
 
     if (letter.type === 'L') {
       // === LETTER TYPE: use standard transcription prompt ===
       // Process pages in parallel batches for speed, with abort checks between batches
-      const results: { text: string; structured: TranscriptLine[] | null }[] = new Array(pages.length).fill(null);
+      const results: { text: string; structured: TranscriptLine[] | null; specialAreas?: SpecialArea[] }[] = new Array(pages.length).fill(null);
       let completedCount = 0;
 
       for (let batchStart = 0; batchStart < pages.length; batchStart += PAGE_CONCURRENCY) {
@@ -107,7 +108,7 @@ export async function runTranscription(letterId: string): Promise<void> {
           });
 
           // Store at correct index to preserve page order
-          results[page.pageNumber - 1] = { text: result.text, structured: result.structured };
+          results[page.pageNumber - 1] = { text: result.text, structured: result.structured, specialAreas: result.specialAreas };
           stubMode = result.isStub;
           completedCount++;
 
@@ -131,6 +132,7 @@ export async function runTranscription(letterId: string): Promise<void> {
         if (r !== null) {
           pageTranscriptions.push(r.text);
           pageStructuredLines.push(r.structured);
+          pageSpecialAreas.push(r.specialAreas);
         }
       }
     } else {
@@ -236,6 +238,7 @@ export async function runTranscription(letterId: string): Promise<void> {
         pages: pageStructuredLines.map((lines, i) => ({
           pageNumber: i + 1,
           lines: lines!,
+          specialAreas: pageSpecialAreas[i] ?? [],
         })),
       };
       letterLog.info(

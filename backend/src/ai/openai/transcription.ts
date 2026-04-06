@@ -17,6 +17,7 @@ import {
   TranscriptionOutputSchema,
   STRUCTURED_TRANSCRIPTION_JSON_SCHEMA,
   type TranscriptLine,
+  type SpecialArea,
 } from '../schemas/structuredTranscript.js';
 import { logIfSlow, TIMING_THRESHOLDS } from '../../utils/logger.js';
 import { log, openai } from './client.js';
@@ -73,6 +74,7 @@ export interface TranscribeImageParams {
 export interface TranscribeImageResult {
   text: string;
   structured: TranscriptLine[] | null;
+  specialAreas?: SpecialArea[];
   isStub: boolean;
 }
 
@@ -239,6 +241,7 @@ export async function transcribeImage(
     }
 
     const lines = validated.data.lines;
+    const specialAreas = validated.data.specialAreas;
     const flatText = structuredLinesToText(lines);
 
     // Log usage
@@ -267,7 +270,7 @@ export async function transcribeImage(
       durationMs: duration,
     });
 
-    return { text: flatText, structured: lines, isStub: false };
+    return { text: flatText, structured: lines, specialAreas, isStub: false };
   } catch (error) {
     const duration = Date.now() - start;
     log.error({ ...context, duration, err: error, model: env.OPENAI_MODEL }, 'Structured transcription failed');
@@ -284,25 +287,34 @@ export async function transcribeImage(
 
 function generateStubTranscription(params: TranscribeImageParams): TranscribeImageResult {
   const stubLines: TranscriptLine[] = [
-    { text: 'September 12, 1943', x: 500, paragraph: null, continues: false, role: 'date' },
-    { text: '', x: 0, paragraph: null, continues: false, role: null },
-    { text: 'Dear [recipient],', x: 0, paragraph: null, continues: false, role: 'salutation' },
-    { text: '', x: 0, paragraph: null, continues: false, role: null },
-    { text: 'I hope this letter finds you well.', x: 0, paragraph: 1, continues: false, role: 'body' },
-    { text: '[illegible] the weather has been quite', x: 0, paragraph: 1, continues: false, role: 'body' },
-    { text: 'pleasant this [unclear: week/month].', x: 0, paragraph: 1, continues: true, role: 'body' },
-    { text: '', x: 0, paragraph: null, continues: false, role: null },
-    { text: 'The family sends their regards, and', x: 0, paragraph: 2, continues: false, role: 'body' },
-    { text: 'we look forward to hearing from you', x: 0, paragraph: 2, continues: true, role: 'body' },
-    { text: 'soon.', x: 0, paragraph: 2, continues: true, role: 'body' },
-    { text: '', x: 0, paragraph: null, continues: false, role: null },
-    { text: 'With warm regards,', x: 300, paragraph: null, continues: false, role: 'closing' },
-    { text: '[sender]', x: 350, paragraph: null, continues: false, role: 'signature' },
+    { text: 'September 12, 1943', x: 500, paragraph: null, continues: false, role: 'date', areaId: null },
+    { text: '', x: 0, paragraph: null, continues: false, role: null, areaId: null },
+    { text: 'Dear [recipient],', x: 0, paragraph: null, continues: false, role: 'salutation', areaId: null },
+    { text: '', x: 0, paragraph: null, continues: false, role: null, areaId: null },
+    { text: 'I hope this letter finds you well.', x: 0, paragraph: 1, continues: false, role: 'body', areaId: null },
+    { text: '[illegible] the weather has been quite', x: 0, paragraph: 1, continues: false, role: 'body', areaId: null },
+    { text: 'pleasant this [unclear: week/month].', x: 0, paragraph: 1, continues: true, role: 'body', areaId: null },
+    { text: '', x: 0, paragraph: null, continues: false, role: null, areaId: null },
+    { text: 'The family sends their regards, and', x: 0, paragraph: 2, continues: false, role: 'body', areaId: null },
+    { text: 'we look forward to hearing from you', x: 0, paragraph: 2, continues: true, role: 'body', areaId: null },
+    { text: 'soon.', x: 0, paragraph: 2, continues: true, role: 'body', areaId: null },
+    { text: '', x: 0, paragraph: null, continues: false, role: null, areaId: null },
+    { text: 'With warm regards,', x: 300, paragraph: null, continues: false, role: 'closing', areaId: null },
+    { text: '[sender]', x: 350, paragraph: null, continues: false, role: 'signature', areaId: null },
+    { text: 'P.S. Tell everyone hello', x: 0, paragraph: null, continues: false, role: 'margin-note', areaId: 1 },
   ];
 
   const text = structuredLinesToText(stubLines);
 
-  return { text, structured: stubLines, isStub: true };
+  return { text, structured: stubLines, specialAreas: [{
+    id: 1,
+    label: 'Left margin note',
+    type: 'addition',
+    position: 'left-margin',
+    orientation: 'sideways-left',
+    continuesFromLine: null,
+    readingOrder: 2,
+  }], isStub: true };
 }
 
 export interface CheckExtraContentParams {

@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { getErrorMessage, getImageUrl } from '../../api/client';
 import { detectPageLines, savePageLineSegments } from '../../api/admin/letters';
-import type { Letter, LineSegment } from '../../types/Letter';
+import type { Letter, LineSegment, SpecialArea } from '../../types/Letter';
 import { useSegmentEditor } from '../../hooks/useSegmentEditor';
 import SegmentEditorOverlay from './SegmentEditorOverlay';
 import { constrainedGrouping, eastEdgeY, westEdgeY } from '../../utils/constrainedGrouping';
@@ -546,6 +546,33 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     }
     return sum + currentLineIndex + 1;
   }, [currentLetterPageIndex, currentLineIndex, pageLineCounts]);
+
+  // Special area data for the current letter page
+  // Maps each non-blank line index → areaId, and collects SpecialArea metadata
+  const specialAreaInfo = useMemo(() => {
+    if (currentLetterPageIndex === undefined) return null;
+    const structuredPages = letter.transcript.structuredPages;
+    if (!structuredPages) return null;
+    const structuredPage = structuredPages[currentLetterPageIndex];
+    if (!structuredPage) return null;
+    const areas = structuredPage.specialAreas;
+    if (!areas || areas.length === 0) return null;
+
+    // Build non-blank line index → areaId mapping
+    const lineAreaIds: (number | null)[] = [];
+    for (const line of structuredPage.lines) {
+      if (line.text !== '') {
+        lineAreaIds.push(line.areaId ?? null);
+      }
+    }
+
+    const areaMap = new Map<number, SpecialArea>();
+    for (const area of areas) {
+      areaMap.set(area.id, area);
+    }
+
+    return { lineAreaIds, areaMap };
+  }, [letter.transcript.structuredPages, currentLetterPageIndex]);
 
   // Scale factor: displayed size vs natural image size
   const scaleFactor = imageNaturalSize.width > 0
@@ -1090,7 +1117,17 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         )}
 
         {/* Input overlay — positioned below the clear strip, sized to the line */}
-        {overlayEnabled && currentLine && !segmentEditor.segmentEditMode && (
+        {overlayEnabled && currentLine && !segmentEditor.segmentEditMode && (() => {
+          const lineIdx = currentLine.transcriptLineIndex;
+          const currentAreaId = specialAreaInfo && lineIdx >= 0 && lineIdx < specialAreaInfo.lineAreaIds.length
+            ? specialAreaInfo.lineAreaIds[lineIdx]
+            : null;
+          const currentArea = currentAreaId != null ? specialAreaInfo?.areaMap.get(currentAreaId) : null;
+          const areaBorder = currentArea
+            ? `3px solid ${currentArea.type === 'continuation' ? 'rgb(217, 119, 6)' : 'rgb(59, 130, 246)'}`
+            : undefined;
+
+          return (
           <div
             className="line-review-input-overlay"
             style={{
@@ -1098,6 +1135,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
               left: inputLeft,
               width: inputWidth,
               height: INPUT_DISPLAY_HEIGHT,
+              borderLeft: areaBorder,
             }}
           >
             <div
@@ -1112,7 +1150,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             />
 
           </div>
-        )}
+          );
+        })()}
 
         {/* Debug overlay — Kraken polygon boundaries */}
         {debugLines && showKrakenLines && imageDisplaySize.width > 0 && (
@@ -1327,6 +1366,79 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             onAddSegment={segmentEditor.addSegment}
           />
         )}
+
+        {/* Special area overlays — colored bounding regions for continuation/addition areas */}
+        {specialAreaInfo && alignedLines.length > 0 && imgW > 0 && !segmentEditor.segmentEditMode && (() => {
+          // Group aligned lines by areaId to compute bounding boxes per area
+          const areaBounds = new Map<number, { minX: number; minY: number; maxX: number; maxY: number }>();
+          for (const line of alignedLines) {
+            const idx = line.transcriptLineIndex;
+            if (idx < 0 || idx >= specialAreaInfo.lineAreaIds.length) continue;
+            const areaId = specialAreaInfo.lineAreaIds[idx];
+            if (areaId == null) continue;
+            const [x1, y1, x2, y2] = line.bbox;
+            const existing = areaBounds.get(areaId);
+            if (existing) {
+              existing.minX = Math.min(existing.minX, x1);
+              existing.minY = Math.min(existing.minY, y1);
+              existing.maxX = Math.max(existing.maxX, x2);
+              existing.maxY = Math.max(existing.maxY, y2);
+            } else {
+              areaBounds.set(areaId, { minX: x1, minY: y1, maxX: x2, maxY: y2 });
+            }
+          }
+
+          if (areaBounds.size === 0) return null;
+
+          const PAD = 6; // px padding around area bounds
+          return (
+            <svg
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: imgW,
+                height: displayedImageHeight,
+                pointerEvents: 'none',
+                zIndex: 4,
+              }}
+            >
+              {[...areaBounds.entries()].map(([areaId, bounds]) => {
+                const area = specialAreaInfo.areaMap.get(areaId);
+                if (!area) return null;
+                const isContinuation = area.type === 'continuation';
+                const color = isContinuation ? 'rgba(217, 119, 6, 0.25)' : 'rgba(59, 130, 246, 0.25)';
+                const stroke = isContinuation ? 'rgba(217, 119, 6, 0.7)' : 'rgba(59, 130, 246, 0.7)';
+                const x = bounds.minX * scaleFactor - PAD;
+                const y = bounds.minY * scaleFactor - PAD;
+                const w = (bounds.maxX - bounds.minX) * scaleFactor + PAD * 2;
+                const h = (bounds.maxY - bounds.minY) * scaleFactor + PAD * 2;
+
+                return (
+                  <g key={`area-${areaId}`}>
+                    <rect
+                      x={x} y={y} width={w} height={h}
+                      fill={color}
+                      stroke={stroke}
+                      strokeWidth={1.5}
+                      strokeDasharray="4 2"
+                      rx={3}
+                    />
+                    <text
+                      x={x + 4} y={y - 4}
+                      fill={stroke}
+                      fontSize={10}
+                      fontWeight="600"
+                      fontFamily="system-ui, sans-serif"
+                    >
+                      {area.label}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
+          );
+        })()}
 
         {/* Detecting lines — detection in progress */}
         {isDetecting && imageNaturalSize.width > 0 && (

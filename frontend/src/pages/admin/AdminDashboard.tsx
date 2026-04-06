@@ -166,6 +166,8 @@ export default function AdminDashboard() {
   }, [visibilityFilter, collectionFilter, searchQuery, sortColumns, dateMode, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
   // Selection-driven toolbar (no manual edit mode toggle)
+  const [showPublishMenu, setShowPublishMenu] = useState(false);
+  const publishMenuRef = useRef<HTMLDivElement>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
@@ -480,6 +482,31 @@ export default function AdminDashboard() {
         : "extract",
     [singleSelectedLetter],
   );
+
+  // Publish menu counts for selected letters
+  const publishCounts = useMemo(() => {
+    const selected = filteredLetters.filter(l => selectedIds.has(l.id));
+    return {
+      lettersPublished: selected.filter(l => l.visibility === 'PUBLISHED').length,
+      lettersHidden: selected.filter(l => l.visibility === 'HIDDEN').length,
+      transcriptsPublished: selected.filter(l => l.transcriptPublished).length,
+      transcriptsUnpublished: selected.filter(l => !l.transcriptPublished).length,
+      metadataPublished: selected.filter(l => l.metadataPublished).length,
+      metadataUnpublished: selected.filter(l => !l.metadataPublished).length,
+    };
+  }, [filteredLetters, selectedIds]);
+
+  // Close publish menu on click outside
+  useEffect(() => {
+    if (!showPublishMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (publishMenuRef.current && !publishMenuRef.current.contains(e.target as Node)) {
+        setShowPublishMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showPublishMenu]);
 
   // Auto-open toolbar when items are selected
   useEffect(() => {
@@ -1706,40 +1733,94 @@ export default function AdminDashboard() {
               )}
             </div>
 
-            {/* Right section: visibility + destructive actions */}
+            {/* Right section: publishing + destructive actions */}
             <div className="edit-toolbar-right">
-              <div className="toolbar-visibility-actions">
+              <div className="publish-menu-container" ref={publishMenuRef}>
                 <button
-                  className="toolbar-process-btn"
-                  onClick={handleBulkPublish}
-                  disabled={selectedIds.size === 0 || bulkActionLoading}
+                  className={`toolbar-process-btn${showPublishMenu ? ' active' : ''}`}
+                  onClick={() => setShowPublishMenu(!showPublishMenu)}
+                  disabled={selectedIds.size === 0}
                 >
-                  Publish
+                  Publishing
                 </button>
-                <button
-                  className="toolbar-process-btn"
-                  onClick={handleBulkHide}
-                  disabled={selectedIds.size === 0 || bulkActionLoading}
-                >
-                  Hide
-                </button>
-              </div>
-              <div className="toolbar-divider" />
-              <div className="toolbar-visibility-actions">
-                <button
-                  className="toolbar-process-btn"
-                  onClick={() => handleBulkContentVisibility('transcriptPublished', true)}
-                  disabled={selectedIds.size === 0 || bulkActionLoading}
-                >
-                  Publish Transcripts
-                </button>
-                <button
-                  className="toolbar-process-btn"
-                  onClick={() => handleBulkContentVisibility('metadataPublished', true)}
-                  disabled={selectedIds.size === 0 || bulkActionLoading}
-                >
-                  Publish Metadata
-                </button>
+                {showPublishMenu && (
+                  <div className="publish-menu-dropdown">
+                    <div className="publish-menu-section">
+                      <div className="publish-menu-header">
+                        <span className="publish-menu-label">Letters</span>
+                        <span className="publish-menu-counts">
+                          {publishCounts.lettersPublished} published · {publishCounts.lettersHidden} hidden
+                        </span>
+                      </div>
+                      <div className="publish-menu-actions">
+                        <button
+                          className="publish-menu-btn publish-menu-btn--unpublish"
+                          onClick={() => { handleBulkHide(); setShowPublishMenu(false); }}
+                          disabled={bulkActionLoading}
+                        >
+                          Hide
+                        </button>
+                        <button
+                          className="publish-menu-btn publish-menu-btn--publish"
+                          onClick={() => { handleBulkPublish(); setShowPublishMenu(false); }}
+                          disabled={bulkActionLoading}
+                        >
+                          Publish
+                        </button>
+                      </div>
+                    </div>
+                    <div className="publish-menu-divider" />
+                    <div className="publish-menu-section">
+                      <div className="publish-menu-header">
+                        <span className="publish-menu-label">Transcripts</span>
+                        <span className="publish-menu-counts">
+                          {publishCounts.transcriptsPublished} published · {publishCounts.transcriptsUnpublished} hidden
+                        </span>
+                      </div>
+                      <div className="publish-menu-actions">
+                        <button
+                          className="publish-menu-btn publish-menu-btn--unpublish"
+                          onClick={() => { handleBulkContentVisibility('transcriptPublished', false); setShowPublishMenu(false); }}
+                          disabled={bulkActionLoading}
+                        >
+                          Hide
+                        </button>
+                        <button
+                          className="publish-menu-btn publish-menu-btn--publish"
+                          onClick={() => { handleBulkContentVisibility('transcriptPublished', true); setShowPublishMenu(false); }}
+                          disabled={bulkActionLoading}
+                        >
+                          Publish
+                        </button>
+                      </div>
+                    </div>
+                    <div className="publish-menu-divider" />
+                    <div className="publish-menu-section">
+                      <div className="publish-menu-header">
+                        <span className="publish-menu-label">Metadata</span>
+                        <span className="publish-menu-counts">
+                          {publishCounts.metadataPublished} published · {publishCounts.metadataUnpublished} hidden
+                        </span>
+                      </div>
+                      <div className="publish-menu-actions">
+                        <button
+                          className="publish-menu-btn publish-menu-btn--unpublish"
+                          onClick={() => { handleBulkContentVisibility('metadataPublished', false); setShowPublishMenu(false); }}
+                          disabled={bulkActionLoading}
+                        >
+                          Hide
+                        </button>
+                        <button
+                          className="publish-menu-btn publish-menu-btn--publish"
+                          onClick={() => { handleBulkContentVisibility('metadataPublished', true); setShowPublishMenu(false); }}
+                          disabled={bulkActionLoading}
+                        >
+                          Publish
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="toolbar-divider" />
               <div className="toolbar-destructive-actions">

@@ -47,7 +47,7 @@ export async function bulkUpdateFields(updates: BulkFieldUpdate[]): Promise<Bulk
 
 export async function bulkUpdateContentVisibility(
   letterIds: string[],
-  updates: { transcriptPublished?: boolean; metadataPublished?: boolean },
+  updates: { visibility?: 'PUBLISHED' | 'HIDDEN'; transcriptPublished?: boolean; metadataPublished?: boolean },
 ): Promise<{ updated: number }> {
   return apiPatch<{ updated: number }>("/admin/letters/bulk/content-visibility", {
     letterIds,

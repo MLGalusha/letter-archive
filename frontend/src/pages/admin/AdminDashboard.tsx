@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
 import { getErrorMessage } from "../../api/client";
 import { getAdminLetters, getFilteredLetterIds, deleteLetter } from "../../api/letters";
-import { toggleLetterFlag, publishLetter, hideLetter } from "../../api/admin/letters";
+import { toggleLetterFlag } from "../../api/admin/letters";
 import {
   confirmTranscript,
   getProcessingStatus,
@@ -735,7 +735,7 @@ export default function AdminDashboard() {
     setBulkActionLoading(true);
     const count = selectedIds.size;
     try {
-      await Promise.all(Array.from(selectedIds).map(id => publishLetter(id)));
+      await bulkUpdateContentVisibility(Array.from(selectedIds), { visibility: 'PUBLISHED' });
       showToast(`Published ${count} letter${count === 1 ? '' : 's'}`, 'success');
       await fetchLetters();
     } catch (err) {
@@ -751,7 +751,7 @@ export default function AdminDashboard() {
     setBulkActionLoading(true);
     const count = selectedIds.size;
     try {
-      await Promise.all(Array.from(selectedIds).map(id => hideLetter(id)));
+      await bulkUpdateContentVisibility(Array.from(selectedIds), { visibility: 'HIDDEN' });
       showToast(`Hid ${count} letter${count === 1 ? '' : 's'}`, 'success');
       await fetchLetters();
     } catch (err) {

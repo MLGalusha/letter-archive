@@ -18,11 +18,12 @@ import { parseOrThrow } from './helpers.js';
 
 const bulkContentVisibilitySchema = z.object({
   letterIds: z.array(z.string().uuid()).min(1),
+  visibility: z.enum(['PUBLISHED', 'HIDDEN']).optional(),
   transcriptPublished: z.boolean().optional(),
   metadataPublished: z.boolean().optional(),
 }).refine(
-  (data) => data.transcriptPublished !== undefined || data.metadataPublished !== undefined,
-  { message: 'At least one of transcriptPublished or metadataPublished must be provided' },
+  (data) => data.transcriptPublished !== undefined || data.metadataPublished !== undefined || data.visibility !== undefined,
+  { message: 'At least one of visibility, transcriptPublished, or metadataPublished must be provided' },
 );
 
 const router = Router();
@@ -79,10 +80,11 @@ router.post('/clear-metadata', async (req, res, next) => {
 
 router.patch('/content-visibility', async (req, res, next) => {
   try {
-    const { letterIds, transcriptPublished, metadataPublished } = parseOrThrow(
+    const { letterIds, visibility, transcriptPublished, metadataPublished } = parseOrThrow(
       bulkContentVisibilitySchema, req.body, 'Invalid request',
     );
     const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (visibility !== undefined) updates.visibility = visibility;
     if (transcriptPublished !== undefined) updates.transcriptPublished = transcriptPublished;
     if (metadataPublished !== undefined) updates.metadataPublished = metadataPublished;
 

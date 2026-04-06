@@ -208,8 +208,8 @@ export default function AdminDashboard() {
     if (showLoading) setLoading(true);
     setError(null);
     try {
-      // Find the first server-sortable column (skip client-side computed columns)
-      const serverSort = sortColumns.find(col => isServerSortField(col.field));
+      // Find the last server-sortable column (most recently added; skip client-side computed columns)
+      const serverSort = [...sortColumns].reverse().find(col => isServerSortField(col.field));
 
       // Visibility: convert filter type to API param (ALL means no filter)
       const visibilityParam = visibilityFilter !== 'ALL' ? visibilityFilter : undefined;
@@ -280,7 +280,7 @@ export default function AdminDashboard() {
     // If there are selections, prune to only IDs that match the new filter set
     if (selectedIds.size > 0) {
       const visibilityParam = visibilityFilter !== 'ALL' ? visibilityFilter : undefined;
-      const serverSort = sortColumns.find(col => isServerSortField(col.field));
+      const serverSort = [...sortColumns].reverse().find(col => isServerSortField(col.field));
       getFilteredLetterIds({
         collection: collectionFilter === "all" ? undefined : collectionFilter,
         visibility: visibilityParam,

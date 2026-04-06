@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import type { ExtendedSortField, SortColumn } from './types';
+import { isServerSortField } from './utils';
 
 export function useDashboardSort(initialSortColumns: SortColumn[] = []) {
   const [sortColumns, setSortColumns] = useState<SortColumn[]>(initialSortColumns);
@@ -9,7 +10,13 @@ export function useDashboardSort(initialSortColumns: SortColumn[] = []) {
       const existingIndex = previous.findIndex((column) => column.field === field);
 
       if (existingIndex === -1) {
-        return [...previous, { field, direction: 'asc' }];
+        // When adding a new server-sort field, remove other server-sort fields
+        // so the new one becomes the active server sort (API only supports one)
+        const isServer = isServerSortField(field);
+        const base = isServer
+          ? previous.filter((col) => !isServerSortField(col.field))
+          : previous;
+        return [...base, { field, direction: 'asc' }];
       }
 
       const existing = previous[existingIndex];

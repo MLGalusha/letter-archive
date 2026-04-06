@@ -653,6 +653,19 @@ router.post('/pages/:pageId/detect-lines', async (req, res, next) => {
 
     if (!page) throw new NotFoundError('Page not found');
 
+    // Return cached segments if available (unless ?force=true)
+    const force = req.query.force === 'true';
+    if (!force && Array.isArray(page.lineSegments) && page.lineSegments.length > 0) {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      });
+      res.write(`data: ${JSON.stringify({ type: 'result', lineSegments: page.lineSegments, cached: true })}\n\n`);
+      res.end();
+      return;
+    }
+
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
@@ -666,10 +679,17 @@ router.post('/pages/:pageId/detect-lines', async (req, res, next) => {
     const absolutePath = getAbsoluteStoragePath(page.storagePath);
     const result = await detectAndStorePageLines(req.params.pageId, absolutePath, undefined, onProgress);
 
-    res.write(`data: ${JSON.stringify({
-      type: 'result',
-      lineSegments: result.lineSegments ?? (Array.isArray(page.lineSegments) ? page.lineSegments : []),
-    })}\n\n`);
+    if (result.lineSegments === null) {
+      // Line finder failed — report it clearly instead of returning empty results
+      const fallback = Array.isArray(page.lineSegments) ? page.lineSegments : null;
+      if (fallback && fallback.length > 0) {
+        res.write(`data: ${JSON.stringify({ type: 'result', lineSegments: fallback })}\n\n`);
+      } else {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Line detection failed — Python line finder did not return results. Check that the Python venv is configured on the server.' })}\n\n`);
+      }
+    } else {
+      res.write(`data: ${JSON.stringify({ type: 'result', lineSegments: result.lineSegments })}\n\n`);
+    }
 
     res.end();
   } catch (error) {

@@ -881,7 +881,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     detectPageLines(pageId, (label) => {
       setDetectionSteps(prev => [...prev, label]);
-    })
+    }, true)
       .then(result => {
         setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: result.lineSegments }));
 
@@ -1450,7 +1450,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             <div className="line-review-spinner" />
             <div className="detection-status" key={detectionSteps.length}>
               {detectionSteps.length === 0
-                ? 'Starting detection...'
+                ? 'Loading line segments...'
                 : detectionSteps[detectionSteps.length - 1]}
             </div>
           </div>

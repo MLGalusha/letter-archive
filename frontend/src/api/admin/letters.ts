@@ -88,8 +88,12 @@ export type DetectLinesResult = { lineSegments: LineSegment[] };
 export async function detectPageLines(
   pageId: string,
   onProgress?: (label: string) => void,
+  force = false,
 ): Promise<DetectLinesResult> {
-  const response = await fetch(`${API_BASE_URL}/admin/letters/pages/${pageId}/detect-lines`, {
+  const url = force
+    ? `${API_BASE_URL}/admin/letters/pages/${pageId}/detect-lines?force=true`
+    : `${API_BASE_URL}/admin/letters/pages/${pageId}/detect-lines`;
+  const response = await fetch(url, {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),

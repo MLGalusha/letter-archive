@@ -84,7 +84,8 @@ export async function runLineFinder(imagePath: string): Promise<LineSegment[] | 
     return segments;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    log.warn({ imagePath, err: message }, 'Line finder failed (non-fatal)');
+    const stderr = (error as { stderr?: string }).stderr;
+    log.warn({ imagePath, err: message, stderr: stderr?.slice(-500) }, 'Line finder failed (non-fatal)');
     return null;
   }
 }

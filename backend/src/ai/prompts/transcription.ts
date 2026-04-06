@@ -50,7 +50,7 @@ EPHEMERA:
 - Note printed vs handwritten text
 
 HANDLING UNCERTAINTY:
-- Use [illegible] for words that cannot be read at all
+- Never mark text as [illegible]. Instead, use surrounding context, common phrases, names, and letter conventions to make your best educated guess at what the word likely says.
 - Note crossed-out text as [crossed out]
 
 OUTPUT FORMAT:
@@ -198,7 +198,7 @@ SPACING AND LAYOUT RULES (VERY IMPORTANT):
 - Think of the output as a fixed-width representation where spacing matters
 
 HANDLING UNCERTAINTY:
-- Use [illegible] for words that cannot be read at all
+- Never mark text as [illegible]. Instead, use surrounding context, common phrases, names, and letter conventions to make your best educated guess at what the word likely says.
 - Note crossed-out text as [crossed out]
 - In typewritten text, ignore characters or words overtyped with "x" (typist corrections). Transcribe only the intended text, not the struck-through error.
 - Indicate inserted text or marginal notes as [insertion: text] or [margin: text]
@@ -265,7 +265,7 @@ IMPORTANT: Not every margin-note or postscript is a special area. Only mark text
 If there are no special areas on a page, return an empty "specialAreas" array.
 
 HANDLING UNCERTAINTY:
-- Use [illegible] for words that cannot be read at all
+- Never mark text as [illegible]. Instead, use surrounding context, common phrases, names, and letter conventions to make your best educated guess at what the word likely says.
 - Note crossed-out text as [crossed out]
 - In typewritten text, ignore characters overtyped with "x" (typist corrections)
 - Indicate inserted text as [insertion: text]

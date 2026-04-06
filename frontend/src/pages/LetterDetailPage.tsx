@@ -456,8 +456,9 @@ export default function LetterDetailPage() {
                     }
                   >
                     <ProgressiveImage
-                      src={getImageUrl(img.imageUrl, { width: 800 })}
+                      src={getImageUrl(img.imageUrl)}
                       thumbSrc={getImageUrl(img.imageUrl, { width: 32 })}
+                      midSrc={getImageUrl(img.imageUrl, { width: 800 })}
                       alt={
                         isLetter
                           ? `Page ${img.pageNumber ?? idx + 1} of letter`
@@ -471,7 +472,7 @@ export default function LetterDetailPage() {
                       decoding="async"
                       context="carousel"
                       aspectRatio={img.width && img.height ? img.width / img.height : undefined}
-                      fullDelay={idx === 0 ? 0 : 150}
+                      idleUpgrade
                     />
                     {typeLabel && (
                       <span className="scan-slide-type-label">{typeLabel}</span>

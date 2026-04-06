@@ -164,12 +164,14 @@ const LetterViewer = memo(function LetterViewer({
   const currentImage = displayImages[currentImageIndex];
 
   // Progressive image loading (blur-up)
-  // Panel: 1200px initial, full on zoom. Lightbox: 1600px initial, full on zoom.
-  const initialWidth = variant === "lightbox" ? 1600 : 1200;
-  const needsFullRes = scale > 1;
+  // Lightbox: 800px mid (matches carousel cache → instant), full-res always loads in background
+  // Panel: 1200px initial, full-res only on zoom
+  const initialWidth = variant === "lightbox" ? 800 : 1200;
   const thumbSrc = getImageUrl(currentImage.imageUrl, { width: 32 });
   const midSrc = getImageUrl(currentImage.imageUrl, { width: initialWidth });
-  const fullSrc = needsFullRes ? getImageUrl(currentImage.imageUrl) : midSrc;
+  const fullSrc = (variant === "lightbox" || scale > 1)
+    ? getImageUrl(currentImage.imageUrl)
+    : midSrc;
   const { fullLoaded, midLoaded } = useProgressiveImage({
     thumbSrc,
     midSrc,
@@ -601,7 +603,7 @@ const LetterViewer = memo(function LetterViewer({
         )}
         <img
           ref={imageRef}
-          src={viewerReady ? fullSrc : midSrc}
+          src={fullLoaded ? fullSrc : midSrc}
           alt={
             getImageAlt
               ? getImageAlt(currentImage)

@@ -142,7 +142,7 @@
   min-height: 50vh;
 }
 
-/* Horizontal scroll track — drag to scroll with momentum */
+/* Horizontal scroll track — CSS scroll-snap handles snapping */
 .scan-carousel {
   display: flex;
   overflow-x: auto;
@@ -155,6 +155,9 @@
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .scan-carousel::-webkit-scrollbar {
@@ -170,11 +173,7 @@
   align-items: center;
   justify-content: center;
   position: relative;
-  /* Smooth scale transition driven by JS */
-  transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-              opacity 0.35s ease;
-  transform-origin: center center;
-  /* will-change removed: transition already promotes during animation */
+  scroll-snap-align: center;
 }
 
 /* The image IS the card — wraps tightly, no extra background */

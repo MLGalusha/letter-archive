@@ -61,7 +61,7 @@ export default function SegmentEditorOverlay({
   );
 
   const handleSvgPointerUp = useCallback(
-    (e: React.PointerEvent) => {
+    (_e: React.PointerEvent) => {
       if (!drawStart || !drawEnd) {
         setDrawStart(null);
         setDrawEnd(null);

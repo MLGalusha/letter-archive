@@ -67,7 +67,7 @@ export function measureRenderedTextWidth(
 
   const fontString = `${fontSize}px ${FONT_FAMILY}`;
   const prepared = prepareWithSegments(text, fontString, {
-    whiteSpace: 'pre',
+    whiteSpace: 'pre-wrap' as const,
   });
   const result = layoutWithLines(prepared, 1e6, fontSize);
   let width = result.lines[0]?.width ?? 0;

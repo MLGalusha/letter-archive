@@ -281,7 +281,7 @@ export function renderStructuredReadingView(
     }
 
     if (!currentBlock) {
-      const area = lineAreaId != null ? areaMap.get(lineAreaId) : null;
+      const area: SpecialArea | null | undefined = lineAreaId != null ? areaMap.get(lineAreaId) : null;
       currentBlock = {
         lines: [],
         role: line.role,

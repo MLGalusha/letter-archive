@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { getErrorMessage, getImageUrl } from '../../api/client';
 import { detectPageLines, savePageLineSegments } from '../../api/admin/letters';
-import type { Letter, LineSegment, SpecialArea } from '../../types/Letter';
+import type { Letter, LineSegment, LineSegmentWord, SpecialArea } from '../../types/Letter';
 import { useSegmentEditor } from '../../hooks/useSegmentEditor';
 import SegmentEditorOverlay from './SegmentEditorOverlay';
 import { constrainedGrouping, eastEdgeY, westEdgeY } from '../../utils/constrainedGrouping';

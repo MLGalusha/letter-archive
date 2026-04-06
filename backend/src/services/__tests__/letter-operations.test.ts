@@ -36,6 +36,8 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn((field: unknown, value: unknown) => ({ kind: 'eq', field, value })),
   and: vi.fn((...clauses: unknown[]) => ({ kind: 'and', clauses })),
   inArray: vi.fn((field: unknown, values: unknown[]) => ({ kind: 'inArray', field, values })),
+  isNull: vi.fn((field: unknown) => ({ kind: 'isNull', field })),
+  isNotNull: vi.fn((field: unknown) => ({ kind: 'isNotNull', field })),
   sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
     kind: 'sql',
     strings: Array.from(strings),

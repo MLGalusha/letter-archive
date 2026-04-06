@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull, isNotNull } from 'drizzle-orm';
 import {
   db,
   letters,
@@ -330,7 +330,7 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearR
   await db.delete(letterPlaces).where(inArray(letterPlaces.letterId, letterIds));
   await db.delete(personRelationships).where(inArray(personRelationships.discoveredInLetterId, letterIds));
 
-  await db.update(letters).set({
+  const metadataFields = {
     sender: null,
     recipient: null,
     locationWritten: null,
@@ -338,7 +338,7 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearR
     summary: null,
     extractedDate: null,
     tags: null,
-    metadataStatus: 'FAILED',
+    metadataStatus: 'FAILED' as const,
     metadataError: 'Cleared by admin',
     metadataAttemptCount: 0,
     metadataJson: null,
@@ -348,16 +348,33 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearR
     primaryTopics: null,
     aiNotes: null,
     entityExtractionJson: null,
-    entityExtractionStatus: 'FAILED',
+    entityExtractionStatus: 'FAILED' as const,
     entityExtractionError: 'Cleared by admin',
-    metadataContentStatus: 'EMPTY',
+    metadataContentStatus: 'EMPTY' as const,
     metadataVerifiedAt: null,
     metadataVerifiedBy: null,
-    workflow: 'TRANSCRIBED',
     updatedAt: new Date(),
+  };
+
+  // Letters that still have a transcript → workflow back to TRANSCRIBED
+  await db.update(letters).set({
+    ...metadataFields,
+    workflow: 'TRANSCRIBED',
   }).where(
     and(
-      inArray(letters.id, letterIds)
+      inArray(letters.id, letterIds),
+      isNotNull(letters.transcriptionText),
+    ),
+  );
+
+  // Letters with no transcript (already cleared) → keep workflow at UPLOADED
+  await db.update(letters).set({
+    ...metadataFields,
+    workflow: 'UPLOADED',
+  }).where(
+    and(
+      inArray(letters.id, letterIds),
+      isNull(letters.transcriptionText),
     ),
   );
 

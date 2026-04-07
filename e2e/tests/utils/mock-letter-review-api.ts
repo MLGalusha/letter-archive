@@ -677,7 +677,7 @@ export async function installMockLetterReviewApi(
     });
   });
 
-  await page.route(new RegExp(`${escapeRegex(API_BASE_URL)}/admin/letters/pages/[^/]+/detect-lines$`), async (route) => {
+  await page.route(new RegExp(`${escapeRegex(API_BASE_URL)}/admin/letters/pages/[^/]+/detect-lines(?:\\?.*)?$`), async (route) => {
     const pageId = route.request().url().split('/').slice(-2)[0];
     detectLineRequests.push(route.request().url());
 

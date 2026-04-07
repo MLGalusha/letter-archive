@@ -1,6 +1,6 @@
 .line-review-mode {
   position: fixed;
-  top: 0;
+  top: var(--admin-header-height, 53px);
   left: 0;
   right: 0;
   bottom: 0;
@@ -54,7 +54,7 @@
   display: block;
   width: auto;
   max-width: 100dvw;
-  max-height: 100vh;
+  max-height: calc(100vh - var(--admin-header-height, 53px));
 }
 
 /* SVG highlight overlay */
@@ -281,7 +281,7 @@
 /* Debug legend */
 .line-review-debug-legend {
   position: fixed;
-  top: 16px;
+  top: calc(var(--admin-header-height, 53px) + 16px);
   left: 16px;
   background: rgba(13, 18, 26, 0.85);
   color: #ccc;
@@ -472,7 +472,7 @@
 /* Close button */
 .line-review-close-btn {
   position: fixed;
-  top: 16px;
+  top: calc(var(--admin-header-height, 53px) + 16px);
   right: 16px;
   z-index: 101;
   width: 36px;
@@ -613,7 +613,7 @@
 /* Segment editor mini-toolbar (top center) */
 .segment-editor-toolbar {
   position: fixed;
-  top: 16px;
+  top: calc(var(--admin-header-height, 53px) + 16px);
   left: 50%;
   transform: translateX(-50%);
   background: rgba(13, 18, 26, 0.92);
@@ -676,4 +676,3 @@
   font-family: var(--font-mono, monospace);
   padding: 0 4px;
 }
-

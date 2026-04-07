@@ -148,7 +148,8 @@
 
 .header-dock .search-input {
   padding: 0.55rem 0.85rem;
-  font-size: 0.88rem;
+  /* 16px minimum prevents iOS Safari auto-zoom on focus */
+  font-size: 1rem;
   border-radius: 16px;
 }
 
@@ -264,15 +265,26 @@
     gap: 0;
   }
 
-  /* Hide dock when not active to avoid empty space */
+  /* ── Dock collapse (smooth transition instead of display:none) ── */
   .header-brand-slot:not(.has-active-dock) {
-    display: none;
+    width: 100%;
+    order: 1;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: max-height 0.25s ease, opacity 0.18s ease;
   }
 
   /* Scrubber mode (show-title): slider below nav, nav stays visible */
   .header-brand-slot.has-active-dock.show-title {
     width: 100%;
     order: 1;
+    max-height: 4rem;
+    opacity: 1;
+    pointer-events: auto;
+    overflow: visible;
+    transition: max-height 0.25s ease, opacity 0.18s ease 0.04s;
   }
 
   .header-brand-slot.has-active-dock.show-title .main-title {
@@ -288,6 +300,11 @@
   .header-brand-slot.has-active-dock:not(.show-title) {
     width: 100%;
     order: 1;
+    max-height: 4rem;
+    opacity: 1;
+    pointer-events: auto;
+    overflow: visible;
+    transition: max-height 0.25s ease, opacity 0.18s ease 0.04s;
   }
 
   .header-inner:has(.has-active-dock:not(.show-title)) .nav {

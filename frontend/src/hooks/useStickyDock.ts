@@ -21,6 +21,10 @@ export interface UseStickyDockReturn {
   setCompactSortOpen: (open: boolean | undefined) => void;
 }
 
+// Extra pixels the user must scroll back before the dock deactivates.
+// Prevents flickering when the dock itself changes the header height (mobile).
+const HYSTERESIS_PX = 50;
+
 export default function useStickyDock(config: UseStickyDockConfig): UseStickyDockReturn {
   const { triggerRef, sectionRef, enabled = true } = config;
 
@@ -30,8 +34,10 @@ export default function useStickyDock(config: UseStickyDockConfig): UseStickyDoc
   const [pageSortOpen, setPageSortOpen] = useState<boolean | undefined>(undefined);
   const [compactSortOpen, setCompactSortOpen] = useState<boolean | undefined>(undefined);
   const headerDropdownOpenRef = useRef(false);
+  const stickyDockActiveRef = useRef(false);
 
   headerDropdownOpenRef.current = compactRefineOpen || compactSortOpen === true;
+  stickyDockActiveRef.current = stickyDockActive;
 
   // ── IntersectionObserver: detect when search bar scrolls past header ──
   useEffect(() => {
@@ -46,7 +52,12 @@ export default function useStickyDock(config: UseStickyDockConfig): UseStickyDoc
       ([entry]) => {
         if (entry.isIntersecting) {
           if (!headerDropdownOpenRef.current) {
-            setStickyDockActive(false);
+            // Hysteresis: require trigger to be well past the header before deactivating
+            // This prevents the flicker loop when dock height changes header size
+            const clearance = entry.boundingClientRect.bottom - headerHeight;
+            if (!stickyDockActiveRef.current || clearance > HYSTERESIS_PX) {
+              setStickyDockActive(false);
+            }
           }
         } else {
           setStickyDockActive(entry.boundingClientRect.bottom <= headerHeight);
@@ -69,7 +80,8 @@ export default function useStickyDock(config: UseStickyDockConfig): UseStickyDoc
     const header = document.querySelector('.header') as HTMLElement | null;
     const headerHeight = header?.offsetHeight || 80;
 
-    if (trigger.getBoundingClientRect().bottom > headerHeight) {
+    // Use hysteresis for deactivation here too
+    if (trigger.getBoundingClientRect().bottom > headerHeight + HYSTERESIS_PX) {
       setStickyDockActive(false);
     }
   }, [compactRefineOpen, compactSortOpen, stickyDockActive, triggerRef, sectionRef]);

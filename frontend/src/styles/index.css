@@ -5,7 +5,7 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
+  color-scheme: light;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -16,7 +16,9 @@
 html {
   scrollbar-gutter: stable;
   overscroll-behavior: none;
-  background: #eee2cf;
+  /* Must match the public site gradient top color so iOS safe areas
+     (notch, home indicator) don't show a white flash */
+  background: #f3eadc;
 }
 
 /* Admin pages handle their own scrolling — don't reserve gutter space */
@@ -25,7 +27,7 @@ html:has(.admin-layout) {
 }
 
 body {
-  background: var(--bg-dark);
+  background: #f3eadc;
   color: var(--text-muted);
   margin: 0;
   overflow-x: hidden;

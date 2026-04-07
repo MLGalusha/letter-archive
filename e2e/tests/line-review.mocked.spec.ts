@@ -218,7 +218,7 @@ test.describe('@mocked Line Review', () => {
     await page.locator('.viewer-image').click();
     await page.locator('.line-review-mode').waitFor({ state: 'visible' });
 
-    await expect(page.locator('.toast')).toContainText('Failed to load segments');
+    await expect(page.locator('.toast')).toContainText('Database offline (Request ID: req-segments-503)');
   });
 
   test('shows the request id when transcript auto-save fails on exit', async ({

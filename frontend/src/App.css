@@ -37,10 +37,7 @@
   font-family: "Instrument Sans", "Avenir Next", "Segoe UI", sans-serif;
   text-align: left;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top right, rgba(31, 109, 122, 0.12), transparent 28%),
-    radial-gradient(circle at 0% 12%, rgba(196, 147, 94, 0.2), transparent 24%),
-    linear-gradient(180deg, #f3eadc 0%, #f8f0e5 26%, #f5ede1 60%, #efe4d2 100%);
+  background: var(--bg);
 }
 
 .public-site-shell::before,

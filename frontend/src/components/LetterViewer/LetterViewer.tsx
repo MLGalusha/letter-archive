@@ -826,13 +826,13 @@ const LetterViewer = memo(function LetterViewer({
             <div className="overlay-center">
               {displayImages.length > 1 && (
                 <>
-                  <button onClick={prevImage} className="nav-button">
+                  <button onClick={prevImage} className="nav-button" aria-label="Previous page">
                     <Icon name="arrow-left" size={14} />
                   </button>
                   <span className="image-counter">
                     {currentImageIndex + 1} / {displayImages.length}
                   </span>
-                  <button onClick={nextImage} className="nav-button">
+                  <button onClick={nextImage} className="nav-button" aria-label="Next page">
                     <Icon name="arrow-right" size={14} />
                   </button>
                 </>
@@ -857,6 +857,7 @@ const LetterViewer = memo(function LetterViewer({
                 type="button"
                 className="viewer-nav viewer-nav--prev"
                 onClick={prevImage}
+                aria-label="Previous page"
               >
                 <Icon name="arrow-left" size={20} />
               </button>
@@ -864,6 +865,7 @@ const LetterViewer = memo(function LetterViewer({
                 type="button"
                 className="viewer-nav viewer-nav--next"
                 onClick={nextImage}
+                aria-label="Next page"
               >
                 <Icon name="arrow-right" size={20} />
               </button>

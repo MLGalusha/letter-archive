@@ -79,6 +79,9 @@ export default function InfiniteCarousel({
 
   useEffect(() => {
     if (slideCount <= 1) return;
+    const prefersReducedMotion = typeof window !== 'undefined'
+      && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    if (prefersReducedMotion) return;
     const id = setInterval(() => {
       if (Date.now() < pauseUntilRef.current) return;
       setAnimated(true);

@@ -70,6 +70,8 @@
   position: relative;
   width: 100%;
   contain: layout style;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 312px;
 }
 
 .letter-card {
@@ -119,11 +121,6 @@
   display: block;
   object-fit: cover;
   background: rgba(45, 38, 32, 0.85);
-}
-
-.archive-load-more-sentinel {
-  width: 100%;
-  height: 1px;
 }
 
 .archive-load-more,
@@ -419,6 +416,10 @@
   .archive-complete-message {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .letter-card-shell {
+    contain-intrinsic-size: auto 220px;
   }
 
   .letter-card {

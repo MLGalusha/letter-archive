@@ -473,7 +473,7 @@ export default function SearchBar({
         <span className="filter-section-label">People &amp; Location</span>
         <div className="filter-section-row">
           <div className="filter-group">
-            <span className="filter-label">Sender</span>
+            <label className="filter-label" htmlFor={senderFilterId}>Sender</label>
             <input
               id={senderFilterId}
               type="text"
@@ -490,7 +490,7 @@ export default function SearchBar({
             <SuggestionHint suggestion={senderSuggestion} />
           </div>
           <div className="filter-group">
-            <span className="filter-label">Recipient</span>
+            <label className="filter-label" htmlFor={recipientFilterId}>Recipient</label>
             <input
               id={recipientFilterId}
               type="text"
@@ -508,7 +508,7 @@ export default function SearchBar({
           </div>
           {!hideCollectionFilter && (
             <div className="filter-group">
-              <span className="filter-label">Collection</span>
+              <label className="filter-label" htmlFor={collectionFilterId}>Collection</label>
               <input
                 id={collectionFilterId}
                 type="text"
@@ -526,7 +526,7 @@ export default function SearchBar({
             </div>
           )}
           <div className="filter-group">
-            <span className="filter-label">Place</span>
+            <label className="filter-label" htmlFor={placeFilterId}>Place</label>
             <input
               id={placeFilterId}
               type="text"
@@ -543,7 +543,7 @@ export default function SearchBar({
             <SuggestionHint suggestion={placeSuggestion} />
           </div>
           <div className="filter-group filter-group-year-range">
-            <span className="filter-label">Year Range</span>
+            <label className="filter-label" htmlFor={`${searchIdBase}-year-from`}>Year Range</label>
             <div className="year-range-pair">
               <FilterChoiceField
                 id={`${searchIdBase}-year-from`}
@@ -589,7 +589,7 @@ export default function SearchBar({
         <span className="filter-section-label">Content &amp; Status</span>
         <div className="filter-section-row">
           <div className="filter-group">
-            <span className="filter-label">Topic</span>
+            <label className="filter-label" htmlFor={topicFilterId}>Topic</label>
             <FilterChoiceField
               id={topicFilterId}
               label="Topic"
@@ -608,7 +608,7 @@ export default function SearchBar({
             />
           </div>
           <div className="filter-group">
-            <span className="filter-label">Tone</span>
+            <label className="filter-label" htmlFor={`${searchIdBase}-tone`}>Tone</label>
             <FilterChoiceField
               id={`${searchIdBase}-tone`}
               label="Tone"
@@ -626,7 +626,7 @@ export default function SearchBar({
             />
           </div>
           <div className="filter-group">
-            <span className="filter-label">Relationship</span>
+            <label className="filter-label" htmlFor={`${searchIdBase}-relationship`}>Relationship</label>
             <FilterChoiceField
               id={`${searchIdBase}-relationship`}
               label="Relationship"
@@ -644,7 +644,7 @@ export default function SearchBar({
             />
           </div>
           <div className="filter-group">
-            <span className="filter-label">Transcript</span>
+            <label className="filter-label" htmlFor={`${searchIdBase}-transcript`}>Transcript</label>
             <FilterChoiceField
               id={`${searchIdBase}-transcript`}
               label="Transcript"
@@ -660,7 +660,7 @@ export default function SearchBar({
             />
           </div>
           <div className="filter-group">
-            <span className="filter-label">Verification</span>
+            <label className="filter-label" htmlFor={`${searchIdBase}-verified`}>Verification</label>
             <FilterChoiceField
               id={`${searchIdBase}-verified`}
               label="Verification"
@@ -746,7 +746,7 @@ export default function SearchBar({
           </p>
         </div>
         <div className="search-status-block">
-          <p className="search-status">{searchStatus}</p>
+          <p className="search-status" aria-live="polite" role="status">{searchStatus}</p>
         </div>
       </div>
 

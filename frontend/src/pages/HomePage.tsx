@@ -23,12 +23,8 @@ import useArchiveSearch from "../hooks/useArchiveSearch";
 import useStickyDock from "../hooks/useStickyDock";
 import useIsMobile from "../hooks/useIsMobile";
 import InfiniteCarousel from '../components/InfiniteCarousel';
+import { formatDate } from "../utils/dateFormatting";
 import "./HomePage.css";
-
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-}
 
 function formatDateParts(yearText: string, monthText: string, dayText: string): string | null {
   const year = Number(yearText);
@@ -195,7 +191,7 @@ function HeroLetterCard({
             src={getImageUrl(img.imageUrl, { width: 640 })}
             thumbSrc={getImageUrl(img.imageUrl, { width: 32 })}
             midSrc={getImageUrl(img.imageUrl, { width: 480 })}
-            alt=""
+            alt={`Scan of letter${heroLetter.sender ? ` from ${heroLetter.sender}` : ''}${heroLetter.recipient ? ` to ${heroLetter.recipient}` : ''}`}
             loading={idx === 0 ? "eager" : "lazy"}
             fetchPriority={idx === 0 ? "high" : undefined}
             decoding="async"
@@ -209,7 +205,7 @@ function HeroLetterCard({
           className="letter-card-image"
           src={heroLetter.imageUrl.startsWith('/') ? getImageUrl(heroLetter.imageUrl, { width: 640 }) : heroLetter.imageUrl}
           thumbSrc={heroLetter.imageUrl.startsWith('/') ? getImageUrl(heroLetter.imageUrl, { width: 32 }) : heroLetter.imageUrl}
-          alt=""
+          alt={`Scan of letter${heroLetter.sender ? ` from ${heroLetter.sender}` : ''}${heroLetter.recipient ? ` to ${heroLetter.recipient}` : ''}`}
           loading="eager"
           fetchPriority="high"
           decoding="async"

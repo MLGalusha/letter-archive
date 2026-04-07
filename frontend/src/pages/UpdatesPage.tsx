@@ -5,6 +5,7 @@ import { listBlogPosts, getImageUrl, type BlogPost } from '../api/client';
 import Footer from '../components/Footer/Footer';
 import { buildBlogIndexSeo, stripMarkdown, truncateText } from '../utils/seo';
 import { saveJournalSort, loadJournalSort } from '../utils/searchPersistence';
+import { formatDate } from '../utils/dateFormatting';
 import './UpdatesPage.css';
 
 const PAGE_SIZE = 12;
@@ -17,11 +18,6 @@ const SORT_OPTIONS: { field: SortField; label: string; defaultOrder: SortOrder }
   { field: 'title', label: 'Title', defaultOrder: 'asc' },
   { field: 'author', label: 'Author', defaultOrder: 'asc' },
 ];
-
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-}
 
 export default function BlogPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -106,7 +102,7 @@ export default function BlogPage() {
             uncovered while preserving personal correspondence.
           </p>
           <div className="updates-hero-bottom">
-            <div className="updates-sort" ref={sortRef}>
+            <div className="updates-sort" ref={sortRef} onKeyDown={(e) => { if (e.key === 'Escape') setSortOpen(false); }}>
               <button
                 type="button"
                 className="sort-trigger"
@@ -133,6 +129,7 @@ export default function BlogPage() {
                       key={opt.field}
                       role="option"
                       aria-selected={isActive}
+                      tabIndex={0}
                       className={`sort-option${isActive ? ' sort-option--active' : ''}`}
                       onClick={() => {
                         if (isActive) {
@@ -140,6 +137,17 @@ export default function BlogPage() {
                         } else {
                           setSortField(opt.field);
                           setSortOrder(opt.defaultOrder);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          if (isActive) {
+                            setSortOrder((o) => o === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setSortField(opt.field);
+                            setSortOrder(opt.defaultOrder);
+                          }
                         }
                       }}
                     >

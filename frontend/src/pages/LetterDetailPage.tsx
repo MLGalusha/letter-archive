@@ -375,6 +375,7 @@ export default function LetterDetailPage() {
   if (error || !letter || !derived) {
     return (
       <div className="letter-article letter-error-state">
+        <SEO title="Letter Not Found" robots="noindex, nofollow" />
         <h1>{error || "Letter not found"}</h1>
         <div className="letter-error-actions">
           <button className="detail-action-btn" onClick={() => navigate("/")}>Back to Home</button>
@@ -409,6 +410,15 @@ export default function LetterDetailPage() {
 
         {/* ── 1. Hero ──────────────────────────────────────── */}
         <header className="letter-hero-section">
+          <h1 className="sr-only">
+            {m.sender && m.recipient
+              ? `Letter from ${m.sender} to ${m.recipient}${m.date ? `, ${m.date}` : ""}`
+              : m.sender
+                ? `Letter from ${m.sender}${m.date ? `, ${m.date}` : ""}`
+                : m.recipient
+                  ? `Letter to ${m.recipient}${m.date ? `, ${m.date}` : ""}`
+                  : dateline || "Letter"}
+          </h1>
           {heroHook && (
             <div className="letter-headline-hook">
               <p>{heroHook}</p>

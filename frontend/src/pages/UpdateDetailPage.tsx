@@ -7,6 +7,7 @@ import SEO from '../components/SEO';
 import { getBlogPost, getImageUrl, type BlogPost } from '../api/client';
 import Footer from '../components/Footer/Footer';
 import { buildBlogPostSeo, stripMarkdown, truncateText } from '../utils/seo';
+import { formatDate } from '../utils/dateFormatting';
 import './UpdateDetailPage.css';
 
 const MARKDOWN_COMPONENTS: import('react-markdown').Components = {
@@ -50,11 +51,6 @@ const MARKDOWN_COMPONENTS: import('react-markdown').Components = {
     );
   },
 };
-
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-}
 
 export default function BlogDetailPage() {
   const { slug } = useParams<{ slug: string }>();

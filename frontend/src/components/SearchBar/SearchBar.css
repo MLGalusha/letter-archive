@@ -138,20 +138,6 @@
   opacity: 0.7;
 }
 
-.search-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.7rem 1rem;
-}
-
-.search-toolbar-compact {
-  justify-content: flex-start;
-}
-
-.search-toolbar-format-group,
-.search-toolbar-actions,
 .search-facet-chips,
 .radio-group,
 .filter-suggestion-row {
@@ -353,36 +339,6 @@
   z-index: 2;
 }
 
-.search-compact-flyout-header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.search-compact-flyout-header-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.8rem;
-}
-
-
-.search-compact-flyout-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 0.18rem;
-  min-width: 0;
-}
-
-.search-compact-flyout-center {
-  position: absolute;
-  top: -1px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1;
-  pointer-events: none;
-}
-
 .search-flyout-footer {
   display: flex;
   align-items: center;
@@ -412,12 +368,6 @@
 .search-facet-row {
   display: grid;
   gap: 0.55rem;
-}
-
-.search-toolbar-format-group {
-  align-items: center;
-  min-width: 0;
-  flex: 1 1 auto;
 }
 
 .search-facet-chip {
@@ -519,37 +469,6 @@
   opacity: 0.5;
   border-left: 1px solid rgb(31, 109, 122);
   border-right: 1px solid rgb(31, 109, 122);
-}
-
-.filter-sort-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.55rem;
-}
-
-.filter-sort-row .filter-choice {
-  min-width: 0;
-}
-
-.filter-sort-direction {
-  min-height: 36px;
-  inline-size: 4.5rem;
-  min-width: 4.5rem;
-  padding-inline: 0;
-  justify-content: center;
-  font-size: 0.88rem;
-  line-height: 1;
-  letter-spacing: 0.02em;
-}
-
-.filter-sort-direction.is-disabled,
-.filter-sort-direction:disabled {
-  cursor: default;
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.72);
-  border-color: rgba(217, 207, 191, 0.82);
-  opacity: 0.76;
 }
 
 /* ── Toolbar sort dropdown ────────────────────────────────── */
@@ -882,19 +801,6 @@
     white-space: nowrap;
   }
 
-  .search-toolbar {
-    align-items: flex-start;
-  }
-
-  .search-toolbar-format-group {
-    flex-basis: 100%;
-  }
-
-  .filter-sort-row {
-    grid-template-columns: 1fr;
-  }
-
-
   .search-compact-flyout {
     left: 0;
     right: 0;
@@ -988,15 +894,6 @@
 
   .search-input-wrapper-compact {
     grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .search-toolbar-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .search-compact-flyout-header-row {
-    flex-wrap: wrap;
   }
 
   .search-compact-flyout {

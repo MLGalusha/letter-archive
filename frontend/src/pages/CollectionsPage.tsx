@@ -153,7 +153,7 @@ export default function CollectionsPage() {
                 <strong>{totalLetters}</strong> letters
               </span>
             </div>
-            <div className="collections-sort" ref={sortRef}>
+            <div className="collections-sort" ref={sortRef} onKeyDown={(e) => { if (e.key === 'Escape') setSortOpen(false); }}>
               <button
                 type="button"
                 className="sort-trigger"
@@ -180,6 +180,7 @@ export default function CollectionsPage() {
                       key={opt.field}
                       role="option"
                       aria-selected={isActive}
+                      tabIndex={0}
                       className={`sort-option${isActive ? ' sort-option--active' : ''}`}
                       onClick={() => {
                         if (isActive) {
@@ -187,6 +188,17 @@ export default function CollectionsPage() {
                         } else {
                           setSortField(opt.field);
                           setSortOrder(opt.defaultOrder);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          if (isActive) {
+                            setSortOrder((o) => o === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setSortField(opt.field);
+                            setSortOrder(opt.defaultOrder);
+                          }
                         }
                       }}
                     >

@@ -37,6 +37,7 @@ export default memo(function Header() {
 
   return (
     <header className={headerClass}>
+      <a href="#main-content" className="skip-link">Skip to content</a>
       <div className="header-inner">
         <div className={`header-brand-slot${dock.active ? " has-active-dock" : ""}${dock.showTitle ? " show-title" : ""}`}>
           <Link to="/" className="main-title" onClick={() => setMenuOpen(false)}>

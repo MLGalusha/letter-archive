@@ -38,11 +38,19 @@ export function saveCollectionsSort(field: string, order: string): void {
   }
 }
 
+const VALID_COLLECTION_SORT_FIELDS = ['letters', 'date', 'title'];
+const VALID_JOURNAL_SORT_FIELDS = ['date', 'title', 'author', 'publishedAt'];
+const VALID_SORT_ORDERS = ['asc', 'desc'];
+
 export function loadCollectionsSort(): { field: string; order: string } | null {
   try {
     const raw = localStorage.getItem('archiveSort:collections');
     if (!raw) return null;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!VALID_COLLECTION_SORT_FIELDS.includes(parsed.field) || !VALID_SORT_ORDERS.includes(parsed.order)) {
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -60,7 +68,11 @@ export function loadJournalSort(): { field: string; order: string } | null {
   try {
     const raw = localStorage.getItem('archiveSort:journal');
     if (!raw) return null;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!VALID_JOURNAL_SORT_FIELDS.includes(parsed.field) || !VALID_SORT_ORDERS.includes(parsed.order)) {
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }

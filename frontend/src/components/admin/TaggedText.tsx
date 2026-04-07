@@ -2,6 +2,7 @@
  * Lightweight read-only renderer for text containing «SENDER:...» and «RECIPIENT:...» tags.
  * Renders sender references in blue and recipient references in green.
  */
+import type { ReactNode } from 'react';
 
 const TAG_REGEX = /«(SENDER|RECIPIENT):([^»]*)»/g;
 
@@ -15,7 +16,7 @@ interface TaggedTextProps {
 }
 
 export default function TaggedText({ text }: TaggedTextProps) {
-  const parts: (string | JSX.Element)[] = [];
+  const parts: ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 

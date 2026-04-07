@@ -100,4 +100,62 @@ describe("CollectionsPage", () => {
     expect(titles[0]).toBe("Family Notes");
   });
 
+  it("sort dropdown closes on Escape key", async () => {
+    const user = userEvent.setup();
+
+    const { container } = render(
+      <MemoryRouter>
+        <CollectionsPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("War Letters")).toBeInTheDocument();
+    });
+
+    // Open the sort dropdown
+    await user.click(screen.getByLabelText("Sort collections"));
+    const menu = container.querySelector(".sort-menu");
+    expect(menu).not.toHaveClass("sort-menu--hidden");
+
+    // Press Escape on a sort option
+    const firstOption = container.querySelector(".sort-option")!;
+    await user.type(firstOption, "{Escape}");
+
+    // Dropdown should be closed
+    expect(container.querySelector(".sort-menu")).toHaveClass("sort-menu--hidden");
+  });
+
+  it("sort options respond to Enter key", async () => {
+    const user = userEvent.setup();
+
+    const { container } = render(
+      <MemoryRouter>
+        <CollectionsPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("War Letters")).toBeInTheDocument();
+    });
+
+    // Default sort is letter count desc — War Letters (12) first
+    let titles = Array.from(container.querySelectorAll(".collection-card-top h3")).map((el) =>
+      el.textContent?.trim(),
+    );
+    expect(titles[0]).toBe("War Letters");
+
+    // Open dropdown and use Enter on "Title" option (3rd option)
+    await user.click(screen.getByLabelText("Sort collections"));
+    const titleOption = container.querySelectorAll(".sort-option")[2]; // Title is 3rd
+    (titleOption as HTMLElement).focus();
+    await user.keyboard("{Enter}");
+
+    // Should re-sort by title asc — Family Notes first
+    titles = Array.from(container.querySelectorAll(".collection-card-top h3")).map((el) =>
+      el.textContent?.trim(),
+    );
+    expect(titles[0]).toBe("Family Notes");
+  });
+
 });

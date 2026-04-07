@@ -102,4 +102,37 @@ describe('api client', () => {
     expect(getImageUrl('https://cdn.example.com/img.jpg')).toBe('https://cdn.example.com/img.jpg');
     expect(getImageUrl('/images/page-1')).toBe('http://localhost:3002/images/page-1');
   });
+
+  it('throws on fetch timeout (AbortError)', async () => {
+    const abortError = new DOMException('The operation was aborted.', 'AbortError');
+    fetchMock.mockRejectedValueOnce(abortError);
+
+    const promise = apiGet('/slow-endpoint');
+
+    await expect(promise).rejects.toBeInstanceOf(ApiError);
+    // DOMException may or may not be instanceof Error in jsdom,
+    // so the message could be the DOMException message or the fallback.
+    const err: ApiError = await promise.catch((e: ApiError) => e);
+    expect(err.status).toBe(0);
+    expect(typeof err.message).toBe('string');
+    expect(err.message.length).toBeGreaterThan(0);
+  });
+
+  it('combines caller signal with default timeout signal', async () => {
+    // AbortSignal.timeout and AbortSignal.any may not be available in jsdom.
+    // Test the fallback: a caller-provided signal that aborts mid-request.
+    const controller = new AbortController();
+    const abortError = new DOMException('signal is aborted without reason', 'AbortError');
+    fetchMock.mockImplementationOnce((_input: string, init?: RequestInit) => {
+      // Verify the caller's signal is forwarded to fetch
+      expect(init?.signal).toBeDefined();
+      return Promise.reject(abortError);
+    });
+
+    const promise = apiGet('/letters', undefined, controller.signal);
+
+    await expect(promise).rejects.toBeInstanceOf(ApiError);
+    const err: ApiError = await promise.catch((e: ApiError) => e);
+    expect(err.status).toBe(0);
+  });
 });

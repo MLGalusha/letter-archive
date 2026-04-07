@@ -131,6 +131,15 @@ describe("Header", () => {
     expect(nav).not.toHaveClass("open");
   });
 
+  it("renders a skip-to-content link", () => {
+    renderHeader();
+
+    const skipLink = screen.getByText("Skip to content");
+    expect(skipLink.tagName).toBe("A");
+    expect(skipLink).toHaveAttribute("href", "#main-content");
+    expect(skipLink).toHaveClass("skip-link");
+  });
+
   it("dock content renders when provided via context", () => {
     render(
       <MemoryRouter>

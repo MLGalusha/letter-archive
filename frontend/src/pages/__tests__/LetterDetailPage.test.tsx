@@ -221,4 +221,26 @@ describe("LetterDetailPage", () => {
     expect(placeChip).toHaveAttribute("href", "/places/place-1");
   });
 
+  it("renders an sr-only h1 with sender/recipient info", async () => {
+    renderLetterDetailPage();
+
+    await screen.findByText(/A bright dispatch from Vienna/);
+
+    const h1 = screen.getByRole("heading", { level: 1, name: /Letter from Alice Smith to Bob Baker/ });
+    expect(h1).toBeInTheDocument();
+    expect(h1).toHaveClass("sr-only");
+  });
+
+  it("sets noindex meta on error state", async () => {
+    getLetterByIdMock.mockRejectedValueOnce(new Error("Letter is unavailable"));
+
+    renderLetterDetailPage();
+
+    await screen.findByRole("heading", { name: "Letter is unavailable" });
+
+    const robotsMeta = document.querySelector('meta[name="robots"]');
+    expect(robotsMeta).not.toBeNull();
+    expect(robotsMeta!.getAttribute("content")).toContain("noindex");
+  });
+
 });

@@ -210,6 +210,69 @@ describe("UpdatesPage", () => {
     expect(screen.queryByText("Older posts")).not.toBeInTheDocument();
   });
 
+  it("sort dropdown closes on Escape key", async () => {
+    const user = userEvent.setup();
+    const posts = [makeBlogPost(1)];
+    listBlogPostsMock.mockResolvedValue({ posts, total: 1 });
+
+    const { container } = render(
+      <MemoryRouter>
+        <UpdatesPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Post 1")).toBeInTheDocument();
+    });
+
+    // Open the sort dropdown
+    await user.click(screen.getByLabelText("Sort journal entries"));
+    const menu = container.querySelector(".sort-menu");
+    expect(menu).not.toHaveClass("sort-menu--hidden");
+
+    // Press Escape on a sort option
+    const firstOption = container.querySelector(".sort-option")!;
+    await user.type(firstOption, "{Escape}");
+
+    // Dropdown should be closed (hidden class applied)
+    expect(container.querySelector(".sort-menu")).toHaveClass("sort-menu--hidden");
+  });
+
+  it("sort options are selectable via Enter key", async () => {
+    const user = userEvent.setup();
+    const posts = [makeBlogPost(1)];
+    listBlogPostsMock.mockResolvedValue({ posts, total: 1 });
+
+    const { container } = render(
+      <MemoryRouter>
+        <UpdatesPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Post 1")).toBeInTheDocument();
+    });
+
+    // Initial fetch is date/desc
+    expect(listBlogPostsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sort: "date", sortOrder: "desc" }),
+    );
+
+    // Open the sort dropdown
+    await user.click(screen.getByLabelText("Sort journal entries"));
+
+    // Focus the "Title" option (2nd) and press Enter
+    const titleOption = container.querySelectorAll(".sort-option")[1];
+    (titleOption as HTMLElement).focus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(listBlogPostsMock).toHaveBeenCalledWith(
+        expect.objectContaining({ sort: "title", sortOrder: "asc" }),
+      );
+    });
+  });
+
   it("hero images use getImageUrl", async () => {
     const posts = [makeBlogPost(1, { heroImageUrl: "/blog-images/special.jpg" })];
     listBlogPostsMock.mockResolvedValue({ posts, total: 1 });

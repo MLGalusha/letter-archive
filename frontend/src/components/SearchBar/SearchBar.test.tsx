@@ -242,6 +242,56 @@ describe("SearchBar", () => {
     });
   });
 
+  it("filter inputs have associated label elements", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <SearchBar
+        query=""
+        filters={{}}
+        facets={baseFacets}
+        total={95}
+        loading={false}
+        onQueryChange={vi.fn()}
+        onFiltersChange={vi.fn()}
+      />,
+    );
+
+    // Open the refine panel to reveal filter inputs
+    await user.click(screen.getByRole("button", { name: /Open archive refine controls/i }));
+
+    // Sender, Recipient, Place inputs should be reachable via their label text
+    expect(screen.getByLabelText("Sender")).toBeInTheDocument();
+    expect(screen.getByLabelText("Recipient")).toBeInTheDocument();
+    expect(screen.getByLabelText("Place")).toBeInTheDocument();
+    expect(screen.getByLabelText("Topic")).toBeInTheDocument();
+
+    // Verify the labels are actual <label> elements (not spans)
+    const senderInput = screen.getByLabelText("Sender");
+    const senderLabel = senderInput.closest(".filter-group")?.querySelector("label");
+    expect(senderLabel).toBeTruthy();
+    expect(senderLabel?.tagName).toBe("LABEL");
+  });
+
+  it("search status has aria-live polite attribute", () => {
+    render(
+      <SearchBar
+        query=""
+        filters={{}}
+        facets={baseFacets}
+        total={95}
+        loading={false}
+        onQueryChange={vi.fn()}
+        onFiltersChange={vi.fn()}
+      />,
+    );
+
+    const statusElement = screen.getByRole("status");
+    expect(statusElement).toBeInTheDocument();
+    expect(statusElement).toHaveAttribute("aria-live", "polite");
+    expect(statusElement).toHaveTextContent("95 archive items");
+  });
+
   it("lets people flip sort direction by clicking the active sort option", async () => {
     const user = userEvent.setup();
     const handleFiltersChange = vi.fn();

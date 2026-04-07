@@ -260,4 +260,41 @@ describe("HomePage archive browsing", () => {
     expect(await screen.findByText("September 21, 2000")).toBeInTheDocument();
     expect(screen.queryByText("09/21/2000")).not.toBeInTheDocument();
   });
+
+  it("hero image has descriptive alt text", async () => {
+    getFeaturedLetterMock.mockResolvedValueOnce({
+      id: "featured-letter",
+      hook: "A featured note.",
+      summary: null,
+      sender: "Jimmie",
+      recipient: "Molly",
+      letterDate: "August 10, 1947",
+      dateRaw: "19470810",
+      collectionCode: "009",
+      collectionTitle: "Collection Nine",
+      imageUrl: "/images/featured-page-1",
+      imageType: "letter",
+      source: "manual",
+    });
+    getLetterByIdMock.mockResolvedValueOnce({
+      images: [
+        { id: "page-1", type: "letter", imageUrl: "/images/featured-page-1" },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <HeaderDockProvider>
+          <HomePage />
+        </HeaderDockProvider>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("A featured note.");
+
+    const heroImg = screen.getByAltText(/Scan of letter/);
+    expect(heroImg).toBeInTheDocument();
+    expect(heroImg.getAttribute("alt")).toContain("Jimmie");
+    expect(heroImg.getAttribute("alt")).toContain("Molly");
+  });
 });

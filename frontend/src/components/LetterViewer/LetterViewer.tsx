@@ -443,30 +443,174 @@ const LetterViewer = memo(function LetterViewer({
     setIsDragging(false);
   };
 
-  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (scale === 1) return;
+  // ============================================================================
+  // NATIVE TOUCH HANDLERS (pinch-to-zoom, double-tap, pan)
+  // iOS Safari requires native listeners with { passive: false } for preventDefault
+  // ============================================================================
 
-    const touch = e.touches[0];
-    setIsDragging(true);
-    setDragStart({
-      x: touch.clientX - position.x,
-      y: touch.clientY - position.y,
+  const touchStateRef = useRef<{
+    // Pinch tracking
+    initialDistance: number;
+    initialScale: number;
+    initialMidpoint: { x: number; y: number };
+    // Single-finger pan
+    panStart: { x: number; y: number } | null;
+    isPinching: boolean;
+    // Double-tap detection
+    lastTapTime: number;
+    lastTapPos: { x: number; y: number };
+  }>({
+    initialDistance: 0,
+    initialScale: 1,
+    initialMidpoint: { x: 0, y: 0 },
+    panStart: null,
+    isPinching: false,
+    lastTapTime: 0,
+    lastTapPos: { x: 0, y: 0 },
+  });
+
+  useEffect(() => {
+    const container = imageContainerRef.current;
+    if (!container) return;
+
+    const getTouchDistance = (t1: Touch, t2: Touch) =>
+      Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+    const getTouchMidpoint = (t1: Touch, t2: Touch) => ({
+      x: (t1.clientX + t2.clientX) / 2,
+      y: (t1.clientY + t2.clientY) / 2,
     });
-  };
 
-  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (!isDragging) return;
+    const onTouchStart = (e: TouchEvent) => {
+      const ts = touchStateRef.current;
 
-    const touch = e.touches[0];
-    setPosition({
-      x: touch.clientX - dragStart.x,
-      y: touch.clientY - dragStart.y,
-    });
-  };
+      if (e.touches.length === 2) {
+        // Start pinch
+        e.preventDefault();
+        ts.isPinching = true;
+        ts.panStart = null;
+        ts.initialDistance = getTouchDistance(e.touches[0], e.touches[1]);
+        ts.initialScale = scaleRef.current;
+        ts.initialMidpoint = getTouchMidpoint(e.touches[0], e.touches[1]);
+      } else if (e.touches.length === 1) {
+        const now = Date.now();
+        const touch = e.touches[0];
+        const dt = now - ts.lastTapTime;
+        const dx = Math.abs(touch.clientX - ts.lastTapPos.x);
+        const dy = Math.abs(touch.clientY - ts.lastTapPos.y);
 
-  const handleTouchEnd = () => {
-    setIsDragging(false);
-  };
+        // Detect double-tap (two taps within 300ms, within 30px)
+        if (dt < 300 && dx < 30 && dy < 30 && variant === 'lightbox') {
+          e.preventDefault();
+          ts.lastTapTime = 0; // Reset so triple-tap doesn't trigger
+
+          if (scaleRef.current > 1) {
+            // Zoom out to 1x
+            applyZoom(1, true);
+          } else {
+            // Zoom in to 2.5x centered on tap
+            const rect = container.getBoundingClientRect();
+            const tapX = touch.clientX - rect.left - rect.width / 2;
+            const tapY = touch.clientY - rect.top - rect.height / 2;
+            const newScale = 2.5;
+            setIsAnimating(true);
+            setTimeout(() => setIsAnimating(false), ZOOM_TRANSITION_MS);
+            setScale(newScale);
+            setPosition({
+              x: tapX * (1 - newScale),
+              y: tapY * (1 - newScale),
+            });
+          }
+          return;
+        }
+
+        ts.lastTapTime = now;
+        ts.lastTapPos = { x: touch.clientX, y: touch.clientY };
+
+        // Start single-finger pan (only when zoomed)
+        if (scaleRef.current > 1) {
+          e.preventDefault();
+          ts.panStart = {
+            x: touch.clientX - positionRef.current.x,
+            y: touch.clientY - positionRef.current.y,
+          };
+        }
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const ts = touchStateRef.current;
+
+      if (e.touches.length === 2 && ts.isPinching) {
+        e.preventDefault();
+        const newDist = getTouchDistance(e.touches[0], e.touches[1]);
+        const ratio = newDist / ts.initialDistance;
+        const newScale = Math.min(Math.max(MIN_SCALE, ts.initialScale * ratio), MAX_SCALE);
+
+        // Zoom centered on pinch midpoint
+        const mid = getTouchMidpoint(e.touches[0], e.touches[1]);
+        const rect = container.getBoundingClientRect();
+        const cx = mid.x - rect.left - rect.width / 2;
+        const cy = mid.y - rect.top - rect.height / 2;
+
+        // Position adjustment: keep the midpoint stationary
+        const prevScale = scaleRef.current;
+        const scaleChange = newScale / prevScale;
+
+        setScale(newScale);
+        setPosition((prev) => ({
+          x: cx - scaleChange * (cx - prev.x),
+          y: cy - scaleChange * (cy - prev.y),
+        }));
+
+        if (newScale === 1) {
+          setPosition({ x: 0, y: 0 });
+        }
+      } else if (e.touches.length === 1 && ts.panStart && !ts.isPinching) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        setPosition({
+          x: touch.clientX - ts.panStart.x,
+          y: touch.clientY - ts.panStart.y,
+        });
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      const ts = touchStateRef.current;
+
+      if (e.touches.length === 0) {
+        ts.isPinching = false;
+        ts.panStart = null;
+
+        // Snap to 1x if very close
+        if (scaleRef.current < 1.05 && scaleRef.current > 0.95) {
+          setIsAnimating(true);
+          setTimeout(() => setIsAnimating(false), ZOOM_TRANSITION_MS);
+          setScale(1);
+          setPosition({ x: 0, y: 0 });
+        }
+      } else if (e.touches.length === 1 && ts.isPinching) {
+        // Went from 2 fingers to 1 — transition to pan
+        ts.isPinching = false;
+        const touch = e.touches[0];
+        ts.panStart = {
+          x: touch.clientX - positionRef.current.x,
+          y: touch.clientY - positionRef.current.y,
+        };
+      }
+    };
+
+    container.addEventListener('touchstart', onTouchStart, { passive: false });
+    container.addEventListener('touchmove', onTouchMove, { passive: false });
+    container.addEventListener('touchend', onTouchEnd, { passive: false });
+
+    return () => {
+      container.removeEventListener('touchstart', onTouchStart);
+      container.removeEventListener('touchmove', onTouchMove);
+      container.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [variant, applyZoom]);
 
   // ============================================================================
   // LIGHTBOX: DOUBLE-CLICK ZOOM + MINIMAP
@@ -496,29 +640,32 @@ const LetterViewer = memo(function LetterViewer({
     [variant, applyZoom]
   );
 
+  const minimapPan = useCallback(
+    (minimapEl: HTMLDivElement, clientX: number, clientY: number) => {
+      const img = imageRef.current;
+      if (!img) return;
+      const rect = minimapEl.getBoundingClientRect();
+      const nx = (clientX - rect.left) / rect.width;
+      const ny = (clientY - rect.top) / rect.height;
+      const dw = img.clientWidth;
+      const dh = img.clientHeight;
+      setPosition({
+        x: -scaleRef.current * (nx - 0.5) * dw,
+        y: -scaleRef.current * (ny - 0.5) * dh,
+      });
+    },
+    []
+  );
+
   const handleMinimapMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       e.preventDefault();
       e.stopPropagation();
       const minimapEl = e.currentTarget;
 
-      const pan = (clientX: number, clientY: number) => {
-        const img = imageRef.current;
-        if (!img) return;
-        const rect = minimapEl.getBoundingClientRect();
-        const nx = (clientX - rect.left) / rect.width;
-        const ny = (clientY - rect.top) / rect.height;
-        const dw = img.clientWidth;
-        const dh = img.clientHeight;
-        setPosition({
-          x: -scaleRef.current * (nx - 0.5) * dw,
-          y: -scaleRef.current * (ny - 0.5) * dh,
-        });
-      };
+      minimapPan(minimapEl, e.clientX, e.clientY);
 
-      pan(e.clientX, e.clientY);
-
-      const onMove = (me: MouseEvent) => pan(me.clientX, me.clientY);
+      const onMove = (me: MouseEvent) => minimapPan(minimapEl, me.clientX, me.clientY);
       const onUp = () => {
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
@@ -526,7 +673,30 @@ const LetterViewer = memo(function LetterViewer({
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     },
-    []
+    [minimapPan]
+  );
+
+  const handleMinimapTouchStart = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const minimapEl = e.currentTarget;
+      const touch = e.touches[0];
+
+      minimapPan(minimapEl, touch.clientX, touch.clientY);
+
+      const onMove = (te: TouchEvent) => {
+        te.preventDefault();
+        minimapPan(minimapEl, te.touches[0].clientX, te.touches[0].clientY);
+      };
+      const onEnd = () => {
+        document.removeEventListener("touchmove", onMove);
+        document.removeEventListener("touchend", onEnd);
+      };
+      document.addEventListener("touchmove", onMove, { passive: false });
+      document.addEventListener("touchend", onEnd);
+    },
+    [minimapPan]
   );
 
   // ============================================================================
@@ -582,9 +752,6 @@ const LetterViewer = memo(function LetterViewer({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
         onDoubleClick={isLightbox ? handleDoubleClick : undefined}
       >
         {!viewerReady && (
@@ -714,6 +881,7 @@ const LetterViewer = memo(function LetterViewer({
             <div
               className="viewer-minimap"
               onMouseDown={handleMinimapMouseDown}
+              onTouchStart={handleMinimapTouchStart}
             >
               <img
                 src={getImageUrl(currentImage.imageUrl, { width: 200 })}

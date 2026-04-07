@@ -311,6 +311,8 @@
 
 .letter-viewer--lightbox .viewer-container {
   background: transparent;
+  /* Prevent browser gestures (scroll, pinch-to-zoom page) so our JS handles all touch */
+  touch-action: none;
 }
 
 .letter-viewer--lightbox .viewer-image,
@@ -434,4 +436,49 @@
   pointer-events: none;
   box-sizing: border-box;
   border-radius: 1px;
+}
+
+/* ── Mobile lightbox adjustments ──────────────────────────── */
+
+@media (max-width: 640px) {
+  .letter-viewer--lightbox .viewer-image,
+  .letter-viewer--lightbox .viewer-image-thumb {
+    max-width: calc(100% - 1rem);
+    max-height: calc(100% - 1rem);
+  }
+
+  .viewer-nav {
+    width: 36px;
+    height: 36px;
+  }
+
+  .viewer-nav--prev {
+    left: 0.5rem;
+  }
+
+  .viewer-nav--next {
+    right: 0.5rem;
+  }
+
+  .viewer-minimap {
+    bottom: 0.6rem;
+    right: 0.6rem;
+  }
+
+  .minimap-thumb {
+    max-width: 100px;
+    max-height: 72px;
+  }
+
+  .viewer-zoom-badge {
+    bottom: 0.6rem;
+    left: 0.6rem;
+    font-size: 0.58rem;
+  }
+
+  .viewer-page-counter {
+    bottom: 0.6rem;
+    font-size: 0.65rem;
+    padding: 0.22rem 0.6rem;
+  }
 }

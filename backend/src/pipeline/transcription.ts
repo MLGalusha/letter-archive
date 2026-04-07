@@ -1,4 +1,4 @@
-import { transcribeImage, checkExtraContentForText, transcribeExtraContent } from '../ai/openai.js';
+import { transcribeImage, transcribeExtraContent } from '../ai/openai.js';
 import { getLetterWithPages, updateTranscriptionStatus, updateLetterWorkflow, incrementTranscriptionAttempts, claimJob } from '../services/letters.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
 import { detectAndStoreLinesForPages } from '../services/line-finder.js';
@@ -151,19 +151,6 @@ export async function runTranscription(letterId: string): Promise<void> {
 
         const absolutePath = getAbsoluteStoragePath(page.storagePath);
 
-        // Check if page has transcribable text
-        const checkResult = await checkExtraContentForText({
-          filePath: absolutePath,
-          letterId,
-          documentType: docType,
-        });
-
-        if (!checkResult.hasTranscribableText) {
-          letterLog.debug({ pageNumber: page.pageNumber, docType, reason: checkResult.reason }, 'Skipping page - no transcribable text');
-          updateJobProgress(letterId, 'transcription', page.pageNumber, pages.length, `Page ${page.pageNumber} of ${pages.length}`);
-          continue;
-        }
-
         const result = await transcribeExtraContent({
           filePath: absolutePath,
           letterId,
@@ -312,17 +299,6 @@ export async function runTranscription(letterId: string): Promise<void> {
 
             for (const page of item.pages) {
               const filePath = getAbsoluteStoragePath(page.storagePath);
-
-              const checkResult = await checkExtraContentForText({
-                filePath,
-                letterId,
-                documentType: docType,
-              });
-
-              if (!checkResult.hasTranscribableText) {
-                letterLog.debug({ docType, reason: checkResult.reason }, 'Skipping extra - no transcribable text');
-                continue;
-              }
 
               const transcription = await transcribeExtraContent({
                 filePath,

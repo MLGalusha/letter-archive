@@ -124,22 +124,39 @@ export const STRUCTURED_TRANSCRIPTION_JSON_SCHEMA = {
   properties: {
     lines: {
       type: 'array',
+      description: 'One entry per physical line of handwriting visible in the image.',
       items: {
         type: 'object',
         properties: {
-          text: { type: 'string' },
-          x: { type: 'number' },
-          paragraph: { type: ['number', 'null'] },
-          continues: { type: 'boolean' },
+          text: {
+            type: 'string',
+            description: 'Exact transcription of this line. Use [illegible] for unreadable words. No leading spaces — use x for positioning.',
+          },
+          x: {
+            type: 'number',
+            description: 'Horizontal start position 0-999 (0=left edge, 999=right edge). Body text is typically 0-50.',
+          },
+          paragraph: {
+            type: ['number', 'null'],
+            description: 'Paragraph group number for body text. Increment on paragraph breaks. null for non-body lines.',
+          },
+          continues: {
+            type: 'boolean',
+            description: 'true only when the writer ran out of horizontal space and wrapped to the next physical line.',
+          },
           role: {
             type: ['string', 'null'],
+            description: 'Structural role of this line. Set to null when ambiguous.',
             enum: [
               'date', 'salutation', 'body', 'closing',
               'signature', 'postscript', 'margin-note', 'address',
               null,
             ],
           },
-          areaId: { type: ['number', 'null'] },
+          areaId: {
+            type: ['number', 'null'],
+            description: 'ID of the special area this line belongs to. null for lines in the main flow.',
+          },
         },
         required: ['text', 'x', 'paragraph', 'continues', 'role', 'areaId'],
         additionalProperties: false,
@@ -147,22 +164,35 @@ export const STRUCTURED_TRANSCRIPTION_JSON_SCHEMA = {
     },
     specialAreas: {
       type: 'array',
+      description: 'Text regions outside the normal vertical line flow (margins, corners, sideways writing). Empty array if none.',
       items: {
         type: 'object',
         properties: {
-          id: { type: 'number' },
-          label: { type: 'string' },
-          type: { type: 'string', enum: ['continuation', 'addition'] },
+          id: { type: 'number', description: 'Sequential ID starting at 1.' },
+          label: { type: 'string', description: 'Descriptive name (e.g., "Left margin note").' },
+          type: {
+            type: 'string',
+            description: '"continuation" if writer ran out of room, "addition" if separate thought.',
+            enum: ['continuation', 'addition'],
+          },
           position: {
             type: 'string',
+            description: 'Physical position on the page.',
             enum: ['top', 'bottom', 'left-margin', 'right-margin', 'corner', 'between-lines'],
           },
           orientation: {
             type: 'string',
+            description: 'Text direction.',
             enum: ['normal', 'sideways-left', 'sideways-right', 'inverted'],
           },
-          continuesFromLine: { type: ['number', 'null'] },
-          readingOrder: { type: ['number', 'null'] },
+          continuesFromLine: {
+            type: ['number', 'null'],
+            description: 'For continuation type: 0-based line index it continues from. null for addition type.',
+          },
+          readingOrder: {
+            type: ['number', 'null'],
+            description: 'Paragraph number this area appears near. null if unclear.',
+          },
         },
         required: ['id', 'label', 'type', 'position', 'orientation', 'continuesFromLine', 'readingOrder'],
         additionalProperties: false,

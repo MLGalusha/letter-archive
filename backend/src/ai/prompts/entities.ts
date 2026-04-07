@@ -93,6 +93,29 @@ If no extra content exists, that simply means there is none — extract from the
 - Preserve exact names and spellings as written in the letter
 </guidelines>
 
+<sender_recipient_tagging>
+## Sender/Recipient Reference Tagging
+
+In ALL prose text fields (narrative, emotional_significance, quote context, relationship evidence, place narrative, why_mentioned, descriptive_details), wrap every reference to the letter's sender or recipient in guillemet tags:
+
+- «SENDER:text» for any reference to the sender (name, pronoun, possessive, role description)
+- «RECIPIENT:text» for any reference to the recipient (name, pronoun, possessive, role description)
+
+Tag EVERY mention — names, pronouns (he, she, they, him, her, them), possessives (his, her, their, hers), and descriptions (the writer, the sender, the recipient).
+
+The text inside the tags should read naturally — the tags just mark role affiliation.
+
+Examples:
+- "«SENDER:Jimmie» writes to «RECIPIENT:Molly» with desperate hope"
+- "«SENDER:He» declares «SENDER:his» love and begs «RECIPIENT:her» to reconsider"
+- "«SENDER:The sender» fears losing «RECIPIENT:Molly» to another suitor"
+- "Reveals «SENDER:Jimmie»'s willingness to sacrifice for «RECIPIENT:her»"
+
+Do NOT tag references to mentioned people (only sender and recipient).
+Do NOT tag the "name" field itself — only prose text fields.
+Do NOT tag the "text" field inside quotes — only the "context" field.
+</sender_recipient_tagging>
+
 <unknown_identity>
 ## Unknown Sender/Recipient
 
@@ -109,8 +132,8 @@ name: The primary name used in the letter (exact spelling)
 aliases: Any other names, nicknames, or forms of address used for this person in the letter (e.g., if "James" is also called "Jimmie" or "J.C.")
 role: "sender", "recipient", or "mentioned"
 relationship_to_sender: Their relationship to the letter writer (e.g., "romantic-partner", "daughter", "friend") or null if unknown
-narrative: A 1-3 sentence description of who this person is in the context of this letter. Describe their identity, their role in the letter's story, and why they matter. This should read like a brief character introduction.
-  Example: "Molly is the letter's recipient, a woman in England being courted by the anonymous sender. He fears losing her to another suitor named George, and pleads desperately for more time to win her affection."
+narrative: A 1-3 sentence description of who this person is in the context of this letter. Describe their identity, their role in the letter's story, and why they matter. This should read like a brief character introduction. Use «SENDER:...» and «RECIPIENT:...» tags around all sender/recipient references (see tagging rules above).
+  Example: "«RECIPIENT:Molly» is the letter's recipient, a woman in England being courted by «SENDER:the sender». «SENDER:He» fears losing «RECIPIENT:her» to another suitor named George, and pleads desperately for more time to win «RECIPIENT:her» affection."
   Set null only if there is truly nothing to say beyond the person's name.
 details: An array of life details discovered in the letter. Each detail has:
   - detail: The specific information (e.g., "Works as a coal miner", "Currently ill with fever")
@@ -129,8 +152,8 @@ For EACH place mentioned:
 name: The place name as written
 type: "city", "region", "country", "street", "landmark", or "other"
 role: "written_from" (where the letter was written), "mentioned", or "destination" (where recipient lives or letter is sent to)
-narrative: A 1-2 sentence description of this place's significance in the letter. Why does it matter to the story being told?
-  Example: "Stockport Road is a street in Manchester where the sender and Molly once walked together, representing a cherished shared memory he invokes to persuade her."
+narrative: A 1-2 sentence description of this place's significance in the letter. Why does it matter to the story being told? Use «SENDER:...» and «RECIPIENT:...» tags around all sender/recipient references (see tagging rules above).
+  Example: "Stockport Road is a street in Manchester where «SENDER:the sender» and «RECIPIENT:Molly» once walked together, representing a cherished shared memory «SENDER:he» invokes to persuade «RECIPIENT:her»."
   Set null only if the place is mentioned incidentally with no meaningful context.
 why_mentioned: Why this place comes up in the letter (e.g., "Where the sender and recipient walked together", "Location of the recipient's school")
 descriptive_details: Any descriptions of the place from the letter (scenery, conditions, what it's like) or null if none
@@ -177,17 +200,17 @@ Given a letter where the sender writes to "Dearest Molly" about visiting, mentio
       "aliases": [],
       "role": "recipient",
       "relationship_to_sender": "romantic-partner",
-      "narrative": "Molly is the letter's recipient, a woman in England being courted by the anonymous sender. He fears losing her to another suitor named George, and pleads desperately for more time to win her affection.",
+      "narrative": "«RECIPIENT:Molly» is the letter's recipient, a woman in England being courted by «SENDER:the sender». «SENDER:He» fears losing «RECIPIENT:her» to another suitor named George, and pleads desperately for more time to win «RECIPIENT:her» affection.",
       "details": [
         { "detail": "Has a daughter named Barbara", "category": "family" },
         { "detail": "Has another suitor named George", "category": "life_event" },
         { "detail": "Lives in England (sender offers to 'fly over')", "category": "location" }
       ],
-      "emotional_significance": "The sender's great love whom he is desperately trying not to lose to another man",
+      "emotional_significance": "«SENDER:The sender»'s great love whom «SENDER:he» is desperately trying not to lose to another man",
       "quotes": [
-        { "text": "I am terribly disappointed but I still love you as much as ever.", "context": "Reveals depth of sender's love despite setback" },
-        { "text": "Please, please give me one more month.", "context": "Desperate plea directed at Molly" },
-        { "text": "George doesn't know you like I do.", "context": "Comparing his knowledge of Molly to rival" }
+        { "text": "I am terribly disappointed but I still love you as much as ever.", "context": "Reveals depth of «SENDER:sender»'s love despite setback" },
+        { "text": "Please, please give me one more month.", "context": "Desperate plea directed at «RECIPIENT:Molly»" },
+        { "text": "George doesn't know you like I do.", "context": "Comparing «SENDER:his» knowledge of «RECIPIENT:Molly» to rival" }
       ],
       "confidence": 0.95,
       "source": "letter"
@@ -197,13 +220,13 @@ Given a letter where the sender writes to "Dearest Molly" about visiting, mentio
       "aliases": [],
       "role": "mentioned",
       "relationship_to_sender": null,
-      "narrative": "George is a rival suitor for Molly's affection whom the sender dismisses as not truly knowing her.",
+      "narrative": "George is a rival suitor for «RECIPIENT:Molly»'s affection whom «SENDER:the sender» dismisses as not truly knowing «RECIPIENT:her».",
       "details": [
         { "detail": "Another suitor competing for Molly's affection", "category": "life_event" }
       ],
-      "emotional_significance": "A rival whom the sender views as inferior in his understanding of Molly",
+      "emotional_significance": "A rival whom «SENDER:the sender» views as inferior in «SENDER:his» understanding of «RECIPIENT:Molly»",
       "quotes": [
-        { "text": "George doesn't know you like I do.", "context": "Sender dismissing George as a lesser suitor" }
+        { "text": "George doesn't know you like I do.", "context": "«SENDER:Sender» dismissing George as a lesser suitor" }
       ],
       "confidence": 0.9,
       "source": "letter"
@@ -213,14 +236,14 @@ Given a letter where the sender writes to "Dearest Molly" about visiting, mentio
       "aliases": [],
       "role": "mentioned",
       "relationship_to_sender": null,
-      "narrative": "Barbara is Molly's daughter, currently attending school. The sender's warm greetings to her suggest he has a caring relationship with the family.",
+      "narrative": "Barbara is «RECIPIENT:Molly»'s daughter, currently attending school. «SENDER:The sender»'s warm greetings to her suggest «SENDER:he» has a caring relationship with the family.",
       "details": [
         { "detail": "Currently attending school", "category": "education" },
         { "detail": "Molly's daughter", "category": "family" }
       ],
-      "emotional_significance": "Someone the sender cares about enough to send greetings, suggesting a warm relationship",
+      "emotional_significance": "Someone «SENDER:the sender» cares about enough to send greetings, suggesting a warm relationship",
       "quotes": [
-        { "text": "Tell Barbara I said hello. I hope she is doing well in school.", "context": "Shows sender's interest in Barbara's wellbeing" }
+        { "text": "Tell Barbara I said hello. I hope she is doing well in school.", "context": "Shows «SENDER:sender»'s interest in Barbara's wellbeing" }
       ],
       "confidence": 0.85,
       "source": "letter"
@@ -231,8 +254,8 @@ Given a letter where the sender writes to "Dearest Molly" about visiting, mentio
       "name": "Stockport Road",
       "type": "street",
       "role": "mentioned",
-      "narrative": "Stockport Road is a street in Manchester where the sender and Molly once walked together, representing a cherished shared memory he invokes to persuade her.",
-      "why_mentioned": "Location of a meaningful shared memory between sender and Molly",
+      "narrative": "Stockport Road is a street in Manchester where «SENDER:the sender» and «RECIPIENT:Molly» once walked together, representing a cherished shared memory «SENDER:he» invokes to persuade «RECIPIENT:her».",
+      "why_mentioned": "Location of a meaningful shared memory between «SENDER:the sender» and «RECIPIENT:Molly»",
       "descriptive_details": null,
       "associated_people": ["Molly"],
       "confidence": 0.95,
@@ -244,7 +267,7 @@ Given a letter where the sender writes to "Dearest Molly" about visiting, mentio
       "person_a": "Molly",
       "person_b": "Barbara",
       "relationship_type": "parent-child",
-      "evidence": "Sender asks Molly to 'Tell Barbara I said hello' and hopes 'she is doing well in school', implying Barbara is Molly's daughter living with her",
+      "evidence": "«SENDER:Sender» asks «RECIPIENT:Molly» to 'Tell Barbara I said hello' and hopes 'she is doing well in school', implying Barbara is «RECIPIENT:Molly»'s daughter living with «RECIPIENT:her»",
       "confidence": 0.85
     }
   ],

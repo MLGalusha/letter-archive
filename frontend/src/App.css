@@ -5,6 +5,13 @@
 .main-page-layout,
 .public-letter-shell {
   position: relative;
+}
+
+/* overflow-x: clip on body-layout (not main-page-layout) to avoid breaking
+   position: sticky on the header — iOS Safari treats overflow-clip ancestors
+   as scroll containers, which disables sticky positioning. */
+.main-page-layout .body-layout,
+.public-letter-shell {
   overflow-x: clip;
 }
 

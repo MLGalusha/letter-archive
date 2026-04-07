@@ -156,7 +156,6 @@ export default function CollectionDetailPage() {
         ),
         active: true,
         visible: true,
-        showTitle: true,
         collectionsLink: collectionsLinkOverride,
       });
     } else if (collectionScrubberProps) {

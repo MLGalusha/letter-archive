@@ -359,7 +359,6 @@ export default function HomePage() {
       ),
       active: true,
       visible: true,
-      showTitle: true,
     });
   }, [
     archive.archiveLoading,

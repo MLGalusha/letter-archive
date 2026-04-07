@@ -55,6 +55,9 @@ function loadImage(
     });
     onLoad(img);
   };
+  img.onerror = () => {
+    // Silently skip this resolution tier so the hook doesn't hang
+  };
   img.src = src;
   if (img.complete) {
     if (!cancelled.current) {
@@ -159,7 +162,7 @@ export function useProgressiveImage(
 
     return () => {
       cancelled.current = true;
-      for (const img of imgs) img.onload = null;
+      for (const img of imgs) { img.onload = null; img.onerror = null; }
       if (idleRef.current !== null) {
         cancelIdle(idleRef.current);
         idleRef.current = null;

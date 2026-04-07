@@ -154,12 +154,16 @@ async function performRequest<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   const startTime = Date.now();
+  const timeoutSignal = AbortSignal.timeout(20_000);
+  const combinedSignal = signal
+    ? AbortSignal.any([timeoutSignal, signal])
+    : timeoutSignal;
 
   try {
     const response = await fetch(input, {
       ...mergeHeaders(init),
       credentials: 'include',
-      signal,
+      signal: combinedSignal,
     });
 
     // Handle 401 by clearing token and redirecting to login

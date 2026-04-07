@@ -73,19 +73,21 @@ function App() {
               <main className="main-page-layout public-site-shell">
                 <HeaderDockProvider>
                   <Header />
-                  <Routes>
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/about" element={<AboutPage />} />
-                    <Route path="/support" element={<SupportPage />} />
-                    <Route path="/collections" element={<CollectionsPage />} />
-                    <Route path="/collections/:collectionCode" element={<CollectionDetailPage />} />
-                    <Route path="/blog" element={<BlogPage />} />
-                    <Route path="/blog/:slug" element={<BlogDetailPage />} />
-                    <Route path="/people/:personId" element={<PersonPage />} />
-                    <Route path="/places/:placeId" element={<PlacePage />} />
-                    <Route path="/letter/:letterId" element={<LetterDetailPage />} />
-                    <Route path="*" element={<NotFoundPage />} />
-                  </Routes>
+                  <ErrorBoundary>
+                    <Routes>
+                      <Route path="/" element={<HomePage />} />
+                      <Route path="/about" element={<AboutPage />} />
+                      <Route path="/support" element={<SupportPage />} />
+                      <Route path="/collections" element={<CollectionsPage />} />
+                      <Route path="/collections/:collectionCode" element={<CollectionDetailPage />} />
+                      <Route path="/blog" element={<BlogPage />} />
+                      <Route path="/blog/:slug" element={<BlogDetailPage />} />
+                      <Route path="/people/:personId" element={<PersonPage />} />
+                      <Route path="/places/:placeId" element={<PlacePage />} />
+                      <Route path="/letter/:letterId" element={<LetterDetailPage />} />
+                      <Route path="*" element={<NotFoundPage />} />
+                    </Routes>
+                  </ErrorBoundary>
                 </HeaderDockProvider>
               </main>
             }

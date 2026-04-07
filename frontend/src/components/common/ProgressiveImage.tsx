@@ -1,4 +1,4 @@
-import { forwardRef, type CSSProperties } from 'react';
+import { forwardRef, useState, useEffect, type CSSProperties } from 'react';
 import { useProgressiveImage } from '../../hooks/useProgressiveImage';
 import './ProgressiveImage.css';
 
@@ -58,6 +58,12 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       fullDelay,
     });
 
+    const [imgError, setImgError] = useState(false);
+
+    useEffect(() => {
+      setImgError(false);
+    }, [src]);
+
     // Best non-full source for the placeholder layer
     const showPlaceholder = !fullLoaded;
     const placeholderSrc = midLoaded && midSrc ? midSrc : thumbLoaded ? thumbSrc : '';
@@ -97,12 +103,23 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
           src={currentSrc || src}
           alt={alt}
           className={`progressive-image__full ${imgClassName ?? ''} ${fullLoaded ? '' : 'progressive-image__full--loading'}`}
-          style={{ ...imgStyle, objectFit }}
+          style={{ ...imgStyle, objectFit, ...(imgError ? { visibility: 'hidden' as const } : {}) }}
           loading={loading}
           decoding={decoding}
           draggable={draggable}
           fetchPriority={fetchPriority}
+          onError={() => setImgError(true)}
         />
+        {imgError && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(160deg, rgba(250,245,237,0.98), rgba(227,216,201,0.88))',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'rgba(109,95,81,0.6)', fontSize: '0.8rem',
+          }}>
+            Image unavailable
+          </div>
+        )}
       </div>
     );
   },

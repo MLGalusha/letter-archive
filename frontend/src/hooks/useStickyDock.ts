@@ -70,6 +70,29 @@ export default function useStickyDock(config: UseStickyDockConfig): UseStickyDoc
     return () => observer.disconnect();
   }, [enabled, triggerRef, sectionRef]);
 
+  // ── Scroll listener: deactivate dock when trigger scrolls back below header ──
+  // The IntersectionObserver only fires on boundary crossings. When it fires
+  // isIntersecting=true the clearance is ~0, which the hysteresis rejects.
+  // This scroll listener supplements the observer to handle the scroll-up case.
+  useEffect(() => {
+    if (!stickyDockActive || !enabled) return;
+
+    const onScroll = () => {
+      if (headerDropdownOpenRef.current) return;
+      const trigger = triggerRef.current || sectionRef.current;
+      if (!trigger) return;
+      const header = document.querySelector('.header') as HTMLElement | null;
+      const headerHeight = header?.offsetHeight || 80;
+      const triggerBottom = trigger.getBoundingClientRect().bottom;
+      if (triggerBottom > headerHeight + HYSTERESIS_PX) {
+        setStickyDockActive(false);
+      }
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [stickyDockActive, enabled, triggerRef, sectionRef]);
+
   // ── Re-evaluate dock when dropdown closes ──
   useEffect(() => {
     const isHeaderDropdown = compactRefineOpen || compactSortOpen === true;

@@ -42,7 +42,7 @@ describe("SearchBar", () => {
       />,
     );
 
-    expect(screen.getByText("95 published archive items")).toBeInTheDocument();
+    expect(screen.getByText("95 archive items")).toBeInTheDocument();
 
     // Format chips are inside the flyout — open it first
     await user.click(screen.getByRole("button", { name: /Open archive refine controls/i }));

@@ -253,6 +253,18 @@ export default function HeaderScrubber({
     [posFromClientX, windowStart, navigateToPos],
   );
 
+  // Native touchstart with { passive: false } — iOS Safari ignores
+  // preventDefault() from React synthetic pointer events, so the browser
+  // still initiates its own scroll gesture. This native listener is the
+  // only reliable way to block that on real iOS devices.
+  useEffect(() => {
+    const el = trackElRef.current;
+    if (!el) return;
+    const onTouchStart = (e: TouchEvent) => { e.preventDefault(); };
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
+    return () => el.removeEventListener('touchstart', onTouchStart);
+  }, []);
+
   useEffect(() => () => {
     if (drag.current.edgeRafId) cancelAnimationFrame(drag.current.edgeRafId);
   }, []);

@@ -484,12 +484,14 @@
 
   .blk-hero-heading {
     max-width: none;
-    font-size: clamp(2.2rem, 13vw, 3.2rem);
+    font-size: clamp(1.65rem, 7.5vw, 2.2rem);
+    line-height: 1.15;
   }
 
   .support-page .blk-hero-heading {
     max-width: none;
-    font-size: clamp(2.2rem, 13vw, 3.2rem);
+    font-size: clamp(1.65rem, 7.5vw, 2.2rem);
+    line-height: 1.15;
   }
 
   .blk-hero-subtitle,
@@ -500,8 +502,8 @@
   .blk-contact-main p,
   .blk-channel-card p,
   .blk-cta-text {
-    font-size: 0.95rem;
-    line-height: 1.68;
+    font-size: 0.85rem;
+    line-height: 1.5;
   }
 
   .blk-contact-primary {

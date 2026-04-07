@@ -442,12 +442,13 @@
 
   .collections-hero h1 {
     max-width: none;
-    font-size: clamp(2.2rem, 14vw, 3.1rem);
+    font-size: clamp(1.65rem, 7.5vw, 2.2rem);
+    line-height: 1.15;
   }
 
   .collections-hero-sub {
-    font-size: 0.95rem;
-    line-height: 1.65;
+    font-size: 0.85rem;
+    line-height: 1.5;
   }
 
   .public-collections-grid {
@@ -467,35 +468,45 @@
   }
 
   .collection-card-top {
-    gap: 0.3rem;
-    margin-bottom: 0.2rem;
+    gap: 0.25rem;
+    margin-bottom: 0.15rem;
+    align-items: baseline;
   }
 
   .collection-card-top h3 {
-    font-size: 0.95rem;
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1.1;
   }
 
   .collection-card-count {
-    font-size: 0.62rem;
-    letter-spacing: 0.1em;
-    padding-top: 0.15rem;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    padding: 0.15rem 0.4rem;
+    background: rgba(31, 109, 122, 0.08);
+    border-radius: 8px;
+    color: var(--accent-strong);
   }
 
   .collection-card-people {
-    font-size: 0.8rem;
-    margin-bottom: 0.2rem;
+    font-size: 0.75rem;
+    margin-bottom: 0.15rem;
   }
 
   .collection-card-teaser {
-    font-size: 0.78rem;
-    line-height: 1.45;
-    margin-bottom: 0.4rem;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    margin-bottom: 0.3rem;
+    -webkit-line-clamp: 2;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .collection-card-meta {
-    font-size: 0.68rem;
-    gap: 0.25rem;
-    margin-bottom: 0.3rem;
+    font-size: 0.65rem;
+    gap: 0.2rem;
+    margin-bottom: 0.2rem;
   }
 
   .collection-card-cta {

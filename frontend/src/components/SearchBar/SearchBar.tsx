@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type Ref } from "react";
 import type { ArchiveSearchFacets, LetterImageType } from "../../types/Letter";
+import useIsMobile from "../../hooks/useIsMobile";
 import "./SearchBar.css";
 import {
   ARCHIVE_FORMAT_LABELS,
@@ -74,6 +75,7 @@ export default function SearchBar({
   onQueryChange,
   onFiltersChange,
 }: SearchBarProps) {
+  const isMobile = useIsMobile(700);
   const isCompact = variant === "compact";
   const hasQuery = Boolean(query.trim());
   const selectedFormats = filters.format || null;
@@ -152,6 +154,10 @@ export default function SearchBar({
   );
 
   const searchStatus = useMemo(() => {
+    if (isMobile) {
+      if (loading) return "Updating...";
+      return `${total} archive item${total === 1 ? "" : "s"}`;
+    }
     if (loading && hasQuery) return `Searching for "${query.trim()}"...`;
     if (loading && hasActiveFilters) return "Refreshing refined archive...";
     if (loading) return "Refreshing archive browse...";
@@ -162,7 +168,7 @@ export default function SearchBar({
       return `${total} matching archive item${total === 1 ? "" : "s"}`;
     }
     return `${total} archive item${total === 1 ? "" : "s"}`;
-  }, [hasActiveFilters, hasQuery, loading, query, total]);
+  }, [hasActiveFilters, hasQuery, isMobile, loading, query, total]);
 
   const updateFilter = useCallback((partial: Partial<SearchFilters>) => {
     onFiltersChange({

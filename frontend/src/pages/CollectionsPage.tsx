@@ -5,6 +5,7 @@ import { getCachedCollections, listCollections, type CollectionInfo } from '../a
 import Footer from '../components/Footer/Footer';
 import BackToTop from '../components/BackToTop';
 import { saveCollectionsSort, loadCollectionsSort } from '../utils/searchPersistence';
+import useIsMobile from '../hooks/useIsMobile';
 import './CollectionsPage.css';
 
 function formatDateRange(range: { min: string; max: string } | null | undefined): string | null {
@@ -46,6 +47,7 @@ function hasPublishedLetters(collection: CollectionInfo): boolean {
 const COLLECTION_SKELETON_COUNT = 6;
 
 export default function CollectionsPage() {
+  const isMobile = useIsMobile();
   const savedSort = loadCollectionsSort();
   const [sortField, setSortField] = useState<SortField>(
     (savedSort?.field as SortField) || 'letters',
@@ -228,9 +230,11 @@ export default function CollectionsPage() {
                       className="public-collection-card"
                     >
                       <div className="collection-card-top">
-                        <h3>{collection.title || `Collection ${collection.collectionCode}`}</h3>
+                        <h3>{collection.title || (isMobile ? collection.collectionCode : `Collection ${collection.collectionCode}`)}</h3>
                         <span className="collection-card-count">
-                          {collection.letterCount} letter{collection.letterCount !== 1 ? 's' : ''}
+                          {isMobile
+                            ? collection.letterCount
+                            : `${collection.letterCount} letter${collection.letterCount !== 1 ? 's' : ''}`}
                         </span>
                       </div>
 

@@ -990,11 +990,51 @@
   }
 
   .adjacent-teasers {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
   }
 
-  .teaser-next {
-    text-align: left;
+  .letter-nav-section {
+    margin-top: 1.8rem;
+    padding-top: 1.2rem;
+  }
+
+  .nav-position-label {
+    font-size: 0.62rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .teaser-card {
+    padding: 0.65rem 0.75rem;
+    border-radius: 14px;
+    gap: 0.1rem;
+  }
+
+  .teaser-direction {
+    font-size: 0.58rem;
+    letter-spacing: 0.1em;
+  }
+
+  .teaser-body {
+    margin-top: 0.1rem;
+  }
+
+  .teaser-date {
+    font-size: 0.78rem;
+  }
+
+  .teaser-people {
+    font-size: 0.72rem;
+  }
+
+  .teaser-hook {
+    font-size: 0.72rem;
+    line-height: 1.4;
+    -webkit-line-clamp: 2;
+  }
+
+  .teaser-content-labels {
+    font-size: 0.68rem;
   }
 }
 

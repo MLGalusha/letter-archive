@@ -531,17 +531,24 @@
 
   .home-hero-feature-card,
   .home-hero-feature-card--placeholder {
-    min-height: 21rem;
+    min-height: min(21rem, 58svh);
     border-radius: 24px;
   }
 
+  .home-kicker {
+    margin-bottom: 0.4rem;
+    font-size: 0.65rem;
+  }
+
   .home-headline {
-    font-size: clamp(2.2rem, 13vw, 3.15rem);
+    font-size: clamp(1.65rem, 7.5vw, 2.2rem);
+    line-height: 1.15;
   }
 
   .home-subtitle {
-    font-size: 0.95rem;
-    line-height: 1.58;
+    margin-top: 0.6rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
   }
 
   .home-hero-feature-card .letter-card-content {
@@ -575,5 +582,29 @@
   .home-text-link {
     flex-basis: 100%;
     font-size: 0.88rem;
+  }
+
+  .section-eyebrow {
+    font-size: 0.6rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .latest-update-title {
+    font-size: 1.15rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .latest-update-excerpt {
+    font-size: 0.82rem;
+    line-height: 1.55;
+  }
+
+  .latest-update-date,
+  .latest-update-cta {
+    font-size: 0.65rem;
+  }
+
+  .latest-update-footer {
+    margin-top: 0.6rem;
   }
 }

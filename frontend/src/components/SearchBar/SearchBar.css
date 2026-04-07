@@ -928,6 +928,35 @@
     border-radius: 0;
   }
 
+  .search-heading {
+    gap: 0.5rem;
+  }
+
+  .search-heading-copy {
+    gap: 0.2rem;
+  }
+
+  .search-kicker,
+  .search-status-label,
+  .search-facet-label,
+  .filter-label {
+    font-size: 0.6rem;
+  }
+
+  .search-title {
+    font-size: clamp(1.25rem, 5vw, 1.6rem);
+    line-height: 1.1;
+  }
+
+  .search-description {
+    font-size: 0.8rem;
+    line-height: 1.45;
+  }
+
+  .search-status {
+    font-size: 0.78rem;
+  }
+
   .search-input-wrapper {
     grid-template-columns: 1fr;
   }

@@ -298,12 +298,13 @@
 
   .updates-headline {
     max-width: none;
-    font-size: clamp(2.2rem, 14vw, 3.2rem);
+    font-size: clamp(1.65rem, 7.5vw, 2.2rem);
+    line-height: 1.15;
   }
 
   .updates-subtitle {
-    font-size: 0.95rem;
-    line-height: 1.65;
+    font-size: 0.85rem;
+    line-height: 1.5;
   }
 
   .update-card {

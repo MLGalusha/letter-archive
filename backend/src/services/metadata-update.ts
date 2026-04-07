@@ -19,9 +19,11 @@ import { METADATA_V2_JSON_SCHEMA } from '../ai/schemas/metadataV2.js';
 import { createLogger } from '../utils/logger.js';
 import { logApiUsage } from './usage-tracking.js';
 import {
+  deepApplyVariants,
   generateNameVariants,
   getOtherPeopleFirstNames,
   parseNameComponents,
+  propagateInEntityExtraction,
   propagateInMetadataV2,
 } from './name-propagation.js';
 
@@ -246,6 +248,36 @@ export async function executeRetagForLetter(
     // Preserve the current sender/recipient names (don't let AI override them)
     dbUpdates.sender = latestLetter.sender;
     dbUpdates.recipient = latestLetter.recipient;
+
+    // Propagate name changes to entity extraction JSON and AI notes
+    const propagateForRole = (
+      field: 'sender' | 'recipient',
+      oldName: string | null | undefined,
+      newName: string | null | undefined,
+    ) => {
+      if (!newName || !oldName) return;
+      const variants = generateNameVariants(parseNameComponents(oldName), oldName);
+      const entityJson = (dbUpdates.entityExtractionJson ?? latestLetter.entityExtractionJson) as Record<string, unknown> | null;
+      const collisionNames = getOtherPeopleFirstNames(entityJson, oldName, field);
+
+      if (entityJson && typeof entityJson === 'object') {
+        dbUpdates.entityExtractionJson = propagateInEntityExtraction(
+          entityJson, oldName, newName, field, variants, collisionNames,
+        );
+      }
+
+      const currentNotes = (dbUpdates.aiNotes ?? latestLetter.aiNotes) as unknown;
+      if (currentNotes && Array.isArray(currentNotes)) {
+        dbUpdates.aiNotes = deepApplyVariants(currentNotes, variants, newName, collisionNames);
+      }
+    };
+
+    if (change.field === 'sender' || change.field === 'both') {
+      propagateForRole('sender', change.oldSender, latestLetter.sender);
+    }
+    if (change.field === 'recipient' || change.field === 'both') {
+      propagateForRole('recipient', change.oldRecipient, latestLetter.recipient);
+    }
 
     await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
 

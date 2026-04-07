@@ -120,20 +120,39 @@ router.post('/:letterId/confirm-transcript', async (req, res, next) => {
       throw new BadRequestError('Letter must be in TRANSCRIBED state', { currentState: letter.workflow });
     }
 
-    await db.update(letters).set({
-      transcriptConfirmedAt: new Date(),
-      transcriptConfirmedBy: getUserId(req),
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
-
-    // Only trigger metadata extraction if status is PENDING (first-time flow).
-    // Skip if metadata was previously cleared/failed/succeeded to avoid re-queuing.
+    // Atomically confirm transcript AND claim the metadata job in one update
+    // to prevent the background worker from racing to claim it between the
+    // confirm and the extraction call.
     if (letter.metadataStatus === 'PENDING') {
-      const extractionOptions: ExtractionOptions = {};
-      if (confirmedSender) extractionOptions.confirmedSender = confirmedSender;
-      if (confirmedRecipient) extractionOptions.confirmedRecipient = confirmedRecipient;
-      await runMetadataExtractionV2(letterId, Object.keys(extractionOptions).length > 0 ? extractionOptions : undefined);
+      const claimResult = await db.update(letters).set({
+        transcriptConfirmedAt: new Date(),
+        transcriptConfirmedBy: getUserId(req),
+        metadataStatus: 'RUNNING',
+        updatedAt: new Date(),
+      }).where(and(eq(letters.id, letterId), eq(letters.metadataStatus, 'PENDING')))
+        .returning({ id: letters.id });
+
+      if (claimResult.length > 0) {
+        // We claimed the job — run extraction (skipping the internal claimJob since we already claimed)
+        const extractionOptions: ExtractionOptions = {};
+        if (confirmedSender) extractionOptions.confirmedSender = confirmedSender;
+        if (confirmedRecipient) extractionOptions.confirmedRecipient = confirmedRecipient;
+        await runMetadataExtractionV2(letterId, Object.keys(extractionOptions).length > 0 ? extractionOptions : undefined, true);
+      } else {
+        // Worker already claimed it — just confirm the transcript
+        await db.update(letters).set({
+          transcriptConfirmedAt: new Date(),
+          transcriptConfirmedBy: getUserId(req),
+          updatedAt: new Date(),
+        }).where(eq(letters.id, letterId));
+        req.log.info({ letterId }, 'Metadata job already claimed by worker — skipping extraction');
+      }
     } else {
+      await db.update(letters).set({
+        transcriptConfirmedAt: new Date(),
+        transcriptConfirmedBy: getUserId(req),
+        updatedAt: new Date(),
+      }).where(eq(letters.id, letterId));
       req.log.info(
         { letterId, metadataStatus: letter.metadataStatus },
         'Skipping metadata extraction — status is not PENDING',
@@ -157,9 +176,10 @@ router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
       throw new BadRequestError('Metadata extraction is already in progress');
     }
 
-    // Reset status to PENDING so the atomic claim in runMetadataExtractionV2 succeeds
+    // Set metadataStatus directly to RUNNING to claim the job and prevent the
+    // background worker from racing to pick it up between reset and extraction.
     await db.update(letters).set({
-      metadataStatus: 'PENDING',
+      metadataStatus: 'RUNNING',
       metadataAttemptCount: 0,
       metadataError: null,
       entityExtractionStatus: 'PENDING',
@@ -173,7 +193,7 @@ router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
     };
     if (confirmedSender) extractionOptions.confirmedSender = confirmedSender;
     if (confirmedRecipient) extractionOptions.confirmedRecipient = confirmedRecipient;
-    await runMetadataExtractionV2(letterId, extractionOptions);
+    await runMetadataExtractionV2(letterId, extractionOptions, true);
     res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
   } catch (error) {
     next(error);
@@ -232,9 +252,9 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
     );
 
     if (mode === 'full' || mode === 'metadata_only') {
-      // Reset to PENDING so the atomic claim succeeds
+      // Set directly to RUNNING to claim the job atomically (prevents worker race)
       await db.update(letters).set({
-        metadataStatus: 'PENDING',
+        metadataStatus: 'RUNNING',
         metadataAttemptCount: 0,
         metadataError: null,
         entityExtractionStatus: 'PENDING',
@@ -242,7 +262,7 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
         updatedAt: new Date(),
       }).where(eq(letters.id, letterId));
 
-      await runMetadataExtractionV2(letterId, extractionOptions);
+      await runMetadataExtractionV2(letterId, extractionOptions, true);
     } else if (mode === 'entities_only') {
       await db.update(letters).set({
         entityExtractionStatus: 'PENDING',

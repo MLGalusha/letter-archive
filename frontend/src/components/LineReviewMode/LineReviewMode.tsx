@@ -384,6 +384,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const imageRef = useRef<HTMLImageElement>(null);
   const inputRef = useRef<HTMLDivElement>(null);
   const lastGlobalLineIndexRef = useRef<number | null>(null);
+  // Live font size override: tracks font size as user edits text (null = use render-time value)
+  const [liveFontSize, setLiveFontSize] = useState<number | null>(null);
 
   const currentPage = allPages[currentPageIndex];
 
@@ -825,12 +827,64 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       lineFontMax,
     );
 
+    setLiveFontSize(null); // Reset live override — buildWordPositionedContent set correct styles
     inputRef.current.focus();
     const sel = window.getSelection();
     if (sel && inputRef.current.firstChild) {
       sel.collapse(inputRef.current.firstChild, 0);
     }
   }, [currentLineIndex, currentPageIndex, alignedLines, scaleFactor, imageNaturalSize.width, imageDisplaySize.height, imageNaturalSize.height]);
+
+  // Recalculate font-size and word-spacing as the user edits text (without replacing innerHTML)
+  const handleInputChange = useCallback(() => {
+    const div = inputRef.current;
+    const line = alignedLines[currentLineIndex];
+    if (!div || !line) return;
+
+    const editedText = div.textContent || '';
+    const words = editedText.split(/\s+/).filter(w => w.length > 0);
+    if (words.length === 0) return;
+    const joined = words.join(' ');
+
+    // Determine OCR line extent
+    let lineLeftX: number;
+    let lineRightX: number;
+    if (line.words && line.words.length > 0) {
+      lineLeftX = Math.min(...line.words.map(w => w.bbox[0]));
+      lineRightX = Math.max(...line.words.map(w => w.bbox[2]));
+    } else if (line.bbox) {
+      lineLeftX = line.bbox[0];
+      lineRightX = line.bbox[2];
+    } else {
+      return;
+    }
+
+    const targetWidth = (lineRightX - lineLeftX) * scaleFactor;
+    if (targetWidth <= 0) return;
+
+    const displayedImgH = imageDisplaySize.height || (imageNaturalSize.height * scaleFactor);
+    const lineBottom = line.bbox[3] * scaleFactor + 4;
+    const maxH = Math.min(displayedImgH - lineBottom, 150);
+    const maxFontFromHeight = maxH - CSS_BORDER_PADDING * 2;
+
+    const REF_SIZE = 16;
+    const refWidth = measureRenderedTextWidth(joined, REF_SIZE);
+    if (refWidth <= 0) return;
+
+    const newFontSize = Math.max(8, Math.min(REF_SIZE * targetWidth / refWidth, maxFontFromHeight, 72));
+
+    // Recalculate word-spacing
+    let wordSpacing = 0;
+    if (words.length > 1) {
+      const actualWidth = measureRenderedTextWidth(joined, newFontSize);
+      wordSpacing = (targetWidth - actualWidth) / (words.length - 1);
+    }
+
+    div.style.fontSize = `${newFontSize}px`;
+    div.style.wordSpacing = Math.abs(wordSpacing) > 0.1 ? `${wordSpacing}px` : '';
+
+    setLiveFontSize(newFontSize);
+  }, [alignedLines, currentLineIndex, scaleFactor, imageDisplaySize.height, imageNaturalSize.height]);
 
   // Re-fetch line segments from the database for the current page
   const reloadSegments = useCallback(() => {
@@ -975,9 +1029,11 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   // Per-line font size: scales up for short text, bounded by available height below line
   const maxInputHeight = Math.min(displayedImageHeight - inputTop, 150);
-  const fontSize = currentLine
+  const baseFontSize = currentLine
     ? computeLineFontSize(currentLine.transcriptText, currentLine.words, currentLine.bbox, scaleFactor, maxInputHeight)
     : pageFontSize;
+  // Use live font size (updated on each keystroke) if available, otherwise use base
+  const fontSize = liveFontSize ?? baseFontSize;
   const INPUT_DISPLAY_HEIGHT = fontSize + CSS_BORDER_PADDING * 2;
 
   // Build highlight polygon points from Kraken boundary (or bbox fallback).
@@ -1106,6 +1162,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
               suppressContentEditableWarning
               className="line-review-editable"
               style={{ fontSize }}
+              onInput={handleInputChange}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') e.preventDefault();
               }}

@@ -1,5 +1,6 @@
 import { memo, useState, useMemo } from 'react';
 import Icon from '../../../components/common/Icon';
+import TaggedText from '../../../components/admin/TaggedText';
 import './NotesSection.css';
 
 export interface StructuredNote {
@@ -253,7 +254,7 @@ function NoteCard({
       </div>
 
       <div className="note-card-body">
-        <p className="note-card-content">{note.content}</p>
+        <p className="note-card-content"><TaggedText text={note.content} /></p>
 
         {note.status === 'open' && note.resolves_when && (
           <p className="note-card-meta">

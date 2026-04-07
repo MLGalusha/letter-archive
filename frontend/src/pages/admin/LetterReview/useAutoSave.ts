@@ -201,7 +201,11 @@ export function useAutoSave({
       const hasSenderChange = data.sender !== undefined;
       const hasRecipientChange = data.recipient !== undefined;
 
-      if (hasSenderChange || hasRecipientChange) {
+      // When metadata doesn't exist yet, save sender/recipient as a plain update
+      // without the identity countdown + retag flow (there's nothing to retag).
+      const hasMetadata = letter.metadataContentStatus !== 'EMPTY';
+
+      if ((hasSenderChange || hasRecipientChange) && hasMetadata) {
         const pendingIdentity = pendingIdentityUpdateRef.current
           ? {
               ...pendingIdentityUpdateRef.current,

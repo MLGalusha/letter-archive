@@ -32,7 +32,7 @@ export interface ExtractionOptions {
  * Phase 2 failure is non-fatal — metadata from Phase 1 is always preserved.
  * Only processes type='L' letters that have been transcribed.
  */
-export async function runMetadataExtractionV2(letterId: string, options?: ExtractionOptions): Promise<void> {
+export async function runMetadataExtractionV2(letterId: string, options?: ExtractionOptions, preClaimed = false): Promise<void> {
   const start = Date.now();
   const letterLog = log.child({ letterId });
 
@@ -70,10 +70,12 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
   );
 
   // Atomically claim the job — prevents worker and on-demand processing from double-running
-  const claimed = await claimJob(letterId, 'metadataStatus', 'PENDING');
-  if (!claimed) {
-    letterLog.info('Metadata job already claimed by another process — skipping');
-    return;
+  if (!preClaimed) {
+    const claimed = await claimJob(letterId, 'metadataStatus', 'PENDING');
+    if (!claimed) {
+      letterLog.info('Metadata job already claimed by another process — skipping');
+      return;
+    }
   }
   await updateLetterWorkflow(letterId, 'METADATA_EXTRACTING');
 

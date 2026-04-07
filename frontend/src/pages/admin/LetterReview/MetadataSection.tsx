@@ -1,6 +1,7 @@
 import { memo, type RefObject } from "react";
 import { Icon, Dropdown, DropdownItem } from "../../../components/common";
 import TagEditor from "../../../components/admin/TagEditor";
+import TaggedText from "../../../components/admin/TaggedText";
 import type { Letter, EmotionalTone, RelationshipType } from "../../../types/Letter";
 import {
   EMOTIONAL_TONE_OPTIONS,
@@ -459,7 +460,7 @@ const MetadataSection = memo(function MetadataSection({
                         >
                           <p>"{quote.text}"</p>
                           {quote.context && (
-                            <cite>— {quote.context}</cite>
+                            <cite>— <TaggedText text={quote.context} /></cite>
                           )}
                         </blockquote>
                       ),

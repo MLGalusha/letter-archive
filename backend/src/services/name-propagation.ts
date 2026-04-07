@@ -374,7 +374,7 @@ function transformMetadataTextFields(
 /**
  * Deep-apply name variants throughout a JSON-like object.
  */
-function deepApplyVariants(
+export function deepApplyVariants(
   value: unknown,
   variants: NameVariant[],
   newName: string,
@@ -440,7 +440,7 @@ function isTargetPerson(
  *
  * Other entries: only apply multi-word variants; skip single-word to avoid false positives.
  */
-function propagateInEntityExtraction(
+export function propagateInEntityExtraction(
   entities: Record<string, unknown>,
   oldName: string,
   newName: string,

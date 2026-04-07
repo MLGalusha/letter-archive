@@ -269,7 +269,7 @@
 
 @media (max-width: 900px) {
   .header {
-    padding: 0.8rem 1rem 0;
+    padding: 0.8rem 0.65rem 0;
   }
 
   .header-inner {

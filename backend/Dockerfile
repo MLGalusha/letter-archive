@@ -22,9 +22,6 @@ FROM node:20.20.1-slim AS production
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    python3 \
-    python3-venv \
-    python3-pip \
     bash \
     && rm -rf /var/lib/apt/lists/*
 
@@ -36,17 +33,12 @@ COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev --ignore-scripts=false
 
 COPY --from=build /app/dist ./dist
-COPY python ./python
-
 # Drizzle migrations are compiled into dist/db/migrations by tsc,
 # but drizzle-kit at runtime needs the raw SQL files + meta journal.
 COPY src/db/migrations ./src/db/migrations
 
 # Drizzle config is needed if running migrations at startup
 COPY drizzle.config.ts ./
-
-# Install the optional Python OCR runtime used by line detection.
-RUN bash ./python/setup.sh
 
 # Create storage directory (can be overridden with a volume mount)
 RUN mkdir -p /app/storage

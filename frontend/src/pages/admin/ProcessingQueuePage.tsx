@@ -6,6 +6,7 @@ import {
   startTranscription,
   startMetadataExtraction,
   startEntityExtraction,
+  startLineDetection,
   pauseProcessing,
   resumeProcessing,
   abortProcessing,
@@ -24,7 +25,7 @@ import { useToast } from '../../contexts/ToastContext';
 import AdminLayout from '../../components/AdminLayout/AdminLayout';
 import './ProcessingQueuePage.css';
 
-type QueueTab = 'transcription' | 'metadata' | 'entity_extraction';
+type QueueTab = 'transcription' | 'metadata' | 'entity_extraction' | 'line_detection';
 
 function formatTimeAgo(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();
@@ -53,6 +54,7 @@ function jobTypeLabel(type: string): string {
     case 'metadata': return 'Metadata';
     case 'entity_extraction': return 'Entities';
     case 'entity_resolution': return 'Resolution';
+    case 'line_detection': return 'Lines';
     default: return type;
   }
 }
@@ -201,6 +203,16 @@ export default function ProcessingQueuePage() {
     }
   };
 
+  const handleStartLineDetection = async () => {
+    try {
+      const result = await startLineDetection();
+      showToast(`Started line detection for ${result.total} pages`, 'success');
+      fetchQueue();
+    } catch (err) {
+      showToast(getErrorMessage(err, 'Failed to start line detection'), 'error');
+    }
+  };
+
   const handlePause = async () => {
     try {
       await pauseProcessing();
@@ -271,19 +283,22 @@ export default function ProcessingQueuePage() {
     ? queue.queued.transcription
     : activeTab === 'metadata'
       ? queue.queued.metadata
-      : queue.queued.entityExtraction;
+      : activeTab === 'entity_extraction'
+        ? queue.queued.entityExtraction
+        : []; // line_detection has no individual items
 
   const queuedItems = collectionFilter === 'all'
     ? allQueuedItems
     : allQueuedItems.filter(i => i.collectionCode === collectionFilter);
 
-  const queueTabType: QueueJobType = activeTab;
+  const queueTabType: QueueJobType = activeTab === 'line_detection' ? 'transcription' : activeTab; // line_detection doesn't use queue management
 
   // Pipeline phase data
   const phases = [
     { key: 'transcription' as const, label: 'Transcription', count: counts.queuedTranscription, handler: handleStartTranscription },
     { key: 'metadata' as const, label: 'Metadata', count: counts.queuedMetadata, handler: handleStartMetadata },
     { key: 'entity_extraction' as const, label: 'Entities', count: counts.queuedEntityExtraction, handler: handleStartEntities },
+    { key: 'line_detection' as const, label: 'Line Detection', count: counts.queuedLineDetection, handler: handleStartLineDetection },
   ];
 
   // Determine which phase is currently running
@@ -453,25 +468,22 @@ export default function ProcessingQueuePage() {
         </div>
 
         <div className="pq-tabs">
-          {phases.map(phase => {
-            const tabCount = phase.key === 'transcription'
-              ? counts.queuedTranscription
-              : phase.key === 'metadata'
-                ? counts.queuedMetadata
-                : counts.queuedEntityExtraction;
-            return (
-              <button
-                key={phase.key}
-                className={`pq-tab ${activeTab === phase.key ? 'active' : ''}`}
-                onClick={() => setActiveTab(phase.key)}
-              >
-                {phase.label} ({tabCount})
-              </button>
-            );
-          })}
+          {phases.map(phase => (
+            <button
+              key={phase.key}
+              className={`pq-tab ${activeTab === phase.key ? 'active' : ''}`}
+              onClick={() => setActiveTab(phase.key)}
+            >
+              {phase.label} ({phase.count})
+            </button>
+          ))}
         </div>
 
-        {queuedItems.length > 0 ? (
+        {activeTab === 'line_detection' ? (
+          <div className="pq-empty-state">
+            <span>{counts.queuedLineDetection} page{counts.queuedLineDetection !== 1 ? 's' : ''} missing line segments</span>
+          </div>
+        ) : queuedItems.length > 0 ? (
           <>
             <table className="pq-table">
               <thead>

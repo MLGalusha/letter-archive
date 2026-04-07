@@ -13,6 +13,7 @@ import {
   retryJob,
   startEntityExtractionProcessing,
   startMetadataProcessing,
+  startLineDetectionProcessing,
   startTranscriptionProcessing,
 } from '../../../services/processing-queue.js';
 import { BadRequestError } from '../../../utils/response-helpers.js';
@@ -56,6 +57,15 @@ router.post('/start-entities', async (req, res, next) => {
   try {
     const options = processingFilterSchema.parse(req.body || {});
     const result = await startEntityExtractionProcessing(options);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/start-line-detection', async (_req, res, next) => {
+  try {
+    const result = await startLineDetectionProcessing();
     res.json(result);
   } catch (error) {
     next(error);

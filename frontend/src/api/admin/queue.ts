@@ -52,6 +52,7 @@ export interface QueueStatus {
     queuedTranscription: number;
     queuedMetadata: number;
     queuedEntityExtraction: number;
+    queuedLineDetection: number;
     recentSuccessCount: number;
     recentFailedCount: number;
     recentClearedCount: number;

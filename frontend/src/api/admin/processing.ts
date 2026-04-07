@@ -4,7 +4,7 @@ export interface ProcessingStatus {
   isRunning: boolean;
   isPaused: boolean;
   shouldAbort: boolean;
-  currentJob: { letterId: string; type: "transcription" | "metadata" | "entity_extraction" | "entity_resolution" } | null;
+  currentJob: { letterId: string; type: "transcription" | "metadata" | "entity_extraction" | "entity_resolution" | "line_detection" } | null;
   completed: number;
   failed: number;
   total: number;
@@ -54,6 +54,10 @@ export async function pauseProcessing(): Promise<{ message: string }> {
 
 export async function resumeProcessing(): Promise<{ message: string }> {
   return apiPost<{ message: string }>("/admin/processing/resume");
+}
+
+export async function startLineDetection(): Promise<{ message: string; total: number }> {
+  return apiPost<{ message: string; total: number }>("/admin/processing/start-line-detection");
 }
 
 export async function abortProcessing(): Promise<{ message: string }> {

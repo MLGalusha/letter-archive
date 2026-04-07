@@ -1,7 +1,6 @@
 import { transcribeImage, transcribeExtraContent } from '../ai/openai.js';
 import { getLetterWithPages, updateTranscriptionStatus, updateLetterWorkflow, incrementTranscriptionAttempts, claimJob } from '../services/letters.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
-import { detectAndStoreLinesForPages } from '../services/line-finder.js';
 import { createLogger } from '../utils/logger.js';
 import { updateJobProgress, clearJobProgress, shouldAbortProcessing } from '../services/processing-queue.js';
 import { isTranscribableType, getDocumentTypeFromCode } from '../services/letter/shared.js';
@@ -256,12 +255,6 @@ export async function runTranscription(letterId: string): Promise<void> {
       transcriptStatus: 'AI_DRAFT',
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
-
-    try {
-      await detectAndStoreLinesForPages(pages, getAbsoluteStoragePath);
-    } catch (lineError) {
-      letterLog.warn({ err: lineError }, 'Failed to store line detection results - continuing');
-    }
 
     // === Automatically transcribe extra content (T, C, E types) — only for type 'L' ===
     let extrasTranscribed = 0;

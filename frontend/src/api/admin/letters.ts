@@ -1,4 +1,4 @@
-import { apiPost, apiPut, apiPatch, ApiError, API_BASE_URL, getAuthHeaders } from "../client";
+import { apiGet, apiPost, apiPut, apiPatch } from "../client";
 import type { Letter, LineSegment } from "../../types/Letter";
 
 export interface UpdateLetterData {

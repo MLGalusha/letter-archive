@@ -112,7 +112,7 @@ describe('api client', () => {
     await expect(promise).rejects.toBeInstanceOf(ApiError);
     // DOMException may or may not be instanceof Error in jsdom,
     // so the message could be the DOMException message or the fallback.
-    const err: ApiError = await promise.catch((e: ApiError) => e);
+    const err = await promise.catch((e: unknown) => e) as ApiError;
     expect(err.status).toBe(0);
     expect(typeof err.message).toBe('string');
     expect(err.message.length).toBeGreaterThan(0);
@@ -132,7 +132,7 @@ describe('api client', () => {
     const promise = apiGet('/letters', undefined, controller.signal);
 
     await expect(promise).rejects.toBeInstanceOf(ApiError);
-    const err: ApiError = await promise.catch((e: ApiError) => e);
+    const err = await promise.catch((e: unknown) => e) as ApiError;
     expect(err.status).toBe(0);
   });
 });

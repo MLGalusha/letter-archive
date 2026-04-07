@@ -146,7 +146,7 @@ describe('AI prompt builders', () => {
   });
 
   it('exposes hard safety rules in system prompts', () => {
-    expect(TRANSCRIPTION_SYSTEM_PROMPT).toContain('DO NOT fabricate');
+    expect(TRANSCRIPTION_SYSTEM_PROMPT).toContain('must never influence the transcription');
     expect(PHOTO_DESCRIPTION_SYSTEM_PROMPT).toContain('Do NOT invent');
     expect(ENTITY_EXTRACTION_SYSTEM_PROMPT).toContain('NEVER fabricate information');
   });

@@ -36,8 +36,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 function parseArgs() {
   const args = process.argv.slice(2);
   const flags: Record<string, string> = {};
+  const boolFlags = new Set<string>();
   for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith('--') && i + 1 < args.length) {
+    if (args[i] === '--debug') {
+      boolFlags.add('debug');
+    } else if (args[i].startsWith('--') && i + 1 < args.length) {
       flags[args[i].slice(2)] = args[++i];
     }
   }
@@ -45,6 +48,7 @@ function parseArgs() {
     url: (flags.url || process.env.REMOTE_URL || '').replace(/\/$/, ''),
     email: flags.email || process.env.ADMIN_EMAIL || '',
     password: flags.password || process.env.ADMIN_PASSWORD || '',
+    debug: boolFlags.has('debug'),
   };
 }
 
@@ -70,6 +74,7 @@ if (!fs.existsSync(pythonBin)) {
 // History file
 const HISTORY_DIR = path.join(os.homedir(), '.letter-archive');
 const HISTORY_FILE = path.join(HISTORY_DIR, 'line-detection-history.json');
+const DEBUG_DIR = path.join(HISTORY_DIR, 'debug');
 
 // ---------------------------------------------------------------------------
 // Terminal helpers
@@ -289,6 +294,35 @@ async function uploadSegments(pageId: string, lineSegments: LineSegment[]): Prom
   await api('PATCH', `/admin/letters/pages/${pageId}/line-segments`, { lineSegments });
 }
 
+async function saveDebugImage(imagePath: string, segments: LineSegment[], label: string): Promise<string> {
+  const sharp = (await import('sharp')).default;
+  const img = sharp(imagePath);
+  const meta = await img.metadata();
+  const w = meta.width || 800;
+  const h = meta.height || 1200;
+
+  // Build SVG overlay with colored bounding boxes and line numbers
+  const colors = ['#ff3333', '#33cc33', '#3366ff', '#ff9900', '#cc33ff', '#00cccc', '#ff6699', '#99cc00'];
+  const rects = segments.map((seg, i) => {
+    const [x1, y1, x2, y2] = seg.bbox;
+    const color = colors[i % colors.length];
+    return `<rect x="${x1}" y="${y1}" width="${x2 - x1}" height="${y2 - y1}" fill="none" stroke="${color}" stroke-width="3" opacity="0.8"/>` +
+      `<text x="${x1 + 4}" y="${y1 + 16}" font-size="14" font-weight="bold" fill="${color}" font-family="sans-serif">${seg.line}</text>`;
+  }).join('\n');
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">${rects}</svg>`;
+
+  if (!fs.existsSync(DEBUG_DIR)) fs.mkdirSync(DEBUG_DIR, { recursive: true });
+  const outPath = path.join(DEBUG_DIR, `${label}.jpg`);
+
+  await img
+    .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
+    .jpeg({ quality: 85 })
+    .toFile(outPath);
+
+  return outPath;
+}
+
 // ---------------------------------------------------------------------------
 // Processing
 // ---------------------------------------------------------------------------
@@ -385,6 +419,14 @@ async function processPages() {
           await uploadSegments(page.pageId, segments);
           const uploadMs = Date.now() - uploadStart;
 
+          // Debug: save image with segment overlay
+          let debugPath: string | undefined;
+          if (config.debug && segments.length > 0) {
+            stopSpinner();
+            startSpinner(`${counter} ${label} — saving debug image`);
+            debugPath = await saveDebugImage(tmpFile, segments, `${page.dateRaw}-p${page.pageNumber}`);
+          }
+
           stopSpinner();
           const totalMs = Date.now() - pageStart;
           succeeded++;
@@ -392,7 +434,8 @@ async function processPages() {
           writeln(
             `  ${GREEN}\u2713${RESET} ${counter} ${BOLD}${label}${RESET}` +
             `  ${segments.length} lines` +
-            `  ${DIM}dl:${formatMs(dlMs)} det:${formatMs(detectMs)} up:${formatMs(uploadMs)} total:${formatMs(totalMs)}${RESET}`
+            `  ${DIM}dl:${formatMs(dlMs)} det:${formatMs(detectMs)} up:${formatMs(uploadMs)} total:${formatMs(totalMs)}${RESET}` +
+            (debugPath ? `\n    ${DIM}debug: ${debugPath}${RESET}` : '')
           );
 
           history.entries.push({
@@ -536,6 +579,7 @@ async function main() {
   writeln(`${BOLD}Kraken Line Detection${RESET}`);
   writeln(`${DIM}Target: ${config.url}${RESET}`);
   writeln(`${DIM}History: ${HISTORY_FILE}${RESET}`);
+  if (config.debug) writeln(`${YELLOW}Debug mode: saving overlay images to ${DEBUG_DIR}${RESET}`);
   writeln('');
 
   // Show previous history

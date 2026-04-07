@@ -729,6 +729,16 @@ export async function getLineDetectionQueue() {
   return { pages, total: pages.length };
 }
 
+export async function resetLineSegments() {
+  const result = await db.execute(sql`
+    UPDATE letter_pages SET line_segments = NULL
+    WHERE letter_id IN (SELECT id FROM letters WHERE workflow != 'UPLOADED')
+      AND line_segments IS NOT NULL
+  `);
+  const reset = Number(result.count ?? 0);
+  return { reset };
+}
+
 /**
  * Pause the current processing batch.
  */

@@ -15,6 +15,7 @@
 
 html {
   scrollbar-gutter: stable;
+  overscroll-behavior-x: none;
 }
 
 /* Admin pages handle their own scrolling — don't reserve gutter space */
@@ -26,6 +27,7 @@ body {
   background: var(--bg-dark);
   color: var(--text-muted);
   margin: 0;
+  overflow-x: hidden;
 }
 
 /* Button reset - no layout properties */

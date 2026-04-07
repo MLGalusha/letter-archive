@@ -154,7 +154,7 @@
   left: 0;
   right: auto;
   width: var(--refine-panel-width);
-  max-width: calc(100vw - 3rem);
+  max-width: calc(100dvw - 3rem);
 }
 
 .page-selector {

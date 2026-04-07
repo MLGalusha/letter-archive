@@ -257,7 +257,7 @@
 }
 
 .cd-popup {
-  width: min(28rem, calc(100vw - 3rem));
+  width: min(28rem, calc(100dvw - 3rem));
   max-height: calc(100vh - 4rem);
   overflow-y: auto;
   background: linear-gradient(180deg, rgba(255, 250, 242, 0.99), rgba(255, 255, 255, 0.97));

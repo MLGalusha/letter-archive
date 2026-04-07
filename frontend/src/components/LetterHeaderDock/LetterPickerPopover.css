@@ -2,7 +2,7 @@
   position: absolute;
   top: calc(100% + 0.6rem);
   right: 0;
-  width: min(22rem, calc(100vw - 2rem));
+  width: min(22rem, calc(100dvw - 2rem));
   max-height: min(26rem, 60vh);
   display: flex;
   flex-direction: column;

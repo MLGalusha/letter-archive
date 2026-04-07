@@ -1537,6 +1537,8 @@ export default function LetterReviewPage() {
             {showMetadataSections && letter.entityExtractionJson ? (
               <EntitySection
                 entityExtractionJson={letter.entityExtractionJson}
+                senderName={letter.metadata.sender}
+                recipientName={letter.metadata.recipient}
                 reExtractState={entityReExtractState}
                 onReExtractEntities={handleReExtractEntities}
               />

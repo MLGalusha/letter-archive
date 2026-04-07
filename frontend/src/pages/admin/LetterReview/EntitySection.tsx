@@ -1,5 +1,6 @@
 import { memo, useMemo, useState } from "react";
 import { Icon } from "../../../components/common";
+import TaggedText from "../../../components/admin/TaggedText";
 import "./EntitySection.css";
 
 // ---------------------------------------------------------------------------
@@ -67,6 +68,8 @@ interface EntityExtractionData {
 
 interface EntitySectionProps {
   entityExtractionJson: unknown;
+  senderName?: string | null;
+  recipientName?: string | null;
   reExtractState?: "idle" | "extracting" | "done";
   onReExtractEntities?: () => void;
 }
@@ -119,10 +122,14 @@ function PersonCard({
   person,
   relationships,
   placeConnections,
+  senderName,
+  recipientName,
 }: {
   person: ExtractedPerson;
   relationships: DiscoveredRelationship[];
   placeConnections: PersonPlaceConnection[];
+  senderName?: string | null;
+  recipientName?: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -167,7 +174,9 @@ function PersonCard({
         <div className="entity-card-body">
           {/* Narrative */}
           {person.narrative && (
-            <div className="entity-narrative">{person.narrative}</div>
+            <div className="entity-narrative">
+              <TaggedText text={person.narrative} senderName={senderName} recipientName={recipientName} />
+            </div>
           )}
 
           {/* Emotional significance */}
@@ -175,7 +184,7 @@ function PersonCard({
             <div className="entity-field-group">
               <span className="entity-detail-label">Emotional significance</span>
               <div className="entity-emotional">
-                {person.emotional_significance}
+                <TaggedText text={person.emotional_significance} senderName={senderName} recipientName={recipientName} />
               </div>
             </div>
           )}
@@ -205,7 +214,7 @@ function PersonCard({
                 {person.quotes.map((q, i) => (
                   <blockquote key={i} className="entity-quote">
                     <p>&ldquo;{q.text}&rdquo;</p>
-                    {q.context && <cite>{q.context}</cite>}
+                    {q.context && <cite><TaggedText text={q.context} senderName={senderName} recipientName={recipientName} /></cite>}
                   </blockquote>
                 ))}
               </div>
@@ -228,7 +237,7 @@ function PersonCard({
                       <span>{otherPerson}</span>
                       {r.evidence && (
                         <span className="entity-relationship-evidence">
-                          &mdash; {r.evidence}
+                          &mdash; <TaggedText text={r.evidence} senderName={senderName} recipientName={recipientName} />
                         </span>
                       )}
                     </div>
@@ -267,9 +276,13 @@ function PersonCard({
 function PlaceCard({
   place,
   placeConnections,
+  senderName,
+  recipientName,
 }: {
   place: ExtractedPlace;
   placeConnections: PersonPlaceConnection[];
+  senderName?: string | null;
+  recipientName?: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -307,14 +320,18 @@ function PlaceCard({
         <div className="entity-card-body">
           {/* Narrative */}
           {place.narrative && (
-            <div className="entity-narrative">{place.narrative}</div>
+            <div className="entity-narrative">
+              <TaggedText text={place.narrative} senderName={senderName} recipientName={recipientName} />
+            </div>
           )}
 
           {/* Why mentioned */}
           {place.why_mentioned && (
             <div className="entity-field-group">
               <span className="entity-detail-label">Why mentioned</span>
-              <div className="entity-text-block">{place.why_mentioned}</div>
+              <div className="entity-text-block">
+                <TaggedText text={place.why_mentioned} senderName={senderName} recipientName={recipientName} />
+              </div>
             </div>
           )}
 
@@ -323,7 +340,7 @@ function PlaceCard({
             <div className="entity-field-group">
               <span className="entity-detail-label">Description</span>
               <div className="entity-text-block">
-                {place.descriptive_details}
+                <TaggedText text={place.descriptive_details} senderName={senderName} recipientName={recipientName} />
               </div>
             </div>
           )}
@@ -370,6 +387,8 @@ function PlaceCard({
 
 const EntitySection = memo(function EntitySection({
   entityExtractionJson,
+  senderName,
+  recipientName,
   reExtractState = "idle",
   onReExtractEntities,
 }: EntitySectionProps) {
@@ -432,6 +451,8 @@ const EntitySection = memo(function EntitySection({
               person={person}
               relationships={data.relationships}
               placeConnections={data.person_place_connections}
+              senderName={senderName}
+              recipientName={recipientName}
             />
           ))}
         </div>
@@ -446,6 +467,8 @@ const EntitySection = memo(function EntitySection({
               key={place.name}
               place={place}
               placeConnections={data.person_place_connections}
+              senderName={senderName}
+              recipientName={recipientName}
             />
           ))}
         </div>

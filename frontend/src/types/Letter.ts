@@ -217,6 +217,10 @@ export interface LetterMetadata {
   location?: string;
   hook?: string;
   description?: string;
+  /** Hook with «SENDER:...»/«RECIPIENT:...» tags for admin display */
+  taggedHook?: string;
+  /** Summary with «SENDER:...»/«RECIPIENT:...» tags for admin display */
+  taggedDescription?: string;
   tags?: string[];
   notes?: string;
   verified: boolean;

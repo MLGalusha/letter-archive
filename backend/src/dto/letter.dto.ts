@@ -94,6 +94,10 @@ export interface FrontendLetterMetadata {
   location?: string;
   hook?: string;
   description?: string;
+  /** Hook with «SENDER:...»/«RECIPIENT:...» tags for admin display */
+  taggedHook?: string;
+  /** Summary with «SENDER:...»/«RECIPIENT:...» tags for admin display */
+  taggedDescription?: string;
   tags?: string[];
   notes?: string;
   verified: boolean;
@@ -387,6 +391,19 @@ export function formatLetterDate(letter: Letter): string | undefined {
 // ============================================================================
 
 /**
+ * Extracts a tagged text field (hook or summary) from metadataV2Json.
+ * Returns undefined if the field doesn't contain guillemet tags.
+ */
+function extractTaggedField(letter: Letter, field: 'hook' | 'summary'): string | undefined {
+  const metadata = letter.metadataV2Json as Record<string, unknown> | null;
+  if (!metadata) return undefined;
+  const value = metadata[field];
+  if (typeof value !== 'string') return undefined;
+  // Only return if it actually has tags — no point sending plain text twice
+  return value.includes('«') ? value : undefined;
+}
+
+/**
  * Extracts notable quotes from metadataV2Json
  */
 function extractNotableQuotes(letter: Letter): FrontendNotableQuote[] | undefined {
@@ -473,6 +490,8 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
       location: letter.locationWritten || undefined,
       hook: letter.hook || undefined,
       description: letter.summary || undefined,
+      taggedHook: extractTaggedField(letter, 'hook'),
+      taggedDescription: extractTaggedField(letter, 'summary'),
       tags: letter.tags || undefined,
       notes: letter.notes || undefined,
       verified: letter.metadataContentStatus === 'VERIFIED',

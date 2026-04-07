@@ -1257,9 +1257,9 @@ export default function LetterReviewPage() {
         {reviewMode && (
           <button
             className="header-action redetect"
-            onClick={() => lineReviewRef.current?.redetectLines()}
-            disabled={lineReviewRef.current?.isDetecting}
-            data-tooltip="Re-detect Lines"
+            onClick={() => lineReviewRef.current?.reloadSegments()}
+            disabled={lineReviewRef.current?.isLoading}
+            data-tooltip="Reload Segments"
           >
             <Icon name="refresh" size={18} />
           </button>

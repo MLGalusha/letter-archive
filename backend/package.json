@@ -23,7 +23,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:validate-migrations": "vitest run src/db/__tests__/migrations.test.ts",
-    "db:test-migrations": "bash scripts/test-migrations.sh"
+    "db:test-migrations": "bash scripts/test-migrations.sh",
+    "detect-lines": "tsx scripts/detect-lines-remote.ts",
+    "detect-lines-local": "REMOTE_URL=http://localhost:3002 ADMIN_EMAIL=dev@localhost.test ADMIN_PASSWORD=dev tsx scripts/detect-lines-remote.ts"
   },
   "dependencies": {
     "@types/compression": "^1.8.1",

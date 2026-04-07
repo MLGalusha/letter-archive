@@ -79,82 +79,10 @@ export async function savePageLineSegments(pageId: string, segments: LineSegment
   await apiPatch(`/admin/letters/pages/${pageId}/line-segments`, { lineSegments: segments });
 }
 
-export type DetectLinesResult = { lineSegments: LineSegment[] };
-
-/**
- * Detect page lines with SSE progress streaming.
- * Calls onProgress for each pipeline step, then returns the final result.
- */
-export async function detectPageLines(
-  pageId: string,
-  onProgress?: (label: string) => void,
-  force = false,
-): Promise<DetectLinesResult> {
-  const url = force
-    ? `${API_BASE_URL}/admin/letters/pages/${pageId}/detect-lines?force=true`
-    : `${API_BASE_URL}/admin/letters/pages/${pageId}/detect-lines`;
-  const response = await fetch(url, {
-    method: 'POST',
-    credentials: 'include',
-    headers: getAuthHeaders(),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    let message = text || 'Line detection failed';
-    let requestId: string | undefined;
-    try {
-      const parsed = JSON.parse(text);
-      if (parsed.error) message = parsed.error;
-      requestId = parsed.requestId || response.headers.get('x-request-id') || undefined;
-    } catch {
-      // not JSON, use raw text
-    }
-    throw new ApiError(response.status, message, undefined, requestId);
-  }
-
-  const reader = response.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let result: DetectLinesResult | null = null;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    // Parse SSE messages (split on double newline)
-    const parts = buffer.split('\n\n');
-    buffer = parts.pop()!; // keep incomplete tail
-
-    for (const part of parts) {
-      const line = part.trim();
-      if (!line.startsWith('data: ')) continue;
-
-      let data: Record<string, unknown>;
-      try {
-        data = JSON.parse(line.slice(6));
-      } catch {
-        console.warn('[detectPageLines] Malformed SSE data:', line);
-        continue;
-      }
-      if (data.type === 'progress') {
-        onProgress?.(data.label as string);
-      } else if (data.type === 'result') {
-        result = {
-          lineSegments: data.lineSegments as LineSegment[],
-        };
-      } else if (data.type === 'error') {
-        throw new Error(data.message as string);
-      }
-    }
-  }
-
-  if (!result) {
-    throw new Error('No result received from line detection');
-  }
-
-  return result;
+/** Fetch existing line segments from the database for a page. */
+export async function getPageLineSegments(pageId: string): Promise<LineSegment[]> {
+  const result = await apiGet<{ lineSegments: LineSegment[] }>(`/admin/letters/pages/${pageId}/line-segments`);
+  return result.lineSegments ?? [];
 }
 
 export async function reExtractLetter(

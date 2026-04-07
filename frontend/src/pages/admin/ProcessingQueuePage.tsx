@@ -6,7 +6,6 @@ import {
   startTranscription,
   startMetadataExtraction,
   startEntityExtraction,
-  startLineDetection,
   pauseProcessing,
   resumeProcessing,
   abortProcessing,
@@ -25,7 +24,7 @@ import { useToast } from '../../contexts/ToastContext';
 import AdminLayout from '../../components/AdminLayout/AdminLayout';
 import './ProcessingQueuePage.css';
 
-type QueueTab = 'transcription' | 'metadata' | 'entity_extraction' | 'line_detection';
+type QueueTab = 'transcription' | 'metadata' | 'entity_extraction';
 
 function formatTimeAgo(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();
@@ -203,16 +202,6 @@ export default function ProcessingQueuePage() {
     }
   };
 
-  const handleStartLineDetection = async () => {
-    try {
-      const result = await startLineDetection();
-      showToast(`Started line detection for ${result.total} pages`, 'success');
-      fetchQueue();
-    } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to start line detection'), 'error');
-    }
-  };
-
   const handlePause = async () => {
     try {
       await pauseProcessing();
@@ -283,22 +272,19 @@ export default function ProcessingQueuePage() {
     ? queue.queued.transcription
     : activeTab === 'metadata'
       ? queue.queued.metadata
-      : activeTab === 'entity_extraction'
-        ? queue.queued.entityExtraction
-        : []; // line_detection has no individual items
+      : queue.queued.entityExtraction;
 
   const queuedItems = collectionFilter === 'all'
     ? allQueuedItems
     : allQueuedItems.filter(i => i.collectionCode === collectionFilter);
 
-  const queueTabType: QueueJobType = activeTab === 'line_detection' ? 'transcription' : activeTab; // line_detection doesn't use queue management
+  const queueTabType: QueueJobType = activeTab;
 
   // Pipeline phase data
   const phases = [
     { key: 'transcription' as const, label: 'Transcription', count: counts.queuedTranscription, handler: handleStartTranscription },
     { key: 'metadata' as const, label: 'Metadata', count: counts.queuedMetadata, handler: handleStartMetadata },
     { key: 'entity_extraction' as const, label: 'Entities', count: counts.queuedEntityExtraction, handler: handleStartEntities },
-    { key: 'line_detection' as const, label: 'Line Detection', count: counts.queuedLineDetection, handler: handleStartLineDetection },
   ];
 
   // Determine which phase is currently running
@@ -479,11 +465,7 @@ export default function ProcessingQueuePage() {
           ))}
         </div>
 
-        {activeTab === 'line_detection' ? (
-          <div className="pq-empty-state">
-            <span>{counts.queuedLineDetection} page{counts.queuedLineDetection !== 1 ? 's' : ''} missing line segments</span>
-          </div>
-        ) : queuedItems.length > 0 ? (
+        {queuedItems.length > 0 ? (
           <>
             <table className="pq-table">
               <thead>

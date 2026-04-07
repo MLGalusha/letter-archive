@@ -111,7 +111,7 @@ vi.mock('../../../services/storage.js', () => ({
 }));
 
 vi.mock('../../../services/line-finder.js', () => ({
-  detectAndStorePageLines: detectAndStorePageLinesMock,
+  savePageLineSegments: vi.fn(),
 }));
 
 vi.mock('../../../services/letters.js', () => ({
@@ -222,55 +222,31 @@ describe('admin letters line review route integration', () => {
     vi.clearAllMocks();
   });
 
-  it('returns detected line data with stored OCR fallbacks when the detector omits them', async () => {
-    findFirstMock.mockResolvedValueOnce(createStoredPage({ lineSegments: [] }));
-    getAbsoluteStoragePathMock.mockReturnValueOnce('/tmp/collection-009-page-1.jpg');
-    detectAndStorePageLinesMock.mockResolvedValueOnce({
-      lineSegments: [{ id: 999, bbox: [1, 2, 3, 4] }],
-    });
+  it('returns stored line segments for a page', async () => {
+    const segments = [{ id: 999, bbox: [1, 2, 3, 4] }];
+    findFirstMock.mockResolvedValueOnce({ lineSegments: segments });
 
     const response = await invokeRouter(lettersRouter, {
-      method: 'POST',
-      url: `/letters/pages/${PAGE_ID}/detect-lines`,
-      path: `/letters/pages/${PAGE_ID}/detect-lines`,
-      headers: { 'content-type': 'application/json' },
+      method: 'GET',
+      url: `/letters/pages/${PAGE_ID}/line-segments`,
+      path: `/letters/pages/${PAGE_ID}/line-segments`,
     });
 
     expect(response.statusCode).toBe(200);
-    expect(getAbsoluteStoragePathMock).toHaveBeenCalledWith(
-      'collections/009/19470810/L01/009-19470810-L01-01.jpg',
-    );
-    expect(detectAndStorePageLinesMock).toHaveBeenCalledWith(
-      PAGE_ID,
-      '/tmp/collection-009-page-1.jpg',
-      undefined,
-      expect.any(Function),
-    );
-    expect(response.body).toEqual({
-      lineSegments: [{ id: 999, bbox: [1, 2, 3, 4] }],
-    });
+    expect(response.body).toEqual({ lineSegments: segments });
   });
 
-  it('propagates line-detection failures as an SSE error event', async () => {
-    findFirstMock.mockResolvedValueOnce(createStoredPage({ lineSegments: [] }));
-    getAbsoluteStoragePathMock.mockReturnValueOnce('/tmp/collection-009-page-1.jpg');
-    detectAndStorePageLinesMock.mockRejectedValueOnce(new Error('opencv offline'));
+  it('returns empty array when page has no line segments', async () => {
+    findFirstMock.mockResolvedValueOnce({ lineSegments: null });
 
     const response = await invokeRouter(lettersRouter, {
-      method: 'POST',
-      url: `/letters/pages/${PAGE_ID}/detect-lines`,
-      path: `/letters/pages/${PAGE_ID}/detect-lines`,
-      headers: { 'content-type': 'application/json' },
+      method: 'GET',
+      url: `/letters/pages/${PAGE_ID}/line-segments`,
+      path: `/letters/pages/${PAGE_ID}/line-segments`,
     });
 
-    // SSE route sends writeHead(200) before detection, so errors are
-    // streamed as SSE error events rather than passed to next()
     expect(response.statusCode).toBe(200);
-    expect(response.headers['content-type']).toBe('text/event-stream');
-    expect(response.body).toEqual({
-      type: 'error',
-      message: 'opencv offline',
-    });
+    expect(response.body).toEqual({ lineSegments: [] });
   });
 
   it('updates transcript text through the letter update route and returns the refreshed DTO', async () => {

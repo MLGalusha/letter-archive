@@ -56,10 +56,6 @@ export async function resumeProcessing(): Promise<{ message: string }> {
   return apiPost<{ message: string }>("/admin/processing/resume");
 }
 
-export async function startLineDetection(): Promise<{ message: string; total: number }> {
-  return apiPost<{ message: string; total: number }>("/admin/processing/start-line-detection");
-}
-
 export async function abortProcessing(): Promise<{ message: string }> {
   return apiPost<{ message: string }>("/admin/processing/abort");
 }

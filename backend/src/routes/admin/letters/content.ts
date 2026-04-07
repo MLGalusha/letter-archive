@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { and, eq } from 'drizzle-orm';
 import { db, canonicalPersons, letterPages, letterPersons, letters } from '../../../db/index.js';
 import type { StructuredNote, NoteCategory, NotePriority } from '../../../ai/schemas/metadataV2.js';
-import { detectAndStorePageLines, savePageLineSegments } from '../../../services/line-finder.js';
+import { savePageLineSegments } from '../../../services/line-finder.js';
 import {
   buildLetterUpdates,
   createVersion,
@@ -645,60 +645,18 @@ router.patch('/pages/:pageId/line-segments', async (req, res, next) => {
   }
 });
 
-router.post('/pages/:pageId/detect-lines', async (req, res, next) => {
+router.get('/pages/:pageId/line-segments', async (req, res, next) => {
   try {
     const page = await db.query.letterPages.findFirst({
       where: eq(letterPages.id, req.params.pageId),
+      columns: { lineSegments: true },
     });
 
     if (!page) throw new NotFoundError('Page not found');
 
-    // Return cached segments if available (unless ?force=true)
-    const force = req.query.force === 'true';
-    if (!force && Array.isArray(page.lineSegments) && page.lineSegments.length > 0) {
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      });
-      res.write(`data: ${JSON.stringify({ type: 'result', lineSegments: page.lineSegments, cached: true })}\n\n`);
-      res.end();
-      return;
-    }
-
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    });
-
-    const onProgress = (label: string) => {
-      res.write(`data: ${JSON.stringify({ type: 'progress', label })}\n\n`);
-    };
-
-    const absolutePath = getAbsoluteStoragePath(page.storagePath);
-    const result = await detectAndStorePageLines(req.params.pageId, absolutePath, undefined, onProgress);
-
-    if (result.lineSegments === null) {
-      // Line finder failed — report it clearly instead of returning empty results
-      const fallback = Array.isArray(page.lineSegments) ? page.lineSegments : null;
-      if (fallback && fallback.length > 0) {
-        res.write(`data: ${JSON.stringify({ type: 'result', lineSegments: fallback })}\n\n`);
-      } else {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Line detection failed — Python line finder did not return results. Check that the Python venv is configured on the server.' })}\n\n`);
-      }
-    } else {
-      res.write(`data: ${JSON.stringify({ type: 'result', lineSegments: result.lineSegments })}\n\n`);
-    }
-
-    res.end();
+    res.json({ lineSegments: Array.isArray(page.lineSegments) ? page.lineSegments : [] });
   } catch (error) {
-    if (res.headersSent) {
-      res.write(`data: ${JSON.stringify({ type: 'error', message: error instanceof Error ? error.message : 'Detection failed' })}\n\n`);
-      res.end();
-    } else {
-      next(error);
-    }
+    next(error);
   }
 });
 

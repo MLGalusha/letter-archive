@@ -7,7 +7,7 @@ import LineReviewMode, {
   computeAutoScrollTop,
   type LineReviewModeHandle,
 } from '../LineReviewMode';
-import { detectPageLines } from '../../../api/admin/letters';
+import { getPageLineSegments } from '../../../api/admin/letters';
 import type { Letter } from '../../../types/Letter';
 
 // Mock the client module
@@ -16,15 +16,13 @@ vi.mock('../../../api/client', () => ({
   getErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
 
-// Mock the detect-lines API call to resolve with Kraken-style segments
+// Mock the segment fetch API call
 vi.mock('../../../api/admin/letters', () => ({
-  detectPageLines: vi.fn().mockResolvedValue({
-    lineSegments: [
-      { line: 1, bbox: [50, 100, 450, 135], baseline: [[50, 135], [450, 135]], boundary: [{ x: 50, y: 100 }, { x: 450, y: 100 }, { x: 450, y: 135 }, { x: 50, y: 135 }] },
-      { line: 2, bbox: [55, 140, 445, 175], baseline: [[55, 175], [445, 175]], boundary: [{ x: 55, y: 140 }, { x: 445, y: 140 }, { x: 445, y: 175 }, { x: 55, y: 175 }] },
-      { line: 3, bbox: [50, 180, 450, 215], baseline: [[50, 215], [450, 215]], boundary: [{ x: 50, y: 180 }, { x: 450, y: 180 }, { x: 450, y: 215 }, { x: 50, y: 215 }] },
-    ],
-  }),
+  getPageLineSegments: vi.fn().mockResolvedValue([
+    { line: 1, bbox: [50, 100, 450, 135], baseline: [[50, 135], [450, 135]], boundary: [{ x: 50, y: 100 }, { x: 450, y: 100 }, { x: 450, y: 135 }, { x: 50, y: 135 }] },
+    { line: 2, bbox: [55, 140, 445, 175], baseline: [[55, 175], [445, 175]], boundary: [{ x: 55, y: 140 }, { x: 445, y: 140 }, { x: 445, y: 175 }, { x: 55, y: 175 }] },
+    { line: 3, bbox: [50, 180, 450, 215], baseline: [[50, 215], [450, 215]], boundary: [{ x: 50, y: 180 }, { x: 450, y: 180 }, { x: 450, y: 215 }, { x: 50, y: 215 }] },
+  ]),
 }));
 
 
@@ -133,7 +131,7 @@ async function flushEffects() {
 }
 
 describe('LineReviewMode', () => {
-  const detectPageLinesMock = vi.mocked(detectPageLines);
+  const getPageLineSegmentsMock = vi.mocked(getPageLineSegments);
   const defaultProps = {
     letter: makeLetter(),
     transcript: 'Line one\nLine two\nLine three',
@@ -170,7 +168,7 @@ describe('LineReviewMode', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(detectPageLinesMock).not.toHaveBeenCalled();
+    expect(getPageLineSegmentsMock).not.toHaveBeenCalled();
   });
 
   it('uses stored line segments without auto-detecting again', async () => {
@@ -204,7 +202,7 @@ describe('LineReviewMode', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(detectPageLinesMock).not.toHaveBeenCalled();
+    expect(getPageLineSegmentsMock).not.toHaveBeenCalled();
   });
 
   it('renders the image', async () => {
@@ -256,7 +254,7 @@ describe('LineReviewMode', () => {
   });
 
   it('shows no lines when Kraken returns empty segments', async () => {
-    detectPageLinesMock.mockResolvedValueOnce({ lineSegments: [] });
+    getPageLineSegmentsMock.mockResolvedValueOnce([]);
 
     const { container } = render(<LineReviewMode {...defaultProps} />);
     await simulateImageLoadAsync(container);

@@ -7,8 +7,6 @@ import { processLetter, processMetadata } from '../pipeline/processor.js';
 import { runEntityExtractionOnly } from '../pipeline/metadataV2.js';
 import { createLogger } from '../utils/logger.js';
 import { createNotification } from './notifications.js';
-import { detectAndStorePageLines } from './line-finder.js';
-import { getAbsoluteStoragePath } from './storage.js';
 import { TRANSCRIBABLE_TYPES } from './letter/shared.js';
 
 const log = createLogger({ module: 'processing-queue' });
@@ -21,7 +19,7 @@ export interface ProcessingState {
   isRunning: boolean;
   isPaused: boolean;
   shouldAbort: boolean;
-  currentJob: { letterId: string; type: 'transcription' | 'metadata' | 'entity_extraction' | 'line_detection' } | null;
+  currentJob: { letterId: string; type: 'transcription' | 'metadata' | 'entity_extraction' } | null;
   completed: number;
   failed: number;
   total: number;
@@ -710,113 +708,25 @@ export async function startEntityExtractionProcessing(options: ProcessingFilterO
 }
 
 /**
- * Start line detection processing for all pages missing line segments.
+ * Get pages needing line detection (for remote worker script).
  */
-export async function startLineDetectionProcessing(): Promise<{ message: string; total: number }> {
-  if (processingState.isRunning) {
-    throw new ProcessingError('Processing already in progress', 400);
-  }
-
-  // Find all pages needing line detection (from transcribed+ letters)
-  const pagesNeedingLines = await db
+export async function getLineDetectionQueue() {
+  const pages = await db
     .select({
       pageId: letterPages.id,
-      storagePath: letterPages.storagePath,
       letterId: letterPages.letterId,
+      pageNumber: letterPages.pageNumber,
+      dateRaw: letters.dateRaw,
     })
     .from(letterPages)
     .innerJoin(letters, eq(letterPages.letterId, letters.id))
     .where(and(
       sql`(${letterPages.lineSegments} IS NULL OR jsonb_array_length(${letterPages.lineSegments}) = 0)`,
       sql`${letters.workflow} != 'UPLOADED'`
-    ));
+    ))
+    .orderBy(letters.dateRaw, letterPages.pageNumber);
 
-  if (pagesNeedingLines.length === 0) {
-    return { message: 'No pages to process', total: 0 };
-  }
-
-  processingState = {
-    isRunning: true,
-    isPaused: false,
-    shouldAbort: false,
-    currentJob: null,
-    completed: 0,
-    failed: 0,
-    total: pagesNeedingLines.length,
-    errors: [],
-    lastCompletedAt: null,
-  };
-
-  // Start async processing (don't await - runs in background)
-  processPageLineDetectionAsync(pagesNeedingLines);
-
-  return { message: 'Line detection started', total: pagesNeedingLines.length };
-}
-
-/**
- * Async line detection processing — iterates pages sequentially.
- */
-async function processPageLineDetectionAsync(
-  pages: Array<{ pageId: string; storagePath: string; letterId: string }>
-) {
-  log.info({ pageCount: pages.length }, 'Starting line detection batch');
-  const batchStart = Date.now();
-
-  for (const page of pages) {
-    if (processingState.shouldAbort) {
-      log.info({ completed: processingState.completed, failed: processingState.failed }, 'Line detection aborted');
-      processingState.isRunning = false;
-      break;
-    }
-
-    if (processingState.isPaused) {
-      log.info({ letterId: page.letterId }, 'Line detection paused');
-    }
-    while (processingState.isPaused && !processingState.shouldAbort) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    if (processingState.shouldAbort) {
-      log.info({ completed: processingState.completed, failed: processingState.failed }, 'Line detection aborted after pause');
-      processingState.isRunning = false;
-      break;
-    }
-
-    processingState.currentJob = { letterId: page.letterId, type: 'line_detection' };
-    const jobStart = Date.now();
-
-    try {
-      const absolutePath = getAbsoluteStoragePath(page.storagePath);
-      await detectAndStorePageLines(page.pageId, absolutePath);
-      processingState.completed++;
-      processingState.lastCompletedAt = Date.now();
-      const jobDuration = Date.now() - jobStart;
-      log.debug({ pageId: page.pageId, duration: jobDuration, progress: `${processingState.completed}/${processingState.total}` }, 'Page line detection completed');
-    } catch (error) {
-      processingState.failed++;
-      processingState.lastCompletedAt = Date.now();
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      processingState.errors.push(`${page.pageId}: ${errorMessage}`);
-      log.error({ pageId: page.pageId, letterId: page.letterId, err: error }, 'Page line detection failed');
-    }
-  }
-
-  const batchDuration = Date.now() - batchStart;
-  log.info(
-    { total: processingState.total, completed: processingState.completed, failed: processingState.failed, duration: batchDuration },
-    'Line detection batch finished'
-  );
-
-  if (pages.length > 1) {
-    createNotification({
-      type: 'batch',
-      title: 'Line detection complete',
-      message: `${processingState.completed} succeeded, ${processingState.failed} failed`,
-      link: '/admin/processing',
-    });
-  }
-
-  processingState.isRunning = false;
-  processingState.currentJob = null;
+  return { pages, total: pages.length };
 }
 
 /**

@@ -170,7 +170,7 @@ describe('ProcessingQueuePage', () => {
 
     expect(await screen.findByText('Processing Queue')).toBeInTheDocument();
     expect(screen.getByText('Active Jobs')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Start' })).toHaveLength(4);
+    expect(screen.getAllByRole('button', { name: 'Start' })).toHaveLength(3);
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(screen.getByText('Retry')).toBeInTheDocument();
   });

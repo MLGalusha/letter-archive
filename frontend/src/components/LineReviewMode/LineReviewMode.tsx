@@ -8,7 +8,7 @@ import {
   useImperativeHandle,
 } from 'react';
 import { getErrorMessage, getImageUrl } from '../../api/client';
-import { detectPageLines, savePageLineSegments } from '../../api/admin/letters';
+import { getPageLineSegments, savePageLineSegments } from '../../api/admin/letters';
 import type { Letter, LineSegment, LineSegmentWord, SpecialArea } from '../../types/Letter';
 import { useSegmentEditor } from '../../hooks/useSegmentEditor';
 import SegmentEditorOverlay from './SegmentEditorOverlay';
@@ -46,8 +46,8 @@ interface LineReviewModeProps {
 
 export interface LineReviewModeHandle {
   saveCurrentLine: () => void;
-  redetectLines: () => void;
-  isDetecting: boolean;
+  reloadSegments: () => void;
+  isLoading: boolean;
 }
 
 export function computeAutoScrollTop(params: {
@@ -335,7 +335,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   }, [currentKrakenSegments, segmentEditor]);
 
   // Detection progress steps (shown in loading overlay for current page)
-  const [detectionSteps, setDetectionSteps] = useState<string[]>([]);
 
   // Per-page raw text (preserves all whitespace including blank lines)
   const [pageRawTexts, setPageRawTexts] = useState<string[]>(() => {
@@ -397,93 +396,67 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     setFitPan({ x: 0, y: 0 });
   }, [currentPageIndex]);
 
-  // Run line detection via backend API when a letter page loads.
-  // Triggers when: (a) no segments cached at all, or (b) segments cached
-  // from DB but Vision boxes haven't been fetched yet for this page.
+  // Fetch stored line segments from DB when a letter page loads.
   useEffect(() => {
     if (!currentPage || currentLetterPageIndex === undefined) return;
 
     const lpIdx = currentLetterPageIndex;
-    const hasSegments = aiSegmentsMap[lpIdx] !== undefined;
-
-    // Stored segment data is enough to render reliably without
-    // forcing another backend call on first load.
-    if (hasSegments) return;
-    if (aiSegmentsMap[lpIdx] === null) return;
+    if (aiSegmentsMap[lpIdx] !== undefined) return; // already cached
+    if (aiSegmentsMap[lpIdx] === null) return; // fetch in progress
 
     const pageText = pageLineTexts[lpIdx]?.join('\n') || '';
     if (!pageText.trim()) return;
 
-    // Mark as in progress
     setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: null }));
-    setDetectionSteps([]);
 
-    const pageId = currentPage.id;
-
-    detectPageLines(pageId, (label) => {
-      setDetectionSteps(prev => [...prev, label]);
-    })
-      .then(result => {
-        setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: result.lineSegments }));
-
-        setKrakenSegmentsMap(prev => ({ ...prev, [lpIdx]: result.lineSegments ?? [] }));
-        setDetectionSteps([]);
+    getPageLineSegments(currentPage.id)
+      .then(segments => {
+        setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: segments }));
+        setKrakenSegmentsMap(prev => ({ ...prev, [lpIdx]: segments }));
       })
-      .catch((err) => {
+      .catch(() => {
         setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: [] }));
-        showToast(getErrorMessage(err, 'Line detection failed'), 'error');
-        setDetectionSteps([]);
       });
-  }, [currentPage, currentLetterPageIndex, aiSegmentsMap, pageLineTexts, showToast]);
+  }, [currentPage, currentLetterPageIndex, aiSegmentsMap, pageLineTexts]);
 
-
-  // Background pre-fetch: after current letter page finishes detecting, start
-  // detecting the next letter page that hasn't been fetched yet.
+  // Background pre-fetch: load segments for upcoming pages.
   useEffect(() => {
-    // Only pre-fetch once current page is done (or current page is non-letter)
     if (currentLetterPageIndex !== undefined) {
       if (aiSegmentsMap[currentLetterPageIndex] === null || aiSegmentsMap[currentLetterPageIndex] === undefined) return;
     }
 
-    // Find next letter page that needs detection
     for (let i = 0; i < letterPages.length; i++) {
       const idx = (((currentLetterPageIndex ?? -1) + 1 + i) % letterPages.length);
-
-      const hasSegments = aiSegmentsMap[idx] !== undefined;
-      const inProgress = aiSegmentsMap[idx] === null;
-
-      if (inProgress || hasSegments) continue;
+      if (aiSegmentsMap[idx] !== undefined || aiSegmentsMap[idx] === null) continue;
 
       const pageText = pageLineTexts[idx]?.join('\n') || '';
       if (!pageText.trim()) continue;
 
-      // Start background detection for this page
       const page = letterPages[idx];
       setAiSegmentsMap(prev => ({ ...prev, [idx]: null }));
 
-      detectPageLines(page.id)
-        .then(result => {
-          setAiSegmentsMap(prev => ({ ...prev, [idx]: result.lineSegments }));
-          setKrakenSegmentsMap(prev => ({ ...prev, [idx]: result.lineSegments ?? [] }));
+      getPageLineSegments(page.id)
+        .then(segments => {
+          setAiSegmentsMap(prev => ({ ...prev, [idx]: segments }));
+          setKrakenSegmentsMap(prev => ({ ...prev, [idx]: segments }));
         })
         .catch(() => {
           setAiSegmentsMap(prev => ({ ...prev, [idx]: [] }));
         });
 
-      // Only start one at a time to avoid overloading the backend
       break;
     }
   }, [aiSegmentsMap, currentLetterPageIndex, letterPages, pageLineTexts]);
 
   // Whether we're still waiting for AI detection for the current letter page
-  const isDetecting = currentLetterPageIndex !== undefined && aiSegmentsMap[currentLetterPageIndex] === null;
+  const isLoading = currentLetterPageIndex !== undefined && aiSegmentsMap[currentLetterPageIndex] === null;
   const imageReady = imageNaturalSize.width > 0;
   const onLetterPage = currentLetterPageIndex !== undefined;
 
   // Compute aligned lines for current page (empty for non-letter pages)
   const alignedLines: AlignedLine[] = useMemo(() => {
     if (!currentPage || !onLetterPage || currentLetterPageIndex === undefined) return [];
-    if (isDetecting) return []; // AI detection in progress — show spinner, no lines yet
+    if (isLoading) return []; // AI detection in progress — show spinner, no lines yet
     const transcriptLines = pageLineTexts[currentLetterPageIndex] ?? [];
     const pageText = transcriptLines.join('\n');
 
@@ -495,7 +468,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     // No Kraken segments — don't fall back to pixel detection
     return [];
-  }, [currentPage, currentLetterPageIndex, onLetterPage, pageLineTexts, aiSegmentsMap, isDetecting, imageReady]);
+  }, [currentPage, currentLetterPageIndex, onLetterPage, pageLineTexts, aiSegmentsMap, isLoading, imageReady]);
   const hasTranscriptLinesOnPage = onLetterPage && currentLetterPageIndex !== undefined
     && (pageLineTexts[currentLetterPageIndex]?.length ?? 0) > 0;
 
@@ -858,40 +831,32 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     }
   }, [currentLineIndex, currentPageIndex, alignedLines, scaleFactor, imageNaturalSize.width, imageDisplaySize.height, imageNaturalSize.height]);
 
-  // Re-run line detection for the current page
-  const redetectLines = useCallback(() => {
-    if (!currentPage || isDetecting || currentLetterPageIndex === undefined) return;
+  // Re-fetch line segments from the database for the current page
+  const reloadSegments = useCallback(() => {
+    if (!currentPage || isLoading || currentLetterPageIndex === undefined) return;
 
-    const pageId = currentPage.id;
     const lpIdx = currentLetterPageIndex;
 
-    // Immediately show spinner and clear stale data
     setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: null }));
     setKrakenSegmentsMap(prev => ({ ...prev, [lpIdx]: undefined }));
     setCurrentLineIndex(0);
-    setDetectionSteps([]);
 
-    detectPageLines(pageId, (label) => {
-      setDetectionSteps(prev => [...prev, label]);
-    }, true)
-      .then(result => {
-        setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: result.lineSegments }));
-
-        setKrakenSegmentsMap(prev => ({ ...prev, [lpIdx]: result.lineSegments ?? [] }));
-        setDetectionSteps([]);
+    getPageLineSegments(currentPage.id)
+      .then(segments => {
+        setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: segments }));
+        setKrakenSegmentsMap(prev => ({ ...prev, [lpIdx]: segments }));
       })
       .catch((err) => {
         setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: [] }));
-        showToast(getErrorMessage(err, 'Line detection failed'), 'error');
-        setDetectionSteps([]);
+        showToast(getErrorMessage(err, 'Failed to load segments'), 'error');
       });
-  }, [currentPage, currentLetterPageIndex, isDetecting, showToast]);
+  }, [currentPage, currentLetterPageIndex, isLoading, showToast]);
 
   useImperativeHandle(ref, () => ({
     saveCurrentLine,
-    redetectLines,
-    isDetecting,
-  }), [saveCurrentLine, redetectLines, isDetecting]);
+    reloadSegments,
+    isLoading,
+  }), [saveCurrentLine, reloadSegments, isLoading]);
 
   // Keyboard handler
   useEffect(() => {
@@ -932,7 +897,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
       if (e.key === 'R' && e.ctrlKey && e.shiftKey) {
         e.preventDefault();
-        redetectLines();
+        reloadSegments();
         return;
       }
 
@@ -979,7 +944,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [saveCurrentLine, onExit, goToNextLine, goToPrevLine, goToNextPage, goToPrevPage, onLetterPage, overlayEnabled, redetectLines, debugLines, onDebugModeChange, segmentEditor, handleExitSegmentEditMode]);
+  }, [saveCurrentLine, onExit, goToNextLine, goToPrevLine, goToNextPage, goToPrevPage, onLetterPage, overlayEnabled, reloadSegments, debugLines, onDebugModeChange, segmentEditor, handleExitSegmentEditMode]);
 
   if (!currentPage) return null;
 
@@ -1436,24 +1401,20 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           );
         })()}
 
-        {/* Detecting lines — detection in progress */}
-        {isDetecting && imageNaturalSize.width > 0 && (
+        {/* Loading segments */}
+        {isLoading && imageNaturalSize.width > 0 && (
           <div className="line-review-analyzing">
             <div className="line-review-spinner" />
-            <div className="detection-status" key={detectionSteps.length}>
-              {detectionSteps.length === 0
-                ? 'Loading line segments...'
-                : detectionSteps[detectionSteps.length - 1]}
-            </div>
+            <div className="detection-status">Loading line segments...</div>
           </div>
         )}
 
-        {/* Not available — all detection methods exhausted */}
-        {!isDetecting && hasTranscriptLinesOnPage && alignedLines.length === 0 && imageNaturalSize.width > 0 && (
+        {/* No segments available */}
+        {!isLoading && hasTranscriptLinesOnPage && alignedLines.length === 0 && imageNaturalSize.width > 0 && (
           <div className="line-review-analyzing">
-            Could not detect line positions for this page.
+            No line segments for this page.
             <br />
-            <small>Press <kbd>Esc</kbd> to return to the editor.</small>
+            <small>Run <code>npm run detect-lines</code> locally, then press <kbd>Ctrl+Shift+R</kbd> to reload.</small>
           </div>
         )}
       </div>

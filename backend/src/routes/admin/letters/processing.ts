@@ -3,6 +3,7 @@ import {
   abortProcessing,
   cancelActiveJob,
   clearQueue,
+  getLineDetectionQueue,
   getProcessingStatus,
   getQueueStatus,
   pauseProcessing,
@@ -13,7 +14,6 @@ import {
   retryJob,
   startEntityExtractionProcessing,
   startMetadataProcessing,
-  startLineDetectionProcessing,
   startTranscriptionProcessing,
 } from '../../../services/processing-queue.js';
 import { BadRequestError } from '../../../utils/response-helpers.js';
@@ -28,6 +28,14 @@ router.get('/status', (_req, res) => {
 router.get('/queue', async (_req, res, next) => {
   try {
     res.json(await getQueueStatus());
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/line-detection-queue', async (_req, res, next) => {
+  try {
+    res.json(await getLineDetectionQueue());
   } catch (error) {
     next(error);
   }
@@ -57,15 +65,6 @@ router.post('/start-entities', async (req, res, next) => {
   try {
     const options = processingFilterSchema.parse(req.body || {});
     const result = await startEntityExtractionProcessing(options);
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.post('/start-line-detection', async (_req, res, next) => {
-  try {
-    const result = await startLineDetectionProcessing();
     res.json(result);
   } catch (error) {
     next(error);

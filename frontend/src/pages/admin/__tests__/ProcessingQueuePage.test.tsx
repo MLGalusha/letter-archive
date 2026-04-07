@@ -98,6 +98,7 @@ function createQueueStatus() {
       queuedTranscription: 1,
       queuedMetadata: 0,
       queuedEntityExtraction: 0,
+      queuedLineDetection: 0,
       recentSuccessCount: 1,
       recentFailedCount: 1,
       recentClearedCount: 0,
@@ -169,7 +170,7 @@ describe('ProcessingQueuePage', () => {
 
     expect(await screen.findByText('Processing Queue')).toBeInTheDocument();
     expect(screen.getByText('Active Jobs')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Start' })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: 'Start' })).toHaveLength(4);
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(screen.getByText('Retry')).toBeInTheDocument();
   });

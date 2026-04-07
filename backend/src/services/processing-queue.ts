@@ -423,14 +423,14 @@ export async function getQueueStatus() {
     limit: PAGINATION.QUEUE_BATCH_SIZE,
   });
 
-  // Queued line detection: pages with null lineSegments from transcribed+ letters
+  // Queued line detection: pages with null lineSegments from letter-type items
   const lineDetectionCount = await db
     .select({ count: sql<number>`count(*)` })
     .from(letterPages)
     .innerJoin(letters, eq(letterPages.letterId, letters.id))
     .where(and(
       sql`(${letterPages.lineSegments} IS NULL OR jsonb_array_length(${letterPages.lineSegments}) = 0)`,
-      sql`${letters.workflow} != 'UPLOADED'`
+      eq(letters.type, 'L')
     ));
 
   // Recent completions/failures (last hour)
@@ -722,7 +722,7 @@ export async function getLineDetectionQueue() {
     .innerJoin(letters, eq(letterPages.letterId, letters.id))
     .where(and(
       sql`(${letterPages.lineSegments} IS NULL OR jsonb_array_length(${letterPages.lineSegments}) = 0)`,
-      sql`${letters.workflow} != 'UPLOADED'`
+      eq(letters.type, 'L')
     ))
     .orderBy(letters.dateRaw, letterPages.pageNumber);
 
@@ -732,7 +732,7 @@ export async function getLineDetectionQueue() {
 export async function resetLineSegments() {
   const result = await db.execute(sql`
     UPDATE letter_pages SET line_segments = NULL
-    WHERE letter_id IN (SELECT id FROM letters WHERE workflow != 'UPLOADED')
+    WHERE letter_id IN (SELECT id FROM letters WHERE type = 'L')
       AND line_segments IS NOT NULL
   `);
   const reset = Number(result.count ?? 0);

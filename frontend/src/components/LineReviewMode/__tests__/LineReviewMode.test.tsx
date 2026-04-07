@@ -8,7 +8,6 @@ import LineReviewMode, {
   type LineReviewModeHandle,
 } from '../LineReviewMode';
 import { detectPageLines } from '../../../api/admin/letters';
-import { detectImageLines } from '../../../utils/lineAlignment';
 import type { Letter } from '../../../types/Letter';
 
 // Mock the client module
@@ -17,20 +16,17 @@ vi.mock('../../../api/client', () => ({
   getErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
 
-// Mock the detect-lines API call to resolve immediately with empty (triggers pixel fallback)
+// Mock the detect-lines API call to resolve with Kraken-style segments
 vi.mock('../../../api/admin/letters', () => ({
-  detectPageLines: vi.fn().mockResolvedValue({ lineSegments: [] }),
+  detectPageLines: vi.fn().mockResolvedValue({
+    lineSegments: [
+      { line: 1, bbox: [50, 100, 450, 135], baseline: [[50, 135], [450, 135]], boundary: [{ x: 50, y: 100 }, { x: 450, y: 100 }, { x: 450, y: 135 }, { x: 50, y: 135 }] },
+      { line: 2, bbox: [55, 140, 445, 175], baseline: [[55, 175], [445, 175]], boundary: [{ x: 55, y: 140 }, { x: 445, y: 140 }, { x: 445, y: 175 }, { x: 55, y: 175 }] },
+      { line: 3, bbox: [50, 180, 450, 215], baseline: [[50, 215], [450, 215]], boundary: [{ x: 50, y: 180 }, { x: 450, y: 180 }, { x: 450, y: 215 }, { x: 50, y: 215 }] },
+    ],
+  }),
 }));
 
-// Mock detectImageLines since jsdom can't do real pixel analysis
-vi.mock('../../../utils/lineAlignment', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../utils/lineAlignment')>();
-  return {
-    ...actual,
-    // Override detectImageLines to return per-line results (valley detection)
-    detectImageLines: vi.fn(),
-  };
-});
 
 vi.mock('../../../contexts/ToastContext', () => ({
   useToast: () => ({
@@ -138,7 +134,6 @@ async function flushEffects() {
 
 describe('LineReviewMode', () => {
   const detectPageLinesMock = vi.mocked(detectPageLines);
-  const detectImageLinesMock = vi.mocked(detectImageLines);
   const defaultProps = {
     letter: makeLetter(),
     transcript: 'Line one\nLine two\nLine three',
@@ -149,11 +144,6 @@ describe('LineReviewMode', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    detectImageLinesMock.mockReturnValue([
-      { y1: 100, y2: 135, x1: 50, x2: 450 },
-      { y1: 140, y2: 175, x1: 55, x2: 445 },
-      { y1: 180, y2: 215, x1: 50, x2: 450 },
-    ]);
     // Reset requestAnimationFrame to run synchronously
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
       cb(0);
@@ -256,7 +246,7 @@ describe('LineReviewMode', () => {
     expect(analyzing).toBeNull();
   });
 
-  it('renders input overlay after pixel detection', async () => {
+  it('renders input overlay with Kraken segments', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
     await simulateImageLoadAsync(container);
 
@@ -265,16 +255,14 @@ describe('LineReviewMode', () => {
     expect(input?.textContent).toBe('Line one');
   });
 
-  it('uses estimated layout fallback when pixel detection finds no lines', async () => {
-    detectImageLinesMock.mockReturnValue([]);
+  it('shows no lines when Kraken returns empty segments', async () => {
+    detectPageLinesMock.mockResolvedValueOnce({ lineSegments: [] });
 
     const { container } = render(<LineReviewMode {...defaultProps} />);
     await simulateImageLoadAsync(container);
 
     const input = getEditable(container);
-    expect(input).toBeTruthy();
-    expect(input?.textContent).toBe('Line one');
-    expect(screen.queryByText('Could not detect line positions for this page.')).toBeNull();
+    expect(input).toBeNull();
   });
 
   it('advances to next line on ArrowDown', async () => {

@@ -16,9 +16,6 @@ import { constrainedGrouping, eastEdgeY, westEdgeY } from '../../utils/constrain
 import { matchTranscriptToLines, type MatchedLine } from '../../utils/transcriptMatcher';
 import {
   alignTranscriptToVisualLines,
-  buildAlignedLinesFromDetected,
-  buildAlignedLinesFromEstimatedLayout,
-  detectImageLines,
   type AlignmentInput,
   type AlignedLine,
 } from '../../utils/lineAlignment';
@@ -496,13 +493,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       return lines.filter(l => l.transcriptLineIndex >= 0);
     }
 
-    if (!imageReady || !imageRef.current) return [];
-
-    const detectedLines = detectImageLines(imageRef.current);
-    if (detectedLines.length === 0) {
-      return buildAlignedLinesFromEstimatedLayout(transcriptLines, imageNaturalSize);
-    }
-    return buildAlignedLinesFromDetected(transcriptLines, detectedLines);
+    // No Kraken segments — don't fall back to pixel detection
+    return [];
   }, [currentPage, currentLetterPageIndex, onLetterPage, pageLineTexts, aiSegmentsMap, isDetecting, imageReady]);
   const hasTranscriptLinesOnPage = onLetterPage && currentLetterPageIndex !== undefined
     && (pageLineTexts[currentLetterPageIndex]?.length ?? 0) > 0;

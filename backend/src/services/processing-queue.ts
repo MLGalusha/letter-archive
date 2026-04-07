@@ -431,7 +431,7 @@ export async function getQueueStatus() {
     .from(letterPages)
     .innerJoin(letters, eq(letterPages.letterId, letters.id))
     .where(and(
-      sql`${letterPages.lineSegments} IS NULL`,
+      sql`(${letterPages.lineSegments} IS NULL OR jsonb_array_length(${letterPages.lineSegments}) = 0)`,
       sql`${letters.workflow} != 'UPLOADED'`
     ));
 
@@ -727,7 +727,7 @@ export async function startLineDetectionProcessing(): Promise<{ message: string;
     .from(letterPages)
     .innerJoin(letters, eq(letterPages.letterId, letters.id))
     .where(and(
-      sql`${letterPages.lineSegments} IS NULL`,
+      sql`(${letterPages.lineSegments} IS NULL OR jsonb_array_length(${letterPages.lineSegments}) = 0)`,
       sql`${letters.workflow} != 'UPLOADED'`
     ));
 

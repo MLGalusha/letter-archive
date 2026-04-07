@@ -72,7 +72,7 @@
 .body-layout {
   width: min(100%, 1180px);
   margin: 0 auto;
-  padding: 1.8rem 1.5rem 4rem;
+  padding: 1.8rem calc(1.5rem + env(safe-area-inset-right, 0px)) calc(4rem + env(safe-area-inset-bottom, 0px)) calc(1.5rem + env(safe-area-inset-left, 0px));
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
@@ -134,7 +134,7 @@
 
 @media (max-width: 720px) {
   .body-layout {
-    padding: 1.2rem 1rem 3rem;
+    padding: 1.2rem calc(1rem + env(safe-area-inset-right, 0px)) calc(3rem + env(safe-area-inset-bottom, 0px)) calc(1rem + env(safe-area-inset-left, 0px));
     gap: 1.6rem;
   }
 }

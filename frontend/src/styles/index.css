@@ -15,7 +15,8 @@
 
 html {
   scrollbar-gutter: stable;
-  overscroll-behavior-x: none;
+  overscroll-behavior: none;
+  background: #eee2cf;
 }
 
 /* Admin pages handle their own scrolling — don't reserve gutter space */

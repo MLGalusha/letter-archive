@@ -2,7 +2,7 @@
   position: sticky;
   top: 0;
   z-index: 50;
-  padding: 1rem 1.25rem 0;
+  padding: calc(1rem + env(safe-area-inset-top, 0px)) calc(1.25rem + env(safe-area-inset-right, 0px)) 0 calc(1.25rem + env(safe-area-inset-left, 0px));
 }
 
 .header-inner {

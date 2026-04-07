@@ -46,11 +46,11 @@ test.describe('@mocked Line Review', () => {
     await expect(page.locator('.line-review-progress')).toContainText('Page 1 / 2');
     await expect(page.locator('.line-review-editable')).toContainText('My dear mother,');
     expect(mockedApi.detectLineRequests).toContain(
-      `${API_BASE_URL}/admin/letters/pages/collection-009-page-1/detect-lines`,
+      `${API_BASE_URL}/admin/letters/pages/collection-009-page-1/line-segments`,
     );
   });
 
-  test('uses stored line segments before any redetect request is made', async ({
+  test('uses stored line segments before any reload request is made', async ({
     page,
   }) => {
     const initialLetter = createLetterWithStoredLineSegments();
@@ -94,7 +94,7 @@ test.describe('@mocked Line Review', () => {
       .toBeGreaterThan(initialDetectCount);
   });
 
-  test('falls back to browser-side line detection when detect-lines returns no geometry', async ({
+  test('shows no-segments message when line-segments returns empty', async ({
     page,
   }) => {
     const detectLinesByPageId = createMockDetectLinesByPageId();
@@ -102,40 +102,18 @@ test.describe('@mocked Line Review', () => {
       result.lineSegments = [];
     });
 
-    const mockedApi = await openLineReview(
-      page,
-      createMockLetterReviewLetter(),
-      { detectLinesByPageId },
-    );
+    await installMockLetterReviewApi(page, {
+      initialLetter: createMockLetterReviewLetter(),
+      detectLinesByPageId,
+    });
 
-    await expect(page.locator('.line-review-progress')).toContainText('Line 1');
-    await expect(page.locator('.line-review-editable')).toContainText('My dear mother,');
-    expect(mockedApi.detectLineRequests).toContain(
-      `${API_BASE_URL}/admin/letters/pages/collection-009-page-1/detect-lines`,
-    );
+    await page.goto(`/admin/letters/letter-review-1`);
+    await page.locator('.letter-review-page').waitFor({ state: 'visible' });
+    await page.locator('.viewer-image').waitFor({ state: 'visible' });
+    await page.locator('.viewer-image').click();
+    await page.locator('.line-review-mode').waitFor({ state: 'visible' });
 
-    const editable = page.locator('.line-review-editable');
-    await editable.click();
-    await editable.evaluate((node, value) => {
-      node.textContent = value;
-      node.dispatchEvent(
-        new InputEvent('input', {
-          bubbles: true,
-          inputType: 'insertText',
-          data: value,
-        }),
-      );
-    }, 'My dearest mother,');
-
-    await page.locator('.line-review-close-btn').click();
-
-    await expect(page.locator('.transcript-editor')).toContainText('My dearest mother,');
-    await expect
-      .poll(() => mockedApi.updateLetterRequests.length)
-      .toBe(1);
-    await expect
-      .poll(() => mockedApi.versionRequests.length)
-      .toBe(1);
+    await expect(page.locator('.line-review-analyzing')).toContainText('No line segments');
   });
 
   test('saves edited transcript text and records a transcript version on exit', async ({
@@ -220,26 +198,27 @@ test.describe('@mocked Line Review', () => {
       .toBe(1);
   });
 
-  test('shows the request id when detect-lines fails and falls back locally', async ({
+  test('shows error toast when loading line segments fails', async ({
     page,
   }) => {
-    const mockedApi = await openLineReview(page, createMockLetterReviewLetter(), {
+    await installMockLetterReviewApi(page, {
+      initialLetter: createMockLetterReviewLetter(),
       detectLinesFailuresByPageId: {
         'collection-009-page-1': {
           status: 503,
-          error: 'Line detector offline',
-          requestId: 'req-line-detect-503',
+          error: 'Database offline',
+          requestId: 'req-segments-503',
         },
       },
     });
 
-    await expect(page.locator('.toast')).toContainText(
-      'Line detector offline (Request ID: req-line-detect-503)',
-    );
-    await expect(page.locator('.line-review-progress')).toContainText('Line 1');
-    expect(mockedApi.detectLineRequests).toContain(
-      `${API_BASE_URL}/admin/letters/pages/collection-009-page-1/detect-lines`,
-    );
+    await page.goto(`/admin/letters/letter-review-1`);
+    await page.locator('.letter-review-page').waitFor({ state: 'visible' });
+    await page.locator('.viewer-image').waitFor({ state: 'visible' });
+    await page.locator('.viewer-image').click();
+    await page.locator('.line-review-mode').waitFor({ state: 'visible' });
+
+    await expect(page.locator('.toast')).toContainText('Failed to load segments');
   });
 
   test('shows the request id when transcript auto-save fails on exit', async ({

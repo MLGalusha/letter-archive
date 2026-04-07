@@ -208,6 +208,67 @@
 
 /* ShowcaseCard styles are now in components/ShowcaseCard.css */
 
+/* ---- Highlights carousel (transform-based, rendered on mobile only) ---- */
+
+.cd-highlights-carousel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cd-highlights-viewport {
+  overflow: clip;
+}
+
+.cd-highlights-track {
+  display: flex;
+  will-change: transform;
+  cursor: grab;
+}
+
+.cd-highlights-track--animated {
+  transition: transform 0.4s ease;
+}
+
+.cd-highlights-slide {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+.cd-highlights-slide .cd-highlight-card {
+  width: 100%;
+  max-width: none;
+  border-radius: 24px;
+  min-height: 440px;
+  box-shadow: none;
+  flex: none;
+}
+
+.cd-highlights-dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.cd-highlights-dot {
+  appearance: none;
+  border: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  background: var(--text-muted);
+  opacity: 0.4;
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.cd-highlights-dot.active {
+  background: var(--accent);
+  opacity: 1;
+  transform: scale(1.35);
+}
+
 /* ---- Notes card (bottom of people column) ---- */
 
 .cd-notes-card {
@@ -410,12 +471,35 @@
     font-size: clamp(1.9rem, 12vw, 2.8rem);
   }
 
-  .cd-highlights-col {
-    flex-direction: column;
+  /* ---- People: inline on mobile ---- */
+  .cd-people-col {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.7rem;
+    padding: 0.7rem 0.85rem;
+  }
+
+  .cd-people-title {
+    width: auto;
+    margin-right: 0.2rem;
   }
 
   .cd-person-card {
-    padding: 0.85rem 1rem;
-    border-radius: 16px;
+    flex: 0 0 auto;
+    padding: 0.35rem 0.65rem;
+    border-radius: 12px;
+    border: none;
+    background: none;
+  }
+
+  .cd-person-card:first-of-type {
+    border-top: none;
+  }
+
+  .cd-notes-card {
+    flex-basis: 100%;
+    border-top: 1px solid rgba(217, 207, 191, 0.5);
+    padding-top: 0.5rem;
   }
 }

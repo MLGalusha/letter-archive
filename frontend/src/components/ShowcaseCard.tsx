@@ -18,9 +18,10 @@ export interface ShowcaseItem {
 interface ShowcaseCardProps {
   items: ShowcaseItem[];
   onNavigate: (letterId: string, imageId?: string) => void;
+  onInteraction?: () => void;
 }
 
-export default function ShowcaseCard({ items, onNavigate }: ShowcaseCardProps) {
+export default function ShowcaseCard({ items, onNavigate, onInteraction }: ShowcaseCardProps) {
   const [index, setIndex] = useState(0);
   const item = items[index];
   const hasMultiple = items.length > 1;
@@ -30,11 +31,13 @@ export default function ShowcaseCard({ items, onNavigate }: ShowcaseCardProps) {
   const handlePrev = (e: ReactMouseEvent) => {
     e.stopPropagation();
     setIndex((i) => (i === 0 ? items.length - 1 : i - 1));
+    onInteraction?.();
   };
 
   const handleNext = (e: ReactMouseEvent) => {
     e.stopPropagation();
     setIndex((i) => (i === items.length - 1 ? 0 : i + 1));
+    onInteraction?.();
   };
 
   return (

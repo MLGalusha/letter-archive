@@ -24,6 +24,7 @@ interface SearchBarProps {
   variant?: "full" | "compact";
   hideCollectionFilter?: boolean;
   compactPlaceholder?: string;
+  placeholder?: string;
   searchKicker?: string;
   searchTitle?: string;
   refineOpen?: boolean;
@@ -62,6 +63,7 @@ export default function SearchBar({
   variant = "full",
   hideCollectionFilter = false,
   compactPlaceholder,
+  placeholder: placeholderProp,
   searchKicker,
   searchTitle,
   refineOpen,
@@ -159,7 +161,7 @@ export default function SearchBar({
     if (hasActiveFilters) {
       return `${total} matching archive item${total === 1 ? "" : "s"}`;
     }
-    return `${total} published archive item${total === 1 ? "" : "s"}`;
+    return `${total} archive item${total === 1 ? "" : "s"}`;
   }, [hasActiveFilters, hasQuery, loading, query, total]);
 
   const updateFilter = useCallback((partial: Partial<SearchFilters>) => {
@@ -738,7 +740,6 @@ export default function SearchBar({
           </p>
         </div>
         <div className="search-status-block">
-          <span className="search-status-label">Now Showing</span>
           <p className="search-status">{searchStatus}</p>
         </div>
       </div>
@@ -747,7 +748,7 @@ export default function SearchBar({
         <input
           type="search"
           className="search-input"
-          placeholder="Search names, places, dates..."
+          placeholder={placeholderProp || "Search names, places, dates..."}
           aria-label="Search the archive"
           enterKeyHint="search"
           value={query}

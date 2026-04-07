@@ -73,7 +73,9 @@
 
 .cd-highlight-zone--prev {
   left: 0;
-  border-radius: 26px 0 0 26px;
+  border-radius: inherit;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
   background: linear-gradient(90deg, rgba(255, 250, 242, 0.1), transparent);
   justify-content: flex-start;
   padding-left: 0.7rem;
@@ -81,7 +83,9 @@
 
 .cd-highlight-zone--next {
   right: 0;
-  border-radius: 0 26px 26px 0;
+  border-radius: inherit;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
   background: linear-gradient(270deg, rgba(255, 250, 242, 0.1), transparent);
   justify-content: flex-end;
   padding-right: 0.7rem;
@@ -224,5 +228,10 @@
 @media (max-width: 640px) {
   .cd-highlight-card {
     min-height: 340px;
+    max-width: none;
+  }
+
+  .cd-highlight-zone {
+    opacity: 1;
   }
 }

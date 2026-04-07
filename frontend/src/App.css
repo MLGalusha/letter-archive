@@ -5,7 +5,7 @@
 .main-page-layout,
 .public-letter-shell {
   position: relative;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .public-site-shell,

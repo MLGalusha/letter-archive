@@ -91,8 +91,6 @@
   position: relative;
   text-align: left;
   width: 100%;
-  content-visibility: auto;
-  contain-intrinsic-size: 312px;
 }
 
 .letter-card-shell--has-search-match .letter-card {
@@ -399,13 +397,13 @@
   white-space: nowrap;
 }
 
-@media (max-width: 1260px) {
+@media (max-width: 1080px) {
   .letter-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 920px) {
+@media (max-width: 740px) {
   .letter-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -413,7 +411,8 @@
 
 @media (max-width: 640px) {
   .letter-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
   }
 
   .archive-load-more,
@@ -423,34 +422,52 @@
   }
 
   .letter-card {
-    min-height: 298px;
-    border-radius: 24px;
+    min-height: 260px;
+    border-radius: 16px;
   }
 
   .letter-card-page-count {
-    inset: 0.78rem 0.85rem auto auto;
+    inset: 0.45rem 0.5rem auto auto;
+    font-size: 0.58rem;
   }
 
   .letter-card-search-toggle {
-    inset: 0.7rem auto auto 0.72rem;
-    width: 2rem;
-    height: 2rem;
+    inset: 0.45rem auto auto 0.5rem;
+    width: 1.6rem;
+    height: 1.6rem;
   }
 
   .letter-card-sort-cue {
-    inset: 0.76rem auto auto 0.8rem;
-    max-width: min(68%, 11rem);
+    inset: 0.45rem auto auto 0.5rem;
+    max-width: min(72%, 8rem);
+  }
+
+  .letter-card-sort-cue-label {
+    font-size: 0.48rem;
+  }
+
+  .letter-card-sort-cue-value {
+    font-size: 0.62rem;
   }
 
   .letter-card-sort-cue--stacked {
-    inset-block-start: 3rem;
+    inset-block-start: 2.2rem;
   }
 
   .letter-card-content {
-    padding: 0.72rem 0.8rem 0.78rem;
+    padding: 0.4rem 0.5rem 0.45rem;
+  }
+
+  .letter-card-meta {
+    font-size: 0.58rem;
+  }
+
+  .letter-card-date {
+    font-size: 0.54rem;
   }
 
   .letter-hook {
-    font-size: 0.94rem;
+    font-size: 0.72rem;
+    -webkit-line-clamp: 2;
   }
 }

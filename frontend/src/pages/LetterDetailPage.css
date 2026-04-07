@@ -959,6 +959,10 @@
 /* ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 900px) {
+  .letter-article {
+    padding-top: 7.5rem;
+  }
+
   .letter-headline-hook p {
     font-size: clamp(1.3rem, 5vw, 1.8rem);
   }

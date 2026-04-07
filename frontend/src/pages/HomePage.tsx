@@ -21,6 +21,8 @@ import { buildHomeSeo } from "../utils/seo";
 import { EMPTY_DOCK, useHeaderDock } from "../contexts/HeaderDockContext";
 import useArchiveSearch from "../hooks/useArchiveSearch";
 import useStickyDock from "../hooks/useStickyDock";
+import useIsMobile from "../hooks/useIsMobile";
+import InfiniteCarousel from '../components/InfiniteCarousel';
 import "./HomePage.css";
 
 function formatDate(dateStr: string): string {
@@ -113,18 +115,31 @@ function HeroLetterCard({
   heroImages,
   ariaLabel,
   onNavigate,
+  onInteraction,
 }: {
   heroLetter: FeaturedLetter;
   heroImages: LetterImage[];
   ariaLabel: string;
   onNavigate: (letterId: string, params: URLSearchParams) => void;
+  onInteraction?: () => void;
 }) {
   const [heroPageIndex, setHeroPageIndex] = useState(0);
   const currentImage = heroImages[heroPageIndex] || null;
   const hasMultiplePages = heroImages.length > 1;
   const heroPeopleLine = getCorrespondentLine(heroLetter);
   const heroDate = formatFeaturedLetterDate(heroLetter.letterDate || heroLetter.dateRaw);
-  const navigateToLetter = () => {
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const handlePointerDown = (e: React.PointerEvent) => {
+    pointerStartRef.current = { x: e.clientX, y: e.clientY };
+  };
+  const navigateToLetter = (e?: ReactMouseEvent) => {
+    // Suppress click if pointer moved (user was scrolling/swiping)
+    const start = pointerStartRef.current;
+    if (start && e) {
+      const dx = Math.abs(e.clientX - start.x);
+      const dy = Math.abs(e.clientY - start.y);
+      if (dx > 8 || dy > 8) return;
+    }
     const params = new URLSearchParams();
     params.set("from", "highlight");
     if (currentImage) params.set("image", currentImage.id);
@@ -141,11 +156,13 @@ function HeroLetterCard({
     event.preventDefault();
     event.stopPropagation();
     setHeroPageIndex((i) => (i === 0 ? heroImages.length - 1 : i - 1));
+    onInteraction?.();
   };
   const handleNextPage = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
     setHeroPageIndex((i) => (i === heroImages.length - 1 ? 0 : i + 1));
+    onInteraction?.();
   };
 
   const handleHeroHover = () => {
@@ -165,6 +182,7 @@ function HeroLetterCard({
       tabIndex={0}
       className={`letter-card home-hero-feature-card letter-card--${heroLetter.imageType || 'letter'}`}
       aria-label={ariaLabel}
+      onPointerDown={handlePointerDown}
       onClick={navigateToLetter}
       onKeyDown={handleCardKeyDown}
       onMouseEnter={handleHeroHover}
@@ -388,6 +406,8 @@ export default function HomePage() {
     });
   }, []);
 
+  const isMobile = useIsMobile();
+
   const heroPeopleLine = heroLetter ? getCorrespondentLine(heroLetter) : null;
   const heroDate = formatFeaturedLetterDate(heroLetter?.letterDate || heroLetter?.dateRaw);
   const heroAriaLabel = heroLetter
@@ -399,6 +419,11 @@ export default function HomePage() {
       ].filter((value): value is string => Boolean(value)).join(", ")
     : "Featured letter";
 
+  const carouselPauseRef = useRef<() => void>(() => {});
+  const handleCarouselChildInteraction = useCallback(() => {
+    carouselPauseRef.current();
+  }, []);
+
   return (
     <div className="body-layout home-page">
       <SEO
@@ -407,41 +432,85 @@ export default function HomePage() {
         canonicalUrl={homeSeo.canonicalPath}
         jsonLd={homeSeo.jsonLd}
       />
-      <section className="home-hero">
-        <div className="home-hero-copy">
-          <p className="home-kicker">{heroCopy.kicker}</p>
-          <h1 className="home-headline">{heroCopy.heading}</h1>
-          <p className="home-subtitle">{heroCopy.subtitle}</p>
-          <div className="home-hero-actions">
-            <a
-              href="#archive-search"
-              className="btn-card home-primary-action"
-              onClick={handleScrollToArchiveSearch}
-            >
-              Search the Archive
-            </a>
-            <Link to="/collections" className="btn-card home-secondary-action">
-              Browse Collections
-            </Link>
-            <Link to="/blog" className="home-text-link">
-              Read the Journal &rarr;
-            </Link>
+      {isMobile && (heroLetter || !heroLoaded) ? (
+        <section className="home-hero home-hero--carousel">
+          <InfiniteCarousel classPrefix="hero-carousel" pauseRef={carouselPauseRef}>
+            {[
+              <div className="home-hero-copy" key="copy">
+                <p className="home-kicker">{heroCopy.kicker}</p>
+                <h1 className="home-headline">{heroCopy.heading}</h1>
+                <p className="home-subtitle">{heroCopy.subtitle}</p>
+                <div className="home-hero-actions">
+                  <a
+                    href="#archive-search"
+                    className="btn-card home-primary-action"
+                    onClick={handleScrollToArchiveSearch}
+                  >
+                    Search the Archive
+                  </a>
+                  <Link to="/collections" className="btn-card home-secondary-action">
+                    Browse Collections
+                  </Link>
+                  <Link to="/blog" className="home-text-link">
+                    Read the Journal &rarr;
+                  </Link>
+                </div>
+              </div>,
+              heroLetter ? (
+                <HeroLetterCard
+                  key="featured"
+                  heroLetter={heroLetter}
+                  heroImages={heroImages}
+                  ariaLabel={heroAriaLabel}
+                  onNavigate={handleHeroNavigate}
+                  onInteraction={handleCarouselChildInteraction}
+                />
+              ) : (
+                <div key="placeholder" className="home-hero-feature-card home-hero-feature-card--placeholder">
+                  <span className="home-hero-feature-placeholder-label">Featured Letter</span>
+                  <p>Loading a featured letter from collection 009...</p>
+                </div>
+              ),
+            ]}
+          </InfiniteCarousel>
+        </section>
+      ) : (
+        <section className="home-hero">
+          <div className="home-hero-copy">
+            <p className="home-kicker">{heroCopy.kicker}</p>
+            <h1 className="home-headline">{heroCopy.heading}</h1>
+            <p className="home-subtitle">{heroCopy.subtitle}</p>
+            <div className="home-hero-actions">
+              <a
+                href="#archive-search"
+                className="btn-card home-primary-action"
+                onClick={handleScrollToArchiveSearch}
+              >
+                Search the Archive
+              </a>
+              <Link to="/collections" className="btn-card home-secondary-action">
+                Browse Collections
+              </Link>
+              <Link to="/blog" className="home-text-link">
+                Read the Journal &rarr;
+              </Link>
+            </div>
           </div>
-        </div>
-        {heroLetter ? (
-          <HeroLetterCard
-            heroLetter={heroLetter}
-            heroImages={heroImages}
-            ariaLabel={heroAriaLabel}
-            onNavigate={handleHeroNavigate}
-          />
-        ) : !heroLoaded ? (
-          <div className="home-hero-feature-card home-hero-feature-card--placeholder">
-            <span className="home-hero-feature-placeholder-label">Featured Letter</span>
-            <p>Loading a featured letter from collection 009...</p>
-          </div>
-        ) : null}
-      </section>
+          {heroLetter ? (
+            <HeroLetterCard
+              heroLetter={heroLetter}
+              heroImages={heroImages}
+              ariaLabel={heroAriaLabel}
+              onNavigate={handleHeroNavigate}
+            />
+          ) : !heroLoaded ? (
+            <div className="home-hero-feature-card home-hero-feature-card--placeholder">
+              <span className="home-hero-feature-placeholder-label">Featured Letter</span>
+              <p>Loading a featured letter from collection 009...</p>
+            </div>
+          ) : null}
+        </section>
+      )}
 
       {latestBlogPost && (
         <section className="home-editorial-rail">
@@ -475,6 +544,7 @@ export default function HomePage() {
           loading={archive.archiveLoading}
           embedded
           variant="full"
+          placeholder={isMobile ? "Search archive..." : undefined}
           refineOpen={dock.pageRefineOpen}
           sortOpen={dock.pageSortOpen}
           dockTriggerRef={searchDockTriggerRef}

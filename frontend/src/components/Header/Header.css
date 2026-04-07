@@ -146,6 +146,20 @@
   gap: 0.6rem;
 }
 
+.header-dock .search-input {
+  padding: 0.55rem 0.85rem;
+  font-size: 0.88rem;
+  border-radius: 16px;
+}
+
+.header-dock .search-compact-filter-toggle,
+.header-dock .search-sort-trigger {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.78rem;
+  min-height: 0;
+  border-radius: 16px;
+}
+
 .header-dock .search-compact-filter-wrap {
   justify-self: end;
 }
@@ -231,35 +245,74 @@
   }
 
   .header-inner {
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0;
+    padding: 0.55rem 0.45rem;
+    min-height: 3.45rem;
+  }
+
+  /* Hide the brand text — nav takes priority */
+  .main-title {
+    display: none;
+  }
+
+  /* Keep brand slot minimal so dock still works */
+  .header-brand-slot {
+    min-height: 0;
+    gap: 0;
+  }
+
+  /* Hide dock when not active to avoid empty space */
+  .header-brand-slot:not(.has-active-dock) {
+    display: none;
+  }
+
+  /* Scrubber mode (show-title): slider below nav, nav stays visible */
+  .header-brand-slot.has-active-dock.show-title {
+    width: 100%;
+    order: 1;
+  }
+
+  .header-brand-slot.has-active-dock.show-title .main-title {
+    display: none;
+  }
+
+  .header-brand-slot.has-active-dock.show-title .header-dock {
+    padding-top: 0.15rem;
+    padding-bottom: 0.1rem;
+  }
+
+  /* Search dock mode (no show-title): nav hides, search takes full row */
+  .header-brand-slot.has-active-dock:not(.show-title) {
+    width: 100%;
+    order: 1;
+  }
+
+  .header-inner:has(.has-active-dock:not(.show-title)) .nav {
+    display: none;
   }
 
   .menu-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    justify-self: end;
+    display: none;
   }
 
   .nav {
-    display: none;
-    grid-column: 1 / -1;
     justify-self: stretch;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.3rem;
-    padding-top: 0.35rem;
-  }
-
-  .nav.open {
-    display: flex;
+    justify-content: stretch;
+    gap: 0;
+    flex-wrap: nowrap;
+    width: 100%;
   }
 
   .page-selector {
-    width: 100%;
-    justify-content: flex-start;
-    padding-inline: 1rem;
-    background: rgba(255, 255, 255, 0.7);
+    flex: 1 1 0;
+    justify-content: center;
+    padding: 0.5rem 0.2rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    white-space: nowrap;
   }
 }
 

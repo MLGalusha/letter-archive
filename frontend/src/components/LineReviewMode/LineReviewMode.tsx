@@ -414,10 +414,11 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: segments }));
         setKrakenSegmentsMap(prev => ({ ...prev, [lpIdx]: segments }));
       })
-      .catch(() => {
+      .catch((err) => {
         setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: [] }));
+        showToast(getErrorMessage(err, 'Failed to load segments'), 'error');
       });
-  }, [currentPage, currentLetterPageIndex, aiSegmentsMap, pageLineTexts]);
+  }, [currentPage, currentLetterPageIndex, aiSegmentsMap, pageLineTexts, showToast]);
 
   // Background pre-fetch: load segments for upcoming pages.
   useEffect(() => {

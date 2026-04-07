@@ -1,6 +1,6 @@
 import { unlink } from 'node:fs/promises';
 import { Router } from 'express';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db, canonicalPersons, letterPages, letterPersons, letters } from '../../../db/index.js';
 import type { StructuredNote, NoteCategory, NotePriority } from '../../../ai/schemas/metadataV2.js';
 import { savePageLineSegments } from '../../../services/line-finder.js';
@@ -120,17 +120,25 @@ router.post('/:letterId/confirm-transcript', async (req, res, next) => {
       throw new BadRequestError('Letter must be in TRANSCRIBED state', { currentState: letter.workflow });
     }
 
-    // Atomically confirm transcript AND claim the metadata job in one update
-    // to prevent the background worker from racing to claim it between the
-    // confirm and the extraction call.
-    if (letter.metadataStatus === 'PENDING') {
+    // Trigger extraction if status is PENDING or FAILED (e.g. cleared by admin).
+    // Skip only if already RUNNING or SUCCESS to avoid double-processing.
+    const shouldExtract = letter.metadataStatus === 'PENDING' || letter.metadataStatus === 'FAILED';
+
+    if (shouldExtract) {
+      // Atomically confirm transcript AND claim the metadata job in one update
+      // to prevent the background worker from racing to claim it.
       const claimResult = await db.update(letters).set({
         transcriptConfirmedAt: new Date(),
         transcriptConfirmedBy: getUserId(req),
         metadataStatus: 'RUNNING',
+        metadataError: null,
+        entityExtractionStatus: 'PENDING',
+        entityExtractionError: null,
         updatedAt: new Date(),
-      }).where(and(eq(letters.id, letterId), eq(letters.metadataStatus, 'PENDING')))
-        .returning({ id: letters.id });
+      }).where(and(
+        eq(letters.id, letterId),
+        inArray(letters.metadataStatus, ['PENDING', 'FAILED']),
+      )).returning({ id: letters.id });
 
       if (claimResult.length > 0) {
         // We claimed the job — run extraction (skipping the internal claimJob since we already claimed)
@@ -155,7 +163,7 @@ router.post('/:letterId/confirm-transcript', async (req, res, next) => {
       }).where(eq(letters.id, letterId));
       req.log.info(
         { letterId, metadataStatus: letter.metadataStatus },
-        'Skipping metadata extraction — status is not PENDING',
+        'Skipping metadata extraction — status is not PENDING or FAILED',
       );
     }
     res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));

@@ -12,7 +12,8 @@ import {
 } from '../db/index.js';
 import type { MetadataV2, StructuredNote, AiNoteOutput } from '../ai/schemas/metadataV2.js';
 import type { EntityExtraction } from '../ai/schemas/entityExtraction.js';
-import { createNotification } from './notifications.js';
+import { notify } from './notifications.js';
+import { MAX_JOB_ATTEMPTS } from '../config/constants.js';
 import { isPlaceholderValue } from '../utils/placeholders.js';
 
 export interface LetterIdentity {
@@ -203,16 +204,27 @@ export async function updateTranscriptionStatus(
 }
 
 /**
- * Increments transcription attempt count.
+ * Increments transcription attempt count. If the new count reaches
+ * MAX_JOB_ATTEMPTS, marks the letter dead_letter and fires a critical
+ * notification so an admin investigates.
  */
 export async function incrementTranscriptionAttempts(letterId: string): Promise<void> {
-  await db
+  const [updated] = await db
     .update(letters)
     .set({
       transcriptionAttemptCount: sql`${letters.transcriptionAttemptCount} + 1`,
       updatedAt: new Date(),
     })
-    .where(eq(letters.id, letterId));
+    .where(eq(letters.id, letterId))
+    .returning({
+      attempts: letters.transcriptionAttemptCount,
+      deadLetter: letters.deadLetter,
+      dateRaw: letters.dateRaw,
+    });
+
+  if (updated && !updated.deadLetter && updated.attempts >= MAX_JOB_ATTEMPTS) {
+    await markDeadLetter(letterId, 'transcription', updated.attempts, updated.dateRaw);
+  }
 }
 
 /**
@@ -262,16 +274,54 @@ export async function updateMetadataStatus(
 }
 
 /**
- * Increments metadata attempt count.
+ * Increments metadata attempt count. Same dead-letter behavior as the
+ * transcription counter — see incrementTranscriptionAttempts.
  */
 export async function incrementMetadataAttempts(letterId: string): Promise<void> {
-  await db
+  const [updated] = await db
     .update(letters)
     .set({
       metadataAttemptCount: sql`${letters.metadataAttemptCount} + 1`,
       updatedAt: new Date(),
     })
+    .where(eq(letters.id, letterId))
+    .returning({
+      attempts: letters.metadataAttemptCount,
+      deadLetter: letters.deadLetter,
+      dateRaw: letters.dateRaw,
+    });
+
+  if (updated && !updated.deadLetter && updated.attempts >= MAX_JOB_ATTEMPTS) {
+    await markDeadLetter(letterId, 'metadata', updated.attempts, updated.dateRaw);
+  }
+}
+
+/**
+ * Marks a letter dead_letter and fires a critical notification.
+ * The worker job picker excludes dead_letter rows; manual retry clears it.
+ */
+async function markDeadLetter(
+  letterId: string,
+  jobType: 'transcription' | 'metadata' | 'entity',
+  attempts: number,
+  dateRaw: string | null,
+): Promise<void> {
+  await db
+    .update(letters)
+    .set({ deadLetter: true, updatedAt: new Date() })
     .where(eq(letters.id, letterId));
+
+  void notify({
+    type: 'job_max_retries',
+    title: `${jobType} job exceeded max retries`,
+    message: `Letter ${dateRaw ?? letterId.slice(0, 8)} failed ${jobType} ${attempts} times. Auto-retry stopped — investigate before manually retrying.`,
+    link: `/admin/letters/${letterId}`,
+    sourceType: 'letter',
+    sourceId: letterId,
+    metadata: { jobType, attempts, maxAttempts: MAX_JOB_ATTEMPTS },
+    dedupeKey: `job_max_retries:${letterId}:${jobType}`,
+    dedupeWindowMinutes: 1440, // 24h — don't spam if admin doesn't act immediately
+  });
 }
 
 /**
@@ -298,6 +348,7 @@ export async function resetLetterForProcessing(letterId: string): Promise<void> 
       transcriptVerifiedBy: null,
       metadataVerifiedAt: null,
       metadataVerifiedBy: null,
+      deadLetter: false,
       updatedAt: new Date(),
     })
     .where(eq(letters.id, letterId));
@@ -363,11 +414,15 @@ export async function updateMetadataV2(
       // Create notification for high-priority notes
       const highPriorityNotes = structuredNotes.filter(n => n.priority === 'high');
       if (highPriorityNotes.length > 0) {
-        createNotification({
-          type: 'system',
+        void notify({
+          type: 'ai_notes_high_priority',
           title: `${highPriorityNotes.length} note${highPriorityNotes.length > 1 ? 's' : ''} need attention`,
           message: highPriorityNotes.map(n => n.content).join('; '),
           link: `/admin/letters/${letterId}`,
+          sourceType: 'letter',
+          sourceId: letterId,
+          metadata: { noteCount: highPriorityNotes.length },
+          dedupeKey: `ai_notes_high_priority:${letterId}`,
         });
       }
     } else {

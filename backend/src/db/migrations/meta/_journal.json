@@ -288,6 +288,13 @@
       "when": 1776076800000,
       "tag": "0040_drop_ocr_word_boxes",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1776163200000,
+      "tag": "0041_notifications_overhaul",
+      "breakpoints": true
     }
   ]
 }

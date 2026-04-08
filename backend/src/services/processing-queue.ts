@@ -6,7 +6,7 @@ import { db, letters, letterPages, collections } from '../db/index.js';
 import { processLetter, processMetadata } from '../pipeline/processor.js';
 import { runEntityExtractionOnly } from '../pipeline/metadataV2.js';
 import { createLogger } from '../utils/logger.js';
-import { createNotification } from './notifications.js';
+import { notify } from './notifications.js';
 import { TRANSCRIBABLE_TYPES } from './letter/shared.js';
 
 const log = createLogger({ module: 'processing-queue' });
@@ -226,11 +226,21 @@ export async function processLettersAsync(letterIds: string[], type: 'transcript
       log.error({ letterId, type, err: error }, 'Job failed');
 
       // Notify on individual job failure (only for non-batch single re-runs, but always safe)
-      createNotification({
-        type: 'error',
+      const failType =
+        type === 'transcription'
+          ? 'transcription_failed'
+          : type === 'metadata'
+            ? 'metadata_failed'
+            : 'entity_failed';
+      void notify({
+        type: failType,
         title: `${type === 'transcription' ? 'Transcription' : type === 'metadata' ? 'Metadata extraction' : 'Entity extraction'} failed`,
         message: errorMessage,
         link: `/admin/letters/${letterId}`,
+        sourceType: 'letter',
+        sourceId: letterId,
+        metadata: { error: errorMessage, jobType: type },
+        dedupeKey: `${failType}:${letterId}`,
       });
     }
   }
@@ -249,11 +259,19 @@ export async function processLettersAsync(letterIds: string[], type: 'transcript
 
   // Batch completion notification (one summary instead of per-letter)
   if (letterIds.length > 1) {
-    createNotification({
-      type: 'batch',
+    void notify({
+      type: 'batch_complete',
+      severity: processingState.failed > 0 ? 'warn' : 'info',
       title: 'Batch complete',
       message: `${processingState.completed} succeeded, ${processingState.failed} failed (${type})`,
       link: '/admin/processing',
+      metadata: {
+        succeeded: processingState.completed,
+        failed: processingState.failed,
+        total: processingState.total,
+        jobType: type,
+        durationMs: batchDuration,
+      },
     });
   }
 
@@ -312,6 +330,18 @@ export async function recoverOrphanedJobs(): Promise<void> {
   }
 
   log.info({ count: orphanedLetters.length }, 'Orphaned job recovery complete');
+
+  void notify({
+    type: 'job_orphan_recovered',
+    title: `Recovered ${orphanedLetters.length} orphaned job${orphanedLetters.length === 1 ? '' : 's'}`,
+    message: `Reset RUNNING jobs back to PENDING after restart.`,
+    metadata: {
+      count: orphanedLetters.length,
+      letterIds: orphanedLetters.map(l => l.id),
+    },
+    dedupeKey: 'job_orphan_recovered',
+    dedupeWindowMinutes: 5,
+  });
 }
 
 /**
@@ -748,6 +778,17 @@ export function pauseProcessing(): { message: string } {
   }
   processingState.isPaused = true;
   log.info({ completed: processingState.completed, total: processingState.total }, 'Processing paused');
+  void notify({
+    type: 'queue_paused',
+    title: 'Processing queue paused',
+    message: `Paused at ${processingState.completed}/${processingState.total}`,
+    link: '/admin/processing',
+    sourceType: 'admin',
+    metadata: {
+      completed: processingState.completed,
+      total: processingState.total,
+    },
+  });
   return { message: 'Processing paused' };
 }
 
@@ -760,6 +801,17 @@ export function resumeProcessing(): { message: string } {
   }
   processingState.isPaused = false;
   log.info({ completed: processingState.completed, total: processingState.total }, 'Processing resumed');
+  void notify({
+    type: 'queue_resumed',
+    title: 'Processing queue resumed',
+    message: `Resumed at ${processingState.completed}/${processingState.total}`,
+    link: '/admin/processing',
+    sourceType: 'admin',
+    metadata: {
+      completed: processingState.completed,
+      total: processingState.total,
+    },
+  });
   return { message: 'Processing resumed' };
 }
 
@@ -925,6 +977,7 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
       transcriptionStatus: 'PENDING',
       transcriptionError: null,
       transcriptionAttemptCount: 0,
+      deadLetter: false,
       workflow: 'UPLOADED',
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
@@ -936,6 +989,7 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
       metadataStatus: 'PENDING',
       metadataError: null,
       metadataAttemptCount: 0,
+      deadLetter: false,
       workflow: 'TRANSCRIBED',
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));

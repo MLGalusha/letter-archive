@@ -197,6 +197,10 @@ export const letters = pgTable(
     transcriptionAttemptCount: integer('transcription_attempt_count').notNull().default(0),
     transcribedAt: timestamp('transcribed_at', { withTimezone: true }),
 
+    // Dead-letter flag: set when a job (transcription/metadata/entity) hits MAX_JOB_ATTEMPTS.
+    // The worker excludes dead-letter rows from auto-pickup; manual retry/reset clears it.
+    deadLetter: boolean('dead_letter').notNull().default(false),
+
     // Metadata fields (filterable)
     sender: text('sender'),
     recipient: text('recipient'),
@@ -661,17 +665,43 @@ export const siteSettings = pgTable('site_settings', {
 // ============================================================================
 
 /**
- * Admin notification feed — persistent, queryable notifications for the admin UI
+ * Admin notification feed — persistent, queryable notifications for the admin UI.
+ * See backend/src/services/notifications.ts for the canonical type/severity enums
+ * and the notify() helper that should be used for all inserts.
  */
-export const adminNotifications = pgTable('admin_notifications', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  type: text('type').notNull(), // 'transcription', 'metadata', 'entity', 'upload', 'batch', 'admin', 'error', 'system'
-  title: text('title').notNull(),
-  message: text('message'),
-  link: text('link'), // optional frontend route, e.g., '/admin/letters/abc-123'
-  read: boolean('read').notNull().default(false),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const adminNotifications = pgTable(
+  'admin_notifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    type: text('type').notNull(), // canonical NotificationType (see services/notifications.ts)
+    severity: text('severity').notNull().default('info'), // 'info' | 'warn' | 'error' | 'critical'
+    status: text('status').notNull().default('open'), // 'open' | 'acknowledged' | 'resolved' | 'archived'
+    title: text('title').notNull(),
+    message: text('message'),
+    link: text('link'), // optional frontend route, e.g., '/admin/letters/abc-123'
+    sourceType: text('source_type'), // 'letter' | 'collection' | 'job' | 'admin' | 'system'
+    sourceId: text('source_id'), // identifier of source entity (no FK so deletes don't cascade)
+    metadata: jsonb('metadata'), // structured context (sender, recipient, counts, error code, etc.)
+    dedupeKey: text('dedupe_key'), // collapse duplicates within a window
+    dedupeCount: integer('dedupe_count').notNull().default(1),
+    lastOccurredAt: timestamp('last_occurred_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    resolvedBy: text('resolved_by'),
+    read: boolean('read').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_notifications_status_severity_created').on(
+      table.status,
+      table.severity,
+      table.createdAt,
+    ),
+    index('idx_notifications_source').on(table.sourceType, table.sourceId),
+    index('idx_notifications_dedupe_open').on(table.dedupeKey),
+    index('idx_notifications_expires_at').on(table.expiresAt),
+  ],
+);
 
 // ============================================================================
 // API USAGE TRACKING TABLE

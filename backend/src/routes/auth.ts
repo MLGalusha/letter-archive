@@ -8,7 +8,7 @@ import { hashPassword, verifyPassword, generateToken } from '../auth/jwt.js';
 import { validateBody } from '../middleware/validate.js';
 import { requireAuth } from '../middleware/auth.js';
 import { authRateLimit } from '../middleware/rate-limit.js';
-import { createNotification } from '../services/notifications.js';
+import { notify } from '../services/notifications.js';
 import {
   ADMIN_INVITE_TTL_MS,
   cleanupStaleAdminInvites,
@@ -67,6 +67,15 @@ router.post('/auth/login', authRateLimit, validateBody(loginSchema), async (req,
       }
 
       req.log?.warn({ email }, 'Login failed: user not found');
+      void notify({
+        type: 'admin_login_failed',
+        title: 'Failed admin login attempt',
+        message: `Unknown email: ${email}`,
+        sourceType: 'admin',
+        metadata: { email, reason: 'unknown_email', ip: req.ip },
+        dedupeKey: `login_fail:${email}`,
+        dedupeWindowMinutes: 15,
+      });
       res.status(401).json({ error: 'Invalid email or password' });
       return;
     }
@@ -74,6 +83,16 @@ router.post('/auth/login', authRateLimit, validateBody(loginSchema), async (req,
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) {
       req.log?.warn({ email }, 'Login failed: invalid password');
+      void notify({
+        type: 'admin_login_failed',
+        title: 'Failed admin login attempt',
+        message: `Wrong password for ${email}`,
+        sourceType: 'admin',
+        sourceId: user.id,
+        metadata: { email, reason: 'invalid_password', ip: req.ip },
+        dedupeKey: `login_fail:${email}`,
+        dedupeWindowMinutes: 15,
+      });
       res.status(401).json({ error: 'Invalid email or password' });
       return;
     }
@@ -272,10 +291,13 @@ router.post('/auth/accept-invite', authRateLimit, validateBody(acceptInviteSchem
     req.log?.info({ userId: user.id, email, inviteId: invite.id }, 'Admin account created via invite');
 
     // Notify existing admins about the new member
-    createNotification({
-      type: 'admin',
+    void notify({
+      type: 'admin_joined',
       title: 'New admin joined',
       message: `${email} accepted an invite`,
+      sourceType: 'admin',
+      sourceId: user.id,
+      metadata: { email },
     });
 
     res.status(201).json({ token: authToken, email: user.email });

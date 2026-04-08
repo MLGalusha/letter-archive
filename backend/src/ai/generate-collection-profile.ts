@@ -10,6 +10,7 @@ import {
 import { db, letters, collections } from '../db/index.js';
 import { logApiUsage } from '../services/usage-tracking.js';
 import { createLogger } from '../utils/logger.js';
+import { notify } from '../services/notifications.js';
 
 const log = createLogger({ module: 'generate-collection-profile' });
 
@@ -178,6 +179,15 @@ export async function generateCollectionProfile(collectionId: string): Promise<C
     throw new Error(`Collection not found: ${collectionId}`);
   }
 
+  void notify({
+    type: 'collection_profile_started',
+    title: 'Collection profile generation started',
+    message: collection.title ?? collection.collectionCode,
+    sourceType: 'collection',
+    sourceId: collectionId,
+    metadata: { collectionCode: collection.collectionCode },
+  });
+
   // Gather published letters with metadata and entity extraction
   const collectionLetters = await db.query.letters.findMany({
     where: and(
@@ -328,10 +338,36 @@ async function callOpenAIForProfile(
       'Collection profile generated successfully',
     );
 
+    void notify({
+      type: 'collection_profile_complete',
+      title: 'Collection profile ready',
+      message: `${collection.title ?? collection.collectionCode}: ${correspondents.length} correspondent${correspondents.length === 1 ? '' : 's'}`,
+      link: `/admin/collections/${collectionId}`,
+      sourceType: 'collection',
+      sourceId: collectionId,
+      metadata: {
+        collectionCode: collection.collectionCode,
+        correspondentCount: correspondents.length,
+        narrativeLength: result.narrative.length,
+        durationMs: duration,
+      },
+    });
+
     return result;
   } catch (error) {
     const duration = Date.now() - startTime;
+    const message = error instanceof Error ? error.message : 'Unknown error';
     log.error({ collectionId, duration, err: error }, 'Collection profile generation failed');
+    void notify({
+      type: 'collection_profile_failed',
+      title: 'Collection profile generation failed',
+      message,
+      link: `/admin/collections/${collectionId}`,
+      sourceType: 'collection',
+      sourceId: collectionId,
+      metadata: { error: message, durationMs: duration, collectionCode: collection.collectionCode },
+      dedupeKey: `collection_profile_failed:${collectionId}`,
+    });
     throw error;
   }
 }

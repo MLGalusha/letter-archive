@@ -10,7 +10,7 @@ import { buildStoragePath, fileExists } from '../../services/storage.js';
 import { db, siteSettings } from '../../db/index.js';
 import { startTranscriptionProcessing } from '../../services/processing-queue.js';
 import { createLogger } from '../../utils/logger.js';
-import { createNotification } from '../../services/notifications.js';
+import { notify } from '../../services/notifications.js';
 
 const router = Router();
 const log = createLogger({ module: 'uploads' });
@@ -144,11 +144,17 @@ router.post('/uploads', upload.array('files', 500), async (req, res, next) => {
   // Fire-and-forget: upload notification
   if (results.length > 0) {
     const collectionCodes = [...new Set(results.map(r => r.collectionCode))];
-    createNotification({
-      type: 'upload',
+    void notify({
+      type: 'upload_success',
       title: 'Letters uploaded',
       message: `${results.length} letter${results.length === 1 ? '' : 's'} uploaded to ${collectionCodes.join(', ')}`,
       link: '/admin',
+      sourceType: 'collection',
+      metadata: {
+        count: results.length,
+        collectionCodes,
+        failedCount: errors.length,
+      },
     });
   }
 

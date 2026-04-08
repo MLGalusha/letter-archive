@@ -189,6 +189,7 @@ router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
     await db.update(letters).set({
       metadataStatus: 'RUNNING',
       metadataAttemptCount: 0,
+      deadLetter: false,
       metadataError: null,
       entityExtractionStatus: 'PENDING',
       entityExtractionError: null,
@@ -280,6 +281,7 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
       await db.update(letters).set({
         metadataStatus: 'RUNNING',
         metadataAttemptCount: 0,
+        deadLetter: false,
         metadataError: null,
         entityExtractionStatus: 'PENDING',
         entityExtractionError: null,

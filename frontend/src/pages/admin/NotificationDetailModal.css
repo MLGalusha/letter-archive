@@ -1,0 +1,307 @@
+/* ── Notification detail modal ─────────────────────────── */
+
+.notif-modal-body {
+  --sev-info: #1976d2;
+  --sev-info-bg: hsla(210, 70%, 50%, 0.10);
+  --sev-warn: #c77700;
+  --sev-warn-bg: hsla(35, 95%, 50%, 0.12);
+  --sev-error: #c62828;
+  --sev-error-bg: hsla(0, 65%, 50%, 0.10);
+  --sev-critical: #b71c1c;
+  --sev-critical-bg: hsla(0, 75%, 45%, 0.14);
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+body.dark .notif-modal-body {
+  --sev-info: #64b5f6;
+  --sev-warn: #ffb74d;
+  --sev-error: #ef5350;
+  --sev-critical: #ff5252;
+}
+
+/* Hero row: type icon + severity/status badges */
+.notif-modal-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.notif-modal-hero.sev-info {
+  background: var(--sev-info-bg);
+  border-color: hsla(210, 70%, 50%, 0.35);
+}
+.notif-modal-hero.sev-warn {
+  background: var(--sev-warn-bg);
+  border-color: hsla(35, 95%, 50%, 0.35);
+}
+.notif-modal-hero.sev-error {
+  background: var(--sev-error-bg);
+  border-color: hsla(0, 65%, 50%, 0.35);
+}
+.notif-modal-hero.sev-critical {
+  background: var(--sev-critical-bg);
+  border-color: hsla(0, 75%, 45%, 0.4);
+}
+
+.notif-modal-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--bg-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px hsla(0, 0%, 0%, 0.06);
+}
+
+.notif-modal-hero.sev-info .notif-modal-icon { color: var(--sev-info); }
+.notif-modal-hero.sev-warn .notif-modal-icon { color: var(--sev-warn); }
+.notif-modal-hero.sev-error .notif-modal-icon { color: var(--sev-error); }
+.notif-modal-hero.sev-critical .notif-modal-icon { color: var(--sev-critical); }
+
+.notif-modal-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.notif-modal-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: hsla(0, 0%, 50%, 0.15);
+  color: var(--text-muted);
+}
+
+.notif-modal-badge.sev-info {
+  background: hsla(210, 70%, 50%, 0.18);
+  color: var(--sev-info);
+}
+.notif-modal-badge.sev-warn {
+  background: hsla(35, 95%, 50%, 0.18);
+  color: var(--sev-warn);
+}
+.notif-modal-badge.sev-error {
+  background: hsla(0, 65%, 50%, 0.18);
+  color: var(--sev-error);
+}
+.notif-modal-badge.sev-critical {
+  background: hsla(0, 75%, 45%, 0.22);
+  color: var(--sev-critical);
+}
+
+.notif-modal-badge.status-open {
+  background: hsla(210, 70%, 50%, 0.15);
+  color: var(--sev-info);
+}
+.notif-modal-badge.status-resolved {
+  background: hsla(140, 50%, 45%, 0.18);
+  color: hsl(140, 55%, 32%);
+}
+.notif-modal-badge.status-archived {
+  background: hsla(0, 0%, 50%, 0.18);
+  color: var(--text-muted);
+}
+
+.notif-modal-badge.dedupe {
+  background: var(--sev-warn-bg);
+  color: var(--sev-warn);
+}
+
+/* Main message */
+.notif-modal-message {
+  margin: 0;
+  font-size: var(--font-base);
+  line-height: 1.55;
+  color: var(--text);
+}
+
+/* Definition list */
+.notif-modal-meta {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: var(--font-sm);
+}
+
+.notif-modal-meta dt {
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: var(--font-xs);
+  letter-spacing: 0.04em;
+  padding-top: 3px;
+}
+
+.notif-modal-meta dd {
+  margin: 0;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.notif-modal-meta code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.78rem;
+  padding: 1px 6px;
+  background: hsla(0, 0%, 50%, 0.10);
+  border-radius: var(--radius-sm);
+}
+
+.notif-modal-source-type {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sev-info-bg);
+  color: var(--sev-info);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  text-transform: capitalize;
+  margin-right: 8px;
+}
+
+.notif-modal-source-id {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.notif-modal-source-label {
+  display: inline-block;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.notif-modal-resolved-by {
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+}
+
+/* Metadata block (separated from the fixed-field meta list) */
+.notif-modal-metadata {
+  padding-top: var(--spacing-sm);
+  border-top: 1px dashed var(--border);
+}
+
+.notif-modal-metadata-label {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.notif-modal-metadata .notif-modal-meta {
+  display: block;
+}
+
+.notif-modal-metadata .notif-modal-meta-row {
+  display: grid;
+  grid-template-columns: minmax(140px, max-content) 1fr;
+  align-items: baseline;
+  column-gap: var(--spacing-md);
+  row-gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid hsla(0, 0%, 50%, 0.08);
+}
+
+.notif-modal-metadata .notif-modal-meta-row:last-child {
+  border-bottom: none;
+}
+
+.notif-modal-metadata .notif-modal-meta-row dt {
+  /* override the upper-case shouty header style for metadata field labels —
+     the values here are dense and the headings should feel like labels, not
+     section dividers. */
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+  padding-top: 0;
+}
+
+.notif-modal-metadata .notif-modal-meta-row dd {
+  font-size: var(--font-sm);
+  color: var(--text);
+}
+
+.notif-modal-metadata .notif-modal-meta-row dd code {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 6px 8px;
+  background: hsla(0, 0%, 50%, 0.08);
+  border-radius: var(--radius-sm);
+}
+
+/* Footer layout */
+.notif-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  width: 100%;
+  flex-wrap: wrap;
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--border);
+}
+
+.notif-modal-footer-left {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.notif-modal-footer-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Action buttons are differentiated by color/variant alone (no icons):
+   Resolve = primary (filled accent), Archive = secondary (outlined),
+   Delete = danger (red). A small left margin on Delete pushes it visually
+   apart from the Resolve/Archive pair. */
+.notif-modal-footer .btn {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.notif-modal-action-delete {
+  margin-left: var(--spacing-xs);
+}
+
+@media (max-width: 560px) {
+  .notif-modal-meta {
+    grid-template-columns: 1fr;
+    gap: 2px 0;
+  }
+  .notif-modal-meta dt {
+    padding-top: var(--spacing-xs);
+  }
+  .notif-modal-metadata .notif-modal-meta-row {
+    grid-template-columns: 1fr;
+  }
+  .notif-modal-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .notif-modal-footer-left,
+  .notif-modal-footer-right {
+    justify-content: flex-end;
+  }
+}

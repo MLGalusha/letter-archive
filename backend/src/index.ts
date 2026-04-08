@@ -1,8 +1,14 @@
 import 'dotenv/config';
+import path from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import compression from 'compression';
 import cors from 'cors';
 import { eq } from 'drizzle-orm';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import routes from './routes/index.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/request-logger.js';
@@ -12,6 +18,9 @@ import { securityHeaders } from './middleware/security.js';
 import { recoverOrphanedJobs } from './services/processing-queue.js';
 import { db, sql, adminUsers } from './db/index.js';
 import { hashPassword } from './auth/jwt.js';
+import { notify } from './services/notifications.js';
+import { startNotificationSweeper, stopNotificationSweeper } from './services/notification-sweeper.js';
+import { initNotificationStreamBroadcaster } from './routes/admin/notifications-stream.js';
 
 /* ── Process-level error monitoring ─────────────────────── */
 process.on('uncaughtException', (err) => {
@@ -128,6 +137,15 @@ const server = app.listen(env.PORT, () => {
     logger.error({ err }, 'Failed to recover orphaned jobs');
   });
 
+  // Wire the SSE broadcaster into notify() so every notification pushes to connected clients
+  initNotificationStreamBroadcaster();
+
+  // Start the notification sweeper (stuck jobs, failure rate, worker silence, retention)
+  startNotificationSweeper();
+
+  // Boot-time health notifications
+  void runBootChecks();
+
   // Seed a dev admin only when explicitly requested.
   if (env.SEED_DEV_ADMIN) {
     const DEV_EMAIL = 'dev@localhost.test';
@@ -146,6 +164,49 @@ const server = app.listen(env.PORT, () => {
   }
 });
 
+/**
+ * Fire boot-time notifications so admins are aware of mode/state issues
+ * the moment they open the page after a restart.
+ */
+async function runBootChecks(): Promise<void> {
+  if (!hasOpenAI) {
+    void notify({
+      type: 'stub_mode_active',
+      title: 'Stub mode active',
+      message: 'No OPENAI_API_KEY configured — AI calls return mocked responses.',
+      dedupeKey: 'stub_mode_active',
+      dedupeWindowMinutes: 1440,
+      expiresInDays: 1,
+    });
+  }
+
+  // Detect pending Drizzle migrations: compare on-disk journal vs DB tracking table.
+  try {
+    const [appliedRow] = await sql<{ count: number }[]>`
+      SELECT COUNT(*)::int AS count FROM drizzle.__drizzle_migrations
+    `;
+    const appliedCount = appliedRow?.count ?? 0;
+
+    const journalPath = path.resolve(__dirname, '../src/db/migrations/meta/_journal.json');
+    const journalRaw = await readFile(journalPath, 'utf8');
+    const journal = JSON.parse(journalRaw) as { entries: unknown[] };
+    const expectedCount = journal.entries.length;
+
+    if (appliedCount < expectedCount) {
+      void notify({
+        type: 'migrations_pending',
+        title: 'Pending database migrations',
+        message: `${expectedCount - appliedCount} migration(s) on disk but not yet applied. Run \`npm run drizzle:migrate\`.`,
+        metadata: { applied: appliedCount, expected: expectedCount },
+        dedupeKey: 'migrations_pending',
+      });
+    }
+  } catch (err) {
+    // Silent: drizzle migrations table or journal file may not exist in some environments
+    logger.debug({ err }, 'Could not check migration state');
+  }
+}
+
 /* ── Graceful shutdown (Cloud Run sends SIGTERM, gives 10s) ── */
 let shuttingDown = false;
 
@@ -153,6 +214,8 @@ function gracefulShutdown(signal: string) {
   if (shuttingDown) return;
   shuttingDown = true;
   logger.info({ signal }, 'Graceful shutdown initiated');
+
+  stopNotificationSweeper();
 
   // Stop accepting new connections and drain in-flight requests
   server.close(() => {

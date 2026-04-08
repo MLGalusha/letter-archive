@@ -14,6 +14,7 @@ import {
 import { logIfSlow, TIMING_THRESHOLDS } from '../../utils/logger.js';
 import { log, openai } from './client.js';
 import { logApiUsage } from '../../services/usage-tracking.js';
+import { notifyApiError } from '../../services/notifications.js';
 
 /** Max width for images sent to OpenAI — keeps quality high for handwriting while reducing payload */
 const AI_IMAGE_MAX_WIDTH = 2000;
@@ -269,6 +270,12 @@ export async function checkExtraContentForText(
   } catch (error) {
     const duration = Date.now() - start;
     log.error({ ...context, duration, err: error }, 'Extra content check failed');
+    notifyApiError({
+      service: 'openai',
+      endpoint: 'extra_content_check',
+      error,
+      letterId: params.letterId,
+    });
     return {
       hasTranscribableText: true,
       reason: 'Check failed, assuming transcribable',
@@ -403,6 +410,12 @@ File: ${params.filePath}
   } catch (error) {
     const duration = Date.now() - start;
     log.error({ ...context, duration, err: error }, 'Extra content transcription failed');
+    notifyApiError({
+      service: 'openai',
+      endpoint: 'extra_content_transcription',
+      error,
+      letterId: params.letterId,
+    });
     throw error;
   }
 }
@@ -512,6 +525,12 @@ A historical photograph or visual image from the archive. ${contextNotes.join(' 
   } catch (error) {
     const duration = Date.now() - start;
     log.error({ ...context, duration, err: error }, 'Photo description failed');
+    notifyApiError({
+      service: 'openai',
+      endpoint: 'photo_description',
+      error,
+      letterId: params.letterId,
+    });
     throw error;
   }
 }

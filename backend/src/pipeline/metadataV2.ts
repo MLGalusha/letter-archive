@@ -11,7 +11,7 @@ import {
 import { processEntityExtraction } from '../services/entities.js';
 import { updateJobProgress, clearJobProgress } from '../services/processing-queue.js';
 import { createLogger } from '../utils/logger.js';
-import { createNotification } from '../services/notifications.js';
+import { notify } from '../services/notifications.js';
 import { db, letters } from '../db/index.js';
 import { eq } from 'drizzle-orm';
 
@@ -146,11 +146,14 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
     // Notification: metadata extracted
     const senderName = metadataResult.metadata.sender || 'Unknown';
     const recipientName = metadataResult.metadata.recipient || 'Unknown';
-    createNotification({
-      type: 'metadata',
+    void notify({
+      type: 'metadata_success',
       title: 'Metadata extracted',
       message: `Sender: ${senderName}, Recipient: ${recipientName}`,
       link: `/admin/letters/${letterId}`,
+      sourceType: 'letter',
+      sourceId: letterId,
+      metadata: { sender: senderName, recipient: recipientName },
     });
   } catch (error) {
     clearJobProgress(letterId, 'metadata');
@@ -238,11 +241,18 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
     );
 
     // Notification: entities extracted
-    createNotification({
-      type: 'entity',
+    void notify({
+      type: 'entity_success',
       title: 'Entities extracted',
       message: `${entityResult.entities.people.length} people, ${entityResult.entities.places.length} places found`,
       link: `/admin/letters/${letterId}`,
+      sourceType: 'letter',
+      sourceId: letterId,
+      metadata: {
+        peopleCount: entityResult.entities.people.length,
+        placesCount: entityResult.entities.places.length,
+        relationshipsCount: entityResult.entities.relationships.length,
+      },
     });
   } catch (error) {
     clearJobProgress(letterId, 'metadata');
@@ -259,6 +269,18 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
     );
 
     await updateEntityExtraction(letterId, 'FAILED', undefined, message);
+
+    // Surface the failure to the admin — basic metadata still saved, but entity work is missing
+    void notify({
+      type: 'entity_failed',
+      title: 'Entity extraction failed',
+      message: `${message} — basic metadata preserved`,
+      link: `/admin/letters/${letterId}`,
+      sourceType: 'letter',
+      sourceId: letterId,
+      metadata: { error: message, fatal: false },
+      dedupeKey: `entity_failed:${letterId}`,
+    });
     // Do NOT throw — Phase 1 metadata is already saved
   }
 }
@@ -356,11 +378,19 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
     );
 
     // Notification: entities extracted (standalone)
-    createNotification({
-      type: 'entity',
+    void notify({
+      type: 'entity_success',
       title: 'Entities extracted',
       message: `${entityResult.entities.people.length} people, ${entityResult.entities.places.length} places found`,
       link: `/admin/letters/${letterId}`,
+      sourceType: 'letter',
+      sourceId: letterId,
+      metadata: {
+        peopleCount: entityResult.entities.people.length,
+        placesCount: entityResult.entities.places.length,
+        relationshipsCount: entityResult.entities.relationships.length,
+        standalone: true,
+      },
     });
   } catch (error) {
     clearJobProgress(letterId, 'entity_extraction');

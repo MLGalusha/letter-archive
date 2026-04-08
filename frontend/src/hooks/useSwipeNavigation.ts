@@ -10,7 +10,8 @@ import { useEffect, useRef, useState } from 'react';
  * - Ignores touches originating inside [data-swipe-ignore] elements (carousels, etc.)
  */
 
-const DIRECTION_LOCK_PX = 10;
+const DIRECTION_LOCK_PX = 20;
+const HORIZONTAL_RATIO = 1.8; // horizontal delta must exceed vertical by this factor
 const TRANSITION_MS = 280;
 
 interface UseSwipeNavigationOptions {
@@ -94,7 +95,8 @@ export default function useSwipeNavigation({
       if (!ts.decided) {
         if (Math.abs(dx) < DIRECTION_LOCK_PX && Math.abs(dy) < DIRECTION_LOCK_PX) return;
         ts.decided = true;
-        ts.isHorizontal = Math.abs(dx) > Math.abs(dy);
+        // Require a strongly horizontal gesture — dx must exceed dy by HORIZONTAL_RATIO
+        ts.isHorizontal = Math.abs(dx) > Math.abs(dy) * HORIZONTAL_RATIO;
         if (ts.isHorizontal) {
           setIsSwiping(true);
           setIsAnimating(false);

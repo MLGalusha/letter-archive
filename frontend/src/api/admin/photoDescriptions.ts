@@ -11,9 +11,12 @@ export async function describePhoto(
   letterId: string,
   photoDescriptionContext: string,
 ): Promise<DescribePhotoResponse> {
-  return apiPost<DescribePhotoResponse>(`/admin/letters/${letterId}/describe-photo`, {
-    photoDescriptionContext,
-  });
+  // Synchronous AI call — needs more than the default 20s client timeout.
+  return apiPost<DescribePhotoResponse>(
+    `/admin/letters/${letterId}/describe-photo`,
+    { photoDescriptionContext },
+    { timeoutMs: 5 * 60 * 1000 },
+  );
 }
 
 export async function updatePhotoDescription(

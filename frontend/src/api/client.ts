@@ -146,15 +146,18 @@ function mergeHeaders(init: RequestInit): RequestInit {
   };
 }
 
+const DEFAULT_TIMEOUT_MS = 20_000;
+
 async function performRequest<T>(
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
   input: string,
   init: RequestInit,
   signal?: AbortSignal,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<T> {
   const startTime = Date.now();
-  const timeoutSignal = AbortSignal.timeout(20_000);
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
   const combinedSignal = signal
     ? AbortSignal.any([timeoutSignal, signal])
     : timeoutSignal;
@@ -235,16 +238,35 @@ export async function apiGet<T>(
 /**
  * POST request
  */
-export async function apiPost<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+export interface ApiPostOptions {
+  signal?: AbortSignal;
+  /**
+   * Override the default 20s request timeout. Use a longer value for endpoints
+   * that perform synchronous AI inference (transcription, photo description,
+   * etc.) which can take well over 20s to respond.
+   */
+  timeoutMs?: number;
+}
+
+export async function apiPost<T>(
+  path: string,
+  body?: unknown,
+  signalOrOptions?: AbortSignal | ApiPostOptions,
+): Promise<T> {
   const isFormData = body instanceof FormData;
   const url = new URL(path, API_BASE_URL).toString();
+
+  const { signal, timeoutMs } =
+    signalOrOptions instanceof AbortSignal || signalOrOptions === undefined
+      ? { signal: signalOrOptions as AbortSignal | undefined, timeoutMs: undefined }
+      : signalOrOptions;
 
   log.debug('POST request', { path, isFormData });
   return performRequest<T>('POST', path, url, {
     method: 'POST',
     headers: isFormData ? {} : { 'Content-Type': 'application/json' },
     body: isFormData ? body : body ? JSON.stringify(body) : undefined,
-  }, signal);
+  }, signal, timeoutMs);
 }
 
 /**

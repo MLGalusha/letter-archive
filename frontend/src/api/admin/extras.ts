@@ -8,7 +8,12 @@ export interface TranscribeExtrasResponse {
 }
 
 export async function transcribeExtras(letterId: string): Promise<TranscribeExtrasResponse> {
-  return apiPost<TranscribeExtrasResponse>(`/admin/letters/${letterId}/transcribe-extras`);
+  // Synchronous AI call — needs more than the default 20s client timeout.
+  return apiPost<TranscribeExtrasResponse>(
+    `/admin/letters/${letterId}/transcribe-extras`,
+    undefined,
+    { timeoutMs: 5 * 60 * 1000 },
+  );
 }
 
 export async function updateExtraContent(

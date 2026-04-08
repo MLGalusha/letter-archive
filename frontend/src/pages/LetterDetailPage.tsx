@@ -510,7 +510,7 @@ export default function LetterDetailPage() {
 
         {/* ── 4. Transcript ────────────────────────────────── */}
         {hasTranscript && (
-          <section className={`letter-transcript-section${transcriptSectionClass}`} ref={transcriptSectionRef}>
+          <section className={`letter-transcript-section${transcriptSectionClass}${transcriptMode === "original" ? " transcript-original-mode" : ""}`} ref={transcriptSectionRef}>
             <div className="transcript-header-row">
               <div className="transcript-label">Transcript</div>
               {letter.transcriptStatus === "VERIFIED" ? (
@@ -637,12 +637,60 @@ export default function LetterDetailPage() {
                 </div>
               ) : (
                 /* ── Original view OR single-page reading view ── */
+                transcriptMode === "original" ? (
+                  /* ── Original split layout: image + transcript side by side ── */
+                  <div className="original-split-pages">
+                    {letter.transcript.pages.map((page, idx) => {
+                      const pageImage = letterTypeImages.find((img) => img.pageNumber === page.pageNumber);
+                      const sp = structuredPages?.find(s => s.pageNumber === page.pageNumber);
+                      return (
+                        <div key={page.pageNumber} className="original-split-row" data-page={page.pageNumber}>
+                          {pageImage && (
+                            <button
+                              type="button"
+                              className="original-split-image"
+                              onClick={() => openViewer(Math.max(0, allImages.indexOf(pageImage)))}
+                              aria-label={`View page ${page.pageNumber} full size`}
+                            >
+                              <ProgressiveImage
+                                src={getImageUrl(pageImage.imageUrl)}
+                                thumbSrc={getImageUrl(pageImage.imageUrl, { width: 32 })}
+                                midSrc={getImageUrl(pageImage.imageUrl, { width: 600 })}
+                                alt={`Page ${page.pageNumber}`}
+                                className="original-split-img-wrap"
+                                imgClassName="original-split-img"
+                                objectFit="contain"
+                                loading={idx === 0 ? "eager" : "lazy"}
+                                decoding="async"
+                                context="carousel"
+                                aspectRatio={pageImage.width && pageImage.height ? pageImage.width / pageImage.height : undefined}
+                              />
+                              {letter.transcript.pages.length > 1 && (
+                                <span className="original-split-page-label">Page {page.pageNumber}</span>
+                              )}
+                            </button>
+                          )}
+                          <div className="original-split-text">
+                            {letter.transcript.pages.length > 1 && !pageImage && (
+                              <div className="page-marker">Page {page.pageNumber}</div>
+                            )}
+                            {sp ? (
+                              <div className={`transcript-text transcript-original${shortLineClass}`}>
+                                {renderStructuredOriginalView([sp])}
+                              </div>
+                            ) : (
+                              <pre className={`transcript-text transcript-original${shortLineClass}`}>{page.text}</pre>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
                 <div className="transcript-pages">
                   {letter.transcript.pages.map((page, idx) => {
                     const pageImage = letterTypeImages.find((img) => img.pageNumber === page.pageNumber);
                     const side = idx % 2 === 0 ? "left" : "right";
-                    const isOriginal = transcriptMode === "original";
-                    const sp = structuredPages?.find(s => s.pageNumber === page.pageNumber);
                     return (
                       <div key={page.pageNumber} className="transcript-page" data-page={page.pageNumber}>
                         {pageImage && (
@@ -666,24 +714,14 @@ export default function LetterDetailPage() {
                         {letter.transcript.pages.length > 1 && (
                           <div className="page-marker">Page {page.pageNumber}</div>
                         )}
-                        {isOriginal ? (
-                          sp ? (
-                            <div className={`transcript-text transcript-original${shortLineClass}`}>
-                              {renderStructuredOriginalView([sp])}
-                            </div>
-                          ) : (
-                            <pre className={`transcript-text transcript-original${shortLineClass}`}>{page.text}</pre>
-                          )
-                        ) : (
-                          <div className={`transcript-text${shortLineClass}`}>
-                            {renderTranscriptLines(reflowTranscript(page.text), referenceWidth)}
-                          </div>
-                        )}
+                        <div className={`transcript-text${shortLineClass}`}>
+                          {renderTranscriptLines(reflowTranscript(page.text), referenceWidth)}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
-              )
+              ))
             ) : transcriptMode === "original" ? (
               <pre className={`transcript-text transcript-original${shortLineClass}`}>
                 {letter.transcript.fullText}

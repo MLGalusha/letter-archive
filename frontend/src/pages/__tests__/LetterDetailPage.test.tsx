@@ -207,18 +207,12 @@ describe("LetterDetailPage", () => {
     expect(screen.queryByRole("button", { name: "View full size" })).not.toBeInTheDocument();
   });
 
-  it("renders entity chips with links to people and places", async () => {
+  it("does not render entity chips on the public letter page", async () => {
     renderLetterDetailPage();
 
     await screen.findByText(/A bright dispatch/);
 
-    expect(screen.getByText("People & Places")).toBeInTheDocument();
-
-    const personChip = screen.getByText("Alice Smith").closest("a");
-    expect(personChip).toHaveAttribute("href", "/people/person-1");
-
-    const placeChip = screen.getByText("Vienna").closest("a");
-    expect(placeChip).toHaveAttribute("href", "/places/place-1");
+    expect(screen.queryByText("People & Places")).not.toBeInTheDocument();
   });
 
   it("renders an sr-only h1 with sender/recipient info", async () => {

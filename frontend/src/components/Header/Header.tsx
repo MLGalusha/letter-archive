@@ -65,7 +65,7 @@ export default memo(function Header() {
           </NavLink>
           <NavLink
             to={dock.collectionsLink?.to ?? "/collections"}
-            className={({ isActive }) => `page-selector${isActive ? " active" : ""}`}
+            className={({ isActive }) => `page-selector${isActive || dock.collectionsLink ? " active" : ""}`}
             onMouseEnter={preloadCollectionsRoute}
             onFocus={preloadCollectionsRoute}
             onClick={() => setMenuOpen(false)}

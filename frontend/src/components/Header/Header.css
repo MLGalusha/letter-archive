@@ -30,6 +30,7 @@
   top: 0;
   z-index: 50;
   padding: calc(1rem + env(safe-area-inset-top, 0px)) calc(1.25rem + env(safe-area-inset-right, 0px)) 0 calc(1.25rem + env(safe-area-inset-left, 0px));
+  background: var(--bg, #f5ede1);
 }
 
 .header-inner {
@@ -257,14 +258,21 @@
   position: fixed;
   left: 0;
   right: 0;
+  background: transparent;
+}
+
+.header--scroll-reveal .header-inner {
   transition: opacity 0.25s ease, transform 0.25s ease;
   will-change: transform, opacity;
 }
 
 .header--scroll-reveal.header--hidden {
-  opacity: 0;
-  transform: translateY(-110%);
   pointer-events: none;
+}
+
+.header--scroll-reveal.header--hidden .header-inner {
+  opacity: 0;
+  transform: translateY(calc(-100% - 2rem));
 }
 
 @media (max-width: 900px) {

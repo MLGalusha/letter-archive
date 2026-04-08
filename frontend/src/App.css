@@ -54,6 +54,21 @@
   opacity: 0.35;
 }
 
+/* Permanent safe-area cover — prevents iOS Safari from flashing white
+   behind the notch when scroll-reveal pages hide the header.
+   Height is 0 on desktop (no safe area), only visible on notch devices. */
+.public-site-shell::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--bg, #f5ede1);
+  z-index: 49;
+  pointer-events: none;
+}
+
 .public-site-shell *,
 .public-site-shell *::before,
 .public-site-shell *::after,
@@ -140,5 +155,12 @@
   .body-layout {
     padding: 1.2rem calc(1rem + env(safe-area-inset-right, 0px)) calc(3rem + env(safe-area-inset-bottom, 0px)) calc(1rem + env(safe-area-inset-left, 0px));
     gap: 1.6rem;
+  }
+
+  /* Hide the fixed grid overlay on mobile — it reduces contrast
+     and creates a visible "glow" at the top/bottom of the screen */
+  .public-site-shell::before,
+  .public-letter-shell::before {
+    display: none;
   }
 }

@@ -36,16 +36,6 @@ function correspondentLine(m: Letter["metadata"]): string {
 }
 
 
-function dedupePersons(persons: Letter["linkedPersons"]) {
-  if (!persons?.length) return [];
-  const map = new Map<string, (typeof persons)[number]>();
-  const pri: Record<string, number> = { sender: 3, recipient: 2, mentioned: 1 };
-  for (const p of persons) {
-    const ex = map.get(p.personId);
-    if (!ex || (pri[p.role] ?? 0) > (pri[ex.role] ?? 0)) map.set(p.personId, p);
-  }
-  return [...map.values()];
-}
 
 const EXTRA_CONTENT_TYPES: LetterImageType[] = [
   "telegram", "ephemera", "cover", "card", "article", "diary", "voice",
@@ -340,7 +330,6 @@ export default function LetterDetailPage() {
     const m = letter.metadata;
     const letterTypeImages = letter.images.filter((img) => img.type === "letter");
     const extraContentItems = letter.extraContentItems ?? [];
-    const uniquePersons = dedupePersons(letter.linkedPersons);
     // Pre-compute verification CSS class fragments (used repeatedly in JSX)
     const transcriptVerifClass = letter.transcriptStatus === "VERIFIED" ? " verified" : letter.transcriptStatus !== "EMPTY" ? " unverified" : "";
     const transcriptSectionClass = letter.transcriptStatus === "VERIFIED" ? " transcript-verified" : letter.transcriptStatus !== "EMPTY" ? " transcript-unverified" : "";
@@ -357,8 +346,6 @@ export default function LetterDetailPage() {
       hasTranscript: shouldShowPublicTranscript(letter),
       extraContentItems,
       hasExtraContent: extraContentItems.length > 0 || !!letter.extraContentTranscript,
-      uniquePersons,
-      hasEntities: uniquePersons.length > 0 || (letter.linkedPlaces && letter.linkedPlaces.length > 0),
       isPhotoRecord: shouldShowPhotoDescriptionWorkflow(letter),
       heroHook: m.hook || letter.photoDescription || undefined,
       transcriptVerifClass,
@@ -387,8 +374,8 @@ export default function LetterDetailPage() {
 
   const {
     m, byline, dateline, letterTypeImages, carouselImages, allImages,
-    hasTranscript, extraContentItems, hasExtraContent, uniquePersons,
-    hasEntities, isPhotoRecord, heroHook,
+    hasTranscript, extraContentItems, hasExtraContent,
+    isPhotoRecord, heroHook,
     transcriptVerifClass, transcriptSectionClass, extraVerifClass, extraSectionClass,
   } = derived;
 
@@ -836,30 +823,7 @@ export default function LetterDetailPage() {
           );
         })() : null}
 
-        {/* ── 6. People & Places ───────────────────────────── */}
-        {hasEntities && (
-          <section className="letter-entities-section">
-            <div className="entities-label">People &amp; Places</div>
-            <div className="entity-chips">
-              {uniquePersons.map((p) => (
-                <Link key={`${p.personId}-${p.role}`} to={`/people/${p.personId}`} className="entity-chip">
-                  <span className="chip-name">{p.canonicalName}</span>
-                  <span className={`chip-role role-${p.role}`}>{p.role}</span>
-                </Link>
-              ))}
-              {letter.linkedPlaces?.map((pl) => (
-                <Link key={`${pl.placeId}-${pl.role}`} to={`/places/${pl.placeId}`} className="entity-chip">
-                  <span className="chip-name">{pl.canonicalName}</span>
-                  <span className={`chip-role role-${pl.role}`}>
-                    {pl.role === "written_from" ? "from" : pl.role}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ── 7. Collection Footer Nav ───────────────────────── */}
+        {/* ── 6. Collection Footer Nav ───────────────────────── */}
         {adjacent && adjacent.total > 1 && (
           <nav className="letter-nav-section">
             {adjacent.position != null && (

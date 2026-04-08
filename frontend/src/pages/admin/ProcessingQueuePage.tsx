@@ -1,34 +1,37 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getErrorMessage } from '../../api/client';
 import {
-  getProcessingQueue,
-  startTranscription,
-  startMetadataExtraction,
-  startEntityExtraction,
-  pauseProcessing,
-  resumeProcessing,
-  abortProcessing,
-  removeFromQueue,
-  clearQueue,
-  retryFailed,
+  startProcess,
+  pauseBatch,
+  resumeBatch,
+  abortBatch,
+  removeFromProcessQueue,
+  clearProcessQueue,
+  retryProcessJob,
   cancelActiveJob,
-  type QueueStatus,
-  type QueueJobType,
-  type QueueActiveJob,
+  type ProcessStatus,
+  type ProcessKey,
+  type ActiveBatchState,
   type QueuedItem,
-  type QueueRecentJob,
-} from '../../api/admin';
+  type RecentJob,
+  type ObservedWorkerState,
+} from '../../api/admin/processes';
 import { Button } from '../../components/common';
 import { useToast } from '../../contexts/ToastContext';
 import AdminLayout from '../../components/AdminLayout/AdminLayout';
+import { useProcessingState, type ConnectionState } from '../../hooks/useProcessingState';
 import './ProcessingQueuePage.css';
 
-type QueueTab = 'transcription' | 'metadata' | 'entity_extraction';
+// ============================================================================
+// Formatters
+// ============================================================================
 
-function formatTimeAgo(isoString: string): string {
+function formatTimeAgo(isoString: string | null | undefined): string {
+  if (!isoString) return '—';
   const diff = Date.now() - new Date(isoString).getTime();
   const seconds = Math.floor(diff / 1000);
+  if (seconds < 0) return 'just now';
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
@@ -43,565 +46,594 @@ function formatDuration(startIso: string): string {
   const seconds = Math.floor(diff / 1000);
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}m ${remainingSeconds}s`;
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
 }
 
-function jobTypeLabel(type: string): string {
-  switch (type) {
-    case 'transcription': return 'Transcription';
-    case 'metadata': return 'Metadata';
-    case 'entity_extraction': return 'Entities';
-    case 'entity_resolution': return 'Resolution';
-    case 'line_detection': return 'Lines';
-    default: return type;
-  }
-}
-
-/** Format YYYYMMDD dateRaw into readable date like "Mar 12, 1888" */
-function formatDateRaw(dateRaw: string): string {
+export function formatDateRaw(dateRaw: string): string {
   if (!dateRaw || dateRaw.length < 4) return dateRaw;
   const year = dateRaw.slice(0, 4);
   const month = dateRaw.length >= 6 ? dateRaw.slice(4, 6) : '';
   const day = dateRaw.length >= 8 ? dateRaw.slice(6, 8) : '';
-
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
   const monthNum = parseInt(month, 10);
   const dayNum = parseInt(day, 10);
-
   if (monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31) {
     return `${months[monthNum - 1]} ${dayNum}, ${year}`;
-  } else if (monthNum >= 1 && monthNum <= 12) {
+  }
+  if (monthNum >= 1 && monthNum <= 12) {
     return `${months[monthNum - 1]} ${year}`;
   }
   return year;
 }
 
-/** Format sender/recipient into a short description */
 function formatCorrespondents(sender: string | null, recipient: string | null): string {
-  if (sender && recipient) return `${sender} \u2192 ${recipient}`;
+  if (sender && recipient) return `${sender} → ${recipient}`;
   if (sender) return `From: ${sender}`;
   if (recipient) return `To: ${recipient}`;
   return '';
 }
 
+function connectionLabel(state: ConnectionState): string {
+  switch (state) {
+    case 'connecting':
+      return 'Connecting…';
+    case 'connected':
+      return 'Live';
+    case 'reconnecting':
+      return 'Reconnecting…';
+    case 'fallback-polling':
+      return 'Polling (SSE unavailable)';
+  }
+}
+
+// ============================================================================
+// Page
+// ============================================================================
+
 export default function ProcessingQueuePage() {
   const { showToast } = useToast();
-  const [queue, setQueue] = useState<QueueStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<QueueTab>('transcription');
-  const [collectionFilter, setCollectionFilter] = useState<string>('all');
-  const [expandedErrors, setExpandedErrors] = useState<Set<number>>(new Set());
+  const { status, loading, error, connectionState, lastUpdatedAt, refresh } =
+    useProcessingState();
+
+  // 1-second tick for elapsed time rendering
   const [, setTick] = useState(0);
-
-  const fetchQueue = useCallback(async () => {
-    try {
-      const data = await getProcessingQueue();
-      setQueue(data);
-    } catch (err) {
-      // Silently ignore polling failures — don't spam toasts every 2 seconds
-      console.debug('Queue poll failed:', err);
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    const id = window.setInterval(() => setTick(t => t + 1), 1000);
+    return () => window.clearInterval(id);
   }, []);
 
-  // Poll for queue updates
-  useEffect(() => {
-    fetchQueue();
-    const interval = setInterval(fetchQueue, 2000);
-    return () => clearInterval(interval);
-  }, [fetchQueue]);
+  const batchProcesses = useMemo(
+    () => status?.processes.filter(p => p.group === 'batch') ?? [],
+    [status]
+  );
+  const workerProcess = useMemo(
+    () => status?.processes.find(p => p.key === 'background_worker'),
+    [status]
+  );
 
-  // Tick every second for elapsed time display
-  useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 1000);
-    return () => clearInterval(interval);
-  }, []);
+  const activeBatch = status?.activeBatch ?? null;
 
-  // Collect unique collection codes from all queued items
-  const collectionCodes = useMemo(() => {
-    if (!queue) return [];
-    const codes = new Set<string>();
-    queue.queued.transcription.forEach(i => codes.add(i.collectionCode));
-    queue.queued.metadata.forEach(i => codes.add(i.collectionCode));
-    queue.queued.entityExtraction.forEach(i => codes.add(i.collectionCode));
-    return Array.from(codes).sort();
-  }, [queue]);
+  const handleStart = useCallback(
+    async (key: ProcessKey) => {
+      try {
+        const result = await startProcess(key, {});
+        if (result.total === 0) {
+          showToast(result.message, 'info');
+        } else {
+          showToast(`Started ${result.total} ${key} jobs`, 'success');
+        }
+        await refresh();
+      } catch (err) {
+        showToast(getErrorMessage(err, 'Failed to start batch'), 'error');
+      }
+    },
+    [refresh, showToast]
+  );
 
-  const handleCancel = async (letterId: string, type: QueueJobType) => {
+  const handlePause = useCallback(async () => {
     try {
-      await cancelActiveJob(letterId, type);
-      showToast('Job cancelled', 'info');
-      fetchQueue();
+      await pauseBatch();
+      await refresh();
     } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to cancel job'), 'error');
+      showToast(getErrorMessage(err, 'Failed to pause'), 'error');
     }
-  };
+  }, [refresh, showToast]);
 
-  const handleRemove = async (letterId: string, type: QueueJobType) => {
+  const handleResume = useCallback(async () => {
     try {
-      await removeFromQueue(letterId, type);
-      showToast('Removed from queue', 'info');
-      fetchQueue();
+      await resumeBatch();
+      await refresh();
     } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to remove from queue'), 'error');
+      showToast(getErrorMessage(err, 'Failed to resume'), 'error');
     }
-  };
+  }, [refresh, showToast]);
 
-  const handleClear = async (type: QueueJobType) => {
+  const handleAbort = useCallback(async () => {
+    if (!window.confirm('Abort the current batch? Jobs in progress will finish.')) return;
     try {
-      const result = await clearQueue(type);
-      showToast(result.message, 'info');
-      fetchQueue();
+      await abortBatch();
+      showToast('Batch abort requested', 'info');
+      await refresh();
     } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to clear queue'), 'error');
+      showToast(getErrorMessage(err, 'Failed to abort'), 'error');
     }
-  };
+  }, [refresh, showToast]);
 
-  const handleRetry = async (letterId: string, type: QueueJobType) => {
-    try {
-      await retryFailed(letterId, type);
-      showToast('Job re-queued', 'info');
-      fetchQueue();
-    } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to retry job'), 'error');
-    }
-  };
+  const handleRemove = useCallback(
+    async (key: ProcessKey, letterId: string) => {
+      try {
+        await removeFromProcessQueue(key, letterId);
+        await refresh();
+      } catch (err) {
+        showToast(getErrorMessage(err, 'Failed to remove from queue'), 'error');
+      }
+    },
+    [refresh, showToast]
+  );
 
-  const handleStartTranscription = async () => {
-    try {
-      const options = collectionFilter !== 'all' ? { collectionCode: collectionFilter } : undefined;
-      const result = await startTranscription(options);
-      showToast(`Started transcription for ${result.total} letters`, 'success');
-      fetchQueue();
-    } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to start transcription'), 'error');
-    }
-  };
+  const handleClear = useCallback(
+    async (key: ProcessKey, label: string) => {
+      if (!window.confirm(`Clear the entire ${label} queue?`)) return;
+      try {
+        const result = await clearProcessQueue(key);
+        showToast(`Cleared ${result.cleared} items`, 'info');
+        await refresh();
+      } catch (err) {
+        showToast(getErrorMessage(err, 'Failed to clear queue'), 'error');
+      }
+    },
+    [refresh, showToast]
+  );
 
-  const handleStartMetadata = async () => {
-    try {
-      const options = collectionFilter !== 'all' ? { collectionCode: collectionFilter } : undefined;
-      const result = await startMetadataExtraction(options);
-      showToast(`Started metadata extraction for ${result.total} letters`, 'success');
-      fetchQueue();
-    } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to start metadata extraction'), 'error');
-    }
-  };
+  const handleRetry = useCallback(
+    async (key: ProcessKey, letterId: string) => {
+      try {
+        await retryProcessJob(key, letterId);
+        showToast('Retry queued', 'info');
+        await refresh();
+      } catch (err) {
+        showToast(getErrorMessage(err, 'Failed to retry'), 'error');
+      }
+    },
+    [refresh, showToast]
+  );
 
-  const handleStartEntities = async () => {
-    try {
-      const options = collectionFilter !== 'all' ? { collectionCode: collectionFilter } : undefined;
-      const result = await startEntityExtraction(options);
-      showToast(`Started entity extraction for ${result.total} letters`, 'success');
-      fetchQueue();
-    } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to start entity extraction'), 'error');
-    }
-  };
-
-  const handlePause = async () => {
-    try {
-      await pauseProcessing();
-      showToast('Processing paused', 'info');
-      fetchQueue();
-    } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to pause processing'), 'error');
-    }
-  };
-
-  const handleResume = async () => {
-    try {
-      await resumeProcessing();
-      showToast('Processing resumed', 'success');
-      fetchQueue();
-    } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to resume processing'), 'error');
-    }
-  };
-
-  const handleAbort = async () => {
-    try {
-      await abortProcessing();
-      showToast('Processing aborted', 'info');
-      fetchQueue();
-    } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to abort processing'), 'error');
-    }
-  };
-
-  const toggleErrorExpanded = (index: number) => {
-    setExpandedErrors(prev => {
-      const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return next;
-    });
-  };
-
-  if (loading) {
-    return (
-      <AdminLayout>
-        <div className="pq-page">
-          <div className="pq-loading">Loading queue status...</div>
-        </div>
-      </AdminLayout>
-    );
-  }
-
-  if (!queue) {
-    return (
-      <AdminLayout>
-        <div className="pq-page">
-          <div className="pq-loading">Unable to load queue status</div>
-        </div>
-      </AdminLayout>
-    );
-  }
-
-  const { counts, onDemandProcessing } = queue;
-  const isIdle = !onDemandProcessing.isRunning && !onDemandProcessing.isPaused;
-  const batchProgress = onDemandProcessing.total
-    ? Math.round((onDemandProcessing.completed / onDemandProcessing.total) * 100)
-    : 0;
-
-  // Queue items for the active tab, filtered by collection
-  const allQueuedItems: QueuedItem[] = activeTab === 'transcription'
-    ? queue.queued.transcription
-    : activeTab === 'metadata'
-      ? queue.queued.metadata
-      : queue.queued.entityExtraction;
-
-  const queuedItems = collectionFilter === 'all'
-    ? allQueuedItems
-    : allQueuedItems.filter(i => i.collectionCode === collectionFilter);
-
-  const queueTabType: QueueJobType = activeTab;
-
-  // Pipeline phase data
-  const phases = [
-    { key: 'transcription' as const, label: 'Transcription', count: counts.queuedTranscription, handler: handleStartTranscription },
-    { key: 'metadata' as const, label: 'Metadata', count: counts.queuedMetadata, handler: handleStartMetadata },
-    { key: 'entity_extraction' as const, label: 'Entities', count: counts.queuedEntityExtraction, handler: handleStartEntities },
-  ];
-
-  // Determine which phase is currently running
-  const runningPhaseType = onDemandProcessing.currentJob?.type ?? null;
-
-  // Header global controls
-  const headerActions = !isIdle ? (
-    <div className="pq-header-batch">
-      <div className="pq-header-progress">
-        <div className="pq-header-progress-bar">
-          <div className="pq-header-progress-fill" style={{ width: `${batchProgress}%` }} />
-        </div>
-        <span className="pq-header-progress-text">
-          {onDemandProcessing.completed}/{onDemandProcessing.total}
-        </span>
-      </div>
-      {onDemandProcessing.isPaused ? (
-        <Button onClick={handleResume} size="sm">Resume</Button>
-      ) : (
-        <Button onClick={handlePause} variant="secondary" size="sm">Pause</Button>
-      )}
-      <Button onClick={handleAbort} variant="danger" size="sm">Abort</Button>
-    </div>
-  ) : undefined;
+  const handleCancelActive = useCallback(
+    async (key: ProcessKey, letterId: string) => {
+      if (!window.confirm('Cancel this running job?')) return;
+      try {
+        await cancelActiveJob(key, letterId);
+        showToast('Job cancelled', 'info');
+        await refresh();
+      } catch (err) {
+        showToast(getErrorMessage(err, 'Failed to cancel'), 'error');
+      }
+    },
+    [refresh, showToast]
+  );
 
   return (
-    <AdminLayout headerActions={headerActions}>
-    <div className="pq-page">
-      {/* Page Header */}
-      <div className="pq-header">
-        <div>
-          <p className="pq-kicker">Admin</p>
-          <h2 className="pq-title">Processing Queue</h2>
-          <p className="pq-subtitle">Pipeline overview, active jobs, and queue management</p>
-        </div>
-      </div>
-
-      {/* Pipeline Status Overview */}
-      <div className="pq-pipeline">
-        {phases.map((phase, i) => {
-          const isRunning = !isIdle && runningPhaseType === phase.key;
-          return (
-            <div key={phase.key} className="pq-pipeline-row">
-              <div className={`pq-phase-card ${isRunning ? 'running' : ''}`}>
-                <div className="pq-phase-number">{i + 1}</div>
-                <div className="pq-phase-body">
-                  <h3 className="pq-phase-name">{phase.label}</h3>
-                  <span className="pq-phase-count">
-                    {phase.count} ready
-                  </span>
-                  {isRunning ? (
-                    <div className="pq-phase-running">
-                      <div className="pq-phase-progress-bar">
-                        <div className="pq-phase-progress-fill" style={{ width: `${batchProgress}%` }} />
-                      </div>
-                      <span className="pq-phase-progress-text">
-                        {onDemandProcessing.completed}/{onDemandProcessing.total}
-                      </span>
-                    </div>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={phase.handler}
-                      disabled={phase.count === 0 || !isIdle}
-                    >
-                      Start
-                    </Button>
-                  )}
-                </div>
-              </div>
-              {i < phases.length - 1 && (
-                <div className="pq-pipeline-arrow">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9,18 15,12 9,6" />
-                  </svg>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Active Jobs */}
-      <section className="pq-section">
-        <h3 className="pq-section-title">Active Jobs</h3>
-        {queue.active.length > 0 ? (
-          <table className="pq-table">
-            <thead>
-              <tr>
-                <th>Letter</th>
-                <th>Collection</th>
-                <th>Type</th>
-                <th>Progress</th>
-                <th>Elapsed</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {queue.active.map((job: QueueActiveJob) => {
-                const progressPct = job.progress && job.progress.totalSteps > 0
-                  ? Math.round((job.progress.step / job.progress.totalSteps) * 100)
-                  : null;
-                return (
-                  <tr key={`${job.letterId}-${job.type}`}>
-                    <td>
-                      <Link to={`/admin/letters/${job.letterId}`} className="pq-letter-link">
-                        {formatDateRaw(job.letterTitle)}
-                      </Link>
-                      {formatCorrespondents(job.sender, job.recipient) && (
-                        <div className="pq-cell-muted">{formatCorrespondents(job.sender, job.recipient)}</div>
-                      )}
-                    </td>
-                    <td><span className="pq-collection-badge">{job.collectionCode}</span></td>
-                    <td><span className="pq-type-badge">{jobTypeLabel(job.type)}</span></td>
-                    <td className="pq-progress-cell">
-                      {job.progress ? (
-                        <>
-                          <div className="pq-job-progress-bar">
-                            <div className="pq-job-progress-fill" style={{ width: `${progressPct}%` }} />
-                          </div>
-                          <div className="pq-cell-muted">{job.progress.stepLabel}</div>
-                        </>
-                      ) : (
-                        <span className="pq-cell-muted">Starting...</span>
-                      )}
-                    </td>
-                    <td className="pq-cell-mono">{formatDuration(job.startedAt)}</td>
-                    <td>
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => handleCancel(job.letterId, job.type)}
-                      >
-                        Cancel
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <div className="pq-empty-state">
-            <span className="pq-empty-icon">&#9711;</span>
-            <span>No active jobs</span>
+    <AdminLayout>
+      <div className="proc-page">
+        <header className="proc-header">
+          <div>
+            <p className="proc-kicker">Admin</p>
+            <h1 className="proc-title">Processing</h1>
+            <p className="proc-subtitle">
+              Control center for all background pipelines.
+            </p>
           </div>
-        )}
-      </section>
-
-      {/* Queue Section */}
-      <section className="pq-section">
-        <div className="pq-section-header">
-          <h3 className="pq-section-title">Queue</h3>
-          <div className="pq-collection-filter">
-            <label htmlFor="pq-filter">Collection:</label>
-            <select
-              id="pq-filter"
-              value={collectionFilter}
-              onChange={e => setCollectionFilter(e.target.value)}
-            >
-              <option value="all">All</option>
-              {collectionCodes.map(code => (
-                <option key={code} value={code}>{code}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="pq-tabs">
-          {phases.map(phase => (
-            <button
-              key={phase.key}
-              className={`pq-tab ${activeTab === phase.key ? 'active' : ''}`}
-              onClick={() => setActiveTab(phase.key)}
-            >
-              {phase.label} ({phase.count})
-            </button>
-          ))}
-        </div>
-
-        {queuedItems.length > 0 ? (
-          <>
-            <table className="pq-table">
-              <thead>
-                <tr>
-                  <th>Letter</th>
-                  <th>Collection</th>
-                  <th>Waiting Since</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {queuedItems.map((item: QueuedItem) => (
-                  <tr key={item.letterId}>
-                    <td>
-                      <Link to={`/admin/letters/${item.letterId}`} className="pq-letter-link">
-                        {formatDateRaw(item.letterTitle)}
-                      </Link>
-                      {formatCorrespondents(item.sender, item.recipient) && (
-                        <div className="pq-cell-muted">{formatCorrespondents(item.sender, item.recipient)}</div>
-                      )}
-                    </td>
-                    <td><span className="pq-collection-badge">{item.collectionCode}</span></td>
-                    <td className="pq-cell-muted">{formatTimeAgo(item.queuedAt)}</td>
-                    <td>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemove(item.letterId, queueTabType)}
-                      >
-                        Remove
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="pq-queue-footer">
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => handleClear(queueTabType)}
-              >
-                Clear All
-              </Button>
-            </div>
-          </>
-        ) : (
-          <div className="pq-empty-state">
-            <span>No {jobTypeLabel(activeTab).toLowerCase()} jobs queued</span>
-          </div>
-        )}
-      </section>
-
-      {/* Recent Activity */}
-      <section className="pq-section">
-        <div className="pq-section-header">
-          <h3 className="pq-section-title">Recent Activity</h3>
-          {queue.recent.length > 0 && (
-            <span className="pq-recent-summary">
-              {counts.recentSuccessCount} done{counts.recentClearedCount > 0 ? `, ${counts.recentClearedCount} cleared` : ''}{counts.recentFailedCount > 0 ? `, ${counts.recentFailedCount} failed` : ''}
+          <div className="proc-header-meta">
+            <span className={`proc-chip proc-chip-${connectionState}`}>
+              {connectionLabel(connectionState)}
             </span>
+            {lastUpdatedAt && (
+              <span className="proc-updated">
+                Updated {formatTimeAgo(new Date(lastUpdatedAt).toISOString())}
+              </span>
+            )}
+          </div>
+        </header>
+
+        {loading && !status && <p className="proc-loading">Loading…</p>}
+        {error && <p className="proc-error">{error}</p>}
+
+        {status && (
+          <>
+            <section className="proc-cards-row">
+              {batchProcesses.map(p => (
+                <ProcessCard
+                  key={p.key}
+                  process={p}
+                  isBatchRunning={activeBatch !== null}
+                  onStart={() => handleStart(p.key)}
+                />
+              ))}
+            </section>
+
+            {activeBatch && (
+              <ActiveBatchPanel
+                batch={activeBatch}
+                onPause={handlePause}
+                onResume={handleResume}
+                onAbort={handleAbort}
+              />
+            )}
+
+            <section className="proc-queues">
+              {batchProcesses.map(p => (
+                <ProcessQueueSection
+                  key={p.key}
+                  process={p}
+                  onRemove={handleRemove}
+                  onClear={handleClear}
+                  onCancelActive={handleCancelActive}
+                />
+              ))}
+            </section>
+
+            <section className="proc-recent">
+              <h2 className="proc-section-title">Recent activity</h2>
+              <RecentActivityList
+                processes={batchProcesses}
+                onRetry={handleRetry}
+              />
+            </section>
+
+            {workerProcess?.observed && (
+              <section className="proc-observation">
+                <WorkerStatusCard state={workerProcess.observed} />
+              </section>
+            )}
+          </>
+        )}
+      </div>
+    </AdminLayout>
+  );
+}
+
+// ============================================================================
+// ProcessCard
+// ============================================================================
+
+interface ProcessCardProps {
+  process: ProcessStatus;
+  isBatchRunning: boolean;
+  onStart: () => void;
+}
+
+function ProcessCard({ process, isBatchRunning, onStart }: ProcessCardProps) {
+  const disableStart = !process.capabilities.start || isBatchRunning || process.eligibleCount === 0;
+  return (
+    <div className="proc-card" data-key={process.key}>
+      <div className="proc-card-head">
+        <h3 className="proc-card-title">{process.label}</h3>
+        <p className="proc-card-desc">{process.description}</p>
+      </div>
+      <div className="proc-card-stats">
+        <div>
+          <span className="proc-stat-label">Eligible</span>
+          <span className="proc-stat-value">{process.eligibleCount}</span>
+        </div>
+        <div>
+          <span className="proc-stat-label">Queued</span>
+          <span className="proc-stat-value">{process.queued.length}</span>
+        </div>
+        <div>
+          <span className="proc-stat-label">Active</span>
+          <span className="proc-stat-value">{process.active ? '1' : '0'}</span>
+        </div>
+      </div>
+      <div className="proc-card-actions">
+        <Button onClick={onStart} disabled={disableStart}>
+          Start batch
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// ActiveBatchPanel
+// ============================================================================
+
+interface ActiveBatchPanelProps {
+  batch: ActiveBatchState;
+  onPause: () => void;
+  onResume: () => void;
+  onAbort: () => void;
+}
+
+function ActiveBatchPanel({ batch, onPause, onResume, onAbort }: ActiveBatchPanelProps) {
+  const total = batch.total || 1;
+  const pct = Math.round(((batch.completed + batch.failed) / total) * 100);
+  return (
+    <section className="proc-active-batch">
+      <div className="proc-active-head">
+        <h2 className="proc-section-title">
+          {batch.processKey.replace('_', ' ')} batch
+          {batch.isPaused && <span className="proc-badge proc-badge-paused"> paused</span>}
+        </h2>
+        <div className="proc-active-actions">
+          {batch.isPaused ? (
+            <Button onClick={onResume}>Resume</Button>
+          ) : (
+            <Button onClick={onPause}>Pause</Button>
+          )}
+          <Button variant="danger" onClick={onAbort}>
+            Abort
+          </Button>
+        </div>
+      </div>
+      <div className="proc-progress-outer">
+        <div className="proc-progress-inner" style={{ width: `${pct}%` }} />
+      </div>
+      <div className="proc-active-stats">
+        <span>
+          {batch.completed + batch.failed} / {batch.total}
+          {batch.failed > 0 && <> · {batch.failed} failed</>}
+        </span>
+        <span>Elapsed {formatDuration(batch.startedAt)}</span>
+        {batch.currentJob && <span>Current: {batch.currentJob.letterId.slice(0, 8)}</span>}
+      </div>
+    </section>
+  );
+}
+
+// ============================================================================
+// ProcessQueueSection
+// ============================================================================
+
+interface ProcessQueueSectionProps {
+  process: ProcessStatus;
+  onRemove: (key: ProcessKey, letterId: string) => void;
+  onClear: (key: ProcessKey, label: string) => void;
+  onCancelActive: (key: ProcessKey, letterId: string) => void;
+}
+
+function ProcessQueueSection({
+  process,
+  onRemove,
+  onClear,
+  onCancelActive,
+}: ProcessQueueSectionProps) {
+  const [expanded, setExpanded] = useState(false);
+  const count = process.queued.length;
+  const active = process.active;
+
+  return (
+    <div className="proc-queue-section">
+      <div className="proc-queue-head">
+        <button
+          type="button"
+          className="proc-queue-toggle"
+          onClick={() => setExpanded(v => !v)}
+        >
+          <svg
+            className={`proc-queue-caret ${expanded ? 'is-open' : ''}`}
+            viewBox="0 0 20 20"
+            width="18"
+            height="18"
+            aria-hidden="true"
+          >
+            <path
+              d="M6 8l4 4 4-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.25"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="proc-queue-label">{process.label} queue</span>
+          <span className="proc-queue-count">{count}</span>
+        </button>
+        {process.capabilities.clearQueue && count > 0 && (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => onClear(process.key, process.label)}
+          >
+            Clear queue
+          </Button>
+        )}
+      </div>
+
+      {active && (
+        <div className="proc-active-row">
+          <div>
+            <strong>Running:</strong> {formatDateRaw(active.letterTitle)} ({active.collectionCode})
+            {active.progress && (
+              <div className="proc-progress-label">
+                Step {active.progress.step}/{active.progress.totalSteps}: {active.progress.stepLabel}
+              </div>
+            )}
+          </div>
+          {process.capabilities.perItemCancel && (
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() => onCancelActive(process.key, active.letterId)}
+            >
+              Cancel
+            </Button>
           )}
         </div>
+      )}
 
-        {queue.recent.length > 0 ? (
-          <table className="pq-table">
-            <thead>
-              <tr>
-                <th>Letter</th>
-                <th>Collection</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Time</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {queue.recent.map((job: QueueRecentJob, i: number) => {
-                const isFailed = job.status === 'FAILED';
-                const isCleared = job.status === 'CLEARED';
-                const isExpanded = expandedErrors.has(i);
-                return (
-                  <tr
-                    key={`${job.letterId}-${job.type}-${i}`}
-                    className={isFailed ? 'pq-row-failed' : ''}
-                  >
-                    <td>
-                      <Link to={`/admin/letters/${job.letterId}`} className="pq-letter-link">
-                        {formatDateRaw(job.letterTitle)}
-                      </Link>
-                    </td>
-                    <td><span className="pq-collection-badge">{job.collectionCode}</span></td>
-                    <td><span className="pq-type-badge">{jobTypeLabel(job.type)}</span></td>
-                    <td>
-                      <div className="pq-status-cell">
-                        <span className={`pq-status ${job.status === 'SUCCESS' ? 'success' : isCleared ? 'cleared' : 'failed'}`}>
-                          {job.status === 'SUCCESS' ? 'Done' : isCleared ? 'Cleared' : 'Failed'}
-                        </span>
-                        {isFailed && job.error && (
-                          <button
-                            className="pq-error-toggle"
-                            onClick={() => toggleErrorExpanded(i)}
-                            title="Toggle error details"
-                          >
-                            {isExpanded ? '\u25B4' : '\u25BE'}
-                          </button>
-                        )}
-                      </div>
-                      {isFailed && job.error && isExpanded && (
-                        <div className="pq-error-detail">{job.error}</div>
-                      )}
-                    </td>
-                    <td className="pq-cell-muted">{formatTimeAgo(job.completedAt)}</td>
-                    <td>
-                      {isFailed && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRetry(job.letterId, job.type)}
-                        >
-                          Retry
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <div className="pq-empty-state">
-            <span>No recent activity</span>
-          </div>
-        )}
-      </section>
+      {expanded && count > 0 && (
+        <ul className="proc-queue-list">
+          {process.queued.map(item => (
+            <QueueRow
+              key={item.letterId}
+              item={item}
+              canRemove={process.capabilities.perItemRemove}
+              onRemove={() => onRemove(process.key, item.letterId)}
+            />
+          ))}
+        </ul>
+      )}
+      {expanded && count === 0 && !active && (
+        <p className="proc-queue-empty">Queue is empty.</p>
+      )}
     </div>
-    </AdminLayout>
+  );
+}
+
+interface QueueRowProps {
+  item: QueuedItem;
+  canRemove: boolean;
+  onRemove: () => void;
+}
+
+function QueueRow({ item, canRemove, onRemove }: QueueRowProps) {
+  return (
+    <li className="proc-queue-item">
+      <Link to={`/admin/letters/${item.letterId}`} className="proc-queue-item-main">
+        <span className="proc-queue-item-title">{formatDateRaw(item.letterTitle)}</span>
+        <span className="proc-queue-item-meta">
+          {item.collectionCode} · {formatCorrespondents(item.sender, item.recipient)}
+        </span>
+      </Link>
+      <span className="proc-queue-item-time">{formatTimeAgo(item.queuedAt)}</span>
+      {canRemove && (
+        <Button size="sm" variant="secondary" onClick={onRemove}>
+          Remove
+        </Button>
+      )}
+    </li>
+  );
+}
+
+// ============================================================================
+// RecentActivityList
+// ============================================================================
+
+interface RecentActivityListProps {
+  processes: ProcessStatus[];
+  onRetry: (key: ProcessKey, letterId: string) => void;
+}
+
+interface RecentRow extends RecentJob {
+  processKey: ProcessKey;
+  processLabel: string;
+}
+
+function RecentActivityList({ processes, onRetry }: RecentActivityListProps) {
+  const [filter, setFilter] = useState<'all' | 'SUCCESS' | 'FAILED' | 'CLEARED'>('all');
+  const [processFilter, setProcessFilter] = useState<'all' | ProcessKey>('all');
+
+  const rows = useMemo<RecentRow[]>(() => {
+    const out: RecentRow[] = [];
+    for (const p of processes) {
+      for (const r of p.recent) {
+        out.push({ ...r, processKey: p.key, processLabel: p.label });
+      }
+    }
+    out.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
+    return out;
+  }, [processes]);
+
+  const filtered = rows.filter(r => {
+    if (filter !== 'all' && r.status !== filter) return false;
+    if (processFilter !== 'all' && r.processKey !== processFilter) return false;
+    return true;
+  });
+
+  if (rows.length === 0) {
+    return <p className="proc-queue-empty">No recent activity.</p>;
+  }
+
+  return (
+    <div>
+      <div className="proc-recent-filters">
+        <select
+          value={processFilter}
+          onChange={e => setProcessFilter(e.target.value as 'all' | ProcessKey)}
+        >
+          <option value="all">All processes</option>
+          {processes.map(p => (
+            <option key={p.key} value={p.key}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        <select value={filter} onChange={e => setFilter(e.target.value as typeof filter)}>
+          <option value="all">All statuses</option>
+          <option value="SUCCESS">Succeeded</option>
+          <option value="FAILED">Failed</option>
+          <option value="CLEARED">Cleared</option>
+        </select>
+      </div>
+      <ul className="proc-recent-list">
+        {filtered.slice(0, 50).map(row => (
+          <li
+            key={`${row.letterId}-${row.processKey}-${row.completedAt}`}
+            className={`proc-recent-item proc-recent-${row.status.toLowerCase()}`}
+          >
+            <div className="proc-recent-main">
+              <Link to={`/admin/letters/${row.letterId}`}>
+                {formatDateRaw(row.letterTitle)}
+              </Link>
+              <span className="proc-recent-meta">
+                {row.processLabel} · {row.collectionCode} · {formatTimeAgo(row.completedAt)}
+              </span>
+              {row.error && <div className="proc-recent-error">{row.error}</div>}
+            </div>
+            <div className="proc-recent-actions">
+              <span className={`proc-status-pill proc-status-${row.status.toLowerCase()}`}>
+                {row.status}
+              </span>
+              {row.status === 'FAILED' && (
+                <Button size="sm" onClick={() => onRetry(row.processKey, row.letterId)}>
+                  Retry
+                </Button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ============================================================================
+// WorkerStatusCard
+// ============================================================================
+
+interface WorkerStatusCardProps {
+  state: ObservedWorkerState;
+}
+
+function WorkerStatusCard({ state }: WorkerStatusCardProps) {
+  return (
+    <div className="proc-worker-card">
+      <h2 className="proc-section-title">Background worker</h2>
+      <div className="proc-worker-grid">
+        <div>
+          <span className="proc-stat-label">Polling</span>
+          <span
+            className={`proc-dot ${state.isPolling ? 'proc-dot-on' : 'proc-dot-off'}`}
+            aria-label={state.isPolling ? 'polling' : 'idle'}
+          />
+        </div>
+        <div>
+          <span className="proc-stat-label">Last tick</span>
+          <span>{formatTimeAgo(state.lastTickAt)}</span>
+        </div>
+        <div>
+          <span className="proc-stat-label">Batch size</span>
+          <span>{state.currentBatchSize ?? '—'}</span>
+        </div>
+      </div>
+      {state.lastError && <p className="proc-worker-error">{state.lastError}</p>}
+    </div>
   );
 }

@@ -8,6 +8,12 @@ import { runEntityExtractionOnly } from '../pipeline/metadataV2.js';
 import { createLogger } from '../utils/logger.js';
 import { notify } from './notifications.js';
 import { TRANSCRIBABLE_TYPES } from './letter/shared.js';
+import {
+  shouldAbortProcessing as runnerShouldAbort,
+  updateJobProgress as runnerUpdateJobProgress,
+  clearJobProgress as runnerClearJobProgress,
+  getJobProgress as runnerGetJobProgress,
+} from './processes/runner.js';
 
 const log = createLogger({ module: 'processing-queue' });
 
@@ -51,19 +57,27 @@ export interface JobProgress {
   stepLabel: string;
 }
 
-// In-memory map of active job progress, keyed by `${letterId}-${type}`
-const jobProgressMap = new Map<string, JobProgress>();
+// Job progress is now owned by `services/processes/runner.ts` so that the
+// legacy processing-queue and the new runner-driven pipeline share a single
+// in-memory state. We re-export thin shims here so pipeline modules
+// (transcription.ts, metadataV2.ts) can keep importing from the old path.
 
-export function updateJobProgress(letterId: string, type: string, step: number, totalSteps: number, stepLabel: string): void {
-  jobProgressMap.set(`${letterId}-${type}`, { letterId, type, step, totalSteps, stepLabel });
+export function updateJobProgress(
+  letterId: string,
+  type: string,
+  step: number,
+  totalSteps: number,
+  stepLabel: string
+): void {
+  runnerUpdateJobProgress(letterId, type, step, totalSteps, stepLabel);
 }
 
 export function clearJobProgress(letterId: string, type: string): void {
-  jobProgressMap.delete(`${letterId}-${type}`);
+  runnerClearJobProgress(letterId, type);
 }
 
 export function getJobProgress(letterId: string, type: string): JobProgress | undefined {
-  return jobProgressMap.get(`${letterId}-${type}`);
+  return runnerGetJobProgress(letterId, type);
 }
 
 /**
@@ -453,16 +467,6 @@ export async function getQueueStatus() {
     limit: PAGINATION.QUEUE_BATCH_SIZE,
   });
 
-  // Queued line detection: pages with null lineSegments from letter-type items
-  const lineDetectionCount = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(letterPages)
-    .innerJoin(letters, eq(letterPages.letterId, letters.id))
-    .where(and(
-      sql`(${letterPages.lineSegments} IS NULL OR jsonb_array_length(${letterPages.lineSegments}) = 0)`,
-      eq(letters.type, 'L')
-    ));
-
   // Recent completions/failures (last hour)
   // Fetch extra rows to compensate for admin-cleared items that get filtered out in JS.
   // Without this buffer, clearing a large batch from the queue pushes legitimate
@@ -581,7 +585,6 @@ export async function getQueueStatus() {
       queuedTranscription: queuedTranscription.length,
       queuedMetadata: queuedMetadata.length,
       queuedEntityExtraction: queuedEntityExtraction.length,
-      queuedLineDetection: Number(lineDetectionCount[0]?.count ?? 0),
       recentSuccessCount: recent.filter(r => r.status === 'SUCCESS').length,
       recentFailedCount: recent.filter(r => r.status === 'FAILED').length,
       recentClearedCount: recent.filter(r => r.status === 'CLEARED').length,
@@ -738,38 +741,6 @@ export async function startEntityExtractionProcessing(options: ProcessingFilterO
 }
 
 /**
- * Get pages needing line detection (for remote worker script).
- */
-export async function getLineDetectionQueue() {
-  const pages = await db
-    .select({
-      pageId: letterPages.id,
-      letterId: letterPages.letterId,
-      pageNumber: letterPages.pageNumber,
-      dateRaw: letters.dateRaw,
-    })
-    .from(letterPages)
-    .innerJoin(letters, eq(letterPages.letterId, letters.id))
-    .where(and(
-      sql`(${letterPages.lineSegments} IS NULL OR jsonb_array_length(${letterPages.lineSegments}) = 0)`,
-      eq(letters.type, 'L')
-    ))
-    .orderBy(letters.dateRaw, letterPages.pageNumber);
-
-  return { pages, total: pages.length };
-}
-
-export async function resetLineSegments() {
-  const result = await db.execute(sql`
-    UPDATE letter_pages SET line_segments = NULL
-    WHERE letter_id IN (SELECT id FROM letters WHERE type = 'L')
-      AND line_segments IS NOT NULL
-  `);
-  const reset = Number(result.count ?? 0);
-  return { reset };
-}
-
-/**
  * Pause the current processing batch.
  */
 export function pauseProcessing(): { message: string } {
@@ -837,9 +808,11 @@ export function abortProcessing(): { message: string } {
 
 /**
  * Check whether the current processing batch should abort.
- * Called by pipeline functions between page batches for responsive abort.
+ * Delegates to the new runner so both legacy and registry-driven batches
+ * observe the same abort signal.
  */
 export function shouldAbortProcessing(): boolean {
+  if (runnerShouldAbort()) return true;
   return processingState.shouldAbort;
 }
 

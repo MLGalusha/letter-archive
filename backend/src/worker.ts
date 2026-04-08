@@ -5,6 +5,7 @@ import { processLetter, processMetadata } from './pipeline/processor.js';
 import { createLogger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { TRANSCRIBABLE_TYPES } from './services/letter/shared.js';
 import { notify } from './services/notifications.js';
+import { setWorkerState } from './services/worker-state.js';
 
 const log = createLogger({ module: 'worker' });
 
@@ -53,6 +54,14 @@ async function processPendingJobs() {
 
   // Phase 1: Transcription
   const needingTranscription = await findLettersNeedingTranscription();
+
+  // Heartbeat: let the admin API observe us.
+  void setWorkerState({
+    lastTickAt: new Date(),
+    isPolling: true,
+    lastError: null,
+    currentBatchSize: needingTranscription.length,
+  });
 
   if (needingTranscription.length > 0) {
     log.debug({ count: needingTranscription.length }, 'Found letters needing transcription');
@@ -189,6 +198,7 @@ async function main() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       log.error({ err: error }, 'Error in processing cycle');
+      void setWorkerState({ lastError: message });
       void notify({
         type: 'system_worker_error',
         title: 'Worker processing cycle failed',
@@ -213,6 +223,7 @@ function gracefulShutdown(signal: string) {
   if (shuttingDown) return;
   shuttingDown = true;
   log.info({ signal }, 'Shutdown signal received, finishing current job');
+  void setWorkerState({ isPolling: false });
 
   // Force exit after 25s if a job is stuck (Cloud Run default termination is 30s)
   setTimeout(() => {

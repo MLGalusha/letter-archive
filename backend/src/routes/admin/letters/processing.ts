@@ -3,8 +3,6 @@ import {
   abortProcessing,
   cancelActiveJob,
   clearQueue,
-  getLineDetectionQueue,
-  resetLineSegments,
   getProcessingStatus,
   getQueueStatus,
   pauseProcessing,
@@ -29,23 +27,6 @@ router.get('/status', (_req, res) => {
 router.get('/queue', async (_req, res, next) => {
   try {
     res.json(await getQueueStatus());
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.get('/line-detection-queue', async (_req, res, next) => {
-  try {
-    res.json(await getLineDetectionQueue());
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.post('/reset-line-segments', async (_req, res, next) => {
-  try {
-    const result = await resetLineSegments();
-    res.json(result);
   } catch (error) {
     next(error);
   }

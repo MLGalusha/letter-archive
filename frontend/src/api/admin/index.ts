@@ -4,6 +4,7 @@ export * from "./versions";
 export * from "./bulk";
 export * from "./processing";
 export * from "./queue";
+export * from "./processes";
 export * from "./extras";
 export * from "./photoDescriptions";
 export * from "./transcription";

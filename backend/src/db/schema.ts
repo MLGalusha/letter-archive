@@ -734,6 +734,24 @@ export const apiUsageLogs = pgTable(
 );
 
 // ============================================================================
+// WORKER STATE SINGLETON
+// ============================================================================
+
+/**
+ * Singleton row observed by the admin Processing page so it can show whether
+ * the autonomous background worker process is alive. The worker writes on
+ * every poll cycle; the API reads on demand.
+ */
+export const workerState = pgTable('worker_state', {
+  id: text('id').primaryKey().default('singleton'),
+  lastTickAt: timestamp('last_tick_at', { withTimezone: true }),
+  isPolling: boolean('is_polling').notNull().default(false),
+  lastError: text('last_error'),
+  currentBatchSize: integer('current_batch_size'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ============================================================================
 // RELATIONS
 // ============================================================================
 

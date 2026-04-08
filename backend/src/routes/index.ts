@@ -7,6 +7,7 @@ import collectionsRouter from './collections.js';
 import sitemapRouter from './sitemap.js';
 import adminRouter from './admin/index.js';
 import notificationsStreamRouter from './admin/notifications-stream.js';
+import processingStreamRouter from './admin/processing-stream.js';
 import authRouter from './auth.js';
 import blogRouter from './updates.js';
 import blogImagesRouter from './blog-images.js';
@@ -32,6 +33,7 @@ router.use(relationshipsRouter);
 // Stream route must be mounted BEFORE adminRouter so it bypasses requireAuth.
 // It has its own one-time stream-token validation (see notifications-stream.ts).
 router.use('/admin', notificationsStreamRouter);
+router.use('/admin', processingStreamRouter);
 router.use('/admin', adminRouter);
 
 // Public site settings (non-sensitive keys only)

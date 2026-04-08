@@ -64,10 +64,16 @@ const {
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((field: unknown, value: unknown) => ({ field, value })),
   and: vi.fn((...clauses: unknown[]) => clauses),
-  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
-    strings,
-    values,
-  })),
+  or: vi.fn((...clauses: unknown[]) => clauses),
+  inArray: vi.fn((field: unknown, values: unknown[]) => ({ field, values })),
+  isNotNull: vi.fn((field: unknown) => ({ field, isNotNull: true })),
+  ilike: vi.fn((field: unknown, value: unknown) => ({ field, value })),
+  asc: vi.fn((field: unknown) => ({ field, direction: 'asc' })),
+  desc: vi.fn((field: unknown) => ({ field, direction: 'desc' })),
+  sql: Object.assign(
+    vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values })),
+    { raw: vi.fn() }
+  ),
 }));
 
 vi.mock('../../../db/index.js', () => {

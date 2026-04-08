@@ -219,7 +219,7 @@ export default function InfiniteCarousel({
   const translateX = -(pos * 100) + (dragOffset / (containerRef.current?.offsetWidth || 1)) * 100;
 
   return (
-    <div className={`${classPrefix}-wrap${className ? ` ${className}` : ''}`} ref={containerRef}>
+    <div className={`${classPrefix}-wrap${className ? ` ${className}` : ''}`} ref={containerRef} data-swipe-ignore>
       <div className={`${classPrefix}-viewport`}>
         <div
           ref={trackRef}

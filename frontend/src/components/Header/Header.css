@@ -154,6 +154,7 @@
 }
 
 .nav {
+  position: relative;
   justify-self: end;
   display: flex;
   align-items: center;
@@ -225,16 +226,14 @@
   color: var(--text);
 }
 
-.page-selector.active::after {
-  content: "";
+.nav-indicator {
   position: absolute;
   bottom: 0.35rem;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60%;
   height: 2.5px;
   border-radius: 2px;
   background: var(--accent);
+  transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1), width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
 }
 
 .menu-toggle {

@@ -232,7 +232,7 @@ export default function LetterDetailPage() {
 
   // Touch swipe nav between letters (mobile only, disabled when lightbox open)
   const isTouchDevice = useIsTouchDevice();
-  const { ref: swipeRef, offset: swipeOffset, isSwiping } = useSwipeNavigation({
+  const { ref: swipeRef, offset: swipeOffset, isSwiping, isAnimating } = useSwipeNavigation({
     onSwipeLeft: adjacent?.next ? () => navigate(`/letter/${adjacent.next!.id}`) : undefined,
     onSwipeRight: adjacent?.prev ? () => navigate(`/letter/${adjacent.prev!.id}`) : undefined,
     enabled: isTouchDevice && !viewerOpen && !!adjacent,
@@ -384,11 +384,12 @@ export default function LetterDetailPage() {
     transcriptVerifClass, transcriptSectionClass, extraVerifClass, extraSectionClass,
   } = derived;
 
-  const swipeStyle: React.CSSProperties | undefined = swipeOffset !== 0
+  const swipeActive = isSwiping || isAnimating;
+  const swipeStyle: React.CSSProperties | undefined = swipeActive
     ? {
         transform: `translateX(${swipeOffset}px)`,
-        transition: isSwiping ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
-        willChange: isSwiping ? 'transform' : undefined,
+        transition: isSwiping ? 'none' : 'transform 0.28s cubic-bezier(0.25, 0.1, 0.25, 1)',
+        willChange: 'transform',
       }
     : undefined;
 
@@ -444,7 +445,7 @@ export default function LetterDetailPage() {
         {/* ── 3. Scan Image Carousel ──────────────────────── */}
         {carouselImages.length > 0 && (
           <figure className="letter-scan-figure">
-            <div className="scan-carousel" ref={carouselRef}>
+            <div className="scan-carousel" ref={carouselRef} data-swipe-ignore>
               {carouselImages.map((img, idx) => {
                 const isLetter = img.type === "letter";
                 const typeLabel = isLetter

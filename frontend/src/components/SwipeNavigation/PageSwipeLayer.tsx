@@ -46,7 +46,7 @@ export default function PageSwipeLayer({ children }: Props) {
     if (nextPath) navigate(nextPath);
   }, [nextPath, navigate]);
 
-  const { ref, offset, isSwiping } = useSwipeNavigation({
+  const { ref, offset, isSwiping, isAnimating } = useSwipeNavigation({
     onSwipeLeft: enabled ? onSwipeLeft : undefined,
     onSwipeRight: enabled ? onSwipeRight : undefined,
     enabled,
@@ -56,11 +56,12 @@ export default function PageSwipeLayer({ children }: Props) {
     return <>{children}</>;
   }
 
-  const style: CSSProperties | undefined = offset !== 0
+  const active = isSwiping || isAnimating;
+  const style: CSSProperties | undefined = active
     ? {
         transform: `translateX(${offset}px)`,
-        transition: isSwiping ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
-        willChange: isSwiping ? 'transform' : undefined,
+        transition: isSwiping ? 'none' : 'transform 0.28s cubic-bezier(0.25, 0.1, 0.25, 1)',
+        willChange: 'transform',
       }
     : undefined;
 

@@ -1,6 +1,6 @@
 import "./Header.css";
-import { Link, NavLink } from "react-router-dom";
-import { memo, useEffect, useState } from "react";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useHeaderDock } from "../../contexts/HeaderDockContext";
 import useScrollDirection from "../../hooks/useScrollDirection";
 import { prefetchCollections } from "../../api/collections";
@@ -24,10 +24,28 @@ export default memo(function Header() {
   const hasDock = Boolean(dock.content) || Boolean(dock.showTitle);
   const isScrollReveal = dock.scrollReveal ?? false;
   const scrollVisible = useScrollDirection(isScrollReveal);
+  const location = useLocation();
+
+  const navRef = useRef<HTMLElement>(null);
+  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
 
   useEffect(() => {
     preloadCollectionsRoute();
   }, []);
+
+  // Measure active nav item and position the sliding indicator
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const active = nav.querySelector<HTMLElement>('.page-selector.active');
+    if (!active) { setIndicator(null); return; }
+    const navRect = nav.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    setIndicator({
+      left: activeRect.left - navRect.left + activeRect.width * 0.2,
+      width: activeRect.width * 0.6,
+    });
+  }, [location.pathname, dock.collectionsLink]);
 
   const headerClass = [
     "header",
@@ -59,7 +77,7 @@ export default memo(function Header() {
         >
           Menu
         </button>
-        <nav className={`nav ${menuOpen ? "open" : ""}`}>
+        <nav ref={navRef} className={`nav ${menuOpen ? "open" : ""}`}>
           <NavLink to="/" className={({ isActive }) => `page-selector${isActive ? " active" : ""}`} onClick={() => setMenuOpen(false)} end>
             Home
           </NavLink>
@@ -81,6 +99,12 @@ export default memo(function Header() {
           <NavLink to="/support" className={({ isActive }) => `page-selector${isActive ? " active" : ""}`} onClick={() => setMenuOpen(false)}>
             Support
           </NavLink>
+          {indicator && (
+            <span
+              className="nav-indicator"
+              style={{ left: indicator.left, width: indicator.width }}
+            />
+          )}
         </nav>
       </div>
     </header>

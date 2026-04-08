@@ -37,7 +37,7 @@ export default function CollectionDetailPage() {
   const isTouchDevice = useIsTouchDevice();
   const adjacentCollections = useAdjacentCollections(collectionCode);
 
-  const { ref: swipeRef, offset: swipeOffset, isSwiping } = useSwipeNavigation({
+  const { ref: swipeRef, offset: swipeOffset, isSwiping, isAnimating } = useSwipeNavigation({
     onSwipeLeft: adjacentCollections.next
       ? () => navigate(`/collections/${adjacentCollections.next!.collectionCode}`)
       : undefined,
@@ -336,11 +336,12 @@ export default function CollectionDetailPage() {
 
   const seo = buildCollectionSeo(collection, dateRange, topCorrespondentNames);
 
-  const swipeStyle: React.CSSProperties | undefined = swipeOffset !== 0
+  const swipeActive = isSwiping || isAnimating;
+  const swipeStyle: React.CSSProperties | undefined = swipeActive
     ? {
         transform: `translateX(${swipeOffset}px)`,
-        transition: isSwiping ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
-        willChange: isSwiping ? 'transform' : undefined,
+        transition: isSwiping ? 'none' : 'transform 0.28s cubic-bezier(0.25, 0.1, 0.25, 1)',
+        willChange: 'transform',
       }
     : undefined;
 

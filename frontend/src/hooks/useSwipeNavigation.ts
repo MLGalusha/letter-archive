@@ -3,15 +3,15 @@ import { useEffect, useRef, useState } from 'react';
 /**
  * Horizontal swipe gesture hook with direction locking.
  *
- * Returns a ref to attach to the swipeable container, the current
- * horizontal offset (for follow-the-finger animation), and whether
- * a swipe is actively in progress.
- *
- * Direction locking: if the first 10px of movement is more vertical
- * than horizontal the gesture is abandoned and normal scroll proceeds.
+ * Features:
+ * - Direction locking after 10px of movement (horizontal wins → swipe; vertical wins → scroll)
+ * - Rubber-band resistance when swiping toward a non-existent destination
+ * - Smooth exit animation: content slides off-screen before navigation
+ * - Ignores touches originating inside [data-swipe-ignore] elements (carousels, etc.)
  */
 
 const DIRECTION_LOCK_PX = 10;
+const TRANSITION_MS = 280;
 
 interface UseSwipeNavigationOptions {
   onSwipeLeft?: () => void;   // finger moved left → "next"
@@ -22,10 +22,12 @@ interface UseSwipeNavigationOptions {
 
 interface UseSwipeNavigationReturn {
   ref: React.RefObject<HTMLDivElement | null>;
-  /** Live horizontal pixel delta while swiping. */
+  /** Live horizontal pixel delta (follows finger, then exit/snap target). */
   offset: number;
-  /** True while a horizontal swipe is in progress. */
+  /** True while finger is down and swiping horizontally. */
   isSwiping: boolean;
+  /** True while the exit or snap-back animation is playing. */
+  isAnimating: boolean;
 }
 
 export default function useSwipeNavigation({
@@ -37,6 +39,7 @@ export default function useSwipeNavigation({
   const ref = useRef<HTMLDivElement | null>(null);
   const [offset, setOffset] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
 
   // Mutable refs to avoid stale closures in native listeners
   const offsetRef = useRef(0);
@@ -51,16 +54,25 @@ export default function useSwipeNavigation({
     active: false,
   });
 
+  // Track pending timers for cleanup
+  const timersRef = useRef<number[]>([]);
+
   useEffect(() => {
     const el = ref.current;
     if (!el || !enabled) {
       setOffset(0);
       setIsSwiping(false);
+      setIsAnimating(false);
       return;
     }
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 1) return;
+
+      // Ignore touches inside child elements that handle their own gestures
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-swipe-ignore]')) return;
+
       const touch = e.touches[0];
       touchRef.current = {
         startX: touch.clientX,
@@ -83,7 +95,10 @@ export default function useSwipeNavigation({
         if (Math.abs(dx) < DIRECTION_LOCK_PX && Math.abs(dy) < DIRECTION_LOCK_PX) return;
         ts.decided = true;
         ts.isHorizontal = Math.abs(dx) > Math.abs(dy);
-        if (ts.isHorizontal) setIsSwiping(true);
+        if (ts.isHorizontal) {
+          setIsSwiping(true);
+          setIsAnimating(false);
+        }
       }
 
       if (!ts.isHorizontal) return;
@@ -107,33 +122,55 @@ export default function useSwipeNavigation({
       const width = el.clientWidth;
       const { onSwipeLeft: sl, onSwipeRight: sr, threshold: th } = callbacksRef.current;
       const off = offsetRef.current;
-      const committed = Math.abs(off) > width * th;
+      const committed = ts.isHorizontal && Math.abs(off) > width * th;
 
-      if (ts.isHorizontal && committed) {
-        if (off < 0 && sl) sl();
-        else if (off > 0 && sr) sr();
-        // Committed — reset immediately (page will change)
-        offsetRef.current = 0;
-        setOffset(0);
+      ts.active = false;
+      ts.decided = false;
+      ts.isHorizontal = false;
+
+      if (committed) {
+        const callback = off < 0 ? sl : sr;
+        if (!callback) {
+          // No destination — snap back
+          setIsSwiping(false);
+          setIsAnimating(true);
+          requestAnimationFrame(() => {
+            offsetRef.current = 0;
+            setOffset(0);
+            const t = window.setTimeout(() => setIsAnimating(false), TRANSITION_MS);
+            timersRef.current.push(t);
+          });
+          return;
+        }
+
+        // Slide off-screen, then navigate
         setIsSwiping(false);
-      } else {
-        // Not committed — animate back to 0.
-        // Keep offset at last value, disable isSwiping (enables CSS transition),
-        // then set offset to 0 on next frame so the transition animates.
+        setIsAnimating(true);
+        const exitOffset = off < 0 ? -width : width;
+        requestAnimationFrame(() => {
+          offsetRef.current = exitOffset;
+          setOffset(exitOffset);
+          const t = window.setTimeout(() => {
+            callback();
+            offsetRef.current = 0;
+            setOffset(0);
+            setIsAnimating(false);
+          }, TRANSITION_MS);
+          timersRef.current.push(t);
+        });
+      } else if (off !== 0) {
+        // Below threshold — snap back
         setIsSwiping(false);
+        setIsAnimating(true);
         requestAnimationFrame(() => {
           offsetRef.current = 0;
           setOffset(0);
+          const t = window.setTimeout(() => setIsAnimating(false), TRANSITION_MS);
+          timersRef.current.push(t);
         });
+      } else {
+        setIsSwiping(false);
       }
-
-      touchRef.current = {
-        startX: 0,
-        startY: 0,
-        decided: false,
-        isHorizontal: false,
-        active: false,
-      };
     };
 
     el.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -144,8 +181,10 @@ export default function useSwipeNavigation({
       el.removeEventListener('touchstart', onTouchStart);
       el.removeEventListener('touchmove', onTouchMove);
       el.removeEventListener('touchend', onTouchEnd);
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current = [];
     };
   }, [enabled]);
 
-  return { ref, offset, isSwiping };
+  return { ref, offset, isSwiping, isAnimating };
 }

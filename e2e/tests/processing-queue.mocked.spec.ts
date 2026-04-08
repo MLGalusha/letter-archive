@@ -4,49 +4,55 @@ import { installMockProcessingQueueApi } from './utils/mock-processing-queue-api
 async function openMockProcessingQueue(page: Page) {
   const mockedApi = await installMockProcessingQueueApi(page);
   await page.goto('/admin/processing');
-  await page.locator('.pq-page').waitFor({ state: 'visible' });
-  await page.locator('.pq-table').first().waitFor({ state: 'visible' });
+  await page.locator('.proc-page').waitFor({ state: 'visible' });
+  // Wait for the first process card to render so we know the snapshot arrived.
+  await page.locator('.proc-card').first().waitFor({ state: 'visible' });
   return mockedApi;
 }
 
 test.describe('@mocked Processing Queue', () => {
-  test('shows the request id when the queue fails to load', async ({ page }) => {
+  test('shows an error banner when the snapshot fails to load', async ({ page }) => {
     await installMockProcessingQueueApi(page, {
-      queueError: {
+      snapshotError: {
         message: 'Queue backend unavailable',
         requestId: 'req-queue-load-503',
       },
     });
 
     await page.goto('/admin/processing');
-    await page.locator('.pq-page').waitFor({ state: 'visible' });
+    await page.locator('.proc-page').waitFor({ state: 'visible' });
 
-    await expect(page.locator('.pq-loading')).toContainText('Unable to load queue status');
+    await expect(page.locator('.proc-error')).toContainText('Queue backend unavailable');
+    await expect(page.locator('.proc-error')).toContainText('req-queue-load-503');
   });
 
-  test('renders deterministic queue data and removes a queued metadata job', async ({
+  test('renders deterministic snapshot data and removes a queued metadata job', async ({
     page,
   }) => {
     const mockedApi = await openMockProcessingQueue(page);
-    const activeSection = page.locator('.pq-section').nth(0);
-    const queueSection = page.locator('.pq-section').nth(1);
 
-    await expect(page.locator('.pq-section-title').first()).toContainText('Active Jobs');
-    await expect(page.locator('.pq-section-title').nth(1)).toContainText('Queue');
-    await expect(activeSection).toContainText('Alice Smith');
-    await expect(activeSection).toContainText('OCR');
+    // All three batch process cards should render.
+    const cards = page.locator('.proc-card');
+    await expect(cards).toHaveCount(3);
+    await expect(cards.nth(0)).toContainText('Transcription');
+    await expect(cards.nth(1)).toContainText('Metadata extraction');
+    await expect(cards.nth(2)).toContainText('Entity extraction');
 
-    await page.locator('.pq-tab:has-text("Metadata (1)")').click();
-    await expect(queueSection).toContainText('Ellen Gray');
+    // Active batch panel should show the running transcription job.
+    await expect(page.locator('.proc-active-batch')).toContainText('transcription');
 
-    await queueSection.getByRole('button', { name: 'Remove' }).click();
+    // Expand the Metadata queue section and remove the queued item.
+    const metadataSection = page
+      .locator('.proc-queue-section')
+      .filter({ hasText: 'Metadata extraction queue' });
+    await metadataSection.locator('.proc-queue-toggle').click();
+    await expect(metadataSection).toContainText('August 12, 1947');
 
-    await expect(page.locator('.pq-empty-state')).toContainText('No metadata jobs queued');
+    await metadataSection.getByRole('button', { name: 'Remove' }).click();
+
+    await expect(metadataSection).toContainText('Queue is empty.');
     expect(mockedApi.removeRequests).toEqual([
-      {
-        letterId: 'letter-3',
-        type: 'metadata',
-      },
+      { letterId: 'letter-3', processKey: 'metadata' },
     ]);
   });
 
@@ -60,23 +66,30 @@ test.describe('@mocked Processing Queue', () => {
       },
     });
 
+    // Auto-accept the confirm() dialog from the Cancel button.
+    page.on('dialog', (dialog) => dialog.accept());
+
     await page.goto('/admin/processing');
-    await page.locator('.pq-page').waitFor({ state: 'visible' });
+    await page.locator('.proc-page').waitFor({ state: 'visible' });
 
-    await page.getByRole('button', { name: 'Cancel' }).click();
+    // Expand the transcription queue so the active row + Cancel button render.
+    const transcriptionSection = page
+      .locator('.proc-queue-section')
+      .filter({ hasText: 'Transcription queue' });
+    await transcriptionSection.locator('.proc-queue-toggle').click();
+    await transcriptionSection.getByRole('button', { name: 'Cancel' }).click();
 
-    await expect(page.locator('.toast-error')).toContainText('Job queue stalled');
-    await expect(page.locator('.toast-error')).toContainText('Request ID: req-queue-500');
+    const toast = page.locator('.toast-error');
+    await expect(toast).toContainText('Job queue stalled');
+    await expect(toast).toContainText('req-queue-500');
     expect(mockedApi.cancelRequests).toEqual([
-      {
-        letterId: 'letter-1',
-        type: 'transcription',
-      },
+      { letterId: 'letter-1', processKey: 'transcription' },
     ]);
   });
 
   test('shows the request id when starting transcription fails', async ({ page }) => {
     const mockedApi = await installMockProcessingQueueApi(page, {
+      withoutActiveBatch: true,
       startTranscriptionError: {
         message: 'Processing start failed',
         requestId: 'req-start-transcription-503',
@@ -84,14 +97,18 @@ test.describe('@mocked Processing Queue', () => {
     });
 
     await page.goto('/admin/processing');
-    await page.locator('.pq-page').waitFor({ state: 'visible' });
+    await page.locator('.proc-page').waitFor({ state: 'visible' });
+    await page.locator('.proc-card').first().waitFor({ state: 'visible' });
 
-    await page.locator('.pq-phase-card:has-text("Transcription")').getByRole('button', { name: 'Start' }).click();
+    const transcriptionCard = page
+      .locator('.proc-card')
+      .filter({ hasText: 'Transcription' })
+      .first();
+    await transcriptionCard.getByRole('button', { name: 'Start batch' }).click();
 
-    await expect(page.locator('.toast-error')).toContainText('Processing start failed');
-    await expect(page.locator('.toast-error')).toContainText(
-      'Request ID: req-start-transcription-503',
-    );
+    const toast = page.locator('.toast-error');
+    await expect(toast).toContainText('Processing start failed');
+    await expect(toast).toContainText('req-start-transcription-503');
     expect(mockedApi.startTranscriptionRequests).toHaveLength(1);
   });
 });

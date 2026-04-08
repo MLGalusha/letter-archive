@@ -181,8 +181,17 @@ export default function CollectionDetailPage() {
         showTitle: true,
         collectionsLink: collectionsLinkOverride,
       });
-    } else if (!loading) {
-      setDock(EMPTY_DOCK);
+    } else {
+      // Reserve header dock space while scrubber data loads so the content
+      // below doesn't jump when the dock appears (active=true expands the
+      // brand slot; visible=false keeps it invisible until content is ready).
+      setDock({
+        content: null,
+        active: true,
+        visible: false,
+        showTitle: true,
+        collectionsLink: collectionsLinkOverride,
+      });
     }
   }, [
     archive.archiveLoading,

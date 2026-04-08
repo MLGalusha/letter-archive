@@ -170,8 +170,10 @@ test.describe('Navigation', () => {
     test('back button works on admin pages', async ({ page }) => {
       await loginAsAdmin(page);
 
-      await page.goto('/admin', { waitUntil: 'networkidle' });
-      await page.goto('/admin/upload', { waitUntil: 'networkidle' });
+      // Admin pages open a long-lived SSE notification stream, so `networkidle`
+      // never resolves — use `domcontentloaded` instead.
+      await page.goto('/admin', { waitUntil: 'domcontentloaded' });
+      await page.goto('/admin/upload', { waitUntil: 'domcontentloaded' });
 
       await page.goBack();
       await page.waitForURL(/\/admin$/, { timeout: 10000 });

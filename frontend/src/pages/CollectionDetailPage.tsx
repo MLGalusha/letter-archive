@@ -23,6 +23,9 @@ import useStickyDock from '../hooks/useStickyDock';
 import ShowcaseCard, { type ShowcaseItem } from '../components/ShowcaseCard';
 import InfiniteCarousel from '../components/InfiniteCarousel';
 import useIsMobile from '../hooks/useIsMobile';
+import useIsTouchDevice from '../hooks/useIsTouchDevice';
+import useSwipeNavigation from '../hooks/useSwipeNavigation';
+import useAdjacentCollections from '../hooks/useAdjacentCollections';
 import './CollectionDetailPage.css';
 
 export default function CollectionDetailPage() {
@@ -31,6 +34,18 @@ export default function CollectionDetailPage() {
   const { setDock } = useHeaderDock();
   const collectionScrubberProps = useCollectionScrubber(collectionCode);
   const isMobile = useIsMobile(640);
+  const isTouchDevice = useIsTouchDevice();
+  const adjacentCollections = useAdjacentCollections(collectionCode);
+
+  const { ref: swipeRef, offset: swipeOffset, isSwiping } = useSwipeNavigation({
+    onSwipeLeft: adjacentCollections.next
+      ? () => navigate(`/collections/${adjacentCollections.next!.collectionCode}`)
+      : undefined,
+    onSwipeRight: adjacentCollections.prev
+      ? () => navigate(`/collections/${adjacentCollections.prev!.collectionCode}`)
+      : undefined,
+    enabled: isTouchDevice && !!(adjacentCollections.prev || adjacentCollections.next),
+  });
 
   /* ---- Collection data ---- */
   const [collection, setCollection] = useState<CollectionWithLetters | null>(null);
@@ -321,8 +336,16 @@ export default function CollectionDetailPage() {
 
   const seo = buildCollectionSeo(collection, dateRange, topCorrespondentNames);
 
+  const swipeStyle: React.CSSProperties | undefined = swipeOffset !== 0
+    ? {
+        transform: `translateX(${swipeOffset}px)`,
+        transition: isSwiping ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
+        willChange: isSwiping ? 'transform' : undefined,
+      }
+    : undefined;
+
   return (
-    <div className="body-layout">
+    <div className="body-layout" ref={swipeRef} style={swipeStyle}>
       <SEO
         title={seo.title}
         description={seo.description}

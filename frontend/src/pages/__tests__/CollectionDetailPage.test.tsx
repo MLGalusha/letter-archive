@@ -30,6 +30,7 @@ vi.mock("../../api/collections", () => ({
   getCollectionByCode: (...args: unknown[]) => getCollectionByCodeMock(...args),
   getCollectionProfile: (...args: unknown[]) => getCollectionProfileMock(...args),
   listCollections: () => Promise.resolve([]),
+  getCachedCollections: () => null,
 }));
 
 vi.mock("../../api/letters", () => ({

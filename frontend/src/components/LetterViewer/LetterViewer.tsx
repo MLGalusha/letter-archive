@@ -399,6 +399,12 @@ const LetterViewer = memo(function LetterViewer({
     );
   }, [displayImages.length, saveCurrentImageState]);
 
+  // Refs for use in native touch handlers (avoids stale closures)
+  const nextImageRef = useRef(nextImage);
+  nextImageRef.current = nextImage;
+  const prevImageRef = useRef(prevImage);
+  prevImageRef.current = prevImage;
+
   // ============================================================================
   // IMAGE DRAG/PAN HANDLERS
   // ============================================================================
@@ -448,6 +454,11 @@ const LetterViewer = memo(function LetterViewer({
   // iOS Safari requires native listeners with { passive: false } for preventDefault
   // ============================================================================
 
+  // Swipe offset for lightbox image navigation (touch only)
+  const [imageSwipeOffset, setImageSwipeOffset] = useState(0);
+  const [imageSwipeSwiping, setImageSwipeSwiping] = useState(false);
+  const imageSwipeOffsetRef = useRef(0);
+
   const touchStateRef = useRef<{
     // Pinch tracking
     initialDistance: number;
@@ -459,6 +470,12 @@ const LetterViewer = memo(function LetterViewer({
     // Double-tap detection
     lastTapTime: number;
     lastTapPos: { x: number; y: number };
+    // Lightbox swipe navigation (scale === 1)
+    swipeStartX: number;
+    swipeStartY: number;
+    swipeDecided: boolean;
+    swipeIsHorizontal: boolean;
+    swipeActive: boolean;
   }>({
     initialDistance: 0,
     initialScale: 1,
@@ -467,6 +484,11 @@ const LetterViewer = memo(function LetterViewer({
     isPinching: false,
     lastTapTime: 0,
     lastTapPos: { x: 0, y: 0 },
+    swipeStartX: 0,
+    swipeStartY: 0,
+    swipeDecided: false,
+    swipeIsHorizontal: false,
+    swipeActive: false,
   });
 
   useEffect(() => {
@@ -534,6 +556,13 @@ const LetterViewer = memo(function LetterViewer({
             x: touch.clientX - positionRef.current.x,
             y: touch.clientY - positionRef.current.y,
           };
+        } else if (variant === 'lightbox' && displayImagesRef.current.length > 1) {
+          // At scale 1 in lightbox with multiple images: start swipe tracking
+          ts.swipeStartX = touch.clientX;
+          ts.swipeStartY = touch.clientY;
+          ts.swipeDecided = false;
+          ts.swipeIsHorizontal = false;
+          ts.swipeActive = true;
         }
       }
     };
@@ -573,6 +602,24 @@ const LetterViewer = memo(function LetterViewer({
           x: touch.clientX - ts.panStart.x,
           y: touch.clientY - ts.panStart.y,
         });
+      } else if (e.touches.length === 1 && ts.swipeActive && !ts.isPinching) {
+        // Lightbox swipe-to-navigate at scale 1
+        const touch = e.touches[0];
+        const dx = touch.clientX - ts.swipeStartX;
+        const dy = touch.clientY - ts.swipeStartY;
+
+        if (!ts.swipeDecided) {
+          if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+          ts.swipeDecided = true;
+          ts.swipeIsHorizontal = Math.abs(dx) > Math.abs(dy);
+          if (ts.swipeIsHorizontal) setImageSwipeSwiping(true);
+        }
+
+        if (ts.swipeIsHorizontal) {
+          e.preventDefault();
+          imageSwipeOffsetRef.current = dx;
+          setImageSwipeOffset(dx);
+        }
       }
     };
 
@@ -580,6 +627,33 @@ const LetterViewer = memo(function LetterViewer({
       const ts = touchStateRef.current;
 
       if (e.touches.length === 0) {
+        // Resolve lightbox swipe if active
+        if (ts.swipeActive && ts.swipeIsHorizontal) {
+          const container = imageContainerRef.current;
+          const width = container?.clientWidth ?? window.innerWidth;
+          const off = imageSwipeOffsetRef.current;
+          const committed = Math.abs(off) > width * 0.2;
+
+          if (committed) {
+            if (off < 0) nextImageRef.current();
+            else prevImageRef.current();
+            imageSwipeOffsetRef.current = 0;
+            setImageSwipeOffset(0);
+            setImageSwipeSwiping(false);
+          } else {
+            // Snap back
+            setImageSwipeSwiping(false);
+            requestAnimationFrame(() => {
+              imageSwipeOffsetRef.current = 0;
+              setImageSwipeOffset(0);
+            });
+          }
+
+          ts.swipeActive = false;
+          ts.swipeDecided = false;
+          ts.swipeIsHorizontal = false;
+        }
+
         ts.isPinching = false;
         ts.panStart = null;
 
@@ -760,9 +834,12 @@ const LetterViewer = memo(function LetterViewer({
             alt=""
             className={`viewer-image-thumb ${isAnimating ? "animating" : ""}`}
             style={{
-              transform: `scale(${scale}) translate(${position.x / scale}px, ${
+              transform: `translateX(${imageSwipeOffset}px) scale(${scale}) translate(${position.x / scale}px, ${
                 position.y / scale
               }px)`,
+              transition: imageSwipeOffset !== 0 && !imageSwipeSwiping
+                ? 'transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)'
+                : undefined,
             }}
             draggable={false}
             aria-hidden
@@ -778,9 +855,15 @@ const LetterViewer = memo(function LetterViewer({
           }
           className={`viewer-image ${isAnimating ? "animating" : ""}`}
           style={{
-            transform: `scale(${scale}) translate(${position.x / scale}px, ${
+            transform: `translateX(${imageSwipeOffset}px) scale(${scale}) translate(${position.x / scale}px, ${
               position.y / scale
             }px)`,
+            transition: [
+              imageSwipeOffset !== 0 && !imageSwipeSwiping
+                ? 'transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)'
+                : undefined,
+              !viewerReady ? 'opacity 400ms ease-out' : undefined,
+            ].filter(Boolean).join(', ') || undefined,
             cursor:
               scale > 1
                 ? isDragging
@@ -792,7 +875,6 @@ const LetterViewer = memo(function LetterViewer({
                     ? "pointer"
                     : "default",
             opacity: viewerReady ? 1 : 0,
-            transition: 'opacity 400ms ease-out',
           }}
           draggable={false}
         />

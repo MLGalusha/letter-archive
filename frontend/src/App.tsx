@@ -4,6 +4,7 @@ import Header from "./components/Header/Header";
 import ScrollToTop from "./components/ScrollToTop";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { HeaderDockProvider } from "./contexts/HeaderDockContext";
+import PageSwipeLayer from "./components/SwipeNavigation/PageSwipeLayer";
 import "./App.css";
 
 const HomePage = lazy(() => import("./pages/HomePage"));
@@ -73,6 +74,7 @@ function App() {
               <main className="main-page-layout public-site-shell">
                 <HeaderDockProvider>
                   <Header />
+                  <PageSwipeLayer>
                   <div id="main-content">
                   <Routes>
                     <Route path="/" element={<HomePage />} />
@@ -88,6 +90,7 @@ function App() {
                     <Route path="*" element={<NotFoundPage />} />
                   </Routes>
                   </div>
+                  </PageSwipeLayer>
                 </HeaderDockProvider>
               </main>
             }

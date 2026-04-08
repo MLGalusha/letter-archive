@@ -59,6 +59,10 @@ export async function regenerateEntities(letterId: string): Promise<Letter> {
   return apiPost<Letter>(`/admin/letters/${letterId}/regenerate-entities`);
 }
 
+export async function generateReadingView(letterId: string): Promise<Letter> {
+  return apiPost<Letter>(`/admin/letters/${letterId}/generate-reading-view`);
+}
+
 export async function verifyTranscript(letterId: string): Promise<Letter> {
   return apiPost<Letter>(`/admin/letters/${letterId}/verify-transcript`);
 }

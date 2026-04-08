@@ -22,6 +22,7 @@ import {
   reExtractLetter,
   updateNoteStatus,
   addNote,
+  generateReadingView,
 } from "../../api/admin/letters";
 import LetterViewer from "../../components/LetterViewer/LetterViewer";
 import AdminLayout from "../../components/AdminLayout";
@@ -37,8 +38,6 @@ import {
 } from "../../components/common";
 import { trackEdit } from "../../utils/recentEdits";
 import { highlightTranscriptMarkers } from "../../utils/transcriptHighlight";
-import { reflowTranscript } from "../../utils/transcriptRendering";
-import { generateReadingTextFromStructured } from "../../utils/structuredTranscriptRendering";
 import { useTooltip } from "../../hooks/useTooltip";
 import type { Letter, LetterImage, VisibilityState } from "../../types/Letter";
 import {
@@ -77,74 +76,27 @@ export default function LetterReviewPage() {
 
   const [transcript, setTranscript] = useState("");
   const [transcriptViewMode, setTranscriptViewMode] = useState<"edit" | "preview">("edit");
-  // Reader view text — independent from raw transcript, initialized once from reflow
+  // Reader view text — sourced from backend readingText
   const [readerText, setReaderText] = useState<string | null>(null);
-  const prevTranscriptRef = useRef("");
+  const [readingViewGenerating, setReadingViewGenerating] = useState(false);
 
-  // Initialize reader text on first switch to reading view:
-  // use saved readingText from backend if available, otherwise generate from reflow
+  // Initialize reader text from backend when switching to preview
   const handleViewModeChange = useCallback((mode: "edit" | "preview") => {
     setTranscriptViewMode(mode);
-    if (mode === "preview" && readerText === null) {
-      if (letter?.readingText) {
-        setReaderText(letter.readingText);
-      } else if (letter?.transcript?.structuredPages) {
-        setReaderText(generateReadingTextFromStructured(letter.transcript.structuredPages));
-      } else {
-        const stripped = transcript.replace(/^---\s*Page\s+\d+\s*---$/gm, "").replace(/\n{3,}/g, "\n\n");
-        setReaderText(reflowTranscript(stripped));
-      }
-      prevTranscriptRef.current = transcript;
+    if (mode === "preview" && readerText === null && letter?.readingText) {
+      setReaderText(letter.readingText);
     }
-  }, [readerText, transcript, letter?.readingText, letter?.transcript?.structuredPages]);
+  }, [readerText, letter?.readingText]);
 
-  // When transcript changes in edit mode, patch ONLY text changes into reader text.
-  // Whitespace-only changes (line splits, spacing) are ignored — the reader view
-  // maintains its own independent spacing.
+  // Sync reader text when letter data updates (e.g. after verification auto-generates it)
   useEffect(() => {
-    if (readerText === null) return;
-    const prev = prevTranscriptRef.current;
-    if (prev === transcript || !prev) {
-      prevTranscriptRef.current = transcript;
-      return;
+    if (letter?.readingText && readerText === null) {
+      // Don't auto-set — wait until user opens preview
+    } else if (letter?.readingText && letter.readingText !== readerText) {
+      // Backend has newer reading text (e.g. from auto-generation on verify)
+      setReaderText(letter.readingText);
     }
-
-    // Compare non-whitespace content — if identical, only spacing changed → skip
-    const stripWS = (s: string) => s.replace(/\s+/g, "");
-    const oldContent = stripWS(prev);
-    const newContent = stripWS(transcript);
-
-    prevTranscriptRef.current = transcript;
-
-    if (oldContent === newContent) {
-      // Only whitespace changed in edit view — don't touch reader text
-      return;
-    }
-
-    // Actual text changed — patch word-level changes into reader text
-    const oldWords = prev.split(/\s+/).filter(Boolean);
-    const newWords = transcript.split(/\s+/).filter(Boolean);
-
-    if (oldWords.length === newWords.length) {
-      // Same word count — do word-for-word replacement
-      let patched = readerText;
-      for (let i = 0; i < oldWords.length; i++) {
-        if (oldWords[i] !== newWords[i]) {
-          patched = patched.replace(oldWords[i], newWords[i]);
-        }
-      }
-      if (patched !== readerText) {
-        setReaderText(patched);
-      }
-    } else if (letter?.transcript?.structuredPages) {
-      // Word count changed — regenerate from structured data
-      setReaderText(generateReadingTextFromStructured(letter.transcript.structuredPages));
-    } else {
-      // Word count changed — regenerate reader text fully via heuristic
-      const stripped = transcript.replace(/^---\s*Page\s+\d+\s*---$/gm, "").replace(/\n{3,}/g, "\n\n");
-      setReaderText(reflowTranscript(stripped));
-    }
-  }, [transcript, readerText, letter?.transcript?.structuredPages]);
+  }, [letter?.readingText]);
 
   // Photo description state
   const [photoDescription, setPhotoDescription] = useState("");
@@ -1101,6 +1053,23 @@ export default function LetterReviewPage() {
     void triggerAutoSave({ readingText: text });
   }, [triggerAutoSave]);
 
+  const handleGenerateReadingView = useCallback(async () => {
+    if (!letterId) return;
+    setReadingViewGenerating(true);
+    try {
+      const updated = await generateReadingView(letterId);
+      setLetter(updated);
+      if (updated.readingText) {
+        setReaderText(updated.readingText);
+      }
+      showToast("Reading view generated", "success");
+    } catch {
+      showToast("Failed to generate reading view", "error");
+    } finally {
+      setReadingViewGenerating(false);
+    }
+  }, [letterId, showToast]);
+
   const handleMetadataAutoSave = useCallback((updates: Record<string, unknown>) => {
     void triggerAutoSave(updates as AutoSaveData);
   }, [triggerAutoSave]);
@@ -1439,6 +1408,8 @@ export default function LetterReviewPage() {
                 readerText={readerText ?? ""}
                 onReaderTextChange={handleReaderTextChange}
                 hideReadingView={getPrimaryImageType(letter) !== "letter"}
+                onGenerateReadingView={handleGenerateReadingView}
+                readingViewGenerating={readingViewGenerating}
               />
             )}
 

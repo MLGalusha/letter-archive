@@ -83,7 +83,7 @@ describe("TranscriptionSection", () => {
     expect(props.onEditorKeyDown).toHaveBeenCalledTimes(1);
   });
 
-  it("opens the reading view overlay with the spacing editor", () => {
+  it("opens the reading view overlay and shows reading text", () => {
     const props = buildProps({
       letter: {
         transcriptStatus: "EMPTY",
@@ -96,13 +96,9 @@ describe("TranscriptionSection", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Reading view" }));
 
-    expect(screen.getByRole("dialog", { name: "Reading view" })).toBeInTheDocument();
-
-    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
-    textarea.value = "Dear Molly,\n\nWe finally made it home.";
-    fireEvent.input(textarea);
-
-    expect(props.onReaderTextChange).toHaveBeenCalledWith("Dear Molly,\n\nWe finally made it home.");
+    const dialog = screen.getByRole("dialog", { name: "Reading view" });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.querySelector(".reading-view-text")).toHaveTextContent("Dear Molly,");
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog", { name: "Reading view" })).not.toBeInTheDocument();

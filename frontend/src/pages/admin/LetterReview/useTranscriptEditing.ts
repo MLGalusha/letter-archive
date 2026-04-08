@@ -88,9 +88,14 @@ export function useTranscriptEditing({
 
     try {
       const updated = await verifyTranscript(letterId);
+      const hadReadingText = letter?.readingText;
       setLetter(updated);
       resetEditingState();
-      showToast('Transcript verified', 'success');
+      if (!hadReadingText && updated.readingText) {
+        showToast('Transcript verified — reading view generated', 'success');
+      } else {
+        showToast('Transcript verified', 'success');
+      }
     } catch (error) {
       showToast(
         error instanceof Error ? error.message : 'Failed to verify transcript',

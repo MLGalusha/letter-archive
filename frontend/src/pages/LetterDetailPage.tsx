@@ -14,10 +14,6 @@ import {
   shouldShowPhotoDescriptionWorkflow,
 } from "../utils/letterContent";
 import { reflowTranscript, renderTranscriptLines, computeReferenceWidth } from "../utils/transcriptRendering";
-import {
-  renderStructuredOriginalView,
-  renderStructuredReadingView,
-} from "../utils/structuredTranscriptRendering";
 import { useHeaderDock, EMPTY_DOCK } from "../contexts/HeaderDockContext";
 import HeaderScrubber from "../components/HeaderScrubber/HeaderScrubber";
 import useLetterScrubber from "../components/LetterHeaderDock/useLetterScrubber";
@@ -304,7 +300,6 @@ export default function LetterDetailPage() {
     }));
   }, [letter]);
 
-  const structuredPages = letter?.transcript?.structuredPages ?? null;
 
   const seo = useMemo(() => (letter ? buildLetterSeo(letter) : null), [letter]);
 
@@ -567,42 +562,6 @@ export default function LetterDetailPage() {
                   </div>
                 </div>
               </div>
-            ) : transcriptMode === "reading" && structuredPages ? (
-              /* ── Structured reading view — from AI line annotations ── */
-              <div className="transcript-pages-combined">
-                {structuredPages.map((sp, idx) => {
-                  const pageImage = letterTypeImages.find((img) => img.pageNumber === sp.pageNumber);
-                  const side = idx % 2 === 0 ? "left" : "right";
-                  return (
-                    <div key={sp.pageNumber} className="transcript-page-region">
-                      {idx > 0 && <div className="page-boundary-mark" />}
-                      <div className="transcript-page-body">
-                        {pageImage && (
-                          <button
-                            type="button"
-                            className={`page-thumb page-thumb-${side}${transcriptVerifClass}`}
-                            onClick={() => openViewer(Math.max(0, allImages.indexOf(pageImage)))}
-                            aria-label={`View page ${sp.pageNumber}`}
-                          >
-                            <span className="page-thumb-inner">
-                              <img
-                                src={getImageUrl(pageImage.imageUrl, { width: 300 })}
-                                alt={`Page ${sp.pageNumber}`}
-                                className="page-thumb-img"
-                                loading="lazy"
-                              />
-                              <span className="page-thumb-label">Page {sp.pageNumber}</span>
-                            </span>
-                          </button>
-                        )}
-                        <div className={`transcript-text${shortLineClass}`}>
-                          {renderStructuredReadingView([sp])}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             ) : letter.transcript.pages.length > 0 ? (
               transcriptMode === "reading" && readingSegments ? (
                 /* ── Combined reading view — seamless across pages ── */
@@ -647,7 +606,6 @@ export default function LetterDetailPage() {
                   <div className="original-split-pages">
                     {letter.transcript.pages.map((page, idx) => {
                       const pageImage = letterTypeImages.find((img) => img.pageNumber === page.pageNumber);
-                      const sp = structuredPages?.find(s => s.pageNumber === page.pageNumber);
                       return (
                         <div key={page.pageNumber} className="original-split-row" data-page={page.pageNumber}>
                           {pageImage && (
@@ -679,13 +637,7 @@ export default function LetterDetailPage() {
                             {letter.transcript.pages.length > 1 && !pageImage && (
                               <div className="page-marker">Page {page.pageNumber}</div>
                             )}
-                            {sp ? (
-                              <div className={`transcript-text transcript-original${shortLineClass}`}>
-                                {renderStructuredOriginalView([sp])}
-                              </div>
-                            ) : (
-                              <pre className={`transcript-text transcript-original${shortLineClass}`}>{page.text}</pre>
-                            )}
+                            <pre className={`transcript-text transcript-original${shortLineClass}`}>{page.text}</pre>
                           </div>
                         </div>
                       );

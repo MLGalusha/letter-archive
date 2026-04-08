@@ -233,6 +233,22 @@ router.post('/:letterId/regenerate-entities', async (req, res, next) => {
   }
 });
 
+router.post('/:letterId/generate-reading-view', async (req, res, next) => {
+  try {
+    const { letterId } = req.params;
+    const letter = await requireLetter(letterId);
+    if (!letter.transcriptionText) {
+      throw new BadRequestError('Letter must have a transcription before generating reading view');
+    }
+
+    const { generateAndSaveReadingView } = await import('../../../services/letter/readingView.js');
+    await generateAndSaveReadingView(letterId);
+    res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/:letterId/re-extract', async (req, res, next) => {
   try {
     const { letterId } = req.params;

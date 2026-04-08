@@ -2,7 +2,6 @@ import { memo, useState, useMemo, useEffect, useCallback, type RefObject, type C
 import { createPortal } from "react-dom";
 import { Icon } from "../../../components/common";
 import { countMarkers, highlightTranscriptMarkers, type MarkerType } from "../../../utils/transcriptHighlight";
-import SpacingEditor from "./SpacingEditor";
 
 const MARKER_LABELS: Record<MarkerType, string> = {
   illegible: "illegible",
@@ -42,6 +41,8 @@ interface TranscriptionSectionProps {
   onReaderTextChange: (text: string) => void;
   /** Hide the reading view toggle (e.g. for non-letter types like telegrams, covers) */
   hideReadingView?: boolean;
+  onGenerateReadingView?: () => void;
+  readingViewGenerating?: boolean;
 }
 
 const hasContent = (text: string) => text.trim().length > 0;
@@ -66,8 +67,9 @@ const TranscriptionSection = memo(function TranscriptionSection({
   onEditorKeyDown,
   onViewModeChange,
   readerText,
-  onReaderTextChange,
   hideReadingView,
+  onGenerateReadingView,
+  readingViewGenerating,
 }: TranscriptionSectionProps) {
   const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
   const showReadingView = !hideReadingView && viewMode === "preview" && hasContent(transcriptText);
@@ -251,29 +253,75 @@ const TranscriptionSection = memo(function TranscriptionSection({
           >
             <div className="reading-view-modal-header">
               <div className="reading-view-modal-copy">
-                <p className="reading-view-modal-eyebrow">Reader spacing</p>
                 <h3 id="reading-view-title">Reading view</h3>
                 <p className="reading-view-modal-note">
-                  This column matches the public transcript width.
+                  This is how the transcript will appear on the public page.
                 </p>
               </div>
-              <button
-                type="button"
-                className="reading-view-close-btn"
-                onClick={() => changeViewMode("edit")}
-              >
-                Close
-              </button>
+              <div className="reading-view-modal-actions">
+                {onGenerateReadingView && (
+                  <button
+                    type="button"
+                    className="action-btn"
+                    onClick={onGenerateReadingView}
+                    disabled={readingViewGenerating}
+                  >
+                    {readingViewGenerating ? (
+                      <>
+                        <Icon name="process" size={14} className="spinning" />
+                        <span>Generating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="process" size={14} />
+                        <span>{readerText ? "Regenerate" : "Generate"} Reading View</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="reading-view-close-btn"
+                  onClick={() => changeViewMode("edit")}
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="reading-view-modal-body">
               <div className="reading-view-modal-article">
                 <div className="reading-view-modal-label">Transcript</div>
                 <div className="reading-view-modal-column">
-                  <SpacingEditor
-                    value={readerText}
-                    onChange={onReaderTextChange}
-                  />
+                  {readingViewGenerating ? (
+                    <div className="reading-view-generating">
+                      <Icon name="process" size={20} className="spinning" />
+                      <p className="reading-view-generating-text">
+                        Generating reading view...
+                      </p>
+                      <p className="reading-view-generating-sub">
+                        AI is identifying paragraph breaks in the transcript.
+                      </p>
+                    </div>
+                  ) : readerText ? (
+                    <div className="reading-view-text" style={{ whiteSpace: "pre-wrap" }}>
+                      {readerText}
+                    </div>
+                  ) : (
+                    <div className="reading-view-empty">
+                      <p>No reading view generated yet.</p>
+                      {onGenerateReadingView && (
+                        <button
+                          type="button"
+                          className="action-btn generate-reading-view-cta"
+                          onClick={onGenerateReadingView}
+                        >
+                          <Icon name="process" size={14} />
+                          <span>Generate Reading View</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

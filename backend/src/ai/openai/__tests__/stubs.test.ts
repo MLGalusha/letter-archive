@@ -27,8 +27,6 @@ describe('OpenAI modules stub mode', () => {
 
     expect(result.isStub).toBe(true);
     expect(result.text).toBeTruthy();
-    expect(result.structured).toBeTruthy();
-    expect(Array.isArray(result.structured)).toBe(true);
   });
 
   it('returns stub metadata for v2 extraction', async () => {

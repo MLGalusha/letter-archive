@@ -1,11 +1,14 @@
 import { eq } from 'drizzle-orm';
 import { db, letters } from '../../db/index.js';
 import { getLetterById } from '../letters.js';
+import { generateAndSaveReadingView } from './readingView.js';
 import { log } from './shared.js';
 
 export async function verifyTranscript(letterId: string, userId: string = 'admin'): Promise<{ previousStatus: string } | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
+
+  const previousStatus = existingLetter.transcriptStatus;
 
   await db.update(letters).set({
     transcriptStatus: 'VERIFIED',
@@ -14,8 +17,23 @@ export async function verifyTranscript(letterId: string, userId: string = 'admin
     updatedAt: new Date(),
   }).where(eq(letters.id, letterId));
 
-  log.info({ letterId, previousStatus: existingLetter.transcriptStatus }, 'Transcript verified');
-  return { previousStatus: existingLetter.transcriptStatus };
+  log.info({ letterId, previousStatus }, 'Transcript verified');
+
+  // Auto-generate reading view on FIRST verification of letter-type documents only
+  if (
+    previousStatus !== 'VERIFIED'
+    && !existingLetter.readingText
+    && existingLetter.type === 'L'
+  ) {
+    try {
+      await generateAndSaveReadingView(letterId);
+      log.info({ letterId }, 'Auto-generated reading view on first verification');
+    } catch (err) {
+      log.warn({ letterId, err }, 'Failed to auto-generate reading view — user can trigger manually');
+    }
+  }
+
+  return { previousStatus };
 }
 
 export async function unverifyTranscript(letterId: string): Promise<true | null> {

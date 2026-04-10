@@ -123,6 +123,19 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
     [JSON.stringify(fixedFilters)],
   );
 
+  // ── Reset state when fixedFilters change (e.g. swipe to new collection) ──
+  const prevFixedRef = useRef(fixedFilters);
+  useEffect(() => {
+    if (prevFixedRef.current === fixedFilters) return;
+    prevFixedRef.current = fixedFilters;
+
+    // Reload persisted state for the new storageKey, then overlay fixedFilters
+    const saved = loadSearchState(storageKey);
+    setSearchQuery(saved?.query || '');
+    setFiltersRaw({ ...(saved?.filters ?? parseFiltersFromUrl(searchParams, defaultSortOrder)), ...fixedFilters });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fixedFilters, storageKey]);
+
   // ── Archive results state ──
   const [archiveResults, setArchiveResults] = useState<ArchiveSearchResponse>({
     letters: [],

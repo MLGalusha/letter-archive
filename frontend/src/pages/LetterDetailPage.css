@@ -1140,9 +1140,9 @@
 @media (max-width: 640px) {
   .letter-article {
     grid-template-columns:
-      [full-start wide-start] 0.75rem
+      [full-start wide-start] 1.25rem
       [content-start] 1fr [content-end]
-      0.75rem [wide-end full-end];
+      1.25rem [wide-end full-end];
   }
 
   .letter-hero-section {

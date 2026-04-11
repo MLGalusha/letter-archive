@@ -27,10 +27,11 @@ function formatDateRange(range: { min: string; max: string } | null | undefined)
   return `${start.label} \u2014 ${end.label}`;
 }
 
-type SortField = 'letters' | 'date' | 'title';
+type SortField = 'number' | 'letters' | 'date' | 'title';
 type SortOrder = 'asc' | 'desc';
 
 const SORT_OPTIONS: { field: SortField; label: string; defaultOrder: SortOrder }[] = [
+  { field: 'number', label: 'Collection #', defaultOrder: 'asc' },
   { field: 'letters', label: 'Letter count', defaultOrder: 'desc' },
   { field: 'date', label: 'Date', defaultOrder: 'desc' },
   { field: 'title', label: 'Title', defaultOrder: 'asc' },
@@ -50,10 +51,10 @@ export default function CollectionsPage() {
   const isMobile = useIsMobile();
   const savedSort = loadCollectionsSort();
   const [sortField, setSortField] = useState<SortField>(
-    (savedSort?.field as SortField) || 'letters',
+    (savedSort?.field as SortField) || 'number',
   );
   const [sortOrder, setSortOrder] = useState<SortOrder>(
-    (savedSort?.order as SortOrder) || 'desc',
+    (savedSort?.order as SortOrder) || 'asc',
   );
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
@@ -112,6 +113,7 @@ export default function CollectionsPage() {
     const dir = sortOrder === 'asc' ? 1 : -1;
     return [...collections].sort((a, b) => {
       switch (sortField) {
+        case 'number': return dir * a.collectionCode.localeCompare(b.collectionCode);
         case 'letters': return dir * ((a.letterCount || 0) - (b.letterCount || 0));
         case 'date': {
           const which = sortOrder === 'desc' ? 'max' : 'min';

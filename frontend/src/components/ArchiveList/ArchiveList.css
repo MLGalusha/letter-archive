@@ -70,8 +70,6 @@
   position: relative;
   width: 100%;
   contain: layout style;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 312px;
 }
 
 .letter-card {
@@ -416,10 +414,6 @@
   .archive-complete-message {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .letter-card-shell {
-    contain-intrinsic-size: auto 220px;
   }
 
   .letter-card {

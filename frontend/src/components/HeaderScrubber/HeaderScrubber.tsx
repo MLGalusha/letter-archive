@@ -242,7 +242,14 @@ export default function HeaderScrubber({
   }, [pos, total, stopEdgeScroll, paintVisuals]);
 
   const handlePointerCancel = useCallback(() => cancelDrag(), [cancelDrag]);
-  const handleDockPointerLeave = useCallback(() => cancelDrag(), [cancelDrag]);
+  const handleDockPointerLeave = useCallback(() => {
+    // Don't cancel during an active drag — pointer capture on the track
+    // guarantees we'll receive pointerup regardless of finger position.
+    // Without this guard, mobile users lose the drag when their finger
+    // drifts slightly outside the dock element.
+    if (drag.current.active) return;
+    cancelDrag();
+  }, [cancelDrag]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {

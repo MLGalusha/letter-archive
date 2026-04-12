@@ -286,6 +286,35 @@
 
 /* ── Responsive ────────────────────────────────────────── */
 
+/* Mobile touch: enlarge track hit area and thumb for finger targets */
+@media (pointer: coarse) {
+  .dock-strip-track {
+    height: 48px;
+  }
+
+  .dock-track-thumb {
+    width: 28px;
+    height: 28px;
+    border-width: 3.5px;
+  }
+
+  /* Invisible expanded touch target around thumb area */
+  .dock-track-thumb::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+  }
+
+  .dock-strip-track.is-dragging .dock-track-thumb {
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+}
+
 @media (max-width: 700px) {
   .dock-strip-collection {
     max-width: 110px;

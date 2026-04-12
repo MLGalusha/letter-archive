@@ -68,16 +68,16 @@ describe("CollectionsPage", () => {
 
     expect(container.querySelectorAll(".public-collection-card")).toHaveLength(3);
 
-    // Default sort is letter count desc — War Letters (12) first
+    // Default sort is collection number asc — War Letters (001) first
     let titles = Array.from(container.querySelectorAll(".collection-card-top h3")).map((el) =>
       el.textContent?.trim(),
     );
     expect(titles[0]).toBe("War Letters");
 
-    // Open dropdown and click active "Letter count" to toggle to asc
+    // Open dropdown and click active "Collection #" to toggle to desc
     await user.click(screen.getByLabelText("Sort collections"));
     let menuOptions = container.querySelectorAll(".sort-option");
-    await user.click(menuOptions[0]); // Letter count (active) — toggles to asc
+    await user.click(menuOptions[0]); // Collection # (active) — toggles to desc
     titles = Array.from(container.querySelectorAll(".collection-card-top h3")).map((el) =>
       el.textContent?.trim(),
     );
@@ -86,12 +86,12 @@ describe("CollectionsPage", () => {
     // Dropdown stayed open after toggle — pick "Date" directly
     menuOptions = container.querySelectorAll(".sort-option");
     if (menuOptions.length > 0) {
-      await user.click(menuOptions[1]); // Date
+      await user.click(menuOptions[2]); // Date
     } else {
       // Dropdown closed, reopen and pick
       await user.click(screen.getByLabelText("Sort collections"));
       menuOptions = container.querySelectorAll(".sort-option");
-      await user.click(menuOptions[1]);
+      await user.click(menuOptions[2]);
     }
     titles = Array.from(container.querySelectorAll(".collection-card-top h3")).map((el) =>
       el.textContent?.trim(),

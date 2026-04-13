@@ -166,6 +166,37 @@ function buildExtendedBoundary(
   return result;
 }
 
+/** Recompute bbox from a set of boundary points. */
+function bboxFromBoundary(boundary: { x: number; y: number }[]): [number, number, number, number] {
+  const xs = boundary.map((p) => p.x);
+  const ys = boundary.map((p) => p.y);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+
+/**
+ * Subdivide a polygon boundary so points are spaced at most `maxSpacing` px apart.
+ * Adds invisible intermediate points along each edge for smooth reshape deformation.
+ * The shape is preserved exactly — all new points lie on the original edges.
+ */
+function subdivideBoundary(
+  boundary: { x: number; y: number }[],
+  maxSpacing: number,
+): { x: number; y: number }[] {
+  const result: { x: number; y: number }[] = [];
+  const n = boundary.length;
+  for (let i = 0; i < n; i++) {
+    const a = boundary[i];
+    const b = boundary[(i + 1) % n];
+    const edgeLen = Math.hypot(b.x - a.x, b.y - a.y);
+    const numSegments = Math.max(1, Math.ceil(edgeLen / maxSpacing));
+    for (let j = 0; j < numSegments; j++) {
+      const t = j / numSegments;
+      result.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    }
+  }
+  return result;
+}
+
 export interface UseSegmentEditorReturn {
   segmentEditMode: boolean;
   setSegmentEditMode: (v: boolean) => void;
@@ -175,6 +206,10 @@ export interface UseSegmentEditorReturn {
   resizeSegment: (id: string, newBbox: [number, number, number, number]) => void;
   deleteSegment: (id: string) => void;
   addSegment: (bbox: [number, number, number, number]) => void;
+  /** Create a segment from a polygon (point-by-point draw). */
+  addPolygonSegment: (boundary: { x: number; y: number }[]) => void;
+  /** Create a segment from a two-point line (given some width). */
+  addLineSegment: (p1: { x: number; y: number }, p2: { x: number; y: number }, width: number) => void;
   toggleExcluded: (id: string) => void;
   classifySegment: (id: string, segmentClass: SegmentClass) => void;
   mapSegment: (id: string, text: string) => void;
@@ -190,6 +225,24 @@ export interface UseSegmentEditorReturn {
   getSegmentsForSave: () => LineSegment[];
   /** Mark state as clean (after a successful save). */
   markClean: () => void;
+  /** Move a polygon vertex (called per mouse move during drag). */
+  moveVertex: (segId: string, vertexIndex: number, pos: { x: number; y: number }) => void;
+  /** Insert a new vertex after the given index. */
+  addVertex: (segId: string, afterIndex: number, pos: { x: number; y: number }) => void;
+  /** Remove a vertex (minimum 3 vertices enforced). */
+  deleteVertex: (segId: string, vertexIndex: number) => void;
+  /** Convert a rect-only segment to a 4-point polygon boundary for reshaping. */
+  ensureBoundary: (segId: string) => void;
+  /** Set the entire boundary at once (used by smooth deformation drag). */
+  setBoundary: (segId: string, newBoundary: { x: number; y: number }[]) => void;
+  /** Move a segment by translating from original positions by (dx, dy). */
+  moveSegment: (
+    segId: string,
+    origBbox: [number, number, number, number],
+    origBoundary: { x: number; y: number }[] | undefined,
+    dx: number,
+    dy: number,
+  ) => void;
 }
 
 export function useSegmentEditor(
@@ -274,6 +327,75 @@ export function useSegmentEditor(
     [pushUndo, selectedSegmentId],
   );
 
+  const addPolygonSegment = useCallback(
+    (boundary: { x: number; y: number }[]) => {
+      if (boundary.length < 3) return;
+      const bbox = bboxFromBoundary(boundary);
+      const midY = (bbox[1] + bbox[3]) / 2;
+      const newSeg: EditableSegment = {
+        _id: makeId(),
+        line: -1,
+        baseline: [[bbox[0], midY], [bbox[2], midY]],
+        bbox,
+        boundary,
+        ocrText: '',
+        words: [],
+        excluded: false,
+        _deleted: false,
+        _originalBoundary: boundary.map((p) => ({ ...p })),
+        _originalBbox: [...bbox] as [number, number, number, number],
+      };
+      setEditedSegments((prev) => {
+        pushUndo(prev, selectedSegmentId);
+        return [...prev, newSeg];
+      });
+      setSelectedSegmentId(newSeg._id);
+      setIsDirty(true);
+    },
+    [pushUndo, selectedSegmentId],
+  );
+
+  const addLineSegment = useCallback(
+    (p1: { x: number; y: number }, p2: { x: number; y: number }, width: number) => {
+      // Build a thin rectangle around the line
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 1) return;
+      // Perpendicular unit vector
+      const px = (-dy / len) * (width / 2);
+      const py = (dx / len) * (width / 2);
+      const boundary = [
+        { x: p1.x + px, y: p1.y + py },
+        { x: p2.x + px, y: p2.y + py },
+        { x: p2.x - px, y: p2.y - py },
+        { x: p1.x - px, y: p1.y - py },
+      ];
+      const bbox = bboxFromBoundary(boundary);
+      const midY = (bbox[1] + bbox[3]) / 2;
+      const newSeg: EditableSegment = {
+        _id: makeId(),
+        line: -1,
+        baseline: [[p1.x, p1.y], [p2.x, p2.y]],
+        bbox,
+        boundary,
+        ocrText: '',
+        words: [],
+        excluded: false,
+        _deleted: false,
+        _originalBoundary: boundary.map((p) => ({ ...p })),
+        _originalBbox: [...bbox] as [number, number, number, number],
+      };
+      setEditedSegments((prev) => {
+        pushUndo(prev, selectedSegmentId);
+        return [...prev, newSeg];
+      });
+      setSelectedSegmentId(newSeg._id);
+      setIsDirty(true);
+    },
+    [pushUndo, selectedSegmentId],
+  );
+
   const toggleExcluded = useCallback(
     (id: string) => {
       setEditedSegments((prev) => {
@@ -326,6 +448,172 @@ export function useSegmentEditor(
     [pushUndo, selectedSegmentId],
   );
 
+  const moveVertex = useCallback(
+    (segId: string, vertexIndex: number, pos: { x: number; y: number }) => {
+      setEditedSegments((prev) =>
+        prev.map((seg) => {
+          if (seg._id !== segId || !seg.boundary) return seg;
+          const newBoundary = seg.boundary.map((p, i) =>
+            i === vertexIndex ? { x: pos.x, y: pos.y } : { ...p },
+          );
+          const newBbox = bboxFromBoundary(newBoundary);
+          const midY = (newBbox[1] + newBbox[3]) / 2;
+          return {
+            ...seg,
+            boundary: newBoundary,
+            bbox: newBbox,
+            baseline: [[newBbox[0], midY], [newBbox[2], midY]],
+            _originalBoundary: newBoundary.map((p) => ({ ...p })),
+            _originalBbox: [...newBbox] as [number, number, number, number],
+          };
+        }),
+      );
+      setIsDirty(true);
+    },
+    [],
+  );
+
+  const addVertex = useCallback(
+    (segId: string, afterIndex: number, pos: { x: number; y: number }) => {
+      setEditedSegments((prev) => {
+        pushUndo(prev, selectedSegmentId);
+        return prev.map((seg) => {
+          if (seg._id !== segId || !seg.boundary) return seg;
+          const newBoundary = [...seg.boundary];
+          newBoundary.splice(afterIndex + 1, 0, { x: pos.x, y: pos.y });
+          const newBbox = bboxFromBoundary(newBoundary);
+          const midY = (newBbox[1] + newBbox[3]) / 2;
+          return {
+            ...seg,
+            boundary: newBoundary,
+            bbox: newBbox,
+            baseline: [[newBbox[0], midY], [newBbox[2], midY]],
+            _originalBoundary: newBoundary.map((p) => ({ ...p })),
+            _originalBbox: [...newBbox] as [number, number, number, number],
+          };
+        });
+      });
+      setIsDirty(true);
+    },
+    [pushUndo, selectedSegmentId],
+  );
+
+  const deleteVertex = useCallback(
+    (segId: string, vertexIndex: number) => {
+      setEditedSegments((prev) => {
+        pushUndo(prev, selectedSegmentId);
+        return prev.map((seg) => {
+          if (seg._id !== segId || !seg.boundary || seg.boundary.length <= 3) return seg;
+          const newBoundary = seg.boundary.filter((_, i) => i !== vertexIndex);
+          const newBbox = bboxFromBoundary(newBoundary);
+          const midY = (newBbox[1] + newBbox[3]) / 2;
+          return {
+            ...seg,
+            boundary: newBoundary,
+            bbox: newBbox,
+            baseline: [[newBbox[0], midY], [newBbox[2], midY]],
+            _originalBoundary: newBoundary.map((p) => ({ ...p })),
+            _originalBbox: [...newBbox] as [number, number, number, number],
+          };
+        });
+      });
+      setIsDirty(true);
+    },
+    [pushUndo, selectedSegmentId],
+  );
+
+  const ensureBoundary = useCallback(
+    (segId: string) => {
+      setEditedSegments((prev) => {
+        const seg = prev.find((s) => s._id === segId);
+        if (!seg) return prev;
+        pushUndo(prev, selectedSegmentId);
+        return prev.map((s) => {
+          if (s._id !== segId) return s;
+          // Start with existing boundary or create from bbox
+          let raw: { x: number; y: number }[];
+          if (s.boundary && s.boundary.length >= 3) {
+            raw = s.boundary;
+          } else {
+            const [x0, y0, x2, y2] = s.bbox;
+            raw = [
+              { x: x0, y: y0 },
+              { x: x2, y: y0 },
+              { x: x2, y: y2 },
+              { x: x0, y: y2 },
+            ];
+          }
+          // Subdivide for dense control points (~10px spacing)
+          const newBoundary = subdivideBoundary(raw, 10);
+          return {
+            ...s,
+            boundary: newBoundary,
+            _originalBoundary: newBoundary.map((p) => ({ ...p })),
+          };
+        });
+      });
+    },
+    [pushUndo, selectedSegmentId],
+  );
+
+  const setBoundary = useCallback(
+    (segId: string, newBoundary: { x: number; y: number }[]) => {
+      setEditedSegments((prev) =>
+        prev.map((seg) => {
+          if (seg._id !== segId) return seg;
+          const newBbox = bboxFromBoundary(newBoundary);
+          const midY = (newBbox[1] + newBbox[3]) / 2;
+          return {
+            ...seg,
+            boundary: newBoundary,
+            bbox: newBbox,
+            baseline: [[newBbox[0], midY], [newBbox[2], midY]],
+            _originalBoundary: newBoundary.map((p) => ({ ...p })),
+            _originalBbox: [...newBbox] as [number, number, number, number],
+          };
+        }),
+      );
+      setIsDirty(true);
+    },
+    [],
+  );
+
+  const moveSegment = useCallback(
+    (
+      segId: string,
+      origBbox: [number, number, number, number],
+      origBoundary: { x: number; y: number }[] | undefined,
+      dx: number,
+      dy: number,
+    ) => {
+      setEditedSegments((prev) =>
+        prev.map((seg) => {
+          if (seg._id !== segId) return seg;
+          const newBbox: [number, number, number, number] = [
+            origBbox[0] + dx,
+            origBbox[1] + dy,
+            origBbox[2] + dx,
+            origBbox[3] + dy,
+          ];
+          const midY = (newBbox[1] + newBbox[3]) / 2;
+          const newBoundary = origBoundary
+            ? origBoundary.map((p) => ({ x: p.x + dx, y: p.y + dy }))
+            : seg.boundary;
+          return {
+            ...seg,
+            bbox: newBbox,
+            boundary: newBoundary,
+            baseline: [[newBbox[0], midY], [newBbox[2], midY]],
+            _originalBbox: [...newBbox] as [number, number, number, number],
+            _originalBoundary: newBoundary ? newBoundary.map((p) => ({ ...p })) : undefined,
+          };
+        }),
+      );
+      setIsDirty(true);
+    },
+    [],
+  );
+
   const snapshotForUndo = useCallback(() => {
     setEditedSegments((prev) => {
       pushUndo(prev, selectedSegmentId);
@@ -375,6 +663,8 @@ export function useSegmentEditor(
     resizeSegment,
     deleteSegment,
     addSegment,
+    addPolygonSegment,
+    addLineSegment,
     toggleExcluded,
     classifySegment,
     mapSegment,
@@ -386,5 +676,11 @@ export function useSegmentEditor(
     resetFromSource,
     getSegmentsForSave,
     markClean,
+    moveVertex,
+    addVertex,
+    deleteVertex,
+    ensureBoundary,
+    setBoundary,
+    moveSegment,
   };
 }

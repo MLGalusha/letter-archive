@@ -352,6 +352,17 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     }
   }, [mappingText]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Edit mode: resize (default), reshape (smooth deformation), or rotate
+  const [editMode, setEditMode] = useState<'resize' | 'reshape' | 'rotate'>('resize');
+  // Move lock — when false, selected segments can be grabbed and moved
+  const [moveLocked, setMoveLocked] = useState(true);
+  // Draw tool: box (default), polygon (click vertices), line (drag two points)
+  const [drawTool, setDrawTool] = useState<'box' | 'polygon' | 'line'>('box');
+  // Clear to resize when selection changes
+  useEffect(() => {
+    setEditMode('resize');
+  }, [segmentEditor.selectedSegmentId]);
+
   const handleMappingClick = useCallback(
     (segId: string) => {
       if (!mappingActive || !mappingText) return;
@@ -1459,7 +1470,15 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             onDelete={segmentEditor.deleteSegment}
             onToggleExcluded={segmentEditor.toggleExcluded}
             onAddSegment={segmentEditor.addSegment}
+            onAddPolygonSegment={segmentEditor.addPolygonSegment}
+            onAddLineSegment={segmentEditor.addLineSegment}
+            drawTool={drawTool}
+            reshapeMode={editMode === 'reshape'}
+            rotateMode={editMode === 'rotate'}
+            onSetBoundary={segmentEditor.setBoundary}
             mappingMode={mappingActive}
+            movable={!moveLocked}
+            onMoveSegment={segmentEditor.moveSegment}
           />
         )}
 
@@ -1664,7 +1683,47 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             <span className="segment-editor-dirty-indicator">unsaved</span>
           )}
 
-          {/* Segment classification — visible when a segment is selected */}
+          {/* Draw tool picker */}
+          <span className="segment-editor-toolbar-divider" />
+          <button
+            className={`segment-editor-toolbar-btn${drawTool === 'box' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
+            onClick={() => setDrawTool('box')}
+            data-hint="Box"
+          >
+            {/* Box icon — rectangle */}
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <rect x="2" y="3" width="12" height="10" rx="1" stroke="currentColor" strokeWidth="1.4" fill="none" />
+            </svg>
+          </button>
+          <button
+            className={`segment-editor-toolbar-btn${drawTool === 'polygon' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
+            onClick={() => setDrawTool('polygon')}
+            data-hint="Polygon"
+          >
+            {/* Polygon icon — irregular pentagon */}
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <polygon points="8,2 14,6 12,14 4,14 2,6" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinejoin="round" />
+              <circle cx="8" cy="2" r="1.5" fill="currentColor" />
+              <circle cx="14" cy="6" r="1.5" fill="currentColor" />
+              <circle cx="12" cy="14" r="1.5" fill="currentColor" />
+              <circle cx="4" cy="14" r="1.5" fill="currentColor" />
+              <circle cx="2" cy="6" r="1.5" fill="currentColor" />
+            </svg>
+          </button>
+          <button
+            className={`segment-editor-toolbar-btn${drawTool === 'line' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
+            onClick={() => setDrawTool('line')}
+            data-hint="Line"
+          >
+            {/* Line icon — diagonal line with endpoints */}
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <line x1="3" y1="13" x2="13" y2="3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <circle cx="3" cy="13" r="2" fill="currentColor" />
+              <circle cx="13" cy="3" r="2" fill="currentColor" />
+            </svg>
+          </button>
+
+          {/* Reshape + classification — visible when a segment is selected */}
           {segmentEditor.selectedSegmentId && (() => {
             const sel = segmentEditor.editedSegments.find(
               (s) => s._id === segmentEditor.selectedSegmentId,
@@ -1673,6 +1732,62 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             const currentClass = sel.segmentClass ?? 'body';
             return (
               <>
+                <span className="segment-editor-toolbar-divider" />
+                <button
+                  className={`segment-editor-toolbar-btn${editMode === 'reshape' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
+                  onClick={() => {
+                    if (editMode !== 'reshape') {
+                      segmentEditor.ensureBoundary(sel._id);
+                      setEditMode('reshape');
+                    } else {
+                      setEditMode('resize');
+                    }
+                  }}
+                  data-hint="Reshape"
+                >
+                  {/* Reshape icon — wavy/deformed polygon */}
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 4 Q5 2 8 4 Q11 6 14 4 L14 12 Q11 14 8 12 Q5 10 2 12 Z" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <button
+                  className={`segment-editor-toolbar-btn${editMode === 'rotate' ? ' active rotate-active' : ''} segment-editor-toolbar-btn-icon`}
+                  onClick={() => {
+                    if (editMode !== 'rotate') {
+                      segmentEditor.ensureBoundary(sel._id);
+                      setEditMode('rotate');
+                    } else {
+                      setEditMode('resize');
+                    }
+                  }}
+                  data-hint="Rotate"
+                >
+                  {/* Rotate icon — circular arrow */}
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M13 8a5 5 0 01-9 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+                    <path d="M3 8a5 5 0 019-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+                    <path d="M11 3l1.2 2.2L10 6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                    <path d="M5 13l-1.2-2.2 2.2-.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  </svg>
+                </button>
+                <button
+                  className={`segment-editor-toolbar-btn${!moveLocked ? ' active move-active' : ''} segment-editor-toolbar-btn-icon`}
+                  onClick={() => setMoveLocked((v) => !v)}
+                  data-hint={moveLocked ? 'Unlock' : 'Lock'}
+                >
+                  {moveLocked ? (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                      <path d="M5.5 7V5a2.5 2.5 0 015 0v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                      <path d="M10.5 7V5a2.5 2.5 0 00-5 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+                      <line x1="3" y1="14" x2="13" y2="2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  )}
+                </button>
                 <span className="segment-editor-toolbar-divider" />
                 {(['body', 'continuation', 'addition', 'ignore'] as const).map((cls) => (
                   <button

@@ -610,6 +610,65 @@
   pointer-events: none;
 }
 
+/* Polygon draw preview */
+.draw-polygon-line {
+  fill: none;
+  stroke: rgba(34, 197, 94, 0.8);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.draw-polygon-close-line {
+  stroke: rgba(34, 197, 94, 0.35);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
+.draw-polygon-vertex {
+  fill: rgba(34, 197, 94, 0.9);
+  stroke: white;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.draw-polygon-vertex.first {
+  fill: rgba(34, 197, 94, 1);
+  stroke: white;
+  stroke-width: 2;
+}
+
+.draw-polygon-vertex.snap {
+  fill: rgba(250, 204, 21, 1);
+  stroke: white;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 4px rgba(250, 204, 21, 0.6));
+}
+
+/* Line draw preview */
+.draw-line-rect {
+  fill: rgba(139, 92, 246, 0.12);
+  stroke: rgba(139, 92, 246, 0.5);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
+.draw-line-center {
+  stroke: rgba(139, 92, 246, 0.8);
+  stroke-width: 2;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.draw-line-endpoint {
+  fill: rgba(139, 92, 246, 0.9);
+  stroke: white;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
 /* Segment editor mini-toolbar (top center) */
 .segment-editor-toolbar {
   position: fixed;
@@ -644,6 +703,31 @@
 .segment-editor-toolbar-btn:hover:not(:disabled) {
   color: rgba(255, 255, 255, 0.9);
   background: rgba(255, 255, 255, 0.15);
+}
+
+/* Icon-only toolbar buttons */
+.segment-editor-toolbar-btn.segment-editor-toolbar-btn-icon {
+  padding: 4px 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.segment-editor-toolbar-btn-icon[data-hint]:hover::after {
+  content: attr(data-hint);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 100;
 }
 
 .segment-editor-toolbar-btn:disabled {
@@ -814,5 +898,73 @@
 .segment-editor-rect.seg-dimmed,
 .segment-editor-poly.seg-dimmed {
   opacity: 0.2;
+  pointer-events: none;
+}
+
+/* Reshape mode active toolbar button */
+.segment-editor-toolbar-btn.active {
+  background: rgba(255, 200, 0, 0.2);
+  border-color: rgba(255, 200, 0, 0.5);
+  color: rgba(255, 200, 0, 0.95);
+}
+
+.segment-editor-toolbar-btn.active:hover {
+  background: rgba(255, 200, 0, 0.3);
+}
+
+/* Vertex reshape border highlight */
+.vertex-border-highlight {
+  fill: none;
+  stroke: rgba(255, 200, 0, 0.8);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  pointer-events: none;
+  filter: drop-shadow(0 0 4px rgba(255, 200, 0, 0.3));
+}
+
+/* Rotate mode styles */
+.segment-editor-toolbar-btn.rotate-active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.5);
+  color: rgba(56, 189, 248, 0.95);
+}
+
+.segment-editor-toolbar-btn.rotate-active:hover {
+  background: rgba(56, 189, 248, 0.3);
+}
+
+/* Move/unlock mode styles */
+.segment-editor-toolbar-btn.move-active {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: rgba(168, 85, 247, 0.5);
+  color: rgba(168, 85, 247, 0.95);
+}
+
+.segment-editor-toolbar-btn.move-active:hover {
+  background: rgba(168, 85, 247, 0.3);
+}
+
+.rotate-border-highlight {
+  fill: none;
+  stroke: rgba(56, 189, 248, 0.7);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-dasharray: 6 3;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px rgba(56, 189, 248, 0.3));
+}
+
+.rotate-anchor-dot {
+  fill: rgba(56, 189, 248, 0.9);
+  stroke: white;
+  stroke-width: 1.5;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+}
+
+.rotate-anchor-cross {
+  stroke: rgba(255, 255, 255, 0.8);
+  stroke-width: 1.5;
+  stroke-linecap: round;
   pointer-events: none;
 }

@@ -5,6 +5,8 @@ interface SegmentHandleProps {
   bbox: [number, number, number, number];
   scaleFactor: number;
   onResize: (newBbox: [number, number, number, number]) => void;
+  /** Called once when a drag starts — used to snapshot undo state. */
+  onResizeStart?: () => void;
 }
 
 type HandlePosition = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
@@ -29,7 +31,7 @@ function getHandlePositions(
   };
 }
 
-export default function SegmentHandle({ bbox, scaleFactor, onResize }: SegmentHandleProps) {
+export default function SegmentHandle({ bbox, scaleFactor, onResize, onResizeStart }: SegmentHandleProps) {
   const dragRef = useRef<{
     handle: HandlePosition;
     startX: number;
@@ -57,8 +59,9 @@ export default function SegmentHandle({ bbox, scaleFactor, onResize }: SegmentHa
         startY: e.clientY,
         origBbox: [...bbox],
       };
+      onResizeStart?.();
     },
-    [bbox],
+    [bbox, onResizeStart],
   );
 
   const handlePointerMove = useCallback(
@@ -82,9 +85,16 @@ export default function SegmentHandle({ bbox, scaleFactor, onResize }: SegmentHa
       if (handle === 'w') { newBbox[1] = origBbox[1]; newBbox[3] = origBbox[3]; }
       if (handle === 'e') { newBbox[1] = origBbox[1]; newBbox[3] = origBbox[3]; }
 
-      // Ensure minimum size (10px in natural coords)
-      if (newBbox[2] - newBbox[0] < 10) newBbox[2] = newBbox[0] + 10;
-      if (newBbox[3] - newBbox[1] < 10) newBbox[3] = newBbox[1] + 10;
+      // Allow flipping: if edges cross, swap them so the bbox stays valid
+      if (newBbox[2] < newBbox[0]) {
+        [newBbox[0], newBbox[2]] = [newBbox[2], newBbox[0]];
+      }
+      if (newBbox[3] < newBbox[1]) {
+        [newBbox[1], newBbox[3]] = [newBbox[3], newBbox[1]];
+      }
+      // Minimum size after flip (5px in natural coords)
+      if (newBbox[2] - newBbox[0] < 5) newBbox[2] = newBbox[0] + 5;
+      if (newBbox[3] - newBbox[1] < 5) newBbox[3] = newBbox[1] + 5;
 
       onResize(newBbox);
     },

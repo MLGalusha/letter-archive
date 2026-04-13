@@ -1,21 +1,15 @@
 .line-review-mode {
   position: fixed;
-  top: var(--admin-header-height, 53px);
+  top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   background: #1a1a1a;
   overflow-y: auto;
   overflow-x: hidden;
-  z-index: 200;
+  z-index: 300;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.2) transparent;
-}
-
-/* Full-viewport takeover: no admin header/sidebar visible */
-.line-review-mode.full-viewport {
-  top: 0;
-  z-index: 300;
 }
 
 .line-review-mode::-webkit-scrollbar {
@@ -60,10 +54,6 @@
   display: block;
   width: auto;
   max-width: 100dvw;
-  max-height: calc(100vh - var(--admin-header-height, 53px));
-}
-
-.line-review-mode.full-viewport.line-review-fit-height .line-review-image-container img {
   max-height: 100vh;
 }
 
@@ -291,7 +281,7 @@
 /* Debug legend */
 .line-review-debug-legend {
   position: fixed;
-  top: calc(var(--admin-header-height, 53px) + 16px);
+  top: 16px;
   left: 16px;
   background: rgba(13, 18, 26, 0.85);
   color: #ccc;
@@ -480,21 +470,9 @@
 }
 
 /* Close button */
-.full-viewport .line-review-close-btn {
-  top: 16px;
-}
-
-.full-viewport .line-review-debug-legend {
-  top: 16px;
-}
-
-.full-viewport .segment-editor-toolbar {
-  top: 16px;
-}
-
 .line-review-close-btn {
   position: fixed;
-  top: calc(var(--admin-header-height, 53px) + 16px);
+  top: 16px;
   right: 16px;
   z-index: 101;
   width: 36px;
@@ -635,7 +613,7 @@
 /* Segment editor mini-toolbar (top center) */
 .segment-editor-toolbar {
   position: fixed;
-  top: calc(var(--admin-header-height, 53px) + 16px);
+  top: 16px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(13, 18, 26, 0.92);

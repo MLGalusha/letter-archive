@@ -1116,7 +1116,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   return (
     <div
-      className={`line-review-mode${fitHeight ? ' line-review-fit-height' : ''}${fullViewport ? ' full-viewport' : ''}`}
+      className={`line-review-mode${fitHeight ? ' line-review-fit-height' : ''}`}
       ref={containerRef}
       onClick={handleContainerClick}
     >
@@ -1455,6 +1455,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             imageHeight={displayedImageHeight}
             onSelect={mappingActive ? handleMappingClick : segmentEditor.selectSegment}
             onResize={segmentEditor.resizeSegment}
+            onResizeStart={segmentEditor.snapshotForUndo}
             onDelete={segmentEditor.deleteSegment}
             onToggleExcluded={segmentEditor.toggleExcluded}
             onAddSegment={segmentEditor.addSegment}

@@ -13,6 +13,8 @@ interface SegmentEditorOverlayProps {
   onDelete: (id: string) => void;
   onToggleExcluded: (id: string) => void;
   onAddSegment: (bbox: [number, number, number, number]) => void;
+  /** Called once when a resize drag starts — used to snapshot undo state. */
+  onResizeStart?: () => void;
   /** When true, segments are in mapping mode — special segments highlighted, body dimmed. */
   mappingMode?: boolean;
 }
@@ -28,6 +30,7 @@ export default function SegmentEditorOverlay({
   onDelete,
   onToggleExcluded,
   onAddSegment,
+  onResizeStart,
   mappingMode = false,
 }: SegmentEditorOverlayProps) {
   // Draw-new-segment state
@@ -214,6 +217,7 @@ export default function SegmentEditorOverlay({
                 bbox={seg.bbox}
                 scaleFactor={scaleFactor}
                 onResize={(newBbox) => onResize(seg._id, newBbox)}
+                onResizeStart={onResizeStart}
               />
             )}
           </g>

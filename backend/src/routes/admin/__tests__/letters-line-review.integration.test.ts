@@ -139,6 +139,7 @@ vi.mock('../../../services/letter-queries.js', () => ({
 vi.mock('../../../services/processing-queue.js', () => ({
   getProcessingStatus: vi.fn(),
   getQueueStatus: vi.fn(),
+  requestBackgroundWorkerRun: vi.fn(),
   startTranscriptionProcessing: vi.fn(),
   startMetadataProcessing: vi.fn(),
   pauseProcessing: vi.fn(),

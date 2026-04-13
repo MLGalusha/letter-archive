@@ -21,6 +21,7 @@ import {
 import { resetLetterForProcessing } from '../../../services/letters.js';
 import { executeRetagForLetter } from '../../../services/metadata-update.js';
 import { checkNoteAutoResolutions } from '../../../services/note-resolution.js';
+import { requestBackgroundWorkerRun } from '../../../services/processing-queue.js';
 import { addAliasToCanonicalPerson } from '../../../services/entities/persons.js';
 import { syncLetterParticipantsFromMetadata } from '../../../services/entities/participant-sync.js';
 import { getAbsoluteStoragePath } from '../../../services/storage.js';
@@ -73,6 +74,7 @@ router.post('/:letterId/process', async (req, res, next) => {
     const { letterId } = req.params;
     await requireLetter(letterId);
     await resetLetterForProcessing(letterId);
+    await requestBackgroundWorkerRun('letter:process');
     res.json({ message: 'Letter enqueued for processing', letterId });
   } catch (error) {
     next(error);

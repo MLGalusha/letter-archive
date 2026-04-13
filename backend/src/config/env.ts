@@ -15,6 +15,10 @@ const envSchema = z.object({
   JWT_EXPIRY: z.string().default('24h'),
   ALLOW_ADMIN_SETUP: z.coerce.boolean().default(process.env.NODE_ENV !== 'production'),
   SEED_DEV_ADMIN: z.coerce.boolean().default(process.env.NODE_ENV !== 'production'),
+  GOOGLE_CLOUD_PROJECT: z.string().optional(),
+  GCLOUD_PROJECT: z.string().optional(),
+  CLOUD_RUN_REGION: z.string().optional(),
+  CLOUD_RUN_WORKER_JOB_NAME: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

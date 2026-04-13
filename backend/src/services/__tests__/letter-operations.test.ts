@@ -136,6 +136,7 @@ vi.mock('../processing-queue.js', () => ({
   getProcessingStatus: vi.fn(),
   resetProcessingState: vi.fn(),
   processLettersAsync: vi.fn(),
+  requestBackgroundWorkerRun: vi.fn(),
 }));
 
 vi.mock('../entities/participant-sync.js', () => ({

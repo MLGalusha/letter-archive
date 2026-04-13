@@ -9,8 +9,10 @@ import {
 import {
   getProcessingStatus,
   processLettersAsync,
+  requestBackgroundWorkerRun,
   resetProcessingState,
 } from '../processing-queue.js';
+import { shouldUseCloudRunWorkerJob } from '../cloud-run-job.js';
 import { syncLetterParticipantsFromMetadata } from '../entities/participant-sync.js';
 import { propagateName, propagatePlaceholderReplacement } from '../name-propagation.js';
 import { isPlaceholderValue } from '../../utils/placeholders.js';
@@ -68,7 +70,7 @@ export async function bulkTranscribe(letterIds: string[]): Promise<BulkResult> {
     updatedAt: new Date(),
   }).where(inArray(letters.id, eligible.map(l => l.id)));
 
-  if (getProcessingStatus().isRunning) {
+  if (!shouldUseCloudRunWorkerJob() && getProcessingStatus().isRunning) {
     log.info(
       { queued: eligible.length, skipped: skipReasons.length },
       'Bulk transcribe queued (another batch running)',
@@ -76,8 +78,12 @@ export async function bulkTranscribe(letterIds: string[]): Promise<BulkResult> {
     return { queued: eligible.length, skipped: skipReasons.length, skipReasons, processing: false };
   }
 
-  resetProcessingState(eligible.length);
-  processLettersAsync(eligible.map(l => l.id), 'transcription');
+  if (shouldUseCloudRunWorkerJob()) {
+    await requestBackgroundWorkerRun('bulk:transcription');
+  } else {
+    resetProcessingState(eligible.length);
+    void processLettersAsync(eligible.map(l => l.id), 'transcription');
+  }
 
   log.info(
     { queued: eligible.length, skipped: skipReasons.length },
@@ -152,7 +158,7 @@ export async function bulkExtractMetadata(
     updatedAt: new Date(),
   }).where(inArray(letters.id, eligible.map(l => l.id)));
 
-  if (getProcessingStatus().isRunning) {
+  if (!shouldUseCloudRunWorkerJob() && getProcessingStatus().isRunning) {
     return {
       queued: eligible.length,
       skipped: skipReasons.length,
@@ -162,8 +168,12 @@ export async function bulkExtractMetadata(
     };
   }
 
-  resetProcessingState(eligible.length);
-  processLettersAsync(eligible.map(l => l.id), 'metadata');
+  if (shouldUseCloudRunWorkerJob()) {
+    await requestBackgroundWorkerRun('bulk:metadata');
+  } else {
+    resetProcessingState(eligible.length);
+    void processLettersAsync(eligible.map(l => l.id), 'metadata');
+  }
 
   return {
     queued: eligible.length,

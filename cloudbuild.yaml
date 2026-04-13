@@ -175,19 +175,40 @@ steps:
         done
     waitFor: ['push-frontend', 'prepare-manifests']
 
-  # ── Deploy worker pool ──────────────────────────────────────
+  # ── Deploy worker job ───────────────────────────────────────
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    id: deploy-worker
+    id: delete-legacy-worker-pool
     entrypoint: bash
     args:
       - -c
       - |
-        gcloud beta run worker-pools replace deploy/cloudrun/backend-workerpool.yaml \
-          --region=${_REGION} 2>/dev/null || \
-        gcloud beta run worker-pools update letter-archive-worker \
-          --region=${_REGION} \
-          --image=${_BACKEND_IMAGE}:${_TAG}
-    waitFor: ['run-migrations', 'prepare-manifests']
+        gcloud beta run worker-pools delete letter-archive-worker \
+          --region=${_REGION} --quiet || true
+    waitFor: ['run-migrations']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-worker
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - replace
+      - deploy/cloudrun/backend-worker-job.yaml
+      - --region=${_REGION}
+    waitFor: ['delete-legacy-worker-pool', 'prepare-manifests']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: grant-backend-worker-job-invoke
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - add-iam-policy-binding
+      - letter-archive-worker
+      - --region=${_REGION}
+      - --member=serviceAccount:${_SERVICE_ACCOUNT}
+      - --role=roles/run.invoker
+    waitFor: ['deploy-worker']
 
 images:
   - '${_BACKEND_IMAGE}:${_TAG}'

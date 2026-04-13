@@ -8,6 +8,7 @@ import { runEntityExtractionOnly } from '../pipeline/metadataV2.js';
 import { createLogger } from '../utils/logger.js';
 import { notify } from './notifications.js';
 import { TRANSCRIBABLE_TYPES } from './letter/shared.js';
+import { shouldUseCloudRunWorkerJob, triggerWorkerJob } from './cloud-run-job.js';
 import {
   shouldAbortProcessing as runnerShouldAbort,
   updateJobProgress as runnerUpdateJobProgress,
@@ -291,6 +292,33 @@ export async function processLettersAsync(letterIds: string[], type: 'transcript
 
   processingState.isRunning = false;
   processingState.currentJob = null;
+}
+
+export async function requestBackgroundWorkerRun(reason: string): Promise<boolean> {
+  if (!shouldUseCloudRunWorkerJob()) {
+    return false;
+  }
+
+  try {
+    await triggerWorkerJob(reason);
+  } catch {
+    // Leave queued work in PENDING state; a later trigger can still pick it up.
+  }
+
+  return true;
+}
+
+async function startQueuedProcessing(
+  letterIds: string[],
+  type: 'transcription' | 'metadata' | 'entity_extraction',
+): Promise<'job' | 'in_process'> {
+  if (await requestBackgroundWorkerRun(`queue:${type}`)) {
+    return 'job';
+  }
+
+  resetProcessingState(letterIds.length);
+  void processLettersAsync(letterIds, type);
+  return 'in_process';
 }
 
 // ============================================================================
@@ -597,7 +625,7 @@ export async function getQueueStatus() {
  * Start transcription processing for eligible letters matching the given filter options.
  */
 export async function startTranscriptionProcessing(options: ProcessingFilterOptions): Promise<{ message: string; total: number }> {
-  if (processingState.isRunning) {
+  if (!shouldUseCloudRunWorkerJob() && processingState.isRunning) {
     throw new ProcessingError('Processing already in progress', 400);
   }
 
@@ -625,30 +653,15 @@ export async function startTranscriptionProcessing(options: ProcessingFilterOpti
     return { message: 'No letters to process', total: 0 };
   }
 
-  // Reset state and start
-  processingState = {
-    isRunning: true,
-    isPaused: false,
-    shouldAbort: false,
-    currentJob: null,
-    completed: 0,
-    failed: 0,
-    total: toProcess.length,
-    errors: [],
-    lastCompletedAt: null,
-  };
-
-  // Start async processing (don't await - runs in background)
-  processLettersAsync(toProcess.map(l => l.id), 'transcription');
-
-  return { message: 'Processing started', total: toProcess.length };
+  const mode = await startQueuedProcessing(toProcess.map(l => l.id), 'transcription');
+  return { message: mode === 'job' ? 'Processing queued' : 'Processing started', total: toProcess.length };
 }
 
 /**
  * Start metadata processing for eligible letters matching the given filter options.
  */
 export async function startMetadataProcessing(options: ProcessingFilterOptions): Promise<{ message: string; total: number }> {
-  if (processingState.isRunning) {
+  if (!shouldUseCloudRunWorkerJob() && processingState.isRunning) {
     throw new ProcessingError('Processing already in progress', 400);
   }
 
@@ -675,30 +688,15 @@ export async function startMetadataProcessing(options: ProcessingFilterOptions):
     return { message: 'No letters to process', total: 0 };
   }
 
-  // Reset state and start
-  processingState = {
-    isRunning: true,
-    isPaused: false,
-    shouldAbort: false,
-    currentJob: null,
-    completed: 0,
-    failed: 0,
-    total: eligible.length,
-    errors: [],
-    lastCompletedAt: null,
-  };
-
-  // Start async processing (don't await - runs in background)
-  processLettersAsync(eligible.map(l => l.id), 'metadata');
-
-  return { message: 'Processing started', total: eligible.length };
+  const mode = await startQueuedProcessing(eligible.map(l => l.id), 'metadata');
+  return { message: mode === 'job' ? 'Processing queued' : 'Processing started', total: eligible.length };
 }
 
 /**
  * Start entity extraction processing for eligible letters (metadata succeeded, entities pending).
  */
 export async function startEntityExtractionProcessing(options: ProcessingFilterOptions): Promise<{ message: string; total: number }> {
-  if (processingState.isRunning) {
+  if (!shouldUseCloudRunWorkerJob() && processingState.isRunning) {
     throw new ProcessingError('Processing already in progress', 400);
   }
 
@@ -723,21 +721,8 @@ export async function startEntityExtractionProcessing(options: ProcessingFilterO
     return { message: 'No letters to process', total: 0 };
   }
 
-  processingState = {
-    isRunning: true,
-    isPaused: false,
-    shouldAbort: false,
-    currentJob: null,
-    completed: 0,
-    failed: 0,
-    total: eligible.length,
-    errors: [],
-    lastCompletedAt: null,
-  };
-
-  processLettersAsync(eligible.map(l => l.id), 'entity_extraction');
-
-  return { message: 'Processing started', total: eligible.length };
+  const mode = await startQueuedProcessing(eligible.map(l => l.id), 'entity_extraction');
+  return { message: mode === 'job' ? 'Processing queued' : 'Processing started', total: eligible.length };
 }
 
 /**
@@ -976,6 +961,8 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
   }
+
+  void requestBackgroundWorkerRun(`retry:${type}`);
 
   return { message: `Retrying ${type} for letter ${letterId}` };
 }

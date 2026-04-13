@@ -1,0 +1,66 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: letter-archive-worker
+  namespace: PROJECT_NUMBER
+  labels:
+    cloud.googleapis.com/location: REGION
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/cloudsql-instances: PROJECT_ID:REGION:CLOUD_SQL_INSTANCE
+    spec:
+      taskCount: 1
+      parallelism: 1
+      template:
+        spec:
+          maxRetries: 0
+          timeoutSeconds: 3600
+          serviceAccountName: SERVICE_ACCOUNT_EMAIL
+          containers:
+            - image: BACKEND_IMAGE
+              command:
+                - node
+              args:
+                - dist/worker.js
+              env:
+                - name: NODE_ENV
+                  value: production
+                - name: EXIT_WHEN_EMPTY
+                  value: "true"
+                - name: STORAGE_DIR
+                  value: /mnt/archive
+                - name: LOG_TO_FILES
+                  value: "false"
+                - name: ALLOW_ADMIN_SETUP
+                  value: "false"
+                - name: SEED_DEV_ADMIN
+                  value: "false"
+                - name: GOOGLE_CLOUD_PROJECT
+                  value: PROJECT_ID
+                # Secrets from Secret Manager
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: database-url
+                      key: latest
+                - name: OPENAI_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: openai-api-key
+                      key: latest
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              volumeMounts:
+                - name: archive-storage
+                  mountPath: /mnt/archive
+          volumes:
+            - name: archive-storage
+              csi:
+                driver: gcsfuse.run.googleapis.com
+                readOnly: false
+                volumeAttributes:
+                  bucketName: ARCHIVE_BUCKET

@@ -4,14 +4,14 @@ These templates assume:
 
 - frontend and backend are deployed separately
 - the backend runs on Cloud Run
-- the processing worker runs as a Cloud Run worker pool
+- the processing worker runs as a Cloud Run job
 - database migrations run as a Cloud Run job
 - letter images are stored on a mounted Cloud Storage bucket at `/mnt/archive`
 
 ## Templates
 
 - `backend-service.yaml` — public API service
-- `backend-workerpool.yaml` — background processing worker
+- `backend-worker-job.yaml` — background processing worker
 - `backend-migrate-job.yaml` — one-off migration job
 - `frontend-service.yaml` — frontend nginx container
 
@@ -57,8 +57,10 @@ gcloud builds submit --config=cloudbuild.yaml \
 2. Run the migration job with the new image.
 3. Deploy the API service.
 4. Deploy the frontend service.
-5. Deploy or update the worker pool revision.
-6. Verify `/health`, `/health/ready`, admin login, upload, and background processing.
+5. Delete the legacy worker pool if it still exists.
+6. Deploy or update the worker job.
+7. Grant the backend service account permission to execute the worker job.
+8. Verify `/health`, `/health/ready`, admin login, upload, and background processing.
 
 ## Health checks
 
@@ -70,4 +72,4 @@ Official references:
 - https://docs.cloud.google.com/run/docs/reference/yaml/v1
 - https://docs.cloud.google.com/run/docs/configuring/services/cloud-storage-volume-mounts
 - https://docs.cloud.google.com/sql/docs/postgres/connect-run
-- https://docs.cloud.google.com/run/docs/managing/workerpools
+- https://docs.cloud.google.com/run/docs/create-jobs

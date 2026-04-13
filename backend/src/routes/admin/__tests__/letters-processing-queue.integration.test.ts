@@ -13,6 +13,7 @@ const {
   resetLetterForProcessingMock,
   getQueueStatusMock,
   getProcessingStatusMock,
+  requestBackgroundWorkerRunMock,
   startTranscriptionProcessingMock,
   startMetadataProcessingMock,
   startEntityExtractionProcessingMock,
@@ -37,6 +38,7 @@ const {
   resetLetterForProcessingMock: vi.fn(),
   getQueueStatusMock: vi.fn(),
   getProcessingStatusMock: vi.fn(),
+  requestBackgroundWorkerRunMock: vi.fn(),
   startTranscriptionProcessingMock: vi.fn(),
   startMetadataProcessingMock: vi.fn(),
   startEntityExtractionProcessingMock: vi.fn(),
@@ -129,6 +131,7 @@ vi.mock('../../../services/letter-queries.js', () => ({
 vi.mock('../../../services/processing-queue.js', () => ({
   getProcessingStatus: getProcessingStatusMock,
   getQueueStatus: getQueueStatusMock,
+  requestBackgroundWorkerRun: requestBackgroundWorkerRunMock,
   startTranscriptionProcessing: startTranscriptionProcessingMock,
   startMetadataProcessing: startMetadataProcessingMock,
   pauseProcessing: pauseProcessingMock,
@@ -214,6 +217,7 @@ describe('admin letters processing queue integration', () => {
     vi.clearAllMocks();
     processingFilterParseMock.mockImplementation((value) => value);
     queueJobTypeParseMock.mockImplementation((value) => value);
+    requestBackgroundWorkerRunMock.mockResolvedValue(false);
   });
 
   it('returns queue status from the processing service', async () => {
@@ -448,6 +452,7 @@ describe('admin letters processing queue integration', () => {
     });
     expect(getLetterByIdMock).toHaveBeenCalledWith('letter-8');
     expect(resetLetterForProcessingMock).toHaveBeenCalledWith('letter-8');
+    expect(requestBackgroundWorkerRunMock).toHaveBeenCalledWith('letter:process');
   });
 
   it('returns a request-correlated 404 when reprocessing a missing letter', async () => {

@@ -36,6 +36,8 @@ export interface FrontendLineSegmentWord {
   bbox: [number, number, number, number];
 }
 
+export type FrontendSegmentClass = 'body' | 'continuation' | 'addition' | 'ignore';
+
 export interface FrontendLineSegment {
   line: number;
   baseline: number[][];
@@ -43,7 +45,13 @@ export interface FrontendLineSegment {
   ocrText: string;
   words?: FrontendLineSegmentWord[];
   boundary?: { x: number; y: number }[];
+  excluded?: boolean;
+  segmentClass?: FrontendSegmentClass;
+  isMapped?: boolean;
+  mappedText?: string;
 }
+
+export type FrontendSegmentTrustState = 'unverified' | 'trusted';
 
 export interface FrontendLetterImage {
   id: string;
@@ -54,6 +62,7 @@ export interface FrontendLetterImage {
   width?: number;
   height?: number;
   lineSegments?: FrontendLineSegment[];
+  segmentTrustState?: FrontendSegmentTrustState;
 }
 
 // V2 Metadata types
@@ -465,6 +474,7 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
       lineSegments: Array.isArray(page.lineSegments)
         ? page.lineSegments as FrontendLineSegment[]
         : undefined,
+      segmentTrustState: (page.segmentTrustState as FrontendSegmentTrustState) ?? 'unverified',
     })),
     transcript: {
       pages: letter.transcriptionText

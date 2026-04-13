@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
-import type { LineSegment } from '../types/Letter';
+import type { LineSegment, SegmentClass } from '../types/Letter';
 
 export interface EditableSegment extends LineSegment {
   _id: string;
@@ -43,6 +43,9 @@ export interface UseSegmentEditorReturn {
   deleteSegment: (id: string) => void;
   addSegment: (bbox: [number, number, number, number]) => void;
   toggleExcluded: (id: string) => void;
+  classifySegment: (id: string, segmentClass: SegmentClass) => void;
+  mapSegment: (id: string, text: string) => void;
+  unmapSegment: (id: string) => void;
   isDirty: boolean;
   undo: () => void;
   canUndo: boolean;
@@ -147,6 +150,45 @@ export function useSegmentEditor(
     [pushUndo, selectedSegmentId],
   );
 
+  const classifySegment = useCallback(
+    (id: string, segmentClass: SegmentClass) => {
+      setEditedSegments((prev) => {
+        pushUndo(prev, selectedSegmentId);
+        return prev.map((seg) =>
+          seg._id === id ? { ...seg, segmentClass } : seg,
+        );
+      });
+      setIsDirty(true);
+    },
+    [pushUndo, selectedSegmentId],
+  );
+
+  const mapSegment = useCallback(
+    (id: string, text: string) => {
+      setEditedSegments((prev) => {
+        pushUndo(prev, selectedSegmentId);
+        return prev.map((seg) =>
+          seg._id === id ? { ...seg, isMapped: true, mappedText: text } : seg,
+        );
+      });
+      setIsDirty(true);
+    },
+    [pushUndo, selectedSegmentId],
+  );
+
+  const unmapSegment = useCallback(
+    (id: string) => {
+      setEditedSegments((prev) => {
+        pushUndo(prev, selectedSegmentId);
+        return prev.map((seg) =>
+          seg._id === id ? { ...seg, isMapped: false, mappedText: undefined } : seg,
+        );
+      });
+      setIsDirty(true);
+    },
+    [pushUndo, selectedSegmentId],
+  );
+
   const undo = useCallback(() => {
     const entry = undoStackRef.current.pop();
     if (!entry) return;
@@ -190,6 +232,9 @@ export function useSegmentEditor(
     deleteSegment,
     addSegment,
     toggleExcluded,
+    classifySegment,
+    mapSegment,
+    unmapSegment,
     isDirty,
     undo,
     canUndo,

@@ -182,8 +182,13 @@ export default function LetterReviewPage() {
     null,
   );
   const [reviewMode, setReviewMode] = useState(false);
+  const [segmentFirstMode, setSegmentFirstMode] = useState(false);
+  const segmentFirstTriggeredRef = useRef(false);
   const [debugMode, setDebugMode] = useState(false);
   const [viewerPageIndex, setViewerPageIndex] = useState(0);
+  // Mapping mode: selected transcript text to map to a segment
+  const [selectedText, setSelectedText] = useState("");
+  const [mappingText, setMappingText] = useState<string | undefined>(undefined);
 
   const transcriptFontSize = usePretextFontSize(
     editorRef,
@@ -300,6 +305,26 @@ export default function LetterReviewPage() {
       fetchLetter();
     }
   }, [applyLetterMetadata, letterId, navigate]);
+
+  // Segment-first entry: auto-enter full-viewport segment review when pages
+  // have unverified segments with data. Only triggers once per letter visit.
+  useEffect(() => {
+    if (!letter || segmentFirstTriggeredRef.current) return;
+    segmentFirstTriggeredRef.current = true;
+
+    const letterImages = letter.images.filter((img) => img.type === 'letter');
+    const hasUnverifiedSegments = letterImages.some(
+      (img) =>
+        img.segmentTrustState !== 'trusted' &&
+        img.lineSegments &&
+        img.lineSegments.length > 0,
+    );
+
+    if (hasUnverifiedSegments) {
+      setReviewMode(true);
+      setSegmentFirstMode(true);
+    }
+  }, [letter]);
 
   useEffect(() => {
     if (!letter || !routeLocation.hash) return;
@@ -1107,12 +1132,14 @@ export default function LetterReviewPage() {
       const editor = editorRef.current;
       if (!editor || !isEditing) {
         setCurrentLineIndex(null);
+        setSelectedText("");
         return;
       }
 
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0) {
         setCurrentLineIndex(null);
+        setSelectedText("");
         return;
       }
 
@@ -1120,8 +1147,13 @@ export default function LetterReviewPage() {
       const range = selection.getRangeAt(0);
       if (!editor.contains(range.commonAncestorContainer)) {
         setCurrentLineIndex(null);
+        setSelectedText("");
         return;
       }
+
+      // Track selected text for mapping
+      const selText = selection.toString().trim();
+      setSelectedText(selText);
 
       // Find the cursor position
       const preRange = document.createRange();
@@ -1251,11 +1283,26 @@ export default function LetterReviewPage() {
             letter={letter}
             transcript={transcript}
             onTranscriptChange={handleTranscriptFromLineReview}
-            onExit={() => setReviewMode(false)}
+            onExit={() => {
+              setReviewMode(false);
+              setSegmentFirstMode(false);
+              setMappingText(undefined);
+            }}
             onAutoSave={handleLineReviewAutoSave}
             debugMode={debugMode}
             onDebugModeChange={setDebugMode}
             initialPageIndex={viewerPageIndex}
+            fullViewport={segmentFirstMode}
+            mappingText={mappingText}
+            onMappingComplete={() => {
+              setMappingText(undefined);
+              // Re-fetch letter to reflect updated segment data
+              if (letterId) {
+                void getAdminLetterById(letterId).then((updated) => {
+                  setLetter(updated);
+                });
+              }
+            }}
           />
         ) : (
         <ResizableSplitPane
@@ -1381,6 +1428,47 @@ export default function LetterReviewPage() {
                 </>
               )}
             </div>
+
+            {/* Unmapped special segment warning */}
+            {(() => {
+              const letterImages = letter.images.filter((img) => img.type === 'letter');
+              const unmappedCount = letterImages.reduce((sum, img) => {
+                if (!img.lineSegments) return sum;
+                return sum + img.lineSegments.filter(
+                  (s) =>
+                    (s.segmentClass === 'continuation' || s.segmentClass === 'addition') &&
+                    !s.isMapped,
+                ).length;
+              }, 0);
+              if (unmappedCount === 0) return null;
+              return (
+                <div className="unmapped-segment-warning">
+                  <span className="unmapped-segment-icon">⚠</span>
+                  <span>{unmappedCount} unmapped special segment{unmappedCount !== 1 ? 's' : ''}</span>
+                  {selectedText.length > 0 && (
+                    <button
+                      className="unmapped-segment-map-btn"
+                      onClick={() => {
+                        setMappingText(selectedText);
+                        setReviewMode(true);
+                        setSegmentFirstMode(true);
+                      }}
+                    >
+                      Map to Segment
+                    </button>
+                  )}
+                  <button
+                    className="unmapped-segment-review-btn"
+                    onClick={() => {
+                      setReviewMode(true);
+                      setSegmentFirstMode(true);
+                    }}
+                  >
+                    Review
+                  </button>
+                </div>
+              );
+            })()}
 
             {/* Transcription Editor - only shown when letter has letter-type images */}
             {showTranscriptSection && (

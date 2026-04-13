@@ -1,5 +1,5 @@
 import { apiGet, apiPost, apiPut, apiPatch } from "../client";
-import type { Letter, LineSegment } from "../../types/Letter";
+import type { Letter, LineSegment, SegmentTrustState } from "../../types/Letter";
 
 export interface UpdateLetterData {
   transcriptionText?: string;
@@ -122,4 +122,14 @@ export async function updateNoteStatus(letterId: string, noteId: string, status:
 
 export async function addNote(letterId: string, note: { content: string; category: string; priority: string }): Promise<Letter> {
   return apiPost<Letter>(`/admin/letters/${letterId}/notes`, note);
+}
+
+/** Update segment trust state for a single page. */
+export async function updatePageSegmentTrust(pageId: string, trustState: SegmentTrustState): Promise<void> {
+  await apiPatch(`/admin/letters/pages/${pageId}/segment-trust`, { trustState });
+}
+
+/** Update segment trust state for all pages of a letter. */
+export async function updateLetterSegmentTrust(letterId: string, trustState: SegmentTrustState): Promise<void> {
+  await apiPatch(`/admin/letters/${letterId}/segment-trust`, { trustState });
 }

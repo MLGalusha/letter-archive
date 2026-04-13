@@ -12,6 +12,12 @@
   scrollbar-color: rgba(255,255,255,0.2) transparent;
 }
 
+/* Full-viewport takeover: no admin header/sidebar visible */
+.line-review-mode.full-viewport {
+  top: 0;
+  z-index: 300;
+}
+
 .line-review-mode::-webkit-scrollbar {
   width: 6px;
 }
@@ -55,6 +61,10 @@
   width: auto;
   max-width: 100dvw;
   max-height: calc(100vh - var(--admin-header-height, 53px));
+}
+
+.line-review-mode.full-viewport.line-review-fit-height .line-review-image-container img {
+  max-height: 100vh;
 }
 
 /* SVG highlight overlay */
@@ -470,6 +480,18 @@
 }
 
 /* Close button */
+.full-viewport .line-review-close-btn {
+  top: 16px;
+}
+
+.full-viewport .line-review-debug-legend {
+  top: 16px;
+}
+
+.full-viewport .segment-editor-toolbar {
+  top: 16px;
+}
+
 .line-review-close-btn {
   position: fixed;
   top: calc(var(--admin-header-height, 53px) + 16px);
@@ -670,9 +692,149 @@
   background: rgba(239, 68, 68, 0.12);
 }
 
+.segment-editor-toolbar-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 2px;
+}
+
 .segment-editor-dirty-indicator {
   color: rgba(245, 158, 11, 0.8);
   font-size: 11px;
   font-family: var(--font-mono, monospace);
   padding: 0 4px;
+}
+
+/* Segment classification buttons */
+.segment-class-btn {
+  text-transform: capitalize;
+  font-size: 11px !important;
+  padding: 3px 8px !important;
+}
+
+.segment-class-active {
+  background: rgba(255, 255, 255, 0.18) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Visual indicators for classified segments in overlay */
+.segment-editor-rect.seg-continuation,
+.segment-editor-poly.seg-continuation {
+  fill: rgba(245, 158, 11, 0.15);
+  stroke: rgba(245, 158, 11, 0.7);
+}
+
+.segment-editor-rect.seg-addition,
+.segment-editor-poly.seg-addition {
+  fill: rgba(139, 92, 246, 0.15);
+  stroke: rgba(139, 92, 246, 0.7);
+}
+
+.segment-editor-rect.seg-ignore,
+.segment-editor-poly.seg-ignore {
+  fill: rgba(107, 114, 128, 0.08);
+  stroke: rgba(107, 114, 128, 0.4);
+  stroke-dasharray: 4 3;
+  opacity: 0.5;
+}
+
+/* Skip to Text button — segment-first full-viewport mode */
+.line-review-skip-to-text {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 301;
+  background: rgba(13, 18, 26, 0.88);
+  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-family: var(--font-mono, monospace);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  user-select: none;
+}
+
+.line-review-skip-to-text:hover {
+  color: #fff;
+  background: rgba(13, 18, 26, 0.95);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Mapping mode banner */
+.line-review-mapping-banner {
+  position: fixed;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 301;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(13, 18, 26, 0.92);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  border-radius: 8px;
+  padding: 8px 16px;
+  max-width: 600px;
+  backdrop-filter: blur(8px);
+  user-select: none;
+}
+
+.mapping-banner-label {
+  color: rgba(139, 92, 246, 0.9);
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.mapping-banner-text {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mapping-banner-cancel {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  padding: 2px 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.mapping-banner-cancel:hover {
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Mapping mode segment styles */
+.segment-editor-rect.seg-mappable,
+.segment-editor-poly.seg-mappable {
+  fill: rgba(139, 92, 246, 0.2);
+  stroke: rgba(139, 92, 246, 0.9);
+  stroke-width: 2.5;
+  animation: seg-mappable-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes seg-mappable-pulse {
+  0%, 100% { fill: rgba(139, 92, 246, 0.15); }
+  50% { fill: rgba(139, 92, 246, 0.3); }
+}
+
+.segment-editor-rect.seg-dimmed,
+.segment-editor-poly.seg-dimmed {
+  opacity: 0.2;
+  pointer-events: none;
 }

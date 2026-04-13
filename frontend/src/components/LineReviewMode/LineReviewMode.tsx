@@ -42,6 +42,12 @@ interface LineReviewModeProps {
   debugMode?: boolean;
   onDebugModeChange?: (debugMode: boolean) => void;
   initialPageIndex?: number;
+  /** When true, renders as full-viewport takeover (no admin header/sidebar visible). */
+  fullViewport?: boolean;
+  /** Text to map to a segment — entering mapping mode. */
+  mappingText?: string;
+  /** Called when a mapping is completed (segment ID + text). */
+  onMappingComplete?: () => void;
 }
 
 export interface LineReviewModeHandle {
@@ -237,6 +243,9 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   debugMode: debugLines = false,
   onDebugModeChange,
   initialPageIndex,
+  fullViewport = false,
+  mappingText,
+  onMappingComplete,
 }: LineReviewModeProps, ref) {
   const { showToast } = useToast();
 
@@ -333,6 +342,43 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       segmentEditor.resetFromSource(currentKrakenSegments);
     }
   }, [currentKrakenSegments, segmentEditor]);
+
+  // Mapping mode: auto-enter segment edit mode when mapping text provided
+  const [mappingActive, setMappingActive] = useState(!!mappingText);
+  useEffect(() => {
+    if (mappingText) {
+      setMappingActive(true);
+      segmentEditor.setSegmentEditMode(true);
+    }
+  }, [mappingText]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleMappingClick = useCallback(
+    (segId: string) => {
+      if (!mappingActive || !mappingText) return;
+      const seg = segmentEditor.editedSegments.find((s) => s._id === segId);
+      if (!seg) return;
+      // Only map to special segments (continuation/addition)
+      const cls = seg.segmentClass;
+      if (cls !== 'continuation' && cls !== 'addition') return;
+
+      segmentEditor.mapSegment(segId, mappingText);
+
+      // Auto-save after mapping
+      const segments = segmentEditor.getSegmentsForSave();
+      if (currentLetterPageIndex !== undefined) {
+        const pageId = letterPages[currentLetterPageIndex]?.id;
+        if (pageId) {
+          void savePageLineSegments(pageId, segments).then(() => {
+            segmentEditor.markClean();
+          });
+        }
+      }
+
+      setMappingActive(false);
+      onMappingComplete?.();
+    },
+    [mappingActive, mappingText, segmentEditor, currentLetterPageIndex, letterPages, onMappingComplete],
+  );
 
   // Detection progress steps (shown in loading overlay for current page)
 
@@ -1070,7 +1116,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   return (
     <div
-      className={`line-review-mode${fitHeight ? ' line-review-fit-height' : ''}`}
+      className={`line-review-mode${fitHeight ? ' line-review-fit-height' : ''}${fullViewport ? ' full-viewport' : ''}`}
       ref={containerRef}
       onClick={handleContainerClick}
     >
@@ -1084,6 +1130,35 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           <path d="M4 4L12 12M12 4L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
         </svg>
       </button>
+
+      {/* Skip to Text — visible only in segment-first full-viewport mode */}
+      {fullViewport && (
+        <button
+          className="line-review-skip-to-text"
+          onClick={onExit}
+        >
+          Skip to Text
+        </button>
+      )}
+
+      {/* Mapping mode banner — visible when mapping text to a segment */}
+      {mappingActive && mappingText && (
+        <div className="line-review-mapping-banner">
+          <span className="mapping-banner-label">Map to segment:</span>
+          <span className="mapping-banner-text">
+            &ldquo;{mappingText.length > 80 ? `${mappingText.slice(0, 80)}…` : mappingText}&rdquo;
+          </span>
+          <button
+            className="mapping-banner-cancel"
+            onClick={() => {
+              setMappingActive(false);
+              onMappingComplete?.();
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       <div
         className="line-review-image-container"
@@ -1378,11 +1453,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             scaleFactor={scaleFactor}
             imageWidth={imageDisplaySize.width}
             imageHeight={displayedImageHeight}
-            onSelect={segmentEditor.selectSegment}
+            onSelect={mappingActive ? handleMappingClick : segmentEditor.selectSegment}
             onResize={segmentEditor.resizeSegment}
             onDelete={segmentEditor.deleteSegment}
             onToggleExcluded={segmentEditor.toggleExcluded}
             onAddSegment={segmentEditor.addSegment}
+            mappingMode={mappingActive}
           />
         )}
 
@@ -1586,6 +1662,30 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           {segmentEditor.isDirty && (
             <span className="segment-editor-dirty-indicator">unsaved</span>
           )}
+
+          {/* Segment classification — visible when a segment is selected */}
+          {segmentEditor.selectedSegmentId && (() => {
+            const sel = segmentEditor.editedSegments.find(
+              (s) => s._id === segmentEditor.selectedSegmentId,
+            );
+            if (!sel) return null;
+            const currentClass = sel.segmentClass ?? 'body';
+            return (
+              <>
+                <span className="segment-editor-toolbar-divider" />
+                {(['body', 'continuation', 'addition', 'ignore'] as const).map((cls) => (
+                  <button
+                    key={cls}
+                    className={`segment-editor-toolbar-btn segment-class-btn${currentClass === cls ? ' segment-class-active' : ''}`}
+                    onClick={() => segmentEditor.classifySegment(sel._id, cls)}
+                    title={`Classify as ${cls}`}
+                  >
+                    {cls}
+                  </button>
+                ))}
+              </>
+            );
+          })()}
         </div>
       )}
 

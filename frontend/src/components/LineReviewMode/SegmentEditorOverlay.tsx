@@ -13,6 +13,8 @@ interface SegmentEditorOverlayProps {
   onDelete: (id: string) => void;
   onToggleExcluded: (id: string) => void;
   onAddSegment: (bbox: [number, number, number, number]) => void;
+  /** When true, segments are in mapping mode — special segments highlighted, body dimmed. */
+  mappingMode?: boolean;
 }
 
 export default function SegmentEditorOverlay({
@@ -26,6 +28,7 @@ export default function SegmentEditorOverlay({
   onDelete,
   onToggleExcluded,
   onAddSegment,
+  mappingMode = false,
 }: SegmentEditorOverlayProps) {
   // Draw-new-segment state
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
@@ -149,6 +152,12 @@ export default function SegmentEditorOverlay({
       {segments.map((seg) => {
         const isSelected = seg._id === selectedSegmentId;
         const isExcluded = seg.excluded;
+        const segClass = seg.segmentClass;
+        const classModifier = segClass && segClass !== 'body' ? ` seg-${segClass}` : '';
+        const isSpecial = segClass === 'continuation' || segClass === 'addition';
+        const isMappable = mappingMode && isSpecial && !seg.isMapped;
+        const mappingDimmed = mappingMode && !isMappable;
+        const mappingClasses = isMappable ? ' seg-mappable' : mappingDimmed ? ' seg-dimmed' : '';
         const [sx1, sy1, sx2, sy2] = [
           seg.bbox[0] * scaleFactor,
           seg.bbox[1] * scaleFactor,
@@ -164,8 +173,8 @@ export default function SegmentEditorOverlay({
                 points={seg.boundary
                   .map((p) => `${p.x * scaleFactor},${p.y * scaleFactor}`)
                   .join(' ')}
-                className={`segment-editor-poly${isSelected ? ' selected' : ''}${isExcluded ? ' excluded' : ''}`}
-                style={{ pointerEvents: 'all' }}
+                className={`segment-editor-poly${isSelected ? ' selected' : ''}${isExcluded ? ' excluded' : ''}${classModifier}${mappingClasses}`}
+                style={{ pointerEvents: 'all', cursor: isMappable ? 'pointer' : undefined }}
                 onPointerDown={(e) => handleSegmentClick(e, seg._id)}
                 onDoubleClick={(e) => handleDoubleClick(e, seg._id)}
               />
@@ -175,8 +184,8 @@ export default function SegmentEditorOverlay({
                 y={sy1}
                 width={sx2 - sx1}
                 height={sy2 - sy1}
-                className={`segment-editor-rect${isSelected ? ' selected' : ''}${isExcluded ? ' excluded' : ''}`}
-                style={{ pointerEvents: 'all' }}
+                className={`segment-editor-rect${isSelected ? ' selected' : ''}${isExcluded ? ' excluded' : ''}${classModifier}${mappingClasses}`}
+                style={{ pointerEvents: 'all', cursor: isMappable ? 'pointer' : undefined }}
                 onPointerDown={(e) => handleSegmentClick(e, seg._id)}
                 onDoubleClick={(e) => handleDoubleClick(e, seg._id)}
               />

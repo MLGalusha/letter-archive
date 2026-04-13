@@ -112,6 +112,10 @@ export interface ExtraContentItem {
   imageIds: string[];
 }
 
+// Segment system types
+export type SegmentTrustState = 'unverified' | 'trusted';
+export type SegmentClass = 'body' | 'continuation' | 'addition' | 'ignore';
+
 export interface LineSegmentWord {
   text: string;
   bbox: [number, number, number, number];
@@ -125,6 +129,9 @@ export interface LineSegment {
   words?: LineSegmentWord[];
   boundary?: { x: number; y: number }[];
   excluded?: boolean;
+  segmentClass?: SegmentClass;
+  isMapped?: boolean;
+  mappedText?: string;
 }
 
 export interface MergedLineSegment extends LineSegment {
@@ -141,6 +148,7 @@ export interface LetterImage {
   width?: number;
   height?: number;
   lineSegments?: LineSegment[];
+  segmentTrustState?: SegmentTrustState;
 }
 
 export interface LetterCardData {

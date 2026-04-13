@@ -708,4 +708,53 @@ router.get('/pages/:pageId/line-segments', async (req, res, next) => {
   }
 });
 
+// Update segment trust state for a page
+router.patch('/pages/:pageId/segment-trust', async (req, res, next) => {
+  try {
+    const page = await db.query.letterPages.findFirst({
+      where: eq(letterPages.id, req.params.pageId),
+    });
+    if (!page) throw new NotFoundError('Page not found');
+
+    const { trustState } = req.body;
+    if (trustState !== 'unverified' && trustState !== 'trusted') {
+      throw new BadRequestError('trustState must be "unverified" or "trusted"');
+    }
+
+    await db.update(letterPages)
+      .set({ segmentTrustState: trustState, updatedAt: new Date() })
+      .where(eq(letterPages.id, req.params.pageId));
+
+    req.log.info({ pageId: req.params.pageId, trustState }, 'Segment trust state updated');
+    res.json({ ok: true, trustState });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Bulk update segment trust state for all pages of a letter
+router.patch('/:letterId/segment-trust', async (req, res, next) => {
+  try {
+    const { trustState } = req.body;
+    if (trustState !== 'unverified' && trustState !== 'trusted') {
+      throw new BadRequestError('trustState must be "unverified" or "trusted"');
+    }
+
+    const pages = await db.query.letterPages.findMany({
+      where: eq(letterPages.letterId, req.params.letterId),
+      columns: { id: true },
+    });
+    if (pages.length === 0) throw new NotFoundError('No pages found for letter');
+
+    await db.update(letterPages)
+      .set({ segmentTrustState: trustState, updatedAt: new Date() })
+      .where(eq(letterPages.letterId, req.params.letterId));
+
+    req.log.info({ letterId: req.params.letterId, trustState, pageCount: pages.length }, 'Segment trust state updated for all pages');
+    res.json({ ok: true, trustState, pageCount: pages.length });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

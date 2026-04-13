@@ -2620,3 +2620,56 @@ body.dark .re-extract-btn-primary:has(.icon-check) {
   background: #16a34a;
   border-color: #16a34a;
 }
+
+/* Unmapped special segment warning */
+.unmapped-segment-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 0 var(--spacing-md) var(--spacing-sm);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.unmapped-segment-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.unmapped-segment-map-btn {
+  margin-left: auto;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  border-radius: var(--radius-sm);
+  color: rgba(139, 92, 246, 0.9);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.unmapped-segment-map-btn:hover {
+  background: rgba(139, 92, 246, 0.2);
+  color: rgba(139, 92, 246, 1);
+}
+
+.unmapped-segment-review-btn {
+  background: none;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 2px 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.unmapped-segment-review-btn:hover {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--text);
+}

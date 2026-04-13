@@ -16,39 +16,57 @@ import { log, openai } from './client.js';
 import { logApiUsage } from '../../services/usage-tracking.js';
 import { notifyApiError } from '../../services/notifications.js';
 
-/** Max width for images sent to OpenAI — keeps quality high for handwriting while reducing payload */
-const AI_IMAGE_MAX_WIDTH = 2000;
+/** Max width for images sent to OpenAI — preserve fine handwriting detail while keeping payloads bounded */
+const AI_IMAGE_MAX_WIDTH = 4000;
+const AI_JPEG_QUALITY = 95;
+const AI_IMAGE_DETAIL: 'high' = 'high';
+
+type PreparedAIImage = {
+  base64: string;
+  mimeType: 'image/jpeg' | 'image/png';
+  sizeKb: number;
+};
 
 /**
  * Load and resize an image for OpenAI vision calls.
- * Downscales to AI_IMAGE_MAX_WIDTH if wider, converts to JPEG for consistent compression.
+ * Preserves PNGs losslessly and avoids unnecessary recompression of already-good inputs.
  */
-async function prepareImageForAI(filePath: string): Promise<{ base64: string; mimeType: string; sizeKb: number }> {
+async function prepareImageForAI(filePath: string): Promise<PreparedAIImage> {
   const imageBuffer = await readFile(filePath);
   const metadata = await sharp(imageBuffer).metadata();
   const needsResize = metadata.width && metadata.width > AI_IMAGE_MAX_WIDTH;
+  const ext = filePath.toLowerCase().split('.').pop();
+  const isPng = ext === 'png' || metadata.format === 'png';
+  const canKeepOriginalJpeg = !needsResize && (ext === 'jpg' || ext === 'jpeg' || metadata.format === 'jpeg');
+
+  if (canKeepOriginalJpeg) {
+    return {
+      base64: imageBuffer.toString('base64'),
+      mimeType: 'image/jpeg',
+      sizeKb: Math.round(imageBuffer.length / 1024),
+    };
+  }
 
   let outputBuffer: Buffer;
-  if (needsResize) {
+  let mimeType: PreparedAIImage['mimeType'];
+
+  if (isPng) {
     outputBuffer = await sharp(imageBuffer)
       .resize({ width: AI_IMAGE_MAX_WIDTH, withoutEnlargement: true })
-      .jpeg({ quality: 85, mozjpeg: true })
+      .png({ compressionLevel: 9, adaptiveFiltering: true })
       .toBuffer();
+    mimeType = 'image/png';
   } else {
-    // Still re-encode to JPEG for consistent compression (unless already small)
-    const ext = filePath.toLowerCase().split('.').pop();
-    if (ext === 'png' || imageBuffer.length > 500_000) {
-      outputBuffer = await sharp(imageBuffer)
-        .jpeg({ quality: 85, mozjpeg: true })
-        .toBuffer();
-    } else {
-      outputBuffer = imageBuffer;
-    }
+    outputBuffer = await sharp(imageBuffer)
+      .resize({ width: AI_IMAGE_MAX_WIDTH, withoutEnlargement: true })
+      .jpeg({ quality: AI_JPEG_QUALITY, mozjpeg: true })
+      .toBuffer();
+    mimeType = 'image/jpeg';
   }
 
   return {
     base64: outputBuffer.toString('base64'),
-    mimeType: 'image/jpeg',
+    mimeType,
     sizeKb: Math.round(outputBuffer.length / 1024),
   };
 }
@@ -102,7 +120,10 @@ export async function transcribeImage(
           { type: 'text', text: buildTranscriptionUserPrompt(params.context) },
           {
             type: 'image_url',
-            image_url: { url: `data:${preparedImage.mimeType};base64,${preparedImage.base64}` },
+            image_url: {
+              url: `data:${preparedImage.mimeType};base64,${preparedImage.base64}`,
+              detail: AI_IMAGE_DETAIL,
+            },
           },
         ],
       },
@@ -202,7 +223,7 @@ export async function checkExtraContentForText(
             { type: 'text', text: buildExtraContentCheckPrompt({ documentType: params.documentType }) },
             {
               type: 'image_url',
-              image_url: { url: `data:${mimeType};base64,${base64}` },
+              image_url: { url: `data:${mimeType};base64,${base64}`, detail: AI_IMAGE_DETAIL },
             },
           ],
         },
@@ -367,7 +388,7 @@ File: ${params.filePath}
             },
             {
               type: 'image_url',
-              image_url: { url: `data:${mimeType};base64,${base64}` },
+              image_url: { url: `data:${mimeType};base64,${base64}`, detail: AI_IMAGE_DETAIL },
             },
           ],
         },
@@ -483,7 +504,7 @@ A historical photograph or visual image from the archive. ${contextNotes.join(' 
             },
             {
               type: 'image_url',
-              image_url: { url: `data:${mimeType};base64,${base64}` },
+              image_url: { url: `data:${mimeType};base64,${base64}`, detail: AI_IMAGE_DETAIL },
             },
           ],
         },

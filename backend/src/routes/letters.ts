@@ -158,6 +158,7 @@ type ArchiveSearchRow = {
   places: string[] | null;
   hooks: string[] | null;
   summaries: string[] | null;
+  tags: string[] | null;
   topics: string[] | null;
   tones: string[] | null;
   relationships: string[] | null;
@@ -180,6 +181,8 @@ type ArchiveSearchPreview = {
   excerpt: string;
   matchCount: number;
   highlightRanges: ArchiveSearchHighlightRange[];
+  matchedFieldLabel: string;
+  hookHighlightRanges?: ArchiveSearchHighlightRange[];
 };
 
 const ARCHIVE_FORMAT_LABELS = {
@@ -904,10 +907,13 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
         sg.places,
         sg.hooks,
         sg.summaries,
+        sg.tags,
         sg.topics,
         sg.tones,
         sg.relationships,
         sg."photoDescriptions",
+        sg."extraContentTranscripts",
+        sg."transcriptionTexts",
         COUNT(*) OVER()::int AS "totalCount"
       FROM scoped_groups sg
       LEFT JOIN primary_page_counts ppc
@@ -1238,10 +1244,13 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.location_written), '')), NULL) AS places,
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.hook), '')), NULL) AS hooks,
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.summary), '')), NULL) AS summaries,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(tag_name), '')), NULL) AS tags,
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(topic_name), '')), NULL) AS topics,
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.emotional_tone::text), '')), NULL) AS tones,
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.sender_recipient_relationship::text), '')), NULL) AS relationships,
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.photo_description), '')), NULL) AS "photoDescriptions"
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.photo_description), '')), NULL) AS "photoDescriptions",
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.extra_content_transcript), '')), NULL) AS "extraContentTranscripts",
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.transcription_text), '')), NULL) AS "transcriptionTexts"
       FROM matching_groups mg
       INNER JOIN letters l
         ON l.collection_id = mg."collectionId"
@@ -1249,6 +1258,7 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         AND l.type_sequence = mg."typeSequence"
         AND l.visibility = 'PUBLISHED'
       LEFT JOIN LATERAL UNNEST(COALESCE(l.primary_topics, ARRAY[]::text[])) AS topic_name ON TRUE
+      LEFT JOIN LATERAL UNNEST(COALESCE(l.tags, ARRAY[]::text[])) AS tag_name ON TRUE
       GROUP BY mg."collectionId", mg."dateRaw", mg."typeSequence"
     ),
     primary_rows AS (
@@ -1294,10 +1304,13 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         gf.places,
         gf.hooks,
         gf.summaries,
+        gf.tags,
         gf.topics,
         gf.tones,
         gf.relationships,
         gf."photoDescriptions",
+        gf."extraContentTranscripts",
+        gf."transcriptionTexts",
         pr.id,
         pr."primaryType",
         pr.sender,
@@ -1522,7 +1535,7 @@ function transformArchiveSearchRow(row: ArchiveSearchRow, query: ArchiveSearchQu
     hook: row.hook || row.photoDescriptions?.[0] || undefined,
     location: row.location || undefined,
     verified: row.metadataVerified,
-    searchPreview: buildArchiveSearchPreview(row, query, formattedDate),
+    searchPreview: buildArchiveSearchPreview(row, query, formattedDate, row.hook || undefined),
   };
 }
 
@@ -1530,54 +1543,183 @@ function buildArchiveSearchPreview(
   row: ArchiveSearchRow,
   query: ArchiveSearchQuery,
   formattedDate: string,
+  hookText?: string,
 ): ArchiveSearchPreview | undefined {
   const search = query.search?.trim();
   if (!search) return undefined;
 
   const searchTerms = getArchiveSearchTerms(search);
-  const prioritizedGroups = [
-    dedupeArchivePreviewValues([
-      ...(row.photoDescriptions || []),
-    ]),
-    dedupeArchivePreviewValues([
-      ...(row.summaries || []),
-      ...(row.hooks || []),
-    ]),
-    dedupeArchivePreviewValues([
-      formattedDate,
-      ...(row.places || []),
-      ...(row.senders || []),
-      ...(row.recipients || []),
-      row.collectionTitle || '',
-      row.collectionCode,
-      ...(row.formats || []).map((format) => getArchiveFormatDisplayLabel(format)),
-    ]),
+  const hookHighlightRanges = hookText
+    ? buildArchiveInlineHighlightRanges(hookText, search, searchTerms)
+    : [];
+
+  const previewPriorityGroups = [
+    {
+      sources: [
+        {
+          label: 'Transcript',
+          values: dedupeArchivePreviewValues([
+            ...(row.transcriptionTexts || []),
+            ...(row.extraContentTranscripts || []),
+          ]),
+        },
+      ],
+    },
+    {
+      sources: [
+        {
+          label: 'Photo description',
+          values: dedupeArchivePreviewValues([
+            ...(row.photoDescriptions || []),
+          ]),
+        },
+      ],
+    },
+    {
+      sources: [
+        {
+          label: 'Sender',
+          values: dedupeArchivePreviewValues([
+            ...(row.senders || []),
+          ]),
+        },
+        {
+          label: 'Recipient',
+          values: dedupeArchivePreviewValues([
+            ...(row.recipients || []),
+          ]),
+        },
+      ],
+    },
+    {
+      sources: [
+        {
+          label: 'Collection',
+          values: dedupeArchivePreviewValues([
+            row.collectionTitle || '',
+            row.collectionCode,
+          ]),
+        },
+      ],
+    },
+    {
+      sources: [
+        {
+          label: 'Date',
+          values: dedupeArchivePreviewValues([formattedDate]),
+        },
+      ],
+    },
+    {
+      sources: [
+        {
+          label: 'Place',
+          values: dedupeArchivePreviewValues([
+            ...(row.places || []),
+          ]),
+        },
+      ],
+    },
+    {
+      sources: [
+        {
+          label: 'Topic',
+          values: dedupeArchivePreviewValues([
+            ...(row.topics || []),
+          ]),
+        },
+        {
+          label: 'Tone',
+          values: dedupeArchivePreviewValues([
+            ...(row.tones || []),
+          ]),
+        },
+        {
+          label: 'Relationship',
+          values: dedupeArchivePreviewValues([
+            ...(row.relationships || []),
+          ]),
+        },
+        {
+          label: 'Tag',
+          values: dedupeArchivePreviewValues([
+            ...(row.tags || []),
+          ]),
+        },
+        {
+          label: 'Format',
+          values: dedupeArchivePreviewValues([
+            ...(row.formats || []).map((format) => getArchiveFormatDisplayLabel(format)),
+          ]),
+        },
+      ],
+    },
+    {
+      sources: [
+        {
+          label: 'Summary',
+          values: dedupeArchivePreviewValues([
+            ...(row.summaries || []),
+          ]),
+        },
+      ],
+    },
   ];
 
-  for (let groupIndex = 0; groupIndex < prioritizedGroups.length; groupIndex += 1) {
-    const groupValues = prioritizedGroups[groupIndex];
-    const candidates = groupValues
-      .map((value) => scoreArchivePreviewValue(value, search, searchTerms))
-      .filter((candidate): candidate is ArchivePreviewCandidate => candidate !== null);
-
-    if (candidates.length === 0) continue;
-
-    candidates.sort((left, right) => right.score - left.score || right.totalMatches - left.totalMatches);
-    const bestCandidate = candidates[0];
-    const matchCount = Math.max(
-      candidates.reduce((sum, candidate) => sum + candidate.totalMatches, 0),
-      bestCandidate.highlightRanges.length,
-      1,
+  for (const group of previewPriorityGroups) {
+    const groupCandidates = group.sources.flatMap((source) =>
+      source.values
+        .map((value) => scoreArchivePreviewValue(value, search, searchTerms))
+        .filter((candidate): candidate is ArchivePreviewCandidate => candidate !== null)
+        .map((candidate) => ({ label: source.label, candidate })),
     );
 
+    if (groupCandidates.length === 0) continue;
+
+    groupCandidates.sort(
+      (left, right) =>
+        right.candidate.score - left.candidate.score ||
+        right.candidate.totalMatches - left.candidate.totalMatches,
+    );
+    const bestInGroup = groupCandidates[0];
     return {
-      excerpt: bestCandidate.excerpt,
-      highlightRanges: bestCandidate.highlightRanges,
-      matchCount,
+      excerpt: bestInGroup.candidate.excerpt,
+      highlightRanges: bestInGroup.candidate.highlightRanges,
+      matchCount: Math.max(
+        groupCandidates.reduce((sum, item) => sum + item.candidate.totalMatches, 0),
+        bestInGroup.candidate.highlightRanges.length,
+        1,
+      ),
+      matchedFieldLabel: bestInGroup.label,
+      hookHighlightRanges: hookHighlightRanges.length > 0 ? hookHighlightRanges : undefined,
+    };
+  }
+
+  if (hookHighlightRanges.length > 0) {
+    return {
+      excerpt: '',
+      highlightRanges: [],
+      matchCount: 0,
+      matchedFieldLabel: 'Hook',
+      hookHighlightRanges,
     };
   }
 
   return undefined;
+}
+
+function buildArchiveInlineHighlightRanges(
+  value: string,
+  rawSearch: string,
+  searchTerms: string[],
+) {
+  const exactRanges = collectArchiveExactMatchRanges(value, rawSearch, searchTerms);
+  if (exactRanges.length > 0) return exactRanges;
+
+  const fuzzyCandidate = buildArchiveFuzzyPreviewCandidate(value, searchTerms, rawSearch);
+  if (!fuzzyCandidate) return [];
+
+  return fuzzyCandidate.highlightRanges;
 }
 
 type ArchivePreviewCandidate = {

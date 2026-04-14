@@ -25,29 +25,30 @@ export default function BackToSearch({
     if (!target) return;
 
     const isTouch = typeof window !== "undefined" && window.matchMedia?.("(hover: none)").matches;
-
-    // Desktop: just focus the input. useAutoScrollOnFocus will smooth-scroll
-    // the container into position, keeping one source of truth for scroll math.
-    if (!isTouch) {
-      const input = target.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-        'input[type="search"], input[type="text"], input:not([type]), textarea',
-      );
-      input?.focus({ preventScroll: true });
-      return;
-    }
-
-    // Touch: scroll manually without focusing (we don't want to force the soft
-    // keyboard open from a button tap).
     const header = document.querySelector(".header") as HTMLElement | null;
     const headerHeight = header?.offsetHeight ?? 0;
     const targetTop = window.scrollY + target.getBoundingClientRect().top - headerHeight - SCROLL_GAP;
     const prefersReducedMotion =
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // Always perform an explicit scroll so the button still works when the input
+    // is already focused or focus events are otherwise suppressed.
     window.scrollTo({
       top: Math.max(0, targetTop),
       behavior: prefersReducedMotion ? "auto" : "smooth",
     });
+
+    // Desktop: also focus the input after the scroll so typing can continue.
+    if (!isTouch) {
+      const input = target.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+        'input[type="search"], input[type="text"], input:not([type]), textarea',
+      );
+      window.setTimeout(() => {
+        input?.focus({ preventScroll: true });
+      }, prefersReducedMotion ? 0 : 160);
+      return;
+    }
   }, [targetRef]);
 
   // Desktop keyboard shortcut: `/` jumps to search (unless user is already typing).

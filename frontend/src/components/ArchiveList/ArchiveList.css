@@ -109,6 +109,36 @@
   box-shadow: 0 24px 48px rgba(29, 26, 20, 0.13);
 }
 
+.letter-card-skeleton {
+  min-height: 312px;
+  border-radius: 26px;
+  overflow: hidden;
+  position: relative;
+  background:
+    linear-gradient(160deg, rgba(250, 245, 237, 0.96), rgba(231, 221, 208, 0.92));
+  box-shadow: var(--shadow-soft);
+}
+
+.letter-card-skeleton-shimmer {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      110deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.38) 28%,
+      rgba(255, 255, 255, 0) 56%
+    );
+  transform: translateX(-100%);
+  animation: archive-card-shimmer 1.15s linear infinite;
+}
+
+@keyframes archive-card-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
 .letter-card:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -324,6 +354,8 @@
   transform: translateY(0.5rem);
   transition: opacity 0.18s ease, transform 0.22s ease;
   pointer-events: none;
+  max-height: min(72%, 17rem);
+  overflow: hidden;
 }
 
 .letter-card-search-match-count {
@@ -331,6 +363,13 @@
   font-weight: 600;
   letter-spacing: 0.03em;
   color: rgba(255, 250, 242, 0.72);
+}
+
+.letter-card-search-match-source {
+  margin-top: 0.12rem;
+  font-size: 0.6rem;
+  line-height: 1.35;
+  color: rgba(255, 250, 242, 0.68);
 }
 
 .letter-card-search-match-excerpt {
@@ -428,6 +467,11 @@
     border-radius: 16px;
   }
 
+  .letter-card-skeleton {
+    min-height: 220px;
+    border-radius: 16px;
+  }
+
   .letter-card-page-count {
     inset: 0.45rem 0.5rem auto auto;
     font-size: 0.58rem;
@@ -437,6 +481,27 @@
     inset: 0.45rem auto auto 0.5rem;
     width: 1.6rem;
     height: 1.6rem;
+  }
+
+  .letter-card-search-match {
+    inset: 2.25rem 0.45rem auto;
+    max-height: min(54%, 8.25rem);
+    padding: 0.48rem 0.56rem 0.52rem;
+    border-radius: 12px;
+  }
+
+  .letter-card-search-match-count {
+    font-size: 0.56rem;
+  }
+
+  .letter-card-search-match-source {
+    font-size: 0.52rem;
+  }
+
+  .letter-card-search-match-excerpt {
+    margin-top: 0.22rem;
+    font-size: 0.64rem;
+    -webkit-line-clamp: 3;
   }
 
   .letter-card-sort-cue {

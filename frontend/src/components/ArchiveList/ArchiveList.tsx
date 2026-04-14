@@ -41,6 +41,7 @@ export default function ArchiveList({
   sortCueField = null,
   onLetterClick,
 }: ArchiveListProps) {
+  const LOAD_MORE_PLACEHOLDER_COUNT = 8;
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const loadMoreHandlerRef = useRef(onLoadMore);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -48,6 +49,10 @@ export default function ArchiveList({
   const previousHeightRef = useRef<number | null>(null);
   const collapseAnimationFrameRef = useRef<number | null>(null);
   const isSparseResultSet = !loading && !loadingMore && !error && total <= 8;
+  const remainingCount = Math.max(0, total - letters.length);
+  const loadingPlaceholderCount = loadingMore
+    ? Math.min(LOAD_MORE_PLACEHOLDER_COUNT, Math.max(4, remainingCount))
+    : 0;
 
   // When the result set is small (e.g. filtered down), preload all carousel images
   // since the user is likely to click through several of them
@@ -155,7 +160,7 @@ export default function ArchiveList({
         if (!entries.some((entry) => entry.isIntersecting)) return;
         loadMoreHandlerRef.current?.();
       },
-      { rootMargin: "1200px 0px" },
+      { rootMargin: "2400px 0px" },
     );
 
     observer.observe(node);
@@ -187,12 +192,21 @@ export default function ArchiveList({
                   onClick={onLetterClick}
                 />
               ))}
+              {Array.from({ length: loadingPlaceholderCount }).map((_, index) => (
+                <div
+                  key={`archive-loading-placeholder-${index}`}
+                  className="letter-card letter-card-skeleton"
+                  aria-hidden="true"
+                >
+                  <div className="letter-card-skeleton-shimmer" />
+                </div>
+              ))}
             </div>
             {hasMore ? (
               <div className="archive-load-more" ref={loadMoreRef}>
                 <p className={`archive-progress-message${loadMoreError ? " archive-progress-message--error" : ""}`}>
                   {loadingMore
-                    ? "Loading more archive items..."
+                    ? "Loading..."
                     : loadMoreError
                       ? `${loadMoreError} Scroll again or load the next set manually.`
                       : `Scroll to continue through the archive. ${total - letters.length} more ${
@@ -218,7 +232,7 @@ export default function ArchiveList({
           </>
         ) : loading ? (
           <div className="archive-initial-loading" aria-live="polite">
-            <p className="loading-message">Searching archive...</p>
+            <p className="loading-message">Loading...</p>
           </div>
         ) : (
           <div className="no-results">

@@ -6,6 +6,22 @@ vi.mock("../../../api/client", () => ({
   getImageUrl: (url: string) => url,
 }));
 
+function mockMatchMedia(matches: boolean) {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation(() => ({
+      matches,
+      media: "",
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
 afterEach(() => {
   vi.useRealTimers();
   window.localStorage.clear();
@@ -30,10 +46,17 @@ describe("LetterCard", () => {
           searchPreview: {
             excerpt: "Please write soon, Molly.",
             matchCount: 3,
+            matchedFieldLabel: "Transcript",
             highlightRanges: [
               {
                 start: 19,
                 end: 24,
+              },
+            ],
+            hookHighlightRanges: [
+              {
+                start: 20,
+                end: 25,
               },
             ],
           },
@@ -51,7 +74,9 @@ describe("LetterCard", () => {
 
     expect(button).not.toHaveAttribute("title");
     expect(screen.getByText("3 matches")).toBeInTheDocument();
-    expect(container.querySelector(".letter-card-search-match-highlight")?.textContent).toBe("Molly");
+    expect(screen.getByText("Transcript match")).toBeInTheDocument();
+    expect(screen.getAllByText("Molly").length).toBeGreaterThan(0);
+    expect(container.querySelector(".letter-hook .letter-card-search-match-highlight")?.textContent).toBe("reply");
     expect(button).not.toHaveClass("letter-card--search-preview-visible");
 
     const shell = button.closest(".letter-card-shell") as HTMLElement;
@@ -100,12 +125,14 @@ describe("LetterCard", () => {
           date: "August 11th, 1947",
           hook: "Jimmie imagines their future together.",
           searchPreview: {
-            excerpt: "Molly, darling, write soon.",
-            matchCount: 2,
-            highlightRanges: [
+            excerpt: "",
+            matchCount: 0,
+            matchedFieldLabel: "Hook",
+            highlightRanges: [],
+            hookHighlightRanges: [
               {
-                start: 0,
-                end: 5,
+                start: 22,
+                end: 28,
               },
             ],
           },
@@ -118,9 +145,12 @@ describe("LetterCard", () => {
       name: /August 11th, 1947/i,
     });
     const shell = button.closest(".letter-card-shell") as HTMLElement;
+    expect(screen.queryByRole("button", { name: "Show search match preview" })).not.toBeInTheDocument();
+    expect(shell).not.toHaveClass("letter-card-shell--has-search-match");
+    expect(document.querySelector(".letter-hook .letter-card-search-match-highlight")?.textContent).toBe("future");
 
     fireEvent.mouseEnter(shell);
-    expect(button).toHaveClass("letter-card--search-preview-visible");
+    expect(button).not.toHaveClass("letter-card--search-preview-visible");
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(700);
@@ -131,7 +161,7 @@ describe("LetterCard", () => {
     expect(window.localStorage.getItem("letter-card-search-preview-cooldowns")).toBeNull();
 
     fireEvent.mouseEnter(shell);
-    expect(button).toHaveClass("letter-card--search-preview-visible");
+    expect(button).not.toHaveClass("letter-card--search-preview-visible");
   });
 
   it("renders a subtle sort cue when the archive is sorted by a hidden field", () => {
@@ -157,5 +187,50 @@ describe("LetterCard", () => {
 
     expect(screen.getByText("Collection")).toBeInTheDocument();
     expect(screen.getByText("009")).toBeInTheDocument();
+  });
+
+  it("shows preview on first tap and navigates on second tap for touch devices", () => {
+    mockMatchMedia(true);
+    const onClick = vi.fn();
+
+    render(
+      <LetterCard
+        card={{
+          id: "letter-4",
+          imageType: "letter",
+          imageUrl: "/images/page-4.jpg",
+          primaryChip: "1 page",
+          sender: "Jimmie",
+          recipient: "Molly",
+          date: "August 13th, 1947",
+          hook: "Jimmie begs Molly to answer.",
+          searchPreview: {
+            excerpt: "Please answer soon, Molly.",
+            matchCount: 1,
+            matchedFieldLabel: "Transcript",
+            highlightRanges: [
+              {
+                start: 20,
+                end: 25,
+              },
+            ],
+          },
+        }}
+        onClick={onClick}
+      />,
+    );
+
+    const button = screen.getByRole("button", {
+      name: /August 13th, 1947/i,
+    });
+
+    fireEvent.pointerDown(button, { pointerType: "touch" });
+    fireEvent.click(button);
+    expect(button).toHaveClass("letter-card--search-preview-visible");
+    expect(onClick).not.toHaveBeenCalled();
+
+    fireEvent.pointerDown(button, { pointerType: "touch" });
+    fireEvent.click(button);
+    expect(onClick).toHaveBeenCalledWith("letter-4");
   });
 });

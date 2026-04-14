@@ -182,6 +182,8 @@ export interface ArchiveSearchPreview {
   excerpt: string;
   matchCount: number;
   highlightRanges: ArchiveSearchHighlightRange[];
+  matchedFieldLabel: string;
+  hookHighlightRanges?: ArchiveSearchHighlightRange[];
 }
 
 export interface ArchiveFacetValue {

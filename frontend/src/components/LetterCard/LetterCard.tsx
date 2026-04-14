@@ -131,20 +131,29 @@ function renderHighlightedExcerpt(
   return parts;
 }
 
+function prefersTouchPreview() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(hover: none), (pointer: coarse)").matches;
+}
+
 function LetterCard({
   card,
   onClick,
   sortCue = null,
 }: LetterCardProps) {
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const searchPreview = card.searchPreview;
-  const hasSearchPreview = Boolean(searchPreview?.excerpt);
+  const hasSearchPreview = Boolean(searchPreview?.excerpt && searchPreview.matchCount > 0);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [prioritizeImageLoad, setPrioritizeImageLoad] = useState(false);
   const previewTimerRef = useRef<number | null>(null);
   const hoverActiveRef = useRef(false);
+  const swallowNextCardClickRef = useRef(false);
   const mediaLabel = getMediaLabel(card.imageType);
   const primaryChip = card.primaryChip;
   const date = card.date || card.dateRaw;
   const hook = card.hook?.trim();
+  const hookHighlightRanges = searchPreview?.hookHighlightRanges ?? [];
   const peopleLine = getCorrespondentLine(card);
   const hasImage = Boolean(card.imageUrl);
   const fallbackLabel = date || mediaLabel;
@@ -155,6 +164,26 @@ function LetterCard({
     primaryChip,
     hook,
   ].filter((value): value is string => Boolean(value)).join(", ");
+
+  useEffect(() => {
+    const node = shellRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setPrioritizeImageLoad(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        setPrioritizeImageLoad(true);
+        observer.disconnect();
+      },
+      { rootMargin: "1200px 0px" },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [card.id]);
 
   const clearPreviewTimer = () => {
     if (previewTimerRef.current !== null) {
@@ -220,8 +249,26 @@ function LetterCard({
     showPreviewForABeat();
   };
 
+  const handleCardPointerDown = () => {
+    if (!hasSearchPreview) return;
+    if (!prefersTouchPreview()) return;
+    if (previewVisible) return;
+
+    swallowNextCardClickRef.current = true;
+    showPreviewForABeat();
+  };
+
+  const handleCardClick = () => {
+    if (swallowNextCardClickRef.current) {
+      swallowNextCardClickRef.current = false;
+      return;
+    }
+    onClick(card.id);
+  };
+
   return (
     <div
+      ref={shellRef}
       className={`letter-card-shell${hasSearchPreview ? " letter-card-shell--has-search-match" : ""}`}
       onMouseEnter={handleCardMouseEnter}
       onMouseLeave={handleCardMouseLeave}
@@ -229,7 +276,8 @@ function LetterCard({
       <button
         type="button"
         className={`letter-card letter-card--${card.imageType}${hasSearchPreview ? " letter-card--has-search-match" : ""}${previewVisible ? " letter-card--search-preview-visible" : ""}`}
-        onClick={() => onClick(card.id)}
+        onPointerDown={handleCardPointerDown}
+        onClick={handleCardClick}
         aria-label={ariaLabel || `${mediaLabel}: ${card.title || "Unknown item"}`}
       >
         {hasImage ? (
@@ -239,10 +287,12 @@ function LetterCard({
             thumbSrc={getImageUrl(card.imageUrl!, { width: 32 })}
             midSrc={getImageUrl(card.imageUrl!, { width: 240 })}
             alt=""
-            loading="lazy"
+            loading={prioritizeImageLoad ? "eager" : "lazy"}
             decoding="async"
+            fetchPriority={prioritizeImageLoad ? "high" : "low"}
             context="archive-card"
             idleUpgrade
+            deferFullUntilVisible={!prioritizeImageLoad}
           />
         ) : (
           <div className="letter-card-fallback" aria-hidden="true">
@@ -265,6 +315,9 @@ function LetterCard({
             <div className="letter-card-search-match-count">
               {searchPreview.matchCount} {searchPreview.matchCount === 1 ? "match" : "matches"}
             </div>
+            <div className="letter-card-search-match-source">
+              {searchPreview.matchedFieldLabel} match
+            </div>
             <div className="letter-card-search-match-excerpt">
               {renderHighlightedExcerpt(searchPreview.excerpt, searchPreview.highlightRanges)}
             </div>
@@ -273,7 +326,11 @@ function LetterCard({
         <div className="letter-card-content">
           {peopleLine && <div className="letter-card-meta">{peopleLine}</div>}
           {date && <div className="letter-card-date">{date}</div>}
-          {hook && <p className="letter-hook">{hook}</p>}
+          {hook && (
+            <p className="letter-hook">
+              {renderHighlightedExcerpt(hook, hookHighlightRanges)}
+            </p>
+          )}
         </div>
       </button>
       {hasSearchPreview && (

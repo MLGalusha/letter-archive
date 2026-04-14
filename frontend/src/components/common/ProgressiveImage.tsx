@@ -17,6 +17,7 @@ export interface ProgressiveImageProps {
   draggable?: boolean;
   fetchPriority?: 'high' | 'low' | 'auto';
   idleUpgrade?: boolean;
+  deferFullUntilVisible?: boolean;
   context?: string;
   onLoad?: () => void;
   /** Known aspect ratio (width/height) from DB — used for placeholder sizing */
@@ -42,6 +43,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       draggable,
       fetchPriority,
       idleUpgrade,
+      deferFullUntilVisible,
       context,
       onLoad,
       aspectRatio: knownAspectRatio,
@@ -54,6 +56,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       midSrc,
       fullSrc: src,
       idleUpgrade,
+      deferFullUntilVisible,
       context,
       fullDelay,
     });

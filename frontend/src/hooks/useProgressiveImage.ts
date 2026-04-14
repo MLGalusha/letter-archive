@@ -7,6 +7,7 @@ export interface ProgressiveImageOptions {
   midSrc?: string;
   fullSrc: string;
   idleUpgrade?: boolean;
+  deferFullUntilVisible?: boolean;
   context?: string;
   /** Delay in ms before starting the full-quality load (gives priority images a head start) */
   fullDelay?: number;
@@ -88,7 +89,15 @@ export function useProgressiveImage(
       ? { thumbSrc: thumbSrcOrOpts, fullSrc: fullSrcArg! }
       : thumbSrcOrOpts;
 
-  const { thumbSrc, midSrc, fullSrc, idleUpgrade = false, context = 'unknown', fullDelay = 0 } = opts;
+  const {
+    thumbSrc,
+    midSrc,
+    fullSrc,
+    idleUpgrade = false,
+    deferFullUntilVisible = false,
+    context = 'unknown',
+    fullDelay = 0,
+  } = opts;
 
   // If the preload service already has this image, start as loaded with known dimensions
   const preloaded = imagePreloadService.isPreloaded(fullSrc);
@@ -139,7 +148,7 @@ export function useProgressiveImage(
     }
 
     // 3. Load full — skip if preload service already has it, otherwise load
-    if (!alreadyPreloaded) {
+    if (!alreadyPreloaded && !deferFullUntilVisible) {
       const startFull = () => {
         if (cancelled.current) return;
         imgs.push(loadImage(fullSrc, 'full', context, cancelled, (img) => {
@@ -173,7 +182,7 @@ export function useProgressiveImage(
       }
       imgsRef.current = [];
     };
-  }, [thumbSrc, midSrc, fullSrc, idleUpgrade, context, fullDelay]);
+  }, [thumbSrc, midSrc, fullSrc, idleUpgrade, deferFullUntilVisible, context, fullDelay]);
 
   const currentSrc = fullLoaded ? fullSrc : midLoaded && midSrc ? midSrc : thumbLoaded ? thumbSrc : '';
 

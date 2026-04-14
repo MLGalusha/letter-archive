@@ -560,9 +560,16 @@ describe('letters route integration', () => {
           location: 'Overland Park, Kans.',
           verified: true,
           searchPreview: {
-            excerpt: 'Jimmie pleads with Molly for a reply.',
+            excerpt: 'Molly',
             matchCount: 1,
+            matchedFieldLabel: 'Recipient',
             highlightRanges: [
+              {
+                start: 0,
+                end: 5,
+              },
+            ],
+            hookHighlightRanges: [
               {
                 start: 19,
                 end: 24,
@@ -715,14 +722,17 @@ describe('letters route integration', () => {
       letters: Array<{
         searchPreview: {
           excerpt: string;
+          matchedFieldLabel: string;
           highlightRanges: Array<{ start: number; end: number }>;
+          hookHighlightRanges?: Array<{ start: number; end: number }>;
         };
       }>;
     }).letters[0]?.searchPreview;
 
     expect(searchPreview).toBeDefined();
-    // Without transcription text in search results, preview falls back to hook text
-    expect(searchPreview.excerpt).toBe('Jimmie pleads with Molly for a reply.');
+    expect(searchPreview.excerpt).toBe('Molly');
+    expect(searchPreview.matchedFieldLabel).toBe('Recipient');
+    expect(searchPreview.hookHighlightRanges).toEqual([{ start: 19, end: 24 }]);
     expect(searchPreview.excerpt.indexOf('Molly')).toBeGreaterThanOrEqual(0);
     expect(
       searchPreview.excerpt.slice(
@@ -731,4 +741,5 @@ describe('letters route integration', () => {
       ),
     ).toBe('Molly');
   });
+
 });

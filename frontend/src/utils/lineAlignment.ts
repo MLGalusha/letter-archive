@@ -526,6 +526,20 @@ export function alignTranscriptToVisualLines(
         lineSegments,
         wordMetrics,
       );
+      const selectedIndexBySegment = new Map<AlignableSegment, number>();
+      selectedSegments.forEach((segment, index) => {
+        selectedIndexBySegment.set(segment, index);
+      });
+      return lineSegments.map((seg, visualIndex) => {
+        const transcriptIndex = selectedIndexBySegment.get(seg);
+        return createAlignedLine(
+          seg,
+          transcriptIndex !== undefined ? transcriptLines[transcriptIndex] : '',
+          transcriptIndex ?? -1,
+          visualIndex,
+          wordMetrics,
+        );
+      });
     } else {
       return lineSegments.map((seg, i) =>
         createAlignedLine(
@@ -538,9 +552,6 @@ export function alignTranscriptToVisualLines(
       );
     }
 
-    return selectedSegments.map((seg, i) =>
-      createAlignedLine(seg, transcriptLines[i], i, i, wordMetrics),
-    );
   }
 
   // Fewer segments than transcript lines — assign 1:1 for all segments except

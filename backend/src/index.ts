@@ -111,7 +111,7 @@ app.use((req, res, next) => {
   if (contentType.includes('multipart/form-data')) {
     return next();
   }
-  return express.json()(req, res, next);
+  return express.json({ limit: '5mb' })(req, res, next);
 });
 
 // Routes

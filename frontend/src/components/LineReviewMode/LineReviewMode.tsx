@@ -310,6 +310,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const [fitPan, setFitPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0 });
+  const minimapDragRef = useRef<{ pointerId: number; rect: DOMRect } | null>(null);
 
   // Debug overlay layer toggles
   const [showKrakenLines, setShowKrakenLines] = useState(true);
@@ -360,10 +361,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Edit mode: resize (default), reshape (smooth deformation), or rotate
-  const [editMode, setEditMode] = useState<'resize' | 'reshape' | 'rotate'>('resize');
+  // Edit mode: resize (default) or rotate
+  const [editMode, setEditMode] = useState<'resize' | 'rotate'>('resize');
   // Draw tool: select (default), box, polygon, line
   const [drawTool, setDrawTool] = useState<'select' | 'box' | 'polygon' | 'draw'>('select');
+  // Subtract mode: when on, drawn shapes subtract from selected segment instead of extending
+  const [subtractMode, setSubtractMode] = useState(false);
   // Classification dropdown
   const [classDropdownOpen, setClassDropdownOpen] = useState(false);
   // Context menu
@@ -372,6 +375,9 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   useEffect(() => {
     setEditMode('resize');
     setClassDropdownOpen(false);
+    if (!segmentEditor.selectedSegmentId) {
+      setSubtractMode(false);
+    }
   }, [segmentEditor.selectedSegmentId]);
 
   const handleMappingClick = useCallback(
@@ -391,7 +397,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         const pageId = letterPages[currentLetterPageIndex]?.id;
         if (pageId) {
           void savePageLineSegments(pageId, segments).then(() => {
-            segmentEditor.markClean();
+            segmentEditor.markSaved();
           });
         }
       }
@@ -542,8 +548,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     const aiResult = aiSegmentsMap[currentLetterPageIndex];
     if (aiResult && aiResult.length > 0) {
-      const lines = alignTranscriptToVisualLines(pageText, aiResult);
-      return lines.filter(l => l.transcriptLineIndex >= 0);
+      return alignTranscriptToVisualLines(pageText, aiResult);
     }
 
     // No Kraken segments — don't fall back to pixel detection
@@ -563,9 +568,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       const aiSegs = aiSegmentsMap[idx];
 
       if (aiSegs && aiSegs.length > 0) {
-        return alignTranscriptToVisualLines(pageText, aiSegs)
-          .filter((line) => line.transcriptLineIndex >= 0)
-          .length;
+        return alignTranscriptToVisualLines(pageText, aiSegs).length;
       }
 
       return transcriptLineCount;
@@ -698,13 +701,15 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     return () => container.removeEventListener('wheel', handleWheel);
   }, [fitHeight, clampPan]);
 
+  const canPanZoomedImage = fitHeight && fitZoom > 1 && (!segmentEditor.segmentEditMode || drawTool === 'select');
+
   // Pan handlers for fit-height zoom
   const handlePanMouseDown = useCallback((e: React.MouseEvent) => {
-    if (!fitHeight || fitZoom <= 1) return;
+    if (!canPanZoomedImage) return;
     e.preventDefault();
     setIsPanning(true);
     panStartRef.current = { x: e.clientX - fitPan.x, y: e.clientY - fitPan.y };
-  }, [fitHeight, fitZoom, fitPan]);
+  }, [canPanZoomedImage, fitPan]);
 
   const handlePanMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isPanning) return;
@@ -716,6 +721,44 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   const handlePanMouseUp = useCallback(() => {
     setIsPanning(false);
+  }, []);
+
+  const panToMinimapPoint = useCallback((clientX: number, clientY: number, rect: DOMRect) => {
+    const dw = imageDisplaySize.width;
+    const dh = imageDisplaySize.height;
+    if (dw === 0 || dh === 0) return;
+
+    const nx = (clientX - rect.left) / rect.width;
+    const ny = (clientY - rect.top) / rect.height;
+    const tx = -(nx * dw - dw / 2) * fitZoom;
+    const ty = -(ny * dh - dh / 2) * fitZoom;
+    setFitPan(clampPan({ x: tx, y: ty }, fitZoom));
+  }, [imageDisplaySize.width, imageDisplaySize.height, fitZoom, clampPan]);
+
+  const handleMinimapPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    minimapDragRef.current = { pointerId: e.pointerId, rect };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    panToMinimapPoint(e.clientX, e.clientY, rect);
+  }, [panToMinimapPoint]);
+
+  const handleMinimapPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!minimapDragRef.current || minimapDragRef.current.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    panToMinimapPoint(e.clientX, e.clientY, minimapDragRef.current.rect);
+  }, [panToMinimapPoint]);
+
+  const handleMinimapPointerEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!minimapDragRef.current || minimapDragRef.current.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    minimapDragRef.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
   }, []);
 
   // Save current line text and trigger auto-save (only if user actually edited)
@@ -734,15 +777,21 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (newText === originalNormalized) return;
 
     // Use the tracked transcript line index (not the visual line index)
-    const transcriptIdx = currentAligned.transcriptLineIndex;
-    if (transcriptIdx < 0) return; // empty/unassigned line — nothing to save
-
-    const rawLineIndex = pageNonBlankMap[currentLetterPageIndex]?.[transcriptIdx];
-    if (rawLineIndex === undefined) return;
-
     const updated = [...pageRawTexts];
     const rawLines = updated[currentLetterPageIndex].split('\n');
-    rawLines[rawLineIndex] = mergeEditedTextWithOriginalSpacing(originalText, newText);
+    const transcriptIdx = currentAligned.transcriptLineIndex;
+    if (transcriptIdx >= 0) {
+      const rawLineIndex = pageNonBlankMap[currentLetterPageIndex]?.[transcriptIdx];
+      if (rawLineIndex === undefined) return;
+      rawLines[rawLineIndex] = mergeEditedTextWithOriginalSpacing(originalText, newText);
+    } else {
+      const insertionIndex = alignedLines
+        .slice(0, currentLineIndex)
+        .filter((line) => line.transcriptLineIndex >= 0)
+        .length;
+      const rawInsertIndex = pageNonBlankMap[currentLetterPageIndex]?.[insertionIndex] ?? rawLines.length;
+      rawLines.splice(rawInsertIndex, 0, newText);
+    }
     updated[currentLetterPageIndex] = rawLines.join('\n');
 
     setPageRawTexts(updated);
@@ -762,13 +811,17 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const segments = segmentEditor.getSegmentsForSave();
     try {
       await savePageLineSegments(pageId, segments);
-      setKrakenSegmentsMap(prev => ({ ...prev, [currentLetterPageIndex]: segments }));
+      // Update lastSourceRef BEFORE mutating the map so the sync effect
+      // doesn't treat our own save as an external change and reset selection.
+      const nextKraken = { ...krakenSegmentsMap, [currentLetterPageIndex]: segments };
+      lastSourceRef.current = nextKraken[currentLetterPageIndex];
+      setKrakenSegmentsMap(nextKraken);
       setAiSegmentsMap(prev => ({ ...prev, [currentLetterPageIndex]: segments }));
-      segmentEditor.markClean();
+      segmentEditor.markSaved();
     } catch (err) {
       showToast(getErrorMessage(err, 'Failed to save segment edits'), 'error');
     }
-  }, [segmentEditor, currentLetterPageIndex, letterPages, showToast]);
+  }, [segmentEditor, currentLetterPageIndex, letterPages, showToast, krakenSegmentsMap]);
 
   // Auto-save on a debounced timer when dirty
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -829,6 +882,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (segmentEditor.isDirty) {
       await autoSaveSegments();
     }
+    setSubtractMode(false);
+    segmentEditor.clearSessionHistory();
     segmentEditor.setSegmentEditMode(false);
   }, [segmentEditor, autoSaveSegments]);
 
@@ -1064,12 +1119,21 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   // Keyboard handler
   useEffect(() => {
+    const blurFocusedToolbarButton = () => {
+      const activeEl = document.activeElement;
+      if (activeEl instanceof HTMLElement && activeEl.classList.contains('segment-editor-toolbar-btn')) {
+        activeEl.blur();
+      }
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // Segment edit mode keyboard handling
       if (segmentEditor.segmentEditMode) {
         if (e.key === 'Escape') {
           e.preventDefault();
-          handleExitSegmentEditMode();
+          // Cancel active drawing tool — return to select mode
+          setDrawTool('select');
+          blurFocusedToolbarButton();
           return;
         }
         if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey)) {
@@ -1093,16 +1157,14 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         const tag = (document.activeElement as HTMLElement)?.tagName;
         if (!e.ctrlKey && !e.metaKey && !e.shiftKey && tag !== 'INPUT' && tag !== 'TEXTAREA') {
           const key = e.key.toLowerCase();
-          if (key === 's') { setDrawTool('select'); return; }
-          if (key === 'b') { setDrawTool('box'); return; }
-          if (key === 'p') { setDrawTool('polygon'); return; }
-          if (key === 'd') { setDrawTool('draw'); return; }
+          if (key === 's') { setDrawTool('select'); blurFocusedToolbarButton(); return; }
+          if (key === 'b') { setDrawTool('box'); blurFocusedToolbarButton(); return; }
+          if (key === 'p') { setDrawTool('polygon'); blurFocusedToolbarButton(); return; }
+          if (key === 'd') { setDrawTool('draw'); blurFocusedToolbarButton(); return; }
           if (key === 'r') {
-            const sel = segmentEditor.editedSegments.find((s) => s._id === segmentEditor.selectedSegmentId);
-            if (sel) {
-              if (editMode !== 'reshape') { segmentEditor.ensureBoundary(sel._id); setEditMode('reshape'); }
-              else { setEditMode('resize'); }
-            }
+            // Toggle subtract mode
+            setSubtractMode((v) => !v);
+            blurFocusedToolbarButton();
             return;
           }
           if (key === 't') {
@@ -1115,14 +1177,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           }
         }
         return; // Don't process other keys in edit mode
-      }
-
-      // Only handle when our input is focused or the container is active
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        saveCurrentLine();
-        onExit();
-        return;
       }
 
       if (e.key === 'D' && e.ctrlKey && e.shiftKey) {
@@ -1239,6 +1293,10 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (segmentEditor.segmentEditMode && segmentEditor.isDirty) {
       autoSaveSegments();
     }
+    if (segmentEditor.segmentEditMode) {
+      setSubtractMode(false);
+      segmentEditor.clearSessionHistory();
+    }
     onExit();
   }, [saveCurrentLine, segmentEditor, autoSaveSegments, onExit]);
 
@@ -1293,7 +1351,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             ? `scale(${fitZoom}) translate(${fitPan.x / fitZoom}px, ${fitPan.y / fitZoom}px)`
             : undefined,
           transformOrigin: 'center center',
-          cursor: fitHeight && fitZoom > 1 ? (isPanning ? 'grabbing' : 'grab') : undefined,
+          cursor: canPanZoomedImage ? (isPanning ? 'grabbing' : 'grab') : undefined,
         }}
         onMouseDown={handlePanMouseDown}
         onMouseMove={handlePanMouseMove}
@@ -1583,12 +1641,15 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             onResizeStart={segmentEditor.snapshotForUndo}
             onDelete={segmentEditor.deleteSegment}
             onToggleExcluded={segmentEditor.toggleExcluded}
-            onAddSegment={(bbox) => { segmentEditor.addSegment(bbox); setDrawTool('select'); }}
-            onAddPolygonSegment={(b) => { segmentEditor.addPolygonSegment(b); setDrawTool('select'); }}
+            onAddSegment={(bbox) => { segmentEditor.addSegment(bbox); }}
+            onAddPolygonSegment={(b) => { segmentEditor.addPolygonSegment(b); }}
             onAddFreehandSegment={(pts) => { segmentEditor.addFreehandSegment(pts); }}
+            onExtendSelected={segmentEditor.extendSelectedWithShape}
+            onSubtractFromSelected={segmentEditor.subtractShapeFromSelected}
             drawTool={drawTool}
-            reshapeMode={editMode === 'reshape'}
+            reshapeMode={false}
             rotateMode={editMode === 'rotate'}
+            subtractMode={subtractMode}
             onSetBoundary={segmentEditor.setBoundary}
             mappingMode={mappingActive}
             movable={editMode === 'resize'}
@@ -1801,32 +1862,14 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         const topPct = Math.max(0, (0.5 - (ch / 2 + fitPan.y) / (fitZoom * dh)) * 100);
         const widthPct = Math.min(100, (cw / (fitZoom * dw)) * 100);
         const heightPct = Math.min(100, (ch / (fitZoom * dh)) * 100);
-        const panToClient = (clientX: number, clientY: number, rect: DOMRect) => {
-          const nx = (clientX - rect.left) / rect.width;
-          const ny = (clientY - rect.top) / rect.height;
-          const tx = -(nx * dw - dw / 2) * fitZoom;
-          const ty = -(ny * dh - dh / 2) * fitZoom;
-          // Clamp pan so viewport stays within image bounds
-          const maxX = ((fitZoom - 1) * dw) / 2;
-          const maxY = ((fitZoom - 1) * dh) / 2;
-          setFitPan({
-            x: Math.max(-maxX, Math.min(maxX, tx)),
-            y: Math.max(-maxY, Math.min(maxY, ty)),
-          });
-        };
-        const handleMinimapPointer = (e: React.MouseEvent<HTMLDivElement>) => {
-          const rect = e.currentTarget.getBoundingClientRect();
-          panToClient(e.clientX, e.clientY, rect);
-          const onMove = (ev: MouseEvent) => panToClient(ev.clientX, ev.clientY, rect);
-          const onUp = () => {
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
-          };
-          window.addEventListener('mousemove', onMove);
-          window.addEventListener('mouseup', onUp);
-        };
         return (
-          <div className="line-review-minimap" onMouseDown={handleMinimapPointer}>
+          <div
+            className="line-review-minimap"
+            onPointerDown={handleMinimapPointerDown}
+            onPointerMove={handleMinimapPointerMove}
+            onPointerUp={handleMinimapPointerEnd}
+            onPointerCancel={handleMinimapPointerEnd}
+          >
             <img
               src={getImageUrl(currentPage.imageUrl, { width: 200 })}
               alt=""
@@ -1884,7 +1927,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           )}
           <button
             className="seg-editor-action-btn danger"
-            onClick={() => segmentEditor.resetFromSource(currentKrakenSegments)}
+            onClick={() => segmentEditor.resetFromSource(currentKrakenSegments, { preserveSelection: true })}
             disabled={!segmentEditor.isDirty}
           >
             Discard
@@ -1895,7 +1938,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
       {/* Segment editor mini-toolbar — shown only in edit mode */}
       {overlayEnabled && segmentEditor.segmentEditMode && (
-        <div className={`segment-editor-toolbar${currentPageTrusted ? ' locked' : ''}`}>
+        <div className={`segment-editor-toolbar${currentPageTrusted ? ' locked' : ''}${subtractMode ? ' subtract-mode' : ''}`}>
           {/* Undo/Redo */}
           <div className="seg-toolbar-group">
             <button
@@ -1984,19 +2027,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                 <div className="seg-toolbar-group">
                   <span className="seg-toolbar-label">Edit</span>
                   <button
-                    className={`segment-editor-toolbar-btn${editMode === 'reshape' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
-                    onClick={() => {
-                      if (editMode !== 'reshape') {
-                        segmentEditor.ensureBoundary(sel._id);
-                        setEditMode('reshape');
-                      } else {
-                        setEditMode('resize');
-                      }
-                    }}
-                    data-hint="Reshape (R)"
+                    className={`segment-editor-toolbar-btn${subtractMode ? ' active subtract-active' : ''} segment-editor-toolbar-btn-icon`}
+                    onClick={() => setSubtractMode((v) => !v)}
+                    data-hint="Subtract (R)"
                   >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M2 4 Q5 2 8 4 Q11 6 14 4 L14 12 Q11 14 8 12 Q5 10 2 12 Z" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinejoin="round" />
+                      <path d="M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                     </svg>
                   </button>
                   <button
@@ -2050,6 +2086,22 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                     </div>
                   )}
                 </div>
+
+                <span className="segment-editor-toolbar-divider" />
+
+                {/* Delete selected segment */}
+                <button
+                  className="segment-editor-toolbar-btn segment-editor-toolbar-btn-icon seg-toolbar-delete"
+                  onClick={() => segmentEditor.deleteSegment(sel._id)}
+                  data-hint="Delete (Del)"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M3 4h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                    <path d="M6 4V2.8A0.8 0.8 0 0 1 6.8 2h2.4a0.8 0.8 0 0 1 0.8 0.8V4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                    <path d="M4.5 4l0.6 9a1 1 0 0 0 1 0.9h3.8a1 1 0 0 0 1-0.9l0.6-9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M6.8 7v4.5M9.2 7v4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                </button>
               </>
             );
           })()}
@@ -2137,10 +2189,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         )}
       </div>
 
-      {/* Exit hint */}
-      <div className="line-review-exit-hint">
-        <kbd>Esc</kbd> or click outside to exit
-      </div>
     </div>
   );
 });

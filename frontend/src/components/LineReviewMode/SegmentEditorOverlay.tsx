@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EditableSegment } from '../../hooks/useSegmentEditor';
-import SegmentHandle from './SegmentHandle';
 import VertexHandles from './VertexHandles';
 import RotateHandle from './RotateHandle';
 
@@ -11,18 +10,24 @@ interface SegmentEditorOverlayProps {
   imageWidth: number;
   imageHeight: number;
   onSelect: (id: string | null) => void;
-  onResize: (id: string, newBbox: [number, number, number, number]) => void;
+  onResize?: (id: string, newBbox: [number, number, number, number]) => void;
   onDelete: (id: string) => void;
   onToggleExcluded: (id: string) => void;
   onAddSegment: (bbox: [number, number, number, number]) => void;
   onAddPolygonSegment?: (boundary: { x: number; y: number }[]) => void;
   onAddFreehandSegment?: (points: { x: number; y: number }[]) => void;
+  /** Extend the selected segment by unioning a drawn shape into it. Returns true if applied. */
+  onExtendSelected?: (segId: string, shape: { x: number; y: number }[]) => boolean;
+  /** Subtract a drawn shape from the selected segment. Returns true if applied. */
+  onSubtractFromSelected?: (segId: string, shape: { x: number; y: number }[]) => boolean;
   /** Active draw tool: select (default), box, polygon, or draw (freehand). */
   drawTool?: 'select' | 'box' | 'polygon' | 'draw';
   /** Called once when a resize/vertex drag starts — used to snapshot undo state. */
   onResizeStart?: () => void;
   /** When true, show vertex handles instead of bbox resize handles on selected segment. */
   reshapeMode?: boolean;
+  /** When true, drawn shapes subtract from the selected segment instead of extending. */
+  subtractMode?: boolean;
   /** When true, show rotation handles on selected segment. */
   rotateMode?: boolean;
   /** Set entire boundary at once (smooth deformation / rotation). */
@@ -50,15 +55,17 @@ export default function SegmentEditorOverlay({
   imageWidth,
   imageHeight,
   onSelect,
-  onResize,
   onDelete,
   onToggleExcluded,
   onAddSegment,
   onAddPolygonSegment,
   onAddFreehandSegment,
+  onExtendSelected,
+  onSubtractFromSelected,
   drawTool = 'select',
   onResizeStart,
   reshapeMode = false,
+  subtractMode = false,
   rotateMode = false,
   onSetBoundary,
   mappingMode = false,
@@ -80,6 +87,43 @@ export default function SegmentEditorOverlay({
   // Snap guides shown during move
   const [snapGuides, setSnapGuides] = useState<{ axis: 'h' | 'v'; pos: number }[]>([]);
 
+  // Track Alt key state for subtract mode
+  const [altHeld, setAltHeld] = useState(false);
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => { if (e.altKey) setAltHeld(true); };
+    const up = (e: KeyboardEvent) => { if (!e.altKey) setAltHeld(false); };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', () => setAltHeld(false));
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+    };
+  }, []);
+
+  /** Route a finalized draw shape to extend/subtract (if selected) or new-segment creation. */
+  const finalizeShape = useCallback(
+    (
+      shape: { x: number; y: number }[],
+      kind: 'box' | 'polygon' | 'freehand',
+      useAlt: boolean,
+      fallback: () => void,
+    ) => {
+      if (selectedSegmentId && (onExtendSelected || onSubtractFromSelected)) {
+        const subtract = subtractMode || useAlt;
+        if (subtract) {
+          if (onSubtractFromSelected?.(selectedSegmentId, shape)) return;
+        } else {
+          if (onExtendSelected?.(selectedSegmentId, shape)) return;
+        }
+      }
+      // No selection or no overlap: create new segment via kind-appropriate path
+      void kind;
+      fallback();
+    },
+    [selectedSegmentId, onExtendSelected, onSubtractFromSelected, subtractMode],
+  );
+
   // Pre-compute edges of all segments for snapping
   const segmentEdges = useMemo(() => {
     const edges: { segId: string; left: number; right: number; top: number; bottom: number }[] = [];
@@ -100,7 +144,12 @@ export default function SegmentEditorOverlay({
     const svg = svgRef.current;
     if (!svg) return { x: 0, y: 0 };
     const rect = svg.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const width = svg.width.baseVal.value || rect.width || 1;
+    const height = svg.height.baseVal.value || rect.height || 1;
+    return {
+      x: ((e.clientX - rect.left) * width) / rect.width,
+      y: ((e.clientY - rect.top) * height) / rect.height,
+    };
   }, []);
 
   // Move-drag state
@@ -133,15 +182,15 @@ export default function SegmentEditorOverlay({
           const first = polyPoints[0];
           const dist = Math.hypot(pt.x - first.x * scaleFactor, pt.y - first.y * scaleFactor);
           if (dist < 12) {
-            // Close polygon
-            onAddPolygonSegment?.(polyPoints.map((p) => ({ ...p })));
+            // Close polygon — route through extend/subtract if selected
+            const shape = polyPoints.map((p) => ({ ...p }));
+            finalizeShape(shape, 'polygon', e.altKey, () => onAddPolygonSegment?.(shape));
             setPolyPoints([]);
             setPolyPreview(null);
             return;
           }
         }
         setPolyPoints((prev) => [...prev, imgPt]);
-        onSelect(null);
         return;
       }
 
@@ -149,7 +198,6 @@ export default function SegmentEditorOverlay({
         const imgPt = { x: pt.x / scaleFactor, y: pt.y / scaleFactor };
         freehandDrawing.current = true;
         setFreehandPoints([imgPt]);
-        onSelect(null);
         (e.target as Element).setPointerCapture(e.pointerId);
         return;
       }
@@ -157,10 +205,9 @@ export default function SegmentEditorOverlay({
       // Box mode (default)
       setDrawStart(pt);
       setDrawEnd(pt);
-      onSelect(null);
       (e.target as Element).setPointerCapture(e.pointerId);
     },
-    [getSvgPoint, onSelect, drawTool, polyPoints, scaleFactor, onAddPolygonSegment],
+    [getSvgPoint, onSelect, drawTool, polyPoints, scaleFactor, onAddPolygonSegment, finalizeShape],
   );
 
   const handleSvgPointerMove = useCallback(
@@ -246,7 +293,10 @@ export default function SegmentEditorOverlay({
       if (drawTool === 'draw' && freehandDrawing.current) {
         freehandDrawing.current = false;
         if (freehandPoints.length >= 5) {
-          onAddFreehandSegment?.(freehandPoints);
+          // Use freehand points directly as the shape polygon for extend/subtract
+          finalizeShape(freehandPoints, 'freehand', _e.altKey, () =>
+            onAddFreehandSegment?.(freehandPoints),
+          );
         }
         setFreehandPoints([]);
         return;
@@ -268,13 +318,19 @@ export default function SegmentEditorOverlay({
       const y2 = Math.max(drawStart.y, drawEnd.y) / scaleFactor;
 
       if ((x2 - x1) * scaleFactor > 15 && (y2 - y1) * scaleFactor > 15) {
-        onAddSegment([x1, y1, x2, y2]);
+        const shape: { x: number; y: number }[] = [
+          { x: x1, y: y1 },
+          { x: x2, y: y1 },
+          { x: x2, y: y2 },
+          { x: x1, y: y2 },
+        ];
+        finalizeShape(shape, 'box', _e.altKey, () => onAddSegment([x1, y1, x2, y2]));
       }
 
       setDrawStart(null);
       setDrawEnd(null);
     },
-    [drawStart, drawEnd, scaleFactor, onAddSegment, drawTool, freehandPoints, onAddFreehandSegment],
+    [drawStart, drawEnd, scaleFactor, onAddSegment, drawTool, freehandPoints, onAddFreehandSegment, finalizeShape],
   );
 
   const handleSegmentClick = useCallback(
@@ -381,7 +437,8 @@ export default function SegmentEditorOverlay({
         // Double-click closes polygon if enough points
         if (drawTool === 'polygon' && polyPoints.length >= 3) {
           e.stopPropagation();
-          onAddPolygonSegment?.(polyPoints.map((p) => ({ ...p })));
+          const shape = polyPoints.map((p) => ({ ...p }));
+          finalizeShape(shape, 'polygon', e.altKey, () => onAddPolygonSegment?.(shape));
           setPolyPoints([]);
           setPolyPreview(null);
         }
@@ -404,8 +461,10 @@ export default function SegmentEditorOverlay({
         ];
 
         const hasBoundary = seg.boundary && seg.boundary.length >= 3;
-        const showVertexHandles = isSelected && reshapeMode && hasBoundary;
-        const showRotateHandles = isSelected && rotateMode && hasBoundary;
+        const inSelectMode = drawTool === 'select';
+        const selectableClass = inSelectMode || isMappable ? ' selectable' : '';
+        const showVertexHandles = isSelected && reshapeMode && hasBoundary && inSelectMode;
+        const showRotateHandles = isSelected && rotateMode && hasBoundary && inSelectMode;
 
         return (
           <g key={seg._id} className="segment-editor-seg">
@@ -415,8 +474,8 @@ export default function SegmentEditorOverlay({
                 points={seg.boundary
                   .map((p) => `${p.x * scaleFactor},${p.y * scaleFactor}`)
                   .join(' ')}
-                className={`segment-editor-poly${isSelected ? ' selected' : ''}${isExcluded ? ' excluded' : ''}${classModifier}${mappingClasses}`}
-                style={{ pointerEvents: 'all', cursor: isMappable ? 'pointer' : (movable && isSelected) ? 'move' : undefined }}
+                className={`segment-editor-poly${isSelected ? ' selected' : ''}${isExcluded ? ' excluded' : ''}${classModifier}${mappingClasses}${selectableClass}`}
+                style={{ pointerEvents: 'all', cursor: isMappable ? 'pointer' : (movable && isSelected && inSelectMode) ? 'move' : undefined }}
                 onPointerDown={(e) => handleSegmentClick(e, seg._id)}
                 onDoubleClick={(e) => handleDoubleClick(e, seg._id)}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onSegmentContextMenu?.(e.clientX, e.clientY, seg._id); }}
@@ -427,8 +486,8 @@ export default function SegmentEditorOverlay({
                 y={sy1}
                 width={sx2 - sx1}
                 height={sy2 - sy1}
-                className={`segment-editor-rect${isSelected ? ' selected' : ''}${isExcluded ? ' excluded' : ''}${classModifier}${mappingClasses}`}
-                style={{ pointerEvents: 'all', cursor: isMappable ? 'pointer' : (movable && isSelected) ? 'move' : undefined }}
+                className={`segment-editor-rect${isSelected ? ' selected' : ''}${isExcluded ? ' excluded' : ''}${classModifier}${mappingClasses}${selectableClass}`}
+                style={{ pointerEvents: 'all', cursor: isMappable ? 'pointer' : (movable && isSelected && inSelectMode) ? 'move' : undefined }}
                 onPointerDown={(e) => handleSegmentClick(e, seg._id)}
                 onDoubleClick={(e) => handleDoubleClick(e, seg._id)}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onSegmentContextMenu?.(e.clientX, e.clientY, seg._id); }}
@@ -447,32 +506,7 @@ export default function SegmentEditorOverlay({
               </text>
             )}
 
-            {/* Delete button on selected segment */}
-            {isSelected && (
-              <g
-                className="segment-editor-delete"
-                style={{ cursor: 'pointer', pointerEvents: 'all' }}
-                onClick={(e) => { e.stopPropagation(); onDelete(seg._id); }}
-              >
-                <circle cx={sx2 + 10} cy={sy1 - 10} r={10} fill="rgba(220,38,38,0.9)" />
-                <path
-                  d={`M${sx2 + 6},${sy1 - 14} L${sx2 + 14},${sy1 - 6} M${sx2 + 14},${sy1 - 14} L${sx2 + 6},${sy1 - 6}`}
-                  stroke="white"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                />
-              </g>
-            )}
-
-            {/* Resize handles (default), vertex handles (reshape), or rotation handles */}
-            {isSelected && !showVertexHandles && !showRotateHandles && (
-              <SegmentHandle
-                bbox={seg.bbox}
-                scaleFactor={scaleFactor}
-                onResize={(newBbox) => onResize(seg._id, newBbox)}
-                onResizeStart={onResizeStart}
-              />
-            )}
+            {/* Vertex handles (reshape) or rotation handles */}
             {showVertexHandles && (
               <VertexHandles
                 boundary={seg.boundary!}
@@ -501,7 +535,7 @@ export default function SegmentEditorOverlay({
           y={rubberBand.y}
           width={rubberBand.width}
           height={rubberBand.height}
-          className="segment-editor-rubber-band"
+          className={`segment-editor-rubber-band${(altHeld || subtractMode) && selectedSegmentId ? ' subtract' : ''}`}
         />
       )}
 
@@ -548,7 +582,7 @@ export default function SegmentEditorOverlay({
       {drawTool === 'draw' && freehandPoints.length > 1 && (
         <polyline
           points={freehandPoints.map((p) => `${p.x * scaleFactor},${p.y * scaleFactor}`).join(' ')}
-          className="draw-freehand-line"
+          className={`draw-freehand-line${(altHeld || subtractMode) && selectedSegmentId ? ' subtract' : ''}`}
         />
       )}
 

@@ -24,6 +24,13 @@
   min-height: clamp(26rem, 62vh, 38rem);
 }
 
+.archive-initial-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: clamp(22rem, 50vh, 34rem);
+}
+
 .loading-message,
 .error-message {
   margin: 0;

@@ -11,7 +11,8 @@ import SEO from "../components/SEO";
 import SearchBar from "../components/SearchBar/SearchBar";
 import ArchiveList from "../components/ArchiveList/ArchiveList";
 import Footer from "../components/Footer/Footer";
-import BackToTop from "../components/BackToTop";
+import BackToSearch from "../components/BackToSearch";
+import { useAutoScrollOnFocus } from "../hooks/useAutoScrollOnFocus";
 import { getContentPage, getFeaturedLetter, getImageUrl, listBlogPosts, type BlogPost, type FeaturedLetter } from "../api/client";
 import { ProgressiveImage } from "../components/common";
 import { imagePreloadService } from "../services/imagePreloadService";
@@ -274,6 +275,15 @@ export default function HomePage() {
   // ── Archive search (extracted hook) ──
   const archive = useArchiveSearch({ storageKey: "home", defaultSort: "createdAt" });
 
+  // Freeze facets and total while a search is in flight so the SearchBar's
+  // refine panel doesn't reshuffle counts between keystrokes (causes layout jumps).
+  const stableFacetsRef = useRef(archive.archiveResults.facets);
+  const stableTotalRef = useRef(archive.archiveResults.total);
+  if (!archive.archiveLoading) {
+    stableFacetsRef.current = archive.archiveResults.facets;
+    stableTotalRef.current = archive.archiveResults.total;
+  }
+
   // ── Sticky dock (extracted hook) ──
   const archiveSearchRef = useRef<HTMLElement | null>(null);
   const searchPanelRef = useRef<HTMLDivElement | null>(null);
@@ -282,6 +292,7 @@ export default function HomePage() {
     triggerRef: searchDockTriggerRef,
     sectionRef: archiveSearchRef,
   });
+  useAutoScrollOnFocus(searchPanelRef);
 
   // ── Fetch hero data + latest blog post ──
   useEffect(() => {
@@ -323,57 +334,7 @@ export default function HomePage() {
     return () => { cancelled = true; };
   }, []);
 
-  // ── Header dock content ──
-  useEffect(() => {
-    if (!dock.stickyDockActive) {
-      setDock(EMPTY_DOCK);
-      return;
-    }
-    setDock({
-      content: (
-        <SearchBar
-          query={archive.searchQuery}
-          filters={archive.filters}
-          facets={archive.archiveResults.facets}
-          total={archive.archiveResults.total}
-          loading={archive.archiveLoading}
-          embedded
-          variant="compact"
-          refineOpen={dock.compactRefineOpen}
-          sortOpen={dock.compactSortOpen}
-          onRefineOpenChange={(open) => {
-            dock.setCompactRefineOpen(open);
-            if (open) dock.setPageRefineOpen(false);
-          }}
-          onSortOpenChange={(open) => {
-            dock.setCompactSortOpen(open === false ? undefined : open);
-            if (open) dock.setPageSortOpen(false);
-          }}
-          onQueryChange={archive.setSearchQuery}
-          onFiltersChange={archive.setFilters}
-        />
-      ),
-      active: true,
-      visible: true,
-    });
-  }, [
-    archive.archiveLoading,
-    archive.archiveResults.facets,
-    archive.archiveResults.total,
-    archive.filters,
-    archive.searchQuery,
-    archive.setFilters,
-    archive.setSearchQuery,
-    dock.compactRefineOpen,
-    dock.compactSortOpen,
-    dock.setCompactRefineOpen,
-    dock.setCompactSortOpen,
-    dock.setPageRefineOpen,
-    dock.setPageSortOpen,
-    dock.stickyDockActive,
-    setDock,
-  ]);
-
+  // ── Keep header dock empty on home; BackToSearch replaces the sticky-header search. ──
   useEffect(() => () => setDock(EMPTY_DOCK), [setDock]);
 
   const handleLetterClick = useCallback((letterId: string) => {
@@ -535,8 +496,8 @@ export default function HomePage() {
         <SearchBar
           query={archive.searchQuery}
           filters={archive.filters}
-          facets={archive.archiveResults.facets}
-          total={archive.archiveResults.total}
+          facets={stableFacetsRef.current}
+          total={stableTotalRef.current}
           loading={archive.archiveLoading}
           embedded
           variant="full"
@@ -576,7 +537,7 @@ export default function HomePage() {
       </section>
 
       <Footer />
-      <BackToTop />
+      <BackToSearch visible={dock.stickyDockActive} targetRef={searchPanelRef} />
     </div>
   );
 }

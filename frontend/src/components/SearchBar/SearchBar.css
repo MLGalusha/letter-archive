@@ -504,8 +504,8 @@
 .search-sort-menu {
   position: absolute;
   top: calc(100% + 0.35rem);
-  left: 0;
-  transform: translateX(-25%);
+  right: 0;
+  left: auto;
   min-width: 170px;
   margin: 0;
   padding: 0.35rem;

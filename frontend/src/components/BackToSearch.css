@@ -1,0 +1,67 @@
+.back-to-search {
+  position: fixed;
+  bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%) translateY(4rem);
+  z-index: 90;
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(18, 18, 22, 0.72);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.45rem 1rem 0.45rem 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+              opacity 0.25s ease,
+              background 0.15s ease,
+              color 0.15s ease,
+              border-color 0.15s ease;
+}
+
+.back-to-search--visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.back-to-search:hover {
+  background: rgba(28, 28, 34, 0.88);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.back-to-search:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 3px;
+}
+
+.back-to-search:active {
+  transform: translateX(-50%) translateY(1px);
+}
+
+.back-to-search svg {
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .back-to-search {
+    transition: opacity 0.15s ease;
+    transform: translateX(-50%) translateY(0);
+  }
+  .back-to-search:not(.back-to-search--visible) {
+    transform: translateX(-50%) translateY(0);
+  }
+}

@@ -162,14 +162,6 @@ export default function ArchiveList({
     return () => observer.disconnect();
   }, [hasMore, letters.length, loading, loadingMore]);
 
-  if (loading && letters.length === 0) {
-    return (
-      <div className="archive-section">
-        <p className="loading-message">Searching archive...</p>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="archive-section">
@@ -224,6 +216,10 @@ export default function ArchiveList({
               </p>
             ) : null}
           </>
+        ) : loading ? (
+          <div className="archive-initial-loading" aria-live="polite">
+            <p className="loading-message">Searching archive...</p>
+          </div>
         ) : (
           <div className="no-results">
             <p>No archive items match this search yet.</p>

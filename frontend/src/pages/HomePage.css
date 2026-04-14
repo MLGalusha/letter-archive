@@ -409,6 +409,9 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  /* Reserve enough vertical space that filtering never shortens the page below
+     the viewport — prevents the search input from jumping around as the user types. */
+  min-height: clamp(42rem, 85svh, 64rem);
 }
 
 .home-surface-divider {

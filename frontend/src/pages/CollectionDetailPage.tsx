@@ -4,7 +4,8 @@ import SEO from '../components/SEO';
 import SearchBar from '../components/SearchBar/SearchBar';
 import ArchiveList from '../components/ArchiveList/ArchiveList';
 import Footer from '../components/Footer/Footer';
-import BackToTop from '../components/BackToTop';
+import BackToSearch from '../components/BackToSearch';
+import { useAutoScrollOnFocus } from '../hooks/useAutoScrollOnFocus';
 import { getCollectionByCode, getCollectionProfile, type CollectionWithLetters, type CollectionProfile } from '../api/collections';
 import { imagePreloadService } from '../services/imagePreloadService';
 import { EMPTY_DOCK, useHeaderDock } from '../contexts/HeaderDockContext';
@@ -68,6 +69,15 @@ export default function CollectionDetailPage() {
     fixedFilters,
   });
 
+  // Freeze facets and total while a search is in flight so the SearchBar's
+  // refine panel doesn't reshuffle counts between keystrokes (causes layout jumps).
+  const stableFacetsRef = useRef(archive.archiveResults.facets);
+  const stableTotalRef = useRef(archive.archiveResults.total);
+  if (!archive.archiveLoading) {
+    stableFacetsRef.current = archive.archiveResults.facets;
+    stableTotalRef.current = archive.archiveResults.total;
+  }
+
   /* ---- Sticky dock (extracted hook) ---- */
   const archiveSearchRef = useRef<HTMLElement | null>(null);
   const searchDockTriggerRef = useRef<HTMLDivElement | null>(null);
@@ -76,6 +86,7 @@ export default function CollectionDetailPage() {
     sectionRef: archiveSearchRef,
     enabled: !loading,
   });
+  useAutoScrollOnFocus(archiveSearchRef);
 
   /* ---- Computed from collection data ---- */
   const collectionLetters = collection?.letters ?? [];
@@ -142,38 +153,7 @@ export default function CollectionDetailPage() {
   }), []);
 
   useEffect(() => {
-    if (dock.stickyDockActive) {
-      setDock({
-        content: (
-          <SearchBar
-            query={archive.searchQuery}
-            filters={archive.filters}
-            facets={archive.archiveResults.facets}
-            total={archive.archiveResults.total}
-            loading={archive.archiveLoading}
-            embedded
-            variant="compact"
-            hideCollectionFilter
-            compactPlaceholder={`Search Collection ${collection?.collectionCode || collectionCode}...`}
-            refineOpen={dock.compactRefineOpen}
-            sortOpen={dock.compactSortOpen}
-            onRefineOpenChange={(open) => {
-              dock.setCompactRefineOpen(open);
-              if (open) dock.setPageRefineOpen(false);
-            }}
-            onSortOpenChange={(open) => {
-              dock.setCompactSortOpen(open === false ? undefined : open);
-              if (open) dock.setPageSortOpen(false);
-            }}
-            onQueryChange={archive.setSearchQuery}
-            onFiltersChange={archive.setFilters}
-          />
-        ),
-        active: true,
-        visible: true,
-        collectionsLink: collectionsLinkOverride,
-      });
-    } else if (collectionScrubberProps) {
+    if (collectionScrubberProps) {
       setDock({
         content: <HeaderScrubber {...collectionScrubberProps} />,
         active: true,
@@ -194,24 +174,8 @@ export default function CollectionDetailPage() {
       });
     }
   }, [
-    archive.archiveLoading,
-    archive.archiveResults.facets,
-    archive.archiveResults.total,
-    archive.filters,
-    archive.searchQuery,
-    archive.setFilters,
-    archive.setSearchQuery,
-    collection,
-    collectionCode,
     collectionScrubberProps,
     collectionsLinkOverride,
-    dock.compactRefineOpen,
-    dock.compactSortOpen,
-    dock.setCompactRefineOpen,
-    dock.setCompactSortOpen,
-    dock.setPageRefineOpen,
-    dock.setPageSortOpen,
-    dock.stickyDockActive,
     loading,
     setDock,
   ]);
@@ -482,8 +446,8 @@ export default function CollectionDetailPage() {
             <SearchBar
               query={archive.searchQuery}
               filters={archive.filters}
-              facets={archive.archiveResults.facets}
-              total={archive.archiveResults.total}
+              facets={stableFacetsRef.current}
+              total={stableTotalRef.current}
               loading={archive.archiveLoading}
               embedded
               variant="full"
@@ -524,7 +488,7 @@ export default function CollectionDetailPage() {
 
       </div>
       <Footer />
-      <BackToTop />
+      <BackToSearch visible={dock.stickyDockActive} targetRef={archiveSearchRef} />
 
       {/* ---- Popup overlay ---- */}
       {popup && (

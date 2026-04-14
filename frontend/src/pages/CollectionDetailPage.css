@@ -427,19 +427,24 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-width: 0;
+  scroll-margin-top: 1rem;
 }
 
 .cd-search-panel {
   position: relative;
   z-index: 1;
+  min-width: 0;
   padding: 1.45rem;
   border-radius: 34px;
   border: 1px solid rgba(217, 207, 191, 0.95);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 250, 242, 0.99));
   box-shadow: var(--shadow);
+  scroll-margin-top: clamp(6.5rem, 11vw, 8rem);
 }
 
 .cd-archive-stage {
+  min-width: 0;
   /* Reserve enough vertical space that filtering never shortens the page below
      the viewport — prevents the search input from jumping around as the user types. */
   min-height: clamp(42rem, 85svh, 64rem);

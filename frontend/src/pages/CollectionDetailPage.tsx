@@ -80,13 +80,14 @@ export default function CollectionDetailPage() {
 
   /* ---- Sticky dock (extracted hook) ---- */
   const archiveSearchRef = useRef<HTMLElement | null>(null);
+  const searchPanelRef = useRef<HTMLDivElement | null>(null);
   const searchDockTriggerRef = useRef<HTMLDivElement | null>(null);
   const dock = useStickyDock({
     triggerRef: searchDockTriggerRef,
     sectionRef: archiveSearchRef,
     enabled: !loading,
   });
-  useAutoScrollOnFocus(archiveSearchRef);
+  useAutoScrollOnFocus(searchPanelRef);
 
   /* ---- Computed from collection data ---- */
   const collectionLetters = collection?.letters ?? [];
@@ -442,7 +443,7 @@ export default function CollectionDetailPage() {
 
         {/* ---- 4. Search + Archive List ---- */}
         <section id="collection-archive" className="cd-archive-surface" ref={archiveSearchRef}>
-          <div className="cd-search-panel">
+          <div className="cd-search-panel" ref={searchPanelRef}>
             <SearchBar
               query={archive.searchQuery}
               filters={archive.filters}
@@ -488,7 +489,7 @@ export default function CollectionDetailPage() {
 
       </div>
       <Footer />
-      <BackToSearch visible={dock.stickyDockActive} targetRef={archiveSearchRef} />
+      <BackToSearch visible={dock.stickyDockActive} targetRef={searchPanelRef} />
 
       {/* ---- Popup overlay ---- */}
       {popup && (

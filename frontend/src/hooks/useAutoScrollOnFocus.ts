@@ -1,27 +1,46 @@
 import { useEffect, type RefObject } from "react";
 
 /**
- * When an input inside `containerRef` receives focus, smooth-scroll the container
- * so its top sits just below the sticky header. This gives typing/filtering a stable
- * vertical anchor (the input stays put, the grid below reflows out of sight) and
- * plays nicely with mobile soft keyboards.
+ * Keep `containerRef` pinned just under the sticky header whenever the user is
+ * interacting with an input inside it.
  *
- * Bails out if:
- *  - the container is already near the target position (within `threshold`px)
- *  - the user is already focused inside the container (typing → retyping)
- *  - prefers-reduced-motion is on and we'd be making a tiny adjustment
+ * Fires on two events:
+ *  - `focusin` → smooth-scroll into place (nice entry animation when clicking
+ *    or tabbing into the input from elsewhere).
+ *  - `input`   → after a short settle delay (matches debounced search + render),
+ *    re-check position and snap the container back into place with an *instant*
+ *    scroll if layout shifts have pushed it away. Instant (not smooth) so it
+ *    feels like the input "stays put" while typing rather than a delayed drift.
+ *
+ * Bails out when the container is already within `threshold`px of the target.
  */
 export function useAutoScrollOnFocus(
   containerRef: RefObject<HTMLElement | null>,
-  options: { gap?: number; threshold?: number } = {},
+  options: { gap?: number; threshold?: number; inputSettleDelay?: number } = {},
 ) {
-  const { gap = 12, threshold = 2 } = options;
+  const { gap = 12, threshold = 2, inputSettleDelay = 320 } = options;
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     let lastFocusedAt = 0;
+    let inputTimer: number | null = null;
+
+    const getDelta = () => {
+      const header = document.querySelector(".header") as HTMLElement | null;
+      const headerHeight = header?.offsetHeight ?? 0;
+      const rect = container.getBoundingClientRect();
+      const desiredViewportTop = headerHeight + gap;
+      return {
+        delta: rect.top - desiredViewportTop,
+        absoluteTop: Math.max(0, window.scrollY + rect.top - desiredViewportTop),
+      };
+    };
+
+    const prefersReducedMotion = () =>
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const handleFocusIn = (event: FocusEvent) => {
       const target = event.target as HTMLElement | null;
@@ -29,32 +48,42 @@ export function useAutoScrollOnFocus(
       const tag = target.tagName;
       if (tag !== "INPUT" && tag !== "TEXTAREA" && !target.isContentEditable) return;
 
-      // If a focus event fires again within a short window (e.g. React re-render
-      // or focus bouncing), don't re-scroll.
+      // Suppress echo focus events from React re-renders.
       const now = Date.now();
       if (now - lastFocusedAt < 400) return;
       lastFocusedAt = now;
 
-      const header = document.querySelector(".header") as HTMLElement | null;
-      const headerHeight = header?.offsetHeight ?? 0;
-      const rect = container.getBoundingClientRect();
-      const desiredViewportTop = headerHeight + gap;
-      const delta = rect.top - desiredViewportTop;
-
+      const { delta, absoluteTop } = getDelta();
       if (Math.abs(delta) <= threshold) return;
-
-      const absoluteTop = Math.max(0, window.scrollY + rect.top - desiredViewportTop);
-      const prefersReducedMotion =
-        typeof window.matchMedia === "function" &&
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       window.scrollTo({
         top: absoluteTop,
-        behavior: prefersReducedMotion ? "auto" : "smooth",
+        behavior: prefersReducedMotion() ? "auto" : "smooth",
       });
     };
 
+    const handleInput = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const tag = target.tagName;
+      if (tag !== "INPUT" && tag !== "TEXTAREA" && !target.isContentEditable) return;
+
+      // Wait for debounced search + re-render to settle, then re-pin.
+      if (inputTimer !== null) window.clearTimeout(inputTimer);
+      inputTimer = window.setTimeout(() => {
+        inputTimer = null;
+        const { delta, absoluteTop } = getDelta();
+        if (Math.abs(delta) <= threshold) return;
+        window.scrollTo({ top: absoluteTop, behavior: "auto" });
+      }, inputSettleDelay);
+    };
+
     container.addEventListener("focusin", handleFocusIn);
-    return () => container.removeEventListener("focusin", handleFocusIn);
-  }, [containerRef, gap, threshold]);
+    container.addEventListener("input", handleInput);
+    return () => {
+      container.removeEventListener("focusin", handleFocusIn);
+      container.removeEventListener("input", handleInput);
+      if (inputTimer !== null) window.clearTimeout(inputTimer);
+    };
+  });
 }

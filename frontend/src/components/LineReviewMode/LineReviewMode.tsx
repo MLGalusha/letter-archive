@@ -8,10 +8,11 @@ import {
   useImperativeHandle,
 } from 'react';
 import { getErrorMessage, getImageUrl } from '../../api/client';
-import { getPageLineSegments, savePageLineSegments } from '../../api/admin/letters';
+import { getPageLineSegments, savePageLineSegments, updatePageSegmentTrust } from '../../api/admin/letters';
 import type { Letter, LineSegment, LineSegmentWord, SpecialArea } from '../../types/Letter';
 import { useSegmentEditor } from '../../hooks/useSegmentEditor';
 import SegmentEditorOverlay from './SegmentEditorOverlay';
+import SegmentContextMenu from './SegmentContextMenu';
 import { constrainedGrouping, eastEdgeY, westEdgeY } from '../../utils/constrainedGrouping';
 import { matchTranscriptToLines, type MatchedLine } from '../../utils/transcriptMatcher';
 import {
@@ -303,7 +304,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   // Overlay toggle (dimmer + input strip)
   const [overlayEnabled, setOverlayEnabled] = useState(true);
   // Fit-height toggle
-  const [fitHeight, setFitHeight] = useState(false);
+  const [fitHeight, setFitHeight] = useState(fullViewport);
   // Zoom + pan for fit-height mode
   const [fitZoom, setFitZoom] = useState(1);
   const [fitPan, setFitPan] = useState({ x: 0, y: 0 });
@@ -352,15 +353,25 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     }
   }, [mappingText]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-enter segment edit mode when opened with unverified segments
+  useEffect(() => {
+    if (fullViewport) {
+      segmentEditor.setSegmentEditMode(true);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Edit mode: resize (default), reshape (smooth deformation), or rotate
   const [editMode, setEditMode] = useState<'resize' | 'reshape' | 'rotate'>('resize');
-  // Move lock — when false, selected segments can be grabbed and moved
-  const [moveLocked, setMoveLocked] = useState(true);
-  // Draw tool: box (default), polygon (click vertices), line (drag two points)
-  const [drawTool, setDrawTool] = useState<'box' | 'polygon' | 'line'>('box');
-  // Clear to resize when selection changes
+  // Draw tool: select (default), box, polygon, line
+  const [drawTool, setDrawTool] = useState<'select' | 'box' | 'polygon' | 'draw'>('select');
+  // Classification dropdown
+  const [classDropdownOpen, setClassDropdownOpen] = useState(false);
+  // Context menu
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; segId: string } | null>(null);
+  // Clear to resize and close dropdown when selection changes
   useEffect(() => {
     setEditMode('resize');
+    setClassDropdownOpen(false);
   }, [segmentEditor.selectedSegmentId]);
 
   const handleMappingClick = useCallback(
@@ -445,6 +456,15 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const [liveFontSize, setLiveFontSize] = useState<number | null>(null);
 
   const currentPage = allPages[currentPageIndex];
+
+  // Local trust state tracking (mirrors server, updated on verify/unverify)
+  const [trustOverrides, setTrustOverrides] = useState<Record<string, 'trusted' | 'unverified'>>({});
+  // Letter-level trust: treat verified if ANY page in the letter is trusted (verify is a letter-level action)
+  const currentPageTrusted = letterPages.length > 0 && letterPages.some(p => {
+    const override = trustOverrides[p.id];
+    if (override !== undefined) return override === 'trusted';
+    return p.segmentTrustState === 'trusted';
+  });
 
   // Reset image sizes and zoom when switching pages so overlay doesn't render
   // at stale positions from the previous page's dimensions
@@ -632,6 +652,23 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const fitZoomRef = useRef(fitZoom);
   fitZoomRef.current = fitZoom;
 
+  // Clamp pan so the image edges never cross inside the viewport
+  const clampPan = useCallback((pan: { x: number; y: number }, zoom: number) => {
+    const container = containerRef.current;
+    if (!container) return pan;
+    const dw = imageDisplaySize.width;
+    const dh = imageDisplaySize.height;
+    if (dw === 0 || dh === 0) return pan;
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+    const maxX = Math.max(0, (zoom * dw - cw) / 2);
+    const maxY = Math.max(0, (zoom * dh - ch) / 2);
+    return {
+      x: Math.max(-maxX, Math.min(maxX, pan.x)),
+      y: Math.max(-maxY, Math.min(maxY, pan.y)),
+    };
+  }, [imageDisplaySize.width, imageDisplaySize.height]);
+
   useEffect(() => {
     if (!fitHeight) return;
     const container = containerRef.current;
@@ -641,13 +678,17 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       if (e.metaKey || e.ctrlKey) {
         e.preventDefault();
         e.stopPropagation();
-        // Proportional zoom — feels smooth at all zoom levels
-        const factor = e.deltaY > 0 ? 0.97 : 1.03;
+        // Smooth exponential zoom (matches public LetterViewer feel)
+        const factor = Math.pow(1.01, -e.deltaY);
         setFitZoom(prev => {
           const next = prev * factor;
-          const clamped = Math.min(5, Math.max(1, next));
-          // Reset pan when zooming back to 1x
-          if (clamped === 1) setFitPan({ x: 0, y: 0 });
+          const clamped = Math.min(50, Math.max(1, next));
+          // Scale pan proportionally so the view center stays put, then clamp to bounds
+          setFitPan(prevPan => {
+            if (clamped === 1) return { x: 0, y: 0 };
+            const ratio = clamped / prev;
+            return clampPan({ x: prevPan.x * ratio, y: prevPan.y * ratio }, clamped);
+          });
           return clamped;
         });
       }
@@ -655,7 +696,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     container.addEventListener('wheel', handleWheel, { passive: false });
     return () => container.removeEventListener('wheel', handleWheel);
-  }, [fitHeight]);
+  }, [fitHeight, clampPan]);
 
   // Pan handlers for fit-height zoom
   const handlePanMouseDown = useCallback((e: React.MouseEvent) => {
@@ -667,11 +708,11 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   const handlePanMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isPanning) return;
-    setFitPan({
+    setFitPan(clampPan({
       x: e.clientX - panStartRef.current.x,
       y: e.clientY - panStartRef.current.y,
-    });
-  }, [isPanning]);
+    }, fitZoom));
+  }, [isPanning, fitZoom, clampPan]);
 
   const handlePanMouseUp = useCallback(() => {
     setIsPanning(false);
@@ -713,18 +754,14 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     onAutoSave({ transcriptionText: fullText });
   }, [currentLetterPageIndex, currentLineIndex, alignedLines, pageNonBlankMap, onTranscriptChange, onAutoSave, pageRawTexts]);
 
-  // Save segment edits and exit edit mode
-  const handleSaveSegmentEdits = useCallback(async () => {
-    if (!segmentEditor.isDirty || currentLetterPageIndex === undefined) {
-      segmentEditor.setSegmentEditMode(false);
-      return;
-    }
+  // Auto-save segment edits (no trust state change)
+  const autoSaveSegments = useCallback(async () => {
+    if (!segmentEditor.isDirty || currentLetterPageIndex === undefined) return;
     const pageId = letterPages[currentLetterPageIndex]?.id;
     if (!pageId) return;
     const segments = segmentEditor.getSegmentsForSave();
     try {
       await savePageLineSegments(pageId, segments);
-      // Update local kraken map so pipeline recomputes
       setKrakenSegmentsMap(prev => ({ ...prev, [currentLetterPageIndex]: segments }));
       setAiSegmentsMap(prev => ({ ...prev, [currentLetterPageIndex]: segments }));
       segmentEditor.markClean();
@@ -733,12 +770,67 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     }
   }, [segmentEditor, currentLetterPageIndex, letterPages, showToast]);
 
+  // Auto-save on a debounced timer when dirty
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!segmentEditor.isDirty) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveSegments();
+    }, 1500);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [segmentEditor.isDirty, segmentEditor.editedSegments, autoSaveSegments]);
+
+  // Verify segments — mark ALL letter pages as trusted (letter-level, not per-page)
+  const handleVerifySegments = useCallback(async () => {
+    // Save any pending changes first
+    if (segmentEditor.isDirty) await autoSaveSegments();
+    if (!letterPages.length) return;
+    try {
+      await Promise.all(letterPages.map(p => updatePageSegmentTrust(p.id, 'trusted')));
+      setTrustOverrides(prev => {
+        const next = { ...prev };
+        for (const p of letterPages) next[p.id] = 'trusted';
+        return next;
+      });
+    } catch (err) {
+      showToast(getErrorMessage(err, 'Failed to verify segments'), 'error');
+    }
+  }, [segmentEditor, letterPages, autoSaveSegments, showToast]);
+
+  // Unverify segments — unlock editor for ALL letter pages
+  const handleUnverifySegments = useCallback(async () => {
+    if (!letterPages.length) return;
+    try {
+      await Promise.all(letterPages.map(p => updatePageSegmentTrust(p.id, 'unverified')));
+      setTrustOverrides(prev => {
+        const next = { ...prev };
+        for (const p of letterPages) next[p.id] = 'unverified';
+        return next;
+      });
+      setLockHintVisible(false);
+    } catch (err) {
+      showToast(getErrorMessage(err, 'Failed to unverify segments'), 'error');
+    }
+  }, [letterPages, showToast]);
+
+  // Lock hint for toolbar tooltip when trusted
+  const [lockHintVisible, setLockHintVisible] = useState(false);
+  const lockHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showLockHint = useCallback(() => {
+    setLockHintVisible(true);
+    if (lockHintTimerRef.current) clearTimeout(lockHintTimerRef.current);
+    lockHintTimerRef.current = setTimeout(() => setLockHintVisible(false), 2000);
+  }, []);
+
   const handleExitSegmentEditMode = useCallback(async () => {
     if (segmentEditor.isDirty) {
-      await handleSaveSegmentEdits();
+      await autoSaveSegments();
     }
     segmentEditor.setSegmentEditMode(false);
-  }, [segmentEditor, handleSaveSegmentEdits]);
+  }, [segmentEditor, autoSaveSegments]);
 
   // Navigate to next line (cross-page: skips to next letter page)
   const goToNextLine = useCallback(() => {
@@ -781,19 +873,19 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (currentPageIndex >= allPages.length - 1) return;
     saveCurrentLine();
     if (segmentEditor.segmentEditMode && segmentEditor.isDirty) {
-      handleSaveSegmentEdits();
+      autoSaveSegments();
     }
     setCurrentPageIndex(currentPageIndex + 1);
     setCurrentLineIndex(0);
     containerRef.current?.scrollTo({ top: 0 });
-  }, [currentPageIndex, allPages.length, saveCurrentLine, segmentEditor, handleSaveSegmentEdits]);
+  }, [currentPageIndex, allPages.length, saveCurrentLine, segmentEditor, autoSaveSegments]);
 
   // Navigate to previous page (any type)
   const goToPrevPage = useCallback(() => {
     if (currentPageIndex <= 0) return;
     saveCurrentLine();
     if (segmentEditor.segmentEditMode && segmentEditor.isDirty) {
-      handleSaveSegmentEdits();
+      autoSaveSegments();
     }
     setCurrentPageIndex(currentPageIndex - 1);
     setCurrentLineIndex(0);
@@ -890,7 +982,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (sel && inputRef.current.firstChild) {
       sel.collapse(inputRef.current.firstChild, 0);
     }
-  }, [currentLineIndex, currentPageIndex, alignedLines, scaleFactor, imageNaturalSize.width, imageDisplaySize.height, imageNaturalSize.height]);
+  }, [currentLineIndex, currentPageIndex, alignedLines, scaleFactor, imageNaturalSize.width, imageDisplaySize.height, imageNaturalSize.height, segmentEditor.segmentEditMode, overlayEnabled]);
 
   // Recalculate font-size and word-spacing as the user edits text (without replacing innerHTML)
   const handleInputChange = useCallback(() => {
@@ -980,15 +1072,47 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           handleExitSegmentEditMode();
           return;
         }
-        if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && segmentEditor.canUndo) {
-          e.preventDefault();
-          segmentEditor.undo();
-          return;
+        if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey)) {
+          if (e.shiftKey && segmentEditor.canRedo) {
+            e.preventDefault();
+            segmentEditor.redo();
+            return;
+          }
+          if (!e.shiftKey && segmentEditor.canUndo) {
+            e.preventDefault();
+            segmentEditor.undo();
+            return;
+          }
         }
         // Block line navigation keys in edit mode
         if (['Enter', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
           e.preventDefault();
           return;
+        }
+        // Single-key tool shortcuts (only when not typing in an input)
+        const tag = (document.activeElement as HTMLElement)?.tagName;
+        if (!e.ctrlKey && !e.metaKey && !e.shiftKey && tag !== 'INPUT' && tag !== 'TEXTAREA') {
+          const key = e.key.toLowerCase();
+          if (key === 's') { setDrawTool('select'); return; }
+          if (key === 'b') { setDrawTool('box'); return; }
+          if (key === 'p') { setDrawTool('polygon'); return; }
+          if (key === 'd') { setDrawTool('draw'); return; }
+          if (key === 'r') {
+            const sel = segmentEditor.editedSegments.find((s) => s._id === segmentEditor.selectedSegmentId);
+            if (sel) {
+              if (editMode !== 'reshape') { segmentEditor.ensureBoundary(sel._id); setEditMode('reshape'); }
+              else { setEditMode('resize'); }
+            }
+            return;
+          }
+          if (key === 't') {
+            const sel = segmentEditor.editedSegments.find((s) => s._id === segmentEditor.selectedSegmentId);
+            if (sel) {
+              if (editMode !== 'rotate') { segmentEditor.ensureBoundary(sel._id); setEditMode('rotate'); }
+              else { setEditMode('resize'); }
+            }
+            return;
+          }
         }
         return; // Don't process other keys in edit mode
       }
@@ -1113,10 +1237,10 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const handleFullExit = useCallback(() => {
     saveCurrentLine();
     if (segmentEditor.segmentEditMode && segmentEditor.isDirty) {
-      handleSaveSegmentEdits();
+      autoSaveSegments();
     }
     onExit();
-  }, [saveCurrentLine, segmentEditor, handleSaveSegmentEdits, onExit]);
+  }, [saveCurrentLine, segmentEditor, autoSaveSegments, onExit]);
 
   const handleContainerClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     // Only exit when clicking directly on the dark background (not the image or overlays)
@@ -1141,16 +1265,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           <path d="M4 4L12 12M12 4L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
         </svg>
       </button>
-
-      {/* Skip to Text — visible only in segment-first full-viewport mode */}
-      {fullViewport && (
-        <button
-          className="line-review-skip-to-text"
-          onClick={onExit}
-        >
-          Skip to Text
-        </button>
-      )}
 
       {/* Mapping mode banner — visible when mapping text to a segment */}
       {mappingActive && mappingText && (
@@ -1457,7 +1571,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         )}
 
         {/* Segment editor overlay — interactive segment editing */}
-        {segmentEditor.segmentEditMode && imageDisplaySize.width > 0 && (
+        {overlayEnabled && segmentEditor.segmentEditMode && imageDisplaySize.width > 0 && (
           <SegmentEditorOverlay
             segments={segmentEditor.editedSegments}
             selectedSegmentId={segmentEditor.selectedSegmentId}
@@ -1469,18 +1583,42 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             onResizeStart={segmentEditor.snapshotForUndo}
             onDelete={segmentEditor.deleteSegment}
             onToggleExcluded={segmentEditor.toggleExcluded}
-            onAddSegment={segmentEditor.addSegment}
-            onAddPolygonSegment={segmentEditor.addPolygonSegment}
-            onAddLineSegment={segmentEditor.addLineSegment}
+            onAddSegment={(bbox) => { segmentEditor.addSegment(bbox); setDrawTool('select'); }}
+            onAddPolygonSegment={(b) => { segmentEditor.addPolygonSegment(b); setDrawTool('select'); }}
+            onAddFreehandSegment={(pts) => { segmentEditor.addFreehandSegment(pts); }}
             drawTool={drawTool}
             reshapeMode={editMode === 'reshape'}
             rotateMode={editMode === 'rotate'}
             onSetBoundary={segmentEditor.setBoundary}
             mappingMode={mappingActive}
-            movable={!moveLocked}
+            movable={editMode === 'resize'}
             onMoveSegment={segmentEditor.moveSegment}
+            onSegmentContextMenu={(cx, cy, segId) => {
+              segmentEditor.selectSegment(segId);
+              setContextMenu({ x: cx, y: cy, segId });
+            }}
           />
         )}
+
+
+        {/* Segment context menu */}
+        {contextMenu && (() => {
+          const seg = segmentEditor.editedSegments.find((s) => s._id === contextMenu.segId);
+          if (!seg) return null;
+          return (
+            <SegmentContextMenu
+              x={contextMenu.x}
+              y={contextMenu.y}
+              currentClass={seg.segmentClass}
+              excluded={!!seg.excluded}
+              onClassify={(cls) => segmentEditor.classifySegment(seg._id, cls)}
+              onToggleExcluded={() => segmentEditor.toggleExcluded(seg._id)}
+              onDelete={() => segmentEditor.deleteSegment(seg._id)}
+              onDuplicate={() => segmentEditor.duplicateSegment(seg._id)}
+              onClose={() => setContextMenu(null)}
+            />
+          );
+        })()}
 
         {/* Special area overlays — colored bounding regions for continuation/addition areas */}
         {specialAreaInfo && alignedLines.length > 0 && imgW > 0 && !segmentEditor.segmentEditMode && (() => {
@@ -1653,77 +1791,187 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         </>
       )}
 
-      {/* Segment editor mini-toolbar — shown only in edit mode */}
-      {segmentEditor.segmentEditMode && (
-        <div className="segment-editor-toolbar">
+      {/* Minimap — shown when fit-height mode is zoomed in */}
+      {fitHeight && fitZoom > 1 && imageDisplaySize.width > 0 && containerRef.current && (() => {
+        const dw = imageDisplaySize.width;
+        const dh = imageDisplaySize.height;
+        const cw = containerRef.current.clientWidth;
+        const ch = containerRef.current.clientHeight;
+        const leftPct = Math.max(0, (0.5 - (cw / 2 + fitPan.x) / (fitZoom * dw)) * 100);
+        const topPct = Math.max(0, (0.5 - (ch / 2 + fitPan.y) / (fitZoom * dh)) * 100);
+        const widthPct = Math.min(100, (cw / (fitZoom * dw)) * 100);
+        const heightPct = Math.min(100, (ch / (fitZoom * dh)) * 100);
+        const panToClient = (clientX: number, clientY: number, rect: DOMRect) => {
+          const nx = (clientX - rect.left) / rect.width;
+          const ny = (clientY - rect.top) / rect.height;
+          const tx = -(nx * dw - dw / 2) * fitZoom;
+          const ty = -(ny * dh - dh / 2) * fitZoom;
+          // Clamp pan so viewport stays within image bounds
+          const maxX = ((fitZoom - 1) * dw) / 2;
+          const maxY = ((fitZoom - 1) * dh) / 2;
+          setFitPan({
+            x: Math.max(-maxX, Math.min(maxX, tx)),
+            y: Math.max(-maxY, Math.min(maxY, ty)),
+          });
+        };
+        const handleMinimapPointer = (e: React.MouseEvent<HTMLDivElement>) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          panToClient(e.clientX, e.clientY, rect);
+          const onMove = (ev: MouseEvent) => panToClient(ev.clientX, ev.clientY, rect);
+          const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+          };
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+        };
+        return (
+          <div className="line-review-minimap" onMouseDown={handleMinimapPointer}>
+            <img
+              src={getImageUrl(currentPage.imageUrl, { width: 200 })}
+              alt=""
+              className="line-review-minimap-thumb"
+              draggable={false}
+            />
+            <div
+              className="line-review-minimap-viewport"
+              style={{
+                left: `${leftPct}%`,
+                top: `${topPct}%`,
+                width: `${widthPct}%`,
+                height: `${heightPct}%`,
+              }}
+            />
+          </div>
+        );
+      })()}
+
+      {/* Full-screen lock overlay — greys out everything, double-click anywhere to unverify */}
+      {overlayEnabled && segmentEditor.segmentEditMode && currentPageTrusted && (
+        <div
+          className="seg-lock-overlay"
+          onClick={showLockHint}
+          onDoubleClick={handleUnverifySegments}
+          onWheel={(e) => {
+            // Forward scroll to the container so the page still scrolls normally while locked
+            const el = containerRef.current;
+            if (el) el.scrollBy({ top: e.deltaY, left: e.deltaX, behavior: 'auto' });
+          }}
+        >
+          {lockHintVisible && (
+            <span className="seg-lock-overlay-hint">Double-click anywhere to unverify</span>
+          )}
+        </div>
+      )}
+
+      {/* Segment editor save/discard bar — top right, outside toolbar */}
+      {overlayEnabled && segmentEditor.segmentEditMode && (
+        <div className="seg-editor-actions">
+          {currentPageTrusted ? (
+            <span className="seg-editor-verified-info">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M3 7.5l2.5 2.5 5.5-5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Verified
+            </span>
+          ) : (
+            <button
+              className="seg-editor-verify-btn"
+              onClick={handleVerifySegments}
+            >
+              Verify
+            </button>
+          )}
           <button
-            className="segment-editor-toolbar-btn primary"
-            onClick={handleExitSegmentEditMode}
-          >
-            Done
-          </button>
-          <button
-            className="segment-editor-toolbar-btn"
-            onClick={() => segmentEditor.undo()}
-            disabled={!segmentEditor.canUndo}
-            title="Undo (Ctrl+Z)"
-          >
-            Undo
-          </button>
-          <button
-            className="segment-editor-toolbar-btn danger"
-            onClick={() => {
-              segmentEditor.resetFromSource(currentKrakenSegments);
-            }}
+            className="seg-editor-action-btn danger"
+            onClick={() => segmentEditor.resetFromSource(currentKrakenSegments)}
             disabled={!segmentEditor.isDirty}
           >
             Discard
           </button>
-          {segmentEditor.isDirty && (
-            <span className="segment-editor-dirty-indicator">unsaved</span>
-          )}
+        </div>
+      )}
 
-          {/* Draw tool picker */}
+
+      {/* Segment editor mini-toolbar — shown only in edit mode */}
+      {overlayEnabled && segmentEditor.segmentEditMode && (
+        <div className={`segment-editor-toolbar${currentPageTrusted ? ' locked' : ''}`}>
+          {/* Undo/Redo */}
+          <div className="seg-toolbar-group">
+            <button
+              className="segment-editor-toolbar-btn segment-editor-toolbar-btn-icon"
+              onClick={() => segmentEditor.undo()}
+              disabled={!segmentEditor.canUndo}
+              data-hint="Undo (⌘Z)"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M4 6l-3 3 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M1 9h9a4 4 0 0 1 0 8H8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+              </svg>
+            </button>
+            <button
+              className="segment-editor-toolbar-btn segment-editor-toolbar-btn-icon"
+              onClick={() => segmentEditor.redo()}
+              disabled={!segmentEditor.canRedo}
+              data-hint="Redo (⌘⇧Z)"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M12 6l3 3-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M15 9H6a4 4 0 0 0 0 8h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+              </svg>
+            </button>
+          </div>
+
           <span className="segment-editor-toolbar-divider" />
-          <button
-            className={`segment-editor-toolbar-btn${drawTool === 'box' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
-            onClick={() => setDrawTool('box')}
-            data-hint="Box"
-          >
-            {/* Box icon — rectangle */}
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <rect x="2" y="3" width="12" height="10" rx="1" stroke="currentColor" strokeWidth="1.4" fill="none" />
-            </svg>
-          </button>
-          <button
-            className={`segment-editor-toolbar-btn${drawTool === 'polygon' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
-            onClick={() => setDrawTool('polygon')}
-            data-hint="Polygon"
-          >
-            {/* Polygon icon — irregular pentagon */}
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <polygon points="8,2 14,6 12,14 4,14 2,6" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinejoin="round" />
-              <circle cx="8" cy="2" r="1.5" fill="currentColor" />
-              <circle cx="14" cy="6" r="1.5" fill="currentColor" />
-              <circle cx="12" cy="14" r="1.5" fill="currentColor" />
-              <circle cx="4" cy="14" r="1.5" fill="currentColor" />
-              <circle cx="2" cy="6" r="1.5" fill="currentColor" />
-            </svg>
-          </button>
-          <button
-            className={`segment-editor-toolbar-btn${drawTool === 'line' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
-            onClick={() => setDrawTool('line')}
-            data-hint="Line"
-          >
-            {/* Line icon — diagonal line with endpoints */}
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <line x1="3" y1="13" x2="13" y2="3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              <circle cx="3" cy="13" r="2" fill="currentColor" />
-              <circle cx="13" cy="3" r="2" fill="currentColor" />
-            </svg>
-          </button>
 
-          {/* Reshape + classification — visible when a segment is selected */}
+          {/* Draw tools group */}
+          <div className="seg-toolbar-group">
+            <span className="seg-toolbar-label">Draw</span>
+            <button
+              className={`segment-editor-toolbar-btn${drawTool === 'select' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
+              onClick={() => setDrawTool('select')}
+              data-hint="Select (S)"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M3 2l9 5.5-4 1.2-2.2 4z" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <button
+              className={`segment-editor-toolbar-btn${drawTool === 'box' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
+              onClick={() => setDrawTool('box')}
+              data-hint="Box (B)"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <rect x="2" y="3" width="12" height="10" rx="1" stroke="currentColor" strokeWidth="1.4" fill="none" />
+              </svg>
+            </button>
+            <button
+              className={`segment-editor-toolbar-btn${drawTool === 'polygon' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
+              onClick={() => setDrawTool('polygon')}
+              data-hint="Polygon (P)"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <polygon points="8,2 14,6 12,14 4,14 2,6" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinejoin="round" />
+                <circle cx="8" cy="2" r="1.5" fill="currentColor" />
+                <circle cx="14" cy="6" r="1.5" fill="currentColor" />
+                <circle cx="12" cy="14" r="1.5" fill="currentColor" />
+                <circle cx="4" cy="14" r="1.5" fill="currentColor" />
+                <circle cx="2" cy="6" r="1.5" fill="currentColor" />
+              </svg>
+            </button>
+            <button
+              className={`segment-editor-toolbar-btn${drawTool === 'draw' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
+              onClick={() => setDrawTool('draw')}
+              data-hint="Draw (D)"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M3 21l1.5-4.5L17.3 3.7a1.4 1.4 0 0 1 2 0l1 1a1.4 1.4 0 0 1 0 2L7.5 19.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" fill="none" />
+                <path d="M14.5 6.5l3 3" stroke="currentColor" strokeWidth="1.5" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Edit tools + classification — visible when a segment is selected */}
           {segmentEditor.selectedSegmentId && (() => {
             const sel = segmentEditor.editedSegments.find(
               (s) => s._id === segmentEditor.selectedSegmentId,
@@ -1733,80 +1981,84 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             return (
               <>
                 <span className="segment-editor-toolbar-divider" />
-                <button
-                  className={`segment-editor-toolbar-btn${editMode === 'reshape' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
-                  onClick={() => {
-                    if (editMode !== 'reshape') {
-                      segmentEditor.ensureBoundary(sel._id);
-                      setEditMode('reshape');
-                    } else {
-                      setEditMode('resize');
-                    }
-                  }}
-                  data-hint="Reshape"
-                >
-                  {/* Reshape icon — wavy/deformed polygon */}
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 4 Q5 2 8 4 Q11 6 14 4 L14 12 Q11 14 8 12 Q5 10 2 12 Z" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                <button
-                  className={`segment-editor-toolbar-btn${editMode === 'rotate' ? ' active rotate-active' : ''} segment-editor-toolbar-btn-icon`}
-                  onClick={() => {
-                    if (editMode !== 'rotate') {
-                      segmentEditor.ensureBoundary(sel._id);
-                      setEditMode('rotate');
-                    } else {
-                      setEditMode('resize');
-                    }
-                  }}
-                  data-hint="Rotate"
-                >
-                  {/* Rotate icon — circular arrow */}
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M13 8a5 5 0 01-9 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none" />
-                    <path d="M3 8a5 5 0 019-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none" />
-                    <path d="M11 3l1.2 2.2L10 6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                    <path d="M5 13l-1.2-2.2 2.2-.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                  </svg>
-                </button>
-                <button
-                  className={`segment-editor-toolbar-btn${!moveLocked ? ' active move-active' : ''} segment-editor-toolbar-btn-icon`}
-                  onClick={() => setMoveLocked((v) => !v)}
-                  data-hint={moveLocked ? 'Unlock' : 'Lock'}
-                >
-                  {moveLocked ? (
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
-                      <path d="M5.5 7V5a2.5 2.5 0 015 0v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-                    </svg>
-                  ) : (
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
-                      <path d="M10.5 7V5a2.5 2.5 0 00-5 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-                      <line x1="3" y1="14" x2="13" y2="2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                    </svg>
-                  )}
-                </button>
-                <span className="segment-editor-toolbar-divider" />
-                {(['body', 'continuation', 'addition', 'ignore'] as const).map((cls) => (
+                <div className="seg-toolbar-group">
+                  <span className="seg-toolbar-label">Edit</span>
                   <button
-                    key={cls}
-                    className={`segment-editor-toolbar-btn segment-class-btn${currentClass === cls ? ' segment-class-active' : ''}`}
-                    onClick={() => segmentEditor.classifySegment(sel._id, cls)}
-                    title={`Classify as ${cls}`}
+                    className={`segment-editor-toolbar-btn${editMode === 'reshape' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
+                    onClick={() => {
+                      if (editMode !== 'reshape') {
+                        segmentEditor.ensureBoundary(sel._id);
+                        setEditMode('reshape');
+                      } else {
+                        setEditMode('resize');
+                      }
+                    }}
+                    data-hint="Reshape (R)"
                   >
-                    {cls}
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M2 4 Q5 2 8 4 Q11 6 14 4 L14 12 Q11 14 8 12 Q5 10 2 12 Z" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinejoin="round" />
+                    </svg>
                   </button>
-                ))}
+                  <button
+                    className={`segment-editor-toolbar-btn${editMode === 'rotate' ? ' active rotate-active' : ''} segment-editor-toolbar-btn-icon`}
+                    onClick={() => {
+                      if (editMode !== 'rotate') {
+                        segmentEditor.ensureBoundary(sel._id);
+                        setEditMode('rotate');
+                      } else {
+                        setEditMode('resize');
+                      }
+                    }}
+                    data-hint="Rotate (T)"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M13 8a5 5 0 01-9 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+                      <path d="M3 8a5 5 0 019-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+                      <path d="M11 3l1.2 2.2L10 6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                      <path d="M5 13l-1.2-2.2 2.2-.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                    </svg>
+                  </button>
+                </div>
+
+                <span className="segment-editor-toolbar-divider" />
+
+                {/* Classification dropdown */}
+                <div className="seg-toolbar-group seg-class-dropdown-wrap">
+                  <button
+                    className={`segment-editor-toolbar-btn seg-class-trigger seg-class-${currentClass}`}
+                    onClick={() => setClassDropdownOpen((v) => !v)}
+                  >
+                    {currentClass}
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 4 }}>
+                      <path d="M2 4l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  {classDropdownOpen && (
+                    <div className="seg-class-dropdown">
+                      {(['body', 'continuation', 'addition', 'ignore'] as const).map((cls) => (
+                        <button
+                          key={cls}
+                          className={`seg-class-dropdown-item${currentClass === cls ? ' active' : ''} seg-class-${cls}`}
+                          onClick={() => {
+                            segmentEditor.classifySegment(sel._id, cls);
+                            setClassDropdownOpen(false);
+                          }}
+                        >
+                          {cls}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </>
             );
           })()}
         </div>
       )}
 
-      {/* Bottom toolbar — overlay + fit-height toggles */}
+      {/* Bottom toolbar — overlay visibility + mode toggle + fit-height */}
       <div className="line-review-toolbar">
+        {/* Overlay master toggle — hides both transcript and segments when off, preserves mode */}
         <button
           className={`line-review-toolbar-btn${overlayEnabled ? ' active' : ''}`}
           onClick={() => setOverlayEnabled(v => !v)}
@@ -1825,15 +2077,57 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           Overlay
         </button>
         <span className="line-review-toolbar-divider" />
+        {/* Transcript ↔ Segments toggle — only meaningful when overlay is on */}
+        {(() => {
+          const isSegments = segmentEditor.segmentEditMode;
+          const toggle = async () => {
+            // Always make sure overlay is on when switching modes
+            if (!overlayEnabled) setOverlayEnabled(true);
+            if (isSegments) {
+              await handleExitSegmentEditMode();
+            } else {
+              segmentEditor.setSegmentEditMode(true);
+            }
+          };
+          // Label describes what clicking will switch TO
+          const label = isSegments ? 'Transcript' : 'Segments';
+          return (
+            <button
+              className="line-review-toolbar-btn"
+              onClick={toggle}
+              title={isSegments ? 'Switch to transcript editor' : 'Switch to segment editor'}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                {isSegments ? (
+                  <path d="M3 4h10M3 8h10M3 12h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                ) : (
+                  <>
+                    <path d="M11.5 1.5l3 3-9 9H2.5v-3l9-9z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M9.5 3.5l3 3" stroke="currentColor" strokeWidth="1.5"/>
+                  </>
+                )}
+              </svg>
+              {label}
+            </button>
+          );
+        })()}
+        <span className="line-review-toolbar-divider" />
         <button
           className={`line-review-toolbar-btn${fitHeight ? ' active' : ''}`}
           onClick={() => { setFitHeight(v => !v); setFitZoom(1); setFitPan({ x: 0, y: 0 }); }}
-          title={fitHeight ? 'Scroll mode' : 'Fit to height'}
+          title={fitHeight ? 'Switch to scroll mode' : 'Fit to height'}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M4 2H12M4 14H12M8 4V12M6 4L8 2L10 4M6 12L8 14L10 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            {fitHeight ? (
+              <>
+                <rect x="5" y="2" width="6" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+                <path d="M8 5v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </>
+            ) : (
+              <path d="M4 2H12M4 14H12M8 4V12M6 4L8 2L10 4M6 12L8 14L10 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            )}
           </svg>
-          Fit Height
+          {fitHeight ? 'Scroll' : 'Fit Height'}
         </button>
         {fitHeight && fitZoom !== 1 && (
           <>
@@ -1841,24 +2135,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             <span className="line-review-toolbar-zoom">{Math.round(fitZoom * 100)}%</span>
           </>
         )}
-        <span className="line-review-toolbar-divider" />
-        <button
-          className={`line-review-toolbar-btn${segmentEditor.segmentEditMode ? ' active' : ''}`}
-          onClick={() => {
-            if (segmentEditor.segmentEditMode) {
-              handleExitSegmentEditMode();
-            } else {
-              segmentEditor.setSegmentEditMode(true);
-            }
-          }}
-          title={segmentEditor.segmentEditMode ? 'Exit segment editor' : 'Edit segments'}
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M11.5 1.5l3 3-9 9H2.5v-3l9-9z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M9.5 3.5l3 3" stroke="currentColor" strokeWidth="1.5"/>
-          </svg>
-          Segments
-        </button>
       </div>
 
       {/* Exit hint */}

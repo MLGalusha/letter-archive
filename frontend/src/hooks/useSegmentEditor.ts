@@ -197,6 +197,44 @@ function subdivideBoundary(
   return result;
 }
 
+/**
+ * Reduces a dense point trail to a simpler polygon using Ramer-Douglas-Peucker.
+ */
+function simplifyPoints(
+  pts: { x: number; y: number }[],
+  epsilon: number,
+): { x: number; y: number }[] {
+  if (pts.length <= 2) return pts;
+  // Find the point with the greatest distance from the line start→end
+  const start = pts[0];
+  const end = pts[pts.length - 1];
+  let maxDist = 0;
+  let maxIdx = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = pointLineDistance(pts[i], start, end);
+    if (d > maxDist) { maxDist = d; maxIdx = i; }
+  }
+  if (maxDist > epsilon) {
+    const left = simplifyPoints(pts.slice(0, maxIdx + 1), epsilon);
+    const right = simplifyPoints(pts.slice(maxIdx), epsilon);
+    return [...left.slice(0, -1), ...right];
+  }
+  return [start, end];
+}
+
+function pointLineDistance(
+  p: { x: number; y: number },
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
 export interface UseSegmentEditorReturn {
   segmentEditMode: boolean;
   setSegmentEditMode: (v: boolean) => void;
@@ -209,7 +247,9 @@ export interface UseSegmentEditorReturn {
   /** Create a segment from a polygon (point-by-point draw). */
   addPolygonSegment: (boundary: { x: number; y: number }[]) => void;
   /** Create a segment from a two-point line (given some width). */
-  addLineSegment: (p1: { x: number; y: number }, p2: { x: number; y: number }, width: number) => void;
+  addFreehandSegment: (points: { x: number; y: number }[]) => void;
+  /** Duplicate a segment, offset slightly. */
+  duplicateSegment: (id: string) => void;
   toggleExcluded: (id: string) => void;
   classifySegment: (id: string, segmentClass: SegmentClass) => void;
   mapSegment: (id: string, text: string) => void;
@@ -218,7 +258,9 @@ export interface UseSegmentEditorReturn {
   /** Snapshot current state for undo — call once at drag start, not per mouse move. */
   snapshotForUndo: () => void;
   undo: () => void;
+  redo: () => void;
   canUndo: boolean;
+  canRedo: boolean;
   /** Resets editor state from fresh source segments (e.g. after save or page switch). */
   resetFromSource: (segments: LineSegment[]) => void;
   /** Returns cleaned segments ready for API persistence. */
@@ -256,6 +298,7 @@ export function useSegmentEditor(
   const [isDirty, setIsDirty] = useState(false);
 
   const undoStackRef = useRef<UndoEntry[]>([]);
+  const redoStackRef = useRef<UndoEntry[]>([]);
 
   const pushUndo = useCallback((segments: EditableSegment[], selectedId: string | null) => {
     undoStackRef.current.push({ segments: segments.map((s) => ({ ...s })), selectedId });
@@ -263,6 +306,8 @@ export function useSegmentEditor(
     if (undoStackRef.current.length > 50) {
       undoStackRef.current.shift();
     }
+    // New action clears redo stack
+    redoStackRef.current = [];
   }, []);
 
   const selectSegment = useCallback((id: string | null) => {
@@ -330,19 +375,20 @@ export function useSegmentEditor(
   const addPolygonSegment = useCallback(
     (boundary: { x: number; y: number }[]) => {
       if (boundary.length < 3) return;
-      const bbox = bboxFromBoundary(boundary);
+      const smoothed = subdivideBoundary(boundary, 10);
+      const bbox = bboxFromBoundary(smoothed);
       const midY = (bbox[1] + bbox[3]) / 2;
       const newSeg: EditableSegment = {
         _id: makeId(),
         line: -1,
         baseline: [[bbox[0], midY], [bbox[2], midY]],
         bbox,
-        boundary,
+        boundary: smoothed,
         ocrText: '',
         words: [],
         excluded: false,
         _deleted: false,
-        _originalBoundary: boundary.map((p) => ({ ...p })),
+        _originalBoundary: smoothed.map((p) => ({ ...p })),
         _originalBbox: [...bbox] as [number, number, number, number],
       };
       setEditedSegments((prev) => {
@@ -355,42 +401,66 @@ export function useSegmentEditor(
     [pushUndo, selectedSegmentId],
   );
 
-  const addLineSegment = useCallback(
-    (p1: { x: number; y: number }, p2: { x: number; y: number }, width: number) => {
-      // Build a thin rectangle around the line
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const len = Math.hypot(dx, dy);
-      if (len < 1) return;
-      // Perpendicular unit vector
-      const px = (-dy / len) * (width / 2);
-      const py = (dx / len) * (width / 2);
-      const boundary = [
-        { x: p1.x + px, y: p1.y + py },
-        { x: p2.x + px, y: p2.y + py },
-        { x: p2.x - px, y: p2.y - py },
-        { x: p1.x - px, y: p1.y - py },
-      ];
-      const bbox = bboxFromBoundary(boundary);
+  const addFreehandSegment = useCallback(
+    (points: { x: number; y: number }[]) => {
+      if (points.length < 3) return;
+      // Simplify: keep every Nth point based on total count, then subdivide for smoothness
+      const simplified = simplifyPoints(points, 3);
+      if (simplified.length < 3) return;
+      const smoothed = subdivideBoundary(simplified, 10);
+      const bbox = bboxFromBoundary(smoothed);
       const midY = (bbox[1] + bbox[3]) / 2;
       const newSeg: EditableSegment = {
         _id: makeId(),
         line: -1,
-        baseline: [[p1.x, p1.y], [p2.x, p2.y]],
+        baseline: [[bbox[0], midY], [bbox[2], midY]],
         bbox,
-        boundary,
+        boundary: smoothed,
         ocrText: '',
         words: [],
         excluded: false,
         _deleted: false,
-        _originalBoundary: boundary.map((p) => ({ ...p })),
+        _originalBoundary: smoothed.map((p) => ({ ...p })),
         _originalBbox: [...bbox] as [number, number, number, number],
       };
       setEditedSegments((prev) => {
         pushUndo(prev, selectedSegmentId);
         return [...prev, newSeg];
       });
-      setSelectedSegmentId(newSeg._id);
+      setIsDirty(true);
+    },
+    [pushUndo, selectedSegmentId],
+  );
+
+  const duplicateSegment = useCallback(
+    (id: string) => {
+      setEditedSegments((prev) => {
+        const seg = prev.find((s) => s._id === id);
+        if (!seg) return prev;
+        pushUndo(prev, selectedSegmentId);
+        const offset = 15;
+        const newBbox: [number, number, number, number] = [
+          seg.bbox[0] + offset,
+          seg.bbox[1] + offset,
+          seg.bbox[2] + offset,
+          seg.bbox[3] + offset,
+        ];
+        const newBoundary = seg.boundary
+          ? seg.boundary.map((p) => ({ x: p.x + offset, y: p.y + offset }))
+          : undefined;
+        const midY = (newBbox[1] + newBbox[3]) / 2;
+        const newSeg: EditableSegment = {
+          ...seg,
+          _id: makeId(),
+          bbox: newBbox,
+          boundary: newBoundary,
+          baseline: [[newBbox[0], midY], [newBbox[2], midY]],
+          _originalBbox: [...newBbox] as [number, number, number, number],
+          _originalBoundary: newBoundary ? newBoundary.map((p) => ({ ...p })) : undefined,
+        };
+        setSelectedSegmentId(newSeg._id);
+        return [...prev, newSeg];
+      });
       setIsDirty(true);
     },
     [pushUndo, selectedSegmentId],
@@ -624,19 +694,36 @@ export function useSegmentEditor(
   const undo = useCallback(() => {
     const entry = undoStackRef.current.pop();
     if (!entry) return;
-    setEditedSegments(entry.segments);
+    // Push current state onto redo stack before restoring
+    setEditedSegments((prev) => {
+      redoStackRef.current.push({ segments: prev.map((s) => ({ ...s })), selectedId: selectedSegmentId });
+      return entry.segments;
+    });
     setSelectedSegmentId(entry.selectedId);
-    // If undo stack is empty, we're back to clean state
     setIsDirty(undoStackRef.current.length > 0);
-  }, []);
+  }, [selectedSegmentId]);
+
+  const redo = useCallback(() => {
+    const entry = redoStackRef.current.pop();
+    if (!entry) return;
+    // Push current state onto undo stack before restoring
+    setEditedSegments((prev) => {
+      undoStackRef.current.push({ segments: prev.map((s) => ({ ...s })), selectedId: selectedSegmentId });
+      return entry.segments;
+    });
+    setSelectedSegmentId(entry.selectedId);
+    setIsDirty(true);
+  }, [selectedSegmentId]);
 
   const canUndo = undoStackRef.current.length > 0;
+  const canRedo = redoStackRef.current.length > 0;
 
   const resetFromSource = useCallback((segments: LineSegment[]) => {
     setEditedSegments(toEditable(segments));
     setSelectedSegmentId(null);
     setIsDirty(false);
     undoStackRef.current = [];
+    redoStackRef.current = [];
   }, []);
 
   const getSegmentsForSave = useCallback(() => {
@@ -646,6 +733,7 @@ export function useSegmentEditor(
   const markClean = useCallback(() => {
     setIsDirty(false);
     undoStackRef.current = [];
+    redoStackRef.current = [];
   }, []);
 
   // Visible (non-deleted) segments for rendering
@@ -664,7 +752,8 @@ export function useSegmentEditor(
     deleteSegment,
     addSegment,
     addPolygonSegment,
-    addLineSegment,
+    addFreehandSegment,
+    duplicateSegment,
     toggleExcluded,
     classifySegment,
     mapSegment,
@@ -672,7 +761,9 @@ export function useSegmentEditor(
     isDirty,
     snapshotForUndo,
     undo,
+    redo,
     canUndo,
+    canRedo,
     resetFromSource,
     getSegmentsForSave,
     markClean,

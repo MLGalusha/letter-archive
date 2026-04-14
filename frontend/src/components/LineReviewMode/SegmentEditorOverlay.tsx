@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EditableSegment } from '../../hooks/useSegmentEditor';
 import SegmentHandle from './SegmentHandle';
 import VertexHandles from './VertexHandles';
@@ -16,9 +16,9 @@ interface SegmentEditorOverlayProps {
   onToggleExcluded: (id: string) => void;
   onAddSegment: (bbox: [number, number, number, number]) => void;
   onAddPolygonSegment?: (boundary: { x: number; y: number }[]) => void;
-  onAddLineSegment?: (p1: { x: number; y: number }, p2: { x: number; y: number }, width: number) => void;
-  /** Active draw tool: box (default), polygon, or line. */
-  drawTool?: 'box' | 'polygon' | 'line';
+  onAddFreehandSegment?: (points: { x: number; y: number }[]) => void;
+  /** Active draw tool: select (default), box, polygon, or draw (freehand). */
+  drawTool?: 'select' | 'box' | 'polygon' | 'draw';
   /** Called once when a resize/vertex drag starts — used to snapshot undo state. */
   onResizeStart?: () => void;
   /** When true, show vertex handles instead of bbox resize handles on selected segment. */
@@ -29,6 +29,8 @@ interface SegmentEditorOverlayProps {
   onSetBoundary?: (segId: string, newBoundary: { x: number; y: number }[]) => void;
   /** When true, segments are in mapping mode — special segments highlighted, body dimmed. */
   mappingMode?: boolean;
+  /** Right-click on segment — (clientX, clientY, segId). */
+  onSegmentContextMenu?: (x: number, y: number, segId: string) => void;
   /** When true, selected segment can be grabbed and moved. */
   movable?: boolean;
   /** Move segment by delta from original positions. */
@@ -53,13 +55,14 @@ export default function SegmentEditorOverlay({
   onToggleExcluded,
   onAddSegment,
   onAddPolygonSegment,
-  onAddLineSegment,
-  drawTool = 'box',
+  onAddFreehandSegment,
+  drawTool = 'select',
   onResizeStart,
   reshapeMode = false,
   rotateMode = false,
   onSetBoundary,
   mappingMode = false,
+  onSegmentContextMenu,
   movable = false,
   onMoveSegment,
 }: SegmentEditorOverlayProps) {
@@ -69,10 +72,29 @@ export default function SegmentEditorOverlay({
   // Polygon draw state (click-to-place vertices)
   const [polyPoints, setPolyPoints] = useState<{ x: number; y: number }[]>([]);
   const [polyPreview, setPolyPreview] = useState<{ x: number; y: number } | null>(null);
-  // Line draw state
-  const [lineStart, setLineStart] = useState<{ x: number; y: number } | null>(null);
-  const [lineEnd, setLineEnd] = useState<{ x: number; y: number } | null>(null);
+  // Freehand draw state
+  const [freehandPoints, setFreehandPoints] = useState<{ x: number; y: number }[]>([]);
+  const freehandDrawing = useRef(false);
   const svgRef = useRef<SVGSVGElement>(null);
+
+  // Snap guides shown during move
+  const [snapGuides, setSnapGuides] = useState<{ axis: 'h' | 'v'; pos: number }[]>([]);
+
+  // Pre-compute edges of all segments for snapping
+  const segmentEdges = useMemo(() => {
+    const edges: { segId: string; left: number; right: number; top: number; bottom: number }[] = [];
+    for (const seg of segments) {
+      if (seg._deleted) continue;
+      edges.push({
+        segId: seg._id,
+        left: seg.bbox[0],
+        top: seg.bbox[1],
+        right: seg.bbox[2],
+        bottom: seg.bbox[3],
+      });
+    }
+    return edges;
+  }, [segments]);
 
   const getSvgPoint = useCallback((e: React.PointerEvent): { x: number; y: number } => {
     const svg = svgRef.current;
@@ -93,10 +115,16 @@ export default function SegmentEditorOverlay({
 
   const handleSvgPointerDown = useCallback(
     (e: React.PointerEvent) => {
-      // Only start drawing if clicking on empty SVG area (not a segment)
-      if ((e.target as Element).closest('.segment-editor-seg, .segment-handles, .vertex-handles')) return;
+      // In select mode, clicking on a segment is handled by segment click handlers — skip draw logic
+      // In draw modes, clicks pass through to drawing even on segments
+      if (drawTool === 'select' && (e.target as Element).closest('.segment-editor-seg, .segment-handles, .vertex-handles')) return;
 
       const pt = getSvgPoint(e);
+
+      if (drawTool === 'select') {
+        onSelect(null);
+        return;
+      }
 
       if (drawTool === 'polygon') {
         // Polygon: click to add vertex, close if near first point
@@ -117,13 +145,12 @@ export default function SegmentEditorOverlay({
         return;
       }
 
-      if (drawTool === 'line') {
-        if (!lineStart) {
-          setLineStart(pt);
-          setLineEnd(pt);
-          onSelect(null);
-          (e.target as Element).setPointerCapture(e.pointerId);
-        }
+      if (drawTool === 'draw') {
+        const imgPt = { x: pt.x / scaleFactor, y: pt.y / scaleFactor };
+        freehandDrawing.current = true;
+        setFreehandPoints([imgPt]);
+        onSelect(null);
+        (e.target as Element).setPointerCapture(e.pointerId);
         return;
       }
 
@@ -133,7 +160,7 @@ export default function SegmentEditorOverlay({
       onSelect(null);
       (e.target as Element).setPointerCapture(e.pointerId);
     },
-    [getSvgPoint, onSelect, drawTool, polyPoints, scaleFactor, onAddPolygonSegment, lineStart],
+    [getSvgPoint, onSelect, drawTool, polyPoints, scaleFactor, onAddPolygonSegment],
   );
 
   const handleSvgPointerMove = useCallback(
@@ -145,12 +172,44 @@ export default function SegmentEditorOverlay({
         const dy = pt.y / scaleFactor - moveDragRef.current.startY;
         if (!moveDragRef.current.moved && Math.hypot(dx, dy) < 3) return;
         moveDragRef.current.moved = true;
+        // Snap guide detection
+        const ob = moveDragRef.current.origBbox;
+        const movingEdges = {
+          left: ob[0] + dx, top: ob[1] + dy,
+          right: ob[2] + dx, bottom: ob[3] + dy,
+        };
+        const thresh = 5 / scaleFactor;
+        const guides: { axis: 'h' | 'v'; pos: number }[] = [];
+        let snapDx = dx;
+        let snapDy = dy;
+        for (const edge of segmentEdges) {
+          if (edge.segId === moveDragRef.current.segId) continue;
+          // Vertical guides (x alignment)
+          for (const mx of [movingEdges.left, movingEdges.right]) {
+            for (const ox of [edge.left, edge.right]) {
+              if (Math.abs(mx - ox) < thresh) {
+                snapDx += ox - mx;
+                guides.push({ axis: 'v', pos: ox });
+              }
+            }
+          }
+          // Horizontal guides (y alignment)
+          for (const my of [movingEdges.top, movingEdges.bottom]) {
+            for (const oy of [edge.top, edge.bottom]) {
+              if (Math.abs(my - oy) < thresh) {
+                snapDy += oy - my;
+                guides.push({ axis: 'h', pos: oy });
+              }
+            }
+          }
+        }
+        setSnapGuides(guides);
         onMoveSegment?.(
           moveDragRef.current.segId,
           moveDragRef.current.origBbox,
           moveDragRef.current.origBoundary,
-          dx,
-          dy,
+          snapDx,
+          snapDy,
         );
         return;
       }
@@ -163,35 +222,33 @@ export default function SegmentEditorOverlay({
         return;
       }
 
-      // Line preview
-      if (drawTool === 'line' && lineStart) {
-        setLineEnd(pt);
+      // Freehand draw: accumulate points
+      if (drawTool === 'draw' && freehandDrawing.current) {
+        setFreehandPoints((prev) => [...prev, { x: pt.x / scaleFactor, y: pt.y / scaleFactor }]);
         return;
       }
 
       if (!drawStart) return;
       setDrawEnd(pt);
     },
-    [drawStart, getSvgPoint, scaleFactor, onMoveSegment, drawTool, polyPoints.length, lineStart],
+    [drawStart, getSvgPoint, scaleFactor, onMoveSegment, drawTool, polyPoints.length],
   );
 
   const handleSvgPointerUp = useCallback(
     (_e: React.PointerEvent) => {
       if (moveDragRef.current) {
         moveDragRef.current = null;
+        setSnapGuides([]);
         return;
       }
 
-      // Line mode: finish on pointer up
-      if (drawTool === 'line' && lineStart && lineEnd) {
-        const p1 = { x: lineStart.x / scaleFactor, y: lineStart.y / scaleFactor };
-        const p2 = { x: lineEnd.x / scaleFactor, y: lineEnd.y / scaleFactor };
-        const dist = Math.hypot(lineEnd.x - lineStart.x, lineEnd.y - lineStart.y);
-        if (dist > 10) {
-          onAddLineSegment?.(p1, p2, 20);
+      // Freehand mode: finish on pointer up
+      if (drawTool === 'draw' && freehandDrawing.current) {
+        freehandDrawing.current = false;
+        if (freehandPoints.length >= 5) {
+          onAddFreehandSegment?.(freehandPoints);
         }
-        setLineStart(null);
-        setLineEnd(null);
+        setFreehandPoints([]);
         return;
       }
 
@@ -217,11 +274,13 @@ export default function SegmentEditorOverlay({
       setDrawStart(null);
       setDrawEnd(null);
     },
-    [drawStart, drawEnd, scaleFactor, onAddSegment, drawTool, lineStart, lineEnd, onAddLineSegment],
+    [drawStart, drawEnd, scaleFactor, onAddSegment, drawTool, freehandPoints, onAddFreehandSegment],
   );
 
   const handleSegmentClick = useCallback(
     (e: React.PointerEvent, id: string) => {
+      // In draw modes, don't intercept — let clicks pass through to draw handlers
+      if (drawTool !== 'select') return;
       e.stopPropagation();
       if (movable && id === selectedSegmentId) {
         // Start move drag on already-selected segment
@@ -243,7 +302,7 @@ export default function SegmentEditorOverlay({
       }
       onSelect(id);
     },
-    [onSelect, movable, selectedSegmentId, segments, getSvgPoint, scaleFactor, onResizeStart],
+    [onSelect, movable, selectedSegmentId, segments, getSvgPoint, scaleFactor, onResizeStart, drawTool],
   );
 
   const handleDoubleClick = useCallback(
@@ -259,7 +318,7 @@ export default function SegmentEditorOverlay({
       if (e.key === 'Escape') {
         // Cancel in-progress polygon or line draw
         if (polyPoints.length > 0) { setPolyPoints([]); setPolyPreview(null); }
-        if (lineStart) { setLineStart(null); setLineEnd(null); }
+        if (freehandDrawing.current) { freehandDrawing.current = false; setFreehandPoints([]); }
         return;
       }
       if (!selectedSegmentId) return;
@@ -268,15 +327,15 @@ export default function SegmentEditorOverlay({
         onDelete(selectedSegmentId);
       }
     },
-    [selectedSegmentId, onDelete, polyPoints.length, lineStart],
+    [selectedSegmentId, onDelete, polyPoints.length],
   );
 
   // Clear draw state when tool changes
   useEffect(() => {
     setPolyPoints([]);
     setPolyPreview(null);
-    setLineStart(null);
-    setLineEnd(null);
+    freehandDrawing.current = false;
+    setFreehandPoints([]);
     setDrawStart(null);
     setDrawEnd(null);
   }, [drawTool]);
@@ -310,7 +369,10 @@ export default function SegmentEditorOverlay({
         top: 0,
         left: 0,
         zIndex: 15,
-        cursor: 'crosshair',
+        cursor: drawTool === 'select' ? 'default'
+          : drawTool === 'polygon' ? 'cell'
+          : drawTool === 'draw' ? `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M3 21l1.5-4.5L17.3 3.7a1.4 1.4 0 0 1 2 0l1 1a1.4 1.4 0 0 1 0 2L7.5 19.5z' fill='none' stroke='%23333' stroke-width='1.5' stroke-linejoin='round'/%3E%3Cpath d='M14.5 6.5l3 3' stroke='%23333' stroke-width='1.5'/%3E%3C/svg%3E") 2 22, crosshair`
+          : 'crosshair',
       }}
       onPointerDown={handleSvgPointerDown}
       onPointerMove={handleSvgPointerMove}
@@ -357,6 +419,7 @@ export default function SegmentEditorOverlay({
                 style={{ pointerEvents: 'all', cursor: isMappable ? 'pointer' : (movable && isSelected) ? 'move' : undefined }}
                 onPointerDown={(e) => handleSegmentClick(e, seg._id)}
                 onDoubleClick={(e) => handleDoubleClick(e, seg._id)}
+                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onSegmentContextMenu?.(e.clientX, e.clientY, seg._id); }}
               />
             ) : (
               <rect
@@ -368,7 +431,20 @@ export default function SegmentEditorOverlay({
                 style={{ pointerEvents: 'all', cursor: isMappable ? 'pointer' : (movable && isSelected) ? 'move' : undefined }}
                 onPointerDown={(e) => handleSegmentClick(e, seg._id)}
                 onDoubleClick={(e) => handleDoubleClick(e, seg._id)}
+                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onSegmentContextMenu?.(e.clientX, e.clientY, seg._id); }}
               />
+            )}
+
+            {/* Segment class label (non-body only) */}
+            {segClass && segClass !== 'body' && (
+              <text
+                x={sx1 + 3}
+                y={sy1 + 11}
+                className={`segment-label seg-label-${segClass}`}
+                style={{ pointerEvents: 'none' }}
+              >
+                {segClass}
+              </text>
             )}
 
             {/* Delete button on selected segment */}
@@ -468,36 +544,32 @@ export default function SegmentEditorOverlay({
         );
       })()}
 
-      {/* Line draw preview */}
-      {drawTool === 'line' && lineStart && lineEnd && (() => {
-        const dist = Math.hypot(lineEnd.x - lineStart.x, lineEnd.y - lineStart.y);
-        if (dist < 3) return null;
-        // Show the line and thin rectangle preview
-        const dx = lineEnd.x - lineStart.x;
-        const dy = lineEnd.y - lineStart.y;
-        const len = Math.hypot(dx, dy);
-        const w = 20 * scaleFactor; // preview width in display px
-        const px = (-dy / len) * (w / 2);
-        const py = (dx / len) * (w / 2);
-        const rectPts = [
-          `${lineStart.x + px},${lineStart.y + py}`,
-          `${lineEnd.x + px},${lineEnd.y + py}`,
-          `${lineEnd.x - px},${lineEnd.y - py}`,
-          `${lineStart.x - px},${lineStart.y - py}`,
-        ].join(' ');
-        return (
-          <g className="draw-line-preview">
-            <polygon points={rectPts} className="draw-line-rect" />
-            <line
-              x1={lineStart.x} y1={lineStart.y}
-              x2={lineEnd.x} y2={lineEnd.y}
-              className="draw-line-center"
-            />
-            <circle cx={lineStart.x} cy={lineStart.y} r={4} className="draw-line-endpoint" />
-            <circle cx={lineEnd.x} cy={lineEnd.y} r={4} className="draw-line-endpoint" />
-          </g>
-        );
-      })()}
+      {/* Freehand draw preview */}
+      {drawTool === 'draw' && freehandPoints.length > 1 && (
+        <polyline
+          points={freehandPoints.map((p) => `${p.x * scaleFactor},${p.y * scaleFactor}`).join(' ')}
+          className="draw-freehand-line"
+        />
+      )}
+
+      {/* Snap alignment guides */}
+      {snapGuides.map((g, i) =>
+        g.axis === 'v' ? (
+          <line
+            key={`sg-${i}`}
+            x1={g.pos * scaleFactor} y1={0}
+            x2={g.pos * scaleFactor} y2={imageHeight}
+            className="snap-guide-line"
+          />
+        ) : (
+          <line
+            key={`sg-${i}`}
+            x1={0} y1={g.pos * scaleFactor}
+            x2={imageWidth} y2={g.pos * scaleFactor}
+            className="snap-guide-line"
+          />
+        ),
+      )}
     </svg>
   );
 }

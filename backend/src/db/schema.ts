@@ -235,6 +235,8 @@ export const letters = pgTable(
     extraContentStatus: contentStatusEnum('extra_content_status').notNull().default('EMPTY'),
     extraContentVerifiedAt: timestamp('extra_content_verified_at', { withTimezone: true }),
     extraContentVerifiedBy: text('extra_content_verified_by'),
+    extraContentJobStatus: jobStatusEnum('extra_content_job_status').notNull().default('PENDING'),
+    extraContentJobError: text('extra_content_job_error'),
 
     // Photo description workflow
     photoDescription: text('photo_description'),

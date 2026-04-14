@@ -57,6 +57,7 @@ const TYPE_CATEGORIES: TypeCategory[] = [
       { value: 'metadata_failed', label: 'Metadata failed' },
       { value: 'entity_success', label: 'Entity success' },
       { value: 'entity_failed', label: 'Entity failed' },
+      { value: 'extra_content_failed', label: 'Extra content failed' },
       { value: 'batch_started', label: 'Batch started' },
       { value: 'batch_complete', label: 'Batch complete' },
       { value: 'job_max_retries', label: 'Job max retries' },

@@ -26,6 +26,8 @@ export const NOTIFICATION_TYPES = [
   // Entity extraction
   'entity_success',
   'entity_failed',
+  // Extra content transcription
+  'extra_content_failed',
   // Batch processing
   'batch_started',
   'batch_complete',
@@ -79,6 +81,7 @@ const DEFAULT_SEVERITY: Record<NotificationType, NotificationSeverity> = {
   metadata_failed: 'error',
   entity_success: 'info',
   entity_failed: 'warn',
+  extra_content_failed: 'error',
   batch_started: 'info',
   batch_complete: 'info',
   job_max_retries: 'critical',

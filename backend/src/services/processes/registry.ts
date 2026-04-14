@@ -1,6 +1,7 @@
 import { transcriptionProcess } from './transcription.js';
 import { metadataProcess } from './metadata.js';
 import { entityExtractionProcess } from './entity-extraction.js';
+import { extraContentProcess } from './extra-content.js';
 import { backgroundWorkerProcess } from './background-worker.js';
 import type { ProcessConfig, ProcessKey } from './types.js';
 import { ProcessingError } from './types.js';
@@ -24,6 +25,7 @@ function register(config: ProcessConfig<object>): void {
 register(transcriptionProcess as unknown as AnyProcessConfig);
 register(metadataProcess as unknown as AnyProcessConfig);
 register(entityExtractionProcess as unknown as AnyProcessConfig);
+register(extraContentProcess as unknown as AnyProcessConfig);
 register(backgroundWorkerProcess as unknown as AnyProcessConfig);
 
 /**

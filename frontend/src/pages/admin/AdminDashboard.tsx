@@ -818,7 +818,7 @@ export default function AdminDashboard() {
             return;
           }
         }
-        const result = await bulkTranscribe(ids);
+        const result = await bulkTranscribe(ids, !skipExisting);
         if (result.queued === 0 && result.skipped > 0) {
           const summary = result.skipReasons ? summarizeSkipReasons(result.skipReasons) : `${result.skipped} skipped`;
           showToast(`No letters processed: ${summary}`, 'error');

@@ -14,6 +14,7 @@ export type ProcessKey =
   | 'transcription'
   | 'metadata'
   | 'entity_extraction'
+  | 'extra_content'
   | 'background_worker';
 
 export type ProcessGroup = 'batch' | 'autonomous';

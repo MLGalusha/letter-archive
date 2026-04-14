@@ -23,6 +23,7 @@
     "@tiptap/extension-text": "^3.21.0",
     "@tiptap/pm": "^3.21.0",
     "@tiptap/react": "^3.21.0",
+    "polygon-clipping": "^0.15.7",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",

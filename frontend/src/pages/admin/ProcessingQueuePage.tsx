@@ -526,9 +526,34 @@ interface RecentRow extends RecentJob {
   processLabel: string;
 }
 
+interface RecentGroup {
+  letterId: string;
+  letterTitle: string;
+  collectionCode: string;
+  latestCompletedAt: string;
+  steps: RecentRow[];
+  successCount: number;
+  failedCount: number;
+  clearedCount: number;
+}
+
+function getGroupStatus(g: RecentGroup): 'SUCCESS' | 'FAILED' | 'CLEARED' {
+  if (g.failedCount > 0) return 'FAILED';
+  if (g.clearedCount === g.steps.length) return 'CLEARED';
+  return 'SUCCESS';
+}
+
+function getGroupStatusLabel(g: RecentGroup): string {
+  if (g.steps.length === 1) return g.steps[0].status;
+  if (g.failedCount > 0) return `${g.successCount}/${g.steps.length}`;
+  if (g.clearedCount === g.steps.length) return 'CLEARED';
+  return `${g.successCount}/${g.steps.length}`;
+}
+
 function RecentActivityList({ processes, onRetry }: RecentActivityListProps) {
   const [filter, setFilter] = useState<'all' | 'SUCCESS' | 'FAILED' | 'CLEARED'>('all');
   const [processFilter, setProcessFilter] = useState<'all' | ProcessKey>('all');
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const rows = useMemo<RecentRow[]>(() => {
     const out: RecentRow[] = [];
@@ -537,15 +562,58 @@ function RecentActivityList({ processes, onRetry }: RecentActivityListProps) {
         out.push({ ...r, processKey: p.key, processLabel: p.label });
       }
     }
-    out.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
     return out;
   }, [processes]);
 
-  const filtered = rows.filter(r => {
-    if (filter !== 'all' && r.status !== filter) return false;
-    if (processFilter !== 'all' && r.processKey !== processFilter) return false;
-    return true;
+  const groups = useMemo<RecentGroup[]>(() => {
+    // Apply process filter to rows before grouping
+    const applicable = processFilter === 'all'
+      ? rows
+      : rows.filter(r => r.processKey === processFilter);
+
+    const map = new Map<string, RecentRow[]>();
+    for (const r of applicable) {
+      const existing = map.get(r.letterId);
+      if (existing) existing.push(r);
+      else map.set(r.letterId, [r]);
+    }
+
+    const out: RecentGroup[] = [];
+    for (const [letterId, steps] of map) {
+      // Sort steps chronologically (oldest first)
+      steps.sort((a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime());
+      const latest = steps[steps.length - 1];
+      out.push({
+        letterId,
+        letterTitle: latest.letterTitle,
+        collectionCode: latest.collectionCode,
+        latestCompletedAt: latest.completedAt,
+        steps,
+        successCount: steps.filter(s => s.status === 'SUCCESS').length,
+        failedCount: steps.filter(s => s.status === 'FAILED').length,
+        clearedCount: steps.filter(s => s.status === 'CLEARED').length,
+      });
+    }
+
+    // Sort groups by most recent step (newest first)
+    out.sort((a, b) => new Date(b.latestCompletedAt).getTime() - new Date(a.latestCompletedAt).getTime());
+    return out;
+  }, [rows, processFilter]);
+
+  // Apply status filter to groups
+  const filtered = groups.filter(g => {
+    if (filter === 'all') return true;
+    return g.steps.some(s => s.status === filter);
   });
+
+  const toggleExpanded = useCallback((letterId: string) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(letterId)) next.delete(letterId);
+      else next.add(letterId);
+      return next;
+    });
+  }, []);
 
   if (rows.length === 0) {
     return <p className="proc-queue-empty">No recent activity.</p>;
@@ -573,32 +641,86 @@ function RecentActivityList({ processes, onRetry }: RecentActivityListProps) {
         </select>
       </div>
       <ul className="proc-recent-list">
-        {filtered.slice(0, 50).map(row => (
-          <li
-            key={`${row.letterId}-${row.processKey}-${row.completedAt}`}
-            className={`proc-recent-item proc-recent-${row.status.toLowerCase()}`}
-          >
-            <div className="proc-recent-main">
-              <Link to={`/admin/letters/${row.letterId}`}>
-                {formatDateRaw(row.letterTitle)}
-              </Link>
-              <span className="proc-recent-meta">
-                {row.processLabel} · {row.collectionCode} · {formatTimeAgo(row.completedAt)}
-              </span>
-              {row.error && <div className="proc-recent-error">{row.error}</div>}
-            </div>
-            <div className="proc-recent-actions">
-              <span className={`proc-status-pill proc-status-${row.status.toLowerCase()}`}>
-                {row.status}
-              </span>
-              {row.status === 'FAILED' && (
-                <Button size="sm" onClick={() => onRetry(row.processKey, row.letterId)}>
-                  Retry
-                </Button>
+        {filtered.slice(0, 50).map(group => {
+          const isExpanded = expandedIds.has(group.letterId);
+          const groupStatus = getGroupStatus(group);
+          const isSingleStep = group.steps.length === 1;
+
+          return (
+            <li
+              key={group.letterId}
+              className={`proc-recent-group proc-recent-${groupStatus.toLowerCase()}`}
+            >
+              <div
+                className={`proc-recent-item proc-recent-group-header${!isSingleStep ? ' proc-recent-expandable' : ''}`}
+                onClick={!isSingleStep ? () => toggleExpanded(group.letterId) : undefined}
+              >
+                <div className="proc-recent-main">
+                  <Link
+                    to={`/admin/letters/${group.letterId}`}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {formatDateRaw(group.letterTitle)}
+                  </Link>
+                  <span className="proc-recent-meta">
+                    {isSingleStep ? `${group.steps[0].processLabel} · ` : ''}
+                    {group.collectionCode} · {formatTimeAgo(group.latestCompletedAt)}
+                  </span>
+                  {isSingleStep && group.steps[0].error && (
+                    <div className="proc-recent-error">{group.steps[0].error}</div>
+                  )}
+                </div>
+                <div className="proc-recent-actions">
+                  <span className={`proc-status-pill proc-status-${groupStatus.toLowerCase()}`}>
+                    {getGroupStatusLabel(group)}
+                  </span>
+                  {isSingleStep && group.steps[0].status === 'FAILED' && (
+                    <Button
+                      size="sm"
+                      onClick={e => { e.stopPropagation(); onRetry(group.steps[0].processKey, group.letterId); }}
+                    >
+                      Retry
+                    </Button>
+                  )}
+                  {!isSingleStep && (
+                    <span className={`proc-recent-chevron${isExpanded ? ' proc-recent-chevron-open' : ''}`}>
+                      &#9656;
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {isExpanded && !isSingleStep && (
+                <ul className="proc-recent-steps">
+                  {group.steps
+                    .filter(s => processFilter === 'all' || s.processKey === processFilter)
+                    .map(step => (
+                    <li
+                      key={`${step.processKey}-${step.completedAt}`}
+                      className={`proc-recent-step proc-recent-${step.status.toLowerCase()}`}
+                    >
+                      <div className="proc-recent-main">
+                        <span className="proc-recent-step-label">{step.processLabel}</span>
+                        <span className="proc-recent-meta">{formatTimeAgo(step.completedAt)}</span>
+                        {step.error && <div className="proc-recent-error">{step.error}</div>}
+                      </div>
+                      <div className="proc-recent-actions">
+                        <span className={`proc-status-pill proc-status-${step.status.toLowerCase()}`}>
+                          {step.status}
+                        </span>
+                        {step.status === 'FAILED' && (
+                          <Button size="sm" onClick={() => onRetry(step.processKey, step.letterId)}>
+                            Retry
+                          </Button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               )}
-            </div>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

@@ -25,7 +25,7 @@ import {
   type BulkUpdateFieldsResult,
 } from './shared.js';
 
-export async function bulkTranscribe(letterIds: string[]): Promise<BulkResult> {
+export async function bulkTranscribe(letterIds: string[], overwrite = false): Promise<BulkResult> {
   log.info({ requestedCount: letterIds.length }, 'Bulk transcribe request received');
 
   const allRequested = await db.query.letters.findMany({
@@ -48,7 +48,7 @@ export async function bulkTranscribe(letterIds: string[]): Promise<BulkResult> {
   for (const letter of allRequested) {
     if (!isTranscribableType(letter.type)) {
       skipReasons.push({ letterId: letter.id, reason: `Type '${letter.type}' is not transcribable` });
-    } else if (letter.workflow !== 'UPLOADED') {
+    } else if (letter.workflow !== 'UPLOADED' && !overwrite) {
       skipReasons.push({ letterId: letter.id, reason: `Already past upload stage (workflow: ${letter.workflow})` });
     } else if (letter.pages.length === 0) {
       skipReasons.push({ letterId: letter.id, reason: 'No page images uploaded' });
@@ -62,6 +62,19 @@ export async function bulkTranscribe(letterIds: string[]): Promise<BulkResult> {
   if (eligible.length === 0) {
     log.info({ skipped: skipReasons.length }, 'Bulk transcribe: no eligible letters');
     return { queued: 0, skipped: skipReasons.length, skipReasons, processing: false };
+  }
+
+  if (overwrite) {
+    const needsReset = eligible.filter(l => l.workflow !== 'UPLOADED').map(l => l.id);
+    if (needsReset.length > 0) {
+      await db.update(letters).set({
+        workflow: 'UPLOADED',
+        transcriptionError: null,
+        transcriptionAttemptCount: 0,
+        deadLetter: false,
+        updatedAt: new Date(),
+      }).where(inArray(letters.id, needsReset));
+    }
   }
 
   await db.update(letters).set({
@@ -204,6 +217,8 @@ export async function bulkClearTranscriptions(letterIds: string[]): Promise<Bulk
     extraContentStatus: 'EMPTY',
     extraContentVerifiedAt: null,
     extraContentVerifiedBy: null,
+    extraContentJobStatus: 'FAILED' as const,
+    extraContentJobError: 'Cleared by admin',
     metadataStatus: 'FAILED',
     metadataError: 'Cleared by admin',
     metadataAttemptCount: 0,

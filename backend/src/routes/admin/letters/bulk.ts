@@ -28,10 +28,15 @@ const bulkContentVisibilitySchema = z.object({
 
 const router = Router();
 
+const bulkTranscribeSchema = z.object({
+  letterIds: z.array(z.string().uuid()).min(1),
+  overwrite: z.boolean().optional().default(false),
+});
+
 router.post('/transcribe', async (req, res, next) => {
   try {
-    const { letterIds } = parseOrThrow(bulkLetterIdsSchema, req.body, 'Invalid request');
-    const result = await bulkTranscribe(letterIds);
+    const { letterIds, overwrite } = parseOrThrow(bulkTranscribeSchema, req.body, 'Invalid request');
+    const result = await bulkTranscribe(letterIds, overwrite);
     res.json(result);
   } catch (error) {
     next(error);

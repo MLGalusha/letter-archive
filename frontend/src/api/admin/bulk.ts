@@ -19,8 +19,8 @@ export interface BulkFieldUpdate {
   recipient?: string;
 }
 
-export async function bulkTranscribe(letterIds: string[]): Promise<BulkProcessResponse> {
-  return apiPost<BulkProcessResponse>("/admin/letters/bulk/transcribe", { letterIds });
+export async function bulkTranscribe(letterIds: string[], overwrite = false): Promise<BulkProcessResponse> {
+  return apiPost<BulkProcessResponse>("/admin/letters/bulk/transcribe", { letterIds, overwrite });
 }
 
 export async function bulkExtractMetadata(

@@ -2,6 +2,7 @@ import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { db, letters } from '../../db/index.js';
 import { processLetter, processMetadata } from '../../pipeline/processor.js';
 import { runEntityExtractionOnly } from '../../pipeline/metadataV2.js';
+import { transcribeExtras } from '../letter/regeneration.js';
 import { createLogger } from '../../utils/logger.js';
 import { notify } from '../notifications.js';
 import { allOf } from './filter-helpers.js';
@@ -26,14 +27,16 @@ const log = createLogger({ module: 'letter-process-helpers' });
 export type LetterStatusColumn =
   | 'transcriptionStatus'
   | 'metadataStatus'
-  | 'entityExtractionStatus';
+  | 'entityExtractionStatus'
+  | 'extraContentJobStatus';
 
 export type LetterErrorColumn =
   | 'transcriptionError'
   | 'metadataError'
-  | 'entityExtractionError';
+  | 'entityExtractionError'
+  | 'extraContentJobError';
 
-export type PipelineKind = 'transcription' | 'metadata' | 'entity_extraction';
+export type PipelineKind = 'transcription' | 'metadata' | 'entity_extraction' | 'extra_content';
 
 export interface LetterProcessSpec {
   processKey: PipelineKind;
@@ -45,7 +48,7 @@ export interface LetterProcessSpec {
   /** Pipeline function to invoke per letter. */
   runOne(letterId: string): Promise<void>;
   /** Notification type emitted on per-job failure. */
-  failedNotificationType: 'transcription_failed' | 'metadata_failed' | 'entity_failed';
+  failedNotificationType: 'transcription_failed' | 'metadata_failed' | 'entity_failed' | 'extra_content_failed';
 }
 
 export const letterProcessSpecs: Record<PipelineKind, LetterProcessSpec> = {
@@ -75,6 +78,15 @@ export const letterProcessSpecs: Record<PipelineKind, LetterProcessSpec> = {
     retryWorkflow: undefined,
     runOne: (id) => runEntityExtractionOnly(id),
     failedNotificationType: 'entity_failed',
+  },
+  extra_content: {
+    processKey: 'extra_content',
+    label: 'Extra content transcription',
+    statusColumn: 'extraContentJobStatus',
+    errorColumn: 'extraContentJobError',
+    retryWorkflow: undefined,
+    runOne: async (id) => { await transcribeExtras(id); },
+    failedNotificationType: 'extra_content_failed',
   },
 };
 

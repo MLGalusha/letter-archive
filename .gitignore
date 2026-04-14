@@ -72,3 +72,5 @@ backend/test-line-overlay.png
 # Claude
 CLAUDE.md
 .claude/
+AGENTS.md
+docs/refactors/

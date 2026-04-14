@@ -219,17 +219,18 @@ describe('LineReviewMode', () => {
     expect(container.querySelector('.line-review-progress')).toBeTruthy();
   });
 
-  it('shows exit hint with Esc key', async () => {
+  it('renders an explicit close button', async () => {
     render(<LineReviewMode {...defaultProps} />);
     await flushEffects();
-    expect(screen.getByText(/to exit/)).toBeTruthy();
+
+    expect(screen.getByRole('button', { name: 'Exit review mode' })).toBeTruthy();
   });
 
-  it('calls onExit when Escape is pressed', async () => {
+  it('calls onExit when the close button is pressed', async () => {
     const { container } = render(<LineReviewMode {...defaultProps} />);
     await simulateImageLoadAsync(container);
 
-    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'Exit review mode' }));
     expect(defaultProps.onExit).toHaveBeenCalled();
   });
 

@@ -337,7 +337,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const segmentEditor = useSegmentEditor(currentKrakenSegments);
 
   // Sync segment editor when source segments change (page switch or redetect)
-  const lastSourceRef = useRef(currentKrakenSegments);
+  const lastSourceRef = useRef<LineSegment[] | undefined>(currentKrakenSegments);
   useEffect(() => {
     if (currentKrakenSegments !== lastSourceRef.current) {
       lastSourceRef.current = currentKrakenSegments;
@@ -814,7 +814,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       // Update lastSourceRef BEFORE mutating the map so the sync effect
       // doesn't treat our own save as an external change and reset selection.
       const nextKraken = { ...krakenSegmentsMap, [currentLetterPageIndex]: segments };
-      lastSourceRef.current = nextKraken[currentLetterPageIndex];
+      lastSourceRef.current = nextKraken[currentLetterPageIndex] ?? [];
       setKrakenSegmentsMap(nextKraken);
       setAiSegmentsMap(prev => ({ ...prev, [currentLetterPageIndex]: segments }));
       segmentEditor.markSaved();
@@ -1636,7 +1636,13 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             scaleFactor={scaleFactor}
             imageWidth={imageDisplaySize.width}
             imageHeight={displayedImageHeight}
-            onSelect={mappingActive ? handleMappingClick : segmentEditor.selectSegment}
+            onSelect={
+              mappingActive
+                ? (id) => {
+                  if (id) handleMappingClick(id);
+                }
+                : segmentEditor.selectSegment
+            }
             onResize={segmentEditor.resizeSegment}
             onResizeStart={segmentEditor.snapshotForUndo}
             onDelete={segmentEditor.deleteSegment}

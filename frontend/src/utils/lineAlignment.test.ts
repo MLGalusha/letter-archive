@@ -40,14 +40,15 @@ describe('alignTranscriptToVisualLines', () => {
       segments,
     );
 
-    expect(aligned).toHaveLength(2);
-    expect(aligned[0].bbox[1]).toBe(80);
-    expect(aligned[0].words?.map((word) => word.text)).toEqual([
+    expect(aligned).toHaveLength(3);
+    expect(aligned[0].transcriptText).toBe('');
+    expect(aligned[1].bbox[1]).toBe(80);
+    expect(aligned[1].words?.map((word) => word.text)).toEqual([
       'Hello',
       'Again',
       'Darling',
     ]);
-    expect(aligned[1].bbox[1]).toBe(120);
+    expect(aligned[2].bbox[1]).toBe(120);
   });
 
   it('drops detached ghost runs inside an accepted segment', () => {

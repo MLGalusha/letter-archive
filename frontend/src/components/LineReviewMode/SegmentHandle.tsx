@@ -9,7 +9,7 @@ interface SegmentHandleProps {
   onResizeStart?: () => void;
 }
 
-type HandlePosition = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+type HandlePosition = 'n' | 's';
 
 const HANDLE_SIZE = 8;
 const HALF = HANDLE_SIZE / 2;
@@ -18,16 +18,9 @@ function getHandlePositions(
   x1: number, y1: number, x2: number, y2: number,
 ): Record<HandlePosition, { cx: number; cy: number; cursor: string }> {
   const mx = (x1 + x2) / 2;
-  const my = (y1 + y2) / 2;
   return {
-    nw: { cx: x1, cy: y1, cursor: 'nwse-resize' },
-    n:  { cx: mx, cy: y1, cursor: 'ns-resize' },
-    ne: { cx: x2, cy: y1, cursor: 'nesw-resize' },
-    e:  { cx: x2, cy: my, cursor: 'ew-resize' },
-    se: { cx: x2, cy: y2, cursor: 'nwse-resize' },
-    s:  { cx: mx, cy: y2, cursor: 'ns-resize' },
-    sw: { cx: x1, cy: y2, cursor: 'nesw-resize' },
-    w:  { cx: x1, cy: my, cursor: 'ew-resize' },
+    n: { cx: mx, cy: y1, cursor: 'ns-resize' },
+    s: { cx: mx, cy: y2, cursor: 'ns-resize' },
   };
 }
 
@@ -68,22 +61,17 @@ export default function SegmentHandle({ bbox, scaleFactor, onResize, onResizeSta
     (e: React.PointerEvent) => {
       if (!dragRef.current) return;
       e.stopPropagation();
-      const { handle, startX, startY, origBbox } = dragRef.current;
-      const dx = (e.clientX - startX) / scaleFactor;
+      const { handle, startY, origBbox } = dragRef.current;
       const dy = (e.clientY - startY) / scaleFactor;
 
       const newBbox: [number, number, number, number] = [...origBbox];
 
       // Adjust edges based on handle position
-      if (handle.includes('w')) newBbox[0] = origBbox[0] + dx;
       if (handle.includes('n')) newBbox[1] = origBbox[1] + dy;
-      if (handle.includes('e')) newBbox[2] = origBbox[2] + dx;
       if (handle.includes('s')) newBbox[3] = origBbox[3] + dy;
       // For single-axis handles
       if (handle === 'n') { newBbox[0] = origBbox[0]; newBbox[2] = origBbox[2]; }
       if (handle === 's') { newBbox[0] = origBbox[0]; newBbox[2] = origBbox[2]; }
-      if (handle === 'w') { newBbox[1] = origBbox[1]; newBbox[3] = origBbox[3]; }
-      if (handle === 'e') { newBbox[1] = origBbox[1]; newBbox[3] = origBbox[3]; }
 
       // Allow flipping: if edges cross, swap them so the bbox stays valid
       if (newBbox[2] < newBbox[0]) {

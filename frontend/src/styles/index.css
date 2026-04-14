@@ -31,6 +31,11 @@ body {
   color: var(--text-muted);
   margin: 0;
   overflow-x: hidden;
+  /* Belt-and-suspenders for iOS Safari/Chrome: html already has this but
+     iOS has historically been inconsistent about honoring it on html alone.
+     Prevents the sticky header from drifting above the viewport when the
+     document rubber-bands on overscroll. */
+  overscroll-behavior-y: none;
 }
 
 /* Button reset - no layout properties */

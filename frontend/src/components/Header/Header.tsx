@@ -1,6 +1,6 @@
 import "./Header.css";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useHeaderDock } from "../../contexts/HeaderDockContext";
 import useScrollDirection from "../../hooks/useScrollDirection";
 import { prefetchCollections } from "../../api/collections";
@@ -33,8 +33,14 @@ export default memo(function Header() {
     preloadCollectionsRoute();
   }, []);
 
-  // Measure active nav item and position the sliding indicator
-  useLayoutEffect(() => {
+  // Measure active nav item and position the sliding indicator.
+  // Uses a stable measure() callback driven by multiple triggers:
+  //  - pathname / collectionsLink changes (synchronous via useLayoutEffect)
+  //  - nav box resizing (ResizeObserver — handles window resize, orientation,
+  //    dock expand/collapse, and any layout shift that changes nav width)
+  //  - web fonts finishing loading (document.fonts.ready — Playfair Display
+  //    swap-in changes .page-selector widths after first paint)
+  const measureIndicator = useCallback(() => {
     const nav = navRef.current;
     if (!nav) return;
     const active = nav.querySelector<HTMLElement>('.page-selector.active');
@@ -45,7 +51,37 @@ export default memo(function Header() {
       left: activeRect.left - navRect.left + activeRect.width * 0.2,
       width: activeRect.width * 0.6,
     });
-  }, [location.pathname, dock.collectionsLink]);
+  }, []);
+
+  useLayoutEffect(() => {
+    measureIndicator();
+  }, [measureIndicator, location.pathname, dock.collectionsLink]);
+
+  // Re-measure whenever the nav's own box changes (resize, dock collapse,
+  // font swap, orientation change, etc). This is the main fix for the
+  // "indicator stuck between tabs" bug.
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measureIndicator());
+    ro.observe(nav);
+    // Also observe each page-selector so font-driven width changes on any
+    // one of them trigger a re-measure even if the nav's total width didn't
+    // change (e.g. active item grew, another shrank by the same amount).
+    nav.querySelectorAll<HTMLElement>('.page-selector').forEach((el) => ro.observe(el));
+    return () => ro.disconnect();
+  }, [measureIndicator, dock.collectionsLink]);
+
+  // Belt-and-suspenders: re-measure after web fonts settle. Playfair Display
+  // / any swapped font can change widths after the initial layout effect ran.
+  useEffect(() => {
+    if (typeof document === 'undefined' || !document.fonts?.ready) return;
+    let cancelled = false;
+    document.fonts.ready.then(() => {
+      if (!cancelled) measureIndicator();
+    });
+    return () => { cancelled = true; };
+  }, [measureIndicator]);
 
   const headerClass = [
     "header",

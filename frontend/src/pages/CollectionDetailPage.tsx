@@ -35,7 +35,26 @@ export default function CollectionDetailPage() {
   const { setDock } = useHeaderDock();
   const collectionScrubberProps = useCollectionScrubber(collectionCode);
   const isMobile = useIsMobile(640);
+  const isHeaderMobile = useIsMobile(900);
   const isTouchDevice = useIsTouchDevice();
+
+  // Track whether the page is scrolled near the top. On mobile we collapse
+  // the header scrubber once the user starts scrolling down so the header
+  // reclaims its compact height; scrolling back to the top restores it.
+  const [atTop, setAtTop] = useState(() =>
+    typeof window === 'undefined' ? true : window.scrollY <= 8,
+  );
+  useEffect(() => {
+    // Hysteresis: collapse past 16px, restore only at <=4px. Prevents flicker
+    // at the boundary when the dock itself resizes the header.
+    const onScroll = () => {
+      const y = window.scrollY;
+      setAtTop((prev) => (prev ? y <= 16 : y <= 4));
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
   const adjacentCollections = useAdjacentCollections(collectionCode);
 
   const { ref: swipeRef, offset: swipeOffset, isSwiping, isAnimating } = useSwipeNavigation({
@@ -154,6 +173,22 @@ export default function CollectionDetailPage() {
   }), []);
 
   useEffect(() => {
+    // On mobile, once the user scrolls away from the top, collapse the
+    // scrubber so the header shrinks back to its compact size. Desktop and
+    // "at top" mobile behave exactly as before.
+    const collapseScrubber = isHeaderMobile && !atTop;
+
+    if (collapseScrubber) {
+      setDock({
+        content: null,
+        active: false,
+        visible: false,
+        showTitle: true,
+        collectionsLink: collectionsLinkOverride,
+      });
+      return;
+    }
+
     if (collectionScrubberProps) {
       setDock({
         content: <HeaderScrubber {...collectionScrubberProps} />,
@@ -179,6 +214,8 @@ export default function CollectionDetailPage() {
     collectionsLinkOverride,
     loading,
     setDock,
+    isHeaderMobile,
+    atTop,
   ]);
 
   useEffect(() => () => setDock(EMPTY_DOCK), [setDock]);

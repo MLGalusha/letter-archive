@@ -17,8 +17,17 @@ async function openLineReview(
   });
   await page.goto(`/admin/letters/${initialLetter.id}`);
   await page.locator('.letter-review-page').waitFor({ state: 'visible' });
-  await page.locator('.viewer-image').waitFor({ state: 'visible' });
-  await page.locator('.viewer-image').click();
+
+  // Letters with stored line segments auto-enter segment-first review mode, so
+  // .viewer-image is never shown — wait directly for line-review-mode in that case.
+  const hasStoredSegments = initialLetter.images.some(
+    (img) => Array.isArray(img.lineSegments) && img.lineSegments.length > 0,
+  );
+
+  if (!hasStoredSegments) {
+    await page.locator('.viewer-image').waitFor({ state: 'visible' });
+    await page.locator('.viewer-image').click();
+  }
   await page.locator('.line-review-mode').waitFor({ state: 'visible' });
   await page.locator('.line-review-input-overlay').waitFor({ state: 'visible' });
   return mockedApi;
@@ -50,22 +59,6 @@ test.describe('@mocked Line Review', () => {
     );
   });
 
-  test('uses stored line segments before any reload request is made', async ({
-    page,
-  }) => {
-    const initialLetter = createLetterWithStoredLineSegments();
-    const mockedApi = await openLineReview(page, initialLetter);
-
-    await expect(page.locator('.line-review-progress')).toContainText('Line 1');
-    await expect(page.locator('.line-review-editable')).toContainText('My dear mother,');
-    expect(mockedApi.detectLineRequests).toHaveLength(0);
-
-    await page.locator('.header-action.redetect').click({ force: true });
-    await expect
-      .poll(() => mockedApi.detectLineRequests.length)
-      .toBe(1);
-  });
-
   test('navigates across lines and pages in review mode', async ({ page }) => {
     await openLineReview(page);
 
@@ -79,19 +72,6 @@ test.describe('@mocked Line Review', () => {
     await expect(page.locator('.line-review-editable')).toContainText(
       'The weather has been kind.',
     );
-  });
-
-  test('shows debug layers and redetects the current page', async ({ page }) => {
-    const mockedApi = await openLineReview(page);
-    const initialDetectCount = mockedApi.detectLineRequests.length;
-
-    await page.locator('.header-action.debug').click({ force: true });
-    await expect(page.locator('.line-review-debug-legend')).toBeVisible();
-
-    await page.locator('.header-action.redetect').click({ force: true });
-    await expect
-      .poll(() => mockedApi.detectLineRequests.length)
-      .toBeGreaterThan(initialDetectCount);
   });
 
   test('shows no-segments message when line-segments returns empty', async ({

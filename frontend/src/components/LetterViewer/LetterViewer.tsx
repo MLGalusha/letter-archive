@@ -279,6 +279,24 @@ const LetterViewer = memo(function LetterViewer({
   // ZOOM HELPERS
   // ============================================================================
 
+  // Clamp pan so the zoomed image never exposes empty space beyond its edges
+  const clampPosition = useCallback((pos: { x: number; y: number }, zoom: number) => {
+    const img = imageRef.current;
+    const container = imageContainerRef.current;
+    if (!img || !container) return pos;
+    const iw = img.clientWidth;
+    const ih = img.clientHeight;
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+    if (iw === 0 || ih === 0) return pos;
+    const maxX = Math.max(0, (zoom * iw - cw) / 2);
+    const maxY = Math.max(0, (zoom * ih - ch) / 2);
+    return {
+      x: Math.max(-maxX, Math.min(maxX, pos.x)),
+      y: Math.max(-maxY, Math.min(maxY, pos.y)),
+    };
+  }, []);
+
   // Apply zoom while maintaining view center
   const applyZoom = useCallback((newScale: number, animate: boolean) => {
     const clampedScale = Math.min(Math.max(MIN_SCALE, newScale), MAX_SCALE);
@@ -292,10 +310,10 @@ const LetterViewer = memo(function LetterViewer({
     const oldScale = scaleRef.current;
     if (oldScale !== clampedScale) {
       const ratio = clampedScale / oldScale;
-      setPosition((prev) => ({
+      setPosition((prev) => clampPosition({
         x: prev.x * ratio,
         y: prev.y * ratio,
-      }));
+      }, clampedScale));
     }
 
     setScale(clampedScale);
@@ -304,7 +322,7 @@ const LetterViewer = memo(function LetterViewer({
     if (clampedScale === 1) {
       setPosition({ x: 0, y: 0 });
     }
-  }, []);
+  }, [clampPosition]);
 
   // ============================================================================
   // SLIDER HANDLERS
@@ -424,10 +442,10 @@ const LetterViewer = memo(function LetterViewer({
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isDragging) return;
 
-    setPosition({
+    setPosition(clampPosition({
       x: e.clientX - dragStart.x,
       y: e.clientY - dragStart.y,
-    });
+    }, scaleRef.current));
   };
 
   const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -587,10 +605,10 @@ const LetterViewer = memo(function LetterViewer({
         const scaleChange = newScale / prevScale;
 
         setScale(newScale);
-        setPosition((prev) => ({
+        setPosition((prev) => clampPosition({
           x: cx - scaleChange * (cx - prev.x),
           y: cy - scaleChange * (cy - prev.y),
-        }));
+        }, newScale));
 
         if (newScale === 1) {
           setPosition({ x: 0, y: 0 });
@@ -598,10 +616,10 @@ const LetterViewer = memo(function LetterViewer({
       } else if (e.touches.length === 1 && ts.panStart && !ts.isPinching) {
         e.preventDefault();
         const touch = e.touches[0];
-        setPosition({
+        setPosition(clampPosition({
           x: touch.clientX - ts.panStart.x,
           y: touch.clientY - ts.panStart.y,
-        });
+        }, scaleRef.current));
       } else if (e.touches.length === 1 && ts.swipeActive && !ts.isPinching) {
         // Lightbox swipe-to-navigate at scale 1
         const touch = e.touches[0];
@@ -684,7 +702,7 @@ const LetterViewer = memo(function LetterViewer({
       container.removeEventListener('touchmove', onTouchMove);
       container.removeEventListener('touchend', onTouchEnd);
     };
-  }, [variant, applyZoom]);
+  }, [variant, applyZoom, clampPosition]);
 
   // ============================================================================
   // LIGHTBOX: DOUBLE-CLICK ZOOM + MINIMAP

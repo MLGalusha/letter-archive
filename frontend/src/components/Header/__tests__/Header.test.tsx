@@ -1,13 +1,13 @@
-import { useEffect } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import Header from "../Header";
-import { HeaderDockProvider, useHeaderDock } from "../../../contexts/HeaderDockContext";
+import HeaderDock from "../HeaderDock";
+import { HeaderDockProvider } from "../../../contexts/HeaderDockContext";
 
-vi.mock("../../../hooks/useScrollDirection", () => ({
-  default: () => true, // always visible
+vi.mock("../../../hooks/useHeaderScroll", () => ({
+  default: () => ({ visible: true, atTop: true }),
 }));
 
 vi.mock("../../../api/collections", () => ({
@@ -101,7 +101,6 @@ describe("Header", () => {
     const nav = container.querySelector("nav");
     expect(nav).toHaveClass("open");
 
-    // Click a nav link
     await user.click(screen.getByText("Journal"));
 
     expect(nav).not.toHaveClass("open");
@@ -140,31 +139,19 @@ describe("Header", () => {
     expect(skipLink).toHaveClass("skip-link");
   });
 
-  it("dock content renders when provided via context", () => {
+  it("dock content renders when provided via HeaderDock", async () => {
     render(
       <MemoryRouter>
         <HeaderDockProvider>
-          <DockSetter content={<span>Dock Content Here</span>} />
           <Header />
+          <HeaderDock>
+            <span>Dock Content Here</span>
+          </HeaderDock>
         </HeaderDockProvider>
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Dock Content Here")).toBeInTheDocument();
+    // Portal lands in the slot once it registers (synchronous in tests).
+    expect(await screen.findByText("Dock Content Here")).toBeInTheDocument();
   });
 });
-
-/** Helper component that sets dock state from inside the provider tree */
-function DockSetter({ content }: { content: React.ReactNode }) {
-  const { setDock } = useHeaderDock();
-
-  useEffect(() => {
-    setDock({
-      content,
-      active: true,
-      visible: true,
-    });
-  }, []);
-
-  return null;
-}

@@ -892,8 +892,52 @@
     border-radius: 16px;
   }
 
+  /* Mobile: Claude-style "input bubble" — search on top, filter/sort row below */
   .search-input-wrapper-compact {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+    padding: 0.65rem 0.75rem 0.6rem;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(217, 207, 191, 0.95);
+    border-radius: 22px;
+    transition: border-color 0.2s ease, background 0.2s ease;
+    cursor: text;
+  }
+
+  .search-input-wrapper-compact:focus-within {
+    border-color: rgb(31, 109, 122);
+    background: rgba(255, 255, 255, 0.98);
+  }
+
+  .search-input-wrapper-compact .search-input {
+    padding: 0.35rem 0.35rem 0.15rem;
+    border: none;
+    background: transparent;
+    border-radius: 0;
+  }
+
+  .search-input-wrapper-compact .search-input:focus {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .search-input-wrapper-compact .search-compact-filter-wrap {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .search-input-wrapper-compact .filter-toggle,
+  .search-input-wrapper-compact .search-sort-trigger {
+    border: none;
+    background: transparent;
+  }
+
+  .search-input-wrapper-compact .filter-toggle:hover,
+  .search-input-wrapper-compact .search-sort-trigger:hover,
+  .search-input-wrapper-compact .filter-toggle.active {
+    border: none;
+    background: rgba(31, 109, 122, 0.08);
   }
 
   .search-compact-flyout {

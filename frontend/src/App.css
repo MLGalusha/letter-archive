@@ -11,9 +11,8 @@ html, body {
   position: relative;
 }
 
-/* overflow-x: clip on body-layout (not main-page-layout) to avoid breaking
-   position: sticky on the header — iOS Safari treats overflow-clip ancestors
-   as scroll containers, which disables sticky positioning. */
+/* Header is now position: fixed, not sticky, so overflow-clip is safe
+   anywhere — it no longer breaks sticky-ancestor rules. */
 .main-page-layout .body-layout,
 .public-letter-shell {
   overflow-x: clip;
@@ -21,6 +20,14 @@ html, body {
 
 .public-site-shell,
 .public-letter-shell {
+  /* Fixed-header clearance. Pages that use .body-layout pad their top
+     content by this amount; pages that deliberately scroll under the
+     header (letter detail) ignore it. Mobile is tuned for the shorter
+     header card; desktop has a taller one with the brand text.
+     Header.tsx dynamically overrides this with the real measured height
+     once the dock content is present, so pages with a scrubber reserve
+     enough space for the fully-expanded header. */
+  --header-height: 5.5rem;
   --bg-dark: #eee2cf;
   --bg: #f5ede1;
   --bg-light: #fffaf2;
@@ -72,7 +79,10 @@ html, body {
 .body-layout {
   width: min(100%, 1180px);
   margin: 0 auto;
-  padding: 1.8rem calc(1.5rem + env(safe-area-inset-right, 0px)) calc(4rem + env(safe-area-inset-bottom, 0px)) calc(1.5rem + env(safe-area-inset-left, 0px));
+  padding-top: calc(1.8rem + var(--header-height));
+  padding-right: calc(1.5rem + env(safe-area-inset-right, 0px));
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+  padding-left: calc(1.5rem + env(safe-area-inset-left, 0px));
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
@@ -132,9 +142,20 @@ html, body {
   color: #8c3f35;
 }
 
+@media (max-width: 900px) {
+  .public-site-shell,
+  .public-letter-shell {
+    /* Shorter header card on mobile (no brand text). */
+    --header-height: 4.75rem;
+  }
+}
+
 @media (max-width: 720px) {
   .body-layout {
-    padding: 1.2rem calc(1rem + env(safe-area-inset-right, 0px)) calc(3rem + env(safe-area-inset-bottom, 0px)) calc(1rem + env(safe-area-inset-left, 0px));
+    padding-top: calc(1.2rem + var(--header-height));
+    padding-right: calc(1rem + env(safe-area-inset-right, 0px));
+    padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px));
+    padding-left: calc(1rem + env(safe-area-inset-left, 0px));
     gap: 1.6rem;
   }
 

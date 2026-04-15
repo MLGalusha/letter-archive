@@ -25,12 +25,36 @@
   z-index: 100;
 }
 
+/* ── Core header ───────────────────────────────────────────
+   position: fixed (not sticky). Sticky interacts poorly with
+   the iOS address bar resizing on scroll — the header drifts
+   sub-pixel as the browser chrome shrinks. Fixed kills that.
+   The body-layout spacer (App.css) reserves content clearance.
+   ────────────────────────────────────────────────────────── */
 .header {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 50;
   padding: calc(1rem + env(safe-area-inset-top, 0px)) calc(1.25rem + env(safe-area-inset-right, 0px)) 0 calc(1.25rem + env(safe-area-inset-left, 0px));
   background: linear-gradient(to bottom, var(--bg, #f5ede1) calc(100% - 28px), transparent calc(100% - 28px));
+  /* Hide/reveal transform. Pages in transparent mode are meant to let
+     content scroll under the header, so we animate the inner card only. */
+  transition: transform 0.25s ease;
+  will-change: transform;
+}
+
+/* Letter-detail: transparent so the hero photo extends under the header. */
+.header--transparent {
+  background: transparent;
+}
+
+/* Hide: slide the whole bar up. On transparent pages we still hide the
+   inner card only so the blur/background remains consistent. */
+.header--hidden {
+  transform: translateY(calc(-100% - 1rem));
+  pointer-events: none;
 }
 
 .header-inner {
@@ -65,75 +89,7 @@
   gap: 0.15rem;
   color: var(--text);
   text-decoration: none;
-  transition: opacity 0.22s ease, transform 0.28s ease;
-}
-
-/* Default dock behavior: title hides, dock overlays (homepage search) */
-.header-brand-slot.has-active-dock .main-title {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: translateY(-0.35rem);
-}
-
-/* show-title mode: title stays visible alongside dock (letter detail) */
-.header-brand-slot.show-title .main-title {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: none;
   flex-shrink: 0;
-}
-
-.header-brand-slot.has-active-dock {
-  z-index: 2;
-}
-
-.header-brand-slot.has-active-dock .main-title * {
-  pointer-events: none;
-}
-
-.header-brand-slot.show-title .main-title * {
-  pointer-events: auto;
-}
-
-/* Default dock: absolute overlay (homepage) */
-.header-dock {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  width: 100%;
-  min-width: 0;
-  overflow: visible;
-  z-index: 3;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-0.35rem);
-  transition: opacity 0.22s ease, transform 0.28s ease;
-}
-
-.header-dock > * {
-  width: 100%;
-  min-width: 0;
-}
-
-.header-dock.is-active {
-  pointer-events: auto;
-}
-
-.header-dock.is-active.is-visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-/* show-title mode: dock flows inline next to title */
-.header-brand-slot.show-title .header-dock {
-  position: static;
-  flex: 1 1 auto;
-  transform: none;
-  z-index: auto;
-  min-height: 1.7rem;
 }
 
 .main-title-label {
@@ -153,6 +109,60 @@
   white-space: nowrap;
 }
 
+/* ── Dock region / slot ────────────────────────────────────
+   The slot is an empty div rendered by Header into which
+   <HeaderDock> pages portal their content. The region wraps
+   the slot so we can drive the collapse animation without
+   touching the slot's ref (keeps portal children stable).
+   ────────────────────────────────────────────────────────── */
+.header-dock-region {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Modern "animate to content height" trick: grid with 1fr ↔ 0fr
+     interpolates the intrinsic row height smoothly. Beats max-height
+     because we don't need to guess/clamp the dock height. */
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.28s ease, opacity 0.22s ease;
+  opacity: 1;
+}
+
+.header-dock-slot {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.header-dock-slot > * {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Collapsed: row goes to 0fr, opacity fades. */
+.header--dock-collapsed .header-dock-region {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* While the header is off-screen, kill the collapse transition so
+   state flips (e.g. scrollY crossing the atTop threshold) happen
+   instantly behind the curtain. When the header slides back in,
+   it's already in the right state — no animation mid-flight. */
+.header--hidden .header-dock-region {
+  transition: none;
+}
+
+/* Desktop: we do NOT collapse the dock with scroll (scope: mobile-only).
+   Use min-width to gate the class effect. */
+@media (min-width: 901px) {
+  .header--dock-collapsed .header-dock-region {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 .nav {
   position: relative;
   justify-self: end;
@@ -161,44 +171,6 @@
   gap: 0.35rem;
   flex-shrink: 0;
   min-width: max-content;
-}
-
-.header-dock .search,
-.header-dock .search-compact {
-  width: 100%;
-  min-width: 0;
-}
-
-.header-dock .search-input-wrapper-compact {
-  width: 100%;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.6rem;
-}
-
-.header-dock .search-input {
-  padding: 0.55rem 0.85rem;
-  /* 16px minimum prevents iOS Safari auto-zoom on focus */
-  font-size: 1rem;
-  border-radius: 16px;
-}
-
-.header-dock .search-compact-filter-toggle,
-.header-dock .search-sort-trigger {
-  padding: 0.4rem 0.7rem;
-  font-size: 0.78rem;
-  min-height: 0;
-  border-radius: 16px;
-}
-
-.header-dock .search-compact-filter-wrap {
-  justify-self: end;
-}
-
-.header-dock .search-compact-flyout {
-  left: 0;
-  right: auto;
-  width: var(--refine-panel-width);
-  max-width: calc(100dvw - 3rem);
 }
 
 .page-selector {
@@ -251,39 +223,15 @@
   text-transform: uppercase;
 }
 
-/* ── Scroll-reveal mode (letter detail page) ──────────── */
-
-.header--scroll-reveal {
-  position: fixed;
-  left: 0;
-  right: 0;
-  background: transparent;
-}
-
-.header--scroll-reveal .header-inner {
-  transition: opacity 0.25s ease, transform 0.25s ease;
-  will-change: transform, opacity;
-}
-
-.header--scroll-reveal.header--hidden {
-  pointer-events: none;
-}
-
-.header--scroll-reveal.header--hidden .header-inner {
-  opacity: 0;
-  transform: translateY(calc(-100% - 2rem));
-}
-
+/* ── Mobile ────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .header {
     padding: 0.8rem 0.65rem 0;
     background: linear-gradient(to bottom, var(--bg, #f5ede1) calc(100% - 18px), transparent calc(100% - 18px));
   }
 
-  /* Must re-declare after the .header gradient above — equal specificity,
-     source order determines winner. Without this the gradient leaks onto
-     scroll-reveal pages, hiding content and causing notch color mismatch. */
-  .header--scroll-reveal {
+  /* Re-declare for transparent mode — equal specificity, source order wins. */
+  .header--transparent {
     background: transparent;
   }
 
@@ -297,64 +245,27 @@
     border-radius: 18px;
   }
 
-  /* Hide the brand text — nav takes priority */
+  /* Brand text is hidden on mobile — nav takes priority */
   .main-title {
     display: none;
   }
 
-  /* Keep brand slot minimal so dock still works */
   .header-brand-slot {
     min-height: 0;
     gap: 0;
-  }
-
-  /* ── Dock collapse (smooth transition instead of display:none) ── */
-  .header-brand-slot:not(.has-active-dock) {
     width: 100%;
     order: 1;
-    max-height: 0;
-    overflow: hidden;
-    opacity: 0;
-    pointer-events: none;
-    transition: max-height 0.25s ease, opacity 0.18s ease;
   }
 
-  /* Scrubber mode (show-title): slider below nav, nav stays visible */
-  .header-brand-slot.has-active-dock.show-title {
+  /* Dock region slides underneath nav as a full-width row. */
+  .header-dock-region {
     width: 100%;
-    order: 1;
-    max-height: 4rem;
-    opacity: 1;
-    pointer-events: auto;
-    overflow: visible;
-    transition: max-height 0.25s ease, opacity 0.18s ease 0.04s;
-  }
-
-  .header-brand-slot.has-active-dock.show-title .main-title {
-    display: none;
-  }
-
-  .header-brand-slot.has-active-dock.show-title .header-dock {
     padding-top: 0.15rem;
     padding-bottom: 0.1rem;
   }
 
-  /* Search dock mode (no show-title): nav hides, search takes full row */
-  .header-brand-slot.has-active-dock:not(.show-title) {
-    width: 100%;
-    order: 1;
-    max-height: 4rem;
-    opacity: 1;
-    pointer-events: auto;
-    overflow: visible;
-    transition: max-height 0.25s ease, opacity 0.18s ease 0.04s;
-  }
-
-  .header-inner:has(.has-active-dock:not(.show-title)) .nav {
-    display: none;
-  }
-
-  .menu-toggle {
+  /* When the dock has no content, don't reserve the row at all. */
+  .header:not(.header--has-dock) .header-dock-region {
     display: none;
   }
 
@@ -374,5 +285,8 @@
     font-weight: 700;
     white-space: nowrap;
   }
-}
 
+  .menu-toggle {
+    display: none;
+  }
+}

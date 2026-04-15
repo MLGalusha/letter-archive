@@ -1016,6 +1016,9 @@ body.dark .jn-status.draft {
   min-height: 0;
   overflow-x: auto;
   background: transparent;
+  /* No public <Header> mounted in the admin preview, so zero out
+     --header-height to prevent a phantom top gutter on .body-layout. */
+  --header-height: 0px;
 }
 
 .pe-shell::before {

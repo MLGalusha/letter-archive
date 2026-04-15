@@ -9,6 +9,20 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/**
+ * Find the letterDate sort option. `getByRole("option", { name: /Date/ })`
+ * is ambiguous because "Date Added" also matches, and the active option's
+ * accessible name includes a direction-arrow span. This targets the first
+ * child span text exactly.
+ */
+function getDateOption(): HTMLElement {
+  const list = screen.getByRole("listbox");
+  const options = within(list).getAllByRole("option");
+  const match = options.find((el) => el.querySelector("span")?.textContent === "Date");
+  if (!match) throw new Error("Date sort option not found");
+  return match;
+}
+
 describe("SearchBar", () => {
   const baseFacets: ArchiveSearchFacets = {
     formats: [{ value: "letter", label: "Letters", count: 12 }],
@@ -309,11 +323,71 @@ describe("SearchBar", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Sort archive results" }));
-    await user.click(screen.getByRole("option", { name: /Letter Date/i }));
+    // Exact-match "Date" so we don't accidentally hit "Date Added".
+    await user.click(getDateOption());
 
     expect(handleFiltersChange).toHaveBeenCalledWith({
       sort: "letterDate",
       sortOrder: "asc",
     });
+  });
+
+  it("shows Best Match in the sort dropdown even with no query", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <SearchBar
+        query=""
+        filters={{}}
+        facets={baseFacets}
+        total={12}
+        loading={false}
+        onQueryChange={vi.fn()}
+        onFiltersChange={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Sort archive results" }));
+    expect(screen.getByRole("option", { name: /Best Match/i })).toBeInTheDocument();
+  });
+
+  it("does not auto-switch sort when the query changes", async () => {
+    const user = userEvent.setup();
+    const handleFiltersChange = vi.fn();
+
+    // Start with an explicit "Date" (letterDate) sort and no query.
+    const { rerender } = render(
+      <SearchBar
+        query=""
+        filters={{ sort: "letterDate", sortOrder: "desc" }}
+        facets={baseFacets}
+        total={12}
+        loading={false}
+        defaultSort="relevance"
+        onQueryChange={vi.fn()}
+        onFiltersChange={handleFiltersChange}
+      />,
+    );
+
+    // Simulate the user typing a query from the parent. Sort must NOT flip.
+    rerender(
+      <SearchBar
+        query="Molly"
+        filters={{ sort: "letterDate", sortOrder: "desc" }}
+        facets={baseFacets}
+        total={12}
+        loading={false}
+        defaultSort="relevance"
+        onQueryChange={vi.fn()}
+        onFiltersChange={handleFiltersChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Sort archive results" }));
+    const dateOption = getDateOption();
+    // The explicitly-chosen "Date" sort must still be the active option.
+    expect(dateOption).toHaveAttribute("aria-selected", "true");
+    // handleFiltersChange should not have been called from the query change.
+    expect(handleFiltersChange).not.toHaveBeenCalled();
   });
 });

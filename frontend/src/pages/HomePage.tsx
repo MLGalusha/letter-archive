@@ -271,7 +271,7 @@ export default function HomePage() {
   const [latestBlogPost, setLatestBlogPost] = useState<BlogPost | null>(null);
 
   // ── Archive search (extracted hook) ──
-  const archive = useArchiveSearch({ storageKey: "home", defaultSort: "createdAt" });
+  const archive = useArchiveSearch({ storageKey: "home", defaultSort: "relevance" });
 
   // Freeze facets and total while a search is in flight so the SearchBar's
   // refine panel doesn't reshuffle counts between keystrokes (causes layout jumps).
@@ -497,6 +497,7 @@ export default function HomePage() {
           loading={archive.archiveLoading}
           embedded
           variant="full"
+          defaultSort="relevance"
           placeholder={isMobile ? "Search archive..." : undefined}
           refineOpen={dock.pageRefineOpen}
           sortOpen={dock.pageSortOpen}

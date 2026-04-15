@@ -24,22 +24,21 @@ export type CombinedSortOption = {
   label: string;
   sort: NonNullable<SearchFilters["sort"]>;
   defaultOrder: NonNullable<SearchFilters["sortOrder"]>;
-  requiresQuery?: boolean;
   canToggle?: boolean;
 };
 
 export const SORT_FIELD_OPTIONS: SortFieldOption[] = [
   { label: "Best Match", value: "relevance", defaultOrder: "desc" },
   { label: "Publish Date", value: "createdAt", defaultOrder: "desc" },
-  { label: "Letter Date", value: "letterDate", defaultOrder: "desc" },
+  { label: "Date", value: "letterDate", defaultOrder: "desc" },
   { label: "Sender", value: "sender", defaultOrder: "asc" },
   { label: "Recipient", value: "recipient", defaultOrder: "asc" },
   { label: "Collection", value: "collection", defaultOrder: "asc" },
 ];
 
 export const COMBINED_SORT_OPTIONS: CombinedSortOption[] = [
-  { label: "Best Match", sort: "relevance", defaultOrder: "desc", requiresQuery: true },
-  { label: "Letter Date", sort: "letterDate", defaultOrder: "desc", canToggle: true },
+  { label: "Best Match", sort: "relevance", defaultOrder: "desc" },
+  { label: "Date", sort: "letterDate", defaultOrder: "desc", canToggle: true },
   { label: "Date Added", sort: "createdAt", defaultOrder: "desc", canToggle: true },
   { label: "Sender", sort: "sender", defaultOrder: "asc", canToggle: true },
   { label: "Recipient", sort: "recipient", defaultOrder: "asc", canToggle: true },
@@ -72,20 +71,8 @@ export const ARCHIVE_FORMAT_LABELS: Record<LetterImageType, string> = {
   voice: "Voice",
 };
 
-export function getResolvedSort(query: string, filters: SearchFilters) {
-  const hasQuery = Boolean(query.trim());
-  return {
-    sort: filters.sort || (hasQuery ? "relevance" : "createdAt"),
-    sortOrder: filters.sortOrder || "desc",
-  };
-}
-
 export function getSortValue(option: SortFieldOption) {
   return option.value;
-}
-
-export function getAvailableSortFields(hasQuery: boolean) {
-  return hasQuery ? SORT_FIELD_OPTIONS : SORT_FIELD_OPTIONS.filter((option) => option.value !== "relevance");
 }
 
 export function parseSortValue(value: string, options: SortFieldOption[]) {

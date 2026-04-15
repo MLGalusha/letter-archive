@@ -4,14 +4,48 @@
 
 const isDev = import.meta.env.DEV;
 
-// In dev, derive the API base from the page's current hostname so the app
-// works when loaded from a LAN IP (e.g. on a phone at 192.168.1.62:5174 →
-// backend at 192.168.1.62:3002). In prod builds we honor VITE_API_URL.
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+// In dev the API base URL depends on *how* the page was loaded:
+//
+// 1. Loopback origin (localhost / 127.0.0.1 / ::1) — this covers normal
+//    `vite dev` on the laptop AND the mocked e2e suite (which loads
+//    http://127.0.0.1:4174). Honor VITE_API_URL verbatim if set, else
+//    fall back to http://localhost:3002. The mocked e2e suite in
+//    particular needs this: its Playwright route intercepts are keyed on
+//    `localhost:3002`, so any other host would cause them to miss and
+//    every request would hang on a real network call.
+//
+// 2. Non-loopback origin (a LAN IP, e.g. a phone on Wi-Fi hitting the
+//    dev machine) — swap in window.location.hostname so the phone reaches
+//    the dev machine's backend rather than its own localhost. The port
+//    still comes from VITE_API_URL when set (so isolated worktrees with
+//    custom backend ports still work), defaulting to 3002 otherwise.
+//
+// In prod builds `isDev` is false and we honor VITE_API_URL verbatim.
 function resolveApiBaseUrl(): string {
-  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  const configured = import.meta.env.VITE_API_URL;
+
   if (isDev && typeof window !== 'undefined' && window.location) {
-    return `${window.location.protocol}//${window.location.hostname}:3002`;
+    const currentHost = window.location.hostname;
+    if (LOOPBACK_HOSTS.has(currentHost)) {
+      return configured || 'http://localhost:3002';
+    }
+    // Non-loopback (phone on LAN). Keep the current hostname, take the
+    // port from VITE_API_URL when available.
+    let port = '3002';
+    if (configured) {
+      try {
+        const parsed = new URL(configured);
+        if (parsed.port) port = parsed.port;
+      } catch {
+        /* fall through to default port */
+      }
+    }
+    return `${window.location.protocol}//${currentHost}:${port}`;
   }
+
+  if (configured) return configured;
   return 'http://localhost:3002';
 }
 

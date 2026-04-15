@@ -14,7 +14,7 @@ import {
   shouldShowPhotoDescriptionWorkflow,
 } from "../utils/letterContent";
 import { reflowTranscript, renderTranscriptLines, computeReferenceWidth } from "../utils/transcriptRendering";
-import { useHeaderDock, EMPTY_DOCK } from "../contexts/HeaderDockContext";
+import HeaderDock from "../components/Header/HeaderDock";
 import HeaderScrubber from "../components/HeaderScrubber/HeaderScrubber";
 import useLetterScrubber from "../components/LetterHeaderDock/useLetterScrubber";
 import useCarouselDrag from "../hooks/useCarouselDrag";
@@ -98,9 +98,6 @@ export default function LetterDetailPage() {
 
   // Transcript view mode: "reading" (reflowed) or "original" (1:1 line match)
   const [transcriptMode, setTranscriptMode] = useState<"reading" | "original">("reading");
-
-  // Header dock integration
-  const { setDock } = useHeaderDock();
 
   const initialImageIdRef = useRef(searchParams.get("image"));
   const fromHighlightRef = useRef(searchParams.get("from") === "highlight");
@@ -241,35 +238,13 @@ export default function LetterDetailPage() {
   // Build scrubber props from adjacent data (hook must be at top level)
   const scrubberProps = useLetterScrubber(adjacent, letterId);
 
-  useEffect(() => {
-    const collectionsLink = adjacent ? {
-      label: 'Collection',
-      to: `/collections/${adjacent.collectionCode}`,
-    } : undefined;
-
-    if (scrubberProps) {
-      setDock({
-        content: <HeaderScrubber {...scrubberProps} />,
-        active: true,
-        visible: true,
-        scrollReveal: true,
-        showTitle: true,
-        collectionsLink,
-      });
-    } else {
-      setDock({
-        content: null,
-        active: false,
-        visible: false,
-        scrollReveal: true,
-        showTitle: true,
-        collectionsLink,
-      });
-    }
-  }, [scrubberProps, adjacent, setDock]);
-
-  // Clear dock on unmount
-  useEffect(() => () => setDock(EMPTY_DOCK), [setDock]);
+  const collectionsLink = useMemo(
+    () =>
+      adjacent
+        ? { label: "Collection", to: `/collections/${adjacent.collectionCode}` }
+        : undefined,
+    [adjacent],
+  );
 
   const transcriptSectionRef = useRef<HTMLElement>(null);
 
@@ -395,6 +370,9 @@ export default function LetterDetailPage() {
 
   return (
     <>
+      <HeaderDock transparent collectionsLink={collectionsLink}>
+        {scrubberProps && <HeaderScrubber {...scrubberProps} />}
+      </HeaderDock>
       <article className="letter-article" ref={swipeRef} style={swipeStyle}>
         {seo && (
           <SEO

@@ -2,7 +2,7 @@ import "./Header.css";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useHeaderDock } from "../../contexts/HeaderDockContext";
-import useScrollDirection from "../../hooks/useScrollDirection";
+import useHeaderScroll from "../../hooks/useHeaderScroll";
 import { prefetchCollections } from "../../api/collections";
 
 function preloadCollectionsRoute() {
@@ -20,14 +20,51 @@ function preloadAboutRoute() {
 
 export default memo(function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { dock } = useHeaderDock();
-  const hasDock = Boolean(dock.content) || Boolean(dock.showTitle);
-  const isScrollReveal = dock.scrollReveal ?? false;
-  const scrollVisible = useScrollDirection(isScrollReveal);
+  const { state, registerSlot } = useHeaderDock();
+  const { visible, atTop } = useHeaderScroll();
   const location = useLocation();
 
+  const headerRef = useRef<HTMLElement>(null);
   const navRef = useRef<HTMLElement>(null);
+  const maxHeaderHeightRef = useRef(0);
   const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
+
+  // Publish the header's real height to --header-height on the closest site shell
+  // so body-layout top padding matches when a dock (e.g. the collection scrubber)
+  // is expanded. --header-height is registered as a <length> and has a CSS
+  // transition, so consumers animate smoothly when it changes.
+  //
+  // Growth-only per page: once we've measured the fully-expanded height while at
+  // top, we keep it. This prevents the scroll-to-top grid-row transition from
+  // stepping the value through intermediate sizes (which would restart the
+  // CSS transition on every tick and cause visible snap). Reset when the dock
+  // content is removed (navigation to a page with no dock).
+  useLayoutEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const shell = el.closest<HTMLElement>(".public-site-shell, .public-letter-shell");
+    if (!shell) return;
+
+    if (!state.hasContent) {
+      maxHeaderHeightRef.current = 0;
+      shell.style.removeProperty("--header-height");
+      return;
+    }
+
+    const update = () => {
+      if (!atTop) return;
+      const h = el.offsetHeight;
+      if (h > maxHeaderHeightRef.current) {
+        maxHeaderHeightRef.current = h;
+        shell.style.setProperty("--header-height", `${h}px`);
+      }
+    };
+    update();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [atTop, state.hasContent]);
 
   useEffect(() => {
     preloadCollectionsRoute();
@@ -55,25 +92,17 @@ export default memo(function Header() {
 
   useLayoutEffect(() => {
     measureIndicator();
-  }, [measureIndicator, location.pathname, dock.collectionsLink]);
+  }, [measureIndicator, location.pathname, state.collectionsLink]);
 
-  // Re-measure whenever the nav's own box changes (resize, dock collapse,
-  // font swap, orientation change, etc). This is the main fix for the
-  // "indicator stuck between tabs" bug.
   useEffect(() => {
     const nav = navRef.current;
     if (!nav || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(() => measureIndicator());
     ro.observe(nav);
-    // Also observe each page-selector so font-driven width changes on any
-    // one of them trigger a re-measure even if the nav's total width didn't
-    // change (e.g. active item grew, another shrank by the same amount).
     nav.querySelectorAll<HTMLElement>('.page-selector').forEach((el) => ro.observe(el));
     return () => ro.disconnect();
-  }, [measureIndicator, dock.collectionsLink]);
+  }, [measureIndicator, state.collectionsLink]);
 
-  // Belt-and-suspenders: re-measure after web fonts settle. Playfair Display
-  // / any swapped font can change widths after the initial layout effect ran.
   useEffect(() => {
     if (typeof document === 'undefined' || !document.fonts?.ready) return;
     let cancelled = false;
@@ -83,26 +112,29 @@ export default memo(function Header() {
     return () => { cancelled = true; };
   }, [measureIndicator]);
 
+  const hidden = !visible;
+  const dockCollapsed = state.hasContent && !atTop;
+
   const headerClass = [
     "header",
-    isScrollReveal && "header--scroll-reveal",
-    isScrollReveal && !scrollVisible && "header--hidden",
+    state.transparent && "header--transparent",
+    hidden && "header--hidden",
+    state.hasContent && "header--has-dock",
+    dockCollapsed && "header--dock-collapsed",
   ].filter(Boolean).join(" ");
 
   return (
-    <header className={headerClass}>
+    <header ref={headerRef} className={headerClass}>
       <a href="#main-content" className="skip-link">Skip to content</a>
       <div className="header-inner">
-        <div className={`header-brand-slot${dock.active ? " has-active-dock" : ""}${dock.showTitle ? " show-title" : ""}`}>
+        <div className={`header-brand-slot${state.hasContent ? " has-active-dock" : ""}`}>
           <Link to="/" className="main-title" onClick={() => setMenuOpen(false)}>
             <span className="main-title-label">A Letter Archive</span>
             <span className="main-title-name">Voices That Remain</span>
           </Link>
-          {hasDock && (
-            <div className={`header-dock${dock.active ? " is-active" : ""}${dock.visible ? " is-visible" : ""}`}>
-              {dock.content}
-            </div>
-          )}
+          <div className="header-dock-region">
+            <div ref={registerSlot} className="header-dock-slot" />
+          </div>
         </div>
         <button
           className="menu-toggle"
@@ -118,13 +150,13 @@ export default memo(function Header() {
             Home
           </NavLink>
           <NavLink
-            to={dock.collectionsLink?.to ?? "/collections"}
-            className={({ isActive }) => `page-selector${isActive || dock.collectionsLink ? " active" : ""}`}
+            to={state.collectionsLink?.to ?? "/collections"}
+            className={({ isActive }) => `page-selector${isActive || state.collectionsLink ? " active" : ""}`}
             onMouseEnter={preloadCollectionsRoute}
             onFocus={preloadCollectionsRoute}
             onClick={() => setMenuOpen(false)}
           >
-            {dock.collectionsLink?.label ?? "Collections"}
+            {state.collectionsLink?.label ?? "Collections"}
           </NavLink>
           <NavLink to="/blog" className={({ isActive }) => `page-selector${isActive ? " active" : ""}`} onMouseEnter={preloadBlogRoute} onFocus={preloadBlogRoute} onClick={() => setMenuOpen(false)}>
             Journal

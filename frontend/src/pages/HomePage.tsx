@@ -19,7 +19,6 @@ import { imagePreloadService } from "../services/imagePreloadService";
 import { getLetterById } from "../api/letters";
 import type { LetterImage } from "../types/Letter";
 import { buildHomeSeo } from "../utils/seo";
-import { EMPTY_DOCK, useHeaderDock } from "../contexts/HeaderDockContext";
 import useArchiveSearch from "../hooks/useArchiveSearch";
 import useStickyDock from "../hooks/useStickyDock";
 import useIsMobile from "../hooks/useIsMobile";
@@ -257,7 +256,6 @@ function HeroLetterCard({
 export default function HomePage() {
   const homeSeo = buildHomeSeo();
   const navigate = useNavigate();
-  const { setDock } = useHeaderDock();
 
   // ── Hero content (editable from admin) ──
   const [heroCopy, setHeroCopy] = useState({
@@ -333,9 +331,6 @@ export default function HomePage() {
 
     return () => { cancelled = true; };
   }, []);
-
-  // ── Keep header dock empty on home; BackToSearch replaces the sticky-header search. ──
-  useEffect(() => () => setDock(EMPTY_DOCK), [setDock]);
 
   const handleLetterClick = useCallback((letterId: string) => {
     navigate(`/letter/${letterId}`);
@@ -492,7 +487,8 @@ export default function HomePage() {
       )}
 
       <section id="archive-search" className="home-archive-surface" ref={archiveSearchRef}>
-        <div className="home-search-panel" ref={searchPanelRef}>
+        <div className="home-search-panel" ref={searchPanelRef} data-hide-header-on-focus>
+
         <SearchBar
           query={archive.searchQuery}
           filters={archive.filters}

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -37,10 +38,10 @@ vi.mock("../../api/letters", () => ({
   searchArchiveShelf: (...args: unknown[]) => searchArchiveShelfMock(...args),
 }));
 
-const mockSetDock = vi.fn();
-vi.mock("../../contexts/HeaderDockContext", () => ({
-  useHeaderDock: () => ({ dock: { content: null, active: false, visible: false }, setDock: mockSetDock }),
-  EMPTY_DOCK: { content: null, active: false, visible: false },
+// HeaderDock is now a portal wrapper — stub it out so tests don't need a
+// real slot mounted. Just render children inline.
+vi.mock("../../components/Header/HeaderDock", () => ({
+  default: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock("../../components/SearchBar/SearchBar", () => ({

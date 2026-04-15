@@ -8,7 +8,7 @@ import BackToSearch from '../components/BackToSearch';
 import { useAutoScrollOnFocus } from '../hooks/useAutoScrollOnFocus';
 import { getCollectionByCode, getCollectionProfile, type CollectionWithLetters, type CollectionProfile } from '../api/collections';
 import { imagePreloadService } from '../services/imagePreloadService';
-import { EMPTY_DOCK, useHeaderDock } from '../contexts/HeaderDockContext';
+import HeaderDock from '../components/Header/HeaderDock';
 import { getPrimaryMediaType } from '../utils/letterPreview';
 import {
   computeCollectionStats,
@@ -32,29 +32,9 @@ import './CollectionDetailPage.css';
 export default function CollectionDetailPage() {
   const navigate = useNavigate();
   const { collectionCode } = useParams<{ collectionCode: string }>();
-  const { setDock } = useHeaderDock();
   const collectionScrubberProps = useCollectionScrubber(collectionCode);
   const isMobile = useIsMobile(640);
-  const isHeaderMobile = useIsMobile(900);
   const isTouchDevice = useIsTouchDevice();
-
-  // Track whether the page is scrolled near the top. On mobile we collapse
-  // the header scrubber once the user starts scrolling down so the header
-  // reclaims its compact height; scrolling back to the top restores it.
-  const [atTop, setAtTop] = useState(() =>
-    typeof window === 'undefined' ? true : window.scrollY <= 8,
-  );
-  useEffect(() => {
-    // Hysteresis: collapse past 16px, restore only at <=4px. Prevents flicker
-    // at the boundary when the dock itself resizes the header.
-    const onScroll = () => {
-      const y = window.scrollY;
-      setAtTop((prev) => (prev ? y <= 16 : y <= 4));
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
   const adjacentCollections = useAdjacentCollections(collectionCode);
 
   const { ref: swipeRef, offset: swipeOffset, isSwiping, isAnimating } = useSwipeNavigation({
@@ -171,54 +151,6 @@ export default function CollectionDetailPage() {
     label: 'Collections',
     to: '/collections',
   }), []);
-
-  useEffect(() => {
-    // On mobile, once the user scrolls away from the top, collapse the
-    // scrubber so the header shrinks back to its compact size. Desktop and
-    // "at top" mobile behave exactly as before.
-    const collapseScrubber = isHeaderMobile && !atTop;
-
-    if (collapseScrubber) {
-      setDock({
-        content: null,
-        active: false,
-        visible: false,
-        showTitle: true,
-        collectionsLink: collectionsLinkOverride,
-      });
-      return;
-    }
-
-    if (collectionScrubberProps) {
-      setDock({
-        content: <HeaderScrubber {...collectionScrubberProps} />,
-        active: true,
-        visible: true,
-        showTitle: true,
-        collectionsLink: collectionsLinkOverride,
-      });
-    } else {
-      // Reserve header dock space while scrubber data loads so the content
-      // below doesn't jump when the dock appears (active=true expands the
-      // brand slot; visible=false keeps it invisible until content is ready).
-      setDock({
-        content: null,
-        active: true,
-        visible: false,
-        showTitle: true,
-        collectionsLink: collectionsLinkOverride,
-      });
-    }
-  }, [
-    collectionScrubberProps,
-    collectionsLinkOverride,
-    loading,
-    setDock,
-    isHeaderMobile,
-    atTop,
-  ]);
-
-  useEffect(() => () => setDock(EMPTY_DOCK), [setDock]);
 
   /* ---- Handlers ---- */
   const handleLetterClick = useCallback((letterId: string, imageId?: string) => {
@@ -357,6 +289,10 @@ export default function CollectionDetailPage() {
     : undefined;
 
   return (
+    <>
+      <HeaderDock collectionsLink={collectionsLinkOverride}>
+        {collectionScrubberProps && <HeaderScrubber {...collectionScrubberProps} />}
+      </HeaderDock>
     <div className="body-layout" ref={swipeRef} style={swipeStyle}>
       <SEO
         title={seo.title}
@@ -543,5 +479,6 @@ export default function CollectionDetailPage() {
         </div>
       )}
     </div>
+    </>
   );
 }

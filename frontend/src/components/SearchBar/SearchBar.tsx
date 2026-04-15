@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type Ref } from "react";
 import type { ArchiveSearchFacets, LetterImageType } from "../../types/Letter";
 import useIsMobile from "../../hooks/useIsMobile";
 import "./SearchBar.css";
@@ -98,7 +98,18 @@ export default function SearchBar({
   const [openChoiceField, setOpenChoiceField] = useState<string | null>(null);
   const searchIdBase = useId().replace(/:/g, "");
   const searchRootRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const showFilters = refineOpen ?? internalShowFilters;
+
+  const focusSearchInputFromWrapper = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    // Ignore clicks on the input itself (already handled) or on any interactive control
+    // inside the wrapper (filter button, sort trigger, flyout contents).
+    if (target.closest("button, input, select, textarea, [role='button'], [role='menu']")) {
+      return;
+    }
+    searchInputRef.current?.focus();
+  }, []);
 
   const setRefineOpen = (next: boolean) => {
     if (refineOpen === undefined) {
@@ -683,8 +694,9 @@ export default function SearchBar({
   if (isCompact) {
     return (
       <div className={`search search-compact${embedded ? " search-embedded" : ""}`} ref={searchRootRef}>
-        <div className="search-input-wrapper search-input-wrapper-compact">
+        <div className="search-input-wrapper search-input-wrapper-compact" onClick={focusSearchInputFromWrapper}>
           <input
+            ref={searchInputRef}
             type="search"
             className="search-input"
             placeholder={compactPlaceholder || "Search archive..."}
@@ -750,8 +762,9 @@ export default function SearchBar({
         </div>
       </div>
 
-      <div className="search-input-wrapper search-input-wrapper-compact" ref={dockTriggerRef}>
+      <div className="search-input-wrapper search-input-wrapper-compact" ref={dockTriggerRef} onClick={focusSearchInputFromWrapper}>
         <input
+          ref={searchInputRef}
           type="search"
           className="search-input"
           placeholder={placeholderProp || "Search names, places, dates..."}

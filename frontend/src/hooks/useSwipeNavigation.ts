@@ -14,6 +14,30 @@ const DIRECTION_LOCK_PX = 20;
 const HORIZONTAL_RATIO = 1.8; // horizontal delta must exceed vertical by this factor
 const TRANSITION_MS = 280;
 
+// Text-like input types where horizontal drag is used for text selection, not swiping.
+const TEXT_INPUT_TYPES = new Set([
+  'text', 'search', 'email', 'url', 'tel', 'password', 'number',
+]);
+
+/**
+ * Returns true if the currently focused element is a text-editable control
+ * (text input, textarea, or contenteditable). Used to suppress page swipes
+ * while the user is interacting with text — horizontal drags there are
+ * text selection, not navigation.
+ */
+function isEditableElementFocused(): boolean {
+  const el = document.activeElement as HTMLElement | null;
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName;
+  if (tag === 'TEXTAREA') return true;
+  if (tag === 'INPUT') {
+    const type = ((el as HTMLInputElement).type || 'text').toLowerCase();
+    return TEXT_INPUT_TYPES.has(type);
+  }
+  return false;
+}
+
 interface UseSwipeNavigationOptions {
   onSwipeLeft?: () => void;   // finger moved left → "next"
   onSwipeRight?: () => void;  // finger moved right → "prev"
@@ -69,6 +93,10 @@ export default function useSwipeNavigation({
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 1) return;
+
+      // If a text input / textarea / contenteditable is focused, horizontal
+      // drags are text selection — don't hijack them for page navigation.
+      if (isEditableElementFocused()) return;
 
       // Ignore touches inside child elements that handle their own gestures
       const target = e.target as HTMLElement;

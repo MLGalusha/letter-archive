@@ -426,6 +426,7 @@ export default function CollectionDetailPage() {
               embedded
               variant="full"
               hideCollectionFilter
+              defaultSort="letterDate"
               searchKicker={`Collection ${collection.collectionCode}`}
               searchTitle="Search This Collection"
               refineOpen={dock.pageRefineOpen}

@@ -31,7 +31,7 @@ type SortField = 'number' | 'letters' | 'date' | 'title';
 type SortOrder = 'asc' | 'desc';
 
 const SORT_OPTIONS: { field: SortField; label: string; defaultOrder: SortOrder }[] = [
-  { field: 'number', label: 'Collection #', defaultOrder: 'asc' },
+  { field: 'number', label: 'Collection', defaultOrder: 'asc' },
   { field: 'letters', label: 'Letter count', defaultOrder: 'desc' },
   { field: 'date', label: 'Date', defaultOrder: 'desc' },
   { field: 'title', label: 'Title', defaultOrder: 'asc' },

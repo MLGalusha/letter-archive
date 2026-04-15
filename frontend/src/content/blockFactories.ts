@@ -13,7 +13,23 @@ import type {
 } from './blocks';
 
 function uid(): string {
-  return crypto.randomUUID();
+  // crypto.randomUUID() requires a secure context — iOS Safari on a
+  // plain-http LAN URL (e.g. http://192.168.x.x) does not expose it, so
+  // fall back to a manual RFC4122-ish v4 via getRandomValues, and finally
+  // to Math.random when even that is unavailable.
+  const c = (globalThis as { crypto?: Crypto }).crypto;
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+  if (c && typeof c.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    c.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 10
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0'));
+    return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
+  }
+  // Last-resort: not cryptographically strong, but these ids are just
+  // local block keys, never security-sensitive.
+  return `uid-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
 export function createHeroBlock(data?: Partial<Omit<HeroBlock, 'id' | 'type'>>): HeroBlock {

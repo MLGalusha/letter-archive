@@ -20,16 +20,20 @@ export function mergeArchiveItems(
   return next;
 }
 
+export type ArchiveDefaultSort = 'relevance' | 'createdAt' | 'letterDate';
+
 /**
  * Resolve the effective sort field for archive search.
- * When there's an active text query, defaults to "relevance";
- * otherwise uses the provided defaultSort.
+ *
+ * If the user has explicitly picked a sort it wins, otherwise the page's
+ * defaultSort applies. We intentionally do NOT auto-switch based on query
+ * presence — the user's choice (or the page default) sticks regardless of
+ * whether they're searching, so their sort preference never silently flips
+ * out from under them.
  */
 export function getResolvedArchiveSort(
-  query: string,
   filters: SearchFilters,
-  defaultSort: 'createdAt' | 'letterDate' = 'createdAt',
+  defaultSort: ArchiveDefaultSort = 'relevance',
 ): string {
-  const hasQuery = Boolean(query.trim());
-  return filters.sort || (hasQuery ? 'relevance' : defaultSort);
+  return filters.sort || defaultSort;
 }

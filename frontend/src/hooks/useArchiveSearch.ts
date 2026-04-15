@@ -3,7 +3,11 @@ import { useSearchParams } from 'react-router-dom';
 import type { SearchFilters } from '../components/SearchBar/SearchBar';
 import { searchArchiveShelf, type ArchiveSearchResponse } from '../api/letters';
 import { saveSearchState, loadSearchState } from '../utils/searchPersistence';
-import { mergeArchiveItems, getResolvedArchiveSort } from '../utils/archiveSearch';
+import {
+  mergeArchiveItems,
+  getResolvedArchiveSort,
+  type ArchiveDefaultSort,
+} from '../utils/archiveSearch';
 
 const ARCHIVE_PAGE_SIZE = 24;
 
@@ -62,8 +66,8 @@ const FILTER_URL_KEYS = [
 export interface UseArchiveSearchConfig {
   /** localStorage key for persisting search state */
   storageKey: string;
-  /** Default sort when no query is active */
-  defaultSort?: 'createdAt' | 'letterDate';
+  /** Page-specific default sort when the user hasn't explicitly picked one. */
+  defaultSort?: ArchiveDefaultSort;
   /** Default sort order for the initial filter state */
   defaultSortOrder?: 'asc' | 'desc';
   /** Filters that are always enforced (e.g. { collection: "009" }). Excluded from URL params. */
@@ -86,7 +90,7 @@ export interface UseArchiveSearchReturn {
 }
 
 export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArchiveSearchReturn {
-  const { storageKey, defaultSort = 'createdAt', defaultSortOrder, fixedFilters } = config;
+  const { storageKey, defaultSort = 'relevance', defaultSortOrder, fixedFilters } = config;
   const fixedKeys = useMemo(
     () => new Set(Object.keys(fixedFilters ?? {})),
     // fixedFilters identity is stable per call site — intentionally using JSON serialization
@@ -171,7 +175,10 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
     if (filters.verified !== undefined && filters.verified !== null) {
       nextParams.set('verified', filters.verified ? 'true' : 'false');
     }
-    if (filters.sort && filters.sort !== 'relevance') nextParams.set('sort', filters.sort);
+    // Omit sort from the URL when it matches the page default — keeps
+    // canonical URLs clean (no ?sort=relevance on HomePage, no ?sort=letterDate
+    // on CollectionDetailPage).
+    if (filters.sort && filters.sort !== defaultSort) nextParams.set('sort', filters.sort);
     if (filters.sortOrder && filters.sortOrder !== 'desc') {
       nextParams.set('sortOrder', filters.sortOrder);
     }
@@ -185,7 +192,7 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [filters, fixedKeys, searchParams, searchQuery, setSearchParams]);
+  }, [filters, fixedKeys, searchParams, searchQuery, setSearchParams, defaultSort]);
 
   // ── Persist to localStorage (debounced) ──
   useEffect(() => {
@@ -211,10 +218,15 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
       yearTo: filters.dateRange?.end,
       hasTranscript: filters.hasTranscript,
       verified: filters.verified,
-      sort: filters.sort || undefined,
-      sortOrder: filters.sortOrder || undefined,
+      // Send the *resolved* sort so the backend matches the UI's active
+      // sort cue. Without this, an unset filters.sort makes the UI show the
+      // page default (e.g. letterDate on CollectionDetailPage) while the
+      // request falls through to the backend's own default, producing a
+      // stale/misleading sort indicator.
+      sort: filters.sort || defaultSort,
+      sortOrder: filters.sortOrder || defaultSortOrder,
     }),
-    [filters, searchQuery],
+    [filters, searchQuery, defaultSort, defaultSortOrder],
   );
 
   // ── Execute search (180ms debounce with request versioning) ──
@@ -279,7 +291,7 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
   }, [archiveLoading, archiveLoadingMore, archiveResults, requestParams]);
 
   // ── Derived sort values ──
-  const resolvedSort = getResolvedArchiveSort(searchQuery, filters, defaultSort);
+  const resolvedSort = getResolvedArchiveSort(filters, defaultSort);
   const sortCueField: 'createdAt' | 'collection' | null =
     resolvedSort === 'createdAt' || resolvedSort === 'collection' ? resolvedSort : null;
 

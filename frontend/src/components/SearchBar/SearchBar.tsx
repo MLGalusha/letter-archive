@@ -8,7 +8,6 @@ import {
   COMBINED_SORT_OPTIONS,
   formatFacetLabel,
   getBestSuggestion,
-  getResolvedSort,
 } from "./searchBarUtils";
 import type { FilterChoiceOption } from "./searchBarUtils";
 import FilterChoiceField from "./FilterChoiceField";
@@ -30,6 +29,12 @@ interface SearchBarProps {
   searchTitle?: string;
   refineOpen?: boolean;
   sortOpen?: boolean;
+  /**
+   * Page-specific default sort used when the user hasn't explicitly picked
+   * one. "Best Match" is the default default — pages like collection detail
+   * pass "letterDate" to preserve chronological reading order.
+   */
+  defaultSort?: NonNullable<SearchFilters["sort"]>;
   dockTriggerRef?: Ref<HTMLDivElement>;
   onRefineOpenChange?: (open: boolean) => void;
   onSortOpenChange?: (open: boolean) => void;
@@ -69,6 +74,7 @@ export default function SearchBar({
   searchTitle,
   refineOpen,
   sortOpen: sortOpenProp,
+  defaultSort = "relevance",
   dockTriggerRef,
   onRefineOpenChange,
   onSortOpenChange,
@@ -214,7 +220,13 @@ export default function SearchBar({
     if (filters.verified !== undefined && filters.verified !== null) count++;
     return count;
   }, [filters, selectedFormats, isCompact, hideCollectionFilter]);
-  const resolvedSort = getResolvedSort(query, filters);
+  // Resolve the effective sort: user's explicit choice wins, otherwise the
+  // page default. This never depends on query presence — the sort the user
+  // sees should not silently flip when they start or stop typing.
+  const resolvedSort = {
+    sort: filters.sort || defaultSort,
+    sortOrder: filters.sortOrder || "desc",
+  };
 
   // Sort dropdown
   const [internalSortOpen, setInternalSortOpen] = useState(false);
@@ -225,10 +237,10 @@ export default function SearchBar({
     onSortOpenChange?.(next);
   };
   const visibleSortOptions = useMemo(() => {
-    let options = COMBINED_SORT_OPTIONS.filter((o) => !o.requiresQuery || hasQuery);
+    let options = COMBINED_SORT_OPTIONS;
     if (hideCollectionFilter) options = options.filter((o) => o.sort !== "collection");
     return options;
-  }, [hasQuery, hideCollectionFilter]);
+  }, [hideCollectionFilter]);
   const currentSortOption = visibleSortOptions.find((o) => o.sort === resolvedSort.sort);
   const showSortArrow = currentSortOption?.canToggle;
   const sortArrow = resolvedSort.sortOrder === "asc" ? "\u2191" : "\u2193";

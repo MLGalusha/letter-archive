@@ -74,10 +74,10 @@ describe("CollectionsPage", () => {
     );
     expect(titles[0]).toBe("War Letters");
 
-    // Open dropdown and click active "Collection #" to toggle to desc
+    // Open dropdown and click active "Collection" to toggle to desc
     await user.click(screen.getByLabelText("Sort collections"));
     let menuOptions = container.querySelectorAll(".sort-option");
-    await user.click(menuOptions[0]); // Collection # (active) — toggles to desc
+    await user.click(menuOptions[0]); // Collection (active) — toggles to desc
     titles = Array.from(container.querySelectorAll(".collection-card-top h3")).map((el) =>
       el.textContent?.trim(),
     );

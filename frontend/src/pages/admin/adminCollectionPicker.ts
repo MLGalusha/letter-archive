@@ -28,7 +28,7 @@ export const COLLECTION_PICKER_DEFAULT_SORT: CollectionPickerSortField = "letter
 export const COLLECTION_PICKER_DEFAULT_SORT_ORDER: CollectionPickerState["sortOrder"] = "desc";
 
 export const COLLECTION_PICKER_SORT_OPTIONS: CollectionPickerSortOption[] = [
-  { value: "letterDate", label: "Letter Date", defaultOrder: "desc" },
+  { value: "letterDate", label: "Date", defaultOrder: "desc" },
   { value: "sender", label: "Sender", defaultOrder: "asc" },
   { value: "recipient", label: "Recipient", defaultOrder: "asc" },
 ];

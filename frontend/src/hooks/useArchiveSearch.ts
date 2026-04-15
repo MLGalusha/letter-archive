@@ -178,9 +178,13 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
 
     if (nextParams.toString() === searchParams.toString()) return;
 
-    startTransition(() => {
-      setSearchParams(nextParams, { replace: true });
-    });
+    const timer = window.setTimeout(() => {
+      startTransition(() => {
+        setSearchParams(nextParams, { replace: true });
+      });
+    }, 250);
+
+    return () => window.clearTimeout(timer);
   }, [filters, fixedKeys, searchParams, searchQuery, setSearchParams]);
 
   // ── Persist to localStorage (debounced) ──

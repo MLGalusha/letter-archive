@@ -73,9 +73,8 @@ describe("LetterCard", () => {
     });
 
     expect(button).not.toHaveAttribute("title");
-    expect(screen.getByText("3 matches")).toBeInTheDocument();
-    expect(screen.getByText("Transcript match")).toBeInTheDocument();
-    expect(screen.getAllByText("Molly").length).toBeGreaterThan(0);
+    expect(screen.queryByText("3 matches")).not.toBeInTheDocument();
+    expect(screen.queryByText("Transcript match")).not.toBeInTheDocument();
     expect(container.querySelector(".letter-hook .letter-card-search-match-highlight")?.textContent).toBe("reply");
     expect(button).not.toHaveClass("letter-card--search-preview-visible");
 
@@ -83,6 +82,9 @@ describe("LetterCard", () => {
 
     fireEvent.mouseEnter(shell);
     expect(button).toHaveClass("letter-card--search-preview-visible");
+    expect(screen.getByText("3 matches")).toBeInTheDocument();
+    expect(screen.getByText("Transcript match")).toBeInTheDocument();
+    expect(screen.getAllByText("Molly").length).toBeGreaterThan(0);
     expect(window.localStorage.getItem("letter-card-search-preview-cooldowns")).toBeNull();
 
     await act(async () => {
@@ -189,8 +191,9 @@ describe("LetterCard", () => {
     expect(screen.getByText("009")).toBeInTheDocument();
   });
 
-  it("shows preview on first tap and navigates on second tap for touch devices", () => {
+  it("keeps the preview visible while a touch stays inside the card, delays hide on release, and suppresses navigation after a hold", async () => {
     mockMatchMedia(true);
+    vi.useFakeTimers();
     const onClick = vi.fn();
 
     render(
@@ -223,13 +226,51 @@ describe("LetterCard", () => {
     const button = screen.getByRole("button", {
       name: /August 13th, 1947/i,
     });
+    const shell = button.closest(".letter-card-shell") as HTMLElement;
 
-    fireEvent.pointerDown(button, { pointerType: "touch" });
-    fireEvent.click(button);
+    expect(screen.queryByRole("button", { name: "Show search match preview" })).not.toBeInTheDocument();
+
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: vi.fn(() => shell),
+    });
+
+    fireEvent.touchStart(button, {
+      touches: [{ clientX: 20, clientY: 20 }],
+    });
     expect(button).toHaveClass("letter-card--search-preview-visible");
+
+    fireEvent.touchMove(button, {
+      touches: [{ clientX: 24, clientY: 60 }],
+    });
+    expect(button).toHaveClass("letter-card--search-preview-visible");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(220);
+    });
+
+    fireEvent.touchEnd(button);
+    expect(button).toHaveClass("letter-card--search-preview-visible");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(button).toHaveClass("letter-card--search-preview-visible");
+
+    fireEvent.touchStart(button, {
+      touches: [{ clientX: 20, clientY: 20 }],
+    });
+    expect(button).toHaveClass("letter-card--search-preview-visible");
+
+    fireEvent.touchEnd(button);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(420);
+    });
+    expect(button).not.toHaveClass("letter-card--search-preview-visible");
+
+    fireEvent.click(button);
     expect(onClick).not.toHaveBeenCalled();
 
-    fireEvent.pointerDown(button, { pointerType: "touch" });
     fireEvent.click(button);
     expect(onClick).toHaveBeenCalledWith("letter-4");
   });

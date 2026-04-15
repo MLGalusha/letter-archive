@@ -107,7 +107,7 @@ vi.mock('../../db/index.js', () => ({
   },
 }));
 
-import lettersRouter from '../letters.js';
+import lettersRouter, { getArchiveContiguousSearchPhrases } from '../letters.js';
 
 describe('letters route integration', () => {
   beforeEach(() => {
@@ -660,6 +660,120 @@ describe('letters route integration', () => {
       limit: 5,
     });
     expect(executeMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('builds contiguous query phrases from longest to shortest', () => {
+    expect(getArchiveContiguousSearchPhrases('hello how are you')).toEqual([
+      'hello how are',
+      'how are you',
+      'hello how',
+      'how are',
+      'are you',
+    ]);
+  });
+
+  it('caps contiguous phrases to bound archive ranking SQL size', () => {
+    // 30 distinct terms — without a cap this would emit O(n^2) phrases (~405)
+    // and blow up the per-row LIKE expression in the archive score builder.
+    const terms = Array.from({ length: 30 }, (_, i) => `term${i.toString().padStart(2, '0')}`);
+    const phrases = getArchiveContiguousSearchPhrases(terms.join(' '));
+
+    expect(phrases.length).toBeLessThanOrEqual(20);
+    // Every emitted phrase should come from the first 8 terms only.
+    const allowedTerms = new Set(terms.slice(0, 8));
+    for (const phrase of phrases) {
+      for (const word of phrase.split(' ')) {
+        expect(allowedTerms.has(word)).toBe(true);
+      }
+    }
+    // Longest phrases should win the cap race (length 7 down).
+    expect(phrases[0].split(' ').length).toBe(7);
+  });
+
+  it('adds exact and contiguous phrase boosts to archive best-match ranking', async () => {
+    executeMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters/search',
+      path: '/letters/search',
+      query: {
+        search: 'hello how are you',
+        limit: '5',
+      },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(executeMock).toHaveBeenCalledTimes(2);
+
+    const firstQueryPayload = JSON.stringify(executeMock.mock.calls[0]?.[0]);
+    expect(firstQueryPayload).toContain('%hello how are you%');
+    expect(firstQueryPayload).toContain('%hello how are%');
+    expect(firstQueryPayload).toContain('%how are you%');
+    expect(firstQueryPayload).toContain('%hello how%');
+    expect(firstQueryPayload).toContain('%how are%');
+    expect(firstQueryPayload).toContain('%are you%');
+  });
+
+  it('prefers the closest exact preview match even when a lower-priority field also matches', async () => {
+    executeMock
+      .mockResolvedValueOnce([
+        {
+          id: 'letter-primary',
+          collectionId: 'collection-9',
+          collectionCode: '009',
+          collectionTitle: 'Collection Nine',
+          dateRaw: '19470810',
+          createdAt: '2026-03-09T12:00:00.000Z',
+          primaryType: 'L',
+          primaryPageCount: 2,
+          sender: 'Jimmie',
+          recipient: 'Molly',
+          location: 'Overland Park, Kans.',
+          hook: 'A short note.',
+          metadataVerified: true,
+          pageId: 'page-1',
+          checksumSha256: 'abcdef123456',
+          formats: ['letter'],
+          senders: ['Jimmie'],
+          recipients: ['Molly'],
+          places: ['Overland Park, Kans.'],
+          hooks: ['A short note.'],
+          summaries: [],
+          topics: [],
+          tones: [],
+          relationships: [],
+          photoDescriptions: [],
+          extraContentTranscripts: [],
+          transcriptionTexts: ['This transcript mentions hello and later how are you in separate places.'],
+          totalCount: 1,
+        },
+      ])
+      .mockResolvedValueOnce([
+        { facet: 'formats', value: 'letter', label: null, count: 1 },
+        { facet: 'collections', value: '009', label: 'Collection Nine', count: 1 },
+      ]);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters/search',
+      path: '/letters/search',
+      query: {
+        search: 'Molly',
+        limit: '5',
+      },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect((response.body as { letters: Array<{ searchPreview?: { matchedFieldLabel: string; excerpt: string } }> }).letters[0]?.searchPreview)
+      .toMatchObject({
+        matchedFieldLabel: 'Recipient',
+        excerpt: 'Molly',
+      });
   });
 
   it('centers long search previews around the visible match', async () => {

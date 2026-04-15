@@ -1,10 +1,11 @@
-import { memo, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type MouseEvent, type ReactNode, type TouchEvent } from "react";
 import "../ArchiveList/ArchiveList.css";
 import type { ArchiveSearchHighlightRange, LetterCardData } from "../../types/Letter";
 import { getImageUrl } from "../../api/client";
 import { ProgressiveImage } from "../common";
 import { getMediaLabel } from "../../utils/letterPreview";
 import { imagePreloadService } from "../../services/imagePreloadService";
+import useIsTouchDevice from "../../hooks/useIsTouchDevice";
 
 interface LetterCardProps {
   card: LetterCardData;
@@ -18,6 +19,8 @@ interface LetterCardProps {
 const SEARCH_PREVIEW_AUTO_HIDE_MS = 1600;
 const SEARCH_PREVIEW_COOLDOWN_MS = 8 * 60 * 1000;
 const SEARCH_PREVIEW_COOLDOWN_KEY = "letter-card-search-preview-cooldowns";
+const TOUCH_HOLD_CLICK_SUPPRESS_MS = 180;
+const TOUCH_PREVIEW_RELEASE_HIDE_MS = 400;
 
 type SearchPreviewCooldowns = Record<string, number>;
 
@@ -131,11 +134,6 @@ function renderHighlightedExcerpt(
   return parts;
 }
 
-function prefersTouchPreview() {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-  return window.matchMedia("(hover: none), (pointer: coarse)").matches;
-}
-
 function LetterCard({
   card,
   onClick,
@@ -147,8 +145,13 @@ function LetterCard({
   const [previewVisible, setPreviewVisible] = useState(false);
   const [prioritizeImageLoad, setPrioritizeImageLoad] = useState(false);
   const previewTimerRef = useRef<number | null>(null);
+  const touchReleaseTimerRef = useRef<number | null>(null);
   const hoverActiveRef = useRef(false);
-  const swallowNextCardClickRef = useRef(false);
+  const isTouchDevice = useIsTouchDevice();
+  const touchPreviewStartedAtRef = useRef<number | null>(null);
+  const swallowNextClickRef = useRef(false);
+  const touchPreviewActiveRef = useRef(false);
+  const touchPreviewRetouchRef = useRef(false);
   const mediaLabel = getMediaLabel(card.imageType);
   const primaryChip = card.primaryChip;
   const date = card.date || card.dateRaw;
@@ -192,6 +195,13 @@ function LetterCard({
     }
   };
 
+  const clearTouchReleaseTimer = () => {
+    if (touchReleaseTimerRef.current !== null) {
+      window.clearTimeout(touchReleaseTimerRef.current);
+      touchReleaseTimerRef.current = null;
+    }
+  };
+
   const showPreviewForABeat = (options?: { persistOnComplete?: boolean }) => {
     if (!hasSearchPreview) return;
 
@@ -206,7 +216,10 @@ function LetterCard({
     }, SEARCH_PREVIEW_AUTO_HIDE_MS);
   };
 
-  useEffect(() => () => clearPreviewTimer(), []);
+  useEffect(() => () => {
+    clearPreviewTimer();
+    clearTouchReleaseTimer();
+  }, []);
 
   const handleCardMouseEnter = () => {
     hoverActiveRef.current = true;
@@ -249,22 +262,58 @@ function LetterCard({
     showPreviewForABeat();
   };
 
-  const handleCardPointerDown = () => {
+  const handleCardTouchStart = (_event: TouchEvent<HTMLButtonElement>) => {
     if (!hasSearchPreview) return;
-    if (!prefersTouchPreview()) return;
-    if (previewVisible) return;
-
-    swallowNextCardClickRef.current = true;
-    showPreviewForABeat();
+    if (!isTouchDevice) return;
+    touchPreviewRetouchRef.current = previewVisible;
+    touchPreviewStartedAtRef.current = Date.now();
+    swallowNextClickRef.current = false;
+    touchPreviewActiveRef.current = true;
+    clearTouchReleaseTimer();
+    clearPreviewTimer();
+    setPreviewVisible(true);
   };
 
-  const handleCardClick = () => {
-    if (swallowNextCardClickRef.current) {
-      swallowNextCardClickRef.current = false;
-      return;
+  const handleCardTouchMove = (event: TouchEvent<HTMLButtonElement>) => {
+    if (!isTouchDevice || !touchPreviewActiveRef.current) return;
+
+    const touch = event.touches[0];
+    const shell = shellRef.current;
+    if (!touch || !shell || typeof document.elementFromPoint !== "function") return;
+
+    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    const insideCard = Boolean(target && shell.contains(target));
+
+    clearTouchReleaseTimer();
+    clearPreviewTimer();
+    setPreviewVisible(insideCard);
+
+    if (!insideCard) {
+      touchPreviewActiveRef.current = false;
     }
-    onClick(card.id);
   };
+
+  const handleCardTouchEnd = (_event: TouchEvent<HTMLButtonElement>) => {
+    if (!isTouchDevice) return;
+    const startedAt = touchPreviewStartedAtRef.current;
+    if (
+      touchPreviewRetouchRef.current
+      || (startedAt !== null && Date.now() - startedAt >= TOUCH_HOLD_CLICK_SUPPRESS_MS)
+    ) {
+      swallowNextClickRef.current = true;
+    }
+    touchPreviewStartedAtRef.current = null;
+    touchPreviewActiveRef.current = false;
+    touchPreviewRetouchRef.current = false;
+    clearPreviewTimer();
+    clearTouchReleaseTimer();
+    touchReleaseTimerRef.current = window.setTimeout(() => {
+      setPreviewVisible(false);
+      touchReleaseTimerRef.current = null;
+    }, TOUCH_PREVIEW_RELEASE_HIDE_MS);
+  };
+
+  const visibleSearchPreview = previewVisible && hasSearchPreview && searchPreview;
 
   return (
     <div
@@ -276,8 +325,17 @@ function LetterCard({
       <button
         type="button"
         className={`letter-card letter-card--${card.imageType}${hasSearchPreview ? " letter-card--has-search-match" : ""}${previewVisible ? " letter-card--search-preview-visible" : ""}`}
-        onPointerDown={handleCardPointerDown}
-        onClick={handleCardClick}
+        onTouchStart={handleCardTouchStart}
+        onTouchMove={handleCardTouchMove}
+        onTouchEnd={handleCardTouchEnd}
+        onTouchCancel={handleCardTouchEnd}
+        onClick={() => {
+          if (swallowNextClickRef.current) {
+            swallowNextClickRef.current = false;
+            return;
+          }
+          onClick(card.id);
+        }}
         aria-label={ariaLabel || `${mediaLabel}: ${card.title || "Unknown item"}`}
       >
         {hasImage ? (
@@ -310,16 +368,16 @@ function LetterCard({
           </div>
         )}
         {primaryChip && <div className="letter-card-page-count">{primaryChip}</div>}
-        {hasSearchPreview && searchPreview && (
+        {visibleSearchPreview && (
           <div className="letter-card-search-match" aria-hidden="true">
             <div className="letter-card-search-match-count">
-              {searchPreview.matchCount} {searchPreview.matchCount === 1 ? "match" : "matches"}
+              {visibleSearchPreview.matchCount} {visibleSearchPreview.matchCount === 1 ? "match" : "matches"}
             </div>
             <div className="letter-card-search-match-source">
-              {searchPreview.matchedFieldLabel} match
+              {visibleSearchPreview.matchedFieldLabel} match
             </div>
             <div className="letter-card-search-match-excerpt">
-              {renderHighlightedExcerpt(searchPreview.excerpt, searchPreview.highlightRanges)}
+              {renderHighlightedExcerpt(visibleSearchPreview.excerpt, visibleSearchPreview.highlightRanges)}
             </div>
           </div>
         )}
@@ -333,7 +391,7 @@ function LetterCard({
           )}
         </div>
       </button>
-      {hasSearchPreview && (
+      {hasSearchPreview && !isTouchDevice && (
         <button
           type="button"
           className={`letter-card-search-toggle${previewVisible ? " is-active" : ""}`}

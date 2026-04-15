@@ -1205,11 +1205,13 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
     : sql`TRUE`;
 
   const searchRank = trimmedSearch
-    ? sql`GREATEST(
-        ts_rank_cd(${buildArchiveSearchVectorSql()}, websearch_to_tsquery('simple', ${trimmedSearch})),
-        CASE WHEN ${buildArchiveSearchTextSql()} ILIKE ${`%${trimmedSearch}%`} THEN 0.08 ELSE 0 END,
-        similarity(lower(${buildArchiveFuzzyTextSql()}), lower(${trimmedSearch})),
-        ${fieldSimilarity}
+    ? sql`(
+        CASE WHEN lower(${buildArchiveSearchTextSql()}) LIKE lower(${`%${trimmedSearch}%`}) THEN 30::real ELSE 0::real END
+        + ${buildArchiveContiguousPhraseBoostSql(trimmedSearch)}
+        + ${buildArchiveAllTermsMatchBoostSql(trimmedSearch)}
+        + ts_rank_cd(${buildArchiveSearchVectorSql()}, websearch_to_tsquery('simple', ${trimmedSearch}))
+        + (similarity(lower(${buildArchiveFuzzyTextSql()}), lower(${trimmedSearch})) * 0.18)
+        + (${fieldSimilarity} * 0.22)
       )`
     : sql`0::real`;
 
@@ -1449,6 +1451,30 @@ function buildArchiveFieldSimilaritySql(searchTerm: string) {
   )`;
 }
 
+function buildArchiveAllTermsMatchBoostSql(searchTerm: string) {
+  const searchTerms = getArchiveSearchTerms(searchTerm);
+  if (searchTerms.length < 2) return sql`0::real`;
+
+  const searchTextSql = buildArchiveSearchTextSql();
+  const conditions = searchTerms.map((term) => sql`lower(${searchTextSql}) LIKE lower(${`%${term}%`})`);
+
+  return sql`CASE WHEN ${sql.join(conditions, sql` AND `)} THEN 3::real ELSE 0::real END`;
+}
+
+function buildArchiveContiguousPhraseBoostSql(searchTerm: string) {
+  const phrases = getArchiveContiguousSearchPhrases(searchTerm);
+  if (phrases.length === 0) return sql`0::real`;
+
+  const searchTextSql = buildArchiveSearchTextSql();
+  const boosts = phrases.map((phrase) => {
+    const termCount = phrase.split(' ').length;
+    const boost = termCount * 5;
+    return sql`CASE WHEN lower(${searchTextSql}) LIKE lower(${`%${phrase}%`}) THEN ${boost}::real ELSE 0::real END`;
+  });
+
+  return sql`(${sql.join(boosts, sql` + `)})`;
+}
+
 function buildArchiveMediaTypeSql() {
   return sql`CASE
     WHEN l.type = 'L' THEN 'letter'
@@ -1666,27 +1692,28 @@ function buildArchiveSearchPreview(
     },
   ];
 
-  for (const group of previewPriorityGroups) {
-    const groupCandidates = group.sources.flatMap((source) =>
+  const rankedCandidates = previewPriorityGroups.flatMap((group, groupIndex) =>
+    group.sources.flatMap((source) =>
       source.values
         .map((value) => scoreArchivePreviewValue(value, search, searchTerms))
         .filter((candidate): candidate is ArchivePreviewCandidate => candidate !== null)
-        .map((candidate) => ({ label: source.label, candidate })),
-    );
+        .map((candidate) => ({ label: source.label, candidate, groupIndex })),
+    ),
+  );
 
-    if (groupCandidates.length === 0) continue;
-
-    groupCandidates.sort(
+  if (rankedCandidates.length > 0) {
+    rankedCandidates.sort(
       (left, right) =>
         right.candidate.score - left.candidate.score ||
-        right.candidate.totalMatches - left.candidate.totalMatches,
+        right.candidate.totalMatches - left.candidate.totalMatches ||
+        left.groupIndex - right.groupIndex,
     );
-    const bestInGroup = groupCandidates[0];
+    const bestInGroup = rankedCandidates[0];
     return {
       excerpt: bestInGroup.candidate.excerpt,
       highlightRanges: bestInGroup.candidate.highlightRanges,
       matchCount: Math.max(
-        groupCandidates.reduce((sum, item) => sum + item.candidate.totalMatches, 0),
+        rankedCandidates.reduce((sum, item) => sum + item.candidate.totalMatches, 0),
         bestInGroup.candidate.highlightRanges.length,
         1,
       ),
@@ -1756,6 +1783,24 @@ function getArchiveSearchTerms(search: string) {
   return Array.from(new Set(terms));
 }
 
+export function getArchiveContiguousSearchPhrases(search: string) {
+  const terms = normalizeArchiveSearchText(search)
+    .split(' ')
+    .map((term) => term.trim())
+    .filter((term) => term.length >= 2);
+
+  if (terms.length < 2) return [];
+
+  const phrases: string[] = [];
+  for (let length = terms.length - 1; length >= 2; length -= 1) {
+    for (let start = 0; start + length <= terms.length; start += 1) {
+      phrases.push(terms.slice(start, start + length).join(' '));
+    }
+  }
+
+  return Array.from(new Set(phrases));
+}
+
 function normalizeArchiveSearchText(value: string) {
   return value
     .toLowerCase()
@@ -1793,6 +1838,7 @@ function scoreArchivePreviewValue(
   const segments = splitArchivePreviewSegments(value);
   let bestCandidate: ArchivePreviewCandidate | null = null;
   let totalMatches = 0;
+  const contiguousPhrases = getArchiveContiguousSearchPhrases(rawSearch);
 
   for (const segment of segments) {
     const exactRanges = collectArchiveExactMatchRanges(segment, rawSearch, searchTerms);
@@ -1800,10 +1846,14 @@ function scoreArchivePreviewValue(
     if (exactRanges.length > 0) {
       totalMatches += exactRanges.length;
       const excerptResult = buildArchiveExcerptWithHighlights(segment, exactRanges);
+      const fullPhraseBonus = segment.toLowerCase().includes(rawSearch.trim().toLowerCase()) ? 100 : 0;
+      const bestContiguousPhraseLength = getArchiveBestContiguousPhraseLength(segment, contiguousPhrases);
       const score =
-        exactRanges.length * 10 +
-        getArchivePhraseMatchBonus(segment, rawSearch) +
-        countArchiveMatchedTerms(segment, searchTerms) * 2;
+        fullPhraseBonus +
+        bestContiguousPhraseLength * 20 +
+        getArchivePhraseMatchBonus(segment, rawSearch) * 3 +
+        countArchiveMatchedTerms(segment, searchTerms) * 2 +
+        exactRanges.length;
 
       if (
         !bestCandidate ||
@@ -1839,6 +1889,18 @@ function scoreArchivePreviewValue(
     ...bestCandidate,
     totalMatches: totalMatches > 0 ? totalMatches : 1,
   };
+}
+
+function getArchiveBestContiguousPhraseLength(value: string, phrases: string[]) {
+  const loweredValue = value.toLowerCase();
+
+  for (const phrase of phrases) {
+    if (loweredValue.includes(phrase.toLowerCase())) {
+      return phrase.split(' ').length;
+    }
+  }
+
+  return 0;
 }
 
 function collectArchiveExactMatchRanges(

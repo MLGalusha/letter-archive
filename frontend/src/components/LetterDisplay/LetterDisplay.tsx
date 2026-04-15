@@ -12,6 +12,7 @@ import {
   EMOTIONAL_TONE_OPTIONS,
   METADATA_RELATIONSHIP_OPTIONS,
 } from "../../constants/enums";
+import { getAppScrollRootForIO } from "../../utils/appScroll";
 import "./LetterDisplay.css";
 
 interface LetterDisplayProps {
@@ -39,7 +40,7 @@ export default function LetterDisplay({ letter }: LetterDisplayProps) {
       ([entry]) => {
         setIsTranscriptVisible(entry.intersectionRatio > 0.1);
       },
-      { threshold: [0, 0.1, 0.5, 1] }
+      { root: getAppScrollRootForIO(), threshold: [0, 0.1, 0.5, 1] }
     );
 
     observer.observe(transcriptRef.current);

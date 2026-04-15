@@ -24,6 +24,8 @@ import useStickyDock from "../hooks/useStickyDock";
 import useIsMobile from "../hooks/useIsMobile";
 import InfiniteCarousel from '../components/InfiniteCarousel';
 import { formatDate } from "../utils/dateFormatting";
+import { getAppScrollY } from "../utils/appScroll";
+import { smoothScrollToY } from "../utils/smoothScrollTo";
 import "./HomePage.css";
 
 function formatDateParts(yearText: string, monthText: string, dayText: string): string | null {
@@ -348,14 +350,9 @@ export default function HomePage() {
 
     const header = document.querySelector('.header') as HTMLElement | null;
     const headerHeight = header?.offsetHeight ?? 0;
-    const targetTop = window.scrollY + target.getBoundingClientRect().top - headerHeight - HOME_SEARCH_SCROLL_GAP;
-    const prefersReducedMotion = typeof window.matchMedia === 'function'
-      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const targetTop = getAppScrollY() + target.getBoundingClientRect().top - headerHeight - HOME_SEARCH_SCROLL_GAP;
 
-    window.scrollTo({
-      top: Math.max(0, targetTop),
-      behavior: prefersReducedMotion ? 'auto' : 'smooth',
-    });
+    smoothScrollToY(Math.max(0, targetTop));
   }, []);
 
   const isMobile = useIsMobile();

@@ -174,6 +174,12 @@ describe("HomePage archive browsing", () => {
     const scrollToMock = vi.fn();
 
     vi.stubGlobal("scrollTo", scrollToMock);
+    // smoothScrollToY RAF loop: fire synchronously, jump performance.now()
+    // past duration so animation finalizes on first tick.
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      cb(performance.now() + 10_000);
+      return 0;
+    });
     vi.stubGlobal(
       "matchMedia",
       vi.fn().mockImplementation((query: string) => ({
@@ -227,10 +233,7 @@ describe("HomePage archive browsing", () => {
 
     await user.click(screen.getByRole("link", { name: "Search the Archive" }));
 
-    expect(scrollToMock).toHaveBeenCalledWith({
-      top: 868,
-      behavior: "smooth",
-    });
+    expect(scrollToMock).toHaveBeenLastCalledWith(0, 868);
   });
 
   it("formats featured letter dates into human-readable month names", async () => {

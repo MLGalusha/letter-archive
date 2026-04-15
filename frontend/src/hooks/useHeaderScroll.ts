@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { addAppScrollListener, getAppScrollY } from "../utils/appScroll";
 
 /**
  * Single source of truth for header visibility and "at top of page" state.
@@ -46,7 +47,7 @@ export default function useHeaderScroll(): HeaderScrollState {
   const [visible, setVisible] = useState<boolean>(true);
   const [atTop, setAtTop] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
-    return window.scrollY <= ATTOP_EXPAND;
+    return getAppScrollY() <= ATTOP_EXPAND;
   });
   const [focusHidden, setFocusHidden] = useState<boolean>(false);
 
@@ -73,11 +74,11 @@ export default function useHeaderScroll(): HeaderScrollState {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    let lastY = window.scrollY;
+    let lastY = getAppScrollY();
     let ticking = false;
 
     const update = () => {
-      const y = window.scrollY;
+      const y = getAppScrollY();
 
       // atTop — always tracked, even on desktop, because dock collapse keys off it.
       setAtTop((prev) => (prev ? y <= ATTOP_COLLAPSE : y <= ATTOP_EXPAND));
@@ -107,8 +108,7 @@ export default function useHeaderScroll(): HeaderScrollState {
 
     // Prime state on mount.
     update();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return addAppScrollListener(onScroll);
   }, [isMobile, reducedMotion]);
 
   // focusin/focusout: any element tagged with [data-hide-header-on-focus]

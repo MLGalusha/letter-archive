@@ -55,6 +55,13 @@ describe("useAutoScrollOnFocus", () => {
       value: 300,
     });
     vi.spyOn(window, "scrollTo").mockImplementation(scrollToMock);
+    // smoothScrollToY drives its animation via RAF; fire synchronously and push
+    // performance.now() past any reasonable duration so the animation resolves
+    // to its final position on the first tick.
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+      cb(performance.now() + 10_000);
+      return 0;
+    });
 
     const { container } = render(<TestHarness />);
     const wrapper = container.firstElementChild as HTMLDivElement;
@@ -73,10 +80,8 @@ describe("useAutoScrollOnFocus", () => {
 
     fireEvent.focusIn(input);
 
-    expect(scrollToMock).toHaveBeenCalledWith({
-      top: 440,
-      behavior: "smooth",
-    });
+    // RAF-driven smoothScrollToY → window.scrollTo(0, targetY) (positional).
+    expect(scrollToMock).toHaveBeenLastCalledWith(0, 440);
   });
 
   it("re-pins the container after input-driven layout shifts", async () => {
@@ -106,10 +111,8 @@ describe("useAutoScrollOnFocus", () => {
     fireEvent.input(input, { target: { value: "mol" } });
     await vi.advanceTimersByTimeAsync(320);
 
-    expect(scrollToMock).toHaveBeenCalledWith({
-      top: 328,
-      behavior: "auto",
-    });
+    // Input settle uses appScrollTo → window.scrollTo(0, y) when no container registered.
+    expect(scrollToMock).toHaveBeenCalledWith(0, 328);
   });
 
   it("does not scroll when the container is already within the threshold", () => {

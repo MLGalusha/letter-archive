@@ -6,6 +6,7 @@ import { ProgressiveImage } from "../common";
 import { getMediaLabel } from "../../utils/letterPreview";
 import { imagePreloadService } from "../../services/imagePreloadService";
 import useIsTouchDevice from "../../hooks/useIsTouchDevice";
+import { getAppScrollRootForIO } from "../../utils/appScroll";
 
 interface LetterCardProps {
   card: LetterCardData;
@@ -181,7 +182,7 @@ function LetterCard({
         setPrioritizeImageLoad(true);
         observer.disconnect();
       },
-      { rootMargin: "1200px 0px" },
+      { root: getAppScrollRootForIO(), rootMargin: "1200px 0px" },
     );
 
     observer.observe(node);

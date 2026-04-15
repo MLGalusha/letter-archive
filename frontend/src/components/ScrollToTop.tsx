@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigationType } from 'react-router-dom';
+import { appScrollTo } from '../utils/appScroll';
 
 export default function ScrollToTop() {
   const { pathname } = useLocation();
@@ -18,7 +19,7 @@ export default function ScrollToTop() {
     // Don't scroll on back/forward (POP) so browser restores prior position.
     if (navType === 'POP') return;
 
-    window.scrollTo(0, 0);
+    appScrollTo(0);
   }, [pathname, navType]);
 
   return null;

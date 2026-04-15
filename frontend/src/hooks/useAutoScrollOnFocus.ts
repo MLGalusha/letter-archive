@@ -1,4 +1,6 @@
 import { useEffect, type RefObject } from "react";
+import { appScrollTo, getAppScrollY } from "../utils/appScroll";
+import { smoothScrollToY } from "../utils/smoothScrollTo";
 
 /**
  * Keep `containerRef` pinned just under the sticky header whenever the user is
@@ -34,13 +36,9 @@ export function useAutoScrollOnFocus(
       const desiredViewportTop = headerHeight + gap;
       return {
         delta: rect.top - desiredViewportTop,
-        absoluteTop: Math.max(0, window.scrollY + rect.top - desiredViewportTop),
+        absoluteTop: Math.max(0, getAppScrollY() + rect.top - desiredViewportTop),
       };
     };
-
-    const prefersReducedMotion = () =>
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const handleFocusIn = (event: FocusEvent) => {
       const target = event.target as HTMLElement | null;
@@ -56,10 +54,7 @@ export function useAutoScrollOnFocus(
       const { delta, absoluteTop } = getDelta();
       if (Math.abs(delta) <= threshold) return;
 
-      window.scrollTo({
-        top: absoluteTop,
-        behavior: prefersReducedMotion() ? "auto" : "smooth",
-      });
+      smoothScrollToY(absoluteTop);
     };
 
     const handleInput = (event: Event) => {
@@ -74,7 +69,7 @@ export function useAutoScrollOnFocus(
         inputTimer = null;
         const { delta, absoluteTop } = getDelta();
         if (Math.abs(delta) <= threshold) return;
-        window.scrollTo({ top: absoluteTop, behavior: "auto" });
+        appScrollTo(absoluteTop);
       }, inputSettleDelay);
     };
 

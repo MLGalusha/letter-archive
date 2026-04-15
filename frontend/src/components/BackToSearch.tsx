@@ -1,4 +1,7 @@
-import { useCallback, useEffect, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { createPortal } from "react-dom";
+import { smoothScrollToY } from "../utils/smoothScrollTo";
+import { addAppScrollListener, getAppScrollY } from "../utils/appScroll";
 import "./BackToSearch.css";
 
 interface BackToSearchProps {
@@ -20,6 +23,35 @@ export default function BackToSearch({
   label = "Search",
   enableKeyboardShortcut = true,
 }: BackToSearchProps) {
+  // Only reveal the button when the user is scrolling back up. Scrolling down
+  // hides it so it doesn't linger while the user is reading forward.
+  const [scrollingUp, setScrollingUp] = useState(false);
+  const lastScrollYRef = useRef(0);
+  const programmaticScrollRef = useRef(false);
+
+  useEffect(() => {
+    if (!visible) {
+      setScrollingUp(false);
+      return;
+    }
+    lastScrollYRef.current = getAppScrollY();
+    // A small threshold avoids flipping state on sub-pixel/inertial jitter.
+    const DIRECTION_THRESHOLD = 6;
+    const onScroll = () => {
+      const y = getAppScrollY();
+      const delta = y - lastScrollYRef.current;
+      if (Math.abs(delta) < DIRECTION_THRESHOLD) return;
+      // Ignore our own programmatic scroll-to-search animation.
+      if (programmaticScrollRef.current) {
+        lastScrollYRef.current = y;
+        return;
+      }
+      setScrollingUp(delta < 0);
+      lastScrollYRef.current = y;
+    };
+    return addAppScrollListener(onScroll);
+  }, [visible]);
+
   const jumpToSearch = useCallback(() => {
     const target = targetRef.current;
     if (!target) return;
@@ -27,16 +59,16 @@ export default function BackToSearch({
     const isTouch = typeof window !== "undefined" && window.matchMedia?.("(hover: none)").matches;
     const header = document.querySelector(".header") as HTMLElement | null;
     const headerHeight = header?.offsetHeight ?? 0;
-    const targetTop = window.scrollY + target.getBoundingClientRect().top - headerHeight - SCROLL_GAP;
+    const targetTop = getAppScrollY() + target.getBoundingClientRect().top - headerHeight - SCROLL_GAP;
     const prefersReducedMotion =
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    // Always perform an explicit scroll so the button still works when the input
-    // is already focused or focus events are otherwise suppressed.
-    window.scrollTo({
-      top: Math.max(0, targetTop),
-      behavior: prefersReducedMotion ? "auto" : "smooth",
+    programmaticScrollRef.current = true;
+    smoothScrollToY(targetTop, {
+      onFinish: () => {
+        programmaticScrollRef.current = false;
+      },
     });
 
     // Desktop: also focus the input after the scroll so typing can continue.
@@ -47,7 +79,6 @@ export default function BackToSearch({
       window.setTimeout(() => {
         input?.focus({ preventScroll: true });
       }, prefersReducedMotion ? 0 : 160);
-      return;
     }
   }, [targetRef]);
 
@@ -69,27 +100,33 @@ export default function BackToSearch({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [enableKeyboardShortcut, jumpToSearch]);
 
+  // Floating button is portaled to document.body so it sits OUTSIDE the
+  // #app-scroll container (see #35). The iOS "tap to stop fling" gesture
+  // only consumes touches on the scrolling element and its descendants —
+  // portaling lifts the button out of that subtree entirely, so a single
+  // tap mid-fling both stops the scroll AND triggers the action.
   const handleClick = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
+    (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault();
       jumpToSearch();
     },
     [jumpToSearch],
   );
 
-  return (
+  return createPortal(
     <button
       type="button"
-      className={`back-to-search${visible ? " back-to-search--visible" : ""}`}
-      onPointerDown={handleClick}
+      className={`back-to-search${visible && scrollingUp ? " back-to-search--visible" : ""}`}
+      onClick={handleClick}
       aria-label={`Jump to ${label.toLowerCase()}`}
-      tabIndex={visible ? 0 : -1}
+      tabIndex={visible && scrollingUp ? 0 : -1}
     >
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.6" />
         <path d="M10.5 10.5L13.5 13.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
       <span>{label}</span>
-    </button>
+    </button>,
+    document.body,
   );
 }

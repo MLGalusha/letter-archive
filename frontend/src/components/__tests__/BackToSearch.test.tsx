@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import BackToSearch from "../BackToSearch";
 
@@ -23,9 +23,22 @@ describe("BackToSearch", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mockMatchMedia();
+    // The component uses a RAF-driven smooth scroll. Make RAF fire synchronously
+    // with a timestamp far past the animation duration so the easing loop
+    // terminates on the first tick and lands exactly on the destination.
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation(
+      (cb: FrameRequestCallback) => {
+        cb(performance.now() + 10_000);
+        return 0;
+      },
+    );
   });
 
   afterEach(() => {
+    // Unmount portaled component before clearing DOM — otherwise React's
+    // portal cleanup throws NotFoundError trying to remove a node that was
+    // already wiped by innerHTML = "".
+    cleanup();
     vi.useRealTimers();
     vi.restoreAllMocks();
     document.body.innerHTML = "";
@@ -67,12 +80,9 @@ describe("BackToSearch", () => {
 
     render(<BackToSearch visible targetRef={targetRef} />);
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Jump to search" }));
+    fireEvent.click(screen.getByRole("button", { name: "Jump to search" }));
 
-    expect(scrollToMock).toHaveBeenCalledWith({
-      top: 752,
-      behavior: "smooth",
-    });
+    expect(scrollToMock).toHaveBeenLastCalledWith(0, 752);
 
     await vi.advanceTimersByTimeAsync(160);
     expect(input).toHaveFocus();
@@ -132,7 +142,7 @@ describe("BackToSearch", () => {
 
     render(<BackToSearch visible targetRef={targetRef} />);
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Jump to search" }));
+    fireEvent.click(screen.getByRole("button", { name: "Jump to search" }));
 
     expect(scrollToMock).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(160);

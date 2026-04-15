@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { addAppScrollListener, getAppScrollY } from '../utils/appScroll';
 
 /**
  * Scroll-driven parallax + zigzag animation for floating page thumbnails
@@ -76,7 +77,7 @@ export default function useThumbParallax(enabled: boolean): void {
     const factor = 0.065;
 
     const tick = () => {
-      const scrollY = window.scrollY;
+      const scrollY = getAppScrollY();
 
       if (scrollY === lastScrollY && rafId === null) return;
       lastScrollY = scrollY;
@@ -133,7 +134,7 @@ export default function useThumbParallax(enabled: boolean): void {
     };
 
     function start() { if (rafId == null) rafId = requestAnimationFrame(tick); }
-    window.addEventListener('scroll', start, { passive: true });
+    const removeScroll = addAppScrollListener(start);
     start();
 
     const onMq = (e: MediaQueryListEvent) => {
@@ -144,7 +145,7 @@ export default function useThumbParallax(enabled: boolean): void {
     mq.addEventListener('change', onMq);
 
     return () => {
-      window.removeEventListener('scroll', start);
+      removeScroll();
       window.removeEventListener('resize', onResize);
       mq.removeEventListener('change', onMq);
       observer.disconnect();

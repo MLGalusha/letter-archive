@@ -116,3 +116,99 @@ describe('useArchiveSearch URL-param debounce', () => {
     expect(result.current.location.search).toBe('?q=molly');
   });
 });
+
+describe('useArchiveSearch sort resolution + URL omission', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("resolvedSort falls back to the page's defaultSort when filters.sort is unset", () => {
+    const { result: homeResult } = renderHook(
+      () => useArchiveSearch({ storageKey: 'test-home', defaultSort: 'relevance' }),
+      { wrapper: makeWrapper() },
+    );
+    expect(homeResult.current.resolvedSort).toBe('relevance');
+
+    const { result: collectionResult } = renderHook(
+      () =>
+        useArchiveSearch({
+          storageKey: 'test-collection',
+          defaultSort: 'letterDate',
+          defaultSortOrder: 'asc',
+        }),
+      { wrapper: makeWrapper() },
+    );
+    expect(collectionResult.current.resolvedSort).toBe('letterDate');
+  });
+
+  it('omits ?sort= from the URL when the chosen sort equals the page default (HomePage)', async () => {
+    const { result } = renderHook(
+      () => ({
+        archive: useArchiveSearch({ storageKey: 'test-home', defaultSort: 'relevance' }),
+        location: useLocation(),
+      }),
+      { wrapper: makeWrapper() },
+    );
+
+    // Default (relevance) — no URL param.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(result.current.location.search).toBe('');
+
+    // Pick a non-default sort → URL writes ?sort=letterDate.
+    act(() => {
+      result.current.archive.setFilters({ sort: 'letterDate', sortOrder: 'desc' });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(result.current.location.search).toBe('?sort=letterDate');
+
+    // Flip back to the default → URL drops ?sort=.
+    act(() => {
+      result.current.archive.setFilters({ sort: 'relevance', sortOrder: 'desc' });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(result.current.location.search).toBe('');
+  });
+
+  it('omits ?sort= when letterDate matches the CollectionDetailPage default', async () => {
+    const { result } = renderHook(
+      () => ({
+        archive: useArchiveSearch({
+          storageKey: 'test-collection',
+          defaultSort: 'letterDate',
+          defaultSortOrder: 'asc',
+        }),
+        location: useLocation(),
+      }),
+      { wrapper: makeWrapper() },
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    // letterDate is the default sort field — ?sort= is omitted. (sortOrder=asc
+    // still appears because the hook hardcodes 'desc' as the omission threshold
+    // rather than comparing against defaultSortOrder — pre-existing behavior,
+    // tracked separately.)
+    expect(result.current.location.search).not.toContain('sort=letterDate');
+
+    // Pick Best Match → URL writes ?sort=relevance.
+    act(() => {
+      result.current.archive.setFilters({ sort: 'relevance', sortOrder: 'desc' });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(result.current.location.search).toContain('sort=relevance');
+  });
+});

@@ -97,6 +97,9 @@
   overflow: hidden;
   position: relative;
   text-align: left;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   width: 100%;
 }
 
@@ -104,9 +107,11 @@
   padding-left: 0;
 }
 
-.letter-card:hover {
-  transform: translateY(-3px) scale(1.01);
-  box-shadow: 0 24px 48px rgba(29, 26, 20, 0.13);
+@media (hover: hover) and (pointer: fine) {
+  .letter-card:hover {
+    transform: translateY(-3px) scale(1.01);
+    box-shadow: 0 24px 48px rgba(29, 26, 20, 0.13);
+  }
 }
 
 .letter-card-skeleton {

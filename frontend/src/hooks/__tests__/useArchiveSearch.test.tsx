@@ -6,25 +6,27 @@ import useArchiveSearch from '../useArchiveSearch';
 
 // The hook fires searchArchiveShelf on a 180ms debounce. Stub it so the test
 // doesn't try to hit the real API; we only care about URL-param behavior here.
+const searchArchiveShelfMock = vi.fn(() =>
+  Promise.resolve({
+    letters: [],
+    page: 1,
+    limit: 24,
+    total: 0,
+    facets: {
+      formats: [],
+      collections: [],
+      correspondents: [],
+      places: [],
+      years: [],
+      topics: [],
+      tones: [],
+      relationships: [],
+    },
+  }),
+);
+
 vi.mock('../../api/letters', () => ({
-  searchArchiveShelf: vi.fn(() =>
-    Promise.resolve({
-      letters: [],
-      page: 1,
-      limit: 24,
-      total: 0,
-      facets: {
-        formats: [],
-        collections: [],
-        correspondents: [],
-        places: [],
-        years: [],
-        topics: [],
-        tones: [],
-        relationships: [],
-      },
-    }),
-  ),
+  searchArchiveShelf: (...args: unknown[]) => searchArchiveShelfMock(...(args as [])),
 }));
 
 // Isolate from real localStorage-backed persistence between tests.
@@ -178,6 +180,33 @@ describe('useArchiveSearch sort resolution + URL omission', () => {
       await vi.advanceTimersByTimeAsync(300);
     });
     expect(result.current.location.search).toBe('');
+  });
+
+  it('sends the resolved defaultSort to the backend when filters.sort is unset', async () => {
+    searchArchiveShelfMock.mockClear();
+
+    renderHook(
+      () =>
+        useArchiveSearch({
+          storageKey: 'test-collection-req',
+          defaultSort: 'letterDate',
+          defaultSortOrder: 'asc',
+        }),
+      { wrapper: makeWrapper() },
+    );
+
+    // Flush the 180ms request debounce.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+
+    expect(searchArchiveShelfMock).toHaveBeenCalled();
+    const lastCall = searchArchiveShelfMock.mock.calls.at(-1);
+    const params = (lastCall as unknown as [{ sort?: string; sortOrder?: string }])[0];
+    // Without this behavior, the UI shows "Date" as active while the backend
+    // silently serves relevance-ranked results — misleading sort cue.
+    expect(params.sort).toBe('letterDate');
+    expect(params.sortOrder).toBe('asc');
   });
 
   it('omits ?sort= when letterDate matches the CollectionDetailPage default', async () => {

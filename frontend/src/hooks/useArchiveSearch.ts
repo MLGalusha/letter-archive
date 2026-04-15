@@ -218,10 +218,15 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
       yearTo: filters.dateRange?.end,
       hasTranscript: filters.hasTranscript,
       verified: filters.verified,
-      sort: filters.sort || undefined,
-      sortOrder: filters.sortOrder || undefined,
+      // Send the *resolved* sort so the backend matches the UI's active
+      // sort cue. Without this, an unset filters.sort makes the UI show the
+      // page default (e.g. letterDate on CollectionDetailPage) while the
+      // request falls through to the backend's own default, producing a
+      // stale/misleading sort indicator.
+      sort: filters.sort || defaultSort,
+      sortOrder: filters.sortOrder || defaultSortOrder,
     }),
-    [filters, searchQuery],
+    [filters, searchQuery, defaultSort, defaultSortOrder],
   );
 
   // ── Execute search (180ms debounce with request versioning) ──

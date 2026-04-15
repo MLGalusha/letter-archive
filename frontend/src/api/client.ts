@@ -4,22 +4,35 @@
 
 const isDev = import.meta.env.DEV;
 
-// In dev, we derive the API base from the page's current hostname so the
-// app works no matter which origin it was loaded from:
-//   - laptop at http://localhost:5174         → http://localhost:<port>
-//   - phone  at http://192.168.1.62:5174      → http://192.168.1.62:<port>
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+// In dev the API base URL depends on *how* the page was loaded:
 //
-// VITE_API_URL still matters in dev, but only for its *port* — isolated
-// worktrees set VITE_API_URL=http://localhost:<customPort> in .env.local
-// so they don't collide with the main worktree's backend. We honor that
-// port but ignore the host, otherwise loading the phone's LAN URL would
-// send every API/image request to the phone's own localhost.
+// 1. Loopback origin (localhost / 127.0.0.1 / ::1) — this covers normal
+//    `vite dev` on the laptop AND the mocked e2e suite (which loads
+//    http://127.0.0.1:4174). Honor VITE_API_URL verbatim if set, else
+//    fall back to http://localhost:3002. The mocked e2e suite in
+//    particular needs this: its Playwright route intercepts are keyed on
+//    `localhost:3002`, so any other host would cause them to miss and
+//    every request would hang on a real network call.
+//
+// 2. Non-loopback origin (a LAN IP, e.g. a phone on Wi-Fi hitting the
+//    dev machine) — swap in window.location.hostname so the phone reaches
+//    the dev machine's backend rather than its own localhost. The port
+//    still comes from VITE_API_URL when set (so isolated worktrees with
+//    custom backend ports still work), defaulting to 3002 otherwise.
 //
 // In prod builds `isDev` is false and we honor VITE_API_URL verbatim.
 function resolveApiBaseUrl(): string {
   const configured = import.meta.env.VITE_API_URL;
 
   if (isDev && typeof window !== 'undefined' && window.location) {
+    const currentHost = window.location.hostname;
+    if (LOOPBACK_HOSTS.has(currentHost)) {
+      return configured || 'http://localhost:3002';
+    }
+    // Non-loopback (phone on LAN). Keep the current hostname, take the
+    // port from VITE_API_URL when available.
     let port = '3002';
     if (configured) {
       try {
@@ -29,7 +42,7 @@ function resolveApiBaseUrl(): string {
         /* fall through to default port */
       }
     }
-    return `${window.location.protocol}//${window.location.hostname}:${port}`;
+    return `${window.location.protocol}//${currentHost}:${port}`;
   }
 
   if (configured) return configured;

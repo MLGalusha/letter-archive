@@ -4,6 +4,10 @@
 .be-page-shell.public-site-shell {
   min-height: 0;
   overflow-x: auto;
+  /* This shell doesn't mount the public <Header>, so there's no fixed header
+     to clear. Reset --header-height to 0 so .body-layout's padding-top
+     formula (1.8rem + var(--header-height)) doesn't leave a phantom gutter. */
+  --header-height: 0px;
 }
 
 .be-page-shell.public-site-shell::before {

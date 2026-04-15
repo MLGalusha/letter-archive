@@ -104,8 +104,15 @@ export default function SearchBar({
   const focusSearchInputFromWrapper = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
     // Ignore clicks on the input itself (already handled) or on any interactive control
-    // inside the wrapper (filter button, sort trigger, flyout contents).
-    if (target.closest("button, input, select, textarea, [role='button'], [role='menu']")) {
+    // inside the wrapper (filter button, sort trigger, flyout contents). The sort menu
+    // uses role="listbox"/role="option", so those must be excluded too — otherwise
+    // picking a sort option would bubble up and refocus the input, popping the mobile
+    // keyboard mid-interaction.
+    if (
+      target.closest(
+        "button, input, select, textarea, [role='button'], [role='menu'], [role='menuitem'], [role='listbox'], [role='option']",
+      )
+    ) {
       return;
     }
     searchInputRef.current?.focus();

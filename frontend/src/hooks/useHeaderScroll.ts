@@ -35,8 +35,14 @@ function readIsMobile(): boolean {
   return window.matchMedia(`(max-width: ${MOBILE_MAX_WIDTH}px)`).matches;
 }
 
+function readReducedMotion(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 export default function useHeaderScroll(): HeaderScrollState {
   const [isMobile, setIsMobile] = useState<boolean>(() => readIsMobile());
+  const [reducedMotion, setReducedMotion] = useState<boolean>(() => readReducedMotion());
   const [visible, setVisible] = useState<boolean>(true);
   const [atTop, setAtTop] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
@@ -54,6 +60,15 @@ export default function useHeaderScroll(): HeaderScrollState {
     return () => mql.removeEventListener("change", onChange);
   }, []);
 
+  // Track prefers-reduced-motion so the hide-on-scroll branch can opt out.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onChange = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
   // Scroll listener: drives both `visible` and `atTop`.
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -67,8 +82,10 @@ export default function useHeaderScroll(): HeaderScrollState {
       // atTop — always tracked, even on desktop, because dock collapse keys off it.
       setAtTop((prev) => (prev ? y <= ATTOP_COLLAPSE : y <= ATTOP_EXPAND));
 
-      // visible — only on mobile. Desktop stays pinned.
-      if (isMobile) {
+      // visible — only on mobile, and only when the user hasn't opted out of
+      // motion. Desktop and reduced-motion users keep the header pinned so it
+      // never slides in and out on scroll.
+      if (isMobile && !reducedMotion) {
         if (y < HEADER_NEAR_TOP || y < lastY - HEADER_HYSTERESIS) {
           setVisible(true);
         } else if (y > lastY + HEADER_HYSTERESIS) {
@@ -92,7 +109,7 @@ export default function useHeaderScroll(): HeaderScrollState {
     update();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, [isMobile]);
+  }, [isMobile, reducedMotion]);
 
   // focusin/focusout: any element tagged with [data-hide-header-on-focus]
   // forces the header hidden while focus is inside it. Mobile only — desktop

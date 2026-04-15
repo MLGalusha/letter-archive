@@ -4,14 +4,35 @@
 
 const isDev = import.meta.env.DEV;
 
-// In dev, derive the API base from the page's current hostname so the app
-// works when loaded from a LAN IP (e.g. on a phone at 192.168.1.62:5174 →
-// backend at 192.168.1.62:3002). In prod builds we honor VITE_API_URL.
+// In dev, we derive the API base from the page's current hostname so the
+// app works no matter which origin it was loaded from:
+//   - laptop at http://localhost:5174         → http://localhost:<port>
+//   - phone  at http://192.168.1.62:5174      → http://192.168.1.62:<port>
+//
+// VITE_API_URL still matters in dev, but only for its *port* — isolated
+// worktrees set VITE_API_URL=http://localhost:<customPort> in .env.local
+// so they don't collide with the main worktree's backend. We honor that
+// port but ignore the host, otherwise loading the phone's LAN URL would
+// send every API/image request to the phone's own localhost.
+//
+// In prod builds `isDev` is false and we honor VITE_API_URL verbatim.
 function resolveApiBaseUrl(): string {
-  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  const configured = import.meta.env.VITE_API_URL;
+
   if (isDev && typeof window !== 'undefined' && window.location) {
-    return `${window.location.protocol}//${window.location.hostname}:3002`;
+    let port = '3002';
+    if (configured) {
+      try {
+        const parsed = new URL(configured);
+        if (parsed.port) port = parsed.port;
+      } catch {
+        /* fall through to default port */
+      }
+    }
+    return `${window.location.protocol}//${window.location.hostname}:${port}`;
   }
+
+  if (configured) return configured;
   return 'http://localhost:3002';
 }
 

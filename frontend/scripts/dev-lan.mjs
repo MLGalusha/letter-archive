@@ -78,23 +78,42 @@ if (!lanIp) {
 }
 
 const frontendUrl = `http://${lanIp}:${FRONTEND_PORT}/`;
+const laptopUrl = `http://localhost:${FRONTEND_PORT}/`;
 
-// Rewrite backend URL host to the LAN IP (keep port + scheme).
-let apiUrl;
+// Derive the backend port (for display only) from rawApiUrl.
+let backendPort = '3002';
 try {
-  const u = new URL(rawApiUrl);
-  u.hostname = lanIp;
-  apiUrl = u.toString().replace(/\/$/, '');
+  backendPort = new URL(rawApiUrl).port || '3002';
 } catch {
-  apiUrl = `http://${lanIp}:3002`;
+  /* keep default */
 }
+
+// NOTE: we intentionally do NOT set or mutate VITE_API_URL here. The
+// frontend client (src/api/client.ts) is the single source of truth — in
+// dev it derives the backend *host* from window.location.hostname and
+// takes the *port* from VITE_API_URL when set (so isolated worktrees with
+// custom backend ports still work). That means each origin resolves to
+// its own backend automatically:
+//   laptop  → http://localhost:<FRONTEND_PORT>  → API http://localhost:<backendPort>
+//   phone   → http://<lanIp>:<FRONTEND_PORT>    → API http://<lanIp>:<backendPort>
+//
+// Previously this script forced VITE_API_URL to the LAN IP, which broke
+// the laptop case (http://localhost:5174 sent image requests to
+// http://<lanIp>:3002, which macOS blocks on loopback-to-self). The
+// naive inverse — letting VITE_API_URL flow through unchanged — broke
+// the phone case in worktrees whose .env.local sets
+// VITE_API_URL=http://localhost:<port>, because the phone would then send
+// every request to its own localhost. Fixing this in client.ts covers
+// both scenarios without any env-var gymnastics here. See commit ac0d2fb9
+// for the original (buggy) belt-and-suspenders setup.
 
 console.log('');
 console.log('  ┌─────────────────────────────────────────────────┐');
-console.log('  │  LAN dev server — open on your phone:           │');
-console.log(`  │    ${frontendUrl.padEnd(45)}│`);
+console.log('  │  LAN dev server                                 │');
+console.log(`  │    phone:  ${frontendUrl.padEnd(37)}│`);
+console.log(`  │    laptop: ${laptopUrl.padEnd(37)}│`);
 console.log('  │                                                 │');
-console.log(`  │  API: ${apiUrl.padEnd(42)}│`);
+console.log(`  │  API port: ${backendPort.padEnd(37)}│`);
 console.log('  │                                                 │');
 console.log('  │  Make sure the backend is also running:         │');
 console.log('  │    cd backend && npm run dev                    │');
@@ -117,10 +136,7 @@ const child = spawn(
   viteArgs,
   {
     stdio: 'inherit',
-    env: {
-      ...process.env,
-      VITE_API_URL: apiUrl,
-    },
+    env: process.env,
   },
 );
 

@@ -95,12 +95,26 @@ app.use(globalRateLimit);
 app.use(securityHeaders);
 
 // Middleware
-const corsOrigins = env.CORS_ORIGINS
+const isProd = process.env.NODE_ENV === 'production';
+const explicitCorsOrigins = env.CORS_ORIGINS
   ? env.CORS_ORIGINS.split(',').map(s => s.trim())
   : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://localhost:3002'];
+
+// In dev, also accept requests from any private-network origin (e.g. a phone
+// on the same Wi-Fi hitting the vite --host LAN URL).
+const privateNetworkOriginPattern = /^https?:\/\/(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/;
+
 app.use(
   cors({
-    origin: corsOrigins,
+    origin(origin, callback) {
+      // Same-origin / curl / server-to-server requests have no Origin header.
+      if (!origin) return callback(null, true);
+      if (explicitCorsOrigins.includes(origin)) return callback(null, true);
+      if (!isProd && privateNetworkOriginPattern.test(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
     credentials: true,
   })
 );

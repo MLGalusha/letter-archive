@@ -2,8 +2,20 @@
  * Base HTTP client for API calls
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 const isDev = import.meta.env.DEV;
+
+// In dev, derive the API base from the page's current hostname so the app
+// works when loaded from a LAN IP (e.g. on a phone at 192.168.1.62:5174 →
+// backend at 192.168.1.62:3002). In prod builds we honor VITE_API_URL.
+function resolveApiBaseUrl(): string {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (isDev && typeof window !== 'undefined' && window.location) {
+    return `${window.location.protocol}//${window.location.hostname}:3002`;
+  }
+  return 'http://localhost:3002';
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 // Simple frontend logger
 const log = {

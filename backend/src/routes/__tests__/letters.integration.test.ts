@@ -672,6 +672,24 @@ describe('letters route integration', () => {
     ]);
   });
 
+  it('caps contiguous phrases to bound archive ranking SQL size', () => {
+    // 30 distinct terms — without a cap this would emit O(n^2) phrases (~405)
+    // and blow up the per-row LIKE expression in the archive score builder.
+    const terms = Array.from({ length: 30 }, (_, i) => `term${i.toString().padStart(2, '0')}`);
+    const phrases = getArchiveContiguousSearchPhrases(terms.join(' '));
+
+    expect(phrases.length).toBeLessThanOrEqual(20);
+    // Every emitted phrase should come from the first 8 terms only.
+    const allowedTerms = new Set(terms.slice(0, 8));
+    for (const phrase of phrases) {
+      for (const word of phrase.split(' ')) {
+        expect(allowedTerms.has(word)).toBe(true);
+      }
+    }
+    // Longest phrases should win the cap race (length 7 down).
+    expect(phrases[0].split(' ').length).toBe(7);
+  });
+
   it('adds exact and contiguous phrase boosts to archive best-match ranking', async () => {
     executeMock
       .mockResolvedValueOnce([])

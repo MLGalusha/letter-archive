@@ -1783,19 +1783,31 @@ function getArchiveSearchTerms(search: string) {
   return Array.from(new Set(terms));
 }
 
+// Each phrase returned here becomes its own `LIKE` clause in the archive
+// ranking SQL, evaluated per row. Phrase count grows O(n^2) in the number of
+// terms, so long queries can blow up the score expression — cap both the
+// terms we consider and the total phrases we emit. Longer phrases score
+// higher (termCount * 5), so when we cap we drop the shortest first.
+const MAX_PHRASE_TERMS = 8;
+const MAX_PHRASES = 20;
+
 export function getArchiveContiguousSearchPhrases(search: string) {
-  const terms = normalizeArchiveSearchText(search)
+  const allTerms = normalizeArchiveSearchText(search)
     .split(' ')
     .map((term) => term.trim())
     .filter((term) => term.length >= 2);
 
-  if (terms.length < 2) return [];
+  if (allTerms.length < 2) return [];
+
+  const terms = allTerms.slice(0, MAX_PHRASE_TERMS);
 
   const phrases: string[] = [];
   for (let length = terms.length - 1; length >= 2; length -= 1) {
     for (let start = 0; start + length <= terms.length; start += 1) {
       phrases.push(terms.slice(start, start + length).join(' '));
+      if (phrases.length >= MAX_PHRASES) break;
     }
+    if (phrases.length >= MAX_PHRASES) break;
   }
 
   return Array.from(new Set(phrases));

@@ -113,7 +113,12 @@ app.use(
       if (!isProd && privateNetworkOriginPattern.test(origin)) {
         return callback(null, true);
       }
-      return callback(new Error(`CORS: origin ${origin} not allowed`));
+      // Reject without throwing: returning `false` tells the cors middleware
+      // to omit CORS headers, so the browser blocks the request naturally.
+      // Throwing here would route through the global error handler and
+      // surface as a 500, polluting error logs for expected denials.
+      logger.warn({ origin }, 'CORS: origin not allowed');
+      return callback(null, false);
     },
     credentials: true,
   })

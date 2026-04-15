@@ -102,8 +102,15 @@ console.log('  └────────────────────�
 console.log('');
 
 // Pass through any extra args after the script name (e.g. --port 5175).
+// If the user didn't specify --port, bind Vite to the FRONTEND_PORT we just
+// advertised in the phone URL — otherwise Vite falls back to its default
+// (5173) and the printed LAN URL is unreachable in worktrees with custom
+// ports.
 const extraArgs = process.argv.slice(2);
-const viteArgs = ['--host', '0.0.0.0', ...extraArgs];
+const hasPortArg = extraArgs.some((a) => a === '--port' || a.startsWith('--port='));
+const viteArgs = ['--host', '0.0.0.0'];
+if (!hasPortArg) viteArgs.push('--port', String(FRONTEND_PORT));
+viteArgs.push(...extraArgs);
 
 const child = spawn(
   'vite',

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import SEO from "../components/SEO";
 
@@ -841,7 +842,9 @@ export default function LetterDetailPage() {
       </article>
 
       {/* ── Image Viewer Modal ─────────────────────────────── */}
-      {viewerOpen && (
+      {viewerOpen && createPortal(
+        // Portaled to document.body so the backdrop escapes #app-scroll's
+        // stacking context and reliably covers the fixed header (#40).
         <div
           className="viewer-backdrop"
           onMouseDown={(e) => {
@@ -876,7 +879,8 @@ export default function LetterDetailPage() {
               initialIndex={viewerStartPage}
             />
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
       <BackToTop />
     </>

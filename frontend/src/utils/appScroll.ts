@@ -68,3 +68,4 @@ export function addAppScrollListener(
 export function getAppScrollRootForIO(): Element | null {
   return scrollElement;
 }
+

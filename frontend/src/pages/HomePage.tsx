@@ -12,7 +12,6 @@ import SearchBar from "../components/SearchBar/SearchBar";
 import ArchiveList from "../components/ArchiveList/ArchiveList";
 import Footer from "../components/Footer/Footer";
 import BackToSearch from "../components/BackToSearch";
-import { useAutoScrollOnFocus } from "../hooks/useAutoScrollOnFocus";
 import { getContentPage, getFeaturedLetter, getImageUrl, listBlogPosts, type BlogPost, type FeaturedLetter } from "../api/client";
 import { ProgressiveImage } from "../components/common";
 import { imagePreloadService } from "../services/imagePreloadService";
@@ -292,7 +291,6 @@ export default function HomePage() {
     triggerRef: searchDockTriggerRef,
     sectionRef: archiveSearchRef,
   });
-  useAutoScrollOnFocus(searchPanelRef);
 
   // ── Fetch hero data + latest blog post ──
   useEffect(() => {
@@ -484,7 +482,7 @@ export default function HomePage() {
       )}
 
       <section id="archive-search" className="home-archive-surface" ref={archiveSearchRef}>
-        <div className="home-search-panel" ref={searchPanelRef} data-hide-header-on-focus>
+        <div className="home-search-panel" ref={searchPanelRef}>
 
         <SearchBar
           query={archive.searchQuery}

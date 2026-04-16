@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import SEO from '../components/SEO';
 import SearchBar from '../components/SearchBar/SearchBar';
 import ArchiveList from '../components/ArchiveList/ArchiveList';
 import Footer from '../components/Footer/Footer';
 import BackToSearch from '../components/BackToSearch';
-import { useAutoScrollOnFocus } from '../hooks/useAutoScrollOnFocus';
 import { getCollectionByCode, getCollectionProfile, type CollectionWithLetters, type CollectionProfile } from '../api/collections';
 import { imagePreloadService } from '../services/imagePreloadService';
 import HeaderDock from '../components/Header/HeaderDock';
@@ -86,7 +86,6 @@ export default function CollectionDetailPage() {
     sectionRef: archiveSearchRef,
     enabled: !loading,
   });
-  useAutoScrollOnFocus(searchPanelRef);
 
   /* ---- Computed from collection data ---- */
   const collectionLetters = collection?.letters ?? [];
@@ -465,8 +464,13 @@ export default function CollectionDetailPage() {
       <Footer />
       <BackToSearch visible={dock.stickyDockActive} targetRef={searchPanelRef} />
 
-      {/* ---- Popup overlay ---- */}
-      {popup && (
+      {/* ---- Popup overlay ----
+           Portaled to document.body so the backdrop-filter: blur() can see
+           the full viewport (including the header, which is a sibling of
+           #app-scroll). Rendering inline would clip the blur to #app-scroll's
+           bounds, leaving the header strip un-blurred. Same pattern as the
+           letter-detail viewer backdrop. See #41. */}
+      {popup && createPortal(
         <div className="cd-popup-overlay" onClick={() => setPopup(null)}>
           <div className="cd-popup" onClick={(e) => e.stopPropagation()}>
             <div className="cd-popup-header">
@@ -477,7 +481,8 @@ export default function CollectionDetailPage() {
               {popup.content}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
     </>

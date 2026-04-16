@@ -48,3 +48,9 @@
 .back-to-top svg {
   flex-shrink: 0;
 }
+
+@media (max-width: 768px) {
+  .back-to-top {
+    bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+}

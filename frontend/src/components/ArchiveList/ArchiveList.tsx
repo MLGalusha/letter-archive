@@ -4,6 +4,7 @@ import LetterCard from "../LetterCard/LetterCard";
 import type { ArchiveShelfItem } from "../../types/Letter";
 import { getImageUrl } from "../../api/client";
 import { imagePreloadService } from "../../services/imagePreloadService";
+import { getAppScrollRootForIO } from "../../utils/appScroll";
 
 interface ArchiveListProps {
   letters: ArchiveShelfItem[];
@@ -160,7 +161,7 @@ export default function ArchiveList({
         if (!entries.some((entry) => entry.isIntersecting)) return;
         loadMoreHandlerRef.current?.();
       },
-      { rootMargin: "2400px 0px" },
+      { root: getAppScrollRootForIO(), rootMargin: "2400px 0px" },
     );
 
     observer.observe(node);

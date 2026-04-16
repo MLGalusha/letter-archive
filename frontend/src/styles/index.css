@@ -14,28 +14,46 @@
 }
 
 html {
-  scrollbar-gutter: stable;
   overscroll-behavior: none;
   /* Must match the public site background so iOS safe areas
      (notch, home indicator) blend seamlessly */
   background: #f5ede1;
 }
 
-/* Admin pages handle their own scrolling — don't reserve gutter space */
-html:has(.admin-layout) {
-  scrollbar-gutter: auto;
-}
-
 body {
   background: #f5ede1;
   color: var(--text-muted);
   margin: 0;
+  overscroll-behavior: none;
+}
+
+/* Public site: lock html/body to the viewport so the document can't scroll.
+   All page content scrolls inside #app-scroll instead. This fixes iOS
+   Safari's fixed-positioning drift (#9), momentum-scroll "tap to stop"
+   swallowing taps on floating buttons (#33), and the back-to-top instant-jump
+   animation bug. See #35 for the architectural rationale.
+
+   Scoped to pages that actually render #app-scroll. Admin pages (both the
+   dashboard shell with .admin-layout and standalone routes like /admin-login
+   and /admin-invite) don't have #app-scroll and retain normal document
+   scrolling — otherwise the body-overflow lock would trap their content
+   off-screen on small viewports. */
+html:has(#app-scroll),
+body:has(#app-scroll) {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* The public-site scroll container: fixed to the viewport, scrolls its own
+   content, sits at the very bottom of the stacking context so the fixed
+   header and portal'd floating buttons render above it. */
+#app-scroll {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
   overflow-x: hidden;
-  /* Belt-and-suspenders for iOS Safari/Chrome: html already has this but
-     iOS has historically been inconsistent about honoring it on html alone.
-     Prevents the sticky header from drifting above the viewport when the
-     document rubber-bands on overscroll. */
-  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Button reset - no layout properties */

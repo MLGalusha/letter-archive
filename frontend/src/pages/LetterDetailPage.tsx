@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import SEO from "../components/SEO";
 
@@ -22,6 +23,7 @@ import useThumbParallax from "../hooks/useThumbParallax";
 import useIsTouchDevice from "../hooks/useIsTouchDevice";
 import useSwipeNavigation from "../hooks/useSwipeNavigation";
 import BackToTop from "../components/BackToTop";
+import { appScrollTo, getAppScrollElement, getAppScrollY } from "../utils/appScroll";
 import "./LetterDetailPage.css";
 
 /* ── helpers ─────────────────────────────────────────────── */
@@ -118,7 +120,7 @@ export default function LetterDetailPage() {
   useEffect(() => {
     if (carouselRef.current) carouselRef.current.scrollLeft = 0;
     // Scroll to top on letter change (unless coming from a highlight)
-    if (!fromHighlightRef.current) window.scrollTo(0, 0);
+    if (!fromHighlightRef.current) appScrollTo(0);
   }, [letterId]);
 
   // Auto-scroll to a specific image when navigated with ?image= param
@@ -155,7 +157,7 @@ export default function LetterDetailPage() {
         : Infinity;
       const scrollTarget = Math.min(idealTarget, Math.max(0, maxScroll));
 
-      window.scrollTo(0, 0);
+      appScrollTo(0);
 
       requestAnimationFrame(() => {
         const distance = scrollTarget;
@@ -168,7 +170,7 @@ export default function LetterDetailPage() {
           const elapsed = now - startTime;
           const t = Math.min(1, elapsed / duration);
           const ease = 1 - Math.pow(1 - t, 3);
-          window.scrollTo(0, distance * ease);
+          appScrollTo(distance * ease);
           if (t < 1) requestAnimationFrame(animate);
         }
         requestAnimationFrame(animate);
@@ -284,22 +286,27 @@ export default function LetterDetailPage() {
     setViewerOpen(true);
   }, []);
 
-  // Lock body scroll while viewer is open
+  // Lock scroll while viewer is open. With container scroll, body is already
+  // overflow:hidden — we freeze the #app-scroll container instead by setting
+  // overflow:hidden on it and restoring scrollTop on close.
   useEffect(() => {
     if (viewerOpen) {
-      const scrollY = window.scrollY;
-      document.body.style.position = "fixed";
-      document.body.style.top = `-${scrollY}px`;
-      document.body.style.left = "0";
-      document.body.style.right = "0";
-      document.body.style.overflow = "hidden";
+      const scroller = getAppScrollElement();
+      const savedY = getAppScrollY();
+      if (scroller) {
+        scroller.style.overflow = "hidden";
+      } else {
+        // Fallback for admin routes / tests without a container.
+        document.body.style.overflow = "hidden";
+      }
       return () => {
-        document.body.style.position = "";
-        document.body.style.top = "";
-        document.body.style.left = "";
-        document.body.style.right = "";
-        document.body.style.overflow = "";
-        window.scrollTo(0, scrollY);
+        if (scroller) {
+          scroller.style.overflow = "";
+          scroller.scrollTop = savedY;
+        } else {
+          document.body.style.overflow = "";
+          window.scrollTo(0, savedY);
+        }
       };
     }
   }, [viewerOpen]);
@@ -835,7 +842,9 @@ export default function LetterDetailPage() {
       </article>
 
       {/* ── Image Viewer Modal ─────────────────────────────── */}
-      {viewerOpen && (
+      {viewerOpen && createPortal(
+        // Portaled to document.body so the backdrop escapes #app-scroll's
+        // stacking context and reliably covers the fixed header (#40).
         <div
           className="viewer-backdrop"
           onMouseDown={(e) => {
@@ -870,7 +879,8 @@ export default function LetterDetailPage() {
               initialIndex={viewerStartPage}
             />
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
       <BackToTop />
     </>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
+import { addAppScrollListener, getAppScrollRootForIO } from '../utils/appScroll';
 
 export interface UseStickyDockConfig {
   /** Ref to the element that triggers sticky mode (e.g. dock trigger inside search bar) */
@@ -63,7 +64,7 @@ export default function useStickyDock(config: UseStickyDockConfig): UseStickyDoc
           setStickyDockActive(entry.boundingClientRect.bottom <= headerHeight);
         }
       },
-      { rootMargin: `-${headerHeight}px 0px 0px 0px`, threshold: 0 },
+      { root: getAppScrollRootForIO(), rootMargin: `-${headerHeight}px 0px 0px 0px`, threshold: 0 },
     );
 
     observer.observe(trigger);
@@ -89,8 +90,7 @@ export default function useStickyDock(config: UseStickyDockConfig): UseStickyDoc
       }
     };
 
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    return addAppScrollListener(onScroll);
   }, [stickyDockActive, enabled, triggerRef, sectionRef]);
 
   // ── Re-evaluate dock when dropdown closes ──

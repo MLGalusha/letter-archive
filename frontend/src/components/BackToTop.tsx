@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
+import { smoothScrollToY } from "../utils/smoothScrollTo";
+import { addAppScrollListener, getAppScrollY } from "../utils/appScroll";
 import "./BackToTop.css";
 
 const SCROLL_THRESHOLD = 600;
@@ -16,7 +19,7 @@ export default function BackToTop() {
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
-        const y = window.scrollY;
+        const y = getAppScrollY();
         // Clear suppression once we've reached the top
         if (suppressed.current && y < 10) {
           suppressed.current = false;
@@ -39,30 +42,40 @@ export default function BackToTop() {
       });
     };
 
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return addAppScrollListener(onScroll);
   }, []);
 
-  const scrollToTop = useCallback((e: React.PointerEvent | React.MouseEvent) => {
-    // Prevent default so the browser doesn't swallow the tap as a
-    // momentum-scroll stop gesture — fires the action on first touch.
-    e.preventDefault();
+  const scrollToTop = useCallback(() => {
     suppressed.current = true;
     setVisible(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    smoothScrollToY(0);
   }, []);
 
-  return (
+  // Floating button is portaled to document.body so it sits OUTSIDE the
+  // #app-scroll container (see #35). This is what makes taps during momentum
+  // scroll actually fire the action on iOS: the button is no longer a
+  // descendant of the scroller, so iOS's "tap to stop fling" gesture doesn't
+  // consume touches that land on it.
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.preventDefault();
+      scrollToTop();
+    },
+    [scrollToTop],
+  );
+
+  return createPortal(
     <button
       type="button"
       className={`back-to-top${visible ? " back-to-top--visible" : ""}`}
-      onPointerDown={scrollToTop}
+      onClick={handleClick}
       aria-label="Back to top"
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
         <path d="M7 2.5L2.5 7.5M7 2.5L11.5 7.5M7 2.5V12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       <span>Top</span>
-    </button>
+    </button>,
+    document.body,
   );
 }

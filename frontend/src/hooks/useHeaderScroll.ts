@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { addAppScrollListener, getAppScrollY } from "../utils/appScroll";
 
 /**
  * Single source of truth for header visibility and "at top of page" state.
@@ -10,13 +11,14 @@ import { useEffect, useState } from "react";
  * bounce back into view just because the header slid back in after a small
  * scroll-up. The header uses a 4/80 threshold pair; the scrubber uses 4/16.
  *
- * Also hides the header when focus enters any element inside an ancestor
- * carrying `data-hide-header-on-focus` — lets mobile search focus reclaim
- * vertical space without the page having to participate.
- *
  * Disabled on desktop (>= 900px) and when `prefers-reduced-motion` is on;
  * both simply return `{ visible: true, atTop: y <= 4 }` so behaviors that key
  * off `atTop` (dock collapse) still work but the header never hides.
+ *
+ * Also force-pinned visible while any input/textarea/contentEditable has
+ * focus. The user isn't manually scrolling while typing, and any browser-
+ * level scroll-into-view adjustments (iOS keyboard reflow, etc.) would
+ * otherwise race against the hide-on-scroll-down logic.
  */
 
 export interface HeaderScrollState {
@@ -44,11 +46,11 @@ export default function useHeaderScroll(): HeaderScrollState {
   const [isMobile, setIsMobile] = useState<boolean>(() => readIsMobile());
   const [reducedMotion, setReducedMotion] = useState<boolean>(() => readReducedMotion());
   const [visible, setVisible] = useState<boolean>(true);
+  const [inputFocused, setInputFocused] = useState<boolean>(false);
   const [atTop, setAtTop] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
-    return window.scrollY <= ATTOP_EXPAND;
+    return getAppScrollY() <= ATTOP_EXPAND;
   });
-  const [focusHidden, setFocusHidden] = useState<boolean>(false);
 
   // Track viewport width changes so the hook flips between mobile/desktop modes.
   useEffect(() => {
@@ -73,11 +75,11 @@ export default function useHeaderScroll(): HeaderScrollState {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    let lastY = window.scrollY;
+    let lastY = getAppScrollY();
     let ticking = false;
 
     const update = () => {
-      const y = window.scrollY;
+      const y = getAppScrollY();
 
       // atTop — always tracked, even on desktop, because dock collapse keys off it.
       setAtTop((prev) => (prev ? y <= ATTOP_COLLAPSE : y <= ATTOP_EXPAND));
@@ -107,30 +109,26 @@ export default function useHeaderScroll(): HeaderScrollState {
 
     // Prime state on mount.
     update();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return addAppScrollListener(onScroll);
   }, [isMobile, reducedMotion]);
 
-  // focusin/focusout: any element tagged with [data-hide-header-on-focus]
-  // forces the header hidden while focus is inside it. Mobile only — desktop
-  // doesn't need the vertical space and hiding-on-focus would be jarring.
+  // Track whether any text input has focus. While focused we force the
+  // header visible so auto-scroll-on-focus can reposition the search panel
+  // without the hide-on-scroll-down logic racing against it.
   useEffect(() => {
-    if (!isMobile || typeof document === "undefined") return;
+    if (typeof document === "undefined") return;
 
-    const isInsideTagged = (el: Element | null): boolean =>
-      !!el && !!el.closest?.("[data-hide-header-on-focus]");
-
-    const onFocusIn = (event: FocusEvent) => {
-      if (isInsideTagged(event.target as Element | null)) {
-        setFocusHidden(true);
-      }
+    const isTextInput = (el: EventTarget | null): boolean => {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
     };
 
-    const onFocusOut = (event: FocusEvent) => {
-      const next = event.relatedTarget as Element | null;
-      if (!isInsideTagged(next)) {
-        setFocusHidden(false);
-      }
+    const onFocusIn = (e: FocusEvent) => {
+      if (isTextInput(e.target)) setInputFocused(true);
+    };
+    const onFocusOut = (e: FocusEvent) => {
+      if (isTextInput(e.target)) setInputFocused(false);
     };
 
     document.addEventListener("focusin", onFocusIn);
@@ -139,10 +137,10 @@ export default function useHeaderScroll(): HeaderScrollState {
       document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("focusout", onFocusOut);
     };
-  }, [isMobile]);
+  }, []);
 
   return {
-    visible: isMobile ? visible && !focusHidden : true,
+    visible: isMobile ? visible || inputFocused : true,
     atTop,
   };
 }

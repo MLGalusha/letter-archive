@@ -183,7 +183,6 @@ export default function LetterReviewPage() {
   );
   const [reviewMode, setReviewMode] = useState(false);
   const [segmentFirstMode, setSegmentFirstMode] = useState(false);
-  const segmentFirstTriggeredRef = useRef(false);
   const [debugMode, setDebugMode] = useState(false);
   const [viewerPageIndex, setViewerPageIndex] = useState(0);
   // Mapping mode: selected transcript text to map to a segment
@@ -305,26 +304,6 @@ export default function LetterReviewPage() {
       fetchLetter();
     }
   }, [applyLetterMetadata, letterId, navigate]);
-
-  // Segment-first entry: auto-enter full-viewport segment review when pages
-  // have unverified segments with data. Only triggers once per letter visit.
-  useEffect(() => {
-    if (!letter || segmentFirstTriggeredRef.current) return;
-    segmentFirstTriggeredRef.current = true;
-
-    const letterImages = letter.images.filter((img) => img.type === 'letter');
-    const hasUnverifiedSegments = letterImages.some(
-      (img) =>
-        img.segmentTrustState !== 'trusted' &&
-        img.lineSegments &&
-        img.lineSegments.length > 0,
-    );
-
-    if (hasUnverifiedSegments) {
-      setReviewMode(true);
-      setSegmentFirstMode(true);
-    }
-  }, [letter]);
 
   useEffect(() => {
     if (!letter || !routeLocation.hash) return;

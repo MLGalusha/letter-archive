@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+#
+# dev — start dev servers. Works identically from main repo or any worktree.
+#
+# Usage:
+#   ./dev                 # start backend + frontend
+#   ./dev backend         # start backend only
+#   ./dev frontend        # start frontend only
+#   ./dev --lan           # start both with LAN access (phone testing)
+#   ./dev frontend --lan  # start frontend only with LAN
+#
+# In a worktree, ports are auto-assigned and won't conflict with main or
+# other worktrees. Run setup-worktree.sh first if this is a fresh worktree
+# (this script will remind you).
+#
+# In the main repo, uses default ports (backend 3002, frontend 5174).
+
+set -euo pipefail
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+MAIN_ROOT=$(git worktree list --porcelain | awk '/^worktree / { print $2; exit }')
+IS_WORKTREE=false
+[[ "$REPO_ROOT" != "$MAIN_ROOT" ]] && IS_WORKTREE=true
+
+# ── parse args ─────────────────────────────────────────────────────────────
+TARGET=""  # "", "backend", or "frontend"
+LAN=false
+
+for arg in "$@"; do
+  case $arg in
+    backend)  TARGET="backend" ;;
+    frontend) TARGET="frontend" ;;
+    --lan)    LAN=true ;;
+    *)        echo "usage: ./dev [backend|frontend] [--lan]"; exit 1 ;;
+  esac
+done
+
+# ── resolve ports ──────────────────────────────────────────────────────────
+BACKEND_PORT=3002
+FRONTEND_PORT=5174
+
+if $IS_WORKTREE; then
+  # Worktree: read ports from env files written by setup-worktree.sh
+  if [[ ! -f "$REPO_ROOT/backend/.env" || ! -f "$REPO_ROOT/frontend/.env.local" ]]; then
+    echo "This worktree hasn't been set up yet. Run:"
+    echo "  ./scripts/setup-worktree.sh"
+    exit 1
+  fi
+  # `|| true` so a missing/malformed line doesn't trip pipefail and skip the
+  # friendly error below.
+  BACKEND_PORT=$(grep -E "^PORT=" "$REPO_ROOT/backend/.env" 2>/dev/null | head -1 | cut -d= -f2 | tr -d '[:space:]' || true)
+  FRONTEND_PORT=$(grep -E "^VITE_SITE_URL=" "$REPO_ROOT/frontend/.env.local" 2>/dev/null | head -1 | sed -E 's|.*:([0-9]+).*|\1|' || true)
+
+  if [[ -z "$BACKEND_PORT" || -z "$FRONTEND_PORT" ]]; then
+    echo "Could not read ports from env files. Re-run:"
+    echo "  ./scripts/setup-worktree.sh --force"
+    exit 1
+  fi
+fi
+
+# ── LAN IP ─────────────────────────────────────────────────────────────────
+LAN_IP=""
+if $LAN; then
+  # macOS: grab IPv4 from en0/en1, fallback to routing table trick
+  LAN_IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)
+  if [[ -z "$LAN_IP" ]]; then
+    LAN_IP=$(python3 -c "
+import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+try: s.connect(('10.255.255.255', 1)); print(s.getsockname()[0])
+except: print('')
+finally: s.close()
+" 2>/dev/null || true)
+  fi
+
+  if [[ -z "$LAN_IP" ]]; then
+    echo "warning: could not detect LAN IP, falling back to localhost only"
+    LAN=false
+  fi
+fi
+
+# ── banner ─────────────────────────────────────────────────────────────────
+echo ""
+if $IS_WORKTREE; then
+  WT_NAME=$(basename "$REPO_ROOT")
+  echo "  ┌─────────────────────────────────────────────────┐"
+  echo "  │  worktree: $WT_NAME"
+else
+  echo "  ┌─────────────────────────────────────────────────┐"
+  echo "  │  main repo"
+fi
+echo "  │"
+if [[ -z "$TARGET" || "$TARGET" == "backend" ]]; then
+  echo "  │  backend:  http://localhost:$BACKEND_PORT"
+fi
+if [[ -z "$TARGET" || "$TARGET" == "frontend" ]]; then
+  echo "  │  frontend: http://localhost:$FRONTEND_PORT"
+  if $LAN; then
+    echo "  │  phone:    http://$LAN_IP:$FRONTEND_PORT"
+  fi
+fi
+echo "  └─────────────────────────────────────────────────┘"
+echo ""
+
+# ── start servers ──────────────────────────────────────────────────────────
+PIDS=()
+
+cleanup() {
+  echo ""
+  echo "shutting down..."
+  for pid in "${PIDS[@]}"; do
+    kill "$pid" 2>/dev/null || true
+  done
+  wait 2>/dev/null
+}
+trap cleanup EXIT INT TERM
+
+start_backend() {
+  cd "$REPO_ROOT/backend"
+  # Explicitly pass PORT and STORAGE_DIR to override anything direnv exported
+  # at the shell level — process.env beats dotenv/config, so a stale direnv
+  # PORT=3002 would otherwise mask the worktree's backend/.env PORT.
+  PORT="$BACKEND_PORT" STORAGE_DIR="./storage" npm run dev &
+  PIDS+=($!)
+  cd "$REPO_ROOT"
+}
+
+start_frontend() {
+  cd "$REPO_ROOT/frontend"
+  if $LAN; then
+    npx vite --port "$FRONTEND_PORT" --strictPort --host 0.0.0.0 &
+  else
+    npx vite --port "$FRONTEND_PORT" --strictPort &
+  fi
+  PIDS+=($!)
+  cd "$REPO_ROOT"
+}
+
+case "$TARGET" in
+  backend)  start_backend ;;
+  frontend) start_frontend ;;
+  *)        start_backend; start_frontend ;;
+esac
+
+# Wait for any child to exit
+wait

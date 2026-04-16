@@ -154,17 +154,9 @@ cat > "$LAUNCH" <<EOF
   "configurations": [
     {
       "name": "frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--port", "$FRONTEND_PORT", "--strictPort"],
-      "cwd": "frontend",
+      "runtimeExecutable": "./dev",
+      "runtimeArgs": [],
       "port": $FRONTEND_PORT
-    },
-    {
-      "name": "backend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "cwd": "backend",
-      "port": $BACKEND_PORT
     }
   ]
 }

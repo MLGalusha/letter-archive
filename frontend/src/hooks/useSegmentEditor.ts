@@ -458,6 +458,8 @@ export interface UseSegmentEditorReturn {
   resetFromSource: (segments: LineSegment[], options?: ResetFromSourceOptions) => void;
   /** Returns cleaned segments ready for API persistence. */
   getSegmentsForSave: () => LineSegment[];
+  /** Returns segment classifications extracted from current segments, keyed by segment index. */
+  getClassificationsForSave: () => Record<number, { class: string; isMapped: boolean; mappedLineIds?: string[] }> | null;
   /** Mark state as saved without clearing in-session undo history. */
   markSaved: () => void;
   /** Clear edit-session history and dirty state. */
@@ -1059,6 +1061,22 @@ export function useSegmentEditor(
     return toLineSegments(editedSegments);
   }, [editedSegments]);
 
+  const getClassificationsForSave = useCallback(() => {
+    const saved = toLineSegments(editedSegments);
+    const hasAny = saved.some(s => s.segmentClass && s.segmentClass !== 'body');
+    if (!hasAny) return null;
+    const out: Record<number, { class: string; isMapped: boolean; mappedLineIds?: string[] }> = {};
+    for (const s of saved) {
+      if (s.segmentClass) {
+        out[s.line] = {
+          class: s.segmentClass,
+          isMapped: s.isMapped ?? false,
+        };
+      }
+    }
+    return out;
+  }, [editedSegments]);
+
   const markSaved = useCallback(() => {
     setIsDirty(false);
   }, []);
@@ -1100,6 +1118,7 @@ export function useSegmentEditor(
     canRedo,
     resetFromSource,
     getSegmentsForSave,
+    getClassificationsForSave,
     markSaved,
     clearSessionHistory,
     moveVertex,

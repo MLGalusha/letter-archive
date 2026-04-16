@@ -1,5 +1,6 @@
 import { apiGet, apiPost, apiPut, apiPatch } from "../client";
 import type { Letter, LineSegment, SegmentTrustState } from "../../types/Letter";
+import type { SegmentClassification } from "../../types/ReaderView";
 
 export interface UpdateLetterData {
   transcriptionText?: string;
@@ -132,4 +133,12 @@ export async function updatePageSegmentTrust(pageId: string, trustState: Segment
 /** Update segment trust state for all pages of a letter. */
 export async function updateLetterSegmentTrust(letterId: string, trustState: SegmentTrustState): Promise<void> {
   await apiPatch(`/admin/letters/${letterId}/segment-trust`, { trustState });
+}
+
+/** Save segment classifications for a page. */
+export async function savePageSegmentClassifications(
+  pageId: string,
+  classifications: Record<number, SegmentClassification>,
+): Promise<void> {
+  await apiPatch(`/admin/letters/pages/${pageId}/segment-classifications`, { classifications });
 }

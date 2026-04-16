@@ -1022,6 +1022,15 @@
   cursor: default;
 }
 
+.seg-editor-action-btn.skip-to-text {
+  color: rgba(96, 165, 250, 0.9);
+  border-color: rgba(96, 165, 250, 0.3);
+}
+.seg-editor-action-btn.skip-to-text:hover {
+  color: rgba(96, 165, 250, 1);
+  background: rgba(96, 165, 250, 0.12);
+}
+
 /* Segment classification buttons */
 .segment-class-btn {
   text-transform: capitalize;

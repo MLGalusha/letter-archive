@@ -251,6 +251,10 @@ export const letters = pgTable(
     // Reading view text (independent spacing from raw transcript)
     readingText: text('reading_text'),
 
+    // Reader View V2: derived block-based rendering
+    readerBlocks: jsonb('reader_blocks'),
+    readerDecisions: jsonb('reader_decisions'),
+
     // Admin review
     reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
     reviewedBy: text('reviewed_by'),
@@ -306,6 +310,7 @@ export const letterPages = pgTable(
     checksumSha256: text('checksum_sha256'),
     lineSegments: jsonb('line_segments'),
     segmentTrustState: text('segment_trust_state').notNull().default('unverified'),
+    segmentClassifications: jsonb('segment_classifications'),
     width: integer('width'),
     height: integer('height'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

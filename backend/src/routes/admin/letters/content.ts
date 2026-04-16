@@ -26,6 +26,7 @@ import { addAliasToCanonicalPerson } from '../../../services/entities/persons.js
 import { syncLetterParticipantsFromMetadata } from '../../../services/entities/participant-sync.js';
 import { getAbsoluteStoragePath } from '../../../services/storage.js';
 import { runEntityExtractionOnly, runMetadataExtractionV2, type ExtractionOptions } from '../../../pipeline/metadataV2.js';
+import type { SegmentClass, SegmentClassification } from '../../../types/readerView.js';
 import { BadRequestError, NotFoundError } from '../../../utils/response-helpers.js';
 import { isPlaceholderValue } from '../../../utils/placeholders.js';
 import {
@@ -752,6 +753,43 @@ router.patch('/:letterId/segment-trust', async (req, res, next) => {
 
     req.log.info({ letterId: req.params.letterId, trustState, pageCount: pages.length }, 'Segment trust state updated for all pages');
     res.json({ ok: true, trustState, pageCount: pages.length });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Save segment classifications for a page
+const VALID_SEGMENT_CLASSES: SegmentClass[] = ['body', 'continuation', 'addition', 'ignore'];
+
+router.patch('/pages/:pageId/segment-classifications', async (req, res, next) => {
+  try {
+    const page = await db.query.letterPages.findFirst({
+      where: eq(letterPages.id, req.params.pageId),
+    });
+    if (!page) throw new NotFoundError('Page not found');
+
+    const { classifications } = req.body;
+    if (!classifications || typeof classifications !== 'object' || Array.isArray(classifications)) {
+      throw new BadRequestError('classifications must be an object mapping segment index to classification');
+    }
+
+    // Validate each entry
+    for (const [key, val] of Object.entries(classifications)) {
+      if (isNaN(Number(key))) {
+        throw new BadRequestError(`Invalid segment index: ${key}`);
+      }
+      const c = val as SegmentClassification;
+      if (!c.class || !VALID_SEGMENT_CLASSES.includes(c.class)) {
+        throw new BadRequestError(`Invalid class for segment ${key}: ${c.class}`);
+      }
+    }
+
+    await db.update(letterPages)
+      .set({ segmentClassifications: classifications, updatedAt: new Date() })
+      .where(eq(letterPages.id, req.params.pageId));
+
+    req.log.info({ pageId: req.params.pageId, count: Object.keys(classifications).length }, 'Segment classifications updated');
+    res.json({ ok: true });
   } catch (error) {
     next(error);
   }

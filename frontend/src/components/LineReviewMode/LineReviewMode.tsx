@@ -8,7 +8,7 @@ import {
   useImperativeHandle,
 } from 'react';
 import { getErrorMessage, getImageUrl } from '../../api/client';
-import { getPageLineSegments, savePageLineSegments, updatePageSegmentTrust } from '../../api/admin/letters';
+import { getPageLineSegments, savePageLineSegments, savePageSegmentClassifications, updatePageSegmentTrust } from '../../api/admin/letters';
 import type { Letter, LineSegment, LineSegmentWord, SpecialArea } from '../../types/Letter';
 import { useSegmentEditor } from '../../hooks/useSegmentEditor';
 import SegmentEditorOverlay from './SegmentEditorOverlay';
@@ -809,8 +809,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const pageId = letterPages[currentLetterPageIndex]?.id;
     if (!pageId) return;
     const segments = segmentEditor.getSegmentsForSave();
+    const classifications = segmentEditor.getClassificationsForSave();
     try {
       await savePageLineSegments(pageId, segments);
+      if (classifications) {
+        await savePageSegmentClassifications(pageId, classifications);
+      }
       // Update lastSourceRef BEFORE mutating the map so the sync effect
       // doesn't treat our own save as an external change and reset selection.
       const nextKraken = { ...krakenSegmentsMap, [currentLetterPageIndex]: segments };
@@ -1938,6 +1942,17 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           >
             Discard
           </button>
+          {fullViewport && (
+            <button
+              className="seg-editor-action-btn skip-to-text"
+              onClick={async () => {
+                await handleExitSegmentEditMode();
+              }}
+              title="Skip segment review and go to transcript editing"
+            >
+              Skip to Text
+            </button>
+          )}
         </div>
       )}
 

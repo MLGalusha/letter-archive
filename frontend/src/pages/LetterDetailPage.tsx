@@ -15,6 +15,7 @@ import {
   shouldShowPhotoDescriptionWorkflow,
 } from "../utils/letterContent";
 import { reflowTranscript, renderTranscriptLines, computeReferenceWidth } from "../utils/transcriptRendering";
+import ReaderBlockRenderer from "../components/ReaderBlockRenderer";
 import HeaderDock from "../components/Header/HeaderDock";
 import HeaderScrubber from "../components/HeaderScrubber/HeaderScrubber";
 import useLetterScrubber from "../components/LetterHeaderDock/useLetterScrubber";
@@ -514,7 +515,42 @@ export default function LetterDetailPage() {
               </button>
             </div>
 
-            {transcriptMode === "reading" && letter.readingText ? (
+            {transcriptMode === "reading" && letter.readerBlocks && letter.readerBlocks.length > 0 ? (
+              /* ── Reader View V2 — derived block-based rendering ── */
+              <div className="transcript-pages-combined">
+                <div className="transcript-page-region">
+                  <div className="transcript-page-body">
+                    {letterTypeImages.length > 0 && letterTypeImages.map((pageImage, idx) => {
+                      const side = idx % 2 === 0 ? "left" : "right";
+                      return (
+                        <button
+                          key={pageImage.id}
+                          type="button"
+                          className={`page-thumb page-thumb-${side}${transcriptVerifClass}`}
+                          onClick={() => openViewer(Math.max(0, allImages.indexOf(pageImage)))}
+                          aria-label={`View page ${pageImage.pageNumber ?? idx + 1}`}
+                          style={idx > 0 ? { top: `${idx * 14}rem` } : undefined}
+                        >
+                          <span className="page-thumb-inner">
+                            <img
+                              src={getImageUrl(pageImage.imageUrl, { width: 300 })}
+                              alt={`Page ${pageImage.pageNumber ?? idx + 1}`}
+                              className="page-thumb-img"
+                              loading="lazy"
+                            />
+                            <span className="page-thumb-label">Page {pageImage.pageNumber ?? idx + 1}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                    <ReaderBlockRenderer
+                      blocks={letter.readerBlocks}
+                      className={shortLineClass.trim() || undefined}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : transcriptMode === "reading" && letter.readingText ? (
               /* ── Saved reading text — render exactly as admin set it ── */
               <div className="transcript-pages-combined">
                 <div className="transcript-page-region">

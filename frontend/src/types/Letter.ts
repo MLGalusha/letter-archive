@@ -323,6 +323,8 @@ export interface Letter {
   aiNotes?: string;
   // Reading view text (independent spacing from raw transcript)
   readingText?: string;
+  // Reader View V2: derived block-based rendering
+  readerBlocks?: import('./ReaderView').ReaderBlock[];
   // Entity extraction (Prompt 2)
   entityExtractionStatus?: string;
   entityExtractionJson?: unknown;

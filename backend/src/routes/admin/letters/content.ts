@@ -27,6 +27,7 @@ import { syncLetterParticipantsFromMetadata } from '../../../services/entities/p
 import { getAbsoluteStoragePath } from '../../../services/storage.js';
 import { runEntityExtractionOnly, runMetadataExtractionV2, type ExtractionOptions } from '../../../pipeline/metadataV2.js';
 import type { SegmentClass, SegmentClassification } from '../../../types/readerView.js';
+import { deriveAndSaveReaderBlocks } from '../../../services/letter/readerDerivation.js';
 import { BadRequestError, NotFoundError } from '../../../utils/response-helpers.js';
 import { isPlaceholderValue } from '../../../utils/placeholders.js';
 import {
@@ -790,6 +791,19 @@ router.patch('/pages/:pageId/segment-classifications', async (req, res, next) =>
 
     req.log.info({ pageId: req.params.pageId, count: Object.keys(classifications).length }, 'Segment classifications updated');
     res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Derive reader blocks for a letter (Reader View V2)
+router.post('/:letterId/derive-reader-blocks', async (req, res, next) => {
+  try {
+    const blocks = await deriveAndSaveReaderBlocks(req.params.letterId);
+    if (!blocks) {
+      throw new NotFoundError('Letter not found or has no transcript');
+    }
+    res.json({ ok: true, blocks });
   } catch (error) {
     next(error);
   }

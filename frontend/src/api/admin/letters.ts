@@ -142,3 +142,11 @@ export async function savePageSegmentClassifications(
 ): Promise<void> {
   await apiPatch(`/admin/letters/pages/${pageId}/segment-classifications`, { classifications });
 }
+
+/** Derive reader blocks for a letter (Reader View V2). */
+export async function deriveReaderBlocks(letterId: string): Promise<import('../../types/ReaderView').ReaderBlock[]> {
+  const result = await apiPost<{ ok: boolean; blocks: import('../../types/ReaderView').ReaderBlock[] }>(
+    `/admin/letters/${letterId}/derive-reader-blocks`,
+  );
+  return result.blocks;
+}

@@ -200,6 +200,8 @@ export interface FrontendLetter {
   aiNotes?: unknown;
   // Reading view text (independent spacing from raw transcript)
   readingText?: string;
+  // Reader View V2: derived block-based rendering
+  readerBlocks?: unknown[];
   // Legacy field kept for backward compat
   transcriptConfirmedAt?: string;
   flagged: boolean;
@@ -540,6 +542,8 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
     aiNotes: letter.aiNotes || undefined,
     // Reading view text
     readingText: letter.readingText || undefined,
+    // Reader View V2
+    readerBlocks: (letter.readerBlocks as unknown[] | null) || undefined,
     // Entity extraction (Prompt 2)
     entityExtractionStatus: letter.entityExtractionStatus || undefined,
     entityExtractionJson: letter.entityExtractionJson || undefined,

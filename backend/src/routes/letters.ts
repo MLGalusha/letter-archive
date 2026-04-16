@@ -274,6 +274,8 @@ router.get('/letters', async (req, res, next) => {
         metadataJson: false,
         aiNotes: false,
         readingText: false,
+        readerBlocks: false,
+        readerDecisions: false,
         extraContentTranscript: false,
       },
       with: {

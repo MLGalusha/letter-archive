@@ -316,6 +316,7 @@
   overflow: visible;
   border-left: 1px solid transparent;
   padding-left: 1rem;
+  padding-right: 1rem;
 }
 
 .letter-transcript-section.transcript-original-mode {
@@ -1063,6 +1064,11 @@
       1rem [wide-end full-end];
   }
 
+  .letter-transcript-section.transcript-original-mode {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
   .letter-hero-section {
     padding: 1.8rem 0 1.3rem;
   }
@@ -1143,6 +1149,11 @@
       [full-start wide-start] 1.25rem
       [content-start] 1fr [content-end]
       1.25rem [wide-end full-end];
+  }
+
+  .letter-transcript-section.transcript-original-mode {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
   }
 
   .letter-hero-section {

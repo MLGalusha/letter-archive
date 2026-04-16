@@ -46,8 +46,10 @@ if $IS_WORKTREE; then
     echo "  ./scripts/setup-worktree.sh"
     exit 1
   fi
-  BACKEND_PORT=$(grep -E "^PORT=" "$REPO_ROOT/backend/.env" | head -1 | cut -d= -f2 | tr -d '[:space:]')
-  FRONTEND_PORT=$(grep -E "^VITE_SITE_URL=" "$REPO_ROOT/frontend/.env.local" | head -1 | sed -E 's|.*:([0-9]+).*|\1|')
+  # `|| true` so a missing/malformed line doesn't trip pipefail and skip the
+  # friendly error below.
+  BACKEND_PORT=$(grep -E "^PORT=" "$REPO_ROOT/backend/.env" 2>/dev/null | head -1 | cut -d= -f2 | tr -d '[:space:]' || true)
+  FRONTEND_PORT=$(grep -E "^VITE_SITE_URL=" "$REPO_ROOT/frontend/.env.local" 2>/dev/null | head -1 | sed -E 's|.*:([0-9]+).*|\1|' || true)
 
   if [[ -z "$BACKEND_PORT" || -z "$FRONTEND_PORT" ]]; then
     echo "Could not read ports from env files. Re-run:"

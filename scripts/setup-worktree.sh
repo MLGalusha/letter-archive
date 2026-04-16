@@ -155,8 +155,14 @@ cat > "$LAUNCH" <<EOF
     {
       "name": "frontend",
       "runtimeExecutable": "./dev",
-      "runtimeArgs": [],
+      "runtimeArgs": ["frontend"],
       "port": $FRONTEND_PORT
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "./dev",
+      "runtimeArgs": ["backend"],
+      "port": $BACKEND_PORT
     }
   ]
 }

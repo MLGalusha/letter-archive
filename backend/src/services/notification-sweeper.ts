@@ -18,10 +18,10 @@ const FAILURE_RATE_LOOKBACK_MS = 60 * 60 * 1000; // 1 hour
 const FAILURE_RATE_MIN_SAMPLE = 5; // need at least 5 jobs to bother reporting a rate
 
 /** How long the worker can go without RUNNING any job while PENDING exists before we alert. */
-const WORKER_SILENT_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+const WORKER_SILENT_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
 
 /** Default sweeper interval. Overridable for tests. */
-const DEFAULT_SWEEP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_SWEEP_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
 // ============================================================================
 // Individual checks
@@ -156,7 +156,7 @@ export async function checkWorkerSilent(now: Date = new Date()): Promise<void> {
     message: `${pendingCount} job${pendingCount === 1 ? '' : 's'} PENDING but no letter has been touched in the last ${WORKER_SILENT_THRESHOLD_MS / 60_000} minutes.`,
     metadata: { pendingCount, silenceWindowMinutes: WORKER_SILENT_THRESHOLD_MS / 60_000 },
     dedupeKey: 'worker_silent',
-    dedupeWindowMinutes: 30,
+    dedupeWindowMinutes: 60,
   });
 }
 

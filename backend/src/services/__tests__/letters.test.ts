@@ -195,6 +195,13 @@ describe('letters service', () => {
   });
 
   it('resets entity extraction state when re-enqueuing a letter for processing', async () => {
+    findFirstMock.mockResolvedValueOnce({
+      id: 'letter-3',
+      transcriptionStatus: 'PENDING',
+      metadataStatus: 'PENDING',
+      entityExtractionStatus: 'PENDING',
+    });
+
     await resetLetterForProcessing('letter-3');
 
     expect(updateSetMock).toHaveBeenCalledWith(
@@ -207,8 +214,38 @@ describe('letters service', () => {
         entityExtractionJson: null,
         transcriptStatus: 'EMPTY',
         metadataContentStatus: 'EMPTY',
+        deadLetter: false,
         updatedAt: expect.any(Date),
       }),
     );
+  });
+
+  it('preserves stages already in SUCCESS when re-enqueuing a letter', async () => {
+    findFirstMock.mockResolvedValueOnce({
+      id: 'letter-4',
+      transcriptionStatus: 'SUCCESS',
+      metadataStatus: 'SUCCESS',
+      entityExtractionStatus: 'FAILED',
+    });
+
+    await resetLetterForProcessing('letter-4');
+
+    const args = updateSetMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(args).toMatchObject({
+      deadLetter: false,
+      entityExtractionStatus: 'PENDING',
+      entityExtractionError: null,
+      entityExtractionJson: null,
+      updatedAt: expect.any(Date),
+    });
+    expect(args).not.toHaveProperty('transcriptionStatus');
+    expect(args).not.toHaveProperty('metadataStatus');
+    expect(args).not.toHaveProperty('workflow');
+  });
+
+  it('is a no-op for missing letters', async () => {
+    findFirstMock.mockResolvedValueOnce(undefined);
+    await resetLetterForProcessing('missing');
+    expect(updateSetMock).not.toHaveBeenCalled();
   });
 });

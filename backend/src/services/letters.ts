@@ -325,33 +325,46 @@ async function markDeadLetter(
 }
 
 /**
- * Resets a letter for re-processing.
+ * Resets a letter for re-processing. Stages already in SUCCESS are preserved
+ * so a "Process" click only advances PENDING/FAILED/RUNNING work.
  */
 export async function resetLetterForProcessing(letterId: string): Promise<void> {
-  await db
-    .update(letters)
-    .set({
-      workflow: 'UPLOADED',
-      transcriptionStatus: 'PENDING',
-      transcriptionError: null,
-      transcriptionAttemptCount: 0,
-      metadataStatus: 'PENDING',
-      metadataError: null,
-      metadataAttemptCount: 0,
-      entityExtractionJson: null,
-      entityExtractionStatus: 'PENDING',
-      entityExtractionError: null,
-      // Reset two-track content status to EMPTY
-      transcriptStatus: 'EMPTY',
-      metadataContentStatus: 'EMPTY',
-      transcriptVerifiedAt: null,
-      transcriptVerifiedBy: null,
-      metadataVerifiedAt: null,
-      metadataVerifiedBy: null,
-      deadLetter: false,
-      updatedAt: new Date(),
-    })
-    .where(eq(letters.id, letterId));
+  const current = await db.query.letters.findFirst({
+    where: eq(letters.id, letterId),
+  });
+  if (!current) return;
+
+  const updates: Partial<Letter> = {
+    deadLetter: false,
+    updatedAt: new Date(),
+  };
+
+  if (current.transcriptionStatus !== 'SUCCESS') {
+    updates.workflow = 'UPLOADED';
+    updates.transcriptionStatus = 'PENDING';
+    updates.transcriptionError = null;
+    updates.transcriptionAttemptCount = 0;
+    updates.transcriptStatus = 'EMPTY';
+    updates.transcriptVerifiedAt = null;
+    updates.transcriptVerifiedBy = null;
+  }
+
+  if (current.metadataStatus !== 'SUCCESS') {
+    updates.metadataStatus = 'PENDING';
+    updates.metadataError = null;
+    updates.metadataAttemptCount = 0;
+    updates.metadataContentStatus = 'EMPTY';
+    updates.metadataVerifiedAt = null;
+    updates.metadataVerifiedBy = null;
+  }
+
+  if (current.entityExtractionStatus !== 'SUCCESS') {
+    updates.entityExtractionJson = null;
+    updates.entityExtractionStatus = 'PENDING';
+    updates.entityExtractionError = null;
+  }
+
+  await db.update(letters).set(updates).where(eq(letters.id, letterId));
 }
 
 /**

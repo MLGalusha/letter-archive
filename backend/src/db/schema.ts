@@ -751,6 +751,9 @@ export const workerState = pgTable('worker_state', {
   isPolling: boolean('is_polling').notNull().default(false),
   lastError: text('last_error'),
   currentBatchSize: integer('current_batch_size'),
+  isPaused: boolean('is_paused').notNull().default(false),
+  pausedAt: timestamp('paused_at', { withTimezone: true }),
+  pausedReason: text('paused_reason'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

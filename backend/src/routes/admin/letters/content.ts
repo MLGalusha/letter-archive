@@ -74,7 +74,7 @@ router.post('/:letterId/process', async (req, res, next) => {
     const { letterId } = req.params;
     await requireLetter(letterId);
     await resetLetterForProcessing(letterId);
-    await requestBackgroundWorkerRun('letter:process');
+    await requestBackgroundWorkerRun('letter:process', { bypassPause: true });
     res.json({ message: 'Letter enqueued for processing', letterId });
   } catch (error) {
     next(error);

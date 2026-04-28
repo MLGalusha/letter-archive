@@ -55,7 +55,21 @@ async function hasActiveWorkerHeartbeat(): Promise<boolean> {
 
 let triggerInFlight: Promise<void> | null = null;
 
-export async function triggerWorkerJob(reason: string): Promise<boolean> {
+export interface TriggerWorkerJobOptions {
+  /**
+   * When true, the worker run ignores the worker_state.is_paused flag.
+   * Used for explicit admin "Process" clicks that should override pause.
+   * Also bypasses the active-heartbeat dedup so the explicit trigger always
+   * fires (the in-flight promise dedup still applies within a single API
+   * process to avoid concurrent fire-and-forget calls).
+   */
+  bypassPause?: boolean;
+}
+
+export async function triggerWorkerJob(
+  reason: string,
+  options: TriggerWorkerJobOptions = {},
+): Promise<boolean> {
   if (!shouldUseCloudRunWorkerJob()) {
     return false;
   }
@@ -70,9 +84,11 @@ export async function triggerWorkerJob(reason: string): Promise<boolean> {
     return false;
   }
 
+  const { bypassPause = false } = options;
+
   triggerInFlight = (async () => {
     try {
-      if (await hasActiveWorkerHeartbeat()) {
+      if (!bypassPause && (await hasActiveWorkerHeartbeat())) {
         log.info(
           {
             jobName: env.CLOUD_RUN_WORKER_JOB_NAME,
@@ -87,13 +103,22 @@ export async function triggerWorkerJob(reason: string): Promise<boolean> {
       const accessToken = await getAccessToken();
       const url = `https://run.googleapis.com/v2/projects/${projectId}/locations/${env.CLOUD_RUN_REGION}/jobs/${env.CLOUD_RUN_WORKER_JOB_NAME}:run`;
 
+      const body: Record<string, unknown> = {};
+      if (bypassPause) {
+        body.overrides = {
+          containerOverrides: [
+            { env: [{ name: 'BYPASS_PAUSE', value: 'true' }] },
+          ],
+        };
+      }
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -106,6 +131,7 @@ export async function triggerWorkerJob(reason: string): Promise<boolean> {
           jobName: env.CLOUD_RUN_WORKER_JOB_NAME,
           region: env.CLOUD_RUN_REGION,
           reason,
+          bypassPause,
         },
         'Triggered Cloud Run worker job',
       );

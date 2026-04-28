@@ -15,7 +15,7 @@ import { requestLogger } from './middleware/request-logger.js';
 import { env, hasOpenAI } from './config/env.js';
 import { logger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { securityHeaders } from './middleware/security.js';
-import { recoverOrphanedJobs } from './services/processing-queue.js';
+import { recoverOrphanedJobs, hydratePauseStateFromDb } from './services/processing-queue.js';
 import { db, sql, adminUsers } from './db/index.js';
 import { hashPassword } from './auth/jwt.js';
 import { notify } from './services/notifications.js';
@@ -155,6 +155,12 @@ const server = app.listen(env.PORT, () => {
   // Recover any jobs left in RUNNING state from a previous crash/restart
   recoverOrphanedJobs().catch(err => {
     logger.error({ err }, 'Failed to recover orphaned jobs');
+  });
+
+  // Mirror the persisted pause flag into in-memory state so getProcessingStatus
+  // reflects the DB after a server restart.
+  hydratePauseStateFromDb().catch(err => {
+    logger.error({ err }, 'Failed to hydrate pause state');
   });
 
   // Wire the SSE broadcaster into notify() so every notification pushes to connected clients

@@ -452,7 +452,7 @@ describe('admin letters processing queue integration', () => {
     });
     expect(getLetterByIdMock).toHaveBeenCalledWith('letter-8');
     expect(resetLetterForProcessingMock).toHaveBeenCalledWith('letter-8');
-    expect(requestBackgroundWorkerRunMock).toHaveBeenCalledWith('letter:process');
+    expect(requestBackgroundWorkerRunMock).toHaveBeenCalledWith('letter:process', { bypassPause: true });
   });
 
   it('returns a request-correlated 404 when reprocessing a missing letter', async () => {

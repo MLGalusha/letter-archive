@@ -9,6 +9,7 @@ import { createLogger } from '../utils/logger.js';
 import { notify } from './notifications.js';
 import { TRANSCRIBABLE_TYPES } from './letter/shared.js';
 import { shouldUseCloudRunWorkerJob, triggerWorkerJob } from './cloud-run-job.js';
+import { setWorkerState, isWorkerPaused } from './worker-state.js';
 import {
   shouldAbortProcessing as runnerShouldAbort,
   updateJobProgress as runnerUpdateJobProgress,
@@ -294,13 +295,21 @@ export async function processLettersAsync(letterIds: string[], type: 'transcript
   processingState.currentJob = null;
 }
 
-export async function requestBackgroundWorkerRun(reason: string): Promise<boolean> {
+export interface BackgroundRunOptions {
+  /** Override worker_state.is_paused for this run only — for explicit admin Process clicks. */
+  bypassPause?: boolean;
+}
+
+export async function requestBackgroundWorkerRun(
+  reason: string,
+  options: BackgroundRunOptions = {},
+): Promise<boolean> {
   if (!shouldUseCloudRunWorkerJob()) {
     return false;
   }
 
   try {
-    await triggerWorkerJob(reason);
+    await triggerWorkerJob(reason, { bypassPause: options.bypassPause });
   } catch {
     // Leave queued work in PENDING state; a later trigger can still pick it up.
   }
@@ -312,7 +321,7 @@ async function startQueuedProcessing(
   letterIds: string[],
   type: 'transcription' | 'metadata' | 'entity_extraction',
 ): Promise<'job' | 'in_process'> {
-  if (await requestBackgroundWorkerRun(`queue:${type}`)) {
+  if (await requestBackgroundWorkerRun(`queue:${type}`, { bypassPause: true })) {
     return 'job';
   }
 
@@ -330,6 +339,15 @@ async function startQueuedProcessing(
  */
 export function getProcessingStatus(): ProcessingState {
   return processingState;
+}
+
+/**
+ * Mirror the persisted pause flag into in-memory state. Called once on
+ * server startup so getProcessingStatus reflects pauses set by a previous
+ * server instance (or by a Cloud Run job execution).
+ */
+export async function hydratePauseStateFromDb(): Promise<void> {
+  processingState.isPaused = await isWorkerPaused();
 }
 
 /**
@@ -726,41 +744,54 @@ export async function startEntityExtractionProcessing(options: ProcessingFilterO
 }
 
 /**
- * Pause the current processing batch.
+ * Pause processing. Sets both the in-memory flag (for the long-running
+ * in-process loop) and the DB flag (so Cloud Run worker invocations see it).
+ * Always succeeds — pause is an admin intent regardless of whether a batch
+ * is currently running.
  */
-export function pauseProcessing(): { message: string } {
-  if (!processingState.isRunning) {
-    throw new ProcessingError('No processing in progress', 400);
-  }
+export async function pauseProcessing(reason?: string): Promise<{ message: string }> {
   processingState.isPaused = true;
-  log.info({ completed: processingState.completed, total: processingState.total }, 'Processing paused');
+  await setWorkerState({
+    isPaused: true,
+    pausedAt: new Date(),
+    pausedReason: reason ?? null,
+  });
+  log.info({ completed: processingState.completed, total: processingState.total, reason }, 'Processing paused');
   void notify({
     type: 'queue_paused',
     title: 'Processing queue paused',
-    message: `Paused at ${processingState.completed}/${processingState.total}`,
+    message: processingState.isRunning
+      ? `Paused at ${processingState.completed}/${processingState.total}`
+      : 'Worker paused — new triggers will be skipped until resumed',
     link: '/admin/processing',
     sourceType: 'admin',
     metadata: {
       completed: processingState.completed,
       total: processingState.total,
+      reason: reason ?? null,
     },
   });
   return { message: 'Processing paused' };
 }
 
 /**
- * Resume the current processing batch.
+ * Resume processing. Clears the DB pause flag and kicks the worker so any
+ * letters that were queued during the pause start draining immediately.
  */
-export function resumeProcessing(): { message: string } {
-  if (!processingState.isRunning) {
-    throw new ProcessingError('No processing in progress', 400);
-  }
+export async function resumeProcessing(): Promise<{ message: string }> {
   processingState.isPaused = false;
+  await setWorkerState({
+    isPaused: false,
+    pausedAt: null,
+    pausedReason: null,
+  });
   log.info({ completed: processingState.completed, total: processingState.total }, 'Processing resumed');
   void notify({
     type: 'queue_resumed',
     title: 'Processing queue resumed',
-    message: `Resumed at ${processingState.completed}/${processingState.total}`,
+    message: processingState.isRunning
+      ? `Resumed at ${processingState.completed}/${processingState.total}`
+      : 'Worker resumed — pending work will drain on the next trigger',
     link: '/admin/processing',
     sourceType: 'admin',
     metadata: {
@@ -768,6 +799,7 @@ export function resumeProcessing(): { message: string } {
       total: processingState.total,
     },
   });
+  void requestBackgroundWorkerRun('resume');
   return { message: 'Processing resumed' };
 }
 
@@ -962,7 +994,7 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
     }).where(eq(letters.id, letterId));
   }
 
-  void requestBackgroundWorkerRun(`retry:${type}`);
+  void requestBackgroundWorkerRun(`retry:${type}`, { bypassPause: true });
 
   return { message: `Retrying ${type} for letter ${letterId}` };
 }

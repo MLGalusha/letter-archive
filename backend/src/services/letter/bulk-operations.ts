@@ -92,7 +92,7 @@ export async function bulkTranscribe(letterIds: string[], overwrite = false): Pr
   }
 
   if (shouldUseCloudRunWorkerJob()) {
-    await requestBackgroundWorkerRun('bulk:transcription');
+    await requestBackgroundWorkerRun('bulk:transcription', { bypassPause: true });
   } else {
     resetProcessingState(eligible.length);
     void processLettersAsync(eligible.map(l => l.id), 'transcription');
@@ -182,7 +182,7 @@ export async function bulkExtractMetadata(
   }
 
   if (shouldUseCloudRunWorkerJob()) {
-    await requestBackgroundWorkerRun('bulk:metadata');
+    await requestBackgroundWorkerRun('bulk:metadata', { bypassPause: true });
   } else {
     resetProcessingState(eligible.length);
     void processLettersAsync(eligible.map(l => l.id), 'metadata');

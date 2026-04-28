@@ -7,7 +7,7 @@ import { createLogger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { TRANSCRIBABLE_TYPES } from './services/letter/shared.js';
 import { notify } from './services/notifications.js';
 import { recoverOrphanedJobs } from './services/processing-queue.js';
-import { setWorkerState } from './services/worker-state.js';
+import { setWorkerState, isWorkerPaused } from './services/worker-state.js';
 
 const log = createLogger({ module: 'worker' });
 
@@ -30,6 +30,13 @@ function publishHeartbeat(currentBatchSize: number, lastError: string | null = n
  * runs as a long-lived polling loop — the local-dev shape.
  */
 const EXIT_WHEN_EMPTY = process.env.EXIT_WHEN_EMPTY === 'true';
+
+/**
+ * When true, this worker run ignores the worker_state.is_paused flag.
+ * Set by the cloud-run-job trigger when an admin explicitly clicks
+ * "Process" on a letter — the explicit action overrides the pause.
+ */
+const BYPASS_PAUSE = process.env.BYPASS_PAUSE === 'true';
 
 /**
  * Finds letters that need transcription (type='L', status='PENDING', not deleted, not dead-letter).
@@ -82,12 +89,27 @@ async function findLettersNeedingEntityExtraction() {
 }
 
 /**
+ * Returns true when the worker should stop picking up new work because the
+ * admin paused processing. Honored between stages and between letters, but
+ * never mid-stage — current stage finishes and saves first.
+ */
+async function shouldStopForPause(): Promise<boolean> {
+  if (BYPASS_PAUSE) return false;
+  return isWorkerPaused();
+}
+
+/**
  * Processes pending jobs. Returns true if any work was found this cycle,
  * false if both queues were empty — the Job-mode main loop uses this
  * signal to decide when to exit.
  */
 async function processPendingJobs(): Promise<boolean> {
   const cycleStart = Date.now();
+
+  if (await shouldStopForPause()) {
+    log.info('Worker paused — skipping cycle');
+    return false;
+  }
 
   // Phase 1: Transcription
   const needingTranscription = await findLettersNeedingTranscription();
@@ -103,7 +125,10 @@ async function processPendingJobs(): Promise<boolean> {
     log.debug({ count: needingTranscription.length }, 'Found letters needing transcription');
   }
 
+  let pausedMidCycle = false;
+
   for (const letter of needingTranscription) {
+    if (await shouldStopForPause()) { pausedMidCycle = true; break; }
     publishHeartbeat(totalPendingThisCycle);
     const jobStart = Date.now();
     log.info(
@@ -145,11 +170,16 @@ async function processPendingJobs(): Promise<boolean> {
     }
   }
 
-  if (needingMetadata.length > 0) {
+  if (!pausedMidCycle && (await shouldStopForPause())) {
+    pausedMidCycle = true;
+  }
+
+  if (needingMetadata.length > 0 && !pausedMidCycle) {
     log.debug({ count: needingMetadata.length }, 'Found letters needing metadata extraction');
   }
 
-  for (const letter of needingMetadata) {
+  for (const letter of pausedMidCycle ? [] : needingMetadata) {
+    if (await shouldStopForPause()) { pausedMidCycle = true; break; }
     publishHeartbeat(totalPendingThisCycle);
     const jobStart = Date.now();
     log.info(
@@ -183,11 +213,12 @@ async function processPendingJobs(): Promise<boolean> {
     }
   }
 
-  if (needingEntityExtraction.length > 0) {
+  if (needingEntityExtraction.length > 0 && !pausedMidCycle) {
     log.debug({ count: needingEntityExtraction.length }, 'Found letters needing entity extraction');
   }
 
-  for (const letter of needingEntityExtraction) {
+  for (const letter of pausedMidCycle ? [] : needingEntityExtraction) {
+    if (await shouldStopForPause()) { pausedMidCycle = true; break; }
     publishHeartbeat(totalPendingThisCycle);
     const jobStart = Date.now();
     log.info(
@@ -231,9 +262,15 @@ async function processPendingJobs(): Promise<boolean> {
         entityCount: needingEntityExtraction.length,
         totalProcessed,
         cycleDuration,
+        pausedMidCycle,
       },
       'Processing cycle completed'
     );
+  }
+
+  if (pausedMidCycle) {
+    log.info('Worker stopping after current stage — pause flag observed');
+    return false;
   }
 
   return totalProcessed > 0;

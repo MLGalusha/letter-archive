@@ -62,17 +62,18 @@ router.post('/start-entities', async (req, res, next) => {
   }
 });
 
-router.post('/pause', (_req, res, next) => {
+router.post('/pause', async (req, res, next) => {
   try {
-    res.json(pauseProcessing());
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
+    res.json(await pauseProcessing(reason));
   } catch (error) {
     next(new BadRequestError((error as Error).message));
   }
 });
 
-router.post('/resume', (_req, res, next) => {
+router.post('/resume', async (_req, res, next) => {
   try {
-    res.json(resumeProcessing());
+    res.json(await resumeProcessing());
   } catch (error) {
     next(new BadRequestError((error as Error).message));
   }

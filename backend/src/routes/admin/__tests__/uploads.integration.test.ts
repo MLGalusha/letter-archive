@@ -4,6 +4,7 @@ import { invokeRouter } from '../../../test/express-test-utils.js';
 const {
   dbSelectMock,
   ensureBackgroundWorkerForQueuedProcessingMock,
+  findPageByChecksumMock,
   findObservedPageSourcesByIdentityMock,
   unlinkMock,
   notifyMock,
@@ -12,6 +13,7 @@ const {
 } = vi.hoisted(() => ({
   dbSelectMock: vi.fn(),
   ensureBackgroundWorkerForQueuedProcessingMock: vi.fn(),
+  findPageByChecksumMock: vi.fn(),
   findObservedPageSourcesByIdentityMock: vi.fn(),
   unlinkMock: vi.fn(),
   notifyMock: vi.fn(),
@@ -67,6 +69,7 @@ vi.mock('../../../services/letter-pages.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../services/letter-pages.js')>();
   return {
     ...actual,
+    findPageByChecksum: findPageByChecksumMock,
     findObservedPageSourcesByIdentity: findObservedPageSourcesByIdentityMock,
   };
 });
@@ -101,6 +104,7 @@ describe('admin uploads route integration', () => {
       outcome: 'created',
       changed: true,
     });
+    findPageByChecksumMock.mockResolvedValue(undefined);
     findObservedPageSourcesByIdentityMock.mockResolvedValue(new Map());
   });
 
@@ -149,8 +153,40 @@ describe('admin uploads route integration', () => {
         '003-19320706-L01-01.jpg': sourceExpectation,
         'not-valid.jpg': null,
       },
+      contentDuplicates: {},
     });
     expect(findObservedPageSourcesByIdentityMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('checks optional file hashes for content duplicates', async () => {
+    findPageByChecksumMock.mockResolvedValueOnce({
+      id: 'page-existing-content',
+    });
+
+    const response = await invokeRouter(uploadsRouter, {
+      method: 'POST',
+      url: '/uploads/check-duplicates',
+      path: '/uploads/check-duplicates',
+      body: {
+        filenames: [
+          '003-19320706-L01-01.jpg',
+          '003-19320706-L01-02.jpg',
+        ],
+        hashes: {
+          '003-19320706-L01-01.jpg': 'checksum-one',
+        },
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      contentDuplicates: {
+        '003-19320706-L01-01.jpg': true,
+      },
+    });
+    expect(findPageByChecksumMock).toHaveBeenCalledWith('checksum-one');
+    expect(findPageByChecksumMock).toHaveBeenCalledTimes(1);
   });
 
   it('propagates internal failures through the error handler with request id', async () => {
@@ -234,6 +270,7 @@ describe('admin uploads route integration', () => {
       alreadyExists: true,
       outcome: 'unchanged',
       changed: false,
+      duplicateReason: 'duplicate_content',
     });
 
     const response = await invokeRouter(uploadsRouter, {
@@ -249,6 +286,9 @@ describe('admin uploads route integration', () => {
         changed: 0,
         unchanged: 1,
       },
+      results: [{
+        duplicateReason: 'duplicate_content',
+      }],
     });
     expect(notifyMock).not.toHaveBeenCalled();
     expect(dbSelectMock).not.toHaveBeenCalled();

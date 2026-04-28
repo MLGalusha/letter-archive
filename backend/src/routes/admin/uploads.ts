@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { processUploadedFile } from '../../services/upload.js';
 import { parseFilename } from '../../services/filename-parser.js';
 import {
+  findPageByChecksum,
   findObservedPageSourcesByIdentity,
   uploadPageIdentityKey,
   type UploadPageIdentity,
@@ -60,14 +61,21 @@ const upload = multer({
 });
 
 /**
- * POST /admin/uploads/check-duplicates - Check which filenames already exist in storage
+ * POST /admin/uploads/check-duplicates - Check which files already exist
  *
- * Accepts JSON body: { filenames: string[] }
- * Returns the duplicate flag and exact committed-source expectation per file.
+ * Accepts JSON body:
+ *   { filenames: string[], hashes?: Record<string, string> }
+ * Hashes are optional hex-encoded SHA-256 values keyed by filename.
+ *
+ * Returns filename-identity duplicates, exact committed-source expectations,
+ * and content duplicates for callers that supplied hashes.
  */
 router.post('/uploads/check-duplicates', async (req, res, next) => {
   try {
-    const { filenames } = req.body as { filenames?: string[] };
+    const { filenames, hashes } = req.body as {
+      filenames?: string[];
+      hashes?: Record<string, string>;
+    };
 
     if (!filenames || !Array.isArray(filenames)) {
       res.status(400).json({ error: 'filenames must be an array of strings' });
@@ -98,8 +106,18 @@ router.post('/uploads/check-duplicates', async (req, res, next) => {
           : null,
       ];
     }));
+    const contentDuplicates = Object.fromEntries(
+      await Promise.all(filenames.flatMap((filename) => {
+        const hash = hashes?.[filename];
+        if (!hash) return [];
+        return [findPageByChecksum(hash).then((page) => [
+          filename,
+          page !== undefined,
+        ] as const)];
+      })),
+    );
 
-    res.json({ duplicates, sourceExpectations });
+    res.json({ duplicates, sourceExpectations, contentDuplicates });
   } catch (error) {
     next(error);
   }
@@ -170,6 +188,7 @@ router.post('/uploads', upload.array('files', 500), async (req, res, next) => {
     alreadyExists: boolean;
     outcome: 'created' | 'replaced' | 'unchanged';
     changed: boolean;
+    duplicateReason?: 'duplicate_content';
   }> = [];
 
   const errors: Array<{
@@ -197,6 +216,7 @@ router.post('/uploads', upload.array('files', 500), async (req, res, next) => {
         alreadyExists: result.alreadyExists,
         outcome: result.outcome,
         changed: result.changed,
+        duplicateReason: result.duplicateReason,
       });
     } catch (error) {
       if (files.length === 1 && error instanceof SourceRevisionChangedError) {

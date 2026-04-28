@@ -9,12 +9,14 @@ import {
   removeStoredFile,
   storeImmutableFile,
 } from './storage.js';
-import { findOrCreateCollection } from './collections.js';
+import { findOrCreateCollection, getCollectionById } from './collections.js';
 import {
   findLetterByIdentity,
+  getLetterById,
   type CreateLetterParams,
 } from './letters.js';
 import {
+  findPageByChecksum,
   findOrCreatePage,
   getPage,
   type ExistingPagePolicy,
@@ -41,9 +43,11 @@ export interface UploadResult {
   alreadyExists: boolean;
   outcome: UploadOutcome;
   changed: boolean;
+  duplicateReason?: DuplicateReason;
 }
 
 export type UploadOutcome = 'created' | 'replaced' | 'unchanged';
+export type DuplicateReason = 'duplicate_content';
 
 async function readImageDimensions(
   storagePath: string,
@@ -108,6 +112,68 @@ export async function processUploadedFile(
     },
     'Filename parsed successfully'
   );
+
+  // Resolve content duplicates before creating collection or letter membership.
+  // A renamed upload can parse to a different identity even when its bytes are
+  // already archived, and creating that identity first would leave page-less
+  // metadata behind when the upload short-circuits.
+  const inspectedUpload = force ? null : await inspectUploadFile(tempPath);
+  if (inspectedUpload) {
+    const existingByChecksum = await findPageByChecksum(
+      inspectedUpload.checksumSha256,
+    );
+    if (existingByChecksum) {
+      const existingLetter = await getLetterById(existingByChecksum.letterId);
+      const existingCollection = existingLetter
+        ? await getCollectionById(existingLetter.collectionId)
+        : undefined;
+      const samePageIdentity = Boolean(
+        existingLetter
+        && existingCollection
+        && existingCollection.collectionCode === parsed.collectionCode
+        && existingLetter.dateRaw === parsed.dateRaw
+        && existingLetter.type === parsed.type
+        && existingLetter.typeSequence === parsed.typeSequence
+        && existingByChecksum.pageNumber === parsed.pageNumber
+      );
+
+      if (existingLetter && existingCollection && !samePageIdentity) {
+        log.info(
+          {
+            ...context,
+            checksumSha256:
+              inspectedUpload.checksumSha256.substring(0, 12) + '...',
+            existingPageId: existingByChecksum.id,
+            existingStoragePath: existingByChecksum.storagePath,
+          },
+          'Content-hash duplicate, skipping storage and membership writes',
+        );
+        return {
+          collection: existingCollection,
+          letter: existingLetter,
+          page: existingByChecksum,
+          storagePath: existingByChecksum.storagePath,
+          primarySourceRevision: existingLetter.primarySourceRevision,
+          alreadyExists: true,
+          outcome: 'unchanged',
+          changed: false,
+          duplicateReason: 'duplicate_content',
+        };
+      }
+
+      if (!existingLetter || !existingCollection) {
+        log.warn(
+          {
+            ...context,
+            existingPageId: existingByChecksum.id,
+            letterFound: Boolean(existingLetter),
+            collectionFound: Boolean(existingCollection),
+          },
+          'Content-hash match has no complete owner; continuing normal upload reconciliation',
+        );
+      }
+    }
+  }
 
   // Get or create collection
   const collection = await findOrCreateCollection(parsed.collectionCode);
@@ -259,7 +325,7 @@ export async function processUploadedFile(
     ) {
       pageResult = await commitObservedSource(actualChecksum, 'keep');
     } else {
-      const inspected = await inspectUploadFile(tempPath);
+      const inspected = inspectedUpload ?? await inspectUploadFile(tempPath);
       if (inspected.checksumSha256 === existing.checksumSha256) {
         const stored = await storeImmutableFile(
           tempPath,
@@ -294,7 +360,7 @@ export async function processUploadedFile(
       }
     }
   } else {
-    const inspected = await inspectUploadFile(tempPath);
+    const inspected = inspectedUpload ?? await inspectUploadFile(tempPath);
 
     if (existing) {
       let actualChecksum: string | null = null;

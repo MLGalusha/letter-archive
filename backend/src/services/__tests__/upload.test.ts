@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   findOrCreateCollectionMock,
+  getCollectionByIdMock,
   findLetterByIdentityMock,
+  getLetterByIdMock,
+  findPageByChecksumMock,
   findOrCreatePageMock,
   getPageMock,
   computeChecksumMock,
@@ -16,7 +19,10 @@ const {
   storeImmutableFileMock,
 } = vi.hoisted(() => ({
   findOrCreateCollectionMock: vi.fn(),
+  getCollectionByIdMock: vi.fn(),
   findLetterByIdentityMock: vi.fn(),
+  getLetterByIdMock: vi.fn(),
+  findPageByChecksumMock: vi.fn(),
   findOrCreatePageMock: vi.fn(),
   getPageMock: vi.fn(),
   computeChecksumMock: vi.fn(),
@@ -32,13 +38,16 @@ const {
 
 vi.mock('../collections.js', () => ({
   findOrCreateCollection: findOrCreateCollectionMock,
+  getCollectionById: getCollectionByIdMock,
 }));
 
 vi.mock('../letters.js', () => ({
   findLetterByIdentity: findLetterByIdentityMock,
+  getLetterById: getLetterByIdMock,
 }));
 
 vi.mock('../letter-pages.js', () => ({
+  findPageByChecksum: findPageByChecksumMock,
   findOrCreatePage: findOrCreatePageMock,
   getPage: getPageMock,
 }));
@@ -134,6 +143,7 @@ describe('upload service', () => {
       collectionCode: '003',
     });
     findLetterByIdentityMock.mockResolvedValue(observedLetter);
+    findPageByChecksumMock.mockResolvedValue(undefined);
     getPageMock.mockResolvedValue(undefined);
     findOrCreatePageMock.mockResolvedValue(pageMutationResult({
       page: {
@@ -165,6 +175,91 @@ describe('upload service', () => {
 
     expect(findOrCreateCollectionMock).not.toHaveBeenCalled();
     expect(storeImmutableFileMock).not.toHaveBeenCalled();
+  });
+
+  it('returns the existing owner for renamed content before creating membership', async () => {
+    const existingPage = {
+      id: 'page-existing-content',
+      letterId: 'letter-existing-content',
+      pageNumber: 5,
+      storagePath: 'storage/collections/004/objects/existing.jpg',
+      originalFilename: '004-19400102-L01-05.jpg',
+      checksumSha256: 'abc123',
+    };
+    const existingLetter = {
+      id: 'letter-existing-content',
+      collectionId: 'collection-existing-content',
+      dateRaw: '19400102',
+      type: 'L',
+      typeSequence: 1,
+      primarySourceRevision: 9,
+    };
+    const existingCollection = {
+      id: 'collection-existing-content',
+      collectionCode: '004',
+    };
+    findPageByChecksumMock.mockResolvedValueOnce(existingPage);
+    getLetterByIdMock.mockResolvedValueOnce(existingLetter);
+    getCollectionByIdMock.mockResolvedValueOnce(existingCollection);
+
+    const result = await processUploadedFile(
+      '/tmp/renamed.jpg',
+      '003-19320706-L01-01.jpg',
+    );
+
+    expect(findPageByChecksumMock).toHaveBeenCalledWith('abc123');
+    expect(findOrCreateCollectionMock).not.toHaveBeenCalled();
+    expect(findLetterByIdentityMock).not.toHaveBeenCalled();
+    expect(storeImmutableFileMock).not.toHaveBeenCalled();
+    expect(findOrCreatePageMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      collection: existingCollection,
+      letter: existingLetter,
+      page: existingPage,
+      storagePath: existingPage.storagePath,
+      primarySourceRevision: 9,
+      alreadyExists: true,
+      outcome: 'unchanged',
+      changed: false,
+      duplicateReason: 'duplicate_content',
+    });
+  });
+
+  it('keeps normal reconciliation for matching content at the requested identity', async () => {
+    const sameIdentityPage = {
+      ...preflightExistingPage,
+      pageNumber: 1,
+      checksumSha256: 'abc123',
+    };
+    findPageByChecksumMock.mockResolvedValueOnce(sameIdentityPage);
+    getLetterByIdMock.mockResolvedValueOnce({
+      ...observedLetter,
+      primarySourceRevision: 7,
+    });
+    getCollectionByIdMock.mockResolvedValueOnce({
+      id: 'collection-1',
+      collectionCode: '003',
+    });
+    getPageMock.mockResolvedValueOnce(sameIdentityPage);
+    findOrCreatePageMock.mockResolvedValueOnce(pageMutationResult({
+      page: sameIdentityPage,
+      outcome: 'unchanged',
+      sourceChanged: false,
+      primarySourceRevision: 7,
+    }));
+
+    const result = await processUploadedFile(
+      '/tmp/test.jpg',
+      '003-19320706-L01-01.jpg',
+    );
+
+    expect(findOrCreateCollectionMock).toHaveBeenCalledWith('003');
+    expect(findOrCreatePageMock).toHaveBeenCalled();
+    expect(result).toMatchObject({
+      outcome: 'unchanged',
+      changed: false,
+    });
+    expect(result).not.toHaveProperty('duplicateReason');
   });
 
   it('passes the read-only observed letter and exact creation identity to the page owner', async () => {

@@ -68,6 +68,7 @@ backend/test-line-overlay.png
 !frontend/public/favicon-*.png
 !frontend/public/apple-touch-icon.png
 !frontend/public/og-default.png
+!docs/screenshots/*.png
 
 # Claude
 CLAUDE.md

@@ -5,74 +5,53 @@ import type { ContentStatus } from "../../../types/Letter";
 import type {
   ColumnId,
   DashboardViewState,
-  DateMode,
   SortColumn,
-  VisibilityFilter,
 } from "./types";
+import type { DashboardFilterControls } from "./useDashboardFilters";
 import { useSavedDashboardViews } from "./useSavedDashboardViews";
 
 interface UseDashboardSavedViewStateOptions {
-  visibilityFilter: VisibilityFilter;
-  setVisibilityFilter: (value: VisibilityFilter) => void;
-  collectionFilter: string;
-  setCollectionFilter: (value: string) => void;
-  setCollectionInput: (value: string) => void;
-  searchQuery: string;
-  setSearchInput: (value: string) => void;
-  setSearchQuery: (value: string) => void;
+  filters: DashboardFilterControls;
   sortColumns: SortColumn[];
   setSortColumns: Dispatch<SetStateAction<SortColumn[]>>;
-  dateMode: DateMode;
-  setDateMode: (value: DateMode) => void;
-  yearFilter: number | null;
-  setYearFilter: (value: number | null) => void;
-  monthFilter: number | null;
-  setMonthFilter: (value: number | null) => void;
-  dayFilter: number | null;
-  setDayFilter: (value: number | null) => void;
-  dateFromFilter: string | null;
-  setDateFromFilter: (value: string | null) => void;
-  dateToFilter: string | null;
-  setDateToFilter: (value: string | null) => void;
-  transcriptStatusFilters: ContentStatus[];
-  setTranscriptStatusFilters: Dispatch<SetStateAction<ContentStatus[]>>;
-  metadataStatusFilters: ContentStatus[];
-  setMetadataStatusFilters: Dispatch<SetStateAction<ContentStatus[]>>;
   visibleColumns: Set<ColumnId>;
   setVisibleColumns: Dispatch<SetStateAction<Set<ColumnId>>>;
 }
 
 export function useDashboardSavedViewState({
-  visibilityFilter,
-  setVisibilityFilter,
-  collectionFilter,
-  setCollectionFilter,
-  setCollectionInput,
-  searchQuery,
-  setSearchInput,
-  setSearchQuery,
+  filters,
   sortColumns,
   setSortColumns,
-  dateMode,
-  setDateMode,
-  yearFilter,
-  setYearFilter,
-  monthFilter,
-  setMonthFilter,
-  dayFilter,
-  setDayFilter,
-  dateFromFilter,
-  setDateFromFilter,
-  dateToFilter,
-  setDateToFilter,
-  transcriptStatusFilters,
-  setTranscriptStatusFilters,
-  metadataStatusFilters,
-  setMetadataStatusFilters,
   visibleColumns,
   setVisibleColumns,
 }: UseDashboardSavedViewStateOptions) {
   const { showToast } = useToast();
+  const {
+    visibilityFilter,
+    setVisibilityFilter,
+    collectionFilter,
+    setCollectionFilter,
+    setCollectionInput,
+    searchQuery,
+    setSearchInput,
+    setSearchQuery,
+    dateMode,
+    setDateMode,
+    yearFilter,
+    setYearFilter,
+    monthFilter,
+    setMonthFilter,
+    dayFilter,
+    setDayFilter,
+    dateFromFilter,
+    setDateFromFilter,
+    dateToFilter,
+    setDateToFilter,
+    transcriptStatusFilters,
+    setTranscriptStatusFilters,
+    metadataStatusFilters,
+    setMetadataStatusFilters,
+  } = filters;
 
   const getCurrentDashboardViewState = useCallback((): DashboardViewState => ({
     visibilityFilter,

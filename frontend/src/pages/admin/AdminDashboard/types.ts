@@ -4,6 +4,8 @@ export type DateMode = "specific" | "range";
 
 export type ContentFilterView = "transcript" | "metadata";
 
+export type DashboardView = "letters" | "collections";
+
 export type ServerSortField =
   | "createdAt"
   | "updatedAt"

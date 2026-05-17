@@ -50,6 +50,7 @@ Progress:
 - Mobile table now uses a compact column set instead of rendering the full desktop table.
 - Dashboard toolbar split into primary controls, active filter chips, and a filter editing panel.
 - Mobile filter editing is now collapsed behind a Filters button; desktop keeps the filter panel visible.
+- Dashboard toolbar render/state glue extracted into `AdminDashboard/DashboardToolbar.tsx` so `AdminDashboard.tsx` can stay closer to page orchestration.
 
 Out of scope:
 

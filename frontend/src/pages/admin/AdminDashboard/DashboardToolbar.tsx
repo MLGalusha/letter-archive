@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import type { ProcessingStatus } from "../../../api/admin";
 import Icon from "../../../components/common/Icon";
 import type { ContentStatus } from "../../../types/Letter";
+import ActiveFilterChips from "./ActiveFilterChips";
 import DashboardFilterPanel from "./DashboardFilterPanel";
 import SavedViewsMenu from "./SavedViewsMenu";
 import type {
@@ -15,6 +16,7 @@ import type {
   VisibilityFilter,
 } from "./types";
 import { isServerSortField } from "./utils";
+import { useDashboardActiveFilters } from "./useDashboardActiveFilters";
 import { DEFAULT_DASHBOARD_SORT } from "./useDashboardSort";
 
 interface DashboardToolbarStats {
@@ -135,20 +137,7 @@ export default function DashboardToolbar({
   processingStatus,
   selectedCount,
 }: DashboardToolbarProps) {
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (collectionFilter !== "all") count++;
-    if (visibilityFilter !== "ALL") count++;
-    if (searchQuery) count++;
-    if (transcriptStatusFilters.length > 0) count += transcriptStatusFilters.length;
-    if (metadataStatusFilters.length > 0) count += metadataStatusFilters.length;
-    if (yearFilter !== null) count++;
-    if (monthFilter !== null) count++;
-    if (dayFilter !== null) count++;
-    if (dateFromFilter !== null) count++;
-    if (dateToFilter !== null) count++;
-    return count;
-  }, [
+  const { activeFilterCount, activeFilterChips } = useDashboardActiveFilters({
     collectionFilter,
     visibilityFilter,
     searchQuery,
@@ -159,7 +148,16 @@ export default function DashboardToolbar({
     dayFilter,
     dateFromFilter,
     dateToFilter,
-  ]);
+    hasDateFilter,
+    toggleVisibilityFilter,
+    handleCollectionInputChange,
+    setSearchInput,
+    setSearchQuery,
+    getDateButtonText,
+    clearDateFilters,
+    toggleTranscriptFilter,
+    toggleMetadataFilter,
+  });
 
   const primarySortValue = useMemo(() => {
     const serverSort = [...sortColumns].reverse().find(col => isServerSortField(col.field));
@@ -174,78 +172,6 @@ export default function DashboardToolbar({
       { field, direction },
     ]);
   };
-
-  const activeFilterChips = useMemo(() => {
-    const chips: Array<{ key: string; label: string; onRemove: () => void }> = [];
-
-    if (visibilityFilter !== "ALL") {
-      chips.push({
-        key: "visibility",
-        label: visibilityFilter === "PUBLISHED" ? "Published" : "Hidden",
-        onRemove: () => toggleVisibilityFilter(visibilityFilter),
-      });
-    }
-
-    if (collectionFilter !== "all") {
-      chips.push({
-        key: "collection",
-        label: `Collection ${collectionFilter}`,
-        onRemove: () => handleCollectionInputChange(""),
-      });
-    }
-
-    if (searchQuery) {
-      chips.push({
-        key: "search",
-        label: `Search: ${searchQuery}`,
-        onRemove: () => {
-          setSearchInput("");
-          setSearchQuery("");
-        },
-      });
-    }
-
-    if (hasDateFilter) {
-      chips.push({
-        key: "date",
-        label: getDateButtonText(),
-        onRemove: clearDateFilters,
-      });
-    }
-
-    transcriptStatusFilters.forEach((status) => {
-      chips.push({
-        key: `transcript-${status}`,
-        label: `Transcript ${status.toLowerCase().replace("_", " ")}`,
-        onRemove: () => toggleTranscriptFilter(status),
-      });
-    });
-
-    metadataStatusFilters.forEach((status) => {
-      chips.push({
-        key: `metadata-${status}`,
-        label: `Metadata ${status.toLowerCase().replace("_", " ")}`,
-        onRemove: () => toggleMetadataFilter(status),
-      });
-    });
-
-    return chips;
-  }, [
-    visibilityFilter,
-    collectionFilter,
-    searchQuery,
-    hasDateFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
-    toggleVisibilityFilter,
-    handleCollectionInputChange,
-    setSearchInput,
-    setSearchQuery,
-    getDateButtonText,
-    clearDateFilters,
-    toggleTranscriptFilter,
-    toggleMetadataFilter,
-  ]);
 
   return (
     <div className="dashboard-toolbar-stack">
@@ -325,26 +251,14 @@ export default function DashboardToolbar({
 
       {dashboardView === "letters" && (
         <>
-          <div className="active-filter-chips" aria-label="Active filters">
-            <span className="dashboard-result-count">{paginationTotal} letters</span>
-            {activeFilterChips.map((chip) => (
-              <button key={chip.key} className="active-filter-chip" onClick={chip.onRemove}>
-                <span>{chip.label}</span>
-                <Icon name="close" size={12} />
-              </button>
-            ))}
-            {activeFilterCount > 0 && (
-              <button className="clear-all-link" onClick={handleClearAllFilters}>
-                Clear all
-              </button>
-            )}
-            {processingStatus?.isRunning && selectedCount === 0 && (
-              <span className="stat-pill stat-processing">
-                {processingStatus.currentJob?.type === "transcription" ? "T" : "M"}:{" "}
-                {processingStatus.completed}/{processingStatus.total}
-              </span>
-            )}
-          </div>
+          <ActiveFilterChips
+            paginationTotal={paginationTotal}
+            activeFilterCount={activeFilterCount}
+            activeFilterChips={activeFilterChips}
+            processingStatus={processingStatus}
+            selectedCount={selectedCount}
+            onClearAllFilters={handleClearAllFilters}
+          />
 
           {mobileFiltersOpen && (
             <button

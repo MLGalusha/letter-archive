@@ -40,6 +40,7 @@ export default function AdminDashboard() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const { dashboardView, handleDashboardViewChange } = useDashboardViewState();
 
+  const dashboardFilters = useDashboardFilters();
   const {
     showDateDropdown,
     setShowDateDropdown,
@@ -80,7 +81,7 @@ export default function AdminDashboard() {
     clearDateFilters,
     handleClearAllFilters,
     initialSortColumns,
-  } = useDashboardFilters();
+  } = dashboardFilters;
   const { sortColumns, setSortColumns, handleSort, getSortInfo } = useDashboardSort(initialSortColumns);
   const {
     visibleColumns,
@@ -378,39 +379,7 @@ export default function AdminDashboard() {
           onSaveView={handleSaveDashboardView}
           onApplyView={handleApplyDashboardView}
           onDeleteView={handleDeleteDashboardView}
-          searchInput={searchInput}
-          setSearchInput={setSearchInput}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          collectionInput={collectionInput}
-          collectionFilter={collectionFilter}
-          handleCollectionInputChange={handleCollectionInputChange}
-          visibilityFilter={visibilityFilter}
-          toggleVisibilityFilter={toggleVisibilityFilter}
-          contentFilterView={contentFilterView}
-          setContentFilterView={setContentFilterView}
-          transcriptStatusFilters={transcriptStatusFilters}
-          toggleTranscriptFilter={toggleTranscriptFilter}
-          metadataStatusFilters={metadataStatusFilters}
-          toggleMetadataFilter={toggleMetadataFilter}
-          showDateDropdown={showDateDropdown}
-          setShowDateDropdown={setShowDateDropdown}
-          dateDropdownRef={dateDropdownRef}
-          dateMode={dateMode}
-          setDateMode={setDateMode}
-          hasDateFilter={hasDateFilter}
-          yearFilter={yearFilter}
-          setYearFilter={setYearFilter}
-          monthFilter={monthFilter}
-          setMonthFilter={setMonthFilter}
-          dayFilter={dayFilter}
-          setDayFilter={setDayFilter}
-          dateFromFilter={dateFromFilter}
-          setDateFromFilter={setDateFromFilter}
-          dateToFilter={dateToFilter}
-          setDateToFilter={setDateToFilter}
-          clearDateFilters={clearDateFilters}
-          handleClearAllFilters={handleClearAllFilters}
+          filters={dashboardFilters}
           getDateButtonText={getDateButtonText}
           dateRawToDisplay={dateRawToDisplay}
           displayToDateRaw={displayToDateRaw}

@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
 import { getErrorMessage } from "../../api/client";
 import { getFilteredLetterIds } from "../../api/letters";
 import { toggleLetterFlag } from "../../api/admin/letters";
 import { useToast } from "../../contexts/ToastContext";
-import type { ContentStatus } from "../../types/Letter";
 import AdminLayout from "../../components/AdminLayout";
 import RecentActivityTable from "./AdminDashboard/RecentActivityTable";
 import DashboardToolbar from "./AdminDashboard/DashboardToolbar";
@@ -16,10 +15,7 @@ import {
   DEFAULT_DASHBOARD_SORT,
   MONTH_OPTIONS,
 } from "./AdminDashboard/constants";
-import type {
-  DashboardViewState,
-  DashboardView,
-} from "./AdminDashboard/types";
+import type { DashboardView } from "./AdminDashboard/types";
 import {
   buildDashboardLetterQuery,
   formatDateRaw,
@@ -35,9 +31,9 @@ import { useDashboardLettersData } from "./AdminDashboard/useDashboardLettersDat
 import { useDashboardProcessingActions } from "./AdminDashboard/useDashboardProcessingActions";
 import { useDashboardProcessingControls } from "./AdminDashboard/useDashboardProcessingControls";
 import { useDashboardRowSelection } from "./AdminDashboard/useDashboardRowSelection";
+import { useDashboardSavedViewState } from "./AdminDashboard/useDashboardSavedViewState";
 import { useDashboardSelection } from "./AdminDashboard/useDashboardSelection";
 import { useDashboardSort } from "./AdminDashboard/useDashboardSort";
-import { useSavedDashboardViews } from "./AdminDashboard/useSavedDashboardViews";
 import CollectionsDashboard from "./AdminCollectionsListPage";
 import "./AdminDashboard.css";
 
@@ -415,80 +411,40 @@ export default function AdminDashboard() {
     localStorage.setItem("dashboard-view", view);
   };
 
-  const getCurrentDashboardViewState = useCallback((): DashboardViewState => ({
-    visibilityFilter,
-    collectionFilter,
-    searchQuery,
-    sortColumns,
-    dateMode,
-    year: yearFilter,
-    month: monthFilter,
-    day: dayFilter,
-    dateFrom: dateFromFilter,
-    dateTo: dateToFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
-    visibleColumns: Array.from(visibleColumns),
-  }), [
-    visibilityFilter,
-    collectionFilter,
-    searchQuery,
-    sortColumns,
-    dateMode,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
-    visibleColumns,
-  ]);
-
-  const applyDashboardViewState = useCallback((state: DashboardViewState) => {
-    setVisibilityFilter(state.visibilityFilter);
-    setCollectionFilter(state.collectionFilter);
-    setCollectionInput(state.collectionFilter === "all" ? "" : state.collectionFilter);
-    setSearchInput(state.searchQuery);
-    setSearchQuery(state.searchQuery);
-    setSortColumns(state.sortColumns);
-    setDateMode(state.dateMode);
-    setYearFilter(state.year);
-    setMonthFilter(state.month);
-    setDayFilter(state.day);
-    setDateFromFilter(state.dateFrom);
-    setDateToFilter(state.dateTo);
-    setTranscriptStatusFilters(state.transcriptStatusFilters as ContentStatus[]);
-    setMetadataStatusFilters(state.metadataStatusFilters as ContentStatus[]);
-    setVisibleColumns(new Set(state.visibleColumns));
-  }, [
-    setVisibilityFilter,
-    setCollectionFilter,
-    setCollectionInput,
-    setSearchInput,
-    setSearchQuery,
-    setSortColumns,
-    setDateMode,
-    setYearFilter,
-    setMonthFilter,
-    setDayFilter,
-    setDateFromFilter,
-    setDateToFilter,
-    setTranscriptStatusFilters,
-    setMetadataStatusFilters,
-    setVisibleColumns,
-  ]);
-
   const {
     savedViews,
     saveView: handleSaveDashboardView,
     applyView: handleApplyDashboardView,
     deleteView: handleDeleteDashboardView,
-  } = useSavedDashboardViews({
-    getCurrentState: getCurrentDashboardViewState,
-    applyState: applyDashboardViewState,
-    onSaved: (name) => showToast(`Saved view "${name}"`, "success"),
-    onApplied: (name) => showToast(`Loaded view "${name}"`, "info"),
+  } = useDashboardSavedViewState({
+    visibilityFilter,
+    setVisibilityFilter,
+    collectionFilter,
+    setCollectionFilter,
+    setCollectionInput,
+    searchQuery,
+    setSearchInput,
+    setSearchQuery,
+    sortColumns,
+    setSortColumns,
+    dateMode,
+    setDateMode,
+    yearFilter,
+    setYearFilter,
+    monthFilter,
+    setMonthFilter,
+    dayFilter,
+    setDayFilter,
+    dateFromFilter,
+    setDateFromFilter,
+    dateToFilter,
+    setDateToFilter,
+    transcriptStatusFilters,
+    setTranscriptStatusFilters,
+    metadataStatusFilters,
+    setMetadataStatusFilters,
+    visibleColumns,
+    setVisibleColumns,
   });
 
   if (loading && isInitialLoad) {

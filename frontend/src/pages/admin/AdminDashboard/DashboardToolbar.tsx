@@ -12,24 +12,12 @@ import type {
   ContentFilterView,
   DashboardView,
   DateMode,
+  DashboardFilterStats,
   SavedDashboardView,
   SortColumn,
   VisibilityFilter,
 } from "./types";
 import { useDashboardActiveFilters } from "./useDashboardActiveFilters";
-
-interface DashboardToolbarStats {
-  published: number;
-  hidden: number;
-  transcriptEmpty: number;
-  transcriptAiDraft: number;
-  transcriptEdited: number;
-  transcriptVerified: number;
-  metadataEmpty: number;
-  metadataAiDraft: number;
-  metadataEdited: number;
-  metadataVerified: number;
-}
 
 interface DashboardToolbarProps {
   dashboardView: DashboardView;
@@ -37,7 +25,7 @@ interface DashboardToolbarProps {
   mobileFiltersOpen: boolean;
   onMobileFiltersOpenChange: Dispatch<SetStateAction<boolean>>;
   paginationTotal: number;
-  stats: DashboardToolbarStats;
+  stats: DashboardFilterStats;
   sortColumns: SortColumn[];
   setSortColumns: Dispatch<SetStateAction<SortColumn[]>>;
   savedViews: SavedDashboardView[];

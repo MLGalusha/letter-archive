@@ -96,3 +96,16 @@ export interface PendingChange {
   sender?: string;
   recipient?: string;
 }
+
+export interface DashboardFilterStats {
+  published: number;
+  hidden: number;
+  transcriptEmpty: number;
+  transcriptAiDraft: number;
+  transcriptEdited: number;
+  transcriptVerified: number;
+  metadataEmpty: number;
+  metadataAiDraft: number;
+  metadataEdited: number;
+  metadataVerified: number;
+}

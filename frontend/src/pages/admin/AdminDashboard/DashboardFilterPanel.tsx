@@ -1,26 +1,14 @@
 import type { RefObject } from "react";
 import Icon from "../../../components/common/Icon";
 import type { ContentStatus } from "../../../types/Letter";
-import { CONTENT_STATUS_FILTERS, VISIBILITY_FILTERS } from "./constants";
+import ContentStatusFilterSection from "./ContentStatusFilterSection";
 import DashboardDateFilterControl from "./DashboardDateFilterControl";
-import type { ContentFilterView, DateMode, VisibilityFilter } from "./types";
-
-interface DashboardFilterPanelStats {
-  published: number;
-  hidden: number;
-  transcriptEmpty: number;
-  transcriptAiDraft: number;
-  transcriptEdited: number;
-  transcriptVerified: number;
-  metadataEmpty: number;
-  metadataAiDraft: number;
-  metadataEdited: number;
-  metadataVerified: number;
-}
+import VisibilityFilterSection from "./VisibilityFilterSection";
+import type { ContentFilterView, DashboardFilterStats, DateMode, VisibilityFilter } from "./types";
 
 interface DashboardFilterPanelProps {
   open: boolean;
-  stats: DashboardFilterPanelStats;
+  stats: DashboardFilterStats;
   collectionInput: string;
   handleCollectionInputChange: (value: string) => void;
   visibilityFilter: VisibilityFilter;
@@ -112,76 +100,21 @@ export default function DashboardFilterPanel({
         </div>
       </div>
 
-      <section className="filter-panel-section">
-        <span className="filter-panel-label">Visibility</span>
-        <div className="filter-button-grid filter-button-grid--visibility">
-          {VISIBILITY_FILTERS.map((filter) => {
-            const isActive = visibilityFilter === filter.value;
-            return (
-              <button
-                key={filter.value}
-                type="button"
-                className={`filter-pill ${filter.className} ${isActive ? "active" : ""}`}
-                onClick={() => toggleVisibilityFilter(filter.value)}
-                aria-pressed={isActive}
-                title={filter.title}
-              >
-                <span className="filter-pill-count">{stats[filter.countKey]}</span>
-                <span>{filter.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
+      <VisibilityFilterSection
+        stats={stats}
+        visibilityFilter={visibilityFilter}
+        toggleVisibilityFilter={toggleVisibilityFilter}
+      />
 
-      <section className="filter-panel-section content-filter-section">
-        <div className="content-filter-toggle">
-          <button
-            type="button"
-            className={`content-toggle-btn ${contentFilterView === "transcript" ? "active" : ""}`}
-            onClick={() => setContentFilterView("transcript")}
-          >
-            Transcript
-            {contentFilterView !== "transcript" && transcriptStatusFilters.length > 0 && (
-              <span className="toggle-badge">{transcriptStatusFilters.length}</span>
-            )}
-          </button>
-          <button
-            type="button"
-            className={`content-toggle-btn ${contentFilterView === "metadata" ? "active" : ""}`}
-            onClick={() => setContentFilterView("metadata")}
-          >
-            Metadata
-            {contentFilterView !== "metadata" && metadataStatusFilters.length > 0 && (
-              <span className="toggle-badge">{metadataStatusFilters.length}</span>
-            )}
-          </button>
-        </div>
-        <div className="filter-button-grid filter-button-grid--content">
-          {CONTENT_STATUS_FILTERS.map((filter) => {
-            const selectedFilters = contentFilterView === "transcript"
-              ? transcriptStatusFilters
-              : metadataStatusFilters;
-            const toggleFilter = contentFilterView === "transcript"
-              ? toggleTranscriptFilter
-              : toggleMetadataFilter;
-            const isActive = selectedFilters.includes(filter.value);
-
-            return (
-              <button
-                key={filter.value}
-                type="button"
-                className={`filter-pill ${filter.className} ${isActive ? "active" : ""}`}
-                onClick={() => toggleFilter(filter.value)}
-                aria-pressed={isActive}
-              >
-                <span className="filter-pill-count">{stats[filter.countKeys[contentFilterView]]}</span>
-                <span>{filter.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
+      <ContentStatusFilterSection
+        stats={stats}
+        contentFilterView={contentFilterView}
+        setContentFilterView={setContentFilterView}
+        transcriptStatusFilters={transcriptStatusFilters}
+        toggleTranscriptFilter={toggleTranscriptFilter}
+        metadataStatusFilters={metadataStatusFilters}
+        toggleMetadataFilter={toggleMetadataFilter}
+      />
 
       <section className="filter-panel-section filter-panel-fields">
         <DashboardDateFilterControl

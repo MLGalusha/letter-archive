@@ -3,9 +3,7 @@ import ContentStatusFilterSection from "./ContentStatusFilterSection";
 import DashboardDateFilterControl from "./DashboardDateFilterControl";
 import VisibilityFilterSection from "./VisibilityFilterSection";
 import type { DashboardFilterStats } from "./types";
-import type { useDashboardFilters } from "./useDashboardFilters";
-
-type DashboardFilterControls = ReturnType<typeof useDashboardFilters>;
+import type { DashboardFilterControls } from "./useDashboardFilters";
 
 interface DashboardFilterPanelProps {
   open: boolean;

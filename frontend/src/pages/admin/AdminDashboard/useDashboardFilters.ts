@@ -175,3 +175,5 @@ export function useDashboardFilters() {
     initialSortColumns: persistedState.current.sortColumns ?? [],
   };
 }
+
+export type DashboardFilterControls = ReturnType<typeof useDashboardFilters>;

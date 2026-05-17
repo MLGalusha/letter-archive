@@ -7,7 +7,7 @@ import DashboardSortControl from "./DashboardSortControl";
 import DashboardViewToggle from "./DashboardViewToggle";
 import MobileFilterTrigger from "./MobileFilterTrigger";
 import SavedViewsMenu from "./SavedViewsMenu";
-import type { useDashboardFilters } from "./useDashboardFilters";
+import type { DashboardFilterControls } from "./useDashboardFilters";
 import type {
   DashboardView,
   DashboardFilterStats,
@@ -15,8 +15,6 @@ import type {
   SortColumn,
 } from "./types";
 import { useDashboardActiveFilters } from "./useDashboardActiveFilters";
-
-type DashboardFilterControls = ReturnType<typeof useDashboardFilters>;
 
 interface DashboardToolbarProps {
   dashboardView: DashboardView;

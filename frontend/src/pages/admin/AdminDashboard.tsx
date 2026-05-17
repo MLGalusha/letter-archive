@@ -6,13 +6,13 @@ import RecentActivityTable from "./AdminDashboard/RecentActivityTable";
 import DashboardToolbar from "./AdminDashboard/DashboardToolbar";
 import BulkEditToolbar from "./AdminDashboard/BulkEditToolbar";
 import DashboardDialogs from "./AdminDashboard/DashboardDialogs";
-import {
-  ALL_COLUMNS,
-  MONTH_OPTIONS,
-} from "./AdminDashboard/constants";
+import { ALL_COLUMNS } from "./AdminDashboard/constants";
 import type { DashboardView } from "./AdminDashboard/types";
 import {
+  dateRawToDisplay,
+  displayToDateRaw,
   formatDateRaw,
+  getDashboardDateButtonText,
   getCombinedTranscriptStatus,
   savePersistedState,
   StatusIcon,
@@ -313,42 +313,14 @@ export default function AdminDashboard() {
     fetchLetters,
   });
 
-  const displayToDateRaw = (display: string): string | null => {
-    if (!display) return null;
-    const parts = display.split('/');
-    if (parts.length !== 3) return null;
-    const [month, day, year] = parts;
-    if (year.length !== 4 || !/^\d+$/.test(year)) return null;
-    const m = Number(month);
-    const d = Number(day);
-    if (isNaN(m) || isNaN(d) || m < 1 || m > 12 || d < 1 || d > 31) return null;
-    return `${year}${month.padStart(2, '0')}${day.padStart(2, '0')}`;
-  };
-
-  const dateRawToDisplay = (dateRaw: string | null): string => {
-    if (!dateRaw || dateRaw.length < 8) return '';
-    const year = dateRaw.slice(0, 4);
-    const month = dateRaw.slice(4, 6);
-    const day = dateRaw.slice(6, 8);
-    return `${month}/${day}/${year}`;
-  };
-
-  const getDateButtonText = () => {
-    if (dateMode === 'specific') {
-      const parts = [];
-      if (yearFilter) parts.push(yearFilter);
-      if (monthFilter) parts.push(MONTH_OPTIONS[monthFilter - 1]?.label);
-      if (dayFilter) parts.push(dayFilter);
-      return parts.length > 0 ? parts.join(' ') : 'Date';
-    } else {
-      if (dateFromFilter || dateToFilter) {
-        const from = dateFromFilter ? dateRawToDisplay(dateFromFilter) : '...';
-        const to = dateToFilter ? dateRawToDisplay(dateToFilter) : '...';
-        return `${from} - ${to}`;
-      }
-      return 'Date';
-    }
-  };
+  const getDateButtonText = () => getDashboardDateButtonText({
+    dateMode,
+    yearFilter,
+    monthFilter,
+    dayFilter,
+    dateFromFilter,
+    dateToFilter,
+  });
 
   const handleDashboardViewChange = (view: DashboardView) => {
     setDashboardView(view);

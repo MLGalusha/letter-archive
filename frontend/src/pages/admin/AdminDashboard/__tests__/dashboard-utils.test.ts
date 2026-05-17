@@ -1,7 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   buildDashboardLetterQuery,
+  dateRawToDisplay,
+  displayToDateRaw,
   formatDateRaw,
+  getDashboardDateButtonText,
   getCombinedTranscriptStatus,
   isServerSortField,
   loadPersistedState,
@@ -33,6 +36,31 @@ describe("admin dashboard utils", () => {
     expect(formatDateRaw("18860314")).toBe("03/14/1886");
     expect(formatDateRaw(undefined)).toBe("—");
     expect(formatDateRaw("188603")).toBe("—");
+  });
+
+  it("parses and labels dashboard date filters", () => {
+    expect(displayToDateRaw("03/14/1886")).toBe("18860314");
+    expect(displayToDateRaw("3/4/1886")).toBe("18860304");
+    expect(displayToDateRaw("not a date")).toBeNull();
+    expect(dateRawToDisplay("18860314")).toBe("03/14/1886");
+
+    expect(getDashboardDateButtonText({
+      dateMode: "specific",
+      yearFilter: 1886,
+      monthFilter: 3,
+      dayFilter: 14,
+      dateFromFilter: null,
+      dateToFilter: null,
+    })).toBe("1886 Mar 14");
+
+    expect(getDashboardDateButtonText({
+      dateMode: "range",
+      yearFilter: null,
+      monthFilter: null,
+      dayFilter: null,
+      dateFromFilter: "18860314",
+      dateToFilter: null,
+    })).toBe("03/14/1886 - ...");
   });
 
   it("builds API query params from dashboard filters", () => {

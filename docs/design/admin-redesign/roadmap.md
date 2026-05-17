@@ -71,6 +71,7 @@ Progress:
 - Saved dashboard view state capture/apply wiring moved into `useDashboardSavedViewState`.
 - Filter-change refetching, selection pruning, and select-all-filtered behavior moved into `useDashboardFilteredSelection`.
 - Optimistic flag/unflag row mutation moved into `useDashboardFlagActions`.
+- Date parsing and date filter button labeling moved into dashboard utils with focused tests.
 
 Out of scope:
 

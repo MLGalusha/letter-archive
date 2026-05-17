@@ -1,7 +1,8 @@
 import type { ContentStatus } from "../../../types/Letter";
 import type { AdminLetterQueryParams } from "../../../api/letters";
-import { SAVED_VIEWS_STORAGE_KEY, SERVER_SORT_FIELDS, STORAGE_KEY } from "./constants";
+import { MONTH_OPTIONS, SAVED_VIEWS_STORAGE_KEY, SERVER_SORT_FIELDS, STORAGE_KEY } from "./constants";
 import type {
+  DateMode,
   ExtendedSortField,
   PersistedState,
   SavedDashboardView,
@@ -105,6 +106,58 @@ export function formatDateRaw(dateRaw: string | undefined): string {
   const month = dateRaw.slice(4, 6);
   const day = dateRaw.slice(6, 8);
   return `${month}/${day}/${year}`;
+}
+
+export function displayToDateRaw(display: string): string | null {
+  if (!display) return null;
+  const parts = display.split("/");
+  if (parts.length !== 3) return null;
+  const [month, day, year] = parts;
+  if (year.length !== 4 || !/^\d+$/.test(year)) return null;
+  const m = Number(month);
+  const d = Number(day);
+  if (Number.isNaN(m) || Number.isNaN(d) || m < 1 || m > 12 || d < 1 || d > 31) return null;
+  return `${year}${month.padStart(2, "0")}${day.padStart(2, "0")}`;
+}
+
+export function dateRawToDisplay(dateRaw: string | null): string {
+  if (!dateRaw || dateRaw.length < 8) return "";
+  const year = dateRaw.slice(0, 4);
+  const month = dateRaw.slice(4, 6);
+  const day = dateRaw.slice(6, 8);
+  return `${month}/${day}/${year}`;
+}
+
+export function getDashboardDateButtonText({
+  dateMode,
+  yearFilter,
+  monthFilter,
+  dayFilter,
+  dateFromFilter,
+  dateToFilter,
+}: {
+  dateMode: DateMode;
+  yearFilter: number | null;
+  monthFilter: number | null;
+  dayFilter: number | null;
+  dateFromFilter: string | null;
+  dateToFilter: string | null;
+}) {
+  if (dateMode === "specific") {
+    const parts = [];
+    if (yearFilter) parts.push(yearFilter);
+    if (monthFilter) parts.push(MONTH_OPTIONS[monthFilter - 1]?.label);
+    if (dayFilter) parts.push(dayFilter);
+    return parts.length > 0 ? parts.join(" ") : "Date";
+  }
+
+  if (dateFromFilter || dateToFilter) {
+    const from = dateFromFilter ? dateRawToDisplay(dateFromFilter) : "...";
+    const to = dateToFilter ? dateRawToDisplay(dateToFilter) : "...";
+    return `${from} - ${to}`;
+  }
+
+  return "Date";
 }
 
 export function loadPersistedState(): Partial<PersistedState> {

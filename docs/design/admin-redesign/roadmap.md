@@ -56,6 +56,7 @@ Progress:
 - Saved-view persistence and save/apply/delete behavior moved into a dedicated hook.
 - Last opened is now the real default letters sort, not just a toolbar option.
 - Floating selection and bulk-action toolbar moved into `AdminDashboard/BulkEditToolbar.tsx`, leaving the page component closer to orchestration.
+- Filter panel markup now uses grouped sections for visibility, content status, date, and collection controls.
 
 Out of scope:
 
@@ -79,6 +80,7 @@ Progress:
 - Letters/collections view switch is visible on both desktop and mobile.
 - Mobile uses top app bar plus dashboard-level controls instead of a bottom nav.
 - Sort is a first-class dashboard control and includes Last opened, replacing the need for Recent edits as a primary action.
+- Mobile filters now open as a focused bottom sheet with backdrop and close behavior instead of expanding the dashboard stack inline.
 
 ## Phase 4 - Reusable Admin Patterns
 

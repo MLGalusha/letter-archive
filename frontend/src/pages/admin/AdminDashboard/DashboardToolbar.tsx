@@ -346,6 +346,14 @@ export default function DashboardToolbar({
             )}
           </div>
 
+          {mobileFiltersOpen && (
+            <button
+              type="button"
+              className="filter-panel-backdrop"
+              aria-label="Close filters"
+              onClick={() => onMobileFiltersOpenChange(false)}
+            />
+          )}
           <DashboardFilterPanel
             open={mobileFiltersOpen}
             stats={stats}
@@ -376,9 +384,12 @@ export default function DashboardToolbar({
             dateToFilter={dateToFilter}
             setDateToFilter={setDateToFilter}
             clearDateFilters={clearDateFilters}
+            clearAllFilters={handleClearAllFilters}
             getDateButtonText={getDateButtonText}
             dateRawToDisplay={dateRawToDisplay}
             displayToDateRaw={displayToDateRaw}
+            activeFilterCount={activeFilterCount}
+            onClose={() => onMobileFiltersOpenChange(false)}
           />
         </>
       )}

@@ -47,9 +47,12 @@ interface DashboardFilterPanelProps {
   dateToFilter: string | null;
   setDateToFilter: (value: string | null) => void;
   clearDateFilters: () => void;
+  clearAllFilters: () => void;
   getDateButtonText: () => string;
   dateRawToDisplay: (dateRaw: string | null) => string;
   displayToDateRaw: (display: string) => string | null;
+  activeFilterCount: number;
+  onClose: () => void;
 }
 
 export default function DashboardFilterPanel({
@@ -82,16 +85,37 @@ export default function DashboardFilterPanel({
   dateToFilter,
   setDateToFilter,
   clearDateFilters,
+  clearAllFilters,
   getDateButtonText,
   dateRawToDisplay,
   displayToDateRaw,
+  activeFilterCount,
+  onClose,
 }: DashboardFilterPanelProps) {
   return (
     <div className={`dashboard-filter-panel ${open ? "open" : ""}`}>
-      <div className="filter-panel-section">
+      <div className="filter-panel-header">
+        <div>
+          <h2>Filters</h2>
+          <span>{activeFilterCount > 0 ? `${activeFilterCount} active` : "No active filters"}</span>
+        </div>
+        <div className="filter-panel-header-actions">
+          {activeFilterCount > 0 && (
+            <button type="button" className="filter-panel-clear" onClick={clearAllFilters}>
+              Clear
+            </button>
+          )}
+          <button type="button" className="filter-panel-close" onClick={onClose} aria-label="Close filters">
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+      </div>
+
+      <section className="filter-panel-section">
         <span className="filter-panel-label">Visibility</span>
-        <div className="filter-buttons">
+        <div className="filter-button-grid filter-button-grid--visibility">
           <button
+            type="button"
             className={`filter-pill filter-published ${visibilityFilter === "PUBLISHED" ? "active" : ""}`}
             onClick={() => toggleVisibilityFilter("PUBLISHED")}
             title="Published letters"
@@ -99,6 +123,7 @@ export default function DashboardFilterPanel({
             {stats.published} Public
           </button>
           <button
+            type="button"
             className={`filter-pill filter-hidden ${visibilityFilter === "HIDDEN" ? "active" : ""}`}
             onClick={() => toggleVisibilityFilter("HIDDEN")}
             title="Hidden letters"
@@ -106,11 +131,12 @@ export default function DashboardFilterPanel({
             {stats.hidden} Hidden
           </button>
         </div>
-      </div>
+      </section>
 
-      <div className="filter-panel-section content-filter-section">
+      <section className="filter-panel-section content-filter-section">
         <div className="content-filter-toggle">
           <button
+            type="button"
             className={`content-toggle-btn ${contentFilterView === "transcript" ? "active" : ""}`}
             onClick={() => setContentFilterView("transcript")}
           >
@@ -120,6 +146,7 @@ export default function DashboardFilterPanel({
             )}
           </button>
           <button
+            type="button"
             className={`content-toggle-btn ${contentFilterView === "metadata" ? "active" : ""}`}
             onClick={() => setContentFilterView("metadata")}
           >
@@ -129,28 +156,29 @@ export default function DashboardFilterPanel({
             )}
           </button>
         </div>
-        <div className="filter-buttons">
+        <div className="filter-button-grid filter-button-grid--content">
           {contentFilterView === "transcript" ? (
             <>
-              <button className={`filter-pill filter-content-none ${transcriptStatusFilters.includes("EMPTY") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("EMPTY")}>{stats.transcriptEmpty} None</button>
-              <button className={`filter-pill filter-content-draft ${transcriptStatusFilters.includes("AI_DRAFT") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("AI_DRAFT")}>{stats.transcriptAiDraft} Draft</button>
-              <button className={`filter-pill filter-content-edited ${transcriptStatusFilters.includes("EDITED") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("EDITED")}>{stats.transcriptEdited} Edited</button>
-              <button className={`filter-pill filter-content-verified ${transcriptStatusFilters.includes("VERIFIED") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("VERIFIED")}>{stats.transcriptVerified} Done</button>
+              <button type="button" className={`filter-pill filter-content-none ${transcriptStatusFilters.includes("EMPTY") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("EMPTY")}>{stats.transcriptEmpty} None</button>
+              <button type="button" className={`filter-pill filter-content-draft ${transcriptStatusFilters.includes("AI_DRAFT") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("AI_DRAFT")}>{stats.transcriptAiDraft} Draft</button>
+              <button type="button" className={`filter-pill filter-content-edited ${transcriptStatusFilters.includes("EDITED") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("EDITED")}>{stats.transcriptEdited} Edited</button>
+              <button type="button" className={`filter-pill filter-content-verified ${transcriptStatusFilters.includes("VERIFIED") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("VERIFIED")}>{stats.transcriptVerified} Done</button>
             </>
           ) : (
             <>
-              <button className={`filter-pill filter-content-none ${metadataStatusFilters.includes("EMPTY") ? "active" : ""}`} onClick={() => toggleMetadataFilter("EMPTY")}>{stats.metadataEmpty} None</button>
-              <button className={`filter-pill filter-content-draft ${metadataStatusFilters.includes("AI_DRAFT") ? "active" : ""}`} onClick={() => toggleMetadataFilter("AI_DRAFT")}>{stats.metadataAiDraft} Draft</button>
-              <button className={`filter-pill filter-content-edited ${metadataStatusFilters.includes("EDITED") ? "active" : ""}`} onClick={() => toggleMetadataFilter("EDITED")}>{stats.metadataEdited} Edited</button>
-              <button className={`filter-pill filter-content-verified ${metadataStatusFilters.includes("VERIFIED") ? "active" : ""}`} onClick={() => toggleMetadataFilter("VERIFIED")}>{stats.metadataVerified} Done</button>
+              <button type="button" className={`filter-pill filter-content-none ${metadataStatusFilters.includes("EMPTY") ? "active" : ""}`} onClick={() => toggleMetadataFilter("EMPTY")}>{stats.metadataEmpty} None</button>
+              <button type="button" className={`filter-pill filter-content-draft ${metadataStatusFilters.includes("AI_DRAFT") ? "active" : ""}`} onClick={() => toggleMetadataFilter("AI_DRAFT")}>{stats.metadataAiDraft} Draft</button>
+              <button type="button" className={`filter-pill filter-content-edited ${metadataStatusFilters.includes("EDITED") ? "active" : ""}`} onClick={() => toggleMetadataFilter("EDITED")}>{stats.metadataEdited} Edited</button>
+              <button type="button" className={`filter-pill filter-content-verified ${metadataStatusFilters.includes("VERIFIED") ? "active" : ""}`} onClick={() => toggleMetadataFilter("VERIFIED")}>{stats.metadataVerified} Done</button>
             </>
           )}
         </div>
-      </div>
+      </section>
 
-      <div className="filter-panel-section filter-panel-fields">
+      <section className="filter-panel-section filter-panel-fields">
         <div className="dropdown-container" ref={dateDropdownRef}>
           <button
+            type="button"
             className={`dropdown-trigger ${hasDateFilter ? "active" : ""}`}
             onClick={() => setShowDateDropdown(!showDateDropdown)}
           >
@@ -160,6 +188,7 @@ export default function DashboardFilterPanel({
             <div className="date-dropdown-panel">
               <div className="date-mode-toggle">
                 <button
+                  type="button"
                   className={`mode-btn ${dateMode === "specific" ? "active" : ""}`}
                   onClick={() => {
                     setDateMode("specific");
@@ -170,6 +199,7 @@ export default function DashboardFilterPanel({
                   Specific
                 </button>
                 <button
+                  type="button"
                   className={`mode-btn ${dateMode === "range" ? "active" : ""}`}
                   onClick={() => {
                     setDateMode("range");
@@ -210,7 +240,7 @@ export default function DashboardFilterPanel({
                 </div>
               )}
 
-              {hasDateFilter && <button className="date-clear-btn" onClick={clearDateFilters}>Clear Date</button>}
+              {hasDateFilter && <button type="button" className="date-clear-btn" onClick={clearDateFilters}>Clear Date</button>}
             </div>
           )}
         </div>
@@ -225,7 +255,7 @@ export default function DashboardFilterPanel({
             maxLength={3}
           />
         </label>
-      </div>
+      </section>
     </div>
   );
 }

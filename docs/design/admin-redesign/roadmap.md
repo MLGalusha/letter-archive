@@ -70,6 +70,7 @@ Progress:
 - Filter panel option rendering now uses shared visibility/content status definitions with pressed states, and the mobile date/collection controls use a tighter two-column row.
 - Saved dashboard view state capture/apply wiring moved into `useDashboardSavedViewState`.
 - Filter-change refetching, selection pruning, and select-all-filtered behavior moved into `useDashboardFilteredSelection`.
+- Optimistic flag/unflag row mutation moved into `useDashboardFlagActions`.
 
 Out of scope:
 

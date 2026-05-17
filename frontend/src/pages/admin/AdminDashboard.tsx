@@ -1,9 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
-import { getErrorMessage } from "../../api/client";
-import { toggleLetterFlag } from "../../api/admin/letters";
-import { useToast } from "../../contexts/ToastContext";
 import AdminLayout from "../../components/AdminLayout";
 import RecentActivityTable from "./AdminDashboard/RecentActivityTable";
 import DashboardToolbar from "./AdminDashboard/DashboardToolbar";
@@ -24,6 +21,7 @@ import { useDashboardBulkActions } from "./AdminDashboard/useDashboardBulkAction
 import { useDashboardColumns } from "./AdminDashboard/useDashboardColumns";
 import { useDashboardCopyPasteEdit } from "./AdminDashboard/useDashboardCopyPasteEdit";
 import { useDashboardFilteredSelection } from "./AdminDashboard/useDashboardFilteredSelection";
+import { useDashboardFlagActions } from "./AdminDashboard/useDashboardFlagActions";
 import { useDashboardFilters } from "./AdminDashboard/useDashboardFilters";
 import { useDashboardLettersData } from "./AdminDashboard/useDashboardLettersData";
 import { useDashboardProcessingActions } from "./AdminDashboard/useDashboardProcessingActions";
@@ -37,7 +35,6 @@ import "./AdminDashboard.css";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { showToast } = useToast();
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [dashboardView, setDashboardView] = useState<DashboardView>(
     () => (localStorage.getItem('dashboard-view') as DashboardView) || 'letters',
@@ -241,20 +238,7 @@ export default function AdminDashboard() {
     });
   };
 
-  const handleToggleFlag = async (letterId: string, flagged: boolean) => {
-    // Optimistic update
-    setLetters(prev => prev.map(l => l.id === letterId ? { ...l, flagged, flaggedAt: flagged ? new Date().toISOString() : undefined, flaggedBy: flagged ? 'admin' : undefined } : l));
-    try {
-      await toggleLetterFlag(letterId, flagged);
-    } catch (err) {
-      // Revert optimistic update
-      setLetters(prev => prev.map(l => l.id === letterId ? { ...l, flagged: !flagged, flaggedAt: !flagged ? new Date().toISOString() : undefined, flaggedBy: !flagged ? 'admin' : undefined } : l));
-      showToast(
-        getErrorMessage(err, `Failed to ${flagged ? 'flag' : 'unflag'} letter`),
-        'error',
-      );
-    }
-  };
+  const { handleToggleFlag } = useDashboardFlagActions({ setLetters });
 
   const {
     showDeleteModal,

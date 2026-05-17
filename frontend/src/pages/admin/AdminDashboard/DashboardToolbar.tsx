@@ -1,23 +1,20 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { useMemo } from "react";
 import type { ProcessingStatus } from "../../../api/admin";
 import Icon from "../../../components/common/Icon";
 import type { ContentStatus } from "../../../types/Letter";
 import ActiveFilterChips from "./ActiveFilterChips";
 import DashboardFilterPanel from "./DashboardFilterPanel";
+import DashboardSortControl from "./DashboardSortControl";
 import SavedViewsMenu from "./SavedViewsMenu";
 import type {
   ContentFilterView,
   DashboardView,
   DateMode,
   SavedDashboardView,
-  ServerSortField,
   SortColumn,
   VisibilityFilter,
 } from "./types";
-import { isServerSortField } from "./utils";
 import { useDashboardActiveFilters } from "./useDashboardActiveFilters";
-import { DEFAULT_DASHBOARD_SORT } from "./constants";
 
 interface DashboardToolbarStats {
   published: number;
@@ -159,20 +156,6 @@ export default function DashboardToolbar({
     toggleMetadataFilter,
   });
 
-  const primarySortValue = useMemo(() => {
-    const serverSort = [...sortColumns].reverse().find(col => isServerSortField(col.field));
-    if (!serverSort) return `${DEFAULT_DASHBOARD_SORT.field}:${DEFAULT_DASHBOARD_SORT.direction}`;
-    return `${serverSort.field}:${serverSort.direction}`;
-  }, [sortColumns]);
-
-  const handlePrimarySortChange = (value: string) => {
-    const [field, direction] = value.split(":") as [ServerSortField, "asc" | "desc"];
-    setSortColumns((previous) => [
-      ...previous.filter((column) => !isServerSortField(column.field)),
-      { field, direction },
-    ]);
-  };
-
   return (
     <div className="dashboard-toolbar-stack">
       <div className="dashboard-toolbar-primary">
@@ -231,20 +214,10 @@ export default function DashboardToolbar({
               onDeleteView={onDeleteView}
             />
 
-            <label className="dashboard-sort-control">
-              <span>Sort</span>
-              <select value={primarySortValue} onChange={(event) => handlePrimarySortChange(event.target.value)}>
-                <option value="lastOpenedAt:desc">Last opened</option>
-                <option value="letterDate:asc">Letter date oldest</option>
-                <option value="letterDate:desc">Letter date newest</option>
-                <option value="collection:asc">Collection</option>
-                <option value="createdAt:desc">Created newest</option>
-                <option value="sender:asc">Sender</option>
-                <option value="recipient:asc">Recipient</option>
-                <option value="visibility:asc">Visibility</option>
-                <option value="flagged:desc">Flagged</option>
-              </select>
-            </label>
+            <DashboardSortControl
+              sortColumns={sortColumns}
+              setSortColumns={setSortColumns}
+            />
           </>
         )}
       </div>

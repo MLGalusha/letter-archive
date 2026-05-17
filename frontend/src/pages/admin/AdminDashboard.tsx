@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
 import { getErrorMessage } from "../../api/client";
@@ -29,9 +29,9 @@ import {
 } from "../../components/common";
 import AdminLayout from "../../components/AdminLayout";
 import IdentityExtractionModal from "../../components/admin/IdentityExtractionModal";
-import Icon from "../../components/common/Icon";
 import RecentActivityTable from "./AdminDashboard/RecentActivityTable";
 import DashboardToolbar from "./AdminDashboard/DashboardToolbar";
+import BulkEditToolbar from "./AdminDashboard/BulkEditToolbar";
 import {
   ALL_COLUMNS,
   MONTH_OPTIONS,
@@ -146,8 +146,6 @@ export default function AdminDashboard() {
   }, [visibilityFilter, collectionFilter, searchQuery, sortColumns, dateMode, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
   // Selection-driven toolbar (no manual edit mode toggle)
-  const [showPublishMenu, setShowPublishMenu] = useState(false);
-  const publishMenuRef = useRef<HTMLDivElement>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
@@ -475,18 +473,6 @@ export default function AdminDashboard() {
       metadataUnpublished: selected.filter(l => !l.metadataPublished).length,
     };
   }, [filteredLetters, selectedIds]);
-
-  // Close publish menu on click outside
-  useEffect(() => {
-    if (!showPublishMenu) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (publishMenuRef.current && !publishMenuRef.current.contains(e.target as Node)) {
-        setShowPublishMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showPublishMenu]);
 
   // Auto-open toolbar when items are selected
   useEffect(() => {
@@ -869,6 +855,19 @@ export default function AdminDashboard() {
     setShowUnconfirmedDialog(false);
     await handleStartMetadataExtraction(true);
   };
+
+  const handleOpenTranscription = useCallback(() => {
+    if (selectedIds.size > 0) {
+      const existing = letters.filter(
+        (letter) => selectedIds.has(letter.id) && letter.transcriptStatus !== "EMPTY",
+      ).length;
+      setTranscribeExistingCount(existing);
+    } else {
+      setTranscribeExistingCount(0);
+    }
+
+    setShowTranscribeConfirm(true);
+  }, [letters, selectedIds]);
 
   const handleOpenMetadataExtraction = useCallback(() => {
     if (selectedIds.size === 1 && singleSelectedLetter) {
@@ -1396,252 +1395,41 @@ export default function AdminDashboard() {
       />
 
 
-      {/* Floating edit toolbar with process actions */}
       {editMode && (
-        <div className="edit-toolbar visible">
-          <div className="edit-toolbar-content">
-            {/* Left section: select all, selection count, copy mode, hints, pending changes */}
-            <div className="edit-toolbar-left">
-              <span className="toolbar-selection-count">
-                {selectedIds.size} selected
-              </span>
-              <div className="toolbar-select-actions">
-                {!allPageSelected ? (
-                  <button className="toolbar-select-btn" onClick={handleSelectAllPage}>
-                    Page ({filteredLetters.length})
-                  </button>
-                ) : (
-                  <button className="toolbar-select-btn active" onClick={handleSelectAllPage}>
-                    Page ✓
-                  </button>
-                )}
-                {pagination.total > filteredLetters.length && (
-                  !allFilteredSelected ? (
-                    <button className="toolbar-select-btn" onClick={handleSelectAllFiltered}>
-                      All {pagination.total}
-                    </button>
-                  ) : (
-                    <button className="toolbar-select-btn active" onClick={() => { clearSelection(); }}>
-                      All {pagination.total} ✓
-                    </button>
-                  )
-                )}
-              </div>
-              <div className="toolbar-divider" />
-              <button
-                className={`toolbar-copy-btn ${copyModeActive ? 'active' : ''}`}
-                onClick={toggleCopyMode}
-                disabled={isSaving}
-              >
-                {copyModeActive ? '✓ Copy Mode' : 'Copy Mode'}
-              </button>
-              {copyModeActive && !sourceCell && (
-                <span className="toolbar-hint">Click a cell to copy</span>
-              )}
-              {copyModeActive && sourceCell && (
-                <span className="toolbar-hint">
-                  Copying: <strong>"{copiedValue || '(empty)'}"</strong>
-                </span>
-              )}
-              {pendingChanges.size > 0 && (
-                <span className="toolbar-changes">{pendingChanges.size} change{pendingChanges.size === 1 ? '' : 's'}</span>
-              )}
-            </div>
-
-            {/* Center section: process actions or processing progress */}
-            <div className="edit-toolbar-center">
-              {processingStatus?.isRunning ? (
-                <div className="toolbar-processing-controls">
-                  <div className="toolbar-progress">
-                    <span className="toolbar-progress-text">
-                      {processingStatus.currentJob?.type === "transcription" ? "Transcribing" : "Extracting"}:{" "}
-                      {processingStatus.completed}/{processingStatus.total}
-                      {processingStatus.failed > 0 && (
-                        <span className="failed-count"> ({processingStatus.failed} failed)</span>
-                      )}
-                    </span>
-                    <div className="toolbar-progress-bar">
-                      <div
-                        className="toolbar-progress-fill"
-                        style={{
-                          width: `${processingStatus.total > 0 ? (processingStatus.completed / processingStatus.total) * 100 : 0}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                  {processingStatus.isPaused ? (
-                    <button onClick={handleResumeProcessing} className="toolbar-process-btn toolbar-process-resume">
-                      Resume
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handlePauseProcessing}
-                      className="toolbar-process-btn toolbar-process-pause"
-                      disabled={pausePending || abortPending}
-                    >
-                      {pausePending ? 'Pausing\u2026' : 'Pause'}
-                    </button>
-                  )}
-                  <button
-                    onClick={handleAbortProcessing}
-                    className="toolbar-process-btn toolbar-process-abort"
-                    disabled={abortPending}
-                  >
-                    {abortPending ? 'Aborting\u2026' : 'Abort'}
-                  </button>
-                </div>
-              ) : (
-                <div className="toolbar-process-actions">
-                  <button
-                    className="toolbar-process-btn"
-                    onClick={() => {
-                      if (selectedIds.size > 0) {
-                        const existing = letters.filter(l => selectedIds.has(l.id) && l.transcriptStatus !== 'EMPTY').length;
-                        setTranscribeExistingCount(existing);
-                      } else {
-                        setTranscribeExistingCount(0);
-                      }
-                      setShowTranscribeConfirm(true);
-                    }}
-                  >
-                    Transcribe{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
-                  </button>
-                  <button
-                    className="toolbar-process-btn"
-                    onClick={handleOpenMetadataExtraction}
-                  >
-                    Extract Metadata{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Right section: publishing + destructive actions */}
-            <div className="edit-toolbar-right">
-              <div className="publish-menu-container" ref={publishMenuRef}>
-                <button
-                  className={`toolbar-process-btn${showPublishMenu ? ' active' : ''}`}
-                  onClick={() => setShowPublishMenu(!showPublishMenu)}
-                  disabled={selectedIds.size === 0}
-                >
-                  Publishing
-                </button>
-                {showPublishMenu && (
-                  <div className="publish-menu-dropdown">
-                    <div className="publish-menu-section">
-                      <div className="publish-menu-header">
-                        <span className="publish-menu-label">Letters</span>
-                        <span className="publish-menu-counts">
-                          {publishCounts.lettersPublished} published · {publishCounts.lettersHidden} hidden
-                        </span>
-                      </div>
-                      <div className="publish-menu-actions">
-                        <button
-                          className="publish-menu-btn publish-menu-btn--unpublish"
-                          onClick={() => { handleBulkHide(); setShowPublishMenu(false); }}
-                          disabled={bulkActionLoading}
-                        >
-                          Hide
-                        </button>
-                        <button
-                          className="publish-menu-btn publish-menu-btn--publish"
-                          onClick={() => { handleBulkPublish(); setShowPublishMenu(false); }}
-                          disabled={bulkActionLoading}
-                        >
-                          Publish
-                        </button>
-                      </div>
-                    </div>
-                    <div className="publish-menu-divider" />
-                    <div className="publish-menu-section">
-                      <div className="publish-menu-header">
-                        <span className="publish-menu-label">Transcripts</span>
-                        <span className="publish-menu-counts">
-                          {publishCounts.transcriptsPublished} published · {publishCounts.transcriptsUnpublished} hidden
-                        </span>
-                      </div>
-                      <div className="publish-menu-actions">
-                        <button
-                          className="publish-menu-btn publish-menu-btn--unpublish"
-                          onClick={() => { handleBulkContentVisibility('transcriptPublished', false); setShowPublishMenu(false); }}
-                          disabled={bulkActionLoading}
-                        >
-                          Hide
-                        </button>
-                        <button
-                          className="publish-menu-btn publish-menu-btn--publish"
-                          onClick={() => { handleBulkContentVisibility('transcriptPublished', true); setShowPublishMenu(false); }}
-                          disabled={bulkActionLoading}
-                        >
-                          Publish
-                        </button>
-                      </div>
-                    </div>
-                    <div className="publish-menu-divider" />
-                    <div className="publish-menu-section">
-                      <div className="publish-menu-header">
-                        <span className="publish-menu-label">Metadata</span>
-                        <span className="publish-menu-counts">
-                          {publishCounts.metadataPublished} published · {publishCounts.metadataUnpublished} hidden
-                        </span>
-                      </div>
-                      <div className="publish-menu-actions">
-                        <button
-                          className="publish-menu-btn publish-menu-btn--unpublish"
-                          onClick={() => { handleBulkContentVisibility('metadataPublished', false); setShowPublishMenu(false); }}
-                          disabled={bulkActionLoading}
-                        >
-                          Hide
-                        </button>
-                        <button
-                          className="publish-menu-btn publish-menu-btn--publish"
-                          onClick={() => { handleBulkContentVisibility('metadataPublished', true); setShowPublishMenu(false); }}
-                          disabled={bulkActionLoading}
-                        >
-                          Publish
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="toolbar-divider" />
-              <div className="toolbar-destructive-actions">
-                <button
-                  className="toolbar-btn-destructive"
-                  onClick={handleClearTranscriptionsClick}
-                  disabled={selectedIds.size === 0 || bulkActionLoading}
-                >
-                  Clear Transcripts
-                </button>
-                <button
-                  className="toolbar-btn-destructive"
-                  onClick={handleClearMetadataClick}
-                  disabled={selectedIds.size === 0 || bulkActionLoading}
-                >
-                  Clear Metadata
-                </button>
-                <button
-                  className="toolbar-btn-danger"
-                  onClick={handleDeleteClick}
-                  disabled={selectedIds.size === 0}
-                >
-                  Delete
-                </button>
-              </div>
-              <div className="toolbar-divider" />
-              {pendingChanges.size > 0 ? (
-                <button className="toolbar-done-btn" onClick={handleDone} disabled={isSaving}>
-                  {isSaving ? 'Saving...' : 'Save & Close'}
-                </button>
-              ) : (
-                <button className="toolbar-close-btn" onClick={exitEditMode} title="Clear selection">
-                  <Icon name="close" size={16} />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        <BulkEditToolbar
+          selectedCount={selectedIds.size}
+          pageCount={filteredLetters.length}
+          totalCount={pagination.total}
+          allPageSelected={allPageSelected}
+          allFilteredSelected={allFilteredSelected}
+          copyModeActive={copyModeActive}
+          copiedValue={copiedValue}
+          sourceCell={sourceCell}
+          pendingChangesCount={pendingChanges.size}
+          isSaving={isSaving}
+          bulkActionLoading={bulkActionLoading}
+          processingStatus={processingStatus}
+          pausePending={pausePending}
+          abortPending={abortPending}
+          publishCounts={publishCounts}
+          onSelectPage={handleSelectAllPage}
+          onSelectAllFiltered={handleSelectAllFiltered}
+          onClearSelection={clearSelection}
+          onToggleCopyMode={toggleCopyMode}
+          onOpenTranscription={handleOpenTranscription}
+          onOpenMetadataExtraction={handleOpenMetadataExtraction}
+          onPauseProcessing={handlePauseProcessing}
+          onResumeProcessing={handleResumeProcessing}
+          onAbortProcessing={handleAbortProcessing}
+          onBulkHide={handleBulkHide}
+          onBulkPublish={handleBulkPublish}
+          onBulkContentVisibility={handleBulkContentVisibility}
+          onClearTranscriptions={handleClearTranscriptionsClick}
+          onClearMetadata={handleClearMetadataClick}
+          onDelete={handleDeleteClick}
+          onDone={handleDone}
+          onExit={exitEditMode}
+        />
       )}
       </>}
     </div>

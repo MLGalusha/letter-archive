@@ -1,10 +1,12 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { ProcessingStatus } from "../../../api/admin";
-import Icon from "../../../components/common/Icon";
 import type { ContentStatus } from "../../../types/Letter";
 import ActiveFilterChips from "./ActiveFilterChips";
 import DashboardFilterPanel from "./DashboardFilterPanel";
+import DashboardSearchField from "./DashboardSearchField";
 import DashboardSortControl from "./DashboardSortControl";
+import DashboardViewToggle from "./DashboardViewToggle";
+import MobileFilterTrigger from "./MobileFilterTrigger";
 import SavedViewsMenu from "./SavedViewsMenu";
 import type {
   ContentFilterView,
@@ -159,53 +161,24 @@ export default function DashboardToolbar({
   return (
     <div className="dashboard-toolbar-stack">
       <div className="dashboard-toolbar-primary">
-        <div className="dashboard-view-toggle" aria-label="Dashboard view">
-          <button
-            className={`view-toggle-btn ${dashboardView === "letters" ? "active" : ""}`}
-            onClick={() => onDashboardViewChange("letters")}
-          >
-            Letters
-          </button>
-          <button
-            className={`view-toggle-btn ${dashboardView === "collections" ? "active" : ""}`}
-            onClick={() => onDashboardViewChange("collections")}
-          >
-            Collections
-          </button>
-        </div>
+        <DashboardViewToggle
+          dashboardView={dashboardView}
+          onDashboardViewChange={onDashboardViewChange}
+        />
 
         {dashboardView === "letters" && (
           <>
-            <div className="dashboard-search-field">
-              <input
-                type="search"
-                placeholder="Search letters, senders, recipients..."
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-              />
-              {searchInput && (
-                <button
-                  className="dashboard-search-clear"
-                  onClick={() => {
-                    setSearchInput("");
-                    setSearchQuery("");
-                  }}
-                  aria-label="Clear search"
-                >
-                  <Icon name="close" size={14} />
-                </button>
-              )}
-            </div>
+            <DashboardSearchField
+              searchInput={searchInput}
+              setSearchInput={setSearchInput}
+              setSearchQuery={setSearchQuery}
+            />
 
-            <button
-              className={`dashboard-control-btn mobile-filter-trigger ${activeFilterCount > 0 ? "has-filters" : ""}`}
-              onClick={() => onMobileFiltersOpenChange((open) => !open)}
-              aria-expanded={mobileFiltersOpen}
-            >
-              <Icon name="settings" size={15} />
-              <span>Filters</span>
-              {activeFilterCount > 0 && <span className="filter-badge">{activeFilterCount}</span>}
-            </button>
+            <MobileFilterTrigger
+              activeFilterCount={activeFilterCount}
+              mobileFiltersOpen={mobileFiltersOpen}
+              onToggle={() => onMobileFiltersOpenChange((open) => !open)}
+            />
 
             <SavedViewsMenu
               savedViews={savedViews}

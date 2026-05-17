@@ -62,6 +62,7 @@ Progress:
 - Row shift-click and drag selection behavior moved into `useDashboardRowSelection`.
 - Delete, clear, and publish/hide bulk mutation workflows moved into `useDashboardBulkActions`.
 - Processing status polling and pause/resume/abort controls moved into `useDashboardProcessingControls`.
+- Transcription and metadata start flows, including confirmation modal state, moved into `useDashboardProcessingActions`.
 
 Out of scope:
 

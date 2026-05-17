@@ -91,6 +91,7 @@ Goals:
 - Present proposed filters with what each would do, why it would be useful, and whether it should be primary or advanced.
 - Let Mason decide which filters to add or skip before implementation.
 - Define how selected filters interact with saved dashboard views, mobile filter sheets, active chips, select-all-filtered behavior, and backend query parameters.
+- Review the dashboard sort model so the toolbar sort control and sortable column headers are not two competing systems.
 
 Candidate filter categories:
 
@@ -99,11 +100,20 @@ Candidate filter categories:
 - Historical/entity filters: sender, recipient, mentioned person, place, date range.
 - Content-shape filters: has extras, has photos, has cover, has telegram, flagged.
 
+Sort-model questions:
+
+- Should the toolbar sort be the primary/simple sort while column headers remain desktop power controls?
+- Should mobile expose only the toolbar sort, or also keep header sorting?
+- How should the toolbar label multi-sort states created from column headers: custom sort, primary sort plus count, or another pattern?
+- Should choosing a toolbar sort replace the existing sort stack, while column headers can build a multi-sort stack?
+- How should saved dashboard views describe and restore multi-sort state?
+
 Exit criteria:
 
 - A narrowed filter set is approved before implementation.
 - Each accepted filter has a clear source of truth and query strategy.
 - Saved dashboard views include any new accepted filter state.
+- The accepted sort model has one shared state, clear mobile behavior, and no duplicate-feeling controls.
 
 ## Phase 3 - Dashboard Responsive UI
 

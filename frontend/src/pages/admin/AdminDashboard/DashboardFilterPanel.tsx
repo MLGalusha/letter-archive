@@ -1,7 +1,8 @@
 import type { RefObject } from "react";
 import Icon from "../../../components/common/Icon";
 import type { ContentStatus } from "../../../types/Letter";
-import { DAY_OPTIONS, MONTH_OPTIONS, YEAR_OPTIONS } from "./constants";
+import { CONTENT_STATUS_FILTERS, VISIBILITY_FILTERS } from "./constants";
+import DashboardDateFilterControl from "./DashboardDateFilterControl";
 import type { ContentFilterView, DateMode, VisibilityFilter } from "./types";
 
 interface DashboardFilterPanelStats {
@@ -54,62 +55,6 @@ interface DashboardFilterPanelProps {
   activeFilterCount: number;
   onClose: () => void;
 }
-
-const VISIBILITY_FILTERS = [
-  {
-    value: "PUBLISHED",
-    label: "Public",
-    countKey: "published",
-    className: "filter-published",
-    title: "Published letters",
-  },
-  {
-    value: "HIDDEN",
-    label: "Hidden",
-    countKey: "hidden",
-    className: "filter-hidden",
-    title: "Hidden letters",
-  },
-] as const;
-
-const CONTENT_STATUS_FILTERS = [
-  {
-    value: "EMPTY",
-    label: "None",
-    countKeys: {
-      transcript: "transcriptEmpty",
-      metadata: "metadataEmpty",
-    },
-    className: "filter-content-none",
-  },
-  {
-    value: "AI_DRAFT",
-    label: "Draft",
-    countKeys: {
-      transcript: "transcriptAiDraft",
-      metadata: "metadataAiDraft",
-    },
-    className: "filter-content-draft",
-  },
-  {
-    value: "EDITED",
-    label: "Edited",
-    countKeys: {
-      transcript: "transcriptEdited",
-      metadata: "metadataEdited",
-    },
-    className: "filter-content-edited",
-  },
-  {
-    value: "VERIFIED",
-    label: "Done",
-    countKeys: {
-      transcript: "transcriptVerified",
-      metadata: "metadataVerified",
-    },
-    className: "filter-content-verified",
-  },
-] as const;
 
 export default function DashboardFilterPanel({
   open,
@@ -239,74 +184,28 @@ export default function DashboardFilterPanel({
       </section>
 
       <section className="filter-panel-section filter-panel-fields">
-        <div className="dropdown-container" ref={dateDropdownRef}>
-          <button
-            type="button"
-            className={`dropdown-trigger ${hasDateFilter ? "active" : ""}`}
-            onClick={() => setShowDateDropdown(!showDateDropdown)}
-          >
-            {getDateButtonText()} <Icon name="chevron-down" size={12} />
-          </button>
-          {showDateDropdown && (
-            <div className="date-dropdown-panel">
-              <div className="date-mode-toggle">
-                <button
-                  type="button"
-                  className={`mode-btn ${dateMode === "specific" ? "active" : ""}`}
-                  onClick={() => {
-                    setDateMode("specific");
-                    setDateFromFilter(null);
-                    setDateToFilter(null);
-                  }}
-                >
-                  Specific
-                </button>
-                <button
-                  type="button"
-                  className={`mode-btn ${dateMode === "range" ? "active" : ""}`}
-                  onClick={() => {
-                    setDateMode("range");
-                    setYearFilter(null);
-                    setMonthFilter(null);
-                    setDayFilter(null);
-                  }}
-                >
-                  Range
-                </button>
-              </div>
-
-              {dateMode === "specific" ? (
-                <div className="date-dropdowns">
-                  <select value={yearFilter ?? ""} onChange={(event) => setYearFilter(event.target.value ? Number(event.target.value) : null)}>
-                    <option value="">Year</option>
-                    {YEAR_OPTIONS.map((year) => <option key={year} value={year}>{year}</option>)}
-                  </select>
-                  <select value={monthFilter ?? ""} onChange={(event) => setMonthFilter(event.target.value ? Number(event.target.value) : null)}>
-                    <option value="">Month</option>
-                    {MONTH_OPTIONS.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}
-                  </select>
-                  <select value={dayFilter ?? ""} onChange={(event) => setDayFilter(event.target.value ? Number(event.target.value) : null)}>
-                    <option value="">Day</option>
-                    {DAY_OPTIONS.map((day) => <option key={day} value={day}>{day}</option>)}
-                  </select>
-                </div>
-              ) : (
-                <div className="date-range-inputs">
-                  <div className="date-range-field">
-                    <label>From</label>
-                    <input type="text" placeholder="mm/dd/yyyy" value={dateFromFilter ? dateRawToDisplay(dateFromFilter) : ""} onChange={(event) => setDateFromFilter(displayToDateRaw(event.target.value))} maxLength={10} />
-                  </div>
-                  <div className="date-range-field">
-                    <label>To</label>
-                    <input type="text" placeholder="mm/dd/yyyy" value={dateToFilter ? dateRawToDisplay(dateToFilter) : ""} onChange={(event) => setDateToFilter(displayToDateRaw(event.target.value))} maxLength={10} />
-                  </div>
-                </div>
-              )}
-
-              {hasDateFilter && <button type="button" className="date-clear-btn" onClick={clearDateFilters}>Clear Date</button>}
-            </div>
-          )}
-        </div>
+        <DashboardDateFilterControl
+          showDateDropdown={showDateDropdown}
+          setShowDateDropdown={setShowDateDropdown}
+          dateDropdownRef={dateDropdownRef}
+          dateMode={dateMode}
+          setDateMode={setDateMode}
+          hasDateFilter={hasDateFilter}
+          yearFilter={yearFilter}
+          setYearFilter={setYearFilter}
+          monthFilter={monthFilter}
+          setMonthFilter={setMonthFilter}
+          dayFilter={dayFilter}
+          setDayFilter={setDayFilter}
+          dateFromFilter={dateFromFilter}
+          setDateFromFilter={setDateFromFilter}
+          dateToFilter={dateToFilter}
+          setDateToFilter={setDateToFilter}
+          clearDateFilters={clearDateFilters}
+          getDateButtonText={getDateButtonText}
+          dateRawToDisplay={dateRawToDisplay}
+          displayToDateRaw={displayToDateRaw}
+        />
         <label className="collection-filter-field">
           <span>Collection</span>
           <input

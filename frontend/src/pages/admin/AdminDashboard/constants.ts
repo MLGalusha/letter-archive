@@ -75,6 +75,62 @@ export const FILE_TYPE_COLUMNS: Array<{ id: ColumnId; label: string }> = [
   { id: "type_diary", label: "Diary" },
 ];
 
+export const VISIBILITY_FILTERS = [
+  {
+    value: "PUBLISHED",
+    label: "Public",
+    countKey: "published",
+    className: "filter-published",
+    title: "Published letters",
+  },
+  {
+    value: "HIDDEN",
+    label: "Hidden",
+    countKey: "hidden",
+    className: "filter-hidden",
+    title: "Hidden letters",
+  },
+] as const;
+
+export const CONTENT_STATUS_FILTERS = [
+  {
+    value: "EMPTY",
+    label: "None",
+    countKeys: {
+      transcript: "transcriptEmpty",
+      metadata: "metadataEmpty",
+    },
+    className: "filter-content-none",
+  },
+  {
+    value: "AI_DRAFT",
+    label: "Draft",
+    countKeys: {
+      transcript: "transcriptAiDraft",
+      metadata: "metadataAiDraft",
+    },
+    className: "filter-content-draft",
+  },
+  {
+    value: "EDITED",
+    label: "Edited",
+    countKeys: {
+      transcript: "transcriptEdited",
+      metadata: "metadataEdited",
+    },
+    className: "filter-content-edited",
+  },
+  {
+    value: "VERIFIED",
+    label: "Done",
+    countKeys: {
+      transcript: "transcriptVerified",
+      metadata: "metadataVerified",
+    },
+    className: "filter-content-verified",
+  },
+] as const;
+
 export const DEFAULT_VISIBLE_COLUMNS = new Set<ColumnId>(
   ALL_COLUMNS.filter((column) => column.defaultVisible).map((column) => column.id),
 );

@@ -4,9 +4,6 @@ import { isAuthenticated } from "../../api/auth";
 import { getErrorMessage } from "../../api/client";
 import { getAdminLetters, getFilteredLetterIds } from "../../api/letters";
 import { toggleLetterFlag } from "../../api/admin/letters";
-import {
-  bulkUpdateFields,
-} from "../../api/admin";
 import { useToast } from "../../contexts/ToastContext";
 import type { ContentStatus, Letter } from "../../types/Letter";
 import AdminLayout from "../../components/AdminLayout";
@@ -32,6 +29,7 @@ import {
 } from "./AdminDashboard/utils";
 import { useDashboardBulkActions } from "./AdminDashboard/useDashboardBulkActions";
 import { useDashboardColumns } from "./AdminDashboard/useDashboardColumns";
+import { useDashboardCopyPasteEdit } from "./AdminDashboard/useDashboardCopyPasteEdit";
 import { useDashboardFilters } from "./AdminDashboard/useDashboardFilters";
 import { useDashboardProcessingActions } from "./AdminDashboard/useDashboardProcessingActions";
 import { useDashboardProcessingControls } from "./AdminDashboard/useDashboardProcessingControls";
@@ -131,13 +129,6 @@ export default function AdminDashboard() {
     });
   }, [visibilityFilter, collectionFilter, searchQuery, sortColumns, dateMode, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
-  // Copy-paste edit mode state
-  const [copyModeActive, setCopyModeActive] = useState(false);
-  const [copiedValue, setCopiedValue] = useState<string | null>(null);
-  const [sourceCell, setSourceCell] = useState<{ letterId: string; column: 'sender' | 'recipient' } | null>(null);
-  const [pendingChanges, setPendingChanges] = useState<Map<string, { sender?: string; recipient?: string }>>(new Map());
-  const [isSaving, setIsSaving] = useState(false);
-
   const fetchLetters = useCallback(async (showLoading = false, page = pagination.page) => {
     if (showLoading) setLoading(true);
     setError(null);
@@ -205,46 +196,6 @@ export default function AdminDashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
-  // Fetch when filters change (reset to page 1) — also handles initial load
-  // Prune selections to only include items that still match the new filters
-  useEffect(() => {
-    if (!isAuthenticated()) return; // Don't fetch if not authenticated
-    fetchLetters(true, 1);
-
-    // If there are selections, prune to only IDs that match the new filter set
-    if (selectedIds.size > 0) {
-      const visibilityParam = visibilityFilter !== 'ALL' ? visibilityFilter : undefined;
-      const serverSort = [...sortColumns].reverse().find(col => isServerSortField(col.field));
-      getFilteredLetterIds({
-        collection: collectionFilter === "all" ? undefined : collectionFilter,
-        visibility: visibilityParam,
-        search: searchQuery || undefined,
-        sort: serverSort ? (serverSort.field as ServerSortField) : DEFAULT_DASHBOARD_SORT.field as ServerSortField,
-        sortOrder: serverSort ? serverSort.direction : DEFAULT_DASHBOARD_SORT.direction,
-        year: yearFilter ?? undefined,
-        month: monthFilter ?? undefined,
-        day: dayFilter ?? undefined,
-        dateFrom: dateFromFilter ?? undefined,
-        dateTo: dateToFilter ?? undefined,
-        transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(',') : undefined,
-        metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(',') : undefined,
-      }).then(validIds => {
-        const validSet = new Set(validIds);
-        setSelectedIds(prev => {
-          const pruned = new Set([...prev].filter(id => validSet.has(id)));
-          if (pruned.size === prev.size) return prev; // no change
-          if (pruned.size === 0) setEditToolbarOpen(false);
-          return pruned;
-        });
-        setAllFilteredSelected(false);
-      }).catch(() => {
-        // If the ID fetch fails, clear selections as a safe fallback
-        clearSelection();
-        setEditToolbarOpen(false);
-      });
-    }
-  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
-
   // Apply client-side sorting for computed columns
   const filteredLetters = useMemo(() => {
     const clientSortColumns = sortColumns.filter(col => !isServerSortField(col.field));
@@ -309,21 +260,69 @@ export default function AdminDashboard() {
     toggleSelection,
   });
 
+  const {
+    editMode,
+    copyModeActive,
+    copiedValue,
+    sourceCell,
+    pendingChanges,
+    isSaving,
+    exitEditMode,
+    closeEditToolbar,
+    handleDone,
+    toggleCopyMode,
+    handleCellClick,
+    handleEditModeRowClick,
+  } = useDashboardCopyPasteEdit({
+    selectedIds,
+    clearSelection,
+    handleCheckboxChange,
+    fetchLetters,
+  });
+
+  // Fetch when filters change (reset to page 1) — also handles initial load.
+  // Prune selections to only include items that still match the new filters.
+  useEffect(() => {
+    if (!isAuthenticated()) return;
+    fetchLetters(true, 1);
+
+    if (selectedIds.size > 0) {
+      const visibilityParam = visibilityFilter !== 'ALL' ? visibilityFilter : undefined;
+      const serverSort = [...sortColumns].reverse().find(col => isServerSortField(col.field));
+      getFilteredLetterIds({
+        collection: collectionFilter === "all" ? undefined : collectionFilter,
+        visibility: visibilityParam,
+        search: searchQuery || undefined,
+        sort: serverSort ? (serverSort.field as ServerSortField) : DEFAULT_DASHBOARD_SORT.field as ServerSortField,
+        sortOrder: serverSort ? serverSort.direction : DEFAULT_DASHBOARD_SORT.direction,
+        year: yearFilter ?? undefined,
+        month: monthFilter ?? undefined,
+        day: dayFilter ?? undefined,
+        dateFrom: dateFromFilter ?? undefined,
+        dateTo: dateToFilter ?? undefined,
+        transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(',') : undefined,
+        metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(',') : undefined,
+      }).then(validIds => {
+        const validSet = new Set(validIds);
+        setSelectedIds(prev => {
+          const pruned = new Set([...prev].filter(id => validSet.has(id)));
+          if (pruned.size === prev.size) return prev;
+          if (pruned.size === 0) closeEditToolbar();
+          return pruned;
+        });
+        setAllFilteredSelected(false);
+      }).catch(() => {
+        clearSelection();
+        closeEditToolbar();
+      });
+    }
+  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
+
   const handleRowClick = (letterId: string, index: number, e: React.MouseEvent) => {
     if (hasDragMoved) return;
-    // If in copy mode, don't navigate
-    if (copyModeActive) return;
-    // If in edit mode (rows selected or pending changes), toggle selection instead of navigating
-    if (selectedIds.size > 0 || pendingChanges.size > 0) {
-      handleCheckboxChange(letterId, index, e);
-      return;
-    }
+    if (handleEditModeRowClick(letterId, index, e)) return;
     navigate(`/admin/letters/${letterId}`);
   };
-
-  // Toolbar visibility is manually controlled — opens on first selection, closes only via X button
-  const [editToolbarOpen, setEditToolbarOpen] = useState(false);
-  const editMode = editToolbarOpen || copyModeActive || pendingChanges.size > 0;
 
   const singleSelectedLetter = useMemo(() => {
     if (selectedIds.size !== 1) return null;
@@ -344,13 +343,6 @@ export default function AdminDashboard() {
     };
   }, [filteredLetters, selectedIds]);
 
-  // Auto-open toolbar when items are selected
-  useEffect(() => {
-    if (selectedIds.size > 0 && !editToolbarOpen) {
-      setEditToolbarOpen(true);
-    }
-  }, [selectedIds.size, editToolbarOpen]);
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString(undefined, {
       month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -369,15 +361,6 @@ export default function AdminDashboard() {
         getErrorMessage(err, `Failed to ${flagged ? 'flag' : 'unflag'} letter`),
         'error',
       );
-    }
-  };
-
-  // Save pending changes + clear selection (toolbar "Done" button when in copy mode)
-  const handleDone = async () => {
-    if (pendingChanges.size > 0) {
-      await handleSaveChanges();
-    } else {
-      exitEditMode();
     }
   };
 
@@ -404,91 +387,6 @@ export default function AdminDashboard() {
       console.error('Failed to select all filtered:', err);
       showToast(getErrorMessage(err, 'Failed to select all filtered letters'), 'error');
     }
-  };
-
-  // Copy-paste mode handlers
-  const toggleCopyMode = () => {
-    if (copyModeActive) {
-      setCopyModeActive(false);
-      setCopiedValue(null);
-      setSourceCell(null);
-    } else {
-      setCopyModeActive(true);
-      setCopiedValue(null);
-      setSourceCell(null);
-    }
-  };
-
-  const handleCellClick = (letterId: string, column: 'sender' | 'recipient', value: string | null, e: React.MouseEvent) => {
-    if (!editMode || !copyModeActive) return;
-
-    e.stopPropagation();
-
-    const existingChange = pendingChanges.get(letterId);
-    const hasPendingChangeForColumn = existingChange && existingChange[column] !== undefined;
-
-    if (sourceCell === null) {
-      setSourceCell({ letterId, column });
-      setCopiedValue(value || '');
-    } else if (sourceCell.letterId === letterId && sourceCell.column === column) {
-      setSourceCell(null);
-      setCopiedValue(null);
-    } else if (hasPendingChangeForColumn) {
-      setPendingChanges(prev => {
-        const next = new Map(prev);
-        const existing = next.get(letterId);
-        if (existing) {
-          const { [column]: removed, ...rest } = existing;
-          if (Object.keys(rest).length === 0) {
-            next.delete(letterId);
-          } else {
-            next.set(letterId, rest as { sender?: string; recipient?: string });
-          }
-        }
-        return next;
-      });
-    } else {
-      setPendingChanges(prev => {
-        const next = new Map(prev);
-        const existing = next.get(letterId) || {};
-        next.set(letterId, { ...existing, [column]: copiedValue || '' });
-        return next;
-      });
-    }
-  };
-
-  const handleSaveChanges = async () => {
-    if (pendingChanges.size === 0) return;
-
-    setIsSaving(true);
-    try {
-      const updates = Array.from(pendingChanges.entries()).map(([letterId, changes]) => ({
-        letterId,
-        ...changes,
-      }));
-
-      await bulkUpdateFields(updates);
-
-      showToast(`Updated ${pendingChanges.size} letter${pendingChanges.size === 1 ? '' : 's'}`, 'success');
-
-      exitEditMode();
-
-      await fetchLetters();
-    } catch (err) {
-      console.error('Failed to save changes:', err);
-      showToast(err instanceof Error ? err.message : 'Failed to save changes', 'error');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const exitEditMode = () => {
-    clearSelection();
-    setEditToolbarOpen(false);
-    setPendingChanges(new Map());
-    setCopyModeActive(false);
-    setCopiedValue(null);
-    setSourceCell(null);
   };
 
   const {

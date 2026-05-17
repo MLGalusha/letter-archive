@@ -63,6 +63,7 @@ Progress:
 - Delete, clear, and publish/hide bulk mutation workflows moved into `useDashboardBulkActions`.
 - Processing status polling and pause/resume/abort controls moved into `useDashboardProcessingControls`.
 - Transcription and metadata start flows, including confirmation modal state, moved into `useDashboardProcessingActions`.
+- Copy/paste edit-mode state, pending field updates, and edit-mode row click behavior moved into `useDashboardCopyPasteEdit`.
 
 Out of scope:
 

@@ -60,6 +60,7 @@ Progress:
 - Active filter chip calculation and rendering split out of `DashboardToolbar.tsx`.
 - Dashboard confirmation and metadata identity dialogs moved into `AdminDashboard/DashboardDialogs.tsx`.
 - Row shift-click and drag selection behavior moved into `useDashboardRowSelection`.
+- Delete, clear, and publish/hide bulk mutation workflows moved into `useDashboardBulkActions`.
 
 Out of scope:
 

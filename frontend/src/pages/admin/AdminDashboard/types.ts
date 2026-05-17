@@ -75,13 +75,15 @@ export interface PersistedState {
   metadataStatusFilters: string[];
 }
 
+export interface DashboardViewState extends PersistedState {
+  visibleColumns: ColumnId[];
+}
+
 export interface SavedDashboardView {
   id: string;
   name: string;
   createdAt: string;
-  state: PersistedState & {
-    visibleColumns: ColumnId[];
-  };
+  state: DashboardViewState;
 }
 
 export interface PendingChange {

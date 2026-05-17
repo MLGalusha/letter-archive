@@ -37,24 +37,22 @@ import {
   MONTH_OPTIONS,
 } from "./AdminDashboard/constants";
 import type {
-  ColumnId,
+  DashboardViewState,
   DashboardView,
-  SavedDashboardView,
   ServerSortField,
 } from "./AdminDashboard/types";
 import {
   formatDateRaw,
   getCombinedTranscriptStatus,
   isServerSortField,
-  loadSavedDashboardViews,
   savePersistedState,
-  saveSavedDashboardViews,
   StatusIcon,
 } from "./AdminDashboard/utils";
 import { useDashboardColumns } from "./AdminDashboard/useDashboardColumns";
 import { useDashboardFilters } from "./AdminDashboard/useDashboardFilters";
 import { useDashboardSelection } from "./AdminDashboard/useDashboardSelection";
 import { useDashboardSort } from "./AdminDashboard/useDashboardSort";
+import { useSavedDashboardViews } from "./AdminDashboard/useSavedDashboardViews";
 import CollectionsDashboard from "./AdminCollectionsListPage";
 import "./AdminDashboard.css";
 
@@ -62,7 +60,6 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [savedViews, setSavedViews] = useState<SavedDashboardView[]>(() => loadSavedDashboardViews());
   const [dashboardView, setDashboardView] = useState<DashboardView>(
     () => (localStorage.getItem('dashboard-view') as DashboardView) || 'letters',
   );
@@ -1071,6 +1068,87 @@ export default function AdminDashboard() {
     return () => clearInterval(interval);
   }, [wasRunning, lastCompletedAt, fetchLetters]);
 
+  const handleDashboardViewChange = (view: DashboardView) => {
+    setDashboardView(view);
+    localStorage.setItem("dashboard-view", view);
+  };
+
+  const getCurrentDashboardViewState = useCallback((): DashboardViewState => ({
+    visibilityFilter,
+    collectionFilter,
+    searchQuery,
+    sortColumns,
+    dateMode,
+    year: yearFilter,
+    month: monthFilter,
+    day: dayFilter,
+    dateFrom: dateFromFilter,
+    dateTo: dateToFilter,
+    transcriptStatusFilters,
+    metadataStatusFilters,
+    visibleColumns: Array.from(visibleColumns),
+  }), [
+    visibilityFilter,
+    collectionFilter,
+    searchQuery,
+    sortColumns,
+    dateMode,
+    yearFilter,
+    monthFilter,
+    dayFilter,
+    dateFromFilter,
+    dateToFilter,
+    transcriptStatusFilters,
+    metadataStatusFilters,
+    visibleColumns,
+  ]);
+
+  const applyDashboardViewState = useCallback((state: DashboardViewState) => {
+    setVisibilityFilter(state.visibilityFilter);
+    setCollectionFilter(state.collectionFilter);
+    setCollectionInput(state.collectionFilter === "all" ? "" : state.collectionFilter);
+    setSearchInput(state.searchQuery);
+    setSearchQuery(state.searchQuery);
+    setSortColumns(state.sortColumns);
+    setDateMode(state.dateMode);
+    setYearFilter(state.year);
+    setMonthFilter(state.month);
+    setDayFilter(state.day);
+    setDateFromFilter(state.dateFrom);
+    setDateToFilter(state.dateTo);
+    setTranscriptStatusFilters(state.transcriptStatusFilters as ContentStatus[]);
+    setMetadataStatusFilters(state.metadataStatusFilters as ContentStatus[]);
+    setVisibleColumns(new Set(state.visibleColumns));
+  }, [
+    setVisibilityFilter,
+    setCollectionFilter,
+    setCollectionInput,
+    setSearchInput,
+    setSearchQuery,
+    setSortColumns,
+    setDateMode,
+    setYearFilter,
+    setMonthFilter,
+    setDayFilter,
+    setDateFromFilter,
+    setDateToFilter,
+    setTranscriptStatusFilters,
+    setMetadataStatusFilters,
+    setVisibleColumns,
+  ]);
+
+  const {
+    savedViews,
+    saveView: handleSaveDashboardView,
+    applyView: handleApplyDashboardView,
+    deleteView: handleDeleteDashboardView,
+  } = useSavedDashboardViews({
+    getCurrentState: getCurrentDashboardViewState,
+    applyState: applyDashboardViewState,
+    onSaved: (name) => showToast(`Saved view "${name}"`, "success"),
+    onApplied: (name) => showToast(`Loaded view "${name}"`, "info"),
+  });
+
   if (loading && isInitialLoad) {
     return (
       <AdminLayout fullHeight>
@@ -1094,70 +1172,6 @@ export default function AdminDashboard() {
       </AdminLayout>
     );
   }
-
-  const handleDashboardViewChange = (view: DashboardView) => {
-    setDashboardView(view);
-    localStorage.setItem("dashboard-view", view);
-  };
-
-  const handleSaveDashboardView = (name: string) => {
-    const trimmedName = name.trim();
-    if (!trimmedName) return;
-
-    const nextViews: SavedDashboardView[] = [
-      {
-        id: crypto.randomUUID(),
-        name: trimmedName,
-        createdAt: new Date().toISOString(),
-        state: {
-          visibilityFilter,
-          collectionFilter,
-          searchQuery,
-          sortColumns,
-          dateMode,
-          year: yearFilter,
-          month: monthFilter,
-          day: dayFilter,
-          dateFrom: dateFromFilter,
-          dateTo: dateToFilter,
-          transcriptStatusFilters,
-          metadataStatusFilters,
-          visibleColumns: Array.from(visibleColumns),
-        },
-      },
-      ...savedViews,
-    ].slice(0, 12);
-
-    setSavedViews(nextViews);
-    saveSavedDashboardViews(nextViews);
-    showToast(`Saved view "${trimmedName}"`, "success");
-  };
-
-  const handleApplyDashboardView = (view: SavedDashboardView) => {
-    const { state } = view;
-    setVisibilityFilter(state.visibilityFilter);
-    setCollectionFilter(state.collectionFilter);
-    setCollectionInput(state.collectionFilter === "all" ? "" : state.collectionFilter);
-    setSearchInput(state.searchQuery);
-    setSearchQuery(state.searchQuery);
-    setSortColumns(state.sortColumns);
-    setDateMode(state.dateMode);
-    setYearFilter(state.year);
-    setMonthFilter(state.month);
-    setDayFilter(state.day);
-    setDateFromFilter(state.dateFrom);
-    setDateToFilter(state.dateTo);
-    setTranscriptStatusFilters(state.transcriptStatusFilters as ContentStatus[]);
-    setMetadataStatusFilters(state.metadataStatusFilters as ContentStatus[]);
-    setVisibleColumns(new Set(state.visibleColumns as ColumnId[]));
-    showToast(`Loaded view "${view.name}"`, "info");
-  };
-
-  const handleDeleteDashboardView = (viewId: string) => {
-    const nextViews = savedViews.filter((view) => view.id !== viewId);
-    setSavedViews(nextViews);
-    saveSavedDashboardViews(nextViews);
-  };
 
   return (
     <AdminLayout fullHeight>

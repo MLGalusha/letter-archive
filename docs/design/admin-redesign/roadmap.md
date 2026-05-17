@@ -53,6 +53,7 @@ Progress:
 - Dashboard toolbar render/state glue extracted into `AdminDashboard/DashboardToolbar.tsx` so `AdminDashboard.tsx` can stay closer to page orchestration.
 - Saved views now persist filters, sort, and visible columns locally.
 - Saved-view menu and filter panel are split into focused toolbar subcomponents.
+- Saved-view persistence and save/apply/delete behavior moved into a dedicated hook.
 
 Out of scope:
 

@@ -82,6 +82,7 @@ Progress:
 - Recent activity column toggling and pagination are split out of the table component, leaving the table focused on header and row composition.
 - Dashboard filter state now has a first controller boundary: the toolbar and filter panel consume the filter hook result as one model instead of long repeated filter prop lists.
 - Persisted dashboard state and saved dashboard views now consume the same filter controller, reducing repeated setter lists and making future filter additions less brittle.
+- Letter fetching, filtered selection pruning/select-all, and processing start actions now consume the same filter controller instead of each receiving duplicate filter prop lists.
 
 Out of scope:
 

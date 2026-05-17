@@ -72,6 +72,13 @@ Progress:
 - Filter-change refetching, selection pruning, and select-all-filtered behavior moved into `useDashboardFilteredSelection`.
 - Optimistic flag/unflag row mutation moved into `useDashboardFlagActions`.
 - Date parsing and date filter button labeling moved into dashboard utils with focused tests.
+- Dashboard sort control and mobile date filter control moved into dedicated components so toolbar controls are easier to reason about independently.
+- Recent activity table header behavior moved into `SortableTableHeader`, and row rendering moved into `RecentActivityRow`.
+- File-type table columns are now centralized with shared column definitions instead of repeated cover/photo/telegram column logic.
+- Dashboard toolbar controls are split into view toggle, search field, mobile filter trigger, sort control, saved views, active chips, and filter panel sections.
+- Filter panel internals are split into date, visibility, and content-status sections backed by shared filter definitions and filter stats typing.
+- Bulk edit toolbar internals are split into selection, copy, processing, and publishing sections, keeping the main bulk toolbar focused on layout and coordination.
+- Transcription and metadata confirmation modals now share `ProcessingConfirmDialog`.
 
 Out of scope:
 

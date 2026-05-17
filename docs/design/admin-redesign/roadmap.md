@@ -79,6 +79,8 @@ Progress:
 - Filter panel internals are split into date, visibility, and content-status sections backed by shared filter definitions and filter stats typing.
 - Bulk edit toolbar internals are split into selection, copy, processing, and publishing sections, keeping the main bulk toolbar focused on layout and coordination.
 - Transcription and metadata confirmation modals now share `ProcessingConfirmDialog`.
+- Recent activity column toggling and pagination are split out of the table component, leaving the table focused on header and row composition.
+- Dashboard filter state now has a first controller boundary: the toolbar and filter panel consume the filter hook result as one model instead of long repeated filter prop lists.
 
 Out of scope:
 

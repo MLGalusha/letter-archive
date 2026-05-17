@@ -209,7 +209,8 @@ export default function RecentActivityTable({
                   onClick={() => onSort("collection")}
                 >
                   <span className="header-content">
-                    Collection
+                    <span className="desktop-header-label">Collection</span>
+                    <span className="mobile-header-label">Coll.</span>
                     {getSortInfo("collection") && (
                       <span className="sort-indicator">
                         <span className="sort-arrow">
@@ -338,7 +339,8 @@ export default function RecentActivityTable({
                   onClick={() => onSort("lastOpenedAt")}
                 >
                   <span className="header-content">
-                    Last Opened
+                    <span className="desktop-header-label">Last Opened</span>
+                    <span className="mobile-header-label">Opened</span>
                     {getSortInfo("lastOpenedAt") && (
                       <span className="sort-indicator">
                         <span className="sort-arrow">

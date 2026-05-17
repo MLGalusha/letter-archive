@@ -1654,6 +1654,10 @@
   gap: 0.375rem;
 }
 
+.mobile-header-label {
+  display: none;
+}
+
 .sortable-header .sort-indicator {
   display: inline-flex;
   align-items: center;
@@ -2146,42 +2150,69 @@
 
   .checkbox-header,
   .checkbox-cell {
-    width: 30px;
-    padding: 0.25rem;
+    width: 28px;
+    min-width: 28px;
+    max-width: 28px;
+    padding: 0 !important;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .checkbox-cell {
+    display: table-cell;
+    vertical-align: middle;
   }
 
   .checkbox-cell input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
   }
 
   .letters-table th[data-column="date"],
   .letters-table td[data-column="date"] {
-    width: 78px;
+    width: 76px;
   }
 
   .letters-table th[data-column="collection"],
   .letters-table td[data-column="collection"] {
-    width: 58px;
+    width: 48px;
   }
 
   .letters-table th[data-column="visibility"],
   .letters-table td[data-column="visibility"] {
-    width: 84px;
+    width: 86px;
   }
 
   .letters-table th[data-column="lastOpened"],
   .letters-table td[data-column="lastOpened"] {
-    width: 80px;
+    width: 100px;
   }
 
   .letters-table th[data-column="flag"],
   .letters-table td[data-column="flag"] {
-    width: 30px;
+    width: 28px;
+    padding-inline: 0;
+  }
+
+  .letters-table th[data-column="collection"] .header-content,
+  .letters-table th[data-column="lastOpened"] .header-content {
+    gap: 0.2rem;
+  }
+
+  .letters-table th[data-column="collection"] .desktop-header-label,
+  .letters-table th[data-column="lastOpened"] .desktop-header-label {
+    display: none;
+  }
+
+  .letters-table th[data-column="collection"] .mobile-header-label,
+  .letters-table th[data-column="lastOpened"] .mobile-header-label {
+    display: inline;
+    font-size: 0.64rem;
+    letter-spacing: 0;
   }
 
   .letters-table th[data-column="visibility"] {
-    font-size: 0.64rem;
+    font-size: 0.62rem;
   }
 
   .letters-table td[data-column="visibility"] .badge-visibility {

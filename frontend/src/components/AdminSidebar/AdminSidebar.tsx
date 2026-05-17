@@ -47,6 +47,7 @@ const POLL_INTERVAL = 30_000;
 interface AdminSidebarProps {
   collapsed?: boolean;
   onToggle?: () => void;
+  onNavigate?: () => void;
 }
 
 function formatRelativeTime(dateString: string): string {
@@ -62,7 +63,7 @@ function formatRelativeTime(dateString: string): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-export default function AdminSidebar({ collapsed = false, onToggle }: AdminSidebarProps) {
+export default function AdminSidebar({ collapsed = false, onToggle, onNavigate }: AdminSidebarProps) {
   const location = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
   const [maxSeverity, setMaxSeverity] = useState<NotificationSeverity | null>(null);
@@ -163,6 +164,7 @@ export default function AdminSidebar({ collapsed = false, onToggle }: AdminSideb
                 key={item.path}
                 to={item.path}
                 className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
+                onClick={onNavigate}
               >
                 <Icon name={item.icon} size={18} />
                 <span className="nav-label">{item.label}</span>
@@ -181,6 +183,7 @@ export default function AdminSidebar({ collapsed = false, onToggle }: AdminSideb
           <Link
             to="/admin/notifications"
             className={`nav-item nav-item-bell ${isActive('/admin/notifications') ? 'active' : ''}`}
+            onClick={onNavigate}
           >
             <span className="bell-icon-wrap">
               <Icon name="bell" size={18} />
@@ -208,7 +211,10 @@ export default function AdminSidebar({ collapsed = false, onToggle }: AdminSideb
                       <Link
                         to={n.link ?? '/admin/notifications'}
                         className="bell-popover-link"
-                        onClick={() => setPopoverOpen(false)}
+                        onClick={() => {
+                          setPopoverOpen(false);
+                          onNavigate?.();
+                        }}
                       >
                         <span className="bell-popover-stripe" aria-hidden />
                         <div className="bell-popover-body">
@@ -232,7 +238,10 @@ export default function AdminSidebar({ collapsed = false, onToggle }: AdminSideb
               <Link
                 to="/admin/notifications"
                 className="bell-popover-footer"
-                onClick={() => setPopoverOpen(false)}
+                onClick={() => {
+                  setPopoverOpen(false);
+                  onNavigate?.();
+                }}
               >
                 View all notifications
               </Link>
@@ -243,6 +252,7 @@ export default function AdminSidebar({ collapsed = false, onToggle }: AdminSideb
         <Link
           to="/admin/settings"
           className={`nav-item ${isActive('/admin/settings') ? 'active' : ''}`}
+          onClick={onNavigate}
         >
           <Icon name="settings" size={18} />
           <span className="nav-label">Settings</span>

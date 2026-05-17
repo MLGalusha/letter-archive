@@ -168,6 +168,7 @@ export function useDashboardFilters() {
     searchInput,
     setSearchInput,
     searchQuery,
+    setSearchQuery,
     hasDateFilter,
     clearDateFilters,
     handleClearAllFilters,

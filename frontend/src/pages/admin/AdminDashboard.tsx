@@ -30,7 +30,6 @@ import {
 import AdminLayout from "../../components/AdminLayout";
 import IdentityExtractionModal from "../../components/admin/IdentityExtractionModal";
 import Icon from "../../components/common/Icon";
-import { getRecentEdits, formatTimeAgo, type RecentEdit } from "../../utils/recentEdits";
 import RecentActivityTable from "./AdminDashboard/RecentActivityTable";
 import {
   ALL_COLUMNS,
@@ -60,6 +59,7 @@ type DashboardView = 'letters' | 'collections';
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [dashboardView, setDashboardView] = useState<DashboardView>(
     () => (localStorage.getItem('dashboard-view') as DashboardView) || 'letters',
   );
@@ -107,12 +107,13 @@ export default function AdminDashboard() {
     searchInput,
     setSearchInput,
     searchQuery,
+    setSearchQuery,
     hasDateFilter,
     clearDateFilters,
     handleClearAllFilters,
     initialSortColumns,
   } = useDashboardFilters();
-  const { sortColumns, handleSort, getSortInfo } = useDashboardSort(initialSortColumns);
+  const { sortColumns, setSortColumns, handleSort, getSortInfo } = useDashboardSort(initialSortColumns);
   const {
     visibleColumns,
     showColumnMenu,
@@ -120,33 +121,6 @@ export default function AdminDashboard() {
     toggleColumnVisibility,
     toggleColumnMenu,
   } = useDashboardColumns();
-
-  // Recent edits state (moved from AdminLayout)
-  const [recentEdits, setRecentEdits] = useState<RecentEdit[]>([]);
-  const [showRecent, setShowRecent] = useState(false);
-  const recentDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Load recent edits
-  useEffect(() => {
-    setRecentEdits(getRecentEdits());
-  }, []);
-
-  // Close recent dropdown on click outside
-  useEffect(() => {
-    if (!showRecent) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (recentDropdownRef.current && !recentDropdownRef.current.contains(e.target as Node)) {
-        setShowRecent(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showRecent]);
-
-  const handleRecentClick = (id: string) => {
-    setShowRecent(false);
-    navigate(`/admin/letters/${id}`);
-  };
 
   useEffect(() => {
     savePersistedState({
@@ -1077,6 +1051,97 @@ export default function AdminDashboard() {
     return count;
   }, [collectionFilter, visibilityFilter, searchQuery, transcriptStatusFilters, metadataStatusFilters, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter]);
 
+  const primarySortValue = useMemo(() => {
+    const serverSort = [...sortColumns].reverse().find(col => isServerSortField(col.field));
+    if (!serverSort) return "createdAt:desc";
+    return `${serverSort.field}:${serverSort.direction}`;
+  }, [sortColumns]);
+
+  const handlePrimarySortChange = (value: string) => {
+    const [field, direction] = value.split(":") as [ServerSortField, "asc" | "desc"];
+    setSortColumns((previous) => [
+      ...previous.filter((column) => !isServerSortField(column.field)),
+      { field, direction },
+    ]);
+  };
+
+  const activeFilterChips = useMemo(() => {
+    const chips: Array<{ key: string; label: string; onRemove: () => void }> = [];
+
+    if (visibilityFilter !== "ALL") {
+      chips.push({
+        key: "visibility",
+        label: visibilityFilter === "PUBLISHED" ? "Published" : "Hidden",
+        onRemove: () => toggleVisibilityFilter(visibilityFilter),
+      });
+    }
+
+    if (collectionFilter !== "all") {
+      chips.push({
+        key: "collection",
+        label: `Collection ${collectionFilter}`,
+        onRemove: () => handleCollectionInputChange(""),
+      });
+    }
+
+    if (searchQuery) {
+      chips.push({
+        key: "search",
+        label: `Search: ${searchQuery}`,
+        onRemove: () => {
+          setSearchInput("");
+          setSearchQuery("");
+        },
+      });
+    }
+
+    if (hasDateFilter) {
+      chips.push({
+        key: "date",
+        label: getDateButtonText(),
+        onRemove: clearDateFilters,
+      });
+    }
+
+    transcriptStatusFilters.forEach((status) => {
+      chips.push({
+        key: `transcript-${status}`,
+        label: `Transcript ${status.toLowerCase().replace("_", " ")}`,
+        onRemove: () => toggleTranscriptFilter(status),
+      });
+    });
+
+    metadataStatusFilters.forEach((status) => {
+      chips.push({
+        key: `metadata-${status}`,
+        label: `Metadata ${status.toLowerCase().replace("_", " ")}`,
+        onRemove: () => toggleMetadataFilter(status),
+      });
+    });
+
+    return chips;
+  }, [
+    visibilityFilter,
+    collectionFilter,
+    searchQuery,
+    hasDateFilter,
+    dateMode,
+    yearFilter,
+    monthFilter,
+    dayFilter,
+    dateFromFilter,
+    dateToFilter,
+    transcriptStatusFilters,
+    metadataStatusFilters,
+    toggleVisibilityFilter,
+    handleCollectionInputChange,
+    setSearchInput,
+    setSearchQuery,
+    clearDateFilters,
+    toggleTranscriptFilter,
+    toggleMetadataFilter,
+  ]);
+
   // Poll for processing status
   useEffect(() => {
     const fetchStatus = async () => {
@@ -1128,325 +1193,254 @@ export default function AdminDashboard() {
     );
   }
 
-  // Header action buttons for AdminLayout - now includes all filters
-  const headerActions = (
-    <div className="header-filters-row">
-      {/* Dashboard view toggle */}
-      <div className="dashboard-view-toggle">
-        <button
-          className={`view-toggle-btn ${dashboardView === 'letters' ? 'active' : ''}`}
-          onClick={() => { setDashboardView('letters'); localStorage.setItem('dashboard-view', 'letters'); }}
-        >
-          Letters
-        </button>
-        <button
-          className={`view-toggle-btn ${dashboardView === 'collections' ? 'active' : ''}`}
-          onClick={() => { setDashboardView('collections'); localStorage.setItem('dashboard-view', 'collections'); }}
-        >
-          Collections
-        </button>
-      </div>
-      {dashboardView === 'letters' && <div className="header-filters-left">
-        {/* Visibility group: pills stacked vertically */}
-        <div className="filter-group-stacked">
-          <div className="filter-buttons filter-buttons-vertical">
-            <button
-              className={`filter-pill filter-published ${visibilityFilter === "PUBLISHED" ? "active" : ""}`}
-              onClick={() => toggleVisibilityFilter("PUBLISHED")}
-              title="Published letters"
-            >
-              {stats.published} Public
-            </button>
-            <button
-              className={`filter-pill filter-hidden ${visibilityFilter === "HIDDEN" ? "active" : ""}`}
-              onClick={() => toggleVisibilityFilter("HIDDEN")}
-              title="Hidden letters"
-            >
-              {stats.hidden} Hidden
-            </button>
-          </div>
+  const dashboardToolbar = (
+    <div className="dashboard-toolbar-stack">
+      <div className="dashboard-toolbar-primary">
+        <div className="dashboard-view-toggle" aria-label="Dashboard view">
+          <button
+            className={`view-toggle-btn ${dashboardView === 'letters' ? 'active' : ''}`}
+            onClick={() => { setDashboardView('letters'); localStorage.setItem('dashboard-view', 'letters'); }}
+          >
+            Letters
+          </button>
+          <button
+            className={`view-toggle-btn ${dashboardView === 'collections' ? 'active' : ''}`}
+            onClick={() => { setDashboardView('collections'); localStorage.setItem('dashboard-view', 'collections'); }}
+          >
+            Collections
+          </button>
         </div>
 
-        {/* Content filter group: toggle + status pills */}
-        <div className="filter-group-stacked">
-          <div className="content-filter-toggle">
-            <button
-              className={`content-toggle-btn ${contentFilterView === "transcript" ? "active" : ""}`}
-              onClick={() => setContentFilterView("transcript")}
-            >
-              Transcript
-              {contentFilterView !== "transcript" &&
-                transcriptStatusFilters.length > 0 && (
-                  <span className="toggle-badge">
-                    {transcriptStatusFilters.length}
-                  </span>
-                )}
-            </button>
-            <button
-              className={`content-toggle-btn ${contentFilterView === "metadata" ? "active" : ""}`}
-              onClick={() => setContentFilterView("metadata")}
-            >
-              Metadata
-              {contentFilterView !== "metadata" &&
-                metadataStatusFilters.length > 0 && (
-                  <span className="toggle-badge">
-                    {metadataStatusFilters.length}
-                  </span>
-                )}
-            </button>
-          </div>
-          <div className="filter-buttons">
-            {contentFilterView === "transcript" ? (
-              <>
-                <button
-                  className={`filter-pill filter-content-none ${transcriptStatusFilters.includes("EMPTY") ? "active" : ""}`}
-                  onClick={() => toggleTranscriptFilter("EMPTY")}
-                  title="No transcript data"
-                >
-                  {stats.transcriptEmpty} None
-                </button>
-                <button
-                  className={`filter-pill filter-content-draft ${transcriptStatusFilters.includes("AI_DRAFT") ? "active" : ""}`}
-                  onClick={() => toggleTranscriptFilter("AI_DRAFT")}
-                  title="AI Draft transcripts"
-                >
-                  {stats.transcriptAiDraft} Draft
-                </button>
-                <button
-                  className={`filter-pill filter-content-edited ${transcriptStatusFilters.includes("EDITED") ? "active" : ""}`}
-                  onClick={() => toggleTranscriptFilter("EDITED")}
-                  title="Edited transcripts"
-                >
-                  {stats.transcriptEdited} Edited
-                </button>
-                <button
-                  className={`filter-pill filter-content-verified ${transcriptStatusFilters.includes("VERIFIED") ? "active" : ""}`}
-                  onClick={() => toggleTranscriptFilter("VERIFIED")}
-                  title="Verified transcripts"
-                >
-                  {stats.transcriptVerified} Done
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  className={`filter-pill filter-content-none ${metadataStatusFilters.includes("EMPTY") ? "active" : ""}`}
-                  onClick={() => toggleMetadataFilter("EMPTY")}
-                  title="No metadata"
-                >
-                  {stats.metadataEmpty} None
-                </button>
-                <button
-                  className={`filter-pill filter-content-draft ${metadataStatusFilters.includes("AI_DRAFT") ? "active" : ""}`}
-                  onClick={() => toggleMetadataFilter("AI_DRAFT")}
-                  title="AI Draft metadata"
-                >
-                  {stats.metadataAiDraft} Draft
-                </button>
-                <button
-                  className={`filter-pill filter-content-edited ${metadataStatusFilters.includes("EDITED") ? "active" : ""}`}
-                  onClick={() => toggleMetadataFilter("EDITED")}
-                  title="Edited metadata"
-                >
-                  {stats.metadataEdited} Edited
-                </button>
-                <button
-                  className={`filter-pill filter-content-verified ${metadataStatusFilters.includes("VERIFIED") ? "active" : ""}`}
-                  onClick={() => toggleMetadataFilter("VERIFIED")}
-                  title="Verified metadata"
-                >
-                  {stats.metadataVerified} Done
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Filter controls: search on top, date+collection+clear on bottom */}
-        <div className="filter-group-stacked">
-          <div className="filter-group-row">
-            <div className="filter-group search-group">
+        {dashboardView === 'letters' && (
+          <>
+            <div className="dashboard-search-field">
               <input
-                type="text"
-                placeholder="Search..."
+                type="search"
+                placeholder="Search letters, senders, recipients..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
               />
-            </div>
-          </div>
-          <div className="filter-group-row">
-            <div className="dropdown-container" ref={dateDropdownRef}>
-              <button
-                className={`dropdown-trigger ${hasDateFilter ? "active" : ""}`}
-                onClick={() => setShowDateDropdown(!showDateDropdown)}
-              >
-                {getDateButtonText()} ▾
-              </button>
-              {showDateDropdown && (
-                <div className="date-dropdown-panel">
-                  <div className="date-mode-toggle">
-                    <button
-                      className={`mode-btn ${dateMode === "specific" ? "active" : ""}`}
-                      onClick={() => {
-                        setDateMode("specific");
-                        // Clear range values so they don't silently persist
-                        setDateFromFilter(null);
-                        setDateToFilter(null);
-                      }}
-                    >
-                      Specific
-                    </button>
-                    <button
-                      className={`mode-btn ${dateMode === "range" ? "active" : ""}`}
-                      onClick={() => {
-                        setDateMode("range");
-                        // Clear specific values so they don't silently persist
-                        setYearFilter(null);
-                        setMonthFilter(null);
-                        setDayFilter(null);
-                      }}
-                    >
-                      Range
-                    </button>
-                  </div>
-
-                  {dateMode === "specific" ? (
-                    <div className="date-dropdowns">
-                      <select
-                        value={yearFilter ?? ""}
-                        onChange={(e) =>
-                          setYearFilter(e.target.value ? Number(e.target.value) : null)
-                        }
-                      >
-                        <option value="">Year</option>
-                        {YEAR_OPTIONS.map((y) => (
-                          <option key={y} value={y}>{y}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={monthFilter ?? ""}
-                        onChange={(e) =>
-                          setMonthFilter(e.target.value ? Number(e.target.value) : null)
-                        }
-                      >
-                        <option value="">Month</option>
-                        {MONTH_OPTIONS.map((m) => (
-                          <option key={m.value} value={m.value}>{m.label}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={dayFilter ?? ""}
-                        onChange={(e) =>
-                          setDayFilter(e.target.value ? Number(e.target.value) : null)
-                        }
-                      >
-                        <option value="">Day</option>
-                        {DAY_OPTIONS.map((d) => (
-                          <option key={d} value={d}>{d}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="date-range-inputs">
-                      <div className="date-range-field">
-                        <label>From</label>
-                        <input
-                          type="text"
-                          placeholder="mm/dd/yyyy"
-                          value={dateFromFilter ? dateRawToDisplay(dateFromFilter) : ""}
-                          onChange={(e) => setDateFromFilter(displayToDateRaw(e.target.value))}
-                          maxLength={10}
-                        />
-                      </div>
-                      <div className="date-range-field">
-                        <label>To</label>
-                        <input
-                          type="text"
-                          placeholder="mm/dd/yyyy"
-                          value={dateToFilter ? dateRawToDisplay(dateToFilter) : ""}
-                          onChange={(e) => setDateToFilter(displayToDateRaw(e.target.value))}
-                          maxLength={10}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {hasDateFilter && (
-                    <button className="date-clear-btn" onClick={clearDateFilters}>
-                      Clear Date
-                    </button>
-                  )}
-                </div>
+              {searchInput && (
+                <button
+                  className="dashboard-search-clear"
+                  onClick={() => {
+                    setSearchInput("");
+                    setSearchQuery("");
+                  }}
+                  aria-label="Clear search"
+                >
+                  <Icon name="close" size={14} />
+                </button>
               )}
             </div>
-            <input
-              type="text"
-              className="collection-input"
-              placeholder="000"
-              title="Filter by collection number"
-              value={collectionInput}
-              onChange={(e) => handleCollectionInputChange(e.target.value)}
-              maxLength={3}
-            />
+
+            <button
+              className={`dashboard-control-btn mobile-filter-trigger ${activeFilterCount > 0 ? "has-filters" : ""}`}
+              onClick={() => setMobileFiltersOpen((open) => !open)}
+              aria-expanded={mobileFiltersOpen}
+            >
+              <Icon name="settings" size={15} />
+              <span>Filters</span>
+              {activeFilterCount > 0 && <span className="filter-badge">{activeFilterCount}</span>}
+            </button>
+
+            <button className="dashboard-control-btn saved-view-btn" type="button">
+              <Icon name="save" size={15} />
+              <span>Save view</span>
+            </button>
+
+            <label className="dashboard-sort-control">
+              <span>Sort</span>
+              <select value={primarySortValue} onChange={(e) => handlePrimarySortChange(e.target.value)}>
+                <option value="lastOpenedAt:desc">Last opened</option>
+                <option value="letterDate:asc">Letter date oldest</option>
+                <option value="letterDate:desc">Letter date newest</option>
+                <option value="collection:asc">Collection</option>
+                <option value="createdAt:desc">Created newest</option>
+                <option value="sender:asc">Sender</option>
+                <option value="recipient:asc">Recipient</option>
+                <option value="visibility:asc">Visibility</option>
+                <option value="flagged:desc">Flagged</option>
+              </select>
+            </label>
+          </>
+        )}
+      </div>
+
+      {dashboardView === 'letters' && (
+        <>
+          <div className="active-filter-chips" aria-label="Active filters">
+            <span className="dashboard-result-count">{pagination.total} letters</span>
+            {activeFilterChips.map((chip) => (
+              <button key={chip.key} className="active-filter-chip" onClick={chip.onRemove}>
+                <span>{chip.label}</span>
+                <Icon name="close" size={12} />
+              </button>
+            ))}
             {activeFilterCount > 0 && (
-              <button className="clear-all-btn" onClick={handleClearAllFilters}>
-                Clear
+              <button className="clear-all-link" onClick={handleClearAllFilters}>
+                Clear all
               </button>
             )}
-          </div>
-        </div>
-
-        {/* Processing status pill (when running and not in edit mode) */}
-        {processingStatus?.isRunning && selectedIds.size === 0 && (
-          <span className="stat-pill stat-processing">
-            {processingStatus.currentJob?.type === "transcription" ? "T" : "M"}:{" "}
-            {processingStatus.completed}/{processingStatus.total}
-          </span>
-        )}
-      </div>}
-
-      {/* Actions: Recent edits */}
-      <div className="header-actions-right">
-        <div className="filter-group-stacked">
-          <div className="recent-edits-dropdown" ref={recentDropdownRef}>
-            <button
-              className="recent-edits-btn"
-              onClick={() => setShowRecent(!showRecent)}
-            >
-              <Icon name="refresh" size={12} />
-              Recent
-              <Icon name="chevron-down" size={10} />
-            </button>
-            {showRecent && (
-              <div className="history-dropdown">
-                <div className="history-header">Edit History</div>
-                <div className="history-items">
-                  {recentEdits.length === 0 ? (
-                    <div className="history-empty">No recent edits</div>
-                  ) : (
-                    recentEdits.map((edit) => (
-                      <div
-                        key={edit.id}
-                        className="history-item"
-                        onClick={() => handleRecentClick(edit.id)}
-                      >
-                        <span className="history-info">{edit.displayName}</span>
-                        <span className="history-time">{formatTimeAgo(edit.editedAt)}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+            {processingStatus?.isRunning && selectedIds.size === 0 && (
+              <span className="stat-pill stat-processing">
+                {processingStatus.currentJob?.type === "transcription" ? "T" : "M"}:{" "}
+                {processingStatus.completed}/{processingStatus.total}
+              </span>
             )}
           </div>
-        </div>
-      </div>
+
+          <div className={`dashboard-filter-panel ${mobileFiltersOpen ? "open" : ""}`}>
+            <div className="filter-panel-section">
+              <span className="filter-panel-label">Visibility</span>
+              <div className="filter-buttons">
+                <button
+                  className={`filter-pill filter-published ${visibilityFilter === "PUBLISHED" ? "active" : ""}`}
+                  onClick={() => toggleVisibilityFilter("PUBLISHED")}
+                  title="Published letters"
+                >
+                  {stats.published} Public
+                </button>
+                <button
+                  className={`filter-pill filter-hidden ${visibilityFilter === "HIDDEN" ? "active" : ""}`}
+                  onClick={() => toggleVisibilityFilter("HIDDEN")}
+                  title="Hidden letters"
+                >
+                  {stats.hidden} Hidden
+                </button>
+              </div>
+            </div>
+
+            <div className="filter-panel-section content-filter-section">
+              <div className="content-filter-toggle">
+                <button
+                  className={`content-toggle-btn ${contentFilterView === "transcript" ? "active" : ""}`}
+                  onClick={() => setContentFilterView("transcript")}
+                >
+                  Transcript
+                  {contentFilterView !== "transcript" && transcriptStatusFilters.length > 0 && (
+                    <span className="toggle-badge">{transcriptStatusFilters.length}</span>
+                  )}
+                </button>
+                <button
+                  className={`content-toggle-btn ${contentFilterView === "metadata" ? "active" : ""}`}
+                  onClick={() => setContentFilterView("metadata")}
+                >
+                  Metadata
+                  {contentFilterView !== "metadata" && metadataStatusFilters.length > 0 && (
+                    <span className="toggle-badge">{metadataStatusFilters.length}</span>
+                  )}
+                </button>
+              </div>
+              <div className="filter-buttons">
+                {contentFilterView === "transcript" ? (
+                  <>
+                    <button className={`filter-pill filter-content-none ${transcriptStatusFilters.includes("EMPTY") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("EMPTY")}>{stats.transcriptEmpty} None</button>
+                    <button className={`filter-pill filter-content-draft ${transcriptStatusFilters.includes("AI_DRAFT") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("AI_DRAFT")}>{stats.transcriptAiDraft} Draft</button>
+                    <button className={`filter-pill filter-content-edited ${transcriptStatusFilters.includes("EDITED") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("EDITED")}>{stats.transcriptEdited} Edited</button>
+                    <button className={`filter-pill filter-content-verified ${transcriptStatusFilters.includes("VERIFIED") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("VERIFIED")}>{stats.transcriptVerified} Done</button>
+                  </>
+                ) : (
+                  <>
+                    <button className={`filter-pill filter-content-none ${metadataStatusFilters.includes("EMPTY") ? "active" : ""}`} onClick={() => toggleMetadataFilter("EMPTY")}>{stats.metadataEmpty} None</button>
+                    <button className={`filter-pill filter-content-draft ${metadataStatusFilters.includes("AI_DRAFT") ? "active" : ""}`} onClick={() => toggleMetadataFilter("AI_DRAFT")}>{stats.metadataAiDraft} Draft</button>
+                    <button className={`filter-pill filter-content-edited ${metadataStatusFilters.includes("EDITED") ? "active" : ""}`} onClick={() => toggleMetadataFilter("EDITED")}>{stats.metadataEdited} Edited</button>
+                    <button className={`filter-pill filter-content-verified ${metadataStatusFilters.includes("VERIFIED") ? "active" : ""}`} onClick={() => toggleMetadataFilter("VERIFIED")}>{stats.metadataVerified} Done</button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="filter-panel-section filter-panel-fields">
+              <div className="dropdown-container" ref={dateDropdownRef}>
+                <button
+                  className={`dropdown-trigger ${hasDateFilter ? "active" : ""}`}
+                  onClick={() => setShowDateDropdown(!showDateDropdown)}
+                >
+                  {getDateButtonText()} <Icon name="chevron-down" size={12} />
+                </button>
+                {showDateDropdown && (
+                  <div className="date-dropdown-panel">
+                    <div className="date-mode-toggle">
+                      <button
+                        className={`mode-btn ${dateMode === "specific" ? "active" : ""}`}
+                        onClick={() => {
+                          setDateMode("specific");
+                          setDateFromFilter(null);
+                          setDateToFilter(null);
+                        }}
+                      >
+                        Specific
+                      </button>
+                      <button
+                        className={`mode-btn ${dateMode === "range" ? "active" : ""}`}
+                        onClick={() => {
+                          setDateMode("range");
+                          setYearFilter(null);
+                          setMonthFilter(null);
+                          setDayFilter(null);
+                        }}
+                      >
+                        Range
+                      </button>
+                    </div>
+
+                    {dateMode === "specific" ? (
+                      <div className="date-dropdowns">
+                        <select value={yearFilter ?? ""} onChange={(e) => setYearFilter(e.target.value ? Number(e.target.value) : null)}>
+                          <option value="">Year</option>
+                          {YEAR_OPTIONS.map((y) => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                        <select value={monthFilter ?? ""} onChange={(e) => setMonthFilter(e.target.value ? Number(e.target.value) : null)}>
+                          <option value="">Month</option>
+                          {MONTH_OPTIONS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                        </select>
+                        <select value={dayFilter ?? ""} onChange={(e) => setDayFilter(e.target.value ? Number(e.target.value) : null)}>
+                          <option value="">Day</option>
+                          {DAY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="date-range-inputs">
+                        <div className="date-range-field">
+                          <label>From</label>
+                          <input type="text" placeholder="mm/dd/yyyy" value={dateFromFilter ? dateRawToDisplay(dateFromFilter) : ""} onChange={(e) => setDateFromFilter(displayToDateRaw(e.target.value))} maxLength={10} />
+                        </div>
+                        <div className="date-range-field">
+                          <label>To</label>
+                          <input type="text" placeholder="mm/dd/yyyy" value={dateToFilter ? dateRawToDisplay(dateToFilter) : ""} onChange={(e) => setDateToFilter(displayToDateRaw(e.target.value))} maxLength={10} />
+                        </div>
+                      </div>
+                    )}
+
+                    {hasDateFilter && <button className="date-clear-btn" onClick={clearDateFilters}>Clear Date</button>}
+                  </div>
+                )}
+              </div>
+              <label className="collection-filter-field">
+                <span>Collection</span>
+                <input
+                  type="text"
+                  className="collection-input"
+                  placeholder="000"
+                  value={collectionInput}
+                  onChange={(e) => handleCollectionInputChange(e.target.value)}
+                  maxLength={3}
+                />
+              </label>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 
   return (
-    <AdminLayout headerActions={headerActions} fullHeight>
+    <AdminLayout fullHeight>
     <div className="admin-dashboard">
+      <section className="dashboard-toolbar" aria-label="Dashboard controls">
+        {dashboardToolbar}
+      </section>
       {dashboardView === 'collections' && <CollectionsDashboard />}
       {dashboardView === 'letters' && <>
       <div className={`admin-content ${editMode ? 'has-edit-toolbar' : ''}`}>

@@ -1,8 +1,13 @@
 .admin-layout {
-  --admin-header-height: 53px;
+  --admin-header-height: 0px;
+  --admin-mobile-topbar-height: 0px;
   display: flex;
   min-height: 100vh;
   background: var(--bg);
+}
+
+.admin-layout.has-header-actions {
+  --admin-header-height: 53px;
 }
 
 /* Lock layout to viewport when fullHeight content is present */
@@ -39,9 +44,15 @@
   align-items: center;
   overflow: visible;
   box-shadow: 0 1px 3px hsla(0, 0%, 0%, 0.1);
+  min-height: var(--admin-header-height);
+  box-sizing: border-box;
 }
 
 .admin-header:empty {
+  display: none;
+}
+
+.admin-mobile-topbar {
   display: none;
 }
 
@@ -69,8 +80,8 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--admin-header-height));
-  max-height: calc(100vh - var(--admin-header-height));
+  height: calc(100vh - var(--admin-header-height) - var(--admin-mobile-topbar-height));
+  max-height: calc(100vh - var(--admin-header-height) - var(--admin-mobile-topbar-height));
 }
 
 /* Mobile overlay: visible only when sidebar expanded on small screens */
@@ -86,18 +97,81 @@
 }
 
 @media (max-width: 768px) {
-  /* Content always at collapsed sidebar width */
+  .admin-layout {
+    --admin-mobile-topbar-height: 64px;
+  }
+
   .admin-main {
-    margin-left: 60px;
+    margin-left: 0;
+    width: 100%;
   }
 
   .admin-layout.sidebar-collapsed .admin-main {
-    margin-left: 60px;
+    margin-left: 0;
   }
 
-  /* Show overlay when sidebar is expanded */
-  .admin-layout:not(.sidebar-collapsed) .mobile-overlay {
+  .admin-layout.mobile-nav-open .mobile-overlay {
     display: block;
+  }
+
+  .admin-mobile-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 120;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: var(--admin-mobile-topbar-height);
+    padding: 0 1rem;
+    background: var(--bg-light);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 3px hsla(0, 0%, 0%, 0.08);
+  }
+
+  .admin-mobile-brand {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .admin-mobile-title {
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .admin-mobile-subtitle {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .admin-mobile-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    color: var(--text);
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+  }
+
+  .admin-mobile-menu-btn:hover,
+  .admin-mobile-menu-btn[aria-expanded="true"] {
+    background: var(--bg);
+    border-color: var(--text-muted);
   }
 
   .admin-header {

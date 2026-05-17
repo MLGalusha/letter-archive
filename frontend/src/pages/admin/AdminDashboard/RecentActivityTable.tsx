@@ -141,6 +141,7 @@ export default function RecentActivityTable({
               </th>
               {visibleColumns.has("sender") && (
                 <th
+                  data-column="sender"
                   className={`sortable-header ${getSortInfo("sender") ? "sorted" : ""}`}
                   onClick={() => onSort("sender")}
                 >
@@ -161,6 +162,7 @@ export default function RecentActivityTable({
               )}
               {visibleColumns.has("recipient") && (
                 <th
+                  data-column="recipient"
                   className={`sortable-header ${getSortInfo("recipient") ? "sorted" : ""}`}
                   onClick={() => onSort("recipient")}
                 >
@@ -181,6 +183,7 @@ export default function RecentActivityTable({
               )}
               {visibleColumns.has("date") && (
                 <th
+                  data-column="date"
                   className={`date-header sortable-header ${getSortInfo("letterDate") ? "sorted" : ""}`}
                   onClick={() => onSort("letterDate")}
                 >
@@ -201,6 +204,7 @@ export default function RecentActivityTable({
               )}
               {visibleColumns.has("collection") && (
                 <th
+                  data-column="collection"
                   className={`sortable-header ${getSortInfo("collection") ? "sorted" : ""}`}
                   onClick={() => onSort("collection")}
                 >
@@ -221,6 +225,7 @@ export default function RecentActivityTable({
               )}
               {visibleColumns.has("letters") && (
                 <th
+                  data-column="letters"
                   className={`sortable-header ${getSortInfo("letters") ? "sorted" : ""}`}
                   onClick={() => onSort("letters")}
                 >
@@ -241,6 +246,7 @@ export default function RecentActivityTable({
               )}
               {visibleColumns.has("extras") && (
                 <th
+                  data-column="extras"
                   className={`sortable-header ${getSortInfo("extras") ? "sorted" : ""}`}
                   onClick={() => onSort("extras")}
                 >
@@ -261,6 +267,7 @@ export default function RecentActivityTable({
               )}
               {visibleColumns.has("photos") && (
                 <th
+                  data-column="photos"
                   className={`sortable-header ${getSortInfo("photos") ? "sorted" : ""}`}
                   onClick={() => onSort("photos")}
                 >
@@ -279,11 +286,12 @@ export default function RecentActivityTable({
                   </span>
                 </th>
               )}
-              {visibleColumns.has("transcript") && <th className="status-header">Transcript</th>}
-              {visibleColumns.has("metadata") && <th className="status-header">Metadata</th>}
-              {visibleColumns.has("visibility") && <th>Visibility</th>}
+              {visibleColumns.has("transcript") && <th data-column="transcript" className="status-header">Transcript</th>}
+              {visibleColumns.has("metadata") && <th data-column="metadata" className="status-header">Metadata</th>}
+              {visibleColumns.has("visibility") && <th data-column="visibility">Visibility</th>}
               {visibleColumns.has("created") && (
                 <th
+                  data-column="created"
                   className={`sortable-header ${getSortInfo("createdAt") ? "sorted" : ""}`}
                   onClick={() => onSort("createdAt")}
                 >
@@ -304,6 +312,7 @@ export default function RecentActivityTable({
               )}
               {visibleColumns.has("updated") && (
                 <th
+                  data-column="updated"
                   className={`sortable-header ${getSortInfo("updatedAt") ? "sorted" : ""}`}
                   onClick={() => onSort("updatedAt")}
                 >
@@ -324,6 +333,7 @@ export default function RecentActivityTable({
               )}
               {visibleColumns.has("lastOpened") && (
                 <th
+                  data-column="lastOpened"
                   className={`sortable-header ${getSortInfo("lastOpenedAt") ? "sorted" : ""}`}
                   onClick={() => onSort("lastOpenedAt")}
                 >
@@ -344,6 +354,7 @@ export default function RecentActivityTable({
               )}
               {visibleColumns.has("flag") && (
                 <th
+                  data-column="flag"
                   className={`flag-header sortable-header ${getSortInfo("flagged") ? "sorted" : ""}`}
                   onClick={() => onSort("flagged")}
                 >
@@ -363,7 +374,7 @@ export default function RecentActivityTable({
                 </th>
               )}
               {FILE_TYPE_COLUMNS.filter(col => visibleColumns.has(col.id)).map(col => (
-                <th key={col.id}>{col.label}</th>
+                <th key={col.id} data-column={col.id}>{col.label}</th>
               ))}
             </tr>
           </thead>
@@ -407,6 +418,7 @@ export default function RecentActivityTable({
                   </td>
                   {visibleColumns.has("sender") && (
                     <td
+                      data-column="sender"
                       className={`
                         ${copyModeActive ? "copyable-cell" : ""}
                         ${sourceCell?.letterId === letter.id && sourceCell?.column === "sender" ? "source-cell" : ""}
@@ -431,6 +443,7 @@ export default function RecentActivityTable({
 
                   {visibleColumns.has("recipient") && (
                     <td
+                      data-column="recipient"
                       className={`
                         ${copyModeActive ? "copyable-cell" : ""}
                         ${sourceCell?.letterId === letter.id && sourceCell?.column === "recipient" ? "source-cell" : ""}
@@ -453,41 +466,41 @@ export default function RecentActivityTable({
                     </td>
                   )}
 
-                  {visibleColumns.has("date") && <td className="date-cell">{formattedDate}</td>}
-                  {visibleColumns.has("collection") && <td>{letter.collectionCode || "—"}</td>}
-                  {visibleColumns.has("letters") && <td className="count-cell">{pageCount || "—"}</td>}
-                  {visibleColumns.has("extras") && <td className="count-cell">{extrasCount || "—"}</td>}
-                  {visibleColumns.has("photos") && <td className="count-cell">{photosCount || "—"}</td>}
+                  {visibleColumns.has("date") && <td data-column="date" className="date-cell">{formattedDate}</td>}
+                  {visibleColumns.has("collection") && <td data-column="collection">{letter.collectionCode || "—"}</td>}
+                  {visibleColumns.has("letters") && <td data-column="letters" className="count-cell">{pageCount || "—"}</td>}
+                  {visibleColumns.has("extras") && <td data-column="extras" className="count-cell">{extrasCount || "—"}</td>}
+                  {visibleColumns.has("photos") && <td data-column="photos" className="count-cell">{photosCount || "—"}</td>}
 
                   {visibleColumns.has("transcript") && (
-                    <td className="status-cell">
+                    <td data-column="transcript" className="status-cell">
                       {renderStatusIcon(contentStatus, "T")}
                     </td>
                   )}
 
                   {visibleColumns.has("metadata") && (
-                    <td className="status-cell">
+                    <td data-column="metadata" className="status-cell">
                       {renderStatusIcon(letter.metadataContentStatus, "M")}
                     </td>
                   )}
 
                   {visibleColumns.has("visibility") && (
-                    <td>
+                    <td data-column="visibility">
                       <VisibilityBadge state={letter.visibility} />
                     </td>
                   )}
 
                   {visibleColumns.has("created") && (
-                    <td className="date-cell">{formatDate(letter.createdAt)}</td>
+                    <td data-column="created" className="date-cell">{formatDate(letter.createdAt)}</td>
                   )}
                   {visibleColumns.has("updated") && (
-                    <td className="date-cell">{letter.updatedAt ? formatDate(letter.updatedAt) : "—"}</td>
+                    <td data-column="updated" className="date-cell">{letter.updatedAt ? formatDate(letter.updatedAt) : "—"}</td>
                   )}
                   {visibleColumns.has("lastOpened") && (
-                    <td className="date-cell">{letter.lastOpenedAt ? formatDate(letter.lastOpenedAt) : "—"}</td>
+                    <td data-column="lastOpened" className="date-cell">{letter.lastOpenedAt ? formatDate(letter.lastOpenedAt) : "—"}</td>
                   )}
                   {visibleColumns.has("flag") && (
-                    <td className="flag-cell">
+                    <td data-column="flag" className="flag-cell">
                       <button
                         className={`flag-btn ${letter.flagged ? "flagged" : ""}`}
                         onClick={(e) => {
@@ -503,7 +516,7 @@ export default function RecentActivityTable({
                   {FILE_TYPE_COLUMNS.filter(col => visibleColumns.has(col.id)).map(col => {
                     const typeKey = col.id.replace('type_', '');
                     const count = letter.images.filter((img) => img.type === typeKey).length;
-                    return <td key={col.id} className="count-cell">{count || '—'}</td>;
+                    return <td key={col.id} data-column={col.id} className="count-cell">{count || '—'}</td>;
                   })}
                 </tr>
               );

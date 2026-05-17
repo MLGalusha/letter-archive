@@ -110,6 +110,7 @@
   border: none;
   background: none;
   width: 100%;
+  box-sizing: border-box;
   cursor: pointer;
   text-align: left;
 }
@@ -349,14 +350,23 @@ body.dark .bell-popover-footer {
 @media (max-width: 768px) {
   .admin-sidebar {
     transition: transform 0.2s ease, width 0.2s ease;
+    width: min(82vw, 320px);
+    transform: translateX(-100%);
   }
 
-  .admin-sidebar:not(.collapsed) {
+  .admin-layout.mobile-nav-open .admin-sidebar {
+    transform: translateX(0);
     box-shadow: 4px 0 12px hsla(0, 0%, 0%, 0.15);
   }
 
-  .admin-sidebar.collapsed .sidebar-toggle {
-    margin: 0 auto;
+  .admin-sidebar.collapsed .brand-text,
+  .admin-sidebar.collapsed .brand-sub,
+  .admin-sidebar.collapsed .nav-label,
+  .admin-sidebar.collapsed .nav-section-title {
+    display: inline;
+  }
+
+  .admin-sidebar .sidebar-toggle {
+    display: none;
   }
 }
-

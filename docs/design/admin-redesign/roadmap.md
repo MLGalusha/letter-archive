@@ -59,6 +59,7 @@ Progress:
 - Filter panel markup now uses grouped sections for visibility, content status, date, and collection controls.
 - Active filter chip calculation and rendering split out of `DashboardToolbar.tsx`.
 - Dashboard confirmation and metadata identity dialogs moved into `AdminDashboard/DashboardDialogs.tsx`.
+- Row shift-click and drag selection behavior moved into `useDashboardRowSelection`.
 
 Out of scope:
 

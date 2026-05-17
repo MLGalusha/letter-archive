@@ -46,6 +46,7 @@ import {
 } from "./AdminDashboard/utils";
 import { useDashboardColumns } from "./AdminDashboard/useDashboardColumns";
 import { useDashboardFilters } from "./AdminDashboard/useDashboardFilters";
+import { useDashboardRowSelection } from "./AdminDashboard/useDashboardRowSelection";
 import { useDashboardSelection } from "./AdminDashboard/useDashboardSelection";
 import { DEFAULT_DASHBOARD_SORT, useDashboardSort } from "./AdminDashboard/useDashboardSort";
 import { useSavedDashboardViews } from "./AdminDashboard/useSavedDashboardViews";
@@ -147,14 +148,6 @@ export default function AdminDashboard() {
   const [showResetModal, setShowResetModal] = useState(false);
   const [showClearMetadataModal, setShowClearMetadataModal] = useState(false);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
-
-  // Drag selection state
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStartIndex, setDragStartIndex] = useState<number | null>(null);
-  const [dragMode, setDragMode] = useState<"select" | "deselect" | null>(null);
-  const [draggedIds, setDraggedIds] = useState<Set<string>>(new Set());
-  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
-  const [hasDragMoved, setHasDragMoved] = useState(false);
 
   // Copy-paste edit mode state
   const [copyModeActive, setCopyModeActive] = useState(false);
@@ -287,106 +280,6 @@ export default function AdminDashboard() {
     }
   }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
-  const handleRowClick = (letterId: string, index: number, e: React.MouseEvent) => {
-    if (hasDragMoved) return;
-    // If in copy mode, don't navigate
-    if (copyModeActive) return;
-    // If in edit mode (rows selected or pending changes), toggle selection instead of navigating
-    if (selectedIds.size > 0 || pendingChanges.size > 0) {
-      handleCheckboxChange(letterId, index, e);
-      return;
-    }
-    navigate(`/admin/letters/${letterId}`);
-  };
-
-  // Checkbox-driven selection with shift-click range support
-  const handleCheckboxChange = (letterId: string, index: number, e: React.MouseEvent) => {
-    if (e.shiftKey && lastClickedIndex !== null) {
-      const start = Math.min(lastClickedIndex, index);
-      const end = Math.max(lastClickedIndex, index);
-      const newSelected = new Set(selectedIds);
-      for (let i = start; i <= end; i++) {
-        newSelected.add(filteredLetters[i].id);
-      }
-      setSelectedIds(newSelected);
-      setAllFilteredSelected(false);
-    } else {
-      toggleSelection(letterId);
-    }
-    setLastClickedIndex(index);
-  };
-
-  // Drag selection handlers — always active for multi-select
-  const handleRowMouseDown = (index: number, e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    const tagName = (e.target as HTMLElement).tagName;
-    if (tagName === "INPUT" || tagName === "BUTTON") return;
-
-    const letterId = filteredLetters[index].id;
-    const mode = selectedIds.has(letterId) ? "deselect" : "select";
-
-    setIsDragging(true);
-    setDragStartIndex(index);
-    setDragMode(mode);
-    setDraggedIds(new Set([letterId]));
-    setHasDragMoved(false);
-    e.preventDefault();
-  };
-
-  const handleRowMouseEnter = (index: number) => {
-    if (!isDragging || dragStartIndex === null || dragMode === null) return;
-
-    if (!hasDragMoved) {
-      setHasDragMoved(true);
-    }
-
-    const start = Math.min(dragStartIndex, index);
-    const end = Math.max(dragStartIndex, index);
-
-    const rangeIds = new Set<string>();
-    for (let i = start; i <= end; i++) {
-      rangeIds.add(filteredLetters[i].id);
-    }
-
-    const newSelected = new Set(selectedIds);
-
-    draggedIds.forEach((id) => {
-      if (!rangeIds.has(id)) {
-        if (dragMode === "select") {
-          newSelected.delete(id);
-        } else {
-          newSelected.add(id);
-        }
-      }
-    });
-
-    rangeIds.forEach((id) => {
-      if (dragMode === "select") {
-        newSelected.add(id);
-      } else {
-        newSelected.delete(id);
-      }
-    });
-
-    setDraggedIds(rangeIds);
-    setSelectedIds(newSelected);
-    setAllFilteredSelected(false);
-  };
-
-  const handleMouseUp = useCallback(() => {
-    if (isDragging) {
-      setIsDragging(false);
-      setDragStartIndex(null);
-      setDragMode(null);
-      setDraggedIds(new Set());
-    }
-  }, [isDragging]);
-
-  useEffect(() => {
-    document.addEventListener("mouseup", handleMouseUp);
-    return () => document.removeEventListener("mouseup", handleMouseUp);
-  }, [handleMouseUp]);
-
   // Apply client-side sorting for computed columns
   const filteredLetters = useMemo(() => {
     const clientSortColumns = sortColumns.filter(col => !isServerSortField(col.field));
@@ -437,6 +330,31 @@ export default function AdminDashboard() {
     handleSelectAllPage,
     selectAllFiltered,
   } = useDashboardSelection(filteredLetters);
+
+  const {
+    hasDragMoved,
+    handleCheckboxChange,
+    handleRowMouseDown,
+    handleRowMouseEnter,
+  } = useDashboardRowSelection({
+    rows: filteredLetters,
+    selectedIds,
+    setSelectedIds,
+    setAllFilteredSelected,
+    toggleSelection,
+  });
+
+  const handleRowClick = (letterId: string, index: number, e: React.MouseEvent) => {
+    if (hasDragMoved) return;
+    // If in copy mode, don't navigate
+    if (copyModeActive) return;
+    // If in edit mode (rows selected or pending changes), toggle selection instead of navigating
+    if (selectedIds.size > 0 || pendingChanges.size > 0) {
+      handleCheckboxChange(letterId, index, e);
+      return;
+    }
+    navigate(`/admin/letters/${letterId}`);
+  };
 
   // Toolbar visibility is manually controlled — opens on first selection, closes only via X button
   const [editToolbarOpen, setEditToolbarOpen] = useState(false);

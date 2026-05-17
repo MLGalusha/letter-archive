@@ -23,15 +23,11 @@ import {
 } from "../../api/admin";
 import { useToast } from "../../contexts/ToastContext";
 import type { ContentStatus, Letter } from "../../types/Letter";
-import {
-  Button,
-  ConfirmDialog,
-} from "../../components/common";
 import AdminLayout from "../../components/AdminLayout";
-import IdentityExtractionModal from "../../components/admin/IdentityExtractionModal";
 import RecentActivityTable from "./AdminDashboard/RecentActivityTable";
 import DashboardToolbar from "./AdminDashboard/DashboardToolbar";
 import BulkEditToolbar from "./AdminDashboard/BulkEditToolbar";
+import DashboardDialogs from "./AdminDashboard/DashboardDialogs";
 import {
   ALL_COLUMNS,
   MONTH_OPTIONS,
@@ -1264,134 +1260,47 @@ export default function AdminDashboard() {
         />
       </div>
 
-      {/* Delete confirmation modal */}
-      <ConfirmDialog
-        isOpen={showDeleteModal}
-        title="Delete Letters"
-        message={`Are you sure you want to delete ${selectedIds.size} letter${selectedIds.size === 1 ? "" : "s"}?`}
-        confirmText={deleting ? "Deleting..." : "Delete"}
-        variant="danger"
-        loading={deleting}
-        onConfirm={handleConfirmDelete}
-        onCancel={handleCancelDelete}
-      />
-
-      {/* Clear transcriptions confirmation modal */}
-      <ConfirmDialog
-        isOpen={showResetModal}
-        title="Clear Transcriptions"
-        message={`This will clear all transcriptions (including extra content), metadata, and entity links for ${selectedIds.size} letter${selectedIds.size === 1 ? "" : "s"}, returning them to UPLOADED state. You will need to re-transcribe them.`}
-        confirmText={bulkActionLoading ? "Clearing..." : "Clear Transcriptions"}
-        loading={bulkActionLoading}
-        onConfirm={handleConfirmClearTranscriptions}
-        onCancel={() => setShowResetModal(false)}
-      />
-
-      {/* Clear metadata confirmation modal */}
-      <ConfirmDialog
-        isOpen={showClearMetadataModal}
-        title="Clear Metadata"
-        message={`This will clear all metadata, entity links, and extracted entities for ${selectedIds.size} letter${selectedIds.size === 1 ? "" : "s"}. The transcriptions will be kept intact.`}
-        confirmText={bulkActionLoading ? "Clearing..." : "Clear Metadata"}
-        loading={bulkActionLoading}
-        onConfirm={handleConfirmClearMetadata}
-        onCancel={() => setShowClearMetadataModal(false)}
-      />
-
-      <ConfirmDialog
-        isOpen={showUnconfirmedDialog}
-        title="Unverified Transcripts"
-        message={`${unconfirmedCount} of the selected letter${unconfirmedCount === 1 ? ' has an' : 's have'} unverified transcript${unconfirmedCount === 1 ? '' : 's'}. Metadata extraction may be less accurate without verified transcripts. Do you want to proceed anyway?`}
-        confirmText="Extract Anyway"
-        onConfirm={handleConfirmUnverified}
-        onCancel={() => setShowUnconfirmedDialog(false)}
-      />
-
-      {/* Transcribe confirmation — with overwrite/skip when existing transcripts found */}
-      {showTranscribeConfirm && (
-        <div className="modal-overlay" onClick={() => setShowTranscribeConfirm(false)}>
-          <div className="modal-content modal-sm confirm-dialog" onClick={e => e.stopPropagation()}>
-            <h2 className="confirm-dialog-title">Transcribe Letters</h2>
-            <div className="confirm-dialog-message">
-              {transcribeExistingCount > 0 && selectedIds.size > 0 ? (
-                <p>
-                  {transcribeExistingCount} of {selectedIds.size} selected letter{selectedIds.size === 1 ? '' : 's'} already
-                  {transcribeExistingCount === 1 ? ' has a' : ' have'} transcript{transcribeExistingCount === 1 ? '' : 's'}.
-                  Would you like to overwrite existing transcripts or skip them?
-                </p>
-              ) : (
-                <p>Transcribe {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'all'} letter{selectedIds.size === 1 ? '' : 's'}?</p>
-              )}
-            </div>
-            <div className="confirm-dialog-actions">
-              <Button variant="secondary" onClick={() => setShowTranscribeConfirm(false)}>Cancel</Button>
-              {transcribeExistingCount > 0 && selectedIds.size > 0 ? (
-                <>
-                  <Button variant="secondary" onClick={() => { setShowTranscribeConfirm(false); handleStartTranscription(true); }}>
-                    Skip Existing ({selectedIds.size - transcribeExistingCount})
-                  </Button>
-                  <Button variant="primary" onClick={() => { setShowTranscribeConfirm(false); handleStartTranscription(false); }}>
-                    Overwrite All ({selectedIds.size})
-                  </Button>
-                </>
-              ) : (
-                <Button variant="primary" onClick={() => { setShowTranscribeConfirm(false); handleStartTranscription(); }}>
-                  Transcribe
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Extract Metadata confirmation — with overwrite/skip when existing metadata found */}
-      {showMetadataConfirm && (
-        <div className="modal-overlay" onClick={() => setShowMetadataConfirm(false)}>
-          <div className="modal-content modal-sm confirm-dialog" onClick={e => e.stopPropagation()}>
-            <h2 className="confirm-dialog-title">Extract Metadata</h2>
-            <div className="confirm-dialog-message">
-              {metadataExistingCount > 0 && selectedIds.size > 0 ? (
-                <p>
-                  {metadataExistingCount} of {selectedIds.size} selected letter{selectedIds.size === 1 ? '' : 's'} already
-                  {metadataExistingCount === 1 ? ' has' : ' have'} metadata.
-                  Would you like to overwrite existing metadata or skip them?
-                </p>
-              ) : (
-                <p>Extract metadata for {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'all'} letter{selectedIds.size === 1 ? '' : 's'}?</p>
-              )}
-            </div>
-            <div className="confirm-dialog-actions">
-              <Button variant="secondary" onClick={() => setShowMetadataConfirm(false)}>Cancel</Button>
-              {metadataExistingCount > 0 && selectedIds.size > 0 ? (
-                <>
-                  <Button variant="secondary" onClick={() => { setShowMetadataConfirm(false); handleStartMetadataExtraction(false, true); }}>
-                    Skip Existing ({selectedIds.size - metadataExistingCount})
-                  </Button>
-                  <Button variant="primary" onClick={() => { setShowMetadataConfirm(false); handleStartMetadataExtraction(); }}>
-                    Overwrite All ({selectedIds.size})
-                  </Button>
-                </>
-              ) : (
-                <Button variant="primary" onClick={() => { setShowMetadataConfirm(false); handleStartMetadataExtraction(); }}>
-                  Extract
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <IdentityExtractionModal
-        isOpen={showSingleMetadataModal}
-        onClose={() => setShowSingleMetadataModal(false)}
-        onConfirm={() => void handleSingleMetadataExtraction()}
-        sender={singleMetadataSender}
-        recipient={singleMetadataRecipient}
-        onSenderChange={setSingleMetadataSender}
-        onRecipientChange={setSingleMetadataRecipient}
-        submitting={singleMetadataSubmitting}
-        mode={singleMetadataMode}
-        letterTitle={singleSelectedLetter?.title}
+      <DashboardDialogs
+        selectedCount={selectedIds.size}
+        deleting={deleting}
+        bulkActionLoading={bulkActionLoading}
+        showDeleteModal={showDeleteModal}
+        showResetModal={showResetModal}
+        showClearMetadataModal={showClearMetadataModal}
+        showUnconfirmedDialog={showUnconfirmedDialog}
+        unconfirmedCount={unconfirmedCount}
+        showTranscribeConfirm={showTranscribeConfirm}
+        transcribeExistingCount={transcribeExistingCount}
+        showMetadataConfirm={showMetadataConfirm}
+        metadataExistingCount={metadataExistingCount}
+        showSingleMetadataModal={showSingleMetadataModal}
+        singleMetadataSender={singleMetadataSender}
+        singleMetadataRecipient={singleMetadataRecipient}
+        singleMetadataSubmitting={singleMetadataSubmitting}
+        singleMetadataMode={singleMetadataMode}
+        singleMetadataLetterTitle={singleSelectedLetter?.title}
+        onConfirmDelete={handleConfirmDelete}
+        onCancelDelete={handleCancelDelete}
+        onConfirmClearTranscriptions={handleConfirmClearTranscriptions}
+        onCancelClearTranscriptions={() => setShowResetModal(false)}
+        onConfirmClearMetadata={handleConfirmClearMetadata}
+        onCancelClearMetadata={() => setShowClearMetadataModal(false)}
+        onConfirmUnverified={handleConfirmUnverified}
+        onCancelUnverified={() => setShowUnconfirmedDialog(false)}
+        onCancelTranscribe={() => setShowTranscribeConfirm(false)}
+        onStartTranscription={(skipExisting) => {
+          setShowTranscribeConfirm(false);
+          void handleStartTranscription(skipExisting);
+        }}
+        onCancelMetadata={() => setShowMetadataConfirm(false)}
+        onStartMetadataExtraction={(skipConfirmation, skipExisting) => {
+          setShowMetadataConfirm(false);
+          void handleStartMetadataExtraction(skipConfirmation, skipExisting);
+        }}
+        onCloseSingleMetadata={() => setShowSingleMetadataModal(false)}
+        onConfirmSingleMetadata={() => void handleSingleMetadataExtraction()}
+        onSingleMetadataSenderChange={setSingleMetadataSender}
+        onSingleMetadataRecipientChange={setSingleMetadataRecipient}
       />
 
 

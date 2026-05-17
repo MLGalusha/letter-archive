@@ -58,6 +58,7 @@ Progress:
 - Floating selection and bulk-action toolbar moved into `AdminDashboard/BulkEditToolbar.tsx`, leaving the page component closer to orchestration.
 - Filter panel markup now uses grouped sections for visibility, content status, date, and collection controls.
 - Active filter chip calculation and rendering split out of `DashboardToolbar.tsx`.
+- Dashboard confirmation and metadata identity dialogs moved into `AdminDashboard/DashboardDialogs.tsx`.
 
 Out of scope:
 

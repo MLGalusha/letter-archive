@@ -63,6 +63,18 @@ export const ALL_COLUMNS: ColumnDef[] = [
   { id: "type_diary", label: "Diary (type)", defaultVisible: false },
 ];
 
+export const FILE_TYPE_COLUMNS: Array<{ id: ColumnId; label: string }> = [
+  { id: "type_letter", label: "Letters" },
+  { id: "type_cover", label: "Covers" },
+  { id: "type_telegram", label: "Telegrams" },
+  { id: "type_photo", label: "Photos" },
+  { id: "type_card", label: "Cards" },
+  { id: "type_ephemera", label: "Ephemera" },
+  { id: "type_voice", label: "Voice" },
+  { id: "type_article", label: "Articles" },
+  { id: "type_diary", label: "Diary" },
+];
+
 export const DEFAULT_VISIBLE_COLUMNS = new Set<ColumnId>(
   ALL_COLUMNS.filter((column) => column.defaultVisible).map((column) => column.id),
 );

@@ -6,17 +6,12 @@ import { getAdminLetters, getFilteredLetterIds } from "../../api/letters";
 import { toggleLetterFlag } from "../../api/admin/letters";
 import {
   confirmTranscript,
-  getProcessingStatus,
   regenerateMetadata,
   startTranscription,
   startMetadataExtraction,
-  pauseProcessing,
-  resumeProcessing,
-  abortProcessing,
   bulkTranscribe,
   bulkExtractMetadata,
   bulkUpdateFields,
-  type ProcessingStatus,
 } from "../../api/admin";
 import { useToast } from "../../contexts/ToastContext";
 import type { ContentStatus, Letter } from "../../types/Letter";
@@ -44,6 +39,7 @@ import {
 import { useDashboardBulkActions } from "./AdminDashboard/useDashboardBulkActions";
 import { useDashboardColumns } from "./AdminDashboard/useDashboardColumns";
 import { useDashboardFilters } from "./AdminDashboard/useDashboardFilters";
+import { useDashboardProcessingControls } from "./AdminDashboard/useDashboardProcessingControls";
 import { useDashboardRowSelection } from "./AdminDashboard/useDashboardRowSelection";
 import { useDashboardSelection } from "./AdminDashboard/useDashboardSelection";
 import { DEFAULT_DASHBOARD_SORT, useDashboardSort } from "./AdminDashboard/useDashboardSort";
@@ -147,10 +143,6 @@ export default function AdminDashboard() {
   const [pendingChanges, setPendingChanges] = useState<Map<string, { sender?: string; recipient?: string }>>(new Map());
   const [isSaving, setIsSaving] = useState(false);
 
-  // Processing state
-  const [processingStatus, setProcessingStatus] = useState<ProcessingStatus | null>(null);
-  const [wasRunning, setWasRunning] = useState(false);
-  const [lastCompletedAt, setLastCompletedAt] = useState<number | null>(null);
   const [showUnconfirmedDialog, setShowUnconfirmedDialog] = useState(false);
   const [unconfirmedCount, setUnconfirmedCount] = useState(0);
   const [pendingMetadataIds, setPendingMetadataIds] = useState<string[]>([]);
@@ -550,6 +542,15 @@ export default function AdminDashboard() {
     fetchLetters,
   });
 
+  const {
+    processingStatus,
+    pausePending,
+    abortPending,
+    handlePauseProcessing,
+    handleResumeProcessing,
+    handleAbortProcessing,
+  } = useDashboardProcessingControls({ fetchLetters });
+
   // Build filter options for processing endpoints
   const buildProcessingFilters = () => ({
     collectionCode: collectionFilter !== "all" ? collectionFilter : undefined,
@@ -760,48 +761,6 @@ export default function AdminDashboard() {
     singleSelectedLetter,
   ]);
 
-
-  const [pausePending, setPausePending] = useState(false);
-  const [abortPending, setAbortPending] = useState(false);
-
-  // Reset pending states when processing status changes
-  useEffect(() => {
-    if (processingStatus?.isPaused) setPausePending(false);
-    if (!processingStatus?.isRunning) { setPausePending(false); setAbortPending(false); }
-  }, [processingStatus?.isPaused, processingStatus?.isRunning]);
-
-  const handlePauseProcessing = async () => {
-    setPausePending(true);
-    try {
-      await pauseProcessing();
-    } catch (err) {
-      setPausePending(false);
-      console.error("Failed to pause processing:", err);
-      showToast(err instanceof Error ? err.message : "Failed to pause processing", 'error');
-    }
-  };
-
-  const handleResumeProcessing = async () => {
-    try {
-      await resumeProcessing();
-      showToast('Processing resumed', 'info');
-    } catch (err) {
-      console.error("Failed to resume processing:", err);
-      showToast(err instanceof Error ? err.message : "Failed to resume processing", 'error');
-    }
-  };
-
-  const handleAbortProcessing = async () => {
-    setAbortPending(true);
-    try {
-      await abortProcessing();
-    } catch (err) {
-      setAbortPending(false);
-      console.error("Failed to abort processing:", err);
-      showToast(err instanceof Error ? err.message : "Failed to abort processing", 'error');
-    }
-  };
-
   const displayToDateRaw = (display: string): string | null => {
     if (!display) return null;
     const parts = display.split('/');
@@ -838,33 +797,6 @@ export default function AdminDashboard() {
       return 'Date';
     }
   };
-
-  // Poll for processing status
-  useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        const status = await getProcessingStatus();
-        setProcessingStatus(status);
-
-        if (status.lastCompletedAt && status.lastCompletedAt !== lastCompletedAt) {
-          setLastCompletedAt(status.lastCompletedAt);
-          fetchLetters();
-        }
-
-        if (!status.isRunning && wasRunning) {
-          fetchLetters();
-        }
-        setWasRunning(status.isRunning);
-      } catch (err) {
-        // Silently ignore polling failures
-        console.debug("Processing status poll failed:", err);
-      }
-    };
-
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 1000);
-    return () => clearInterval(interval);
-  }, [wasRunning, lastCompletedAt, fetchLetters]);
 
   const handleDashboardViewChange = (view: DashboardView) => {
     setDashboardView(view);

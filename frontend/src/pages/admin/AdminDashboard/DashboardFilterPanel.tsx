@@ -55,6 +55,62 @@ interface DashboardFilterPanelProps {
   onClose: () => void;
 }
 
+const VISIBILITY_FILTERS = [
+  {
+    value: "PUBLISHED",
+    label: "Public",
+    countKey: "published",
+    className: "filter-published",
+    title: "Published letters",
+  },
+  {
+    value: "HIDDEN",
+    label: "Hidden",
+    countKey: "hidden",
+    className: "filter-hidden",
+    title: "Hidden letters",
+  },
+] as const;
+
+const CONTENT_STATUS_FILTERS = [
+  {
+    value: "EMPTY",
+    label: "None",
+    countKeys: {
+      transcript: "transcriptEmpty",
+      metadata: "metadataEmpty",
+    },
+    className: "filter-content-none",
+  },
+  {
+    value: "AI_DRAFT",
+    label: "Draft",
+    countKeys: {
+      transcript: "transcriptAiDraft",
+      metadata: "metadataAiDraft",
+    },
+    className: "filter-content-draft",
+  },
+  {
+    value: "EDITED",
+    label: "Edited",
+    countKeys: {
+      transcript: "transcriptEdited",
+      metadata: "metadataEdited",
+    },
+    className: "filter-content-edited",
+  },
+  {
+    value: "VERIFIED",
+    label: "Done",
+    countKeys: {
+      transcript: "transcriptVerified",
+      metadata: "metadataVerified",
+    },
+    className: "filter-content-verified",
+  },
+] as const;
+
 export default function DashboardFilterPanel({
   open,
   stats,
@@ -114,22 +170,22 @@ export default function DashboardFilterPanel({
       <section className="filter-panel-section">
         <span className="filter-panel-label">Visibility</span>
         <div className="filter-button-grid filter-button-grid--visibility">
-          <button
-            type="button"
-            className={`filter-pill filter-published ${visibilityFilter === "PUBLISHED" ? "active" : ""}`}
-            onClick={() => toggleVisibilityFilter("PUBLISHED")}
-            title="Published letters"
-          >
-            {stats.published} Public
-          </button>
-          <button
-            type="button"
-            className={`filter-pill filter-hidden ${visibilityFilter === "HIDDEN" ? "active" : ""}`}
-            onClick={() => toggleVisibilityFilter("HIDDEN")}
-            title="Hidden letters"
-          >
-            {stats.hidden} Hidden
-          </button>
+          {VISIBILITY_FILTERS.map((filter) => {
+            const isActive = visibilityFilter === filter.value;
+            return (
+              <button
+                key={filter.value}
+                type="button"
+                className={`filter-pill ${filter.className} ${isActive ? "active" : ""}`}
+                onClick={() => toggleVisibilityFilter(filter.value)}
+                aria-pressed={isActive}
+                title={filter.title}
+              >
+                <span className="filter-pill-count">{stats[filter.countKey]}</span>
+                <span>{filter.label}</span>
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -157,21 +213,28 @@ export default function DashboardFilterPanel({
           </button>
         </div>
         <div className="filter-button-grid filter-button-grid--content">
-          {contentFilterView === "transcript" ? (
-            <>
-              <button type="button" className={`filter-pill filter-content-none ${transcriptStatusFilters.includes("EMPTY") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("EMPTY")}>{stats.transcriptEmpty} None</button>
-              <button type="button" className={`filter-pill filter-content-draft ${transcriptStatusFilters.includes("AI_DRAFT") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("AI_DRAFT")}>{stats.transcriptAiDraft} Draft</button>
-              <button type="button" className={`filter-pill filter-content-edited ${transcriptStatusFilters.includes("EDITED") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("EDITED")}>{stats.transcriptEdited} Edited</button>
-              <button type="button" className={`filter-pill filter-content-verified ${transcriptStatusFilters.includes("VERIFIED") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("VERIFIED")}>{stats.transcriptVerified} Done</button>
-            </>
-          ) : (
-            <>
-              <button type="button" className={`filter-pill filter-content-none ${metadataStatusFilters.includes("EMPTY") ? "active" : ""}`} onClick={() => toggleMetadataFilter("EMPTY")}>{stats.metadataEmpty} None</button>
-              <button type="button" className={`filter-pill filter-content-draft ${metadataStatusFilters.includes("AI_DRAFT") ? "active" : ""}`} onClick={() => toggleMetadataFilter("AI_DRAFT")}>{stats.metadataAiDraft} Draft</button>
-              <button type="button" className={`filter-pill filter-content-edited ${metadataStatusFilters.includes("EDITED") ? "active" : ""}`} onClick={() => toggleMetadataFilter("EDITED")}>{stats.metadataEdited} Edited</button>
-              <button type="button" className={`filter-pill filter-content-verified ${metadataStatusFilters.includes("VERIFIED") ? "active" : ""}`} onClick={() => toggleMetadataFilter("VERIFIED")}>{stats.metadataVerified} Done</button>
-            </>
-          )}
+          {CONTENT_STATUS_FILTERS.map((filter) => {
+            const selectedFilters = contentFilterView === "transcript"
+              ? transcriptStatusFilters
+              : metadataStatusFilters;
+            const toggleFilter = contentFilterView === "transcript"
+              ? toggleTranscriptFilter
+              : toggleMetadataFilter;
+            const isActive = selectedFilters.includes(filter.value);
+
+            return (
+              <button
+                key={filter.value}
+                type="button"
+                className={`filter-pill ${filter.className} ${isActive ? "active" : ""}`}
+                onClick={() => toggleFilter(filter.value)}
+                aria-pressed={isActive}
+              >
+                <span className="filter-pill-count">{stats[filter.countKeys[contentFilterView]]}</span>
+                <span>{filter.label}</span>
+              </button>
+            );
+          })}
         </div>
       </section>
 

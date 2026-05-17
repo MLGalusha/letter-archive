@@ -1058,6 +1058,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.3rem;
   min-width: 0;
   height: 30px;
   padding: 0 10px;
@@ -1072,6 +1073,10 @@
   color: var(--text-muted);
   border-color: var(--border);
   white-space: nowrap;
+}
+
+.filter-pill-count {
+  font-variant-numeric: tabular-nums;
 }
 
 .filter-pill:hover {
@@ -2090,7 +2095,17 @@
   }
 
   .filter-panel-fields {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+
+  .filter-panel-fields.filter-panel-section {
+    flex-direction: row;
+    align-items: end;
+  }
+
+  .dashboard-filter-panel .collection-input {
+    width: 72px;
   }
 
   .filter-button-grid--visibility,

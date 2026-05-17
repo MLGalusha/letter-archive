@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
 import { getErrorMessage } from "../../api/client";
-import { getAdminLetters, getFilteredLetterIds } from "../../api/letters";
+import { getFilteredLetterIds } from "../../api/letters";
 import { toggleLetterFlag } from "../../api/admin/letters";
 import { useToast } from "../../contexts/ToastContext";
-import type { ContentStatus, Letter } from "../../types/Letter";
+import type { ContentStatus } from "../../types/Letter";
 import AdminLayout from "../../components/AdminLayout";
 import RecentActivityTable from "./AdminDashboard/RecentActivityTable";
 import DashboardToolbar from "./AdminDashboard/DashboardToolbar";
@@ -24,7 +24,6 @@ import {
   buildDashboardLetterQuery,
   formatDateRaw,
   getCombinedTranscriptStatus,
-  isServerSortField,
   savePersistedState,
   StatusIcon,
 } from "./AdminDashboard/utils";
@@ -32,6 +31,7 @@ import { useDashboardBulkActions } from "./AdminDashboard/useDashboardBulkAction
 import { useDashboardColumns } from "./AdminDashboard/useDashboardColumns";
 import { useDashboardCopyPasteEdit } from "./AdminDashboard/useDashboardCopyPasteEdit";
 import { useDashboardFilters } from "./AdminDashboard/useDashboardFilters";
+import { useDashboardLettersData } from "./AdminDashboard/useDashboardLettersData";
 import { useDashboardProcessingActions } from "./AdminDashboard/useDashboardProcessingActions";
 import { useDashboardProcessingControls } from "./AdminDashboard/useDashboardProcessingControls";
 import { useDashboardRowSelection } from "./AdminDashboard/useDashboardRowSelection";
@@ -48,19 +48,6 @@ export default function AdminDashboard() {
   const [dashboardView, setDashboardView] = useState<DashboardView>(
     () => (localStorage.getItem('dashboard-view') as DashboardView) || 'letters',
   );
-  const [letters, setLetters] = useState<Letter[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Server response data (pagination and stats)
-  const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
-  const [stats, setStats] = useState({
-    total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0, flagged: 0,
-    // Two-track content status stats
-    transcriptEmpty: 0, transcriptAiDraft: 0, transcriptEdited: 0, transcriptVerified: 0,
-    metadataEmpty: 0, metadataAiDraft: 0, metadataEdited: 0, metadataVerified: 0,
-  });
 
   const {
     showDateDropdown,
@@ -130,55 +117,29 @@ export default function AdminDashboard() {
     });
   }, [visibilityFilter, collectionFilter, searchQuery, sortColumns, dateMode, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
 
-  const fetchLetters = useCallback(async (showLoading = false, page = pagination.page) => {
-    if (showLoading) setLoading(true);
-    setError(null);
-    try {
-      const response = await getAdminLetters(buildDashboardLetterQuery({
-        page,
-        limit: 50,
-        collectionFilter,
-        visibilityFilter,
-        searchQuery,
-        sortColumns,
-        defaultSort: DEFAULT_DASHBOARD_SORT,
-        yearFilter,
-        monthFilter,
-        dayFilter,
-        dateFromFilter,
-        dateToFilter,
-        transcriptStatusFilters,
-        metadataStatusFilters,
-      }));
-      setLetters(response.letters);
-      setPagination(response.pagination);
-      setStats({
-        total: response.stats.total ?? 0,
-        uploaded: response.stats.uploaded ?? 0,
-        transcribed: response.stats.transcribed ?? 0,
-        metadataReady: response.stats.metadataReady ?? 0,
-        reviewed: response.stats.reviewed ?? 0,
-        published: response.stats.published ?? 0,
-        hidden: response.stats.hidden ?? 0,
-        flagged: response.stats.flagged ?? 0,
-        // Two-track content status stats (nested in API response)
-        transcriptEmpty: response.stats.transcript?.empty ?? 0,
-        transcriptAiDraft: response.stats.transcript?.aiDraft ?? 0,
-        transcriptEdited: response.stats.transcript?.edited ?? 0,
-        transcriptVerified: response.stats.transcript?.verified ?? 0,
-        metadataEmpty: response.stats.metadata?.empty ?? 0,
-        metadataAiDraft: response.stats.metadata?.aiDraft ?? 0,
-        metadataEdited: response.stats.metadata?.edited ?? 0,
-        metadataVerified: response.stats.metadata?.verified ?? 0,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load letters");
-      console.error("Failed to fetch letters:", err);
-    } finally {
-      setLoading(false);
-      setIsInitialLoad(false);
-    }
-  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, pagination.page, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
+  const {
+    letters,
+    setLetters,
+    filteredLetters,
+    loading,
+    isInitialLoad,
+    error,
+    pagination,
+    stats,
+    fetchLetters,
+  } = useDashboardLettersData({
+    collectionFilter,
+    visibilityFilter,
+    searchQuery,
+    sortColumns,
+    yearFilter,
+    monthFilter,
+    dayFilter,
+    dateFromFilter,
+    dateToFilter,
+    transcriptStatusFilters,
+    metadataStatusFilters,
+  });
 
   // Auth check — runs once on mount
   useEffect(() => {
@@ -187,44 +148,6 @@ export default function AdminDashboard() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
-
-  // Apply client-side sorting for computed columns
-  const filteredLetters = useMemo(() => {
-    const clientSortColumns = sortColumns.filter(col => !isServerSortField(col.field));
-
-    if (clientSortColumns.length === 0) {
-      return letters;
-    }
-
-    return [...letters].sort((a, b) => {
-      for (const { field, direction } of clientSortColumns) {
-        let comparison = 0;
-
-        switch (field) {
-          case 'letters':
-            const aLetters = a.lettersCount ?? a.images.filter(img => img.type === 'letter').length;
-            const bLetters = b.lettersCount ?? b.images.filter(img => img.type === 'letter').length;
-            comparison = aLetters - bLetters;
-            break;
-          case 'extras':
-            const aExtras = a.extrasCount ?? a.images.filter(img => img.type !== 'letter').length;
-            const bExtras = b.extrasCount ?? b.images.filter(img => img.type !== 'letter').length;
-            comparison = aExtras - bExtras;
-            break;
-          case 'photos':
-            const aPhotos = a.photosCount ?? a.images.filter(img => img.type === 'photo').length;
-            const bPhotos = b.photosCount ?? b.images.filter(img => img.type === 'photo').length;
-            comparison = aPhotos - bPhotos;
-            break;
-        }
-
-        if (comparison !== 0) {
-          return direction === 'asc' ? comparison : -comparison;
-        }
-      }
-      return 0;
-    });
-  }, [letters, sortColumns]);
 
   const {
     selectedIds,

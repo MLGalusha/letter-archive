@@ -4,8 +4,11 @@ import {
   getCombinedTranscriptStatus,
   isServerSortField,
   loadPersistedState,
+  loadSavedDashboardViews,
   savePersistedState,
+  saveSavedDashboardViews,
 } from "../utils";
+import type { SavedDashboardView } from "../types";
 
 describe("admin dashboard utils", () => {
   beforeEach(() => {
@@ -58,5 +61,46 @@ describe("admin dashboard utils", () => {
     expect(warnSpy).toHaveBeenCalled();
 
     warnSpy.mockRestore();
+  });
+
+  it("persists and restores saved dashboard views", () => {
+    const view: SavedDashboardView = {
+      id: "view-1",
+      name: "Needs transcript",
+      createdAt: "2026-05-17T12:00:00.000Z",
+      state: {
+        visibilityFilter: "ALL" as const,
+        collectionFilter: "all",
+        searchQuery: "",
+        sortColumns: [{ field: "lastOpenedAt" as const, direction: "desc" as const }],
+        dateMode: "specific" as const,
+        year: null,
+        month: null,
+        day: null,
+        dateFrom: null,
+        dateTo: null,
+        transcriptStatusFilters: ["EMPTY"],
+        metadataStatusFilters: [],
+        visibleColumns: ["date", "collection", "visibility", "lastOpened"],
+      },
+    };
+
+    saveSavedDashboardViews([view]);
+    expect(loadSavedDashboardViews()).toEqual([view]);
+  });
+
+  it("ignores malformed saved dashboard views", () => {
+    localStorage.setItem("adminDashboardSavedViews", JSON.stringify([
+      { id: "missing-state", name: "Bad", createdAt: "2026-05-17T12:00:00.000Z" },
+      {
+        id: "valid",
+        name: "Valid",
+        createdAt: "2026-05-17T12:00:00.000Z",
+        state: { visibleColumns: [] },
+      },
+    ]));
+
+    expect(loadSavedDashboardViews()).toHaveLength(1);
+    expect(loadSavedDashboardViews()[0]?.id).toBe("valid");
   });
 });

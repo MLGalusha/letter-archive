@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
+  buildDashboardLetterQuery,
   formatDateRaw,
   getCombinedTranscriptStatus,
   isServerSortField,
@@ -8,6 +9,7 @@ import {
   savePersistedState,
   saveSavedDashboardViews,
 } from "../utils";
+import { DEFAULT_DASHBOARD_SORT } from "../constants";
 import type { SavedDashboardView } from "../types";
 
 describe("admin dashboard utils", () => {
@@ -31,6 +33,35 @@ describe("admin dashboard utils", () => {
     expect(formatDateRaw("18860314")).toBe("03/14/1886");
     expect(formatDateRaw(undefined)).toBe("—");
     expect(formatDateRaw("188603")).toBe("—");
+  });
+
+  it("builds API query params from dashboard filters", () => {
+    expect(buildDashboardLetterQuery({
+      collectionFilter: "003",
+      visibilityFilter: "PUBLISHED",
+      searchQuery: "molly",
+      sortColumns: [
+        { field: "letters", direction: "asc" },
+        { field: "createdAt", direction: "desc" },
+      ],
+      defaultSort: DEFAULT_DASHBOARD_SORT,
+      yearFilter: 1886,
+      monthFilter: null,
+      dayFilter: null,
+      dateFromFilter: null,
+      dateToFilter: "18861231",
+      transcriptStatusFilters: ["EMPTY", "AI_DRAFT"],
+      metadataStatusFilters: [],
+    })).toMatchObject({
+      collection: "003",
+      visibility: "PUBLISHED",
+      search: "molly",
+      sort: "createdAt",
+      sortOrder: "desc",
+      year: 1886,
+      dateTo: "18861231",
+      transcriptStatus: "EMPTY,AI_DRAFT",
+    });
   });
 
   it("persists and restores dashboard state", () => {

@@ -1,4 +1,4 @@
-import type { ColumnDef, ColumnId } from "./types";
+import type { ColumnDef, ColumnId, SortColumn } from "./types";
 
 export const YEAR_OPTIONS = Array.from({ length: 151 }, (_, i) => 1800 + i);
 
@@ -31,6 +31,11 @@ export const SERVER_SORT_FIELDS = [
   "collection",
   "flagged",
 ] as const;
+
+export const DEFAULT_DASHBOARD_SORT: SortColumn = {
+  field: "lastOpenedAt",
+  direction: "desc",
+};
 
 export const ALL_COLUMNS: ColumnDef[] = [
   { id: "sender", label: "Sender", defaultVisible: true },

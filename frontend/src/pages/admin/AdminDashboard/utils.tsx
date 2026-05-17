@@ -1,16 +1,75 @@
 import type { ContentStatus } from "../../../types/Letter";
+import type { AdminLetterQueryParams } from "../../../api/letters";
 import { SAVED_VIEWS_STORAGE_KEY, SERVER_SORT_FIELDS, STORAGE_KEY } from "./constants";
 import type {
   ExtendedSortField,
   PersistedState,
   SavedDashboardView,
   ServerSortField,
+  SortColumn,
+  VisibilityFilter,
 } from "./types";
 
 export function isServerSortField(
   field: ExtendedSortField,
 ): field is ServerSortField {
   return (SERVER_SORT_FIELDS as readonly string[]).includes(field);
+}
+
+interface DashboardLetterQueryOptions {
+  page?: number;
+  limit?: number;
+  collectionFilter: string;
+  visibilityFilter: VisibilityFilter;
+  searchQuery: string;
+  sortColumns: SortColumn[];
+  defaultSort: SortColumn;
+  yearFilter: number | null;
+  monthFilter: number | null;
+  dayFilter: number | null;
+  dateFromFilter: string | null;
+  dateToFilter: string | null;
+  transcriptStatusFilters: ContentStatus[];
+  metadataStatusFilters: ContentStatus[];
+}
+
+export function buildDashboardLetterQuery({
+  page,
+  limit,
+  collectionFilter,
+  visibilityFilter,
+  searchQuery,
+  sortColumns,
+  defaultSort,
+  yearFilter,
+  monthFilter,
+  dayFilter,
+  dateFromFilter,
+  dateToFilter,
+  transcriptStatusFilters,
+  metadataStatusFilters,
+}: DashboardLetterQueryOptions): AdminLetterQueryParams {
+  const serverSort = [...sortColumns]
+    .reverse()
+    .find((col): col is SortColumn & { field: ServerSortField } => isServerSortField(col.field));
+  const fallbackSortField = isServerSortField(defaultSort.field) ? defaultSort.field : undefined;
+
+  return {
+    page,
+    limit,
+    collection: collectionFilter === "all" ? undefined : collectionFilter,
+    visibility: visibilityFilter !== "ALL" ? visibilityFilter : undefined,
+    search: searchQuery || undefined,
+    sort: serverSort ? serverSort.field : fallbackSortField,
+    sortOrder: serverSort ? serverSort.direction : fallbackSortField ? defaultSort.direction : undefined,
+    year: yearFilter ?? undefined,
+    month: monthFilter ?? undefined,
+    day: dayFilter ?? undefined,
+    dateFrom: dateFromFilter ?? undefined,
+    dateTo: dateToFilter ?? undefined,
+    transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(",") : undefined,
+    metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(",") : undefined,
+  };
 }
 
 // Combine transcript + extra content status into a single status.

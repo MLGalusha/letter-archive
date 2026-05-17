@@ -13,14 +13,15 @@ import BulkEditToolbar from "./AdminDashboard/BulkEditToolbar";
 import DashboardDialogs from "./AdminDashboard/DashboardDialogs";
 import {
   ALL_COLUMNS,
+  DEFAULT_DASHBOARD_SORT,
   MONTH_OPTIONS,
 } from "./AdminDashboard/constants";
 import type {
   DashboardViewState,
   DashboardView,
-  ServerSortField,
 } from "./AdminDashboard/types";
 import {
+  buildDashboardLetterQuery,
   formatDateRaw,
   getCombinedTranscriptStatus,
   isServerSortField,
@@ -35,7 +36,7 @@ import { useDashboardProcessingActions } from "./AdminDashboard/useDashboardProc
 import { useDashboardProcessingControls } from "./AdminDashboard/useDashboardProcessingControls";
 import { useDashboardRowSelection } from "./AdminDashboard/useDashboardRowSelection";
 import { useDashboardSelection } from "./AdminDashboard/useDashboardSelection";
-import { DEFAULT_DASHBOARD_SORT, useDashboardSort } from "./AdminDashboard/useDashboardSort";
+import { useDashboardSort } from "./AdminDashboard/useDashboardSort";
 import { useSavedDashboardViews } from "./AdminDashboard/useSavedDashboardViews";
 import CollectionsDashboard from "./AdminCollectionsListPage";
 import "./AdminDashboard.css";
@@ -133,31 +134,22 @@ export default function AdminDashboard() {
     if (showLoading) setLoading(true);
     setError(null);
     try {
-      // Find the last server-sortable column (most recently added; skip client-side computed columns)
-      const serverSort = [...sortColumns].reverse().find(col => isServerSortField(col.field));
-
-      // Visibility: convert filter type to API param (ALL means no filter)
-      const visibilityParam = visibilityFilter !== 'ALL' ? visibilityFilter : undefined;
-
-      // Server-side filtering and pagination
-      const response = await getAdminLetters({
+      const response = await getAdminLetters(buildDashboardLetterQuery({
         page,
         limit: 50,
-        collection: collectionFilter === "all" ? undefined : collectionFilter,
-        visibility: visibilityParam,
-        search: searchQuery || undefined,
-        sort: serverSort ? (serverSort.field as ServerSortField) : DEFAULT_DASHBOARD_SORT.field as ServerSortField,
-        sortOrder: serverSort ? serverSort.direction : DEFAULT_DASHBOARD_SORT.direction,
-        // Date filters
-        year: yearFilter ?? undefined,
-        month: monthFilter ?? undefined,
-        day: dayFilter ?? undefined,
-        dateFrom: dateFromFilter ?? undefined,
-        dateTo: dateToFilter ?? undefined,
-        // Content status filters (join arrays to comma-separated strings)
-        transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(',') : undefined,
-        metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(',') : undefined,
-      });
+        collectionFilter,
+        visibilityFilter,
+        searchQuery,
+        sortColumns,
+        defaultSort: DEFAULT_DASHBOARD_SORT,
+        yearFilter,
+        monthFilter,
+        dayFilter,
+        dateFromFilter,
+        dateToFilter,
+        transcriptStatusFilters,
+        metadataStatusFilters,
+      }));
       setLetters(response.letters);
       setPagination(response.pagination);
       setStats({
@@ -287,22 +279,20 @@ export default function AdminDashboard() {
     fetchLetters(true, 1);
 
     if (selectedIds.size > 0) {
-      const visibilityParam = visibilityFilter !== 'ALL' ? visibilityFilter : undefined;
-      const serverSort = [...sortColumns].reverse().find(col => isServerSortField(col.field));
-      getFilteredLetterIds({
-        collection: collectionFilter === "all" ? undefined : collectionFilter,
-        visibility: visibilityParam,
-        search: searchQuery || undefined,
-        sort: serverSort ? (serverSort.field as ServerSortField) : DEFAULT_DASHBOARD_SORT.field as ServerSortField,
-        sortOrder: serverSort ? serverSort.direction : DEFAULT_DASHBOARD_SORT.direction,
-        year: yearFilter ?? undefined,
-        month: monthFilter ?? undefined,
-        day: dayFilter ?? undefined,
-        dateFrom: dateFromFilter ?? undefined,
-        dateTo: dateToFilter ?? undefined,
-        transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(',') : undefined,
-        metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(',') : undefined,
-      }).then(validIds => {
+      getFilteredLetterIds(buildDashboardLetterQuery({
+        collectionFilter,
+        visibilityFilter,
+        searchQuery,
+        sortColumns,
+        defaultSort: DEFAULT_DASHBOARD_SORT,
+        yearFilter,
+        monthFilter,
+        dayFilter,
+        dateFromFilter,
+        dateToFilter,
+        transcriptStatusFilters,
+        metadataStatusFilters,
+      })).then(validIds => {
         const validSet = new Set(validIds);
         setSelectedIds(prev => {
           const pruned = new Set([...prev].filter(id => validSet.has(id)));
@@ -366,22 +356,20 @@ export default function AdminDashboard() {
 
   const handleSelectAllFiltered = async () => {
     try {
-      const visibilityParam = visibilityFilter !== 'ALL' ? visibilityFilter : undefined;
-      const serverSort = sortColumns.find(col => isServerSortField(col.field));
-      const allIds = await getFilteredLetterIds({
-        collection: collectionFilter === "all" ? undefined : collectionFilter,
-        visibility: visibilityParam,
-        search: searchQuery || undefined,
-        sort: serverSort ? (serverSort.field as ServerSortField) : DEFAULT_DASHBOARD_SORT.field as ServerSortField,
-        sortOrder: serverSort ? serverSort.direction : DEFAULT_DASHBOARD_SORT.direction,
-        year: yearFilter ?? undefined,
-        month: monthFilter ?? undefined,
-        day: dayFilter ?? undefined,
-        dateFrom: dateFromFilter ?? undefined,
-        dateTo: dateToFilter ?? undefined,
-        transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(',') : undefined,
-        metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(',') : undefined,
-      });
+      const allIds = await getFilteredLetterIds(buildDashboardLetterQuery({
+        collectionFilter,
+        visibilityFilter,
+        searchQuery,
+        sortColumns,
+        defaultSort: DEFAULT_DASHBOARD_SORT,
+        yearFilter,
+        monthFilter,
+        dayFilter,
+        dateFromFilter,
+        dateToFilter,
+        transcriptStatusFilters,
+        metadataStatusFilters,
+      }));
       selectAllFiltered(allIds);
     } catch (err) {
       console.error('Failed to select all filtered:', err);

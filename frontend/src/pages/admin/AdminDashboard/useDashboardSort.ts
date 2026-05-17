@@ -1,11 +1,7 @@
 import { useCallback, useState } from 'react';
+import { DEFAULT_DASHBOARD_SORT } from './constants';
 import type { ExtendedSortField, SortColumn } from './types';
 import { isServerSortField } from './utils';
-
-export const DEFAULT_DASHBOARD_SORT: SortColumn = {
-  field: 'lastOpenedAt',
-  direction: 'desc',
-};
 
 export function useDashboardSort(initialSortColumns: SortColumn[] = []) {
   const [sortColumns, setSortColumns] = useState<SortColumn[]>(

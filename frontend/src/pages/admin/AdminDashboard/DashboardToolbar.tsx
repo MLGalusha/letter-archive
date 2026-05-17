@@ -17,7 +17,7 @@ import type {
 } from "./types";
 import { isServerSortField } from "./utils";
 import { useDashboardActiveFilters } from "./useDashboardActiveFilters";
-import { DEFAULT_DASHBOARD_SORT } from "./useDashboardSort";
+import { DEFAULT_DASHBOARD_SORT } from "./constants";
 
 interface DashboardToolbarStats {
   published: number;

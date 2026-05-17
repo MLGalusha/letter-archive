@@ -64,6 +64,7 @@ Progress:
 - Processing status polling and pause/resume/abort controls moved into `useDashboardProcessingControls`.
 - Transcription and metadata start flows, including confirmation modal state, moved into `useDashboardProcessingActions`.
 - Copy/paste edit-mode state, pending field updates, and edit-mode row click behavior moved into `useDashboardCopyPasteEdit`.
+- Dashboard filter/sort query construction centralized in `buildDashboardLetterQuery` so fetch, select-all, and selection-pruning use the same API parameters.
 
 Out of scope:
 

@@ -1,5 +1,6 @@
 import IdentityExtractionModal from "../../../components/admin/IdentityExtractionModal";
-import { Button, ConfirmDialog } from "../../../components/common";
+import { ConfirmDialog } from "../../../components/common";
+import ProcessingConfirmDialog from "./ProcessingConfirmDialog";
 
 type SingleMetadataMode = "extract" | "regenerate";
 
@@ -119,75 +120,39 @@ export default function DashboardDialogs({
       />
 
       {showTranscribeConfirm && (
-        <div className="modal-overlay" onClick={onCancelTranscribe}>
-          <div className="modal-content modal-sm confirm-dialog" onClick={(event) => event.stopPropagation()}>
-            <h2 className="confirm-dialog-title">Transcribe Letters</h2>
-            <div className="confirm-dialog-message">
-              {transcribeExistingCount > 0 && selectedCount > 0 ? (
-                <p>
-                  {transcribeExistingCount} of {selectedCount} selected letter{selectedCount === 1 ? "" : "s"} already
-                  {transcribeExistingCount === 1 ? " has a" : " have"} transcript{transcribeExistingCount === 1 ? "" : "s"}.
-                  Would you like to overwrite existing transcripts or skip them?
-                </p>
-              ) : (
-                <p>Transcribe {selectedCount > 0 ? `${selectedCount} selected` : "all"} letter{selectedCount === 1 ? "" : "s"}?</p>
-              )}
-            </div>
-            <div className="confirm-dialog-actions">
-              <Button variant="secondary" onClick={onCancelTranscribe}>Cancel</Button>
-              {transcribeExistingCount > 0 && selectedCount > 0 ? (
-                <>
-                  <Button variant="secondary" onClick={() => onStartTranscription(true)}>
-                    Skip Existing ({selectedCount - transcribeExistingCount})
-                  </Button>
-                  <Button variant="primary" onClick={() => onStartTranscription(false)}>
-                    Overwrite All ({selectedCount})
-                  </Button>
-                </>
-              ) : (
-                <Button variant="primary" onClick={() => onStartTranscription()}>
-                  Transcribe
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
+        <ProcessingConfirmDialog
+          title="Transcribe Letters"
+          selectedCount={selectedCount}
+          existingCount={transcribeExistingCount}
+          existingSingularText="a transcript"
+          existingPluralText="transcripts"
+          emptyActionText="Transcribe"
+          confirmText="Transcribe"
+          skipActionText="Skip Existing"
+          overwriteActionText="Overwrite All"
+          onCancel={onCancelTranscribe}
+          onConfirm={() => onStartTranscription()}
+          onSkipExisting={() => onStartTranscription(true)}
+          onOverwriteAll={() => onStartTranscription(false)}
+        />
       )}
 
       {showMetadataConfirm && (
-        <div className="modal-overlay" onClick={onCancelMetadata}>
-          <div className="modal-content modal-sm confirm-dialog" onClick={(event) => event.stopPropagation()}>
-            <h2 className="confirm-dialog-title">Extract Metadata</h2>
-            <div className="confirm-dialog-message">
-              {metadataExistingCount > 0 && selectedCount > 0 ? (
-                <p>
-                  {metadataExistingCount} of {selectedCount} selected letter{selectedCount === 1 ? "" : "s"} already
-                  {metadataExistingCount === 1 ? " has" : " have"} metadata.
-                  Would you like to overwrite existing metadata or skip them?
-                </p>
-              ) : (
-                <p>Extract metadata for {selectedCount > 0 ? `${selectedCount} selected` : "all"} letter{selectedCount === 1 ? "" : "s"}?</p>
-              )}
-            </div>
-            <div className="confirm-dialog-actions">
-              <Button variant="secondary" onClick={onCancelMetadata}>Cancel</Button>
-              {metadataExistingCount > 0 && selectedCount > 0 ? (
-                <>
-                  <Button variant="secondary" onClick={() => onStartMetadataExtraction(false, true)}>
-                    Skip Existing ({selectedCount - metadataExistingCount})
-                  </Button>
-                  <Button variant="primary" onClick={() => onStartMetadataExtraction()}>
-                    Overwrite All ({selectedCount})
-                  </Button>
-                </>
-              ) : (
-                <Button variant="primary" onClick={() => onStartMetadataExtraction()}>
-                  Extract
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
+        <ProcessingConfirmDialog
+          title="Extract Metadata"
+          selectedCount={selectedCount}
+          existingCount={metadataExistingCount}
+          existingSingularText="metadata"
+          existingPluralText="metadata"
+          emptyActionText="Extract metadata for"
+          confirmText="Extract"
+          skipActionText="Skip Existing"
+          overwriteActionText="Overwrite All"
+          onCancel={onCancelMetadata}
+          onConfirm={() => onStartMetadataExtraction()}
+          onSkipExisting={() => onStartMetadataExtraction(false, true)}
+          onOverwriteAll={() => onStartMetadataExtraction()}
+        />
       )}
 
       <IdentityExtractionModal

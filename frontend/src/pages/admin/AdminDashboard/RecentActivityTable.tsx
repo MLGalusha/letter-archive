@@ -1,11 +1,12 @@
 import type React from "react";
 import type { RefObject } from "react";
-import { Icon } from "../../../components/common/Icon";
 import type { Letter, ContentStatus } from "../../../types/Letter";
+import ColumnToggleHeader from "./ColumnToggleHeader";
 import { FILE_TYPE_COLUMNS } from "./constants";
+import DashboardPagination from "./DashboardPagination";
 import RecentActivityRow from "./RecentActivityRow";
 import SortableTableHeader from "./SortableTableHeader";
-import type { ColumnId, ExtendedSortField, PendingChange, SortInfo } from "./types";
+import type { ColumnDef, ColumnId, ExtendedSortField, PendingChange, SortInfo } from "./types";
 
 interface PaginationState {
   page: number;
@@ -46,7 +47,7 @@ interface RecentActivityTableProps {
   onPageChange: (page: number) => void;
   letterCountText?: string;
   // Column toggle
-  allColumns: Array<{ id: ColumnId; label: string }>;
+  allColumns: ColumnDef[];
   showColumnMenu: boolean;
   onToggleColumnMenu: () => void;
   onToggleColumn: (id: ColumnId) => void;
@@ -95,29 +96,14 @@ export default function RecentActivityTable({
         <table className="letters-table">
           <thead>
             <tr>
-              <th className="checkbox-header" ref={columnMenuRef}>
-                <button
-                  className={`column-toggle-btn ${showColumnMenu ? 'active' : ''}`}
-                  onClick={onToggleColumnMenu}
-                  title="Toggle columns"
-                >
-                  <Icon name="columns" size={14} />
-                </button>
-                {showColumnMenu && (
-                  <div className="column-toggle-dropdown column-toggle-left">
-                    {allColumns.map(col => (
-                      <label key={col.id} className="column-toggle-item">
-                        <input
-                          type="checkbox"
-                          checked={visibleColumns.has(col.id)}
-                          onChange={() => onToggleColumn(col.id)}
-                        />
-                        {col.label}
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </th>
+              <ColumnToggleHeader
+                allColumns={allColumns}
+                visibleColumns={visibleColumns}
+                showColumnMenu={showColumnMenu}
+                onToggleColumnMenu={onToggleColumnMenu}
+                onToggleColumn={onToggleColumn}
+                columnMenuRef={columnMenuRef}
+              />
               {visibleColumns.has("sender") && (
                 <SortableTableHeader
                   field="sender"
@@ -265,34 +251,12 @@ export default function RecentActivityTable({
         </table>
       </div>
 
-      <div className="pagination-controls">
-        {pagination.totalPages > 1 ? (
-          <>
-            <button
-              className="pagination-btn"
-              onClick={() => onPageChange(pagination.page - 1)}
-              disabled={pagination.page <= 1 || loading}
-            >
-              ← Previous
-            </button>
-            <span className="pagination-info">
-              Page {pagination.page} of {pagination.totalPages}
-            </span>
-            <button
-              className="pagination-btn"
-              onClick={() => onPageChange(pagination.page + 1)}
-              disabled={pagination.page >= pagination.totalPages || loading}
-            >
-              Next →
-            </button>
-          </>
-        ) : (
-          <span className="pagination-info" />
-        )}
-        {letterCountText && (
-          <span className="letter-count">{letterCountText}</span>
-        )}
-      </div>
+      <DashboardPagination
+        pagination={pagination}
+        loading={loading}
+        onPageChange={onPageChange}
+        letterCountText={letterCountText}
+      />
     </>
   );
 }

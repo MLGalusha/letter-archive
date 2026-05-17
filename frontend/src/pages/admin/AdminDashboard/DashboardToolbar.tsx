@@ -15,6 +15,7 @@ import type {
   VisibilityFilter,
 } from "./types";
 import { isServerSortField } from "./utils";
+import { DEFAULT_DASHBOARD_SORT } from "./useDashboardSort";
 
 interface DashboardToolbarStats {
   published: number;
@@ -162,7 +163,7 @@ export default function DashboardToolbar({
 
   const primarySortValue = useMemo(() => {
     const serverSort = [...sortColumns].reverse().find(col => isServerSortField(col.field));
-    if (!serverSort) return "createdAt:desc";
+    if (!serverSort) return `${DEFAULT_DASHBOARD_SORT.field}:${DEFAULT_DASHBOARD_SORT.direction}`;
     return `${serverSort.field}:${serverSort.direction}`;
   }, [sortColumns]);
 

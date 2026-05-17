@@ -54,6 +54,7 @@ Progress:
 - Saved views now persist filters, sort, and visible columns locally.
 - Saved-view menu and filter panel are split into focused toolbar subcomponents.
 - Saved-view persistence and save/apply/delete behavior moved into a dedicated hook.
+- Last opened is now the real default letters sort, not just a toolbar option.
 
 Out of scope:
 

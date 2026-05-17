@@ -51,7 +51,7 @@ import {
 import { useDashboardColumns } from "./AdminDashboard/useDashboardColumns";
 import { useDashboardFilters } from "./AdminDashboard/useDashboardFilters";
 import { useDashboardSelection } from "./AdminDashboard/useDashboardSelection";
-import { useDashboardSort } from "./AdminDashboard/useDashboardSort";
+import { DEFAULT_DASHBOARD_SORT, useDashboardSort } from "./AdminDashboard/useDashboardSort";
 import { useSavedDashboardViews } from "./AdminDashboard/useSavedDashboardViews";
 import CollectionsDashboard from "./AdminCollectionsListPage";
 import "./AdminDashboard.css";
@@ -203,8 +203,8 @@ export default function AdminDashboard() {
         collection: collectionFilter === "all" ? undefined : collectionFilter,
         visibility: visibilityParam,
         search: searchQuery || undefined,
-        sort: serverSort ? (serverSort.field as ServerSortField) : 'createdAt',
-        sortOrder: serverSort ? serverSort.direction : 'desc',
+        sort: serverSort ? (serverSort.field as ServerSortField) : DEFAULT_DASHBOARD_SORT.field as ServerSortField,
+        sortOrder: serverSort ? serverSort.direction : DEFAULT_DASHBOARD_SORT.direction,
         // Date filters
         year: yearFilter ?? undefined,
         month: monthFilter ?? undefined,
@@ -267,8 +267,8 @@ export default function AdminDashboard() {
         collection: collectionFilter === "all" ? undefined : collectionFilter,
         visibility: visibilityParam,
         search: searchQuery || undefined,
-        sort: serverSort ? (serverSort.field as ServerSortField) : 'createdAt',
-        sortOrder: serverSort ? serverSort.direction : 'desc',
+        sort: serverSort ? (serverSort.field as ServerSortField) : DEFAULT_DASHBOARD_SORT.field as ServerSortField,
+        sortOrder: serverSort ? serverSort.direction : DEFAULT_DASHBOARD_SORT.direction,
         year: yearFilter ?? undefined,
         month: monthFilter ?? undefined,
         day: dayFilter ?? undefined,
@@ -533,8 +533,8 @@ export default function AdminDashboard() {
         collection: collectionFilter === "all" ? undefined : collectionFilter,
         visibility: visibilityParam,
         search: searchQuery || undefined,
-        sort: serverSort ? (serverSort.field as ServerSortField) : 'createdAt',
-        sortOrder: serverSort ? serverSort.direction : 'desc',
+        sort: serverSort ? (serverSort.field as ServerSortField) : DEFAULT_DASHBOARD_SORT.field as ServerSortField,
+        sortOrder: serverSort ? serverSort.direction : DEFAULT_DASHBOARD_SORT.direction,
         year: yearFilter ?? undefined,
         month: monthFilter ?? undefined,
         day: dayFilter ?? undefined,

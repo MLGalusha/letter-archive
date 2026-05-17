@@ -59,6 +59,8 @@ The mobile filter panel is intentionally not a second navigation system. It edit
 
 Saved views are local dashboard presets for now. They save filters, sort, and visible columns without changing backend/API behavior. If they become multi-user or cross-device later, promote the same shape to an API-backed model.
 
+Default letters sort is Last opened descending. This keeps recent activity discoverable through sorting instead of a separate Recent edits button.
+
 ## Letters vs Collections
 
 The current dashboard has a letters/collections toggle. The redesign should not hide this on mobile only. If the toggle remains, desktop needs an equivalent visible control.

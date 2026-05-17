@@ -60,14 +60,6 @@ export default function DashboardToolbar({
   selectedCount,
 }: DashboardToolbarProps) {
   const {
-    showDateDropdown,
-    setShowDateDropdown,
-    dateMode,
-    setDateMode,
-    dateDropdownRef,
-    contentFilterView,
-    setContentFilterView,
-    collectionInput,
     handleCollectionInputChange,
     visibilityFilter,
     toggleVisibilityFilter,
@@ -77,15 +69,10 @@ export default function DashboardToolbar({
     toggleMetadataFilter,
     collectionFilter,
     yearFilter,
-    setYearFilter,
     monthFilter,
-    setMonthFilter,
     dayFilter,
-    setDayFilter,
     dateFromFilter,
-    setDateFromFilter,
     dateToFilter,
-    setDateToFilter,
     searchInput,
     setSearchInput,
     searchQuery,
@@ -176,34 +163,7 @@ export default function DashboardToolbar({
           <DashboardFilterPanel
             open={mobileFiltersOpen}
             stats={stats}
-            collectionInput={collectionInput}
-            handleCollectionInputChange={handleCollectionInputChange}
-            visibilityFilter={visibilityFilter}
-            toggleVisibilityFilter={toggleVisibilityFilter}
-            contentFilterView={contentFilterView}
-            setContentFilterView={setContentFilterView}
-            transcriptStatusFilters={transcriptStatusFilters}
-            toggleTranscriptFilter={toggleTranscriptFilter}
-            metadataStatusFilters={metadataStatusFilters}
-            toggleMetadataFilter={toggleMetadataFilter}
-            showDateDropdown={showDateDropdown}
-            setShowDateDropdown={setShowDateDropdown}
-            dateDropdownRef={dateDropdownRef}
-            dateMode={dateMode}
-            setDateMode={setDateMode}
-            hasDateFilter={hasDateFilter}
-            yearFilter={yearFilter}
-            setYearFilter={setYearFilter}
-            monthFilter={monthFilter}
-            setMonthFilter={setMonthFilter}
-            dayFilter={dayFilter}
-            setDayFilter={setDayFilter}
-            dateFromFilter={dateFromFilter}
-            setDateFromFilter={setDateFromFilter}
-            dateToFilter={dateToFilter}
-            setDateToFilter={setDateToFilter}
-            clearDateFilters={clearDateFilters}
-            clearAllFilters={handleClearAllFilters}
+            filters={filters}
             getDateButtonText={getDateButtonText}
             dateRawToDisplay={dateRawToDisplay}
             displayToDateRaw={displayToDateRaw}

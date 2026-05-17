@@ -1,42 +1,16 @@
-import type { RefObject } from "react";
 import Icon from "../../../components/common/Icon";
-import type { ContentStatus } from "../../../types/Letter";
 import ContentStatusFilterSection from "./ContentStatusFilterSection";
 import DashboardDateFilterControl from "./DashboardDateFilterControl";
 import VisibilityFilterSection from "./VisibilityFilterSection";
-import type { ContentFilterView, DashboardFilterStats, DateMode, VisibilityFilter } from "./types";
+import type { DashboardFilterStats } from "./types";
+import type { useDashboardFilters } from "./useDashboardFilters";
+
+type DashboardFilterControls = ReturnType<typeof useDashboardFilters>;
 
 interface DashboardFilterPanelProps {
   open: boolean;
   stats: DashboardFilterStats;
-  collectionInput: string;
-  handleCollectionInputChange: (value: string) => void;
-  visibilityFilter: VisibilityFilter;
-  toggleVisibilityFilter: (value: "PUBLISHED" | "HIDDEN") => void;
-  contentFilterView: ContentFilterView;
-  setContentFilterView: (value: ContentFilterView) => void;
-  transcriptStatusFilters: ContentStatus[];
-  toggleTranscriptFilter: (value: ContentStatus) => void;
-  metadataStatusFilters: ContentStatus[];
-  toggleMetadataFilter: (value: ContentStatus) => void;
-  showDateDropdown: boolean;
-  setShowDateDropdown: (value: boolean) => void;
-  dateDropdownRef: RefObject<HTMLDivElement | null>;
-  dateMode: DateMode;
-  setDateMode: (value: DateMode) => void;
-  hasDateFilter: boolean;
-  yearFilter: number | null;
-  setYearFilter: (value: number | null) => void;
-  monthFilter: number | null;
-  setMonthFilter: (value: number | null) => void;
-  dayFilter: number | null;
-  setDayFilter: (value: number | null) => void;
-  dateFromFilter: string | null;
-  setDateFromFilter: (value: string | null) => void;
-  dateToFilter: string | null;
-  setDateToFilter: (value: string | null) => void;
-  clearDateFilters: () => void;
-  clearAllFilters: () => void;
+  filters: DashboardFilterControls;
   getDateButtonText: () => string;
   dateRawToDisplay: (dateRaw: string | null) => string;
   displayToDateRaw: (display: string) => string | null;
@@ -47,40 +21,44 @@ interface DashboardFilterPanelProps {
 export default function DashboardFilterPanel({
   open,
   stats,
-  collectionInput,
-  handleCollectionInputChange,
-  visibilityFilter,
-  toggleVisibilityFilter,
-  contentFilterView,
-  setContentFilterView,
-  transcriptStatusFilters,
-  toggleTranscriptFilter,
-  metadataStatusFilters,
-  toggleMetadataFilter,
-  showDateDropdown,
-  setShowDateDropdown,
-  dateDropdownRef,
-  dateMode,
-  setDateMode,
-  hasDateFilter,
-  yearFilter,
-  setYearFilter,
-  monthFilter,
-  setMonthFilter,
-  dayFilter,
-  setDayFilter,
-  dateFromFilter,
-  setDateFromFilter,
-  dateToFilter,
-  setDateToFilter,
-  clearDateFilters,
-  clearAllFilters,
+  filters,
   getDateButtonText,
   dateRawToDisplay,
   displayToDateRaw,
   activeFilterCount,
   onClose,
 }: DashboardFilterPanelProps) {
+  const {
+    collectionInput,
+    handleCollectionInputChange,
+    visibilityFilter,
+    toggleVisibilityFilter,
+    contentFilterView,
+    setContentFilterView,
+    transcriptStatusFilters,
+    toggleTranscriptFilter,
+    metadataStatusFilters,
+    toggleMetadataFilter,
+    showDateDropdown,
+    setShowDateDropdown,
+    dateDropdownRef,
+    dateMode,
+    setDateMode,
+    hasDateFilter,
+    yearFilter,
+    setYearFilter,
+    monthFilter,
+    setMonthFilter,
+    dayFilter,
+    setDayFilter,
+    dateFromFilter,
+    setDateFromFilter,
+    dateToFilter,
+    setDateToFilter,
+    clearDateFilters,
+    handleClearAllFilters,
+  } = filters;
+
   return (
     <div className={`dashboard-filter-panel ${open ? "open" : ""}`}>
       <div className="filter-panel-header">
@@ -90,7 +68,7 @@ export default function DashboardFilterPanel({
         </div>
         <div className="filter-panel-header-actions">
           {activeFilterCount > 0 && (
-            <button type="button" className="filter-panel-clear" onClick={clearAllFilters}>
+            <button type="button" className="filter-panel-clear" onClick={handleClearAllFilters}>
               Clear
             </button>
           )}

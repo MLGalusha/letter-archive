@@ -52,6 +52,7 @@ Progress:
 - Mobile filter editing is now collapsed behind a Filters button; desktop keeps the filter panel visible.
 - Dashboard toolbar render/state glue extracted into `AdminDashboard/DashboardToolbar.tsx` so `AdminDashboard.tsx` can stay closer to page orchestration.
 - Saved views now persist filters, sort, and visible columns locally.
+- Saved-view menu and filter panel are split into focused toolbar subcomponents.
 
 Out of scope:
 

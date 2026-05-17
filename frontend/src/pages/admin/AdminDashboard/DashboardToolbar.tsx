@@ -1,9 +1,10 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import type { ProcessingStatus } from "../../../api/admin";
 import Icon from "../../../components/common/Icon";
 import type { ContentStatus } from "../../../types/Letter";
-import { DAY_OPTIONS, MONTH_OPTIONS, YEAR_OPTIONS } from "./constants";
+import DashboardFilterPanel from "./DashboardFilterPanel";
+import SavedViewsMenu from "./SavedViewsMenu";
 import type {
   ContentFilterView,
   DashboardView,
@@ -133,29 +134,6 @@ export default function DashboardToolbar({
   processingStatus,
   selectedCount,
 }: DashboardToolbarProps) {
-  const [savedViewsOpen, setSavedViewsOpen] = useState(false);
-  const [newViewName, setNewViewName] = useState("");
-  const savedViewsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!savedViewsOpen) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (savedViewsRef.current && !savedViewsRef.current.contains(event.target as Node)) {
-        setSavedViewsOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [savedViewsOpen]);
-
-  const handleSaveView = () => {
-    onSaveView(newViewName || "Dashboard view");
-    setNewViewName("");
-    setSavedViewsOpen(false);
-  };
-
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (collectionFilter !== "all") count++;
@@ -319,66 +297,12 @@ export default function DashboardToolbar({
               {activeFilterCount > 0 && <span className="filter-badge">{activeFilterCount}</span>}
             </button>
 
-            <div className="saved-view-menu" ref={savedViewsRef}>
-              <button
-                className={`dashboard-control-btn saved-view-btn ${savedViewsOpen ? "active" : ""}`}
-                type="button"
-                onClick={() => setSavedViewsOpen((open) => !open)}
-                aria-expanded={savedViewsOpen}
-              >
-                <Icon name="save" size={15} />
-                <span>Save view</span>
-              </button>
-              {savedViewsOpen && (
-                <div className="saved-view-popover">
-                  <div className="saved-view-form">
-                    <input
-                      type="text"
-                      placeholder="View name"
-                      value={newViewName}
-                      onChange={(event) => setNewViewName(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          handleSaveView();
-                        }
-                      }}
-                    />
-                    <button type="button" onClick={handleSaveView}>
-                      Save
-                    </button>
-                  </div>
-
-                  <div className="saved-view-list">
-                    {savedViews.length === 0 ? (
-                      <div className="saved-view-empty">No saved views</div>
-                    ) : (
-                      savedViews.map((view) => (
-                        <div className="saved-view-item" key={view.id}>
-                          <button
-                            className="saved-view-load"
-                            type="button"
-                            onClick={() => {
-                              onApplyView(view);
-                              setSavedViewsOpen(false);
-                            }}
-                          >
-                            {view.name}
-                          </button>
-                          <button
-                            className="saved-view-delete"
-                            type="button"
-                            aria-label={`Delete ${view.name}`}
-                            onClick={() => onDeleteView(view.id)}
-                          >
-                            <Icon name="close" size={12} />
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            <SavedViewsMenu
+              savedViews={savedViews}
+              onSaveView={onSaveView}
+              onApplyView={onApplyView}
+              onDeleteView={onDeleteView}
+            />
 
             <label className="dashboard-sort-control">
               <span>Sort</span>
@@ -421,146 +345,40 @@ export default function DashboardToolbar({
             )}
           </div>
 
-          <div className={`dashboard-filter-panel ${mobileFiltersOpen ? "open" : ""}`}>
-            <div className="filter-panel-section">
-              <span className="filter-panel-label">Visibility</span>
-              <div className="filter-buttons">
-                <button
-                  className={`filter-pill filter-published ${visibilityFilter === "PUBLISHED" ? "active" : ""}`}
-                  onClick={() => toggleVisibilityFilter("PUBLISHED")}
-                  title="Published letters"
-                >
-                  {stats.published} Public
-                </button>
-                <button
-                  className={`filter-pill filter-hidden ${visibilityFilter === "HIDDEN" ? "active" : ""}`}
-                  onClick={() => toggleVisibilityFilter("HIDDEN")}
-                  title="Hidden letters"
-                >
-                  {stats.hidden} Hidden
-                </button>
-              </div>
-            </div>
-
-            <div className="filter-panel-section content-filter-section">
-              <div className="content-filter-toggle">
-                <button
-                  className={`content-toggle-btn ${contentFilterView === "transcript" ? "active" : ""}`}
-                  onClick={() => setContentFilterView("transcript")}
-                >
-                  Transcript
-                  {contentFilterView !== "transcript" && transcriptStatusFilters.length > 0 && (
-                    <span className="toggle-badge">{transcriptStatusFilters.length}</span>
-                  )}
-                </button>
-                <button
-                  className={`content-toggle-btn ${contentFilterView === "metadata" ? "active" : ""}`}
-                  onClick={() => setContentFilterView("metadata")}
-                >
-                  Metadata
-                  {contentFilterView !== "metadata" && metadataStatusFilters.length > 0 && (
-                    <span className="toggle-badge">{metadataStatusFilters.length}</span>
-                  )}
-                </button>
-              </div>
-              <div className="filter-buttons">
-                {contentFilterView === "transcript" ? (
-                  <>
-                    <button className={`filter-pill filter-content-none ${transcriptStatusFilters.includes("EMPTY") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("EMPTY")}>{stats.transcriptEmpty} None</button>
-                    <button className={`filter-pill filter-content-draft ${transcriptStatusFilters.includes("AI_DRAFT") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("AI_DRAFT")}>{stats.transcriptAiDraft} Draft</button>
-                    <button className={`filter-pill filter-content-edited ${transcriptStatusFilters.includes("EDITED") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("EDITED")}>{stats.transcriptEdited} Edited</button>
-                    <button className={`filter-pill filter-content-verified ${transcriptStatusFilters.includes("VERIFIED") ? "active" : ""}`} onClick={() => toggleTranscriptFilter("VERIFIED")}>{stats.transcriptVerified} Done</button>
-                  </>
-                ) : (
-                  <>
-                    <button className={`filter-pill filter-content-none ${metadataStatusFilters.includes("EMPTY") ? "active" : ""}`} onClick={() => toggleMetadataFilter("EMPTY")}>{stats.metadataEmpty} None</button>
-                    <button className={`filter-pill filter-content-draft ${metadataStatusFilters.includes("AI_DRAFT") ? "active" : ""}`} onClick={() => toggleMetadataFilter("AI_DRAFT")}>{stats.metadataAiDraft} Draft</button>
-                    <button className={`filter-pill filter-content-edited ${metadataStatusFilters.includes("EDITED") ? "active" : ""}`} onClick={() => toggleMetadataFilter("EDITED")}>{stats.metadataEdited} Edited</button>
-                    <button className={`filter-pill filter-content-verified ${metadataStatusFilters.includes("VERIFIED") ? "active" : ""}`} onClick={() => toggleMetadataFilter("VERIFIED")}>{stats.metadataVerified} Done</button>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="filter-panel-section filter-panel-fields">
-              <div className="dropdown-container" ref={dateDropdownRef}>
-                <button
-                  className={`dropdown-trigger ${hasDateFilter ? "active" : ""}`}
-                  onClick={() => setShowDateDropdown(!showDateDropdown)}
-                >
-                  {getDateButtonText()} <Icon name="chevron-down" size={12} />
-                </button>
-                {showDateDropdown && (
-                  <div className="date-dropdown-panel">
-                    <div className="date-mode-toggle">
-                      <button
-                        className={`mode-btn ${dateMode === "specific" ? "active" : ""}`}
-                        onClick={() => {
-                          setDateMode("specific");
-                          setDateFromFilter(null);
-                          setDateToFilter(null);
-                        }}
-                      >
-                        Specific
-                      </button>
-                      <button
-                        className={`mode-btn ${dateMode === "range" ? "active" : ""}`}
-                        onClick={() => {
-                          setDateMode("range");
-                          setYearFilter(null);
-                          setMonthFilter(null);
-                          setDayFilter(null);
-                        }}
-                      >
-                        Range
-                      </button>
-                    </div>
-
-                    {dateMode === "specific" ? (
-                      <div className="date-dropdowns">
-                        <select value={yearFilter ?? ""} onChange={(event) => setYearFilter(event.target.value ? Number(event.target.value) : null)}>
-                          <option value="">Year</option>
-                          {YEAR_OPTIONS.map((year) => <option key={year} value={year}>{year}</option>)}
-                        </select>
-                        <select value={monthFilter ?? ""} onChange={(event) => setMonthFilter(event.target.value ? Number(event.target.value) : null)}>
-                          <option value="">Month</option>
-                          {MONTH_OPTIONS.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}
-                        </select>
-                        <select value={dayFilter ?? ""} onChange={(event) => setDayFilter(event.target.value ? Number(event.target.value) : null)}>
-                          <option value="">Day</option>
-                          {DAY_OPTIONS.map((day) => <option key={day} value={day}>{day}</option>)}
-                        </select>
-                      </div>
-                    ) : (
-                      <div className="date-range-inputs">
-                        <div className="date-range-field">
-                          <label>From</label>
-                          <input type="text" placeholder="mm/dd/yyyy" value={dateFromFilter ? dateRawToDisplay(dateFromFilter) : ""} onChange={(event) => setDateFromFilter(displayToDateRaw(event.target.value))} maxLength={10} />
-                        </div>
-                        <div className="date-range-field">
-                          <label>To</label>
-                          <input type="text" placeholder="mm/dd/yyyy" value={dateToFilter ? dateRawToDisplay(dateToFilter) : ""} onChange={(event) => setDateToFilter(displayToDateRaw(event.target.value))} maxLength={10} />
-                        </div>
-                      </div>
-                    )}
-
-                    {hasDateFilter && <button className="date-clear-btn" onClick={clearDateFilters}>Clear Date</button>}
-                  </div>
-                )}
-              </div>
-              <label className="collection-filter-field">
-                <span>Collection</span>
-                <input
-                  type="text"
-                  className="collection-input"
-                  placeholder="000"
-                  value={collectionInput}
-                  onChange={(event) => handleCollectionInputChange(event.target.value)}
-                  maxLength={3}
-                />
-              </label>
-            </div>
-          </div>
+          <DashboardFilterPanel
+            open={mobileFiltersOpen}
+            stats={stats}
+            collectionInput={collectionInput}
+            handleCollectionInputChange={handleCollectionInputChange}
+            visibilityFilter={visibilityFilter}
+            toggleVisibilityFilter={toggleVisibilityFilter}
+            contentFilterView={contentFilterView}
+            setContentFilterView={setContentFilterView}
+            transcriptStatusFilters={transcriptStatusFilters}
+            toggleTranscriptFilter={toggleTranscriptFilter}
+            metadataStatusFilters={metadataStatusFilters}
+            toggleMetadataFilter={toggleMetadataFilter}
+            showDateDropdown={showDateDropdown}
+            setShowDateDropdown={setShowDateDropdown}
+            dateDropdownRef={dateDropdownRef}
+            dateMode={dateMode}
+            setDateMode={setDateMode}
+            hasDateFilter={hasDateFilter}
+            yearFilter={yearFilter}
+            setYearFilter={setYearFilter}
+            monthFilter={monthFilter}
+            setMonthFilter={setMonthFilter}
+            dayFilter={dayFilter}
+            setDayFilter={setDayFilter}
+            dateFromFilter={dateFromFilter}
+            setDateFromFilter={setDateFromFilter}
+            dateToFilter={dateToFilter}
+            setDateToFilter={setDateToFilter}
+            clearDateFilters={clearDateFilters}
+            getDateButtonText={getDateButtonText}
+            dateRawToDisplay={dateRawToDisplay}
+            displayToDateRaw={displayToDateRaw}
+          />
         </>
       )}
     </div>

@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
 import { getErrorMessage } from "../../api/client";
-import { getFilteredLetterIds } from "../../api/letters";
 import { toggleLetterFlag } from "../../api/admin/letters";
 import { useToast } from "../../contexts/ToastContext";
 import AdminLayout from "../../components/AdminLayout";
@@ -12,12 +11,10 @@ import BulkEditToolbar from "./AdminDashboard/BulkEditToolbar";
 import DashboardDialogs from "./AdminDashboard/DashboardDialogs";
 import {
   ALL_COLUMNS,
-  DEFAULT_DASHBOARD_SORT,
   MONTH_OPTIONS,
 } from "./AdminDashboard/constants";
 import type { DashboardView } from "./AdminDashboard/types";
 import {
-  buildDashboardLetterQuery,
   formatDateRaw,
   getCombinedTranscriptStatus,
   savePersistedState,
@@ -26,6 +23,7 @@ import {
 import { useDashboardBulkActions } from "./AdminDashboard/useDashboardBulkActions";
 import { useDashboardColumns } from "./AdminDashboard/useDashboardColumns";
 import { useDashboardCopyPasteEdit } from "./AdminDashboard/useDashboardCopyPasteEdit";
+import { useDashboardFilteredSelection } from "./AdminDashboard/useDashboardFilteredSelection";
 import { useDashboardFilters } from "./AdminDashboard/useDashboardFilters";
 import { useDashboardLettersData } from "./AdminDashboard/useDashboardLettersData";
 import { useDashboardProcessingActions } from "./AdminDashboard/useDashboardProcessingActions";
@@ -191,41 +189,26 @@ export default function AdminDashboard() {
     fetchLetters,
   });
 
-  // Fetch when filters change (reset to page 1) — also handles initial load.
-  // Prune selections to only include items that still match the new filters.
-  useEffect(() => {
-    if (!isAuthenticated()) return;
-    fetchLetters(true, 1);
-
-    if (selectedIds.size > 0) {
-      getFilteredLetterIds(buildDashboardLetterQuery({
-        collectionFilter,
-        visibilityFilter,
-        searchQuery,
-        sortColumns,
-        defaultSort: DEFAULT_DASHBOARD_SORT,
-        yearFilter,
-        monthFilter,
-        dayFilter,
-        dateFromFilter,
-        dateToFilter,
-        transcriptStatusFilters,
-        metadataStatusFilters,
-      })).then(validIds => {
-        const validSet = new Set(validIds);
-        setSelectedIds(prev => {
-          const pruned = new Set([...prev].filter(id => validSet.has(id)));
-          if (pruned.size === prev.size) return prev;
-          if (pruned.size === 0) closeEditToolbar();
-          return pruned;
-        });
-        setAllFilteredSelected(false);
-      }).catch(() => {
-        clearSelection();
-        closeEditToolbar();
-      });
-    }
-  }, [collectionFilter, visibilityFilter, searchQuery, sortColumns, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
+  const { handleSelectAllFiltered } = useDashboardFilteredSelection({
+    collectionFilter,
+    visibilityFilter,
+    searchQuery,
+    sortColumns,
+    yearFilter,
+    monthFilter,
+    dayFilter,
+    dateFromFilter,
+    dateToFilter,
+    transcriptStatusFilters,
+    metadataStatusFilters,
+    selectedIds,
+    setSelectedIds,
+    setAllFilteredSelected,
+    clearSelection,
+    closeEditToolbar,
+    fetchLetters,
+    selectAllFiltered,
+  });
 
   const handleRowClick = (letterId: string, index: number, e: React.MouseEvent) => {
     if (hasDragMoved) return;
@@ -270,29 +253,6 @@ export default function AdminDashboard() {
         getErrorMessage(err, `Failed to ${flagged ? 'flag' : 'unflag'} letter`),
         'error',
       );
-    }
-  };
-
-  const handleSelectAllFiltered = async () => {
-    try {
-      const allIds = await getFilteredLetterIds(buildDashboardLetterQuery({
-        collectionFilter,
-        visibilityFilter,
-        searchQuery,
-        sortColumns,
-        defaultSort: DEFAULT_DASHBOARD_SORT,
-        yearFilter,
-        monthFilter,
-        dayFilter,
-        dateFromFilter,
-        dateToFilter,
-        transcriptStatusFilters,
-        metadataStatusFilters,
-      }));
-      selectAllFiltered(allIds);
-    } catch (err) {
-      console.error('Failed to select all filtered:', err);
-      showToast(getErrorMessage(err, 'Failed to select all filtered letters'), 'error');
     }
   };
 

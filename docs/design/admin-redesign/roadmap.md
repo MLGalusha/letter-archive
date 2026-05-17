@@ -69,6 +69,7 @@ Progress:
 - Mobile table sizing refined so compact date, collection, visibility, last-opened, checkbox, and flag columns fit without clipped headers or stray ellipses.
 - Filter panel option rendering now uses shared visibility/content status definitions with pressed states, and the mobile date/collection controls use a tighter two-column row.
 - Saved dashboard view state capture/apply wiring moved into `useDashboardSavedViewState`.
+- Filter-change refetching, selection pruning, and select-all-filtered behavior moved into `useDashboardFilteredSelection`.
 
 Out of scope:
 

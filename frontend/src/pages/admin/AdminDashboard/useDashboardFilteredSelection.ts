@@ -6,7 +6,10 @@ import { getFilteredLetterIds } from "../../../api/letters";
 import { useToast } from "../../../contexts/ToastContext";
 import { DEFAULT_DASHBOARD_SORT } from "./constants";
 import type { SortColumn } from "./types";
-import type { DashboardFilterControls } from "./useDashboardFilters";
+import {
+  getDashboardFilterQueryFields,
+  type DashboardFilterControls,
+} from "./useDashboardFilters";
 import { buildDashboardLetterQuery } from "./utils";
 
 interface UseDashboardFilteredSelectionOptions {
@@ -33,32 +36,12 @@ export function useDashboardFilteredSelection({
   selectAllFiltered,
 }: UseDashboardFilteredSelectionOptions) {
   const { showToast } = useToast();
-  const {
-    collectionFilter,
-    visibilityFilter,
-    searchQuery,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
-  } = filters;
+  const filterQueryFields = getDashboardFilterQueryFields(filters);
 
   const query = {
-    collectionFilter,
-    visibilityFilter,
-    searchQuery,
+    ...filterQueryFields,
     sortColumns,
     defaultSort: DEFAULT_DASHBOARD_SORT,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
   };
 
   useEffect(() => {
@@ -83,17 +66,17 @@ export function useDashboardFilteredSelection({
   // The dashboard intentionally refetches only when filter/sort inputs change.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    collectionFilter,
-    visibilityFilter,
-    searchQuery,
+    filterQueryFields.collectionFilter,
+    filterQueryFields.visibilityFilter,
+    filterQueryFields.searchQuery,
     sortColumns,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
+    filterQueryFields.yearFilter,
+    filterQueryFields.monthFilter,
+    filterQueryFields.dayFilter,
+    filterQueryFields.dateFromFilter,
+    filterQueryFields.dateToFilter,
+    filterQueryFields.transcriptStatusFilters,
+    filterQueryFields.metadataStatusFilters,
   ]);
 
   const handleSelectAllFiltered = async () => {

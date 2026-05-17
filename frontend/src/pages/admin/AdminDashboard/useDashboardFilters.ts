@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { StartProcessingOptions } from '../../../api/admin';
 import type { ContentStatus } from '../../../types/Letter';
 import { loadPersistedState } from './utils';
 import type { ContentFilterView, DateMode, VisibilityFilter } from './types';
@@ -177,3 +178,48 @@ export function useDashboardFilters() {
 }
 
 export type DashboardFilterControls = ReturnType<typeof useDashboardFilters>;
+
+export interface DashboardFilterQueryFields {
+  collectionFilter: string;
+  visibilityFilter: VisibilityFilter;
+  searchQuery: string;
+  yearFilter: number | null;
+  monthFilter: number | null;
+  dayFilter: number | null;
+  dateFromFilter: string | null;
+  dateToFilter: string | null;
+  transcriptStatusFilters: ContentStatus[];
+  metadataStatusFilters: ContentStatus[];
+}
+
+export function getDashboardFilterQueryFields(
+  filters: DashboardFilterControls,
+): DashboardFilterQueryFields {
+  return {
+    collectionFilter: filters.collectionFilter,
+    visibilityFilter: filters.visibilityFilter,
+    searchQuery: filters.searchQuery,
+    yearFilter: filters.yearFilter,
+    monthFilter: filters.monthFilter,
+    dayFilter: filters.dayFilter,
+    dateFromFilter: filters.dateFromFilter,
+    dateToFilter: filters.dateToFilter,
+    transcriptStatusFilters: filters.transcriptStatusFilters,
+    metadataStatusFilters: filters.metadataStatusFilters,
+  };
+}
+
+export function getDashboardProcessingFilters(
+  filters: DashboardFilterControls,
+): StartProcessingOptions {
+  return {
+    collectionCode: filters.collectionFilter !== 'all' ? filters.collectionFilter : undefined,
+    visibility: filters.visibilityFilter !== 'ALL' ? filters.visibilityFilter : undefined,
+    search: filters.searchQuery || undefined,
+    year: filters.yearFilter ?? undefined,
+    month: filters.monthFilter ?? undefined,
+    day: filters.dayFilter ?? undefined,
+    dateFrom: filters.dateFromFilter ?? undefined,
+    dateTo: filters.dateToFilter ?? undefined,
+  };
+}

@@ -9,7 +9,10 @@ import {
 } from "../../../api/admin";
 import { useToast } from "../../../contexts/ToastContext";
 import type { Letter } from "../../../types/Letter";
-import type { DashboardFilterControls } from "./useDashboardFilters";
+import {
+  getDashboardProcessingFilters,
+  type DashboardFilterControls,
+} from "./useDashboardFilters";
 
 type SingleMetadataMode = "extract" | "regenerate";
 
@@ -60,36 +63,11 @@ export function useDashboardProcessingActions({
         : "extract",
     [singleSelectedLetter],
   );
-  const {
-    collectionFilter,
-    visibilityFilter,
-    searchQuery,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
-  } = filters;
 
-  const buildProcessingFilters = useCallback(() => ({
-    collectionCode: collectionFilter !== "all" ? collectionFilter : undefined,
-    visibility: visibilityFilter !== "ALL" ? visibilityFilter : undefined,
-    search: searchQuery || undefined,
-    year: yearFilter ?? undefined,
-    month: monthFilter ?? undefined,
-    day: dayFilter ?? undefined,
-    dateFrom: dateFromFilter ?? undefined,
-    dateTo: dateToFilter ?? undefined,
-  }), [
-    collectionFilter,
-    dateFromFilter,
-    dateToFilter,
-    dayFilter,
-    monthFilter,
-    searchQuery,
-    visibilityFilter,
-    yearFilter,
-  ]);
+  const buildProcessingFilters = useCallback(
+    () => getDashboardProcessingFilters(filters),
+    [filters],
+  );
 
   const handleStartTranscription = useCallback(async (skipExisting = false) => {
     try {

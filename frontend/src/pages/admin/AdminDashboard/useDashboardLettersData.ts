@@ -3,7 +3,10 @@ import { getAdminLetters } from "../../../api/letters";
 import type { Letter } from "../../../types/Letter";
 import { DEFAULT_DASHBOARD_SORT } from "./constants";
 import type { SortColumn } from "./types";
-import type { DashboardFilterControls } from "./useDashboardFilters";
+import {
+  getDashboardFilterQueryFields,
+  type DashboardFilterControls,
+} from "./useDashboardFilters";
 import { buildDashboardLetterQuery, isServerSortField } from "./utils";
 
 const DEFAULT_PAGINATION = {
@@ -41,18 +44,7 @@ export function useDashboardLettersData({
   filters,
   sortColumns,
 }: UseDashboardLettersDataOptions) {
-  const {
-    collectionFilter,
-    visibilityFilter,
-    searchQuery,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
-  } = filters;
+  const filterQueryFields = getDashboardFilterQueryFields(filters);
 
   const [letters, setLetters] = useState<Letter[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,18 +60,9 @@ export function useDashboardLettersData({
       const response = await getAdminLetters(buildDashboardLetterQuery({
         page,
         limit: 50,
-        collectionFilter,
-        visibilityFilter,
-        searchQuery,
+        ...filterQueryFields,
         sortColumns,
         defaultSort: DEFAULT_DASHBOARD_SORT,
-        yearFilter,
-        monthFilter,
-        dayFilter,
-        dateFromFilter,
-        dateToFilter,
-        transcriptStatusFilters,
-        metadataStatusFilters,
       }));
       setLetters(response.letters);
       setPagination(response.pagination);
@@ -109,18 +92,18 @@ export function useDashboardLettersData({
       setIsInitialLoad(false);
     }
   }, [
-    collectionFilter,
-    dateFromFilter,
-    dateToFilter,
-    dayFilter,
-    metadataStatusFilters,
-    monthFilter,
+    filterQueryFields.collectionFilter,
+    filterQueryFields.dateFromFilter,
+    filterQueryFields.dateToFilter,
+    filterQueryFields.dayFilter,
+    filterQueryFields.metadataStatusFilters,
+    filterQueryFields.monthFilter,
     pagination.page,
-    searchQuery,
+    filterQueryFields.searchQuery,
     sortColumns,
-    transcriptStatusFilters,
-    visibilityFilter,
-    yearFilter,
+    filterQueryFields.transcriptStatusFilters,
+    filterQueryFields.visibilityFilter,
+    filterQueryFields.yearFilter,
   ]);
 
   const filteredLetters = useMemo(() => {

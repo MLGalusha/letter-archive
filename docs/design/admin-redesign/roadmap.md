@@ -81,6 +81,7 @@ Progress:
 - Transcription and metadata confirmation modals now share `ProcessingConfirmDialog`.
 - Recent activity column toggling and pagination are split out of the table component, leaving the table focused on header and row composition.
 - Dashboard filter state now has a first controller boundary: the toolbar and filter panel consume the filter hook result as one model instead of long repeated filter prop lists.
+- Persisted dashboard state and saved dashboard views now consume the same filter controller, reducing repeated setter lists and making future filter additions less brittle.
 
 Out of scope:
 

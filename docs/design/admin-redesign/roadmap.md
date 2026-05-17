@@ -80,6 +80,31 @@ Out of scope:
 - Card-style letter views.
 - Filtered collections drill-down.
 
+## Phase 2.5 - Dashboard Filter Model Review
+
+Status: pending
+
+Goals:
+
+- Audit the current data shapes and API query support before adding more filters.
+- Compare likely admin workflows against archive-app patterns: broad search, high-value structured filters, advanced filters, active chips, and saved views.
+- Present proposed filters with what each would do, why it would be useful, and whether it should be primary or advanced.
+- Let Mason decide which filters to add or skip before implementation.
+- Define how selected filters interact with saved dashboard views, mobile filter sheets, active chips, select-all-filtered behavior, and backend query parameters.
+
+Candidate filter categories:
+
+- Workflow filters: needs review, missing transcript, transcript confirmed, metadata failed/complete, processing state.
+- Data-completeness filters: missing sender, missing recipient, missing date, missing collection, missing metadata.
+- Historical/entity filters: sender, recipient, mentioned person, place, date range.
+- Content-shape filters: has extras, has photos, has cover, has telegram, flagged.
+
+Exit criteria:
+
+- A narrowed filter set is approved before implementation.
+- Each accepted filter has a clear source of truth and query strategy.
+- Saved dashboard views include any new accepted filter state.
+
 ## Phase 3 - Dashboard Responsive UI
 
 Status: active

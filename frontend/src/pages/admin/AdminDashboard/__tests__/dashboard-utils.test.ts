@@ -3,6 +3,7 @@ import {
   buildDashboardLetterQuery,
   dateRawToDisplay,
   displayToDateRaw,
+  formatDashboardDateTime,
   formatDateRaw,
   getDashboardDateButtonText,
   getCombinedTranscriptStatus,
@@ -36,6 +37,12 @@ describe("admin dashboard utils", () => {
     expect(formatDateRaw("18860314")).toBe("03/14/1886");
     expect(formatDateRaw(undefined)).toBe("—");
     expect(formatDateRaw("188603")).toBe("—");
+  });
+
+  it("formats dashboard timestamps for compact table display", () => {
+    expect(formatDashboardDateTime("2026-03-30T21:14:00Z")).toEqual(
+      expect.stringContaining("30"),
+    );
   });
 
   it("parses and labels dashboard date filters", () => {

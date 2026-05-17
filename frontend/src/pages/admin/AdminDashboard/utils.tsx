@@ -108,6 +108,15 @@ export function formatDateRaw(dateRaw: string | undefined): string {
   return `${month}/${day}/${year}`;
 }
 
+export function formatDashboardDateTime(dateString: string): string {
+  return new Date(dateString).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function displayToDateRaw(display: string): string | null {
   if (!display) return null;
   const parts = display.split("/");

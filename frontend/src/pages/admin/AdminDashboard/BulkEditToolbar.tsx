@@ -1,15 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ProcessingStatus } from "../../../api/admin";
 import Icon from "../../../components/common/Icon";
-
-interface PublishCounts {
-  lettersPublished: number;
-  lettersHidden: number;
-  transcriptsPublished: number;
-  transcriptsUnpublished: number;
-  metadataPublished: number;
-  metadataUnpublished: number;
-}
+import type { PublishCounts } from "./useDashboardSelectionDetails";
 
 interface BulkEditToolbarProps {
   selectedCount: number;

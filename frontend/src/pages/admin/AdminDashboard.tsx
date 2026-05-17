@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
 import AdminLayout from "../../components/AdminLayout";
@@ -7,14 +7,13 @@ import DashboardToolbar from "./AdminDashboard/DashboardToolbar";
 import BulkEditToolbar from "./AdminDashboard/BulkEditToolbar";
 import DashboardDialogs from "./AdminDashboard/DashboardDialogs";
 import { ALL_COLUMNS } from "./AdminDashboard/constants";
-import type { DashboardView } from "./AdminDashboard/types";
 import {
   dateRawToDisplay,
   displayToDateRaw,
+  formatDashboardDateTime,
   formatDateRaw,
   getDashboardDateButtonText,
   getCombinedTranscriptStatus,
-  savePersistedState,
   StatusIcon,
 } from "./AdminDashboard/utils";
 import { useDashboardBulkActions } from "./AdminDashboard/useDashboardBulkActions";
@@ -24,21 +23,22 @@ import { useDashboardFilteredSelection } from "./AdminDashboard/useDashboardFilt
 import { useDashboardFlagActions } from "./AdminDashboard/useDashboardFlagActions";
 import { useDashboardFilters } from "./AdminDashboard/useDashboardFilters";
 import { useDashboardLettersData } from "./AdminDashboard/useDashboardLettersData";
+import { useDashboardPersistedState } from "./AdminDashboard/useDashboardPersistedState";
 import { useDashboardProcessingActions } from "./AdminDashboard/useDashboardProcessingActions";
 import { useDashboardProcessingControls } from "./AdminDashboard/useDashboardProcessingControls";
 import { useDashboardRowSelection } from "./AdminDashboard/useDashboardRowSelection";
 import { useDashboardSavedViewState } from "./AdminDashboard/useDashboardSavedViewState";
 import { useDashboardSelection } from "./AdminDashboard/useDashboardSelection";
+import { useDashboardSelectionDetails } from "./AdminDashboard/useDashboardSelectionDetails";
 import { useDashboardSort } from "./AdminDashboard/useDashboardSort";
+import { useDashboardViewState } from "./AdminDashboard/useDashboardViewState";
 import CollectionsDashboard from "./AdminCollectionsListPage";
 import "./AdminDashboard.css";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [dashboardView, setDashboardView] = useState<DashboardView>(
-    () => (localStorage.getItem('dashboard-view') as DashboardView) || 'letters',
-  );
+  const { dashboardView, handleDashboardViewChange } = useDashboardViewState();
 
   const {
     showDateDropdown,
@@ -91,22 +91,20 @@ export default function AdminDashboard() {
     toggleColumnMenu,
   } = useDashboardColumns();
 
-  useEffect(() => {
-    savePersistedState({
-      visibilityFilter,
-      collectionFilter,
-      searchQuery,
-      sortColumns,
-      dateMode,
-      year: yearFilter,
-      month: monthFilter,
-      day: dayFilter,
-      dateFrom: dateFromFilter,
-      dateTo: dateToFilter,
-      transcriptStatusFilters,
-      metadataStatusFilters,
-    });
-  }, [visibilityFilter, collectionFilter, searchQuery, sortColumns, dateMode, yearFilter, monthFilter, dayFilter, dateFromFilter, dateToFilter, transcriptStatusFilters, metadataStatusFilters]);
+  useDashboardPersistedState({
+    visibilityFilter,
+    collectionFilter,
+    searchQuery,
+    sortColumns,
+    dateMode,
+    yearFilter,
+    monthFilter,
+    dayFilter,
+    dateFromFilter,
+    dateToFilter,
+    transcriptStatusFilters,
+    metadataStatusFilters,
+  });
 
   const {
     letters,
@@ -213,30 +211,11 @@ export default function AdminDashboard() {
     navigate(`/admin/letters/${letterId}`);
   };
 
-  const singleSelectedLetter = useMemo(() => {
-    if (selectedIds.size !== 1) return null;
-    const [selectedId] = Array.from(selectedIds);
-    return letters.find((letter) => letter.id === selectedId) ?? null;
-  }, [letters, selectedIds]);
-
-  // Publish menu counts for selected letters
-  const publishCounts = useMemo(() => {
-    const selected = filteredLetters.filter(l => selectedIds.has(l.id));
-    return {
-      lettersPublished: selected.filter(l => l.visibility === 'PUBLISHED').length,
-      lettersHidden: selected.filter(l => l.visibility === 'HIDDEN').length,
-      transcriptsPublished: selected.filter(l => l.transcriptPublished).length,
-      transcriptsUnpublished: selected.filter(l => !l.transcriptPublished).length,
-      metadataPublished: selected.filter(l => l.metadataPublished).length,
-      metadataUnpublished: selected.filter(l => !l.metadataPublished).length,
-    };
-  }, [filteredLetters, selectedIds]);
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString(undefined, {
-      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-    });
-  };
+  const { singleSelectedLetter, publishCounts } = useDashboardSelectionDetails({
+    letters,
+    filteredLetters,
+    selectedIds,
+  });
 
   const { handleToggleFlag } = useDashboardFlagActions({ setLetters });
 
@@ -321,11 +300,6 @@ export default function AdminDashboard() {
     dateFromFilter,
     dateToFilter,
   });
-
-  const handleDashboardViewChange = (view: DashboardView) => {
-    setDashboardView(view);
-    localStorage.setItem("dashboard-view", view);
-  };
 
   const {
     savedViews,
@@ -462,7 +436,7 @@ export default function AdminDashboard() {
           sourceCell={sourceCell}
           pendingChanges={pendingChanges}
           onCellClick={handleCellClick}
-          formatDate={formatDate}
+          formatDate={formatDashboardDateTime}
           formatDateRaw={formatDateRaw}
           getCombinedTranscriptStatus={getCombinedTranscriptStatus}
           renderStatusIcon={(status, type) => <StatusIcon status={status} type={type} />}

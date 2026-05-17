@@ -29,6 +29,12 @@ export interface SortColumn {
   direction: SortDirection;
 }
 
+export interface SortInfo {
+  direction: SortDirection;
+  priority: number;
+  total: number;
+}
+
 export type ColumnId =
   | "flag"
   | "sender"

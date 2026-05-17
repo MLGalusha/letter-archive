@@ -8,7 +8,8 @@ import {
   hasRelatedExtraContent,
   shouldShowPhotoDescriptionWorkflow,
 } from "../../../utils/letterContent";
-import type { ColumnId, ExtendedSortField, PendingChange } from "./types";
+import SortableTableHeader from "./SortableTableHeader";
+import type { ColumnId, ExtendedSortField, PendingChange, SortInfo } from "./types";
 
 const FILE_TYPE_COLUMNS: Array<{ id: ColumnId; label: string }> = [
   { id: "type_letter", label: "Letters" },
@@ -21,12 +22,6 @@ const FILE_TYPE_COLUMNS: Array<{ id: ColumnId; label: string }> = [
   { id: "type_article", label: "Articles" },
   { id: "type_diary", label: "Diary" },
 ];
-
-interface SortInfo {
-  direction: "asc" | "desc";
-  priority: number;
-  total: number;
-}
 
 interface PaginationState {
   page: number;
@@ -140,240 +135,118 @@ export default function RecentActivityTable({
                 )}
               </th>
               {visibleColumns.has("sender") && (
-                <th
-                  data-column="sender"
-                  className={`sortable-header ${getSortInfo("sender") ? "sorted" : ""}`}
-                  onClick={() => onSort("sender")}
-                >
-                  <span className="header-content">
-                    Sender
-                    {getSortInfo("sender") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">
-                          {getSortInfo("sender")?.direction === "asc" ? "↑" : "↓"}
-                        </span>
-                        {getSortInfo("sender")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("sender")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
+                <SortableTableHeader
+                  field="sender"
+                  dataColumn="sender"
+                  label="Sender"
+                  getSortInfo={getSortInfo}
+                  onSort={onSort}
+                />
               )}
               {visibleColumns.has("recipient") && (
-                <th
-                  data-column="recipient"
-                  className={`sortable-header ${getSortInfo("recipient") ? "sorted" : ""}`}
-                  onClick={() => onSort("recipient")}
-                >
-                  <span className="header-content">
-                    Recipient
-                    {getSortInfo("recipient") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">
-                          {getSortInfo("recipient")?.direction === "asc" ? "↑" : "↓"}
-                        </span>
-                        {getSortInfo("recipient")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("recipient")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
+                <SortableTableHeader
+                  field="recipient"
+                  dataColumn="recipient"
+                  label="Recipient"
+                  getSortInfo={getSortInfo}
+                  onSort={onSort}
+                />
               )}
               {visibleColumns.has("date") && (
-                <th
-                  data-column="date"
-                  className={`date-header sortable-header ${getSortInfo("letterDate") ? "sorted" : ""}`}
-                  onClick={() => onSort("letterDate")}
-                >
-                  <span className="header-content">
-                    Date
-                    {getSortInfo("letterDate") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">
-                          {getSortInfo("letterDate")?.direction === "asc" ? "↑" : "↓"}
-                        </span>
-                        {getSortInfo("letterDate")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("letterDate")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
+                <SortableTableHeader
+                  field="letterDate"
+                  dataColumn="date"
+                  className="date-header"
+                  label="Date"
+                  getSortInfo={getSortInfo}
+                  onSort={onSort}
+                />
               )}
               {visibleColumns.has("collection") && (
-                <th
-                  data-column="collection"
-                  className={`sortable-header ${getSortInfo("collection") ? "sorted" : ""}`}
-                  onClick={() => onSort("collection")}
-                >
-                  <span className="header-content">
+                <SortableTableHeader
+                  field="collection"
+                  dataColumn="collection"
+                  label={
+                    <>
                     <span className="desktop-header-label">Collection</span>
                     <span className="mobile-header-label">Coll.</span>
-                    {getSortInfo("collection") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">
-                          {getSortInfo("collection")?.direction === "asc" ? "↑" : "↓"}
-                        </span>
-                        {getSortInfo("collection")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("collection")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
+                    </>
+                  }
+                  getSortInfo={getSortInfo}
+                  onSort={onSort}
+                />
               )}
               {visibleColumns.has("letters") && (
-                <th
-                  data-column="letters"
-                  className={`sortable-header ${getSortInfo("letters") ? "sorted" : ""}`}
-                  onClick={() => onSort("letters")}
-                >
-                  <span className="header-content">
-                    Letters
-                    {getSortInfo("letters") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">
-                          {getSortInfo("letters")?.direction === "asc" ? "↑" : "↓"}
-                        </span>
-                        {getSortInfo("letters")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("letters")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
+                <SortableTableHeader
+                  field="letters"
+                  dataColumn="letters"
+                  label="Letters"
+                  getSortInfo={getSortInfo}
+                  onSort={onSort}
+                />
               )}
               {visibleColumns.has("extras") && (
-                <th
-                  data-column="extras"
-                  className={`sortable-header ${getSortInfo("extras") ? "sorted" : ""}`}
-                  onClick={() => onSort("extras")}
-                >
-                  <span className="header-content">
-                    Extras
-                    {getSortInfo("extras") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">
-                          {getSortInfo("extras")?.direction === "asc" ? "↑" : "↓"}
-                        </span>
-                        {getSortInfo("extras")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("extras")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
+                <SortableTableHeader
+                  field="extras"
+                  dataColumn="extras"
+                  label="Extras"
+                  getSortInfo={getSortInfo}
+                  onSort={onSort}
+                />
               )}
               {visibleColumns.has("photos") && (
-                <th
-                  data-column="photos"
-                  className={`sortable-header ${getSortInfo("photos") ? "sorted" : ""}`}
-                  onClick={() => onSort("photos")}
-                >
-                  <span className="header-content">
-                    Photos
-                    {getSortInfo("photos") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">
-                          {getSortInfo("photos")?.direction === "asc" ? "↑" : "↓"}
-                        </span>
-                        {getSortInfo("photos")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("photos")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
+                <SortableTableHeader
+                  field="photos"
+                  dataColumn="photos"
+                  label="Photos"
+                  getSortInfo={getSortInfo}
+                  onSort={onSort}
+                />
               )}
               {visibleColumns.has("transcript") && <th data-column="transcript" className="status-header">Transcript</th>}
               {visibleColumns.has("metadata") && <th data-column="metadata" className="status-header">Metadata</th>}
               {visibleColumns.has("visibility") && <th data-column="visibility">Visibility</th>}
               {visibleColumns.has("created") && (
-                <th
-                  data-column="created"
-                  className={`sortable-header ${getSortInfo("createdAt") ? "sorted" : ""}`}
-                  onClick={() => onSort("createdAt")}
-                >
-                  <span className="header-content">
-                    Created
-                    {getSortInfo("createdAt") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">
-                          {getSortInfo("createdAt")?.direction === "asc" ? "↑" : "↓"}
-                        </span>
-                        {getSortInfo("createdAt")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("createdAt")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
+                <SortableTableHeader
+                  field="createdAt"
+                  dataColumn="created"
+                  label="Created"
+                  getSortInfo={getSortInfo}
+                  onSort={onSort}
+                />
               )}
               {visibleColumns.has("updated") && (
-                <th
-                  data-column="updated"
-                  className={`sortable-header ${getSortInfo("updatedAt") ? "sorted" : ""}`}
-                  onClick={() => onSort("updatedAt")}
-                >
-                  <span className="header-content">
-                    Updated
-                    {getSortInfo("updatedAt") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">
-                          {getSortInfo("updatedAt")?.direction === "asc" ? "↑" : "↓"}
-                        </span>
-                        {getSortInfo("updatedAt")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("updatedAt")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
+                <SortableTableHeader
+                  field="updatedAt"
+                  dataColumn="updated"
+                  label="Updated"
+                  getSortInfo={getSortInfo}
+                  onSort={onSort}
+                />
               )}
               {visibleColumns.has("lastOpened") && (
-                <th
-                  data-column="lastOpened"
-                  className={`sortable-header ${getSortInfo("lastOpenedAt") ? "sorted" : ""}`}
-                  onClick={() => onSort("lastOpenedAt")}
-                >
-                  <span className="header-content">
+                <SortableTableHeader
+                  field="lastOpenedAt"
+                  dataColumn="lastOpened"
+                  label={
+                    <>
                     <span className="desktop-header-label">Last Opened</span>
                     <span className="mobile-header-label">Opened</span>
-                    {getSortInfo("lastOpenedAt") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">
-                          {getSortInfo("lastOpenedAt")?.direction === "asc" ? "↑" : "↓"}
-                        </span>
-                        {getSortInfo("lastOpenedAt")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("lastOpenedAt")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
+                    </>
+                  }
+                  getSortInfo={getSortInfo}
+                  onSort={onSort}
+                />
               )}
               {visibleColumns.has("flag") && (
-                <th
-                  data-column="flag"
-                  className={`flag-header sortable-header ${getSortInfo("flagged") ? "sorted" : ""}`}
-                  onClick={() => onSort("flagged")}
-                >
-                  <span className="header-content">
-                    <Icon name="flag" size={14} />
-                    {getSortInfo("flagged") && (
-                      <span className="sort-indicator">
-                        <span className="sort-arrow">
-                          {getSortInfo("flagged")?.direction === "asc" ? "↑" : "↓"}
-                        </span>
-                        {getSortInfo("flagged")!.total > 1 && (
-                          <span className="sort-priority">{getSortInfo("flagged")?.priority}</span>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                </th>
+                <SortableTableHeader
+                  field="flagged"
+                  dataColumn="flag"
+                  className="flag-header"
+                  label={<Icon name="flag" size={14} />}
+                  getSortInfo={getSortInfo}
+                  onSort={onSort}
+                />
               )}
               {FILE_TYPE_COLUMNS.filter(col => visibleColumns.has(col.id)).map(col => (
                 <th key={col.id} data-column={col.id}>{col.label}</th>

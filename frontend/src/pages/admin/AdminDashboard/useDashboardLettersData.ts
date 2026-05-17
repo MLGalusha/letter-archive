@@ -2,7 +2,8 @@ import { useCallback, useMemo, useState } from "react";
 import { getAdminLetters } from "../../../api/letters";
 import type { Letter } from "../../../types/Letter";
 import { DEFAULT_DASHBOARD_SORT } from "./constants";
-import type { SortColumn, VisibilityFilter } from "./types";
+import type { SortColumn } from "./types";
+import type { DashboardFilterControls } from "./useDashboardFilters";
 import { buildDashboardLetterQuery, isServerSortField } from "./utils";
 
 const DEFAULT_PAGINATION = {
@@ -32,32 +33,27 @@ const DEFAULT_STATS = {
 };
 
 interface UseDashboardLettersDataOptions {
-  collectionFilter: string;
-  visibilityFilter: VisibilityFilter;
-  searchQuery: string;
+  filters: DashboardFilterControls;
   sortColumns: SortColumn[];
-  yearFilter: number | null;
-  monthFilter: number | null;
-  dayFilter: number | null;
-  dateFromFilter: string | null;
-  dateToFilter: string | null;
-  transcriptStatusFilters: Letter["transcriptStatus"][];
-  metadataStatusFilters: Letter["metadataContentStatus"][];
 }
 
 export function useDashboardLettersData({
-  collectionFilter,
-  visibilityFilter,
-  searchQuery,
+  filters,
   sortColumns,
-  yearFilter,
-  monthFilter,
-  dayFilter,
-  dateFromFilter,
-  dateToFilter,
-  transcriptStatusFilters,
-  metadataStatusFilters,
 }: UseDashboardLettersDataOptions) {
+  const {
+    collectionFilter,
+    visibilityFilter,
+    searchQuery,
+    yearFilter,
+    monthFilter,
+    dayFilter,
+    dateFromFilter,
+    dateToFilter,
+    transcriptStatusFilters,
+    metadataStatusFilters,
+  } = filters;
+
   const [letters, setLetters] = useState<Letter[]>([]);
   const [loading, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);

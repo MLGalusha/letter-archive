@@ -42,17 +42,6 @@ export default function AdminDashboard() {
 
   const dashboardFilters = useDashboardFilters();
   const {
-    dateMode,
-    visibilityFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
-    collectionFilter,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
-    searchQuery,
     initialSortColumns,
   } = dashboardFilters;
   const { sortColumns, setSortColumns, handleSort, getSortInfo } = useDashboardSort(initialSortColumns);
@@ -78,17 +67,8 @@ export default function AdminDashboard() {
     stats,
     fetchLetters,
   } = useDashboardLettersData({
-    collectionFilter,
-    visibilityFilter,
-    searchQuery,
+    filters: dashboardFilters,
     sortColumns,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
   });
 
   // Auth check — runs once on mount
@@ -146,17 +126,8 @@ export default function AdminDashboard() {
   });
 
   const { handleSelectAllFiltered } = useDashboardFilteredSelection({
-    collectionFilter,
-    visibilityFilter,
-    searchQuery,
+    filters: dashboardFilters,
     sortColumns,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
     selectedIds,
     setSelectedIds,
     setAllFilteredSelected,
@@ -241,25 +212,18 @@ export default function AdminDashboard() {
     selectedIds,
     letters,
     singleSelectedLetter,
-    collectionFilter,
-    visibilityFilter,
-    searchQuery,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
+    filters: dashboardFilters,
     exitEditMode,
     fetchLetters,
   });
 
   const getDateButtonText = () => getDashboardDateButtonText({
-    dateMode,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
+    dateMode: dashboardFilters.dateMode,
+    yearFilter: dashboardFilters.yearFilter,
+    monthFilter: dashboardFilters.monthFilter,
+    dayFilter: dashboardFilters.dayFilter,
+    dateFromFilter: dashboardFilters.dateFromFilter,
+    dateToFilter: dashboardFilters.dateToFilter,
   });
 
   const {

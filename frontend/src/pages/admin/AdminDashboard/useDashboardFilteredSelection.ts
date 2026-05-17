@@ -4,23 +4,14 @@ import { isAuthenticated } from "../../../api/auth";
 import { getErrorMessage } from "../../../api/client";
 import { getFilteredLetterIds } from "../../../api/letters";
 import { useToast } from "../../../contexts/ToastContext";
-import type { ContentStatus } from "../../../types/Letter";
 import { DEFAULT_DASHBOARD_SORT } from "./constants";
-import type { SortColumn, VisibilityFilter } from "./types";
+import type { SortColumn } from "./types";
+import type { DashboardFilterControls } from "./useDashboardFilters";
 import { buildDashboardLetterQuery } from "./utils";
 
 interface UseDashboardFilteredSelectionOptions {
-  collectionFilter: string;
-  visibilityFilter: VisibilityFilter;
-  searchQuery: string;
+  filters: DashboardFilterControls;
   sortColumns: SortColumn[];
-  yearFilter: number | null;
-  monthFilter: number | null;
-  dayFilter: number | null;
-  dateFromFilter: string | null;
-  dateToFilter: string | null;
-  transcriptStatusFilters: ContentStatus[];
-  metadataStatusFilters: ContentStatus[];
   selectedIds: Set<string>;
   setSelectedIds: Dispatch<SetStateAction<Set<string>>>;
   setAllFilteredSelected: (value: boolean) => void;
@@ -31,17 +22,8 @@ interface UseDashboardFilteredSelectionOptions {
 }
 
 export function useDashboardFilteredSelection({
-  collectionFilter,
-  visibilityFilter,
-  searchQuery,
+  filters,
   sortColumns,
-  yearFilter,
-  monthFilter,
-  dayFilter,
-  dateFromFilter,
-  dateToFilter,
-  transcriptStatusFilters,
-  metadataStatusFilters,
   selectedIds,
   setSelectedIds,
   setAllFilteredSelected,
@@ -51,6 +33,18 @@ export function useDashboardFilteredSelection({
   selectAllFiltered,
 }: UseDashboardFilteredSelectionOptions) {
   const { showToast } = useToast();
+  const {
+    collectionFilter,
+    visibilityFilter,
+    searchQuery,
+    yearFilter,
+    monthFilter,
+    dayFilter,
+    dateFromFilter,
+    dateToFilter,
+    transcriptStatusFilters,
+    metadataStatusFilters,
+  } = filters;
 
   const query = {
     collectionFilter,

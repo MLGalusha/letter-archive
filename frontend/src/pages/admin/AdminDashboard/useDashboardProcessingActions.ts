@@ -9,7 +9,7 @@ import {
 } from "../../../api/admin";
 import { useToast } from "../../../contexts/ToastContext";
 import type { Letter } from "../../../types/Letter";
-import type { VisibilityFilter } from "./types";
+import type { DashboardFilterControls } from "./useDashboardFilters";
 
 type SingleMetadataMode = "extract" | "regenerate";
 
@@ -17,14 +17,7 @@ interface UseDashboardProcessingActionsOptions {
   selectedIds: Set<string>;
   letters: Letter[];
   singleSelectedLetter: Letter | null;
-  collectionFilter: string;
-  visibilityFilter: VisibilityFilter;
-  searchQuery: string;
-  yearFilter: number | null;
-  monthFilter: number | null;
-  dayFilter: number | null;
-  dateFromFilter: string | null;
-  dateToFilter: string | null;
+  filters: DashboardFilterControls;
   exitEditMode: () => void;
   fetchLetters: () => Promise<void>;
 }
@@ -43,14 +36,7 @@ export function useDashboardProcessingActions({
   selectedIds,
   letters,
   singleSelectedLetter,
-  collectionFilter,
-  visibilityFilter,
-  searchQuery,
-  yearFilter,
-  monthFilter,
-  dayFilter,
-  dateFromFilter,
-  dateToFilter,
+  filters,
   exitEditMode,
   fetchLetters,
 }: UseDashboardProcessingActionsOptions) {
@@ -74,6 +60,16 @@ export function useDashboardProcessingActions({
         : "extract",
     [singleSelectedLetter],
   );
+  const {
+    collectionFilter,
+    visibilityFilter,
+    searchQuery,
+    yearFilter,
+    monthFilter,
+    dayFilter,
+    dateFromFilter,
+    dateToFilter,
+  } = filters;
 
   const buildProcessingFilters = useCallback(() => ({
     collectionCode: collectionFilter !== "all" ? collectionFilter : undefined,

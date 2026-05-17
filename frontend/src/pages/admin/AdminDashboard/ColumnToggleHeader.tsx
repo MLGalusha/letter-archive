@@ -1,9 +1,9 @@
 import type { RefObject } from "react";
 import { Icon } from "../../../components/common/Icon";
-import type { ColumnDef, ColumnId } from "./types";
+import type { ColumnId } from "./types";
 
 interface ColumnToggleHeaderProps {
-  allColumns: ColumnDef[];
+  allColumns: Array<{ id: ColumnId; label: string }>;
   visibleColumns: Set<ColumnId>;
   showColumnMenu: boolean;
   onToggleColumnMenu: () => void;

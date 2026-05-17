@@ -1,12 +1,13 @@
 import type React from "react";
 import type { RefObject } from "react";
+import { Icon } from "../../../components/common/Icon";
 import type { Letter, ContentStatus } from "../../../types/Letter";
 import ColumnToggleHeader from "./ColumnToggleHeader";
 import { FILE_TYPE_COLUMNS } from "./constants";
 import DashboardPagination from "./DashboardPagination";
 import RecentActivityRow from "./RecentActivityRow";
 import SortableTableHeader from "./SortableTableHeader";
-import type { ColumnDef, ColumnId, ExtendedSortField, PendingChange, SortInfo } from "./types";
+import type { ColumnId, ExtendedSortField, PendingChange, SortInfo } from "./types";
 
 interface PaginationState {
   page: number;
@@ -47,7 +48,7 @@ interface RecentActivityTableProps {
   onPageChange: (page: number) => void;
   letterCountText?: string;
   // Column toggle
-  allColumns: ColumnDef[];
+  allColumns: Array<{ id: ColumnId; label: string }>;
   showColumnMenu: boolean;
   onToggleColumnMenu: () => void;
   onToggleColumn: (id: ColumnId) => void;

@@ -1,5 +1,5 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProcessingStatus } from "../../../api/admin";
 import Icon from "../../../components/common/Icon";
 import type { ContentStatus } from "../../../types/Letter";
@@ -8,6 +8,7 @@ import type {
   ContentFilterView,
   DashboardView,
   DateMode,
+  SavedDashboardView,
   ServerSortField,
   SortColumn,
   VisibilityFilter,
@@ -36,6 +37,10 @@ interface DashboardToolbarProps {
   stats: DashboardToolbarStats;
   sortColumns: SortColumn[];
   setSortColumns: Dispatch<SetStateAction<SortColumn[]>>;
+  savedViews: SavedDashboardView[];
+  onSaveView: (name: string) => void;
+  onApplyView: (view: SavedDashboardView) => void;
+  onDeleteView: (viewId: string) => void;
   searchInput: string;
   setSearchInput: (value: string) => void;
   searchQuery: string;
@@ -85,6 +90,10 @@ export default function DashboardToolbar({
   stats,
   sortColumns,
   setSortColumns,
+  savedViews,
+  onSaveView,
+  onApplyView,
+  onDeleteView,
   searchInput,
   setSearchInput,
   searchQuery,
@@ -124,6 +133,29 @@ export default function DashboardToolbar({
   processingStatus,
   selectedCount,
 }: DashboardToolbarProps) {
+  const [savedViewsOpen, setSavedViewsOpen] = useState(false);
+  const [newViewName, setNewViewName] = useState("");
+  const savedViewsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!savedViewsOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (savedViewsRef.current && !savedViewsRef.current.contains(event.target as Node)) {
+        setSavedViewsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [savedViewsOpen]);
+
+  const handleSaveView = () => {
+    onSaveView(newViewName || "Dashboard view");
+    setNewViewName("");
+    setSavedViewsOpen(false);
+  };
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (collectionFilter !== "all") count++;
@@ -287,10 +319,66 @@ export default function DashboardToolbar({
               {activeFilterCount > 0 && <span className="filter-badge">{activeFilterCount}</span>}
             </button>
 
-            <button className="dashboard-control-btn saved-view-btn" type="button">
-              <Icon name="save" size={15} />
-              <span>Save view</span>
-            </button>
+            <div className="saved-view-menu" ref={savedViewsRef}>
+              <button
+                className={`dashboard-control-btn saved-view-btn ${savedViewsOpen ? "active" : ""}`}
+                type="button"
+                onClick={() => setSavedViewsOpen((open) => !open)}
+                aria-expanded={savedViewsOpen}
+              >
+                <Icon name="save" size={15} />
+                <span>Save view</span>
+              </button>
+              {savedViewsOpen && (
+                <div className="saved-view-popover">
+                  <div className="saved-view-form">
+                    <input
+                      type="text"
+                      placeholder="View name"
+                      value={newViewName}
+                      onChange={(event) => setNewViewName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          handleSaveView();
+                        }
+                      }}
+                    />
+                    <button type="button" onClick={handleSaveView}>
+                      Save
+                    </button>
+                  </div>
+
+                  <div className="saved-view-list">
+                    {savedViews.length === 0 ? (
+                      <div className="saved-view-empty">No saved views</div>
+                    ) : (
+                      savedViews.map((view) => (
+                        <div className="saved-view-item" key={view.id}>
+                          <button
+                            className="saved-view-load"
+                            type="button"
+                            onClick={() => {
+                              onApplyView(view);
+                              setSavedViewsOpen(false);
+                            }}
+                          >
+                            {view.name}
+                          </button>
+                          <button
+                            className="saved-view-delete"
+                            type="button"
+                            aria-label={`Delete ${view.name}`}
+                            onClick={() => onDeleteView(view.id)}
+                          >
+                            <Icon name="close" size={12} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <label className="dashboard-sort-control">
               <span>Sort</span>

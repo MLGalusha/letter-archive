@@ -65,3 +65,5 @@ export const DEFAULT_VISIBLE_COLUMNS = new Set<ColumnId>(
 export const COLUMN_STORAGE_KEY = "adminDashboardColumns";
 
 export const STORAGE_KEY = "adminDashboardState";
+
+export const SAVED_VIEWS_STORAGE_KEY = "adminDashboardSavedViews";

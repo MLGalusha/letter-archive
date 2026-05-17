@@ -1,8 +1,9 @@
 import type { ContentStatus } from "../../../types/Letter";
-import { SERVER_SORT_FIELDS, STORAGE_KEY } from "./constants";
+import { SAVED_VIEWS_STORAGE_KEY, SERVER_SORT_FIELDS, STORAGE_KEY } from "./constants";
 import type {
   ExtendedSortField,
   PersistedState,
+  SavedDashboardView,
   ServerSortField,
 } from "./types";
 
@@ -72,6 +73,33 @@ export function savePersistedState(state: PersistedState): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (error) {
     console.warn("Failed to save persisted state:", error);
+  }
+}
+
+export function loadSavedDashboardViews(): SavedDashboardView[] {
+  try {
+    const saved = localStorage.getItem(SAVED_VIEWS_STORAGE_KEY);
+    if (!saved) return [];
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((view): view is SavedDashboardView =>
+      typeof view?.id === "string" &&
+      typeof view?.name === "string" &&
+      typeof view?.createdAt === "string" &&
+      typeof view?.state === "object" &&
+      Array.isArray(view.state.visibleColumns),
+    );
+  } catch (error) {
+    console.warn("Failed to load saved dashboard views:", error);
+    return [];
+  }
+}
+
+export function saveSavedDashboardViews(views: SavedDashboardView[]): void {
+  try {
+    localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(views));
+  } catch (error) {
+    console.warn("Failed to save dashboard views:", error);
   }
 }
 

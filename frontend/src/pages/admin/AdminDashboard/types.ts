@@ -75,6 +75,15 @@ export interface PersistedState {
   metadataStatusFilters: string[];
 }
 
+export interface SavedDashboardView {
+  id: string;
+  name: string;
+  createdAt: string;
+  state: PersistedState & {
+    visibleColumns: ColumnId[];
+  };
+}
+
 export interface PendingChange {
   sender?: string;
   recipient?: string;

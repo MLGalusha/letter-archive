@@ -87,6 +87,7 @@ export function useDashboardColumns() {
 
   return {
     visibleColumns,
+    setVisibleColumns,
     showColumnMenu,
     setShowColumnMenu,
     columnMenuRef,

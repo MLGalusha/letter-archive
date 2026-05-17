@@ -99,7 +99,115 @@
 }
 
 .dashboard-control-btn:hover,
-.dashboard-control-btn.has-filters {
+.dashboard-control-btn.has-filters,
+.dashboard-control-btn.active {
+  border-color: var(--text-muted);
+  background: var(--bg);
+}
+
+.saved-view-menu {
+  position: relative;
+}
+
+.saved-view-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 220;
+  width: min(320px, calc(100vw - 1.5rem));
+  padding: var(--spacing-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-light);
+  box-shadow: 0 8px 24px hsla(0, 0%, 0%, 0.16);
+  box-sizing: border-box;
+}
+
+.saved-view-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-xs);
+}
+
+.saved-view-form input {
+  min-width: 0;
+  height: 32px;
+  padding: 0 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--font-sm);
+  box-sizing: border-box;
+}
+
+.saved-view-form input:focus {
+  outline: none;
+  border-color: var(--text-muted);
+  box-shadow: 0 0 0 3px hsla(0, 0%, 50%, 0.12);
+}
+
+.saved-view-form button,
+.saved-view-load,
+.saved-view-delete {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-light);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.saved-view-form button {
+  height: 32px;
+  padding: 0 0.75rem;
+  font-weight: 600;
+}
+
+.saved-view-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  margin-top: var(--spacing-sm);
+  overflow-y: auto;
+}
+
+.saved-view-empty {
+  padding: var(--spacing-sm);
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  text-align: center;
+}
+
+.saved-view-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: 4px;
+}
+
+.saved-view-load {
+  min-width: 0;
+  height: 30px;
+  padding: 0 0.6rem;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-view-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 30px;
+  padding: 0;
+  color: var(--text-muted);
+}
+
+.saved-view-form button:hover,
+.saved-view-load:hover,
+.saved-view-delete:hover {
   border-color: var(--text-muted);
   background: var(--bg);
 }
@@ -1835,6 +1943,12 @@
 
   .saved-view-btn span {
     display: none;
+  }
+
+  .saved-view-popover {
+    left: 0;
+    right: auto;
+    width: min(260px, calc(100vw - 7.25rem));
   }
 
   .dashboard-sort-control {

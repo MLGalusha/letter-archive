@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from "react";
 import type { ProcessingStatus } from "../../../api/admin";
 import Icon from "../../../components/common/Icon";
+import BulkCopyControls from "./BulkCopyControls";
+import BulkProcessingControls from "./BulkProcessingControls";
+import BulkPublishingMenu from "./BulkPublishingMenu";
+import BulkSelectionControls from "./BulkSelectionControls";
 import type { PublishCounts } from "./useDashboardSelectionDetails";
 
 interface BulkEditToolbarProps {
@@ -72,215 +75,54 @@ export default function BulkEditToolbar({
   onDone,
   onExit,
 }: BulkEditToolbarProps) {
-  const [showPublishMenu, setShowPublishMenu] = useState(false);
-  const publishMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!showPublishMenu) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (publishMenuRef.current && !publishMenuRef.current.contains(event.target as Node)) {
-        setShowPublishMenu(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showPublishMenu]);
-
   return (
     <div className="edit-toolbar visible">
       <div className="edit-toolbar-content">
         <div className="edit-toolbar-left">
-          <span className="toolbar-selection-count">
-            {selectedCount} selected
-          </span>
-          <div className="toolbar-select-actions">
-            {!allPageSelected ? (
-              <button className="toolbar-select-btn" onClick={onSelectPage}>
-                Page ({pageCount})
-              </button>
-            ) : (
-              <button className="toolbar-select-btn active" onClick={onSelectPage}>
-                Page ✓
-              </button>
-            )}
-            {totalCount > pageCount && (
-              !allFilteredSelected ? (
-                <button className="toolbar-select-btn" onClick={onSelectAllFiltered}>
-                  All {totalCount}
-                </button>
-              ) : (
-                <button className="toolbar-select-btn active" onClick={onClearSelection}>
-                  All {totalCount} ✓
-                </button>
-              )
-            )}
-          </div>
+          <BulkSelectionControls
+            selectedCount={selectedCount}
+            pageCount={pageCount}
+            totalCount={totalCount}
+            allPageSelected={allPageSelected}
+            allFilteredSelected={allFilteredSelected}
+            onSelectPage={onSelectPage}
+            onSelectAllFiltered={onSelectAllFiltered}
+            onClearSelection={onClearSelection}
+          />
           <div className="toolbar-divider" />
-          <button
-            className={`toolbar-copy-btn ${copyModeActive ? "active" : ""}`}
-            onClick={onToggleCopyMode}
-            disabled={isSaving}
-          >
-            {copyModeActive ? "✓ Copy Mode" : "Copy Mode"}
-          </button>
-          {copyModeActive && !sourceCell && (
-            <span className="toolbar-hint">Click a cell to copy</span>
-          )}
-          {copyModeActive && sourceCell && (
-            <span className="toolbar-hint">
-              Copying: <strong>"{copiedValue || "(empty)"}"</strong>
-            </span>
-          )}
-          {pendingChangesCount > 0 && (
-            <span className="toolbar-changes">
-              {pendingChangesCount} change{pendingChangesCount === 1 ? "" : "s"}
-            </span>
-          )}
+          <BulkCopyControls
+            copyModeActive={copyModeActive}
+            copiedValue={copiedValue}
+            sourceCell={sourceCell}
+            pendingChangesCount={pendingChangesCount}
+            isSaving={isSaving}
+            onToggleCopyMode={onToggleCopyMode}
+          />
         </div>
 
         <div className="edit-toolbar-center">
-          {processingStatus?.isRunning ? (
-            <div className="toolbar-processing-controls">
-              <div className="toolbar-progress">
-                <span className="toolbar-progress-text">
-                  {processingStatus.currentJob?.type === "transcription" ? "Transcribing" : "Extracting"}:{" "}
-                  {processingStatus.completed}/{processingStatus.total}
-                  {processingStatus.failed > 0 && (
-                    <span className="failed-count"> ({processingStatus.failed} failed)</span>
-                  )}
-                </span>
-                <div className="toolbar-progress-bar">
-                  <div
-                    className="toolbar-progress-fill"
-                    style={{
-                      width: `${processingStatus.total > 0 ? (processingStatus.completed / processingStatus.total) * 100 : 0}%`,
-                    }}
-                  />
-                </div>
-              </div>
-              {processingStatus.isPaused ? (
-                <button onClick={onResumeProcessing} className="toolbar-process-btn toolbar-process-resume">
-                  Resume
-                </button>
-              ) : (
-                <button
-                  onClick={onPauseProcessing}
-                  className="toolbar-process-btn toolbar-process-pause"
-                  disabled={pausePending || abortPending}
-                >
-                  {pausePending ? "Pausing..." : "Pause"}
-                </button>
-              )}
-              <button
-                onClick={onAbortProcessing}
-                className="toolbar-process-btn toolbar-process-abort"
-                disabled={abortPending}
-              >
-                {abortPending ? "Aborting..." : "Abort"}
-              </button>
-            </div>
-          ) : (
-            <div className="toolbar-process-actions">
-              <button className="toolbar-process-btn" onClick={onOpenTranscription}>
-                Transcribe{selectedCount > 0 ? ` (${selectedCount})` : ""}
-              </button>
-              <button className="toolbar-process-btn" onClick={onOpenMetadataExtraction}>
-                Extract Metadata{selectedCount > 0 ? ` (${selectedCount})` : ""}
-              </button>
-            </div>
-          )}
+          <BulkProcessingControls
+            selectedCount={selectedCount}
+            processingStatus={processingStatus}
+            pausePending={pausePending}
+            abortPending={abortPending}
+            onOpenTranscription={onOpenTranscription}
+            onOpenMetadataExtraction={onOpenMetadataExtraction}
+            onPauseProcessing={onPauseProcessing}
+            onResumeProcessing={onResumeProcessing}
+            onAbortProcessing={onAbortProcessing}
+          />
         </div>
 
         <div className="edit-toolbar-right">
-          <div className="publish-menu-container" ref={publishMenuRef}>
-            <button
-              className={`toolbar-process-btn${showPublishMenu ? " active" : ""}`}
-              onClick={() => setShowPublishMenu((current) => !current)}
-              disabled={selectedCount === 0}
-            >
-              Publishing
-            </button>
-            {showPublishMenu && (
-              <div className="publish-menu-dropdown">
-                <div className="publish-menu-section">
-                  <div className="publish-menu-header">
-                    <span className="publish-menu-label">Letters</span>
-                    <span className="publish-menu-counts">
-                      {publishCounts.lettersPublished} published · {publishCounts.lettersHidden} hidden
-                    </span>
-                  </div>
-                  <div className="publish-menu-actions">
-                    <button
-                      className="publish-menu-btn publish-menu-btn--unpublish"
-                      onClick={() => { onBulkHide(); setShowPublishMenu(false); }}
-                      disabled={bulkActionLoading}
-                    >
-                      Hide
-                    </button>
-                    <button
-                      className="publish-menu-btn publish-menu-btn--publish"
-                      onClick={() => { onBulkPublish(); setShowPublishMenu(false); }}
-                      disabled={bulkActionLoading}
-                    >
-                      Publish
-                    </button>
-                  </div>
-                </div>
-                <div className="publish-menu-divider" />
-                <div className="publish-menu-section">
-                  <div className="publish-menu-header">
-                    <span className="publish-menu-label">Transcripts</span>
-                    <span className="publish-menu-counts">
-                      {publishCounts.transcriptsPublished} published · {publishCounts.transcriptsUnpublished} hidden
-                    </span>
-                  </div>
-                  <div className="publish-menu-actions">
-                    <button
-                      className="publish-menu-btn publish-menu-btn--unpublish"
-                      onClick={() => { onBulkContentVisibility("transcriptPublished", false); setShowPublishMenu(false); }}
-                      disabled={bulkActionLoading}
-                    >
-                      Hide
-                    </button>
-                    <button
-                      className="publish-menu-btn publish-menu-btn--publish"
-                      onClick={() => { onBulkContentVisibility("transcriptPublished", true); setShowPublishMenu(false); }}
-                      disabled={bulkActionLoading}
-                    >
-                      Publish
-                    </button>
-                  </div>
-                </div>
-                <div className="publish-menu-divider" />
-                <div className="publish-menu-section">
-                  <div className="publish-menu-header">
-                    <span className="publish-menu-label">Metadata</span>
-                    <span className="publish-menu-counts">
-                      {publishCounts.metadataPublished} published · {publishCounts.metadataUnpublished} hidden
-                    </span>
-                  </div>
-                  <div className="publish-menu-actions">
-                    <button
-                      className="publish-menu-btn publish-menu-btn--unpublish"
-                      onClick={() => { onBulkContentVisibility("metadataPublished", false); setShowPublishMenu(false); }}
-                      disabled={bulkActionLoading}
-                    >
-                      Hide
-                    </button>
-                    <button
-                      className="publish-menu-btn publish-menu-btn--publish"
-                      onClick={() => { onBulkContentVisibility("metadataPublished", true); setShowPublishMenu(false); }}
-                      disabled={bulkActionLoading}
-                    >
-                      Publish
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <BulkPublishingMenu
+            selectedCount={selectedCount}
+            bulkActionLoading={bulkActionLoading}
+            publishCounts={publishCounts}
+            onBulkHide={onBulkHide}
+            onBulkPublish={onBulkPublish}
+            onBulkContentVisibility={onBulkContentVisibility}
+          />
           <div className="toolbar-divider" />
           <div className="toolbar-destructive-actions">
             <button

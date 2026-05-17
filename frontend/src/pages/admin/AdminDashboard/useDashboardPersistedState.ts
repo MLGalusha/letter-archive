@@ -1,35 +1,29 @@
 import { useEffect } from "react";
-import type { ContentStatus } from "../../../types/Letter";
-import type { DateMode, SortColumn, VisibilityFilter } from "./types";
+import type { SortColumn } from "./types";
+import type { DashboardFilterControls } from "./useDashboardFilters";
 import { savePersistedState } from "./utils";
 
 export function useDashboardPersistedState({
-  visibilityFilter,
-  collectionFilter,
-  searchQuery,
+  filters,
   sortColumns,
-  dateMode,
-  yearFilter,
-  monthFilter,
-  dayFilter,
-  dateFromFilter,
-  dateToFilter,
-  transcriptStatusFilters,
-  metadataStatusFilters,
 }: {
-  visibilityFilter: VisibilityFilter;
-  collectionFilter: string;
-  searchQuery: string;
+  filters: DashboardFilterControls;
   sortColumns: SortColumn[];
-  dateMode: DateMode;
-  yearFilter: number | null;
-  monthFilter: number | null;
-  dayFilter: number | null;
-  dateFromFilter: string | null;
-  dateToFilter: string | null;
-  transcriptStatusFilters: ContentStatus[];
-  metadataStatusFilters: ContentStatus[];
 }) {
+  const {
+    visibilityFilter,
+    collectionFilter,
+    searchQuery,
+    dateMode,
+    yearFilter,
+    monthFilter,
+    dayFilter,
+    dateFromFilter,
+    dateToFilter,
+    transcriptStatusFilters,
+    metadataStatusFilters,
+  } = filters;
+
   useEffect(() => {
     savePersistedState({
       visibilityFilter,

@@ -78,20 +78,7 @@ export default function AdminDashboard() {
     toggleColumnMenu,
   } = useDashboardColumns();
 
-  useDashboardPersistedState({
-    visibilityFilter,
-    collectionFilter,
-    searchQuery,
-    sortColumns,
-    dateMode,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
-  });
+  useDashboardPersistedState({ filters: dashboardFilters, sortColumns });
 
   const {
     letters,

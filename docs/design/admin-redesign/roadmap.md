@@ -453,6 +453,7 @@ Phase 3.25 progress:
 - Added a shared `DashboardManagerSurface` shell with a named dialog, compact header, close action, scrollable body, optional footer/action area, and Escape-to-close behavior.
 - Migrated the Sort manager onto the shared shell as the first proving surface.
 - Changed the Sort manager's mobile behavior from a cramped anchored popover to a bottom sheet with clear header/body/footer ownership.
+- Migrated the Columns manager onto the same shell, keeping its table-header trigger while sharing dialog, close, body, footer, and mobile sheet conventions with Sort.
 
 Related responsive UI progress:
 

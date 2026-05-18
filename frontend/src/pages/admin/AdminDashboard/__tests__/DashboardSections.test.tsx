@@ -36,11 +36,13 @@ describe("RecentActivityTable", () => {
     onRowClick = vi.fn(),
     onCheckboxChange = vi.fn(),
     onCellClick = vi.fn(),
+    showColumnMenu = false,
   }: {
     selectedIds?: Set<string>;
     onRowClick?: TableSelectionModel["onRowClick"];
     onCheckboxChange?: TableSelectionModel["onCheckboxChange"];
     onCellClick?: TableCopyEditModel["onCellClick"];
+    showColumnMenu?: boolean;
   } = {}) {
     render(
       <RecentActivityTable
@@ -65,7 +67,7 @@ describe("RecentActivityTable", () => {
             { id: "date", label: "Letter date", defaultVisible: true },
             { id: "flag", label: "Review flag", defaultVisible: true },
           ],
-          showColumnMenu: false,
+          showColumnMenu,
           onToggleColumnMenu: vi.fn(),
           onToggleColumn: vi.fn(),
           onMoveColumn: vi.fn(),
@@ -120,6 +122,14 @@ describe("RecentActivityTable", () => {
 
     await user.click(screen.getByText("Alice"));
     expect(onCellClick).toHaveBeenCalled();
+  });
+
+  it("renders column settings in the shared manager dialog", () => {
+    renderRecentActivityTable({ showColumnMenu: true });
+
+    expect(screen.getByRole("dialog", { name: "Column settings" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Columns" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reset" })).toBeInTheDocument();
   });
 
   it("exposes selected rows through checkbox and row state", () => {

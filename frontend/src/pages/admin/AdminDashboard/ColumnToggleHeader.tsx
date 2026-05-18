@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { DragEvent, KeyboardEvent, RefObject } from "react";
 import { Icon } from "../../../components/common/Icon";
+import DashboardManagerSurface from "./DashboardManagerSurface";
 import type { ColumnDef, ColumnId } from "./types";
 
 interface ColumnToggleHeaderProps {
@@ -83,19 +84,23 @@ export default function ColumnToggleHeader({
         onClick={onToggleColumnMenu}
         aria-label="Configure columns"
         aria-expanded={showColumnMenu}
-        aria-haspopup="menu"
+        aria-haspopup="dialog"
         title="Toggle columns"
       >
         <Icon name="columns" size={14} />
       </button>
       {showColumnMenu && (
-        <div className="column-toggle-dropdown column-toggle-left">
-          <div className="column-toggle-header-row">
-            <span>Columns</span>
-            <button type="button" onClick={onResetColumnOrder}>
+        <DashboardManagerSurface
+          title="Columns"
+          ariaLabel="Column settings"
+          className="column-toggle-dropdown column-toggle-left"
+          onClose={onToggleColumnMenu}
+          footer={(
+            <button type="button" className="column-reset-btn" onClick={onResetColumnOrder}>
               Reset
             </button>
-          </div>
+          )}
+        >
           {orderedColumns.map((col, index) => (
             <div
               key={col.id}
@@ -127,7 +132,7 @@ export default function ColumnToggleHeader({
               </label>
             </div>
           ))}
-        </div>
+        </DashboardManagerSurface>
       )}
     </th>
   );

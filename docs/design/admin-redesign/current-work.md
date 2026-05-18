@@ -51,6 +51,7 @@ Verification plan:
 - 2026-05-18: Tightened the copy/edit-to-row-selection boundary so edit-mode row clicks pass explicit row-selection options instead of a full React mouse event.
 - 2026-05-18: Added focused copy/edit hook tests for row-click interception in selection mode and copy mode.
 - 2026-05-18: Extracted the row selection checkbox cell so checkbox event isolation is owned by a named component instead of being embedded in the full row renderer.
+- 2026-05-18: Added filtered-selection tests for select-all-filtered, pruning invalid selected IDs, and closing edit mode when pruning empties selection.
 
 ## Selection Audit
 

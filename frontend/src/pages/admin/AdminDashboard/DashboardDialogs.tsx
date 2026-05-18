@@ -1,170 +1,128 @@
 import IdentityExtractionModal from "../../../components/admin/IdentityExtractionModal";
 import { ConfirmDialog } from "../../../components/common";
 import ProcessingConfirmDialog from "./ProcessingConfirmDialog";
-
-type SingleMetadataMode = "extract" | "regenerate";
+import type { useDashboardBulkActions } from "./useDashboardBulkActions";
+import type { useDashboardProcessingActions } from "./useDashboardProcessingActions";
 
 interface DashboardDialogsProps {
   selectedCount: number;
-  deleting: boolean;
-  bulkActionLoading: boolean;
-  showDeleteModal: boolean;
-  showResetModal: boolean;
-  showClearMetadataModal: boolean;
-  showUnconfirmedDialog: boolean;
-  unconfirmedCount: number;
-  showTranscribeConfirm: boolean;
-  transcribeExistingCount: number;
-  showMetadataConfirm: boolean;
-  metadataExistingCount: number;
-  showSingleMetadataModal: boolean;
-  singleMetadataSender: string;
-  singleMetadataRecipient: string;
-  singleMetadataSubmitting: boolean;
-  singleMetadataMode: SingleMetadataMode;
   singleMetadataLetterTitle?: string;
-  onConfirmDelete: () => void;
-  onCancelDelete: () => void;
-  onConfirmClearTranscriptions: () => void;
-  onCancelClearTranscriptions: () => void;
-  onConfirmClearMetadata: () => void;
-  onCancelClearMetadata: () => void;
-  onConfirmUnverified: () => void;
-  onCancelUnverified: () => void;
-  onCancelTranscribe: () => void;
-  onStartTranscription: (skipExisting?: boolean) => void;
-  onCancelMetadata: () => void;
-  onStartMetadataExtraction: (skipConfirmation?: boolean, skipExisting?: boolean) => void;
-  onCloseSingleMetadata: () => void;
-  onConfirmSingleMetadata: () => void;
-  onSingleMetadataSenderChange: (value: string) => void;
-  onSingleMetadataRecipientChange: (value: string) => void;
+  bulkActions: ReturnType<typeof useDashboardBulkActions>;
+  processingActions: ReturnType<typeof useDashboardProcessingActions>;
 }
 
 export default function DashboardDialogs({
   selectedCount,
-  deleting,
-  bulkActionLoading,
-  showDeleteModal,
-  showResetModal,
-  showClearMetadataModal,
-  showUnconfirmedDialog,
-  unconfirmedCount,
-  showTranscribeConfirm,
-  transcribeExistingCount,
-  showMetadataConfirm,
-  metadataExistingCount,
-  showSingleMetadataModal,
-  singleMetadataSender,
-  singleMetadataRecipient,
-  singleMetadataSubmitting,
-  singleMetadataMode,
   singleMetadataLetterTitle,
-  onConfirmDelete,
-  onCancelDelete,
-  onConfirmClearTranscriptions,
-  onCancelClearTranscriptions,
-  onConfirmClearMetadata,
-  onCancelClearMetadata,
-  onConfirmUnverified,
-  onCancelUnverified,
-  onCancelTranscribe,
-  onStartTranscription,
-  onCancelMetadata,
-  onStartMetadataExtraction,
-  onCloseSingleMetadata,
-  onConfirmSingleMetadata,
-  onSingleMetadataSenderChange,
-  onSingleMetadataRecipientChange,
+  bulkActions,
+  processingActions,
 }: DashboardDialogsProps) {
   return (
     <>
       <ConfirmDialog
-        isOpen={showDeleteModal}
+        isOpen={bulkActions.showDeleteModal}
         title="Delete Letters"
         message={`Are you sure you want to delete ${selectedCount} letter${selectedCount === 1 ? "" : "s"}?`}
-        confirmText={deleting ? "Deleting..." : "Delete"}
+        confirmText={bulkActions.deleting ? "Deleting..." : "Delete"}
         variant="danger"
-        loading={deleting}
-        onConfirm={onConfirmDelete}
-        onCancel={onCancelDelete}
+        loading={bulkActions.deleting}
+        onConfirm={bulkActions.handleConfirmDelete}
+        onCancel={bulkActions.handleCancelDelete}
       />
 
       <ConfirmDialog
-        isOpen={showResetModal}
+        isOpen={bulkActions.showResetModal}
         title="Clear Transcriptions"
         message={`This will clear all transcriptions (including extra content), metadata, and entity links for ${selectedCount} letter${selectedCount === 1 ? "" : "s"}, returning them to UPLOADED state. You will need to re-transcribe them.`}
-        confirmText={bulkActionLoading ? "Clearing..." : "Clear Transcriptions"}
-        loading={bulkActionLoading}
-        onConfirm={onConfirmClearTranscriptions}
-        onCancel={onCancelClearTranscriptions}
+        confirmText={bulkActions.bulkActionLoading ? "Clearing..." : "Clear Transcriptions"}
+        loading={bulkActions.bulkActionLoading}
+        onConfirm={bulkActions.handleConfirmClearTranscriptions}
+        onCancel={() => bulkActions.setShowResetModal(false)}
       />
 
       <ConfirmDialog
-        isOpen={showClearMetadataModal}
+        isOpen={bulkActions.showClearMetadataModal}
         title="Clear Metadata"
         message={`This will clear all metadata, entity links, and extracted entities for ${selectedCount} letter${selectedCount === 1 ? "" : "s"}. The transcriptions will be kept intact.`}
-        confirmText={bulkActionLoading ? "Clearing..." : "Clear Metadata"}
-        loading={bulkActionLoading}
-        onConfirm={onConfirmClearMetadata}
-        onCancel={onCancelClearMetadata}
+        confirmText={bulkActions.bulkActionLoading ? "Clearing..." : "Clear Metadata"}
+        loading={bulkActions.bulkActionLoading}
+        onConfirm={bulkActions.handleConfirmClearMetadata}
+        onCancel={() => bulkActions.setShowClearMetadataModal(false)}
       />
 
       <ConfirmDialog
-        isOpen={showUnconfirmedDialog}
+        isOpen={processingActions.showUnconfirmedDialog}
         title="Unverified Transcripts"
-        message={`${unconfirmedCount} of the selected letter${unconfirmedCount === 1 ? " has an" : "s have"} unverified transcript${unconfirmedCount === 1 ? "" : "s"}. Metadata extraction may be less accurate without verified transcripts. Do you want to proceed anyway?`}
+        message={`${processingActions.unconfirmedCount} of the selected letter${processingActions.unconfirmedCount === 1 ? " has an" : "s have"} unverified transcript${processingActions.unconfirmedCount === 1 ? "" : "s"}. Metadata extraction may be less accurate without verified transcripts. Do you want to proceed anyway?`}
         confirmText="Extract Anyway"
-        onConfirm={onConfirmUnverified}
-        onCancel={onCancelUnverified}
+        onConfirm={processingActions.handleConfirmUnverified}
+        onCancel={() => processingActions.setShowUnconfirmedDialog(false)}
       />
 
-      {showTranscribeConfirm && (
+      {processingActions.showTranscribeConfirm && (
         <ProcessingConfirmDialog
           title="Transcribe Letters"
           selectedCount={selectedCount}
-          existingCount={transcribeExistingCount}
+          existingCount={processingActions.transcribeExistingCount}
           existingSingularText="a transcript"
           existingPluralText="transcripts"
           emptyActionText="Transcribe"
           confirmText="Transcribe"
           skipActionText="Skip Existing"
           overwriteActionText="Overwrite All"
-          onCancel={onCancelTranscribe}
-          onConfirm={() => onStartTranscription()}
-          onSkipExisting={() => onStartTranscription(true)}
-          onOverwriteAll={() => onStartTranscription(false)}
+          onCancel={() => processingActions.setShowTranscribeConfirm(false)}
+          onConfirm={() => {
+            processingActions.setShowTranscribeConfirm(false);
+            void processingActions.handleStartTranscription();
+          }}
+          onSkipExisting={() => {
+            processingActions.setShowTranscribeConfirm(false);
+            void processingActions.handleStartTranscription(true);
+          }}
+          onOverwriteAll={() => {
+            processingActions.setShowTranscribeConfirm(false);
+            void processingActions.handleStartTranscription(false);
+          }}
         />
       )}
 
-      {showMetadataConfirm && (
+      {processingActions.showMetadataConfirm && (
         <ProcessingConfirmDialog
           title="Extract Metadata"
           selectedCount={selectedCount}
-          existingCount={metadataExistingCount}
+          existingCount={processingActions.metadataExistingCount}
           existingSingularText="metadata"
           existingPluralText="metadata"
           emptyActionText="Extract metadata for"
           confirmText="Extract"
           skipActionText="Skip Existing"
           overwriteActionText="Overwrite All"
-          onCancel={onCancelMetadata}
-          onConfirm={() => onStartMetadataExtraction()}
-          onSkipExisting={() => onStartMetadataExtraction(false, true)}
-          onOverwriteAll={() => onStartMetadataExtraction()}
+          onCancel={() => processingActions.setShowMetadataConfirm(false)}
+          onConfirm={() => {
+            processingActions.setShowMetadataConfirm(false);
+            void processingActions.handleStartMetadataExtraction();
+          }}
+          onSkipExisting={() => {
+            processingActions.setShowMetadataConfirm(false);
+            void processingActions.handleStartMetadataExtraction(false, true);
+          }}
+          onOverwriteAll={() => {
+            processingActions.setShowMetadataConfirm(false);
+            void processingActions.handleStartMetadataExtraction();
+          }}
         />
       )}
 
       <IdentityExtractionModal
-        isOpen={showSingleMetadataModal}
-        onClose={onCloseSingleMetadata}
-        onConfirm={onConfirmSingleMetadata}
-        sender={singleMetadataSender}
-        recipient={singleMetadataRecipient}
-        onSenderChange={onSingleMetadataSenderChange}
-        onRecipientChange={onSingleMetadataRecipientChange}
-        submitting={singleMetadataSubmitting}
-        mode={singleMetadataMode}
+        isOpen={processingActions.showSingleMetadataModal}
+        onClose={() => processingActions.setShowSingleMetadataModal(false)}
+        onConfirm={() => void processingActions.handleSingleMetadataExtraction()}
+        sender={processingActions.singleMetadataSender}
+        recipient={processingActions.singleMetadataRecipient}
+        onSenderChange={processingActions.setSingleMetadataSender}
+        onRecipientChange={processingActions.setSingleMetadataRecipient}
+        submitting={processingActions.singleMetadataSubmitting}
+        mode={processingActions.singleMetadataMode}
         letterTitle={singleMetadataLetterTitle}
       />
     </>

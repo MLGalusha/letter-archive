@@ -151,29 +151,20 @@ export default function AdminDashboard() {
 
   const { handleToggleFlag } = useDashboardFlagActions({ setLetters });
 
-  const {
-    showDeleteModal,
-    deleting,
-    showResetModal,
-    showClearMetadataModal,
-    bulkActionLoading,
-    setShowResetModal,
-    setShowClearMetadataModal,
-    handleDeleteClick,
-    handleConfirmDelete,
-    handleCancelDelete,
-    handleClearTranscriptionsClick,
-    handleConfirmClearTranscriptions,
-    handleClearMetadataClick,
-    handleConfirmClearMetadata,
-    handleBulkPublish,
-    handleBulkHide,
-    handleBulkContentVisibility,
-  } = useDashboardBulkActions({
+  const bulkActions = useDashboardBulkActions({
     selectedIds,
     exitEditMode,
     fetchLetters,
   });
+  const {
+    bulkActionLoading,
+    handleDeleteClick,
+    handleClearTranscriptionsClick,
+    handleClearMetadataClick,
+    handleBulkPublish,
+    handleBulkHide,
+    handleBulkContentVisibility,
+  } = bulkActions;
 
   const {
     processingStatus,
@@ -184,31 +175,7 @@ export default function AdminDashboard() {
     handleAbortProcessing,
   } = useDashboardProcessingControls({ fetchLetters });
 
-  const {
-    showUnconfirmedDialog,
-    setShowUnconfirmedDialog,
-    unconfirmedCount,
-    showTranscribeConfirm,
-    setShowTranscribeConfirm,
-    transcribeExistingCount,
-    showMetadataConfirm,
-    setShowMetadataConfirm,
-    metadataExistingCount,
-    showSingleMetadataModal,
-    setShowSingleMetadataModal,
-    singleMetadataSender,
-    setSingleMetadataSender,
-    singleMetadataRecipient,
-    setSingleMetadataRecipient,
-    singleMetadataSubmitting,
-    singleMetadataMode,
-    handleStartTranscription,
-    handleStartMetadataExtraction,
-    handleConfirmUnverified,
-    handleOpenTranscription,
-    handleOpenMetadataExtraction,
-    handleSingleMetadataExtraction,
-  } = useDashboardProcessingActions({
+  const processingActions = useDashboardProcessingActions({
     selectedIds,
     letters,
     singleSelectedLetter,
@@ -216,6 +183,10 @@ export default function AdminDashboard() {
     exitEditMode,
     fetchLetters,
   });
+  const {
+    handleOpenTranscription,
+    handleOpenMetadataExtraction,
+  } = processingActions;
 
   const getDateButtonText = () => getDashboardDateButtonText({
     dateMode: dashboardFilters.dateMode,
@@ -325,45 +296,9 @@ export default function AdminDashboard() {
 
       <DashboardDialogs
         selectedCount={selectedIds.size}
-        deleting={deleting}
-        bulkActionLoading={bulkActionLoading}
-        showDeleteModal={showDeleteModal}
-        showResetModal={showResetModal}
-        showClearMetadataModal={showClearMetadataModal}
-        showUnconfirmedDialog={showUnconfirmedDialog}
-        unconfirmedCount={unconfirmedCount}
-        showTranscribeConfirm={showTranscribeConfirm}
-        transcribeExistingCount={transcribeExistingCount}
-        showMetadataConfirm={showMetadataConfirm}
-        metadataExistingCount={metadataExistingCount}
-        showSingleMetadataModal={showSingleMetadataModal}
-        singleMetadataSender={singleMetadataSender}
-        singleMetadataRecipient={singleMetadataRecipient}
-        singleMetadataSubmitting={singleMetadataSubmitting}
-        singleMetadataMode={singleMetadataMode}
         singleMetadataLetterTitle={singleSelectedLetter?.title}
-        onConfirmDelete={handleConfirmDelete}
-        onCancelDelete={handleCancelDelete}
-        onConfirmClearTranscriptions={handleConfirmClearTranscriptions}
-        onCancelClearTranscriptions={() => setShowResetModal(false)}
-        onConfirmClearMetadata={handleConfirmClearMetadata}
-        onCancelClearMetadata={() => setShowClearMetadataModal(false)}
-        onConfirmUnverified={handleConfirmUnverified}
-        onCancelUnverified={() => setShowUnconfirmedDialog(false)}
-        onCancelTranscribe={() => setShowTranscribeConfirm(false)}
-        onStartTranscription={(skipExisting) => {
-          setShowTranscribeConfirm(false);
-          void handleStartTranscription(skipExisting);
-        }}
-        onCancelMetadata={() => setShowMetadataConfirm(false)}
-        onStartMetadataExtraction={(skipConfirmation, skipExisting) => {
-          setShowMetadataConfirm(false);
-          void handleStartMetadataExtraction(skipConfirmation, skipExisting);
-        }}
-        onCloseSingleMetadata={() => setShowSingleMetadataModal(false)}
-        onConfirmSingleMetadata={() => void handleSingleMetadataExtraction()}
-        onSingleMetadataSenderChange={setSingleMetadataSender}
-        onSingleMetadataRecipientChange={setSingleMetadataRecipient}
+        bulkActions={bulkActions}
+        processingActions={processingActions}
       />
 
 

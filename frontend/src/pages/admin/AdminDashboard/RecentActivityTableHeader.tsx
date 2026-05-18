@@ -13,7 +13,7 @@ interface HeaderColumn {
   className?: string;
 }
 
-const SORTABLE_HEADER_COLUMNS: HeaderColumn[] = [
+const PRIMARY_SORTABLE_HEADER_COLUMNS: HeaderColumn[] = [
   { id: "sender", field: "sender", dataColumn: "sender", label: "Sender" },
   { id: "recipient", field: "recipient", dataColumn: "recipient", label: "Recipient" },
   { id: "date", field: "letterDate", dataColumn: "date", className: "date-header", label: "Date" },
@@ -31,6 +31,9 @@ const SORTABLE_HEADER_COLUMNS: HeaderColumn[] = [
   { id: "letters", field: "letters", dataColumn: "letters", label: "Letters" },
   { id: "extras", field: "extras", dataColumn: "extras", label: "Extras" },
   { id: "photos", field: "photos", dataColumn: "photos", label: "Photos" },
+];
+
+const TRAILING_SORTABLE_HEADER_COLUMNS: HeaderColumn[] = [
   { id: "created", field: "createdAt", dataColumn: "created", label: "Created" },
   { id: "updated", field: "updatedAt", dataColumn: "updated", label: "Updated" },
   {
@@ -52,6 +55,24 @@ const SORTABLE_HEADER_COLUMNS: HeaderColumn[] = [
     label: <Icon name="flag" size={14} />,
   },
 ];
+
+function renderSortableHeader(
+  column: HeaderColumn,
+  getSortInfo: (field: ExtendedSortField) => SortInfo | null,
+  onSort: (field: ExtendedSortField) => void,
+) {
+  return (
+    <SortableTableHeader
+      key={column.id}
+      field={column.field}
+      dataColumn={column.dataColumn}
+      className={column.className}
+      label={column.label}
+      getSortInfo={getSortInfo}
+      onSort={onSort}
+    />
+  );
+}
 
 interface RecentActivityTableHeaderProps {
   visibleColumns: Set<ColumnId>;
@@ -85,17 +106,9 @@ export default function RecentActivityTableHeader({
           onToggleColumn={onToggleColumn}
           columnMenuRef={columnMenuRef}
         />
-        {SORTABLE_HEADER_COLUMNS.filter((column) => visibleColumns.has(column.id)).map((column) => (
-          <SortableTableHeader
-            key={column.id}
-            field={column.field}
-            dataColumn={column.dataColumn}
-            className={column.className}
-            label={column.label}
-            getSortInfo={getSortInfo}
-            onSort={onSort}
-          />
-        ))}
+        {PRIMARY_SORTABLE_HEADER_COLUMNS
+          .filter((column) => visibleColumns.has(column.id))
+          .map((column) => renderSortableHeader(column, getSortInfo, onSort))}
         {visibleColumns.has("transcript") && (
           <th data-column="transcript" className="status-header">Transcript</th>
         )}
@@ -105,6 +118,9 @@ export default function RecentActivityTableHeader({
         {visibleColumns.has("visibility") && (
           <th data-column="visibility">Visibility</th>
         )}
+        {TRAILING_SORTABLE_HEADER_COLUMNS
+          .filter((column) => visibleColumns.has(column.id))
+          .map((column) => renderSortableHeader(column, getSortInfo, onSort))}
         {FILE_TYPE_COLUMNS.filter((col) => visibleColumns.has(col.id)).map((col) => (
           <th key={col.id} data-column={col.id}>{col.label}</th>
         ))}

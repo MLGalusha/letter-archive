@@ -214,6 +214,7 @@ Progress:
 - Made row checkboxes real focusable controls instead of read-only, pointer-disabled inputs handled only by the table cell.
 - Consolidated duplicate checkbox CSS into one row checkbox visual model with hover, checked, and focus-visible states.
 - Changed the mobile bulk toolbar into compact stacked action rows with row-level horizontal overflow, reducing the selected-state toolbar footprint.
+- Fixed a table header/body ordering mismatch where flag, transcript, metadata, and visibility headers could appear over the wrong cells.
 
 Likely implementation slices:
 

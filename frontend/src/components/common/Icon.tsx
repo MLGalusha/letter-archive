@@ -12,6 +12,7 @@ export type IconName =
   | 'process'
   | 'arrow-left'
   | 'arrow-right'
+  | 'arrow-up-down'
   | 'arrows-horizontal'
   | 'close'
   | 'confirm'
@@ -111,6 +112,13 @@ const iconPaths: Record<IconName, React.ReactNode> = {
   ),
   'arrow-left': <polyline points="15,18 9,12 15,6" />,
   'arrow-right': <polyline points="9,18 15,12 9,6" />,
+  'arrow-up-down': (
+    <>
+      <path d="M12 5v14" />
+      <polyline points="8,9 12,5 16,9" />
+      <polyline points="16,15 12,19 8,15" />
+    </>
+  ),
   'arrows-horizontal': (
     <>
       <line x1="5" y1="12" x2="19" y2="12" />

@@ -256,6 +256,8 @@
   right: 0;
   z-index: 220;
   width: min(340px, calc(100vw - 2rem));
+  max-height: min(720px, calc(100vh - 5rem));
+  overflow-y: auto;
   padding: var(--spacing-sm);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -265,6 +267,10 @@
 }
 
 .sort-manager-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
   padding-bottom: var(--spacing-xs);
   border-bottom: 1px solid var(--border);
 }
@@ -282,6 +288,27 @@
   margin-top: 0.15rem;
   color: var(--text-muted);
   font-size: var(--font-xs);
+}
+
+.sort-direction-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-light);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.sort-direction-toggle:hover,
+.sort-direction-toggle:focus-visible {
+  border-color: var(--accent);
+  background: var(--bg);
+  color: var(--text);
 }
 
 .sort-manager-section {
@@ -2178,6 +2205,7 @@
   .sort-manager-popover {
     right: 0;
     width: min(330px, calc(100vw - 1.3rem));
+    max-height: calc(100vh - 14rem);
   }
 
   .active-filter-chips {

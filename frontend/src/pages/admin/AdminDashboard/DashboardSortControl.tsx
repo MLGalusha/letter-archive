@@ -10,20 +10,22 @@ interface DashboardSortControlProps {
   setSortColumns: Dispatch<SetStateAction<SortColumn[]>>;
 }
 
+type PrimarySort = SortColumn & { field: ServerSortField };
+
 const PRIMARY_SORT_OPTIONS: Array<{
-  value: `${ServerSortField}:${SortDirection}`;
+  value: ServerSortField;
   label: string;
   description: string;
 }> = [
-  { value: "lastOpenedAt:desc", label: "Last opened", description: "Recently opened first" },
-  { value: "letterDate:asc", label: "Letter date oldest", description: "Earliest letter date first" },
-  { value: "letterDate:desc", label: "Letter date newest", description: "Latest letter date first" },
-  { value: "collection:asc", label: "Collection", description: "Collection order" },
-  { value: "createdAt:desc", label: "Created newest", description: "Newest upload first" },
-  { value: "sender:asc", label: "Sender", description: "Sender A to Z" },
-  { value: "recipient:asc", label: "Recipient", description: "Recipient A to Z" },
-  { value: "visibility:asc", label: "Visibility", description: "Visibility state" },
-  { value: "flagged:desc", label: "Flagged", description: "Flagged letters first" },
+  { value: "lastOpenedAt", label: "Last opened", description: "Order by recent admin activity" },
+  { value: "letterDate", label: "Letter date", description: "Order by the historical letter date" },
+  { value: "collection", label: "Collection", description: "Order by collection number" },
+  { value: "createdAt", label: "Created", description: "Order by upload time" },
+  { value: "updatedAt", label: "Updated", description: "Order by last record update" },
+  { value: "sender", label: "Sender", description: "Order alphabetically by sender" },
+  { value: "recipient", label: "Recipient", description: "Order alphabetically by recipient" },
+  { value: "visibility", label: "Visibility", description: "Order by public or hidden state" },
+  { value: "flagged", label: "Flagged", description: "Group flagged letters together" },
 ];
 
 export default function DashboardSortControl({
@@ -38,15 +40,23 @@ export default function DashboardSortControl({
     [sortColumns],
   );
 
-  const primarySortValue = useMemo(() => {
+  const primarySort = useMemo(() => {
     const serverSort = [...sortColumns].reverse().find((column) => isServerSortField(column.field));
-    if (!serverSort) return `${DEFAULT_DASHBOARD_SORT.field}:${DEFAULT_DASHBOARD_SORT.direction}`;
-    return `${serverSort.field}:${serverSort.direction}`;
+    if (!serverSort || !isServerSortField(serverSort.field)) {
+      return DEFAULT_DASHBOARD_SORT as PrimarySort;
+    }
+
+    return {
+      field: serverSort.field,
+      direction: serverSort.direction,
+    };
   }, [sortColumns]);
 
   const primarySortLabel = useMemo(() => {
-    return PRIMARY_SORT_OPTIONS.find((option) => option.value === primarySortValue)?.label ?? "Custom";
-  }, [primarySortValue]);
+    return PRIMARY_SORT_OPTIONS.find((option) => option.value === primarySort.field)?.label ?? "Custom";
+  }, [primarySort.field]);
+
+  const primaryDirectionLabel = getDirectionLabel(primarySort.field, primarySort.direction);
 
   useEffect(() => {
     if (!open) return;
@@ -61,12 +71,22 @@ export default function DashboardSortControl({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
-  const handlePrimarySortChange = (value: string) => {
-    const [field, direction] = value.split(":") as [ServerSortField, SortDirection];
+  const handlePrimarySortFieldChange = (field: ServerSortField) => {
     setSortColumns((previous) => [
       ...previous.filter((column) => !isServerSortField(column.field)),
-      { field, direction },
+      { field, direction: primarySort.direction },
     ]);
+  };
+
+  const handlePrimarySortDirectionChange = (direction: SortDirection) => {
+    setSortColumns((previous) => [
+      ...previous.filter((column) => !isServerSortField(column.field)),
+      { field: primarySort.field, direction },
+    ]);
+  };
+
+  const handleTogglePrimarySortDirection = () => {
+    handlePrimarySortDirectionChange(primarySort.direction === "asc" ? "desc" : "asc");
   };
 
   const handleClearPageSorts = () => {
@@ -87,7 +107,9 @@ export default function DashboardSortControl({
         aria-haspopup="dialog"
       >
         <span>Sort</span>
-        <span className="sort-manager-summary">{primarySortLabel}</span>
+        <span className="sort-manager-summary">
+          {primarySortLabel}, {primaryDirectionLabel.toLowerCase()}
+        </span>
         {clientSortColumns.length > 0 && (
           <span className="sort-manager-badge">{clientSortColumns.length}</span>
         )}
@@ -99,21 +121,32 @@ export default function DashboardSortControl({
           <div className="sort-manager-header">
             <div>
               <span className="sort-manager-title">Sort</span>
-              <span className="sort-manager-subtitle">Full result set first, page sorts second</span>
+              <span className="sort-manager-subtitle">
+                {getSortDescription(primarySort.field, primarySort.direction)}
+              </span>
             </div>
+            <button
+              type="button"
+              className="sort-direction-toggle"
+              onClick={handleTogglePrimarySortDirection}
+              aria-label={`Reverse sort direction. Current order: ${primaryDirectionLabel}.`}
+              title={`Reverse sort direction. Current order: ${primaryDirectionLabel}.`}
+            >
+              <Icon name="arrow-up-down" size={16} />
+            </button>
           </div>
 
           <section className="sort-manager-section">
-            <span className="sort-manager-section-label">Primary sort</span>
+            <span className="sort-manager-section-label">Sort by</span>
             <div className="sort-option-list">
               {PRIMARY_SORT_OPTIONS.map((option) => (
                 <label key={option.value} className="sort-option">
                   <input
                     type="radio"
-                    name="dashboard-primary-sort"
+                    name="dashboard-primary-sort-field"
                     value={option.value}
-                    checked={primarySortValue === option.value}
-                    onChange={() => handlePrimarySortChange(option.value)}
+                    checked={primarySort.field === option.value}
+                    onChange={() => handlePrimarySortFieldChange(option.value)}
                   />
                   <span>
                     <strong>{option.label}</strong>
@@ -147,6 +180,76 @@ export default function DashboardSortControl({
       )}
     </div>
   );
+}
+
+function getDirectionOptions(field: ServerSortField): Array<{ value: SortDirection; label: string }> {
+  switch (field) {
+    case "lastOpenedAt":
+    case "createdAt":
+    case "updatedAt":
+      return [
+        { value: "desc", label: "Newest first" },
+        { value: "asc", label: "Oldest first" },
+      ];
+    case "letterDate":
+      return [
+        { value: "asc", label: "Oldest first" },
+        { value: "desc", label: "Newest first" },
+      ];
+    case "sender":
+    case "recipient":
+    case "collection":
+      return [
+        { value: "asc", label: "A to Z" },
+        { value: "desc", label: "Z to A" },
+      ];
+    case "flagged":
+      return [
+        { value: "desc", label: "Flagged first" },
+        { value: "asc", label: "Unflagged first" },
+      ];
+    case "visibility":
+      return [
+        { value: "asc", label: "Hidden first" },
+        { value: "desc", label: "Public first" },
+      ];
+    case "workflow":
+      return [
+        { value: "asc", label: "Earlier stage first" },
+        { value: "desc", label: "Later stage first" },
+      ];
+  }
+}
+
+function getDirectionLabel(field: ServerSortField, direction: SortDirection): string {
+  return getDirectionOptions(field).find((option) => option.value === direction)?.label ?? direction;
+}
+
+function getSortDescription(field: ServerSortField, direction: SortDirection): string {
+  const directionLabel = getDirectionLabel(field, direction).toLowerCase();
+
+  switch (field) {
+    case "lastOpenedAt":
+      return `Order by recent admin activity, ${directionLabel}.`;
+    case "letterDate":
+      return `Order by historical letter date, ${directionLabel}.`;
+    case "collection":
+      return `Order by collection number, ${directionLabel}.`;
+    case "createdAt":
+      return `Order by upload time, ${directionLabel}.`;
+    case "updatedAt":
+      return `Order by last record update, ${directionLabel}.`;
+    case "sender":
+      return `Order by sender, ${directionLabel}.`;
+    case "recipient":
+      return `Order by recipient, ${directionLabel}.`;
+    case "visibility":
+      return `Order by visibility, ${directionLabel}.`;
+    case "flagged":
+      return `Order by flagged state, ${directionLabel}.`;
+    case "workflow":
+      return `Order by pipeline stage, ${directionLabel}.`;
+  }
 }
 
 function getClientSortLabel(field: ClientSortField): string {

@@ -4,7 +4,6 @@ import type { DashboardFilterChip } from "./useDashboardActiveFilters";
 
 interface ActiveFilterChipsProps {
   paginationTotal: number;
-  activeFilterCount: number;
   activeFilterChips: DashboardFilterChip[];
   processingStatus: ProcessingStatus | null;
   selectedCount: number;
@@ -13,23 +12,24 @@ interface ActiveFilterChipsProps {
 
 export default function ActiveFilterChips({
   paginationTotal,
-  activeFilterCount,
   activeFilterChips,
   processingStatus,
   selectedCount,
   onClearAllFilters,
 }: ActiveFilterChipsProps) {
+  const hasActiveFilters = activeFilterChips.length > 0;
+
   return (
     <div className="active-filter-chips" aria-label="Active filters">
       <span className="dashboard-result-count">{paginationTotal} letters</span>
       {activeFilterChips.map((chip) => (
-        <button key={chip.key} className="active-filter-chip" onClick={chip.onRemove}>
+        <button key={chip.key} type="button" className="active-filter-chip" onClick={chip.onRemove}>
           <span>{chip.label}</span>
           <Icon name="close" size={12} />
         </button>
       ))}
-      {activeFilterCount > 0 && (
-        <button className="clear-all-link" onClick={onClearAllFilters}>
+      {hasActiveFilters && (
+        <button type="button" className="clear-all-link" onClick={onClearAllFilters}>
           Clear all
         </button>
       )}

@@ -145,7 +145,6 @@ export default function DashboardToolbar({
         <>
           <ActiveFilterChips
             paginationTotal={paginationTotal}
-            activeFilterCount={activeFilterCount}
             activeFilterChips={activeFilterChips}
             processingStatus={processingStatus}
             selectedCount={selectedCount}

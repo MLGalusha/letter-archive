@@ -140,6 +140,15 @@ Goals:
 - Implement the desktop dashboard layout based primarily on the stronger desktop concept.
 - Implement the mobile dashboard based on compact scanning, top toolbar controls, active filter chips, and drawer/sheet controls.
 - Add a matching desktop control for any mobile-only view toggle that survives design review.
+- Revisit mobile table behavior so readability wins over forced column compression.
+
+Mobile table direction:
+
+- Keep table scanning on mobile, but allow horizontal scrolling instead of squeezing every column until labels/content become hard to read.
+- Decide which columns should remain always-visible or sticky on mobile, likely selection/date or selection/title-equivalent, and which columns can scroll horizontally.
+- Use sensible minimum widths for date, collection, visibility, last opened, and status columns so values remain readable.
+- Preserve active filters, saved views, sorting, and visible-column controls with the horizontally scrollable table model.
+- Treat this as a responsive-table design pass, not a card-view replacement.
 
 Progress:
 

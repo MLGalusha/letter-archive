@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   getAdminCollections,
@@ -8,7 +8,7 @@ import {
 } from '../../api/collections';
 import { getErrorMessage } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
-import Icon from '../../components/common/Icon';
+import ColumnToggleHeader from './AdminDashboard/ColumnToggleHeader';
 import { useDashboardSelection } from './AdminDashboard/useDashboardSelection';
 import './AdminCollectionsListPage.css';
 
@@ -44,18 +44,53 @@ const COLLECTION_COLUMNS: Array<{ id: CollectionColumnId; label: string; default
   { id: 'cover', label: 'Thumbnail', defaultVisible: true },
 ];
 
-const COLLECTION_COLUMN_STORAGE_KEY = 'collection-visible-columns';
-
-function loadVisibleColumns(): Set<CollectionColumnId> {
-  try {
-    const stored = localStorage.getItem(COLLECTION_COLUMN_STORAGE_KEY);
-    if (stored) return new Set(JSON.parse(stored));
-  } catch { /* use defaults */ }
-  return new Set(COLLECTION_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id));
+interface SavedCollectionColumnsState {
+  visible: CollectionColumnId[];
+  order?: CollectionColumnId[];
 }
 
-function saveVisibleColumns(cols: Set<CollectionColumnId>) {
-  localStorage.setItem(COLLECTION_COLUMN_STORAGE_KEY, JSON.stringify([...cols]));
+const COLLECTION_COLUMN_STORAGE_KEY = 'collection-visible-columns';
+const DEFAULT_COLLECTION_VISIBLE_COLUMNS = new Set<CollectionColumnId>(
+  COLLECTION_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id),
+);
+const DEFAULT_COLLECTION_COLUMN_ORDER = COLLECTION_COLUMNS.map((c) => c.id);
+
+function normalizeCollectionColumnOrder(savedOrder?: CollectionColumnId[]): CollectionColumnId[] {
+  const allColumnIds = new Set(DEFAULT_COLLECTION_COLUMN_ORDER);
+  const normalized = (savedOrder ?? []).filter((id): id is CollectionColumnId => allColumnIds.has(id));
+  const missing = DEFAULT_COLLECTION_COLUMN_ORDER.filter((id) => !normalized.includes(id));
+  return [...normalized, ...missing];
+}
+
+function loadColumnState(): { visibleColumns: Set<CollectionColumnId>; columnOrder: CollectionColumnId[] } {
+  try {
+    const stored = localStorage.getItem(COLLECTION_COLUMN_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as CollectionColumnId[] | SavedCollectionColumnsState;
+      if (Array.isArray(parsed)) {
+        return {
+          visibleColumns: new Set(parsed),
+          columnOrder: DEFAULT_COLLECTION_COLUMN_ORDER,
+        };
+      }
+
+      return {
+        visibleColumns: new Set(parsed.visible),
+        columnOrder: normalizeCollectionColumnOrder(parsed.order),
+      };
+    }
+  } catch { /* use defaults */ }
+  return {
+    visibleColumns: DEFAULT_COLLECTION_VISIBLE_COLUMNS,
+    columnOrder: DEFAULT_COLLECTION_COLUMN_ORDER,
+  };
+}
+
+function saveColumnState(visibleColumns: Set<CollectionColumnId>, columnOrder: CollectionColumnId[]) {
+  localStorage.setItem(COLLECTION_COLUMN_STORAGE_KEY, JSON.stringify({
+    visible: [...visibleColumns],
+    order: columnOrder,
+  }));
 }
 
 function formatDateRaw(dateRaw: string | null): string {
@@ -75,10 +110,21 @@ export default function CollectionsDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<Set<CollectionColumnId>>(loadVisibleColumns);
+  const [initialColumnState] = useState(loadColumnState);
+  const [visibleColumns, setVisibleColumns] = useState<Set<CollectionColumnId>>(initialColumnState.visibleColumns);
+  const [columnOrder, setColumnOrder] = useState<CollectionColumnId[]>(initialColumnState.columnOrder);
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const lastClickedIndex = useRef<number | null>(null);
   const columnMenuRef = useRef<HTMLTableCellElement | null>(null);
+  const columnById = useMemo(() => new Map(COLLECTION_COLUMNS.map((column) => [column.id, column])), []);
+  const orderedColumns = useMemo(
+    () => columnOrder.map((id) => columnById.get(id)).filter((column): column is typeof COLLECTION_COLUMNS[number] => Boolean(column)),
+    [columnById, columnOrder],
+  );
+  const visibleOrderedColumns = useMemo(
+    () => orderedColumns.filter((column) => visibleColumns.has(column.id)),
+    [orderedColumns, visibleColumns],
+  );
 
   const {
     selectedIds,
@@ -105,16 +151,9 @@ export default function CollectionsDashboard() {
 
   useEffect(() => { fetchCollections(); }, [fetchCollections]);
 
-  // Close column menu on outside click
   useEffect(() => {
-    if (!showColumnMenu) return;
-    const handleClick = (e: MouseEvent) => {
-      if (columnMenuRef.current?.contains(e.target as Node)) return;
-      setShowColumnMenu(false);
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [showColumnMenu]);
+    saveColumnState(visibleColumns, columnOrder);
+  }, [columnOrder, visibleColumns]);
 
   const handleToggleColumn = (colId: CollectionColumnId) => {
     setVisibleColumns((prev) => {
@@ -124,9 +163,37 @@ export default function CollectionsDashboard() {
       } else {
         next.add(colId);
       }
-      saveVisibleColumns(next);
       return next;
     });
+  };
+
+  const handleMoveColumn = (columnId: CollectionColumnId, direction: -1 | 1) => {
+    setColumnOrder((previous) => {
+      const currentIndex = previous.indexOf(columnId);
+      if (currentIndex < 0) return previous;
+      const nextIndex = currentIndex + direction;
+      if (nextIndex < 0 || nextIndex >= previous.length) return previous;
+      const next = [...previous];
+      const [column] = next.splice(currentIndex, 1);
+      next.splice(nextIndex, 0, column);
+      return next;
+    });
+  };
+
+  const handleReorderColumn = (columnId: CollectionColumnId, targetIndex: number) => {
+    setColumnOrder((previous) => {
+      const currentIndex = previous.indexOf(columnId);
+      if (currentIndex < 0 || targetIndex < 0 || targetIndex >= previous.length) return previous;
+      const next = [...previous];
+      const [column] = next.splice(currentIndex, 1);
+      next.splice(targetIndex, 0, column);
+      return next;
+    });
+  };
+
+  const handleResetColumnOrder = () => {
+    setColumnOrder(DEFAULT_COLLECTION_COLUMN_ORDER);
+    setVisibleColumns(DEFAULT_COLLECTION_VISIBLE_COLUMNS);
   };
 
   const handleCheckboxChange = (id: string, index: number, e: React.MouseEvent) => {
@@ -223,30 +290,19 @@ export default function CollectionsDashboard() {
           <table className="letters-table">
             <thead>
               <tr>
-                <th className="checkbox-header" ref={columnMenuRef}>
-                  <button
-                    className={`column-toggle-btn ${showColumnMenu ? 'active' : ''}`}
-                    onClick={() => setShowColumnMenu((v) => !v)}
-                    title="Toggle columns"
-                  >
-                    <Icon name="columns" size={14} />
-                  </button>
-                  {showColumnMenu && (
-                    <div className="column-toggle-dropdown column-toggle-left">
-                      {COLLECTION_COLUMNS.map((col) => (
-                        <label key={col.id} className="column-toggle-item">
-                          <input
-                            type="checkbox"
-                            checked={visibleColumns.has(col.id)}
-                            onChange={() => handleToggleColumn(col.id)}
-                          />
-                          {col.label}
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </th>
-                {COLLECTION_COLUMNS.filter((col) => visibleColumns.has(col.id)).map((col) => (
+                <ColumnToggleHeader
+                  orderedColumns={orderedColumns}
+                  visibleColumns={visibleColumns}
+                  showColumnMenu={showColumnMenu}
+                  onToggleColumnMenu={() => setShowColumnMenu((open) => !open)}
+                  onCloseColumnMenu={() => setShowColumnMenu(false)}
+                  onToggleColumn={handleToggleColumn}
+                  onMoveColumn={handleMoveColumn}
+                  onReorderColumn={handleReorderColumn}
+                  onResetColumnOrder={handleResetColumnOrder}
+                  columnMenuRef={columnMenuRef}
+                />
+                {visibleOrderedColumns.map((col) => (
                   <th key={col.id}>{col.label}</th>
                 ))}
               </tr>
@@ -270,7 +326,7 @@ export default function CollectionsDashboard() {
                       tabIndex={-1}
                     />
                   </td>
-                  {COLLECTION_COLUMNS.filter((col) => visibleColumns.has(col.id)).map((col) => {
+                  {visibleOrderedColumns.map((col) => {
                     switch (col.id) {
                       case 'code': return <td key={col.id} className="collection-code-cell">{c.collectionCode}</td>;
                       case 'title': return <td key={col.id} className="collection-title-cell">{c.title || '—'}</td>;

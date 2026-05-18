@@ -83,6 +83,16 @@ export default function AdminDashboard() {
     }
   }, [navigate]);
 
+  useEffect(() => {
+    const closeDashboardOverlays = () => {
+      setFiltersOpen(false);
+      closeColumnMenu();
+    };
+
+    window.addEventListener("admin-mobile-nav-open", closeDashboardOverlays);
+    return () => window.removeEventListener("admin-mobile-nav-open", closeDashboardOverlays);
+  }, [closeColumnMenu]);
+
   const {
     selectedIds,
     setSelectedIds,

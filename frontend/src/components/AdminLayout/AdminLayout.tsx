@@ -24,7 +24,13 @@ export default function AdminLayout({ children, headerActions, fullHeight }: Adm
 
   const toggleSidebar = () => {
     if (isMobile) {
-      setMobileNavOpen((open) => !open);
+      setMobileNavOpen((open) => {
+        const nextOpen = !open;
+        if (nextOpen) {
+          window.dispatchEvent(new CustomEvent('admin-mobile-nav-open'));
+        }
+        return nextOpen;
+      });
       return;
     }
 

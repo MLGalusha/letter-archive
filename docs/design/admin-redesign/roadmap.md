@@ -107,6 +107,8 @@ Progress:
 - Filter manager organization now uses one ordered module grid instead of nested worklist/content/scope groups, keeping desktop and mobile on the same filter order and component tree.
 - The current filter priority order is visibility, content status, collection, date, content type, pipeline, cleanup, and review.
 - The desktop filter manager uses a single-column right-side surface; mobile keeps the existing prioritized bottom-sheet presentation.
+- Opening the mobile admin navigation now closes dashboard manager overlays such as Filters so the sidebar and dashboard sheets do not stack.
+- Collections dashboard column selection now reuses the shared dashboard column manager surface with visibility and ordering support instead of a separate one-off dropdown.
 
 Out of scope:
 

@@ -308,6 +308,25 @@ describe("AdminDashboard processing", () => {
     expect(consoleDebugSpy).toHaveBeenCalled();
   });
 
+  it("closes dashboard filters when the mobile admin nav opens", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /Filters/i }));
+    expect(screen.getByRole("heading", { name: "Filters" })).toBeInTheDocument();
+
+    window.dispatchEvent(new CustomEvent("admin-mobile-nav-open"));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: "Filters" })).not.toBeInTheDocument();
+    });
+  });
+
   it("opens the sender and recipient modal when exactly one letter is selected", async () => {
     const user = userEvent.setup();
 

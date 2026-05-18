@@ -2,22 +2,26 @@ import { useState } from "react";
 import type { DragEvent, KeyboardEvent, RefObject } from "react";
 import { Icon } from "../../../components/common/Icon";
 import DashboardManagerSurface from "./DashboardManagerSurface";
-import type { ColumnDef, ColumnId } from "./types";
 
-interface ColumnToggleHeaderProps {
-  orderedColumns: ColumnDef[];
-  visibleColumns: Set<ColumnId>;
+interface ColumnToggleOption<TColumnId extends string> {
+  id: TColumnId;
+  label: string;
+}
+
+interface ColumnToggleHeaderProps<TColumnId extends string> {
+  orderedColumns: Array<ColumnToggleOption<TColumnId>>;
+  visibleColumns: Set<TColumnId>;
   showColumnMenu: boolean;
   onToggleColumnMenu: () => void;
   onCloseColumnMenu: () => void;
-  onToggleColumn: (id: ColumnId) => void;
-  onMoveColumn: (id: ColumnId, direction: -1 | 1) => void;
-  onReorderColumn: (id: ColumnId, targetIndex: number) => void;
+  onToggleColumn: (id: TColumnId) => void;
+  onMoveColumn: (id: TColumnId, direction: -1 | 1) => void;
+  onReorderColumn: (id: TColumnId, targetIndex: number) => void;
   onResetColumnOrder: () => void;
   columnMenuRef: RefObject<HTMLTableCellElement | null>;
 }
 
-export default function ColumnToggleHeader({
+export default function ColumnToggleHeader<TColumnId extends string>({
   orderedColumns,
   visibleColumns,
   showColumnMenu,
@@ -28,11 +32,11 @@ export default function ColumnToggleHeader({
   onReorderColumn,
   onResetColumnOrder,
   columnMenuRef,
-}: ColumnToggleHeaderProps) {
-  const [draggedColumn, setDraggedColumn] = useState<ColumnId | null>(null);
-  const [dropTargetColumn, setDropTargetColumn] = useState<ColumnId | null>(null);
+}: ColumnToggleHeaderProps<TColumnId>) {
+  const [draggedColumn, setDraggedColumn] = useState<TColumnId | null>(null);
+  const [dropTargetColumn, setDropTargetColumn] = useState<TColumnId | null>(null);
 
-  const handleDragStart = (event: DragEvent<HTMLButtonElement>, columnId: ColumnId) => {
+  const handleDragStart = (event: DragEvent<HTMLButtonElement>, columnId: TColumnId) => {
     setDraggedColumn(columnId);
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", columnId);
@@ -43,16 +47,16 @@ export default function ColumnToggleHeader({
     }
   };
 
-  const handleDragOver = (event: DragEvent<HTMLDivElement>, columnId: ColumnId) => {
+  const handleDragOver = (event: DragEvent<HTMLDivElement>, columnId: TColumnId) => {
     if (!draggedColumn || draggedColumn === columnId) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     setDropTargetColumn(columnId);
   };
 
-  const handleDrop = (event: DragEvent<HTMLDivElement>, targetColumn: ColumnId) => {
+  const handleDrop = (event: DragEvent<HTMLDivElement>, targetColumn: TColumnId) => {
     event.preventDefault();
-    const sourceColumn = (event.dataTransfer.getData("text/plain") || draggedColumn) as ColumnId | null;
+    const sourceColumn = (event.dataTransfer.getData("text/plain") || draggedColumn) as TColumnId | null;
     if (!sourceColumn || sourceColumn === targetColumn) return;
 
     const targetIndex = orderedColumns.findIndex((column) => column.id === targetColumn);
@@ -68,7 +72,7 @@ export default function ColumnToggleHeader({
     setDropTargetColumn(null);
   };
 
-  const handleReorderKeyDown = (event: KeyboardEvent<HTMLButtonElement>, column: ColumnDef) => {
+  const handleReorderKeyDown = (event: KeyboardEvent<HTMLButtonElement>, column: ColumnToggleOption<TColumnId>) => {
     if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
       event.preventDefault();
       onMoveColumn(column.id, -1);

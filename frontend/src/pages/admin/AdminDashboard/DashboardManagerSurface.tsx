@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { ReactNode, RefObject } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 import Icon from "../../../components/common/Icon";
 
 interface DashboardManagerSurfaceProps {
@@ -7,6 +7,7 @@ interface DashboardManagerSurfaceProps {
   ariaLabel?: string;
   closeBoundaryRef?: RefObject<HTMLElement | null>;
   className?: string;
+  style?: CSSProperties;
   children: ReactNode;
   footer?: ReactNode;
   onClose: () => void;
@@ -17,6 +18,7 @@ export default function DashboardManagerSurface({
   ariaLabel,
   closeBoundaryRef,
   className = "",
+  style,
   children,
   footer,
   onClose,
@@ -46,7 +48,7 @@ export default function DashboardManagerSurface({
   }, [closeBoundaryRef, onClose]);
 
   return (
-    <div className={`dashboard-manager-surface ${className}`} role="dialog" aria-label={ariaLabel ?? title}>
+    <div className={`dashboard-manager-surface ${className}`} style={style} role="dialog" aria-label={ariaLabel ?? title}>
       <div className="dashboard-manager-header">
         <h2>{title}</h2>
         <button type="button" className="dashboard-manager-close" onClick={onClose} aria-label={`Close ${title}`}>

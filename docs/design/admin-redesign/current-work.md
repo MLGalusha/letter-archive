@@ -136,6 +136,7 @@ Selection and bulk actions should behave like a designed admin workflow, not lik
 - 2026-05-18: Added a mobile-specific selected-state bulk surface with count/scope/exit, compact scope controls, and grouped action entry points instead of the dense desktop toolbar.
 - 2026-05-18: Moved destructive bulk actions behind a Danger manager on desktop, reducing toolbar overflow and making dangerous actions a deliberate secondary surface.
 - 2026-05-18: Browser-verified selected-state toolbar behavior at 1440x900 and 390x844. Mobile selected toolbar measured about 137px tall, down from the earlier 206px dense toolbar measurement.
+- 2026-05-18: Fixed desktop Publish/Danger manager positioning so toolbar popovers are anchored to the viewport above the fixed toolbar instead of being clipped by the toolbar scroller. Tightened mobile selected-state bottom reservation to match the actual compact toolbar height.
 
 ## Selection Audit
 

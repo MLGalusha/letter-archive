@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import DashboardManagerSurface from "./DashboardManagerSurface";
+import useFixedToolbarPopover from "./useFixedToolbarPopover";
 import type { PublishCounts } from "./useDashboardSelectionDetails";
 
 interface BulkPublishingMenuProps {
@@ -21,6 +22,7 @@ export default function BulkPublishingMenu({
 }: BulkPublishingMenuProps) {
   const [showPublishMenu, setShowPublishMenu] = useState(false);
   const publishMenuRef = useRef<HTMLDivElement>(null);
+  const popoverStyle = useFixedToolbarPopover(showPublishMenu, publishMenuRef);
 
   return (
     <div className="publish-menu-container" ref={publishMenuRef}>
@@ -38,6 +40,7 @@ export default function BulkPublishingMenu({
           ariaLabel="Publishing actions"
           closeBoundaryRef={publishMenuRef}
           className="publish-menu-dropdown"
+          style={popoverStyle}
           onClose={() => setShowPublishMenu(false)}
         >
           <div className="publish-menu-section">

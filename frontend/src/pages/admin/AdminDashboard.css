@@ -3146,7 +3146,7 @@
   }
 
   .admin-dashboard > .admin-content.has-edit-toolbar {
-    padding-bottom: min(46vh, 280px);
+    padding-bottom: calc(150px + env(safe-area-inset-bottom));
   }
 }
 

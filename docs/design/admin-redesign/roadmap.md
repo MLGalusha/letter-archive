@@ -338,6 +338,7 @@ Progress:
 - Moved mobile Process and Danger actions into manager sheets so the fixed selected-state surface does not need to expose every action inline.
 - Moved desktop destructive actions into a Danger manager, reducing toolbar overflow and separating risky actions from routine selected-state controls.
 - Browser-verified desktop and mobile selected-state layouts.
+- Fixed selected-state edge cases found during audit: desktop Publish/Danger managers now render as viewport-anchored popovers above the fixed toolbar, and mobile table/pagination bottom reservation now matches the compact toolbar height instead of reserving nearly half the viewport.
 
 Product-level choices to resolve:
 

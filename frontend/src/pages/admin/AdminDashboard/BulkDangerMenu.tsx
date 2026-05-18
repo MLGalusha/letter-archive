@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import BulkDestructiveControls from "./BulkDestructiveControls";
 import DashboardManagerSurface from "./DashboardManagerSurface";
+import useFixedToolbarPopover from "./useFixedToolbarPopover";
 
 interface BulkDangerMenuProps {
   selectedCount: number;
@@ -19,6 +20,7 @@ export default function BulkDangerMenu({
 }: BulkDangerMenuProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const popoverStyle = useFixedToolbarPopover(open, menuRef);
 
   return (
     <div className="danger-menu-container" ref={menuRef}>
@@ -36,6 +38,7 @@ export default function BulkDangerMenu({
           ariaLabel="Danger actions"
           closeBoundaryRef={menuRef}
           className="danger-menu-dropdown"
+          style={popoverStyle}
           onClose={() => setOpen(false)}
         >
           <BulkDestructiveControls

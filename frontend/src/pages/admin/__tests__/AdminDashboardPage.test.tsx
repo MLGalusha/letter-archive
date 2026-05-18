@@ -143,12 +143,13 @@ vi.mock("../../../components/common/Icon", () => ({
 vi.mock("../AdminDashboard/RecentActivityTable", () => ({
   default: ({
     filteredLetters,
-    onCheckboxChange,
-    selectedIds,
+    selection,
   }: {
     filteredLetters: Letter[];
-    onCheckboxChange: (letterId: string, index: number, event: unknown) => void;
-    selectedIds: Set<string>;
+    selection: {
+      onCheckboxChange: (letterId: string, index: number, event: unknown) => void;
+      selectedIds: Set<string>;
+    };
   }) => (
     <div>
       <div>Recent activity table</div>
@@ -156,9 +157,9 @@ vi.mock("../AdminDashboard/RecentActivityTable", () => ({
         <button
           key={letter.id}
           type="button"
-          onClick={(event) => onCheckboxChange(letter.id, index, event)}
+          onClick={(event) => selection.onCheckboxChange(letter.id, index, event)}
         >
-          {selectedIds.has(letter.id) ? `Selected ${letter.title}` : `Select ${letter.title}`}
+          {selection.selectedIds.has(letter.id) ? `Selected ${letter.title}` : `Select ${letter.title}`}
         </button>
       ))}
     </div>

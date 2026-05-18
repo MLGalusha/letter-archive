@@ -6,21 +6,25 @@ import RecentActivityRow from "./RecentActivityRow";
 import RecentActivityTableHeader from "./RecentActivityTableHeader";
 import type { ColumnId, ExtendedSortField, PendingChange, SortInfo } from "./types";
 
-interface PaginationState {
+export interface PaginationState {
   page: number;
   totalPages: number;
 }
 
-interface RecentActivityTableProps {
-  filteredLetters: Letter[];
-  visibleColumns: Set<ColumnId>;
+export interface TableSortingModel {
   getSortInfo: (field: ExtendedSortField) => SortInfo | null;
   onSort: (field: ExtendedSortField) => void;
+}
+
+export interface TableSelectionModel {
+  selectedIds: Set<string>;
   onRowClick: (letterId: string, index: number, e: React.MouseEvent) => void;
   onRowMouseDown: (index: number, e: React.MouseEvent) => void;
   onRowMouseEnter: (index: number) => void;
   onCheckboxChange: (letterId: string, index: number, e: React.MouseEvent) => void;
-  selectedIds: Set<string>;
+}
+
+export interface TableCopyEditModel {
   editMode: boolean;
   copyModeActive: boolean;
   sourceCell: { letterId: string; column: "sender" | "recipient" } | null;
@@ -31,6 +35,9 @@ interface RecentActivityTableProps {
     value: string | null,
     e: React.MouseEvent,
   ) => void;
+}
+
+export interface TableFormattingModel {
   formatDate: (dateString: string) => string;
   formatDateRaw: (dateRaw: string | undefined) => string;
   getCombinedTranscriptStatus: (
@@ -40,48 +47,48 @@ interface RecentActivityTableProps {
     hasExtras: boolean,
   ) => ContentStatus;
   renderStatusIcon: (status: ContentStatus, type: "T" | "M") => React.ReactNode;
+}
+
+export interface TablePaginationModel {
   pagination: PaginationState;
   loading: boolean;
   onPageChange: (page: number) => void;
   letterCountText?: string;
-  // Column toggle
+}
+
+export interface TableColumnModel {
+  visibleColumns: Set<ColumnId>;
   allColumns: Array<{ id: ColumnId; label: string }>;
   showColumnMenu: boolean;
   onToggleColumnMenu: () => void;
   onToggleColumn: (id: ColumnId) => void;
   columnMenuRef: RefObject<HTMLTableCellElement | null>;
+}
+
+export interface TableRowActions {
   onToggleFlag: (letterId: string, flagged: boolean) => void;
+}
+
+interface RecentActivityTableProps {
+  filteredLetters: Letter[];
+  columns: TableColumnModel;
+  sorting: TableSortingModel;
+  selection: TableSelectionModel;
+  copyEdit: TableCopyEditModel;
+  formatting: TableFormattingModel;
+  pagination: TablePaginationModel;
+  rowActions: TableRowActions;
 }
 
 export default function RecentActivityTable({
   filteredLetters,
-  visibleColumns,
-  getSortInfo,
-  onSort,
-  onRowClick,
-  onRowMouseDown,
-  onRowMouseEnter,
-  onCheckboxChange,
-  selectedIds,
-  editMode,
-  copyModeActive,
-  sourceCell,
-  pendingChanges,
-  onCellClick,
-  formatDate,
-  formatDateRaw,
-  getCombinedTranscriptStatus,
-  renderStatusIcon,
+  columns,
+  sorting,
+  selection,
+  copyEdit,
+  formatting,
   pagination,
-  loading,
-  onPageChange,
-  letterCountText,
-  allColumns,
-  showColumnMenu,
-  onToggleColumnMenu,
-  onToggleColumn,
-  columnMenuRef,
-  onToggleFlag,
+  rowActions,
 }: RecentActivityTableProps) {
   return (
     <>
@@ -93,14 +100,14 @@ export default function RecentActivityTable({
       >
         <table className="letters-table">
           <RecentActivityTableHeader
-            visibleColumns={visibleColumns}
-            getSortInfo={getSortInfo}
-            onSort={onSort}
-            allColumns={allColumns}
-            showColumnMenu={showColumnMenu}
-            onToggleColumnMenu={onToggleColumnMenu}
-            onToggleColumn={onToggleColumn}
-            columnMenuRef={columnMenuRef}
+            visibleColumns={columns.visibleColumns}
+            getSortInfo={sorting.getSortInfo}
+            onSort={sorting.onSort}
+            allColumns={columns.allColumns}
+            showColumnMenu={columns.showColumnMenu}
+            onToggleColumnMenu={columns.onToggleColumnMenu}
+            onToggleColumn={columns.onToggleColumn}
+            columnMenuRef={columns.columnMenuRef}
           />
           <tbody>
             {filteredLetters.map((letter, index) => (
@@ -108,22 +115,11 @@ export default function RecentActivityTable({
                 key={letter.id}
                 letter={letter}
                 index={index}
-                visibleColumns={visibleColumns}
-                selectedIds={selectedIds}
-                editMode={editMode}
-                copyModeActive={copyModeActive}
-                sourceCell={sourceCell}
-                pendingChanges={pendingChanges}
-                onRowClick={onRowClick}
-                onRowMouseDown={onRowMouseDown}
-                onRowMouseEnter={onRowMouseEnter}
-                onCheckboxChange={onCheckboxChange}
-                onCellClick={onCellClick}
-                formatDate={formatDate}
-                formatDateRaw={formatDateRaw}
-                getCombinedTranscriptStatus={getCombinedTranscriptStatus}
-                renderStatusIcon={renderStatusIcon}
-                onToggleFlag={onToggleFlag}
+                columns={columns}
+                selection={selection}
+                copyEdit={copyEdit}
+                formatting={formatting}
+                rowActions={rowActions}
               />
             ))}
           </tbody>
@@ -131,10 +127,10 @@ export default function RecentActivityTable({
       </div>
 
       <DashboardPagination
-        pagination={pagination}
-        loading={loading}
-        onPageChange={onPageChange}
-        letterCountText={letterCountText}
+        pagination={pagination.pagination}
+        loading={pagination.loading}
+        onPageChange={pagination.onPageChange}
+        letterCountText={pagination.letterCountText}
       />
     </>
   );

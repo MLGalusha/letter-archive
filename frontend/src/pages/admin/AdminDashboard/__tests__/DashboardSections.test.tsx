@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Letter } from "../../../../types/Letter";
+import type { ContentStatus } from "../../../../types/Letter";
 import RecentActivityTable from "../RecentActivityTable";
 
 function makeLetter(): Letter {
@@ -37,47 +38,59 @@ describe("RecentActivityTable", () => {
     render(
       <RecentActivityTable
         filteredLetters={[makeLetter()]}
-        visibleColumns={new Set([
-          "sender",
-          "recipient",
-          "date",
-          "collection",
-          "letters",
-          "extras",
-          "transcript",
-          "metadata",
-          "visibility",
-          "created",
-        ])}
-        getSortInfo={() => null}
-        onSort={onSort}
-        onRowClick={vi.fn()}
-        onRowMouseDown={vi.fn()}
-        onRowMouseEnter={vi.fn()}
-        onCheckboxChange={vi.fn()}
-        selectedIds={new Set()}
-        editMode={false}
-        copyModeActive
-        sourceCell={null}
-        pendingChanges={new Map()}
-        onCellClick={onCellClick}
-        formatDate={() => "1/1/2025"}
-        formatDateRaw={() => "03/14/1886"}
-        getCombinedTranscriptStatus={() => "AI_DRAFT"}
-        renderStatusIcon={(status, type) => <span>{`${type}:${status}`}</span>}
-        pagination={{ page: 1, totalPages: 1 }}
-        loading={false}
-        onPageChange={vi.fn()}
-        allColumns={[
-          { id: "sender", label: "Sender" },
-          { id: "recipient", label: "Recipient" },
-          { id: "date", label: "Date" },
-        ]}
-        showColumnMenu={false}
-        onToggleColumnMenu={vi.fn()}
-        onToggleColumn={vi.fn()}
-        columnMenuRef={createRef<HTMLTableCellElement>()}
-        onToggleFlag={vi.fn()}
+        columns={{
+          visibleColumns: new Set([
+            "sender",
+            "recipient",
+            "date",
+            "collection",
+            "letters",
+            "extras",
+            "transcript",
+            "metadata",
+            "visibility",
+            "created",
+          ]),
+          allColumns: [
+            { id: "sender", label: "Sender" },
+            { id: "recipient", label: "Recipient" },
+            { id: "date", label: "Date" },
+          ],
+          showColumnMenu: false,
+          onToggleColumnMenu: vi.fn(),
+          onToggleColumn: vi.fn(),
+          columnMenuRef: createRef<HTMLTableCellElement>(),
+        }}
+        sorting={{
+          getSortInfo: () => null,
+          onSort,
+        }}
+        selection={{
+          selectedIds: new Set(),
+          onRowClick: vi.fn(),
+          onRowMouseDown: vi.fn(),
+          onRowMouseEnter: vi.fn(),
+          onCheckboxChange: vi.fn(),
+        }}
+        copyEdit={{
+          editMode: false,
+          copyModeActive: true,
+          sourceCell: null,
+          pendingChanges: new Map(),
+          onCellClick,
+        }}
+        formatting={{
+          formatDate: () => "1/1/2025",
+          formatDateRaw: () => "03/14/1886",
+          getCombinedTranscriptStatus: () => "AI_DRAFT",
+          renderStatusIcon: (status: ContentStatus, type: "T" | "M") => <span>{`${type}:${status}`}</span>,
+        }}
+        pagination={{
+          pagination: { page: 1, totalPages: 1 },
+          loading: false,
+          onPageChange: vi.fn(),
+        }}
+        rowActions={{ onToggleFlag: vi.fn() }}
       />,
     );
 

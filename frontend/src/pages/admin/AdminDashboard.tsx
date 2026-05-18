@@ -264,33 +264,45 @@ export default function AdminDashboard() {
       <div className={`admin-content ${editMode ? 'has-edit-toolbar' : ''}`}>
         <RecentActivityTable
           filteredLetters={filteredLetters}
-          visibleColumns={visibleColumns}
-          getSortInfo={getSortInfo}
-          onSort={handleSort}
-          onRowClick={handleRowClick}
-          onRowMouseDown={handleRowMouseDown}
-          onRowMouseEnter={handleRowMouseEnter}
-          onCheckboxChange={handleCheckboxChange}
-          selectedIds={selectedIds}
-          editMode={editMode}
-          copyModeActive={copyModeActive}
-          sourceCell={sourceCell}
-          pendingChanges={pendingChanges}
-          onCellClick={handleCellClick}
-          formatDate={formatDashboardDateTime}
-          formatDateRaw={formatDateRaw}
-          getCombinedTranscriptStatus={getCombinedTranscriptStatus}
-          renderStatusIcon={(status, type) => <StatusIcon status={status} type={type} />}
-          pagination={pagination}
-          loading={loading}
-          onPageChange={(page) => fetchLetters(true, page)}
-          letterCountText={`${(pagination.page - 1) * pagination.limit + 1}–${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total}`}
-          allColumns={ALL_COLUMNS}
-          showColumnMenu={showColumnMenu}
-          onToggleColumnMenu={toggleColumnMenu}
-          onToggleColumn={toggleColumnVisibility}
-          columnMenuRef={columnMenuRef}
-          onToggleFlag={handleToggleFlag}
+          columns={{
+            visibleColumns,
+            allColumns: ALL_COLUMNS,
+            showColumnMenu,
+            onToggleColumnMenu: toggleColumnMenu,
+            onToggleColumn: toggleColumnVisibility,
+            columnMenuRef,
+          }}
+          sorting={{
+            getSortInfo,
+            onSort: handleSort,
+          }}
+          selection={{
+            selectedIds,
+            onRowClick: handleRowClick,
+            onRowMouseDown: handleRowMouseDown,
+            onRowMouseEnter: handleRowMouseEnter,
+            onCheckboxChange: handleCheckboxChange,
+          }}
+          copyEdit={{
+            editMode,
+            copyModeActive,
+            sourceCell,
+            pendingChanges,
+            onCellClick: handleCellClick,
+          }}
+          formatting={{
+            formatDate: formatDashboardDateTime,
+            formatDateRaw,
+            getCombinedTranscriptStatus,
+            renderStatusIcon: (status, type) => <StatusIcon status={status} type={type} />,
+          }}
+          pagination={{
+            pagination,
+            loading,
+            onPageChange: (page) => fetchLetters(true, page),
+            letterCountText: `${(pagination.page - 1) * pagination.limit + 1}–${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total}`,
+          }}
+          rowActions={{ onToggleFlag: handleToggleFlag }}
         />
       </div>
 

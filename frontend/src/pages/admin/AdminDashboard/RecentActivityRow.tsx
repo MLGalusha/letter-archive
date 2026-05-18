@@ -1,44 +1,29 @@
-import type React from "react";
 import { VisibilityBadge } from "../../../components/common";
 import { Icon } from "../../../components/common/Icon";
-import type { ContentStatus, Letter } from "../../../types/Letter";
+import type { Letter } from "../../../types/Letter";
 import {
   hasPrimaryTranscriptContent,
   hasRelatedExtraContent,
   shouldShowPhotoDescriptionWorkflow,
 } from "../../../utils/letterContent";
 import { FILE_TYPE_COLUMNS } from "./constants";
-import type { ColumnId, PendingChange } from "./types";
+import type {
+  TableColumnModel,
+  TableCopyEditModel,
+  TableFormattingModel,
+  TableRowActions,
+  TableSelectionModel,
+} from "./RecentActivityTable";
+import type { PendingChange } from "./types";
 
 interface RecentActivityRowProps {
   letter: Letter;
   index: number;
-  visibleColumns: Set<ColumnId>;
-  selectedIds: Set<string>;
-  editMode: boolean;
-  copyModeActive: boolean;
-  sourceCell: { letterId: string; column: "sender" | "recipient" } | null;
-  pendingChanges: Map<string, PendingChange>;
-  onRowClick: (letterId: string, index: number, e: React.MouseEvent) => void;
-  onRowMouseDown: (index: number, e: React.MouseEvent) => void;
-  onRowMouseEnter: (index: number) => void;
-  onCheckboxChange: (letterId: string, index: number, e: React.MouseEvent) => void;
-  onCellClick: (
-    letterId: string,
-    column: "sender" | "recipient",
-    value: string | null,
-    e: React.MouseEvent,
-  ) => void;
-  formatDate: (dateString: string) => string;
-  formatDateRaw: (dateRaw: string | undefined) => string;
-  getCombinedTranscriptStatus: (
-    transcriptStatus: ContentStatus,
-    extraContentStatus: ContentStatus,
-    hasLetterPages: boolean,
-    hasExtras: boolean,
-  ) => ContentStatus;
-  renderStatusIcon: (status: ContentStatus, type: "T" | "M") => React.ReactNode;
-  onToggleFlag: (letterId: string, flagged: boolean) => void;
+  columns: TableColumnModel;
+  selection: TableSelectionModel;
+  copyEdit: TableCopyEditModel;
+  formatting: TableFormattingModel;
+  rowActions: TableRowActions;
 }
 
 function CopyableTextCell({
@@ -58,7 +43,7 @@ function CopyableTextCell({
   copyModeActive: boolean;
   sourceCell: { letterId: string; column: "sender" | "recipient" } | null;
   pendingChanges: Map<string, PendingChange>;
-  onCellClick: RecentActivityRowProps["onCellClick"];
+  onCellClick: TableCopyEditModel["onCellClick"];
 }) {
   if (!visible) return null;
 
@@ -87,23 +72,14 @@ function CopyableTextCell({
 export default function RecentActivityRow({
   letter,
   index,
-  visibleColumns,
-  selectedIds,
-  editMode,
-  copyModeActive,
-  sourceCell,
-  pendingChanges,
-  onRowClick,
-  onRowMouseDown,
-  onRowMouseEnter,
-  onCheckboxChange,
-  onCellClick,
-  formatDate,
-  formatDateRaw,
-  getCombinedTranscriptStatus,
-  renderStatusIcon,
-  onToggleFlag,
+  columns,
+  selection,
+  copyEdit,
+  formatting,
+  rowActions,
 }: RecentActivityRowProps) {
+  const { visibleColumns } = columns;
+  const { selectedIds } = selection;
   const pageCount =
     letter.lettersCount ??
     letter.images.filter((image) => image.type === "letter").length;
@@ -113,10 +89,10 @@ export default function RecentActivityRow({
   const photosCount =
     letter.photosCount ??
     letter.images.filter((image) => image.type === "photo").length;
-  const formattedDate = formatDateRaw(letter.metadata.dateRaw);
+  const formattedDate = formatting.formatDateRaw(letter.metadata.dateRaw);
   const contentStatus = shouldShowPhotoDescriptionWorkflow(letter)
     ? (letter.photoDescriptionStatus ?? "EMPTY")
-    : getCombinedTranscriptStatus(
+    : formatting.getCombinedTranscriptStatus(
         letter.transcriptStatus,
         letter.extraContentStatus,
         hasPrimaryTranscriptContent(letter),
@@ -126,16 +102,16 @@ export default function RecentActivityRow({
   return (
     <tr
       key={letter.id}
-      onClick={(event) => onRowClick(letter.id, index, event)}
-      onMouseDown={(event) => onRowMouseDown(index, event)}
-      onMouseEnter={() => onRowMouseEnter(index)}
-      className={`letter-row ${selectedIds.has(letter.id) ? "selected" : ""} ${editMode ? "edit-mode" : ""}`}
+      onClick={(event) => selection.onRowClick(letter.id, index, event)}
+      onMouseDown={(event) => selection.onRowMouseDown(index, event)}
+      onMouseEnter={() => selection.onRowMouseEnter(index)}
+      className={`letter-row ${selectedIds.has(letter.id) ? "selected" : ""} ${copyEdit.editMode ? "edit-mode" : ""}`}
     >
       <td
         className="checkbox-cell"
         onClick={(event) => {
           event.stopPropagation();
-          onCheckboxChange(letter.id, index, event);
+          selection.onCheckboxChange(letter.id, index, event);
         }}
       >
         <input
@@ -152,20 +128,20 @@ export default function RecentActivityRow({
         column="sender"
         value={letter.metadata.sender}
         visible={visibleColumns.has("sender")}
-        copyModeActive={copyModeActive}
-        sourceCell={sourceCell}
-        pendingChanges={pendingChanges}
-        onCellClick={onCellClick}
+        copyModeActive={copyEdit.copyModeActive}
+        sourceCell={copyEdit.sourceCell}
+        pendingChanges={copyEdit.pendingChanges}
+        onCellClick={copyEdit.onCellClick}
       />
       <CopyableTextCell
         letter={letter}
         column="recipient"
         value={letter.metadata.recipient}
         visible={visibleColumns.has("recipient")}
-        copyModeActive={copyModeActive}
-        sourceCell={sourceCell}
-        pendingChanges={pendingChanges}
-        onCellClick={onCellClick}
+        copyModeActive={copyEdit.copyModeActive}
+        sourceCell={copyEdit.sourceCell}
+        pendingChanges={copyEdit.pendingChanges}
+        onCellClick={copyEdit.onCellClick}
       />
 
       {visibleColumns.has("date") && <td data-column="date" className="date-cell">{formattedDate}</td>}
@@ -176,13 +152,13 @@ export default function RecentActivityRow({
 
       {visibleColumns.has("transcript") && (
         <td data-column="transcript" className="status-cell">
-          {renderStatusIcon(contentStatus, "T")}
+          {formatting.renderStatusIcon(contentStatus, "T")}
         </td>
       )}
 
       {visibleColumns.has("metadata") && (
         <td data-column="metadata" className="status-cell">
-          {renderStatusIcon(letter.metadataContentStatus, "M")}
+          {formatting.renderStatusIcon(letter.metadataContentStatus, "M")}
         </td>
       )}
 
@@ -193,13 +169,13 @@ export default function RecentActivityRow({
       )}
 
       {visibleColumns.has("created") && (
-        <td data-column="created" className="date-cell">{formatDate(letter.createdAt)}</td>
+        <td data-column="created" className="date-cell">{formatting.formatDate(letter.createdAt)}</td>
       )}
       {visibleColumns.has("updated") && (
-        <td data-column="updated" className="date-cell">{letter.updatedAt ? formatDate(letter.updatedAt) : "—"}</td>
+        <td data-column="updated" className="date-cell">{letter.updatedAt ? formatting.formatDate(letter.updatedAt) : "—"}</td>
       )}
       {visibleColumns.has("lastOpened") && (
-        <td data-column="lastOpened" className="date-cell">{letter.lastOpenedAt ? formatDate(letter.lastOpenedAt) : "—"}</td>
+        <td data-column="lastOpened" className="date-cell">{letter.lastOpenedAt ? formatting.formatDate(letter.lastOpenedAt) : "—"}</td>
       )}
       {visibleColumns.has("flag") && (
         <td data-column="flag" className="flag-cell">
@@ -207,7 +183,7 @@ export default function RecentActivityRow({
             className={`flag-btn ${letter.flagged ? "flagged" : ""}`}
             onClick={(event) => {
               event.stopPropagation();
-              onToggleFlag(letter.id, !letter.flagged);
+              rowActions.onToggleFlag(letter.id, !letter.flagged);
             }}
             aria-label={letter.flagged ? "Unflag letter" : "Flag letter"}
           >

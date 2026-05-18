@@ -457,6 +457,7 @@ Phase 3.25 progress:
 - Migrated Saved views onto the same manager shell so save/apply/delete view behavior no longer uses a separate one-off popover structure.
 - Migrated the bulk Publishing menu onto the same shell, keeping its dark toolbar styling while sharing the dialog/header/close/body conventions.
 - Corrected the mobile placement rule: lightweight toolbar managers such as Sort and Saved views remain anchored near their trigger, while heavier managers such as Columns and Publishing can opt into bottom-sheet placement.
+- Reworked the Date filter from a nested dropdown inside Filters into an inline filter-panel section, removing the date dropdown ref/outside-click state and making mobile filter scrolling simpler.
 
 Related responsive UI progress:
 
@@ -465,6 +466,7 @@ Related responsive UI progress:
 - Sort is a first-class dashboard control and includes Last opened, replacing the need for Recent edits as a primary action.
 - Mobile filters now open as a focused bottom sheet with backdrop and close behavior instead of expanding the dashboard stack inline.
 - Mobile table now favors horizontal scroll with readable minimum column widths instead of hiding most columns and compressing the remaining ones.
+- The desktop filter panel now uses a responsive section grid so wider filter groups, such as pipeline stage, content status, and date, can span enough space without label/button collisions.
 
 Target responsive direction:
 

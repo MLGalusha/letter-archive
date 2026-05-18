@@ -45,9 +45,6 @@ export default function DashboardFilterPanel({
     toggleWorkflowFilter,
     flaggedFilter,
     toggleFlaggedFilter,
-    showDateDropdown,
-    setShowDateDropdown,
-    dateDropdownRef,
     dateMode,
     setDateMode,
     hasDateFilter,
@@ -114,29 +111,27 @@ export default function DashboardFilterPanel({
         toggleExtraContentFilter={toggleExtraContentFilter}
       />
 
+      <DashboardDateFilterControl
+        dateMode={dateMode}
+        setDateMode={setDateMode}
+        hasDateFilter={hasDateFilter}
+        yearFilter={yearFilter}
+        setYearFilter={setYearFilter}
+        monthFilter={monthFilter}
+        setMonthFilter={setMonthFilter}
+        dayFilter={dayFilter}
+        setDayFilter={setDayFilter}
+        dateFromFilter={dateFromFilter}
+        setDateFromFilter={setDateFromFilter}
+        dateToFilter={dateToFilter}
+        setDateToFilter={setDateToFilter}
+        clearDateFilters={clearDateFilters}
+        getDateButtonText={getDateButtonText}
+        dateRawToDisplay={dateRawToDisplay}
+        displayToDateRaw={displayToDateRaw}
+      />
+
       <section className="filter-panel-section filter-panel-fields">
-        <DashboardDateFilterControl
-          showDateDropdown={showDateDropdown}
-          setShowDateDropdown={setShowDateDropdown}
-          dateDropdownRef={dateDropdownRef}
-          dateMode={dateMode}
-          setDateMode={setDateMode}
-          hasDateFilter={hasDateFilter}
-          yearFilter={yearFilter}
-          setYearFilter={setYearFilter}
-          monthFilter={monthFilter}
-          setMonthFilter={setMonthFilter}
-          dayFilter={dayFilter}
-          setDayFilter={setDayFilter}
-          dateFromFilter={dateFromFilter}
-          setDateFromFilter={setDateFromFilter}
-          dateToFilter={dateToFilter}
-          setDateToFilter={setDateToFilter}
-          clearDateFilters={clearDateFilters}
-          getDateButtonText={getDateButtonText}
-          dateRawToDisplay={dateRawToDisplay}
-          displayToDateRaw={displayToDateRaw}
-        />
         <label className="collection-filter-field">
           <span>Collection</span>
           <input

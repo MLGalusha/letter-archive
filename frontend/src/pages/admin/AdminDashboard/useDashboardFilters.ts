@@ -7,11 +7,9 @@ import type { ContentFilterView, DateMode, FlaggedFilter, VisibilityFilter } fro
 export function useDashboardFilters() {
   const persistedState = useRef(loadPersistedState());
 
-  const [showDateDropdown, setShowDateDropdown] = useState(false);
   const [dateMode, setDateMode] = useState<DateMode>(
     persistedState.current.dateMode ?? 'specific',
   );
-  const dateDropdownRef = useRef<HTMLDivElement>(null);
   const [contentFilterView, setContentFilterView] = useState<ContentFilterView>('transcript');
   const [collectionInput, setCollectionInput] = useState(
     persistedState.current.collectionFilter === 'all'
@@ -73,18 +71,6 @@ export function useDashboardFilters() {
       }
     };
   }, [searchInput]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (dateDropdownRef.current && !dateDropdownRef.current.contains(target)) {
-        setShowDateDropdown(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleCollectionInputChange = useCallback((value: string) => {
     const cleaned = value.replace(/\D/g, '').slice(0, 3);
@@ -167,11 +153,8 @@ export function useDashboardFilters() {
     || dateToFilter !== null;
 
   return {
-    showDateDropdown,
-    setShowDateDropdown,
     dateMode,
     setDateMode,
-    dateDropdownRef,
     contentFilterView,
     setContentFilterView,
     collectionInput,

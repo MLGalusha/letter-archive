@@ -66,6 +66,7 @@ Verification plan:
 - 2026-05-18: Added toolbar-level coverage for mobile filter open/close, active search chip clearing, and letter-only control visibility when switching to Collections.
 - 2026-05-18: Hardened dashboard toolbar, pagination, row flag, and bulk-action buttons with explicit button types so future form or manager-shell placement cannot accidentally submit.
 - 2026-05-18: Extracted the dashboard sort option/label/default-direction model from the Sort manager component and covered the pure model with focused tests.
+- 2026-05-18: Added saved-view integration coverage for capturing/restoring filters, sorting, visible columns, column order, and legacy saved-view fallbacks through the dashboard state hook.
 
 ## Selection Audit
 

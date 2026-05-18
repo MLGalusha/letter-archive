@@ -176,6 +176,18 @@ export interface AdminLettersResponse {
 export async function queryAdminLetters(
   query: z.infer<typeof adminLettersQuerySchema>
 ): Promise<AdminLettersResponse> {
+  const hasExtrasExpression = () => sql`
+    EXISTS (
+      SELECT 1
+      FROM letters extra
+      INNER JOIN letter_pages extra_page ON extra_page.letter_id = extra.id
+      WHERE extra.collection_id = letters.collection_id
+        AND extra.date_raw = letters.date_raw
+        AND extra.type_sequence = letters.type_sequence
+        AND extra.type != 'L'
+    )
+  `;
+
   // Collection filter - supports partial matching (e.g., "7" matches "007", "017", "107")
   let collectionIds: string[] = [];
   if (query.collection && query.collection !== 'all') {
@@ -217,7 +229,13 @@ export async function queryAdminLetters(
   const statsResult = await db.execute(sql`
     WITH unique_groups AS (
       SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
-        workflow, visibility, transcript_status, metadata_content_status, extra_content_status, flagged
+        workflow,
+        visibility,
+        transcript_status,
+        metadata_content_status,
+        extra_content_status,
+        flagged,
+        ${hasExtrasExpression()} as has_extras
       FROM letters
       WHERE TRUE ${collectionFilter}
       ORDER BY collection_id, date_raw, type_sequence,
@@ -241,10 +259,10 @@ export async function queryAdminLetters(
       COUNT(*) FILTER (WHERE metadata_content_status = 'AI_DRAFT') as metadata_ai_draft,
       COUNT(*) FILTER (WHERE metadata_content_status = 'EDITED') as metadata_edited,
       COUNT(*) FILTER (WHERE metadata_content_status = 'VERIFIED') as metadata_verified,
-      COUNT(*) FILTER (WHERE extra_content_status = 'EMPTY') as extra_content_empty,
-      COUNT(*) FILTER (WHERE extra_content_status = 'AI_DRAFT') as extra_content_ai_draft,
-      COUNT(*) FILTER (WHERE extra_content_status = 'EDITED') as extra_content_edited,
-      COUNT(*) FILTER (WHERE extra_content_status = 'VERIFIED') as extra_content_verified,
+      COUNT(*) FILTER (WHERE has_extras AND extra_content_status = 'EMPTY') as extra_content_empty,
+      COUNT(*) FILTER (WHERE has_extras AND extra_content_status = 'AI_DRAFT') as extra_content_ai_draft,
+      COUNT(*) FILTER (WHERE has_extras AND extra_content_status = 'EDITED') as extra_content_edited,
+      COUNT(*) FILTER (WHERE has_extras AND extra_content_status = 'VERIFIED') as extra_content_verified,
       COUNT(*) FILTER (WHERE flagged = true) as flagged_count
     FROM unique_groups
   `);
@@ -335,7 +353,7 @@ export async function queryAdminLetters(
       clauses.push(sql`metadata_content_status = ANY(ARRAY[${sql.join(query.metadataStatus.map(s => sql`${s}`), sql`, `)}]::content_status[])`);
     }
     if (query.extraContentStatus && query.extraContentStatus.length > 0) {
-      clauses.push(sql`extra_content_status = ANY(ARRAY[${sql.join(query.extraContentStatus.map(s => sql`${s}`), sql`, `)}]::content_status[])`);
+      clauses.push(sql`has_extras = true AND extra_content_status = ANY(ARRAY[${sql.join(query.extraContentStatus.map(s => sql`${s}`), sql`, `)}]::content_status[])`);
     }
     return clauses.length > 0
       ? sql`WHERE ${sql.join(clauses, sql` AND `)}`
@@ -350,7 +368,10 @@ export async function queryAdminLetters(
   const countResult = await db.execute(sql`
     SELECT COUNT(*) as count FROM (
       SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
-        transcript_status, metadata_content_status, extra_content_status
+        transcript_status,
+        metadata_content_status,
+        extra_content_status,
+        ${hasExtrasExpression()} as has_extras
       FROM letters
       WHERE ${whereClause}
       ORDER BY collection_id, date_raw, type_sequence,
@@ -404,6 +425,7 @@ export async function queryAdminLetters(
       SELECT * FROM (
         SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
           id, transcript_status, metadata_content_status, extra_content_status,
+          ${hasExtrasExpression()} as has_extras,
           ${getSortExpression()} as sort_key
         FROM letters
         WHERE ${whereClause}

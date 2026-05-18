@@ -203,6 +203,54 @@ Deferred processing redesign note:
 - The broader transcription/metadata pipeline needs its own redesign after the dashboard pass. Current stored workflow stages can show counts for `TRANSCRIBING` or `METADATA_EXTRACTING` even when nothing is actively queued or running, which makes dashboard filters and processing status feel contradictory.
 - That redesign should separate durable letter content status, live queue/job status, retry/error state, and admin actions instead of using one mixed workflow concept for everything.
 
+## Phase 2.6 - Extra Content Data Model Correction
+
+Status: active
+
+Why this exists:
+
+- The dashboard extras status filter exposed a deeper data-contract issue: `extra_content_status` exists on every representative letter, but it is only meaningful for letter groups that actually have extra items such as covers, telegrams, photos, or ephemera.
+- The table's `Extras` column counts actual non-letter items, while the filter stats count status values. Those two concepts must agree or the UI will confidently show wrong cleanup/workflow counts.
+- The admin letter detail page and extra-content edit controls also depend on this distinction, so the correction should be made at the API/query boundary instead of as a frontend display patch.
+
+Goals:
+
+- Define the dashboard meaning clearly: extra-content status filters apply only to groups that have extra items.
+- Make `Extras > None` mean "has extra items, but no extra-content transcript/status yet", not "the representative letter has `extra_content_status = EMPTY`".
+- Keep "has extras" as a separate future content-shape filter for showing every group with extra items regardless of status.
+- Preserve the existing detail/review page behavior unless the audit finds a direct inconsistency.
+- Add focused backend coverage so status counts and filtering cannot drift from actual extra-item existence again.
+
+Current audit findings:
+
+- `backend/src/services/letter-queries.ts` computes dashboard extra-content status counts from representative letter status only, so groups with no extra items are currently included in `extraContent.empty`.
+- The same endpoint filters by `extra_content_status` after selecting representative rows, but does not require the group to have extra items.
+- Returned table rows already compute `extrasCount` from related non-letter pages for the current page, which is why the visible table can contradict the filter counts.
+- Collection stats already use non-letter item counts for extra content, so the backend has a precedent for treating item existence separately from extra-content transcript status.
+- Public letter detail display already keys visible extra-content sections from `extraContentItems` or actual transcript text, so this checkpoint does not require a detail-page rendering change.
+- Admin letter review still needs a later workflow/design pass for when and how extra-content edit controls appear, but the dashboard count/filter bug can be corrected independently.
+
+Implementation direction:
+
+- Add a group-level `has_extras`/extra-item existence calculation to the admin letters query.
+- Scope extra-content status stats to groups where `has_extras = true`.
+- Scope `extraContentStatus` filtering to groups where `has_extras = true`.
+- Keep this as a targeted query contract correction; the broader admin API redesign belongs in a later phase.
+
+Progress:
+
+- Dashboard admin letters stats now calculate group-level extra-item existence from non-letter pages in the same collection/date/type-sequence group.
+- Extra-content status counts now include only groups with actual extra item pages.
+- Extra-content status filtering now requires `has_extras = true`, so filtering by `None`, `Draft`, `Edited`, or `Done` cannot return groups with zero extras.
+- Added focused backend regression coverage for the extra-content status query contract.
+
+Exit criteria:
+
+- A collection with no extra items does not inflate `Extras > None`.
+- Filtering by any extra-content status never returns groups with zero extras.
+- Tests cover both dashboard stats and filtered results for extra-content status.
+- Roadmap/decision notes explain why this is not the same as a future `has extras` filter.
+
 ## Phase 2.75 - Dashboard Selection and Bulk Action Redesign
 
 Status: active

@@ -52,6 +52,8 @@ Until the API supports ordered server-side sort rules, only the first server-bac
 
 Long term, meaningful sorts and filters should be server-backed for the full filtered result set. Page-only sorting is acceptable as a temporary state, not the final design. Server-backed ranked multi-sort is a future backend slice and should apply the full ordered sort stack before pagination.
 
+Extra-content status filters apply only to letter groups that actually have extra items. A representative letter with `extra_content_status = EMPTY` is not enough to count as "Extras: None"; the group must have non-letter items first. A future `has extras` filter is a separate content-shape filter, while the current extras status buttons are workflow/status filters for existing extra content.
+
 ### Mobile Data View
 
 Start from a compact table/list-table approach rather than forcing desktop columns onto mobile.

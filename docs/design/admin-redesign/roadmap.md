@@ -394,6 +394,7 @@ Goals:
 - Add a matching desktop control for any mobile-only view toggle that survives design review.
 - Revisit mobile table behavior so readability wins over forced column compression.
 - Turn top-level filter/sort controls into manager buttons/sheets rather than permanent form controls when the rule set becomes complex.
+- Redesign selector/dropdown UI as one dashboard manager system instead of many unrelated popovers.
 
 Mobile table direction:
 
@@ -402,6 +403,50 @@ Mobile table direction:
 - Use sensible minimum widths for date, collection, visibility, last opened, and status columns so values remain readable.
 - Preserve active filters, saved views, sorting, and visible-column controls with the horizontally scrollable table model.
 - Treat this as a responsive-table design pass, not a card-view replacement.
+
+## Phase 3.25 - Dashboard Selector and Manager Redesign
+
+Status: active
+
+Why this exists:
+
+- The current dropdowns/popovers are transitional. They work in places, but they do not yet feel like one designed admin system.
+- Sort, columns, saved views, date selection, filters, and publish/bulk menus all use slightly different structures, spacing, labels, scrolling behavior, and apply/reset semantics.
+- Mobile needs a different interaction surface than desktop. Small dropdowns are cramped for touch and often become awkward when rows can be reordered, toggled, or applied.
+- Polishing each dropdown one by one would likely create five slightly different systems. The better path is one shared selector/manager pattern proven on the dashboard first.
+
+Goals:
+
+- Define a shared desktop manager pattern: trigger button, popover shell, compact header/title, content rows, active state, empty state, reset/apply/cancel actions, and outside-click/escape behavior.
+- Define a shared mobile manager pattern: sheet or full-width panel, larger touch targets, clear title, scroll ownership, sticky action row when needed, and predictable close/apply behavior.
+- Apply the pattern first to dashboard Sort and Columns because they are the most complex managers and already have staged edits/reordering.
+- Bring Saved views, date selection, filter editing, and publish/bulk menus toward the same structure after Sort/Columns prove the pattern.
+- Avoid turning every selector into a permanent large panel. Desktop can still use compact popovers when the task is short.
+- Keep code quality first: shared shell/components only after repeated structure is clear, not before the pattern has proven itself.
+
+Candidate manager surfaces:
+
+- Sort manager: ordered rules, direction toggles, add rule menu, apply/reset.
+- Columns manager: visibility toggles, reorder handles, reset order, mobile-friendly touch behavior.
+- Saved views menu: save/apply/delete views, eventually include current view dirty state.
+- Date selector: specific/range modes, clear/apply behavior, mobile sheet layout.
+- Filter manager/sheet: primary filters, advanced filters, active chips, clear/apply behavior.
+- Publish/bulk menus: grouped actions that should not feel like one-off dropdowns.
+
+Implementation direction:
+
+- Do not chase visual polish by isolated CSS tweaks to individual dropdowns.
+- First document the manager invariants and owner tree: trigger owner, overlay owner, scroll owner, action owner, row owner.
+- Then refactor one complex manager, likely Columns or Sort, into the target structure.
+- After the first manager works in desktop and mobile, reuse the structure for the others.
+
+Exit criteria:
+
+- Sort and Columns use the same manager shell conventions on desktop and mobile.
+- Mobile manager surfaces are touch-friendly and do not rely on cramped native dropdown behavior.
+- Apply/cancel/reset semantics are clear and consistent where staged edits exist.
+- The dashboard does not contain competing one-off dropdown styles for equivalent tasks.
+- Roadmap/decision notes explain which surfaces still use transitional dropdowns and why.
 
 Progress:
 

@@ -208,6 +208,13 @@ Current implementation direction:
 - Mobile should not keep the current detached sticky checkbox treatment. Prefer either a deliberate frozen selection rail with boundary treatment and row-state continuity, or remove sticky selection on mobile and let the selection column scroll with the table. Choose the simpler stable model first unless inspection proves selection becomes too hard to access.
 - Bulk actions should be restyled around hierarchy before extracting reusable patterns: selection summary first, common actions next, dangerous actions visually separated.
 
+Progress:
+
+- Removed the mobile sticky checkbox column so selection moves with the horizontally scrolling table instead of detaching from it.
+- Made row checkboxes real focusable controls instead of read-only, pointer-disabled inputs handled only by the table cell.
+- Consolidated duplicate checkbox CSS into one row checkbox visual model with hover, checked, and focus-visible states.
+- Changed the mobile bulk toolbar into compact stacked action rows with row-level horizontal overflow, reducing the selected-state toolbar footprint.
+
 Likely implementation slices:
 
 - Selection interaction model and table selection visuals.
@@ -223,6 +230,39 @@ Exit criteria:
 - Bulk actions are grouped by intent and danger level.
 - Row opening, checkbox selection, drag/shift selection, and edit mode have predictable behavior on desktop and mobile.
 - Browser verification covers desktop, narrow mobile, selected rows, bulk toolbar visible, and horizontal table scroll.
+
+## Phase 2.8 - Dashboard Column Configuration
+
+Status: pending
+
+Why this exists:
+
+- The dashboard can toggle columns on and off, but the user cannot choose column order.
+- Mobile horizontal scrolling makes column order much more important because only a small slice of the table is visible at a time.
+- Current column order is hardcoded separately in header rendering and row rendering, so reordering needs a shared column model rather than a menu-only tweak.
+
+Goals:
+
+- Add user-controlled column ordering while preserving column visibility.
+- Keep checkbox/selection controls first and outside user reorder for now.
+- Persist column order locally and include it in saved dashboard views.
+- Render table headers and row cells from one shared ordered column model so header/body order cannot drift.
+- Avoid drag-and-drop for the first slice unless a later design requires it; simple up/down/reset controls are easier to make touch and keyboard accessible.
+
+Current audit findings:
+
+- `ALL_COLUMNS` defines available columns, but render order is currently hardcoded in `RecentActivityTableHeader` and `RecentActivityRow`.
+- `useDashboardColumns` owns visibility as a `Set<ColumnId>` and persists visibility under `adminDashboardColumns`.
+- Saved views persist visible columns, but not column order.
+- No drag-and-drop library is installed; header dragging would also conflict with sorting and mobile horizontal scroll.
+
+Likely implementation slices:
+
+- Add `columnOrder` state and persistence migration in `useDashboardColumns`.
+- Expose ordered columns, move-column controls, and reset-order controls.
+- Update the column menu to show ordered columns with move controls.
+- Refactor table header and row rendering to consume the same ordered column list.
+- Update saved dashboard views and tests for column order.
 
 ## Phase 3 - Dashboard Responsive UI
 

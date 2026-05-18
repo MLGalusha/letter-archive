@@ -111,15 +111,18 @@ export default function RecentActivityRow({
         className="checkbox-cell"
         onClick={(event) => {
           event.stopPropagation();
-          selection.onCheckboxChange(letter.id, index, event);
         }}
       >
         <input
           type="checkbox"
           className="row-checkbox"
+          aria-label={`Select ${letter.title || formattedDate || "letter"}`}
           checked={selectedIds.has(letter.id)}
-          readOnly
-          tabIndex={-1}
+          onClick={(event) => {
+            event.stopPropagation();
+            selection.onCheckboxChange(letter.id, index, event);
+          }}
+          onChange={() => undefined}
         />
       </td>
 

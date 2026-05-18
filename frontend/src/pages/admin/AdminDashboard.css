@@ -1786,39 +1786,63 @@
 /* Checkbox styles */
 .checkbox-header,
 .checkbox-cell {
-  width: 40px;
+  width: 36px;
+  min-width: 36px;
+  max-width: 36px;
   text-align: center;
-  padding: var(--spacing-sm);
+  padding: 0 var(--spacing-xs) !important;
 }
 
-.checkbox-cell input[type="checkbox"] {
+.checkbox-header {
+  position: relative;
+}
+
+.checkbox-cell {
+  cursor: default;
+}
+
+.row-checkbox {
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
-  width: 18px;
-  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin: 0;
   cursor: pointer;
   background: var(--bg);
   border: solid 1px var(--border);
-  border-radius: 3px;
+  border-radius: 4px;
   position: relative;
   transition: all 0.2s ease;
+  vertical-align: middle;
 }
 
-.checkbox-cell input[type="checkbox"]:checked {
-  background: var(--bg);
+.row-checkbox:hover {
+  border-color: var(--text-muted);
+}
+
+.row-checkbox:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.6);
+  outline-offset: 2px;
+}
+
+.row-checkbox:checked {
+  background: var(--text);
   border-color: var(--text);
 }
 
-.checkbox-cell input[type="checkbox"]:checked::after {
+.row-checkbox:checked::after {
   content: "✓";
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  color: var(--text);
+  color: var(--bg);
   font-size: 12px;
   font-weight: bold;
+  line-height: 1;
 }
 
 /* Empty state - shown as centered message in table container */
@@ -2176,28 +2200,18 @@
 
   .checkbox-header,
   .checkbox-cell {
-    position: sticky;
-    left: 0;
-    z-index: 12;
-    width: 40px;
-    min-width: 40px;
-    max-width: 40px;
+    position: static;
+    width: 36px;
+    min-width: 36px;
+    max-width: 36px;
     padding: 0 !important;
     overflow: visible;
     text-overflow: clip;
-    background: var(--bg);
   }
 
   .checkbox-cell {
     display: table-cell;
     vertical-align: middle;
-    z-index: 6;
-    background: var(--bg-light);
-  }
-
-  .checkbox-cell input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
   }
 
   .letters-table th[data-column="sender"],
@@ -2291,13 +2305,8 @@
     font-size: 0.65rem;
   }
 
-  .edit-toolbar-content {
-    flex-wrap: wrap;
-    gap: var(--spacing-sm);
-  }
-
-  .toolbar-process-actions {
-    flex-wrap: wrap;
+  .admin-dashboard > .admin-content.has-edit-toolbar {
+    padding-bottom: 180px;
   }
 }
 
@@ -3178,34 +3187,65 @@
   cursor: not-allowed;
 }
 
-/* ── Row checkboxes ────────────────────────────────────── */
-.checkbox-header {
-  width: 32px;
-  min-width: 32px;
-  max-width: 32px;
-  padding: 0 !important;
-  position: relative;
-  text-align: center;
-}
+@media (max-width: 768px) {
+  .edit-toolbar-content {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 0.45rem;
+    max-height: min(42vh, 260px);
+    overflow-y: auto;
+    padding: 0.65rem;
+  }
 
-.checkbox-cell {
-  width: 32px;
-  min-width: 32px;
-  max-width: 32px;
-  padding: 0 var(--spacing-xs) !important;
-  text-align: center;
-  cursor: pointer;
-}
+  .edit-toolbar-left,
+  .edit-toolbar-center,
+  .edit-toolbar-right {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+    gap: 0.45rem;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
 
-.row-checkbox {
-  width: 14px;
-  height: 14px;
-  accent-color: #3b82f6;
-  cursor: pointer;
-  margin: 0;
-  pointer-events: none; /* clicks handled by td */
-}
+  .edit-toolbar-left::-webkit-scrollbar,
+  .edit-toolbar-center::-webkit-scrollbar,
+  .edit-toolbar-right::-webkit-scrollbar {
+    height: 4px;
+  }
 
-body.dark .row-checkbox {
-  accent-color: #60a5fa;
+  .edit-toolbar-left::-webkit-scrollbar-thumb,
+  .edit-toolbar-center::-webkit-scrollbar-thumb,
+  .edit-toolbar-right::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    border-radius: 999px;
+  }
+
+  .toolbar-selection-count {
+    flex: 0 0 auto;
+  }
+
+  .toolbar-select-actions,
+  .toolbar-copy-buttons,
+  .toolbar-process-actions,
+  .toolbar-destructive-actions,
+  .toolbar-visibility-actions {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+  }
+
+  .toolbar-divider {
+    display: none;
+  }
+
+  .toolbar-copy-btn,
+  .toolbar-process-btn,
+  .toolbar-btn-destructive,
+  .toolbar-btn-danger,
+  .toolbar-select-btn {
+    min-height: 32px;
+    padding: 5px 9px;
+    font-size: 0.74rem;
+  }
 }

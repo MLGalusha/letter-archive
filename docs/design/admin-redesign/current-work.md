@@ -61,6 +61,7 @@ Verification plan:
 - 2026-05-18: Normalized saved-view names in the menu so whitespace-only input uses the default name and padded names are trimmed before saving.
 - 2026-05-18: Started filter manager cleanup with focused filter-panel tests for active count, clear, close, and collection input wiring.
 - 2026-05-18: Added active-filter chip tests for count, labels, and removal callbacks, and simplified the active-filter hook inputs to use the existing date-filter summary instead of individual date fields.
+- 2026-05-18: Simplified active-filter chip/count construction so the chip list is the single source of truth for the active-filter count.
 
 ## Selection Audit
 

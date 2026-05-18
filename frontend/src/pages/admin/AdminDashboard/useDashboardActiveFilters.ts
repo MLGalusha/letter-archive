@@ -32,6 +32,15 @@ interface UseDashboardActiveFiltersOptions {
   toggleFlaggedFilter: (value: Exclude<FlaggedFilter, "ALL">) => void;
 }
 
+function formatContentStatusLabel(status: ContentStatus) {
+  return status.toLowerCase().replace("_", " ");
+}
+
+function formatWorkflowLabel(workflow: WorkflowState) {
+  const option = WORKFLOW_FILTERS.find((filter) => filter.value === workflow);
+  return option?.label ?? workflow.toLowerCase().replace(/_/g, " ");
+}
+
 export function useDashboardActiveFilters({
   collectionFilter,
   visibilityFilter,
@@ -54,30 +63,6 @@ export function useDashboardActiveFilters({
   toggleWorkflowFilter,
   toggleFlaggedFilter,
 }: UseDashboardActiveFiltersOptions) {
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (collectionFilter !== "all") count++;
-    if (visibilityFilter !== "ALL") count++;
-    if (searchQuery) count++;
-    if (transcriptStatusFilters.length > 0) count += transcriptStatusFilters.length;
-    if (metadataStatusFilters.length > 0) count += metadataStatusFilters.length;
-    if (extraContentStatusFilters.length > 0) count += extraContentStatusFilters.length;
-    if (workflowFilters.length > 0) count += workflowFilters.length;
-    if (flaggedFilter !== "ALL") count++;
-    if (hasDateFilter) count++;
-    return count;
-  }, [
-    collectionFilter,
-    visibilityFilter,
-    searchQuery,
-    transcriptStatusFilters,
-    metadataStatusFilters,
-    extraContentStatusFilters,
-    workflowFilters,
-    flaggedFilter,
-    hasDateFilter,
-  ]);
-
   const activeFilterChips = useMemo<DashboardFilterChip[]>(() => {
     const chips: DashboardFilterChip[] = [];
 
@@ -127,7 +112,7 @@ export function useDashboardActiveFilters({
     transcriptStatusFilters.forEach((status) => {
       chips.push({
         key: `transcript-${status}`,
-        label: `Transcript ${status.toLowerCase().replace("_", " ")}`,
+        label: `Transcript ${formatContentStatusLabel(status)}`,
         onRemove: () => toggleTranscriptFilter(status),
       });
     });
@@ -135,7 +120,7 @@ export function useDashboardActiveFilters({
     metadataStatusFilters.forEach((status) => {
       chips.push({
         key: `metadata-${status}`,
-        label: `Metadata ${status.toLowerCase().replace("_", " ")}`,
+        label: `Metadata ${formatContentStatusLabel(status)}`,
         onRemove: () => toggleMetadataFilter(status),
       });
     });
@@ -143,16 +128,15 @@ export function useDashboardActiveFilters({
     extraContentStatusFilters.forEach((status) => {
       chips.push({
         key: `extras-${status}`,
-        label: `Extras ${status.toLowerCase().replace("_", " ")}`,
+        label: `Extras ${formatContentStatusLabel(status)}`,
         onRemove: () => toggleExtraContentFilter(status),
       });
     });
 
     workflowFilters.forEach((workflow) => {
-      const option = WORKFLOW_FILTERS.find((filter) => filter.value === workflow);
       chips.push({
         key: `workflow-${workflow}`,
-        label: `Pipeline: ${option?.label ?? workflow.toLowerCase().replace(/_/g, " ")}`,
+        label: `Pipeline: ${formatWorkflowLabel(workflow)}`,
         onRemove: () => toggleWorkflowFilter(workflow),
       });
     });
@@ -180,6 +164,8 @@ export function useDashboardActiveFilters({
     toggleWorkflowFilter,
     toggleFlaggedFilter,
   ]);
+
+  const activeFilterCount = activeFilterChips.length;
 
   return { activeFilterCount, activeFilterChips };
 }

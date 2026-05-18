@@ -46,6 +46,8 @@ The top sort/filter controls should become managers: concise buttons that open a
 
 The top `Sort` manager owns all dashboard sorting. Column headers should not sort in this pass; that keeps desktop and mobile behavior aligned and avoids duplicate sort paths.
 
+The top `Filters` manager should not be a permanently visible desktop form wall. Desktop may render filter editing inline below the toolbar, but it must be opened intentionally, own its internal scroll, and preserve visible table space on normal laptop/desktop viewports. Mobile uses a bottom sheet for the same shared filter state.
+
 Existing sort rules should be fixed ranked rows, not field dropdowns. To change a rule's field in this pass, remove the rule and add the intended field again. This keeps the manager visually clear while the sort model is still being stabilized.
 
 Sort manager edits should be staged until `Apply sorting` is clicked. Closing the popover without applying discards draft edits, which prevents table refetches while the user is still arranging sort rules.

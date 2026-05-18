@@ -36,7 +36,7 @@ import "./AdminDashboard.css";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const { dashboardView, handleDashboardViewChange } = useDashboardViewState();
 
   const dashboardFilters = useDashboardFilters();
@@ -246,8 +246,8 @@ export default function AdminDashboard() {
         <DashboardToolbar
           dashboardView={dashboardView}
           onDashboardViewChange={handleDashboardViewChange}
-          mobileFiltersOpen={mobileFiltersOpen}
-          onMobileFiltersOpenChange={setMobileFiltersOpen}
+          filtersOpen={filtersOpen}
+          onFiltersOpenChange={setFiltersOpen}
           paginationTotal={pagination.total}
           stats={stats}
           sortColumns={sortColumns}

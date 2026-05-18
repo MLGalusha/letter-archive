@@ -1,22 +1,22 @@
 import Icon from "../../../components/common/Icon";
 
-interface MobileFilterTriggerProps {
+interface DashboardFilterTriggerProps {
   activeFilterCount: number;
-  mobileFiltersOpen: boolean;
+  filtersOpen: boolean;
   onToggle: () => void;
 }
 
-export default function MobileFilterTrigger({
+export default function DashboardFilterTrigger({
   activeFilterCount,
-  mobileFiltersOpen,
+  filtersOpen,
   onToggle,
-}: MobileFilterTriggerProps) {
+}: DashboardFilterTriggerProps) {
   return (
     <button
       type="button"
-      className={`dashboard-control-btn mobile-filter-trigger ${activeFilterCount > 0 ? "has-filters" : ""}`}
+      className={`dashboard-control-btn dashboard-filter-trigger ${activeFilterCount > 0 ? "has-filters" : ""} ${filtersOpen ? "active" : ""}`}
       onClick={onToggle}
-      aria-expanded={mobileFiltersOpen}
+      aria-expanded={filtersOpen}
     >
       <Icon name="settings" size={15} />
       <span>Filters</span>

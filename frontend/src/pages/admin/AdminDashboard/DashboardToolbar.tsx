@@ -2,10 +2,10 @@ import type { Dispatch, SetStateAction } from "react";
 import type { ProcessingStatus } from "../../../api/admin";
 import ActiveFilterChips from "./ActiveFilterChips";
 import DashboardFilterPanel from "./DashboardFilterPanel";
+import DashboardFilterTrigger from "./DashboardFilterTrigger";
 import DashboardSearchField from "./DashboardSearchField";
 import DashboardSortControl from "./DashboardSortControl";
 import DashboardViewToggle from "./DashboardViewToggle";
-import MobileFilterTrigger from "./MobileFilterTrigger";
 import SavedViewsMenu from "./SavedViewsMenu";
 import type { DashboardFilterControls } from "./useDashboardFilters";
 import type {
@@ -19,8 +19,8 @@ import { useDashboardActiveFilters } from "./useDashboardActiveFilters";
 interface DashboardToolbarProps {
   dashboardView: DashboardView;
   onDashboardViewChange: (view: DashboardView) => void;
-  mobileFiltersOpen: boolean;
-  onMobileFiltersOpenChange: Dispatch<SetStateAction<boolean>>;
+  filtersOpen: boolean;
+  onFiltersOpenChange: Dispatch<SetStateAction<boolean>>;
   paginationTotal: number;
   stats: DashboardFilterStats;
   sortColumns: SortColumn[];
@@ -40,8 +40,8 @@ interface DashboardToolbarProps {
 export default function DashboardToolbar({
   dashboardView,
   onDashboardViewChange,
-  mobileFiltersOpen,
-  onMobileFiltersOpenChange,
+  filtersOpen,
+  onFiltersOpenChange,
   paginationTotal,
   stats,
   sortColumns,
@@ -128,10 +128,10 @@ export default function DashboardToolbar({
               setSearchQuery={setSearchQuery}
             />
 
-            <MobileFilterTrigger
+            <DashboardFilterTrigger
               activeFilterCount={activeFilterCount}
-              mobileFiltersOpen={mobileFiltersOpen}
-              onToggle={() => onMobileFiltersOpenChange((open) => !open)}
+              filtersOpen={filtersOpen}
+              onToggle={() => onFiltersOpenChange((open) => !open)}
             />
 
             <SavedViewsMenu
@@ -159,23 +159,23 @@ export default function DashboardToolbar({
             onClearAllFilters={handleClearAllFilters}
           />
 
-          {mobileFiltersOpen && (
+          {filtersOpen && (
             <button
               type="button"
               className="filter-panel-backdrop"
               aria-label="Close filters"
-              onClick={() => onMobileFiltersOpenChange(false)}
+              onClick={() => onFiltersOpenChange(false)}
             />
           )}
           <DashboardFilterPanel
-            open={mobileFiltersOpen}
+            open={filtersOpen}
             stats={stats}
             filters={filters}
             getDateButtonText={getDateButtonText}
             dateRawToDisplay={dateRawToDisplay}
             displayToDateRaw={displayToDateRaw}
             activeFilterCount={activeFilterCount}
-            onClose={() => onMobileFiltersOpenChange(false)}
+            onClose={() => onFiltersOpenChange(false)}
           />
         </>
       )}

@@ -85,7 +85,7 @@ export default function DashboardFilterPanel({
   const advancedActiveCount = workflowFilters.length;
 
   return (
-    <div className={`dashboard-filter-panel ${open ? "open" : ""}`}>
+    <div className={`dashboard-filter-panel ${open ? "open" : ""}`} hidden={!open}>
       <div className="filter-panel-header">
         <div>
           <h2>Filters</h2>

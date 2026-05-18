@@ -97,14 +97,14 @@ function ToolbarHarness({
   filters?: DashboardFilterControls;
 }) {
   const [dashboardView, setDashboardView] = useState<DashboardView>(initialView);
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   return (
     <DashboardToolbar
       dashboardView={dashboardView}
       onDashboardViewChange={setDashboardView}
-      mobileFiltersOpen={mobileFiltersOpen}
-      onMobileFiltersOpenChange={setMobileFiltersOpen as Dispatch<SetStateAction<boolean>>}
+      filtersOpen={filtersOpen}
+      onFiltersOpenChange={setFiltersOpen as Dispatch<SetStateAction<boolean>>}
       paginationTotal={12}
       stats={emptyStats}
       sortColumns={[{ field: "lastOpenedAt", direction: "desc" }]}
@@ -136,7 +136,7 @@ describe("DashboardToolbar", () => {
 
     await user.click(closeButtons[1]);
     expect(trigger).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getAllByRole("button", { name: "Close filters" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Close filters" })).not.toBeInTheDocument();
   });
 
   it("routes active search chip clearing through filter state", async () => {

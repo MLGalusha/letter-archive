@@ -49,7 +49,7 @@ Progress:
 - Recent edits removed as a primary dashboard control.
 - Mobile table now uses a compact column set instead of rendering the full desktop table.
 - Dashboard toolbar split into primary controls, active filter chips, and a filter editing panel.
-- Mobile filter editing is now collapsed behind a Filters button; desktop keeps the filter panel visible.
+- Filter editing is now opened from a Filters manager button on desktop and mobile instead of permanently consuming desktop dashboard space.
 - Dashboard toolbar render/state glue extracted into `AdminDashboard/DashboardToolbar.tsx` so `AdminDashboard.tsx` can stay closer to page orchestration.
 - Saved views now persist filters, sort, and visible columns locally.
 - Saved-view menu and filter panel are split into focused toolbar subcomponents.
@@ -75,7 +75,7 @@ Progress:
 - Dashboard sort control and mobile date filter control moved into dedicated components so toolbar controls are easier to reason about independently.
 - Recent activity table header behavior moved into `SortableTableHeader`, and row rendering moved into `RecentActivityRow`.
 - File-type table columns are now centralized with shared column definitions instead of repeated cover/photo/telegram column logic.
-- Dashboard toolbar controls are split into view toggle, search field, mobile filter trigger, sort control, saved views, active chips, and filter panel sections.
+- Dashboard toolbar controls are split into view toggle, search field, filter trigger, sort control, saved views, active chips, and filter panel sections.
 - Filter panel internals are split into date, visibility, and content-status sections backed by shared filter definitions and filter stats typing.
 - Bulk edit toolbar internals are split into selection, copy, processing, and publishing sections, keeping the main bulk toolbar focused on layout and coordination.
 - Transcription and metadata confirmation modals now share `ProcessingConfirmDialog`.
@@ -97,6 +97,7 @@ Progress:
 - Saved dashboard view integration now has coverage for capturing/restoring filters, sorting, visible columns, column order, and legacy saved-view fallbacks through the dashboard state hook.
 - Dashboard sort option metadata, default directions, equality checks, and button summaries are split into a pure sort model with focused tests.
 - Filter panel UI is grouped into worklist, content, scope, and pipeline sections while keeping one shared filter controller for desktop and mobile.
+- Desktop filter editing now uses an inline, height-capped manager surface with its own scroll owner, so opening Filters does not push the table out of view.
 - Mobile filter sheet now has explicit header, scroll-body, and footer ownership so the filter list scrolls independently without the Done action overlapping content.
 
 Out of scope:

@@ -1,8 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "../../../components/common/Icon";
-import { DEFAULT_DASHBOARD_SORT } from "./constants";
-import type { ClientSortField, ServerSortField, SortColumn, SortDirection } from "./types";
+import type { ExtendedSortField, SortColumn, SortDirection } from "./types";
 import { isServerSortField } from "./utils";
 
 interface DashboardSortControlProps {
@@ -10,22 +9,23 @@ interface DashboardSortControlProps {
   setSortColumns: Dispatch<SetStateAction<SortColumn[]>>;
 }
 
-type PrimarySort = SortColumn & { field: ServerSortField };
-
-const PRIMARY_SORT_OPTIONS: Array<{
-  value: ServerSortField;
+const SORT_OPTIONS: Array<{
+  value: ExtendedSortField;
   label: string;
   description: string;
 }> = [
-  { value: "lastOpenedAt", label: "Last opened", description: "Order by recent admin activity" },
-  { value: "letterDate", label: "Letter date", description: "Order by the historical letter date" },
-  { value: "collection", label: "Collection", description: "Order by collection number" },
-  { value: "createdAt", label: "Created", description: "Order by upload time" },
-  { value: "updatedAt", label: "Updated", description: "Order by last record update" },
-  { value: "sender", label: "Sender", description: "Order alphabetically by sender" },
-  { value: "recipient", label: "Recipient", description: "Order alphabetically by recipient" },
-  { value: "visibility", label: "Visibility", description: "Order by public or hidden state" },
-  { value: "flagged", label: "Flagged", description: "Group flagged letters together" },
+  { value: "lastOpenedAt", label: "Last opened", description: "Recent admin activity" },
+  { value: "letterDate", label: "Letter date", description: "Historical letter date" },
+  { value: "collection", label: "Collection", description: "Collection number" },
+  { value: "createdAt", label: "Created", description: "Upload time" },
+  { value: "updatedAt", label: "Updated", description: "Last record update" },
+  { value: "sender", label: "Sender", description: "Sender name" },
+  { value: "recipient", label: "Recipient", description: "Recipient name" },
+  { value: "visibility", label: "Visibility", description: "Public or hidden state" },
+  { value: "flagged", label: "Flagged", description: "Flagged state" },
+  { value: "letters", label: "Letters", description: "Letter-page count" },
+  { value: "extras", label: "Extras", description: "Extra-content count" },
+  { value: "photos", label: "Photos", description: "Photo count" },
 ];
 
 export default function DashboardSortControl({
@@ -33,30 +33,22 @@ export default function DashboardSortControl({
   setSortColumns,
 }: DashboardSortControlProps) {
   const [open, setOpen] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
 
-  const clientSortColumns = useMemo(
-    () => sortColumns.filter((column): column is SortColumn & { field: ClientSortField } => !isServerSortField(column.field)),
+  const availableAddOptions = useMemo(
+    () => SORT_OPTIONS.filter((option) => !sortColumns.some((column) => column.field === option.value)),
     [sortColumns],
   );
 
-  const primarySort = useMemo(() => {
-    const serverSort = [...sortColumns].reverse().find((column) => isServerSortField(column.field));
-    if (!serverSort || !isServerSortField(serverSort.field)) {
-      return DEFAULT_DASHBOARD_SORT as PrimarySort;
-    }
+  const primaryServerSortIndex = sortColumns.findIndex((column) => isServerSortField(column.field));
+  const hasSecondaryRules = sortColumns.length > 1;
+  const hasCurrentPageRules = sortColumns.some((column, index) => {
+    if (!isServerSortField(column.field)) return true;
+    return primaryServerSortIndex !== -1 && index !== primaryServerSortIndex;
+  });
 
-    return {
-      field: serverSort.field,
-      direction: serverSort.direction,
-    };
-  }, [sortColumns]);
-
-  const primarySortLabel = useMemo(() => {
-    return PRIMARY_SORT_OPTIONS.find((option) => option.value === primarySort.field)?.label ?? "Custom";
-  }, [primarySort.field]);
-
-  const primaryDirectionLabel = getDirectionLabel(primarySort.field, primarySort.direction);
+  const buttonSummary = getSortButtonSummary(sortColumns);
 
   useEffect(() => {
     if (!open) return;
@@ -71,31 +63,63 @@ export default function DashboardSortControl({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
-  const handlePrimarySortFieldChange = (field: ServerSortField) => {
-    setSortColumns((previous) => [
-      ...previous.filter((column) => !isServerSortField(column.field)),
-      { field, direction: primarySort.direction },
-    ]);
+  const updateRule = (index: number, nextRule: SortColumn) => {
+    setSortColumns((previous) => previous.map((rule, ruleIndex) => (ruleIndex === index ? nextRule : rule)));
   };
 
-  const handlePrimarySortDirectionChange = (direction: SortDirection) => {
-    setSortColumns((previous) => [
-      ...previous.filter((column) => !isServerSortField(column.field)),
-      { field: primarySort.field, direction },
-    ]);
+  const handleFieldChange = (index: number, field: ExtendedSortField) => {
+    setSortColumns((previous) => {
+      if (previous.some((rule, ruleIndex) => ruleIndex !== index && rule.field === field)) {
+        return previous;
+      }
+
+      return previous.map((rule, ruleIndex) => (
+        ruleIndex === index
+          ? { field, direction: getDefaultDirection(field) }
+          : rule
+      ));
+    });
   };
 
-  const handleTogglePrimarySortDirection = () => {
-    handlePrimarySortDirectionChange(primarySort.direction === "asc" ? "desc" : "asc");
+  const handleToggleDirection = (index: number) => {
+    const currentRule = sortColumns[index];
+    if (!currentRule) return;
+
+    updateRule(index, {
+      ...currentRule,
+      direction: currentRule.direction === "asc" ? "desc" : "asc",
+    });
   };
 
-  const handleClearPageSorts = () => {
-    setSortColumns((previous) => previous.filter((column) => isServerSortField(column.field)));
+  const handleRemoveRule = (index: number) => {
+    setSortColumns((previous) => previous.filter((_, ruleIndex) => ruleIndex !== index));
   };
 
-  const pageSortSummary = clientSortColumns
-    .map((column) => `${getClientSortLabel(column.field)} ${column.direction === "asc" ? "↑" : "↓"}`)
-    .join(", ");
+  const handleAddRule = (field: ExtendedSortField) => {
+    setSortColumns((previous) => {
+      if (previous.some((rule) => rule.field === field)) {
+        return previous;
+      }
+
+      return [...previous, { field, direction: getDefaultDirection(field) }];
+    });
+  };
+
+  const handleDropRule = (targetIndex: number) => {
+    if (dragIndex === null || dragIndex === targetIndex) {
+      setDragIndex(null);
+      return;
+    }
+
+    setSortColumns((previous) => {
+      const next = [...previous];
+      const [movedRule] = next.splice(dragIndex, 1);
+      if (!movedRule) return previous;
+      next.splice(targetIndex, 0, movedRule);
+      return next;
+    });
+    setDragIndex(null);
+  };
 
   return (
     <div className="dashboard-sort-manager" ref={sortMenuRef}>
@@ -106,12 +130,10 @@ export default function DashboardSortControl({
         aria-expanded={open}
         aria-haspopup="dialog"
       >
-        <span>Sort</span>
-        <span className="sort-manager-summary">
-          {primarySortLabel}, {primaryDirectionLabel.toLowerCase()}
-        </span>
-        {clientSortColumns.length > 0 && (
-          <span className="sort-manager-badge">{clientSortColumns.length}</span>
+        <Icon name="table" size={15} />
+        <span>{buttonSummary.label}</span>
+        {buttonSummary.detail && (
+          <span className="sort-manager-summary">{buttonSummary.detail}</span>
         )}
         <Icon name="chevron-down" size={14} />
       </button>
@@ -120,145 +142,170 @@ export default function DashboardSortControl({
         <div className="sort-manager-popover" role="dialog" aria-label="Sort rules">
           <div className="sort-manager-header">
             <div>
-              <span className="sort-manager-title">Sort</span>
+              <span className="sort-manager-title">
+                {sortColumns.length > 0 ? `Sorted by ${sortColumns.length} rule${sortColumns.length === 1 ? "" : "s"}` : "No sorts applied"}
+              </span>
               <span className="sort-manager-subtitle">
-                {getSortDescription(primarySort.field, primarySort.direction)}
+                {sortColumns.length > 0
+                  ? "Drag rules to rank them. The first server-backed rule sorts the full result set."
+                  : "Add a column below to sort the view."}
               </span>
             </div>
-            <button
-              type="button"
-              className="sort-direction-toggle"
-              onClick={handleTogglePrimarySortDirection}
-              aria-label={`Reverse sort direction. Current order: ${primaryDirectionLabel}.`}
-              title={`Reverse sort direction. Current order: ${primaryDirectionLabel}.`}
-            >
-              <Icon name="arrow-up-down" size={16} />
-            </button>
           </div>
 
-          <section className="sort-manager-section">
-            <span className="sort-manager-section-label">Sort by</span>
-            <div className="sort-option-list">
-              {PRIMARY_SORT_OPTIONS.map((option) => (
-                <label key={option.value} className="sort-option">
-                  <input
-                    type="radio"
-                    name="dashboard-primary-sort-field"
-                    value={option.value}
-                    checked={primarySort.field === option.value}
-                    onChange={() => handlePrimarySortFieldChange(option.value)}
-                  />
-                  <span>
-                    <strong>{option.label}</strong>
-                    <small>{option.description}</small>
-                  </span>
-                </label>
+          {sortColumns.length > 0 && (
+            <div className="sort-rule-list">
+              {sortColumns.map((rule, index) => (
+                <div
+                  key={rule.field}
+                  className="sort-rule-row"
+                  draggable
+                  onDragStart={() => setDragIndex(index)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={() => handleDropRule(index)}
+                >
+                  <button
+                    type="button"
+                    className="sort-rule-grip"
+                    aria-label={`Drag ${getFieldLabel(rule.field)} sort rule`}
+                    title="Drag to reorder"
+                  >
+                    <Icon name="grip-vertical" size={16} />
+                  </button>
+                  <span className="sort-rule-prefix">{index === 0 ? "sort by" : "then by"}</span>
+                  <select
+                    className="sort-rule-field"
+                    value={rule.field}
+                    onChange={(event) => handleFieldChange(index, event.target.value as ExtendedSortField)}
+                    aria-label={`Sort rule ${index + 1} column`}
+                  >
+                    {SORT_OPTIONS.filter((option) => (
+                      option.value === rule.field ||
+                      !sortColumns.some((column) => column.field === option.value)
+                    )).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="sort-rule-direction-label">ascending</span>
+                  <button
+                    type="button"
+                    className={`sort-rule-direction ${rule.direction === "asc" ? "active" : ""}`}
+                    onClick={() => handleToggleDirection(index)}
+                    aria-label={`${getFieldLabel(rule.field)} is sorted ${getDirectionLabel(rule.field, rule.direction)}. Toggle direction.`}
+                    title={`${getDirectionLabel(rule.field, rule.direction)}. Toggle direction.`}
+                  >
+                    <span />
+                  </button>
+                  <button
+                    type="button"
+                    className="sort-rule-remove"
+                    onClick={() => handleRemoveRule(index)}
+                    aria-label={`Remove ${getFieldLabel(rule.field)} sort rule`}
+                  >
+                    <Icon name="close" size={16} />
+                  </button>
+                </div>
               ))}
             </div>
-          </section>
+          )}
 
-          <section className="sort-manager-section">
-            <div className="sort-manager-section-heading">
-              <span className="sort-manager-section-label">Page sort</span>
-              {clientSortColumns.length > 0 && (
-                <button type="button" onClick={handleClearPageSorts}>
-                  Clear
-                </button>
-              )}
-            </div>
-            {clientSortColumns.length > 0 ? (
-              <p className="sort-manager-note">
-                {pageSortSummary} applies only to the currently loaded page.
-              </p>
-            ) : (
-              <p className="sort-manager-note">
-                No page-only sorts. Count columns can be sorted from the table header.
-              </p>
-            )}
-          </section>
+          <div className="sort-manager-footer">
+            <select
+              className="sort-add-select"
+              value=""
+              onChange={(event) => {
+                if (event.target.value) {
+                  handleAddRule(event.target.value as ExtendedSortField);
+                }
+              }}
+              aria-label={sortColumns.length > 0 ? "Pick another column to sort by" : "Pick a column to sort by"}
+            >
+              <option value="">
+                {sortColumns.length > 0 ? "Pick another column to sort by" : "Pick a column to sort by"}
+              </option>
+              {availableAddOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label} - {option.description}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {hasSecondaryRules && hasCurrentPageRules && (
+            <p className="sort-manager-note">
+              Secondary rules refine the currently loaded page until the API supports ranked server-side sorting.
+            </p>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function getDirectionOptions(field: ServerSortField): Array<{ value: SortDirection; label: string }> {
+function getSortButtonSummary(sortColumns: SortColumn[]): { label: string; detail?: string } {
+  if (sortColumns.length === 0) {
+    return { label: "Sort" };
+  }
+
+  if (sortColumns.length > 1) {
+    return { label: `Sorted by ${sortColumns.length} rules` };
+  }
+
+  const [rule] = sortColumns;
+  return {
+    label: "Sort",
+    detail: `${getFieldLabel(rule.field)}, ${getDirectionLabel(rule.field, rule.direction).toLowerCase()}`,
+  };
+}
+
+function getDefaultDirection(field: ExtendedSortField): SortDirection {
   switch (field) {
     case "lastOpenedAt":
     case "createdAt":
     case "updatedAt":
-      return [
-        { value: "desc", label: "Newest first" },
-        { value: "asc", label: "Oldest first" },
-      ];
-    case "letterDate":
-      return [
-        { value: "asc", label: "Oldest first" },
-        { value: "desc", label: "Newest first" },
-      ];
-    case "sender":
-    case "recipient":
-    case "collection":
-      return [
-        { value: "asc", label: "A to Z" },
-        { value: "desc", label: "Z to A" },
-      ];
     case "flagged":
-      return [
-        { value: "desc", label: "Flagged first" },
-        { value: "asc", label: "Unflagged first" },
-      ];
-    case "visibility":
-      return [
-        { value: "asc", label: "Hidden first" },
-        { value: "desc", label: "Public first" },
-      ];
-    case "workflow":
-      return [
-        { value: "asc", label: "Earlier stage first" },
-        { value: "desc", label: "Later stage first" },
-      ];
-  }
-}
-
-function getDirectionLabel(field: ServerSortField, direction: SortDirection): string {
-  return getDirectionOptions(field).find((option) => option.value === direction)?.label ?? direction;
-}
-
-function getSortDescription(field: ServerSortField, direction: SortDirection): string {
-  const directionLabel = getDirectionLabel(field, direction).toLowerCase();
-
-  switch (field) {
-    case "lastOpenedAt":
-      return `Order by recent admin activity, ${directionLabel}.`;
-    case "letterDate":
-      return `Order by historical letter date, ${directionLabel}.`;
-    case "collection":
-      return `Order by collection number, ${directionLabel}.`;
-    case "createdAt":
-      return `Order by upload time, ${directionLabel}.`;
-    case "updatedAt":
-      return `Order by last record update, ${directionLabel}.`;
-    case "sender":
-      return `Order by sender, ${directionLabel}.`;
-    case "recipient":
-      return `Order by recipient, ${directionLabel}.`;
-    case "visibility":
-      return `Order by visibility, ${directionLabel}.`;
-    case "flagged":
-      return `Order by flagged state, ${directionLabel}.`;
-    case "workflow":
-      return `Order by pipeline stage, ${directionLabel}.`;
-  }
-}
-
-function getClientSortLabel(field: ClientSortField): string {
-  switch (field) {
     case "letters":
-      return "Letters";
     case "extras":
-      return "Extras";
     case "photos":
-      return "Photos";
+      return "desc";
+    case "letterDate":
+    case "sender":
+    case "recipient":
+    case "workflow":
+    case "visibility":
+    case "collection":
+      return "asc";
   }
+}
+
+function getDirectionLabel(field: ExtendedSortField, direction: SortDirection): string {
+  if (field === "flagged") {
+    return direction === "asc" ? "unflagged first" : "flagged first";
+  }
+
+  if (field === "letters" || field === "extras" || field === "photos") {
+    return direction === "asc" ? "low to high" : "high to low";
+  }
+
+  switch (field) {
+    case "lastOpenedAt":
+    case "createdAt":
+    case "updatedAt":
+    case "letterDate":
+      return direction === "asc" ? "oldest first" : "newest first";
+    case "sender":
+    case "recipient":
+    case "collection":
+      return direction === "asc" ? "A to Z" : "Z to A";
+    case "visibility":
+      return direction === "asc" ? "hidden first" : "public first";
+    case "workflow":
+      return direction === "asc" ? "earlier stage first" : "later stage first";
+  }
+}
+
+function getFieldLabel(field: ExtendedSortField): string {
+  return SORT_OPTIONS.find((option) => option.value === field)?.label ?? field;
 }

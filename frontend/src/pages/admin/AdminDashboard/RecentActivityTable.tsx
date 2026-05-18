@@ -4,16 +4,11 @@ import type { Letter, ContentStatus } from "../../../types/Letter";
 import DashboardPagination from "./DashboardPagination";
 import RecentActivityRow from "./RecentActivityRow";
 import RecentActivityTableHeader from "./RecentActivityTableHeader";
-import type { ColumnDef, ColumnId, ExtendedSortField, PendingChange, SortInfo } from "./types";
+import type { ColumnDef, ColumnId, PendingChange } from "./types";
 
 export interface PaginationState {
   page: number;
   totalPages: number;
-}
-
-export interface TableSortingModel {
-  getSortInfo: (field: ExtendedSortField) => SortInfo | null;
-  onSort: (field: ExtendedSortField) => void;
 }
 
 export interface TableSelectionModel {
@@ -75,7 +70,6 @@ export interface TableRowActions {
 interface RecentActivityTableProps {
   filteredLetters: Letter[];
   columns: TableColumnModel;
-  sorting: TableSortingModel;
   selection: TableSelectionModel;
   copyEdit: TableCopyEditModel;
   formatting: TableFormattingModel;
@@ -86,7 +80,6 @@ interface RecentActivityTableProps {
 export default function RecentActivityTable({
   filteredLetters,
   columns,
-  sorting,
   selection,
   copyEdit,
   formatting,
@@ -105,8 +98,6 @@ export default function RecentActivityTable({
           <RecentActivityTableHeader
             visibleColumns={columns.visibleColumns}
             orderedColumns={columns.orderedColumns}
-            getSortInfo={sorting.getSortInfo}
-            onSort={sorting.onSort}
             showColumnMenu={columns.showColumnMenu}
             onToggleColumnMenu={columns.onToggleColumnMenu}
             onToggleColumn={columns.onToggleColumn}

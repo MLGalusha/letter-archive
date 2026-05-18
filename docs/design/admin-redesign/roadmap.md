@@ -154,24 +154,24 @@ Sort-model questions:
 Sort audit findings:
 
 - The backend only supports one server-side sort field and direction per admin letters request.
-- The dashboard sort state can hold multiple sort columns, but only the last server-sort column is sent to the API.
+- The dashboard sort state can hold multiple sort columns, but only one server-sort column can be sent to the API today.
 - Count sorts for letters, extras, and photos are applied client-side after the paginated server response, which means they only sort the current page rather than the full filtered result set.
-- The toolbar sort is currently the primary server sort selector; column headers can create a broader sort stack, which risks feeling like duplicate sorting unless the UI labels the relationship clearly.
+- Column-header sorting created a duplicate-feeling sort path and should be removed in favor of one Supabase-style sort manager.
 
 Sort-model decision:
 
-- Short term: treat the toolbar dropdown as the primary server sort for the full filtered result set.
-- Short term: treat count-column header sorts for letters, extras, and photos as page-level secondary sorts until the backend supports those sorts server-side.
-- Short term: keep server-sortable column headers wired to the same primary server sort state, but label the sort scope so the toolbar and headers do not read as unrelated competing systems.
-- Target direction: replace the dropdown-feeling sort control with a `Sort` manager that shows ordered sort rules and lets desktop column headers/menus act as shortcuts into the same rules.
+- Short term: make the toolbar `Sort` manager the only dashboard sorting surface.
+- Short term: support adding, removing, reordering, and toggling sort rules in that manager.
+- Short term: send the first server-backed rule to the API and label later rules as current-page refinement until backend multi-sort exists.
+- Target direction: replace the dropdown-feeling sort control with a Supabase-style `Sort` manager that shows ordered sort rules.
 - Target direction: avoid exposing true multi-sort until the API can apply it server-side across the full filtered result set.
 
 Progress:
 
-- Dashboard sort UI now labels the dropdown as `Primary sort`, exposes page-level count sorts separately, and lets admins clear page sorts without clearing the primary server sort.
-- Sortable column headers now advertise whether they affect the full filtered result set or only the currently loaded page.
-- Replaced the always-visible primary sort dropdown with a `Sort` manager button/popover that shows primary sort rules and page-only sort rules in one place.
-- Added a compact reverse-direction toggle to the top `Sort` manager so reversing the primary server sort is available on desktop and mobile without relying on table-header clicks.
+- Replaced the dropdown-feeling primary sort control with a Supabase-style `Sort` manager button/popover.
+- Removed column-header sorting so there is one sorting surface across desktop and mobile.
+- Added ordered sort rules with drag ranking, column selection, ascending toggles, and removal.
+- Kept the backend limitation explicit: the first server-backed rule drives the API request; additional rules refine the currently loaded page until backend multi-sort is implemented.
 
 Exit criteria:
 

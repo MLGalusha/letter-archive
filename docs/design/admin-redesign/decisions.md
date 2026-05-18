@@ -38,11 +38,13 @@ Column order is part of the dashboard view model. Use a single drag-handle affor
 
 Evolve dashboard sorting and filtering toward a Supabase-style data-table model.
 
-The target direction is one shared table state with column-aware sorting/filtering shortcuts, active chips, saved views, and manager surfaces for mobile or complex edits. Header and column-menu actions should be shortcuts into the same state, not separate systems from top-level controls.
+The target direction is one shared table state with manager surfaces for sorting, filtering, columns, and saved views. Header and column-menu actions should not become a second sorting system.
 
-The top sort/filter controls should become managers: concise buttons that open a menu/sheet showing active rules, adding/removing rules, and explaining scope. Column headers and column menus can expose quick sort/filter actions on desktop, while mobile should rely more on the top manager/sheet pattern because horizontal table headers are harder to use.
+The top sort/filter controls should become managers: concise buttons that open a menu/sheet showing active rules, adding/removing rules, and explaining scope.
 
-The top `Sort` manager owns both the primary server sort field and its direction. Direction is a compact reverse toggle in the manager header with helper copy that names the current order. Table header sorting remains a shortcut into the same state, not the only way to reverse a sort.
+The top `Sort` manager owns all dashboard sorting. Column headers should not sort in this pass; that keeps desktop and mobile behavior aligned and avoids duplicate sort paths.
+
+Until the API supports ordered server-side sort rules, only the first server-backed rule is sent to the backend. Additional rules refine the currently loaded page and must be labeled as such.
 
 Long term, meaningful sorts and filters should be server-backed for the full filtered result set. Page-only sorting is acceptable as an explicitly labeled temporary state, not the final design.
 

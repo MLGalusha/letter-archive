@@ -32,7 +32,6 @@ function makeLetter(): Letter {
 describe("RecentActivityTable", () => {
   it("renders rows and forwards table interactions", async () => {
     const user = userEvent.setup();
-    const onSort = vi.fn();
     const onCellClick = vi.fn();
 
     render(
@@ -63,10 +62,6 @@ describe("RecentActivityTable", () => {
           onReorderColumn: vi.fn(),
           onResetColumnOrder: vi.fn(),
           columnMenuRef: createRef<HTMLTableCellElement>(),
-        }}
-        sorting={{
-          getSortInfo: () => null,
-          onSort,
         }}
         selection={{
           selectedIds: new Set(),
@@ -100,8 +95,7 @@ describe("RecentActivityTable", () => {
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("columnheader", { name: /Sender/ }));
-    expect(onSort).toHaveBeenCalledWith("sender");
+    expect(screen.getByRole("columnheader", { name: /Sender/ })).toBeInTheDocument();
 
     await user.click(screen.getByText("Alice"));
     expect(onCellClick).toHaveBeenCalled();

@@ -57,8 +57,7 @@ export function buildDashboardLetterQuery({
   workflowFilters,
   flaggedFilter,
 }: DashboardLetterQueryOptions): AdminLetterQueryParams {
-  const serverSort = [...sortColumns]
-    .reverse()
+  const serverSort = sortColumns
     .find((col): col is SortColumn & { field: ServerSortField } => isServerSortField(col.field));
   const fallbackSortField = isServerSortField(defaultSort.field) ? defaultSort.field : undefined;
 

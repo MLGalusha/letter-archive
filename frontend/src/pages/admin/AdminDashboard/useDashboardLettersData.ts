@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { getAdminLetters } from "../../../api/letters";
 import type { Letter } from "../../../types/Letter";
 import { DEFAULT_DASHBOARD_SORT } from "./constants";
-import type { SortColumn } from "./types";
+import type { ExtendedSortField, SortColumn } from "./types";
 import {
   getDashboardFilterQueryFields,
   type DashboardFilterControls,
@@ -122,7 +122,8 @@ export function useDashboardLettersData({
   ]);
 
   const filteredLetters = useMemo(() => {
-    const clientSortColumns = sortColumns.filter(col => !isServerSortField(col.field));
+    const primaryServerSortIndex = sortColumns.findIndex((column) => isServerSortField(column.field));
+    const clientSortColumns = sortColumns.filter((_, index) => index !== primaryServerSortIndex);
 
     if (clientSortColumns.length === 0) {
       return letters;
@@ -132,20 +133,7 @@ export function useDashboardLettersData({
       for (const { field, direction } of clientSortColumns) {
         let comparison = 0;
 
-        switch (field) {
-          case "letters":
-            comparison = (a.lettersCount ?? a.images.filter(img => img.type === "letter").length)
-              - (b.lettersCount ?? b.images.filter(img => img.type === "letter").length);
-            break;
-          case "extras":
-            comparison = (a.extrasCount ?? a.images.filter(img => img.type !== "letter").length)
-              - (b.extrasCount ?? b.images.filter(img => img.type !== "letter").length);
-            break;
-          case "photos":
-            comparison = (a.photosCount ?? a.images.filter(img => img.type === "photo").length)
-              - (b.photosCount ?? b.images.filter(img => img.type === "photo").length);
-            break;
-        }
+        comparison = compareLettersByField(a, b, field);
 
         if (comparison !== 0) {
           return direction === "asc" ? comparison : -comparison;
@@ -166,4 +154,54 @@ export function useDashboardLettersData({
     stats,
     fetchLetters,
   };
+}
+
+function compareLettersByField(a: Letter, b: Letter, field: ExtendedSortField): number {
+  switch (field) {
+    case "letters":
+      return getLetterPageCount(a) - getLetterPageCount(b);
+    case "extras":
+      return getExtrasCount(a) - getExtrasCount(b);
+    case "photos":
+      return getPhotosCount(a) - getPhotosCount(b);
+    case "sender":
+      return compareStrings(a.metadata.sender, b.metadata.sender);
+    case "recipient":
+      return compareStrings(a.metadata.recipient, b.metadata.recipient);
+    case "collection":
+      return compareStrings(a.collectionCode, b.collectionCode);
+    case "letterDate":
+      return compareStrings(a.metadata.dateRaw ?? a.metadata.date, b.metadata.dateRaw ?? b.metadata.date);
+    case "createdAt":
+      return compareStrings(a.createdAt, b.createdAt);
+    case "updatedAt":
+      return compareStrings(a.updatedAt, b.updatedAt);
+    case "lastOpenedAt":
+      return compareStrings(a.lastOpenedAt, b.lastOpenedAt);
+    case "workflow":
+      return compareStrings(a.workflowState, b.workflowState);
+    case "visibility":
+      return compareStrings(a.visibility, b.visibility);
+    case "flagged":
+      return Number(a.flagged) - Number(b.flagged);
+  }
+}
+
+function compareStrings(a: string | undefined, b: string | undefined): number {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function getLetterPageCount(letter: Letter): number {
+  return letter.lettersCount ?? letter.images.filter((img) => img.type === "letter").length;
+}
+
+function getExtrasCount(letter: Letter): number {
+  return letter.extrasCount ?? letter.images.filter((img) => img.type !== "letter").length;
+}
+
+function getPhotosCount(letter: Letter): number {
+  return letter.photosCount ?? letter.images.filter((img) => img.type === "photo").length;
 }

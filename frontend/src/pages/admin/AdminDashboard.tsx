@@ -43,7 +43,7 @@ export default function AdminDashboard() {
   const {
     initialSortColumns,
   } = dashboardFilters;
-  const { sortColumns, setSortColumns, handleSort, getSortInfo } = useDashboardSort(initialSortColumns);
+  const { sortColumns, setSortColumns } = useDashboardSort(initialSortColumns);
   const {
     visibleColumns,
     setVisibleColumns,
@@ -281,10 +281,6 @@ export default function AdminDashboard() {
             onReorderColumn: reorderColumn,
             onResetColumnOrder: resetColumnOrder,
             columnMenuRef,
-          }}
-          sorting={{
-            getSortInfo,
-            onSort: handleSort,
           }}
           selection={{
             selectedIds,

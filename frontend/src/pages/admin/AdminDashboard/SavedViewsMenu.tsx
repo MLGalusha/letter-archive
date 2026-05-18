@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Icon from "../../../components/common/Icon";
+import DashboardManagerSurface from "./DashboardManagerSurface";
 import type { SavedDashboardView } from "./types";
 
 interface SavedViewsMenuProps {
@@ -38,6 +39,10 @@ export default function SavedViewsMenu({
     setOpen(false);
   };
 
+  const handleClose = () => {
+    setOpen(false);
+  };
+
   return (
     <div className="saved-view-menu" ref={containerRef}>
       <button
@@ -45,13 +50,19 @@ export default function SavedViewsMenu({
         type="button"
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
+        aria-haspopup="dialog"
       >
         <Icon name="save" size={15} />
         <span>Save view</span>
       </button>
 
       {open && (
-        <div className="saved-view-popover">
+        <DashboardManagerSurface
+          title="Views"
+          ariaLabel="Saved views"
+          className="saved-view-popover"
+          onClose={handleClose}
+        >
           <div className="saved-view-form">
             <input
               type="text"
@@ -97,7 +108,7 @@ export default function SavedViewsMenu({
               ))
             )}
           </div>
-        </div>
+        </DashboardManagerSurface>
       )}
     </div>
   );

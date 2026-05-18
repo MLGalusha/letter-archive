@@ -454,6 +454,7 @@ Phase 3.25 progress:
 - Migrated the Sort manager onto the shared shell as the first proving surface.
 - Changed the Sort manager's mobile behavior from a cramped anchored popover to a bottom sheet with clear header/body/footer ownership.
 - Migrated the Columns manager onto the same shell, keeping its table-header trigger while sharing dialog, close, body, footer, and mobile sheet conventions with Sort.
+- Migrated Saved views onto the same manager shell so save/apply/delete view behavior no longer uses a separate one-off popover structure.
 
 Related responsive UI progress:
 

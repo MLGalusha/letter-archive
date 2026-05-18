@@ -24,6 +24,8 @@ Remove recent edits as a primary dashboard button.
 
 Replace that behavior with sort/filter/saved-view affordances, especially options such as recently opened, recently edited, flagged, created date, or workflow status.
 
+Workflow/pipeline-stage filtering should be treated as an advanced admin filter, not a primary dashboard filter. Label it as pipeline stage and make clear that the counts come from stored letter stage fields, not from live queue health.
+
 ### Saved Presets
 
 Treat saved presets as saved dashboard views.

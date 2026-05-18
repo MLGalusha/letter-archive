@@ -132,6 +132,7 @@ Progress:
 - Added approved low-risk filters to the letters dashboard: flagged, workflow, and extra-content status.
 - Wired the new filters through API query construction, active filter chips, saved dashboard views, persisted dashboard state, stats normalization, select-all-filtered, and the desktop/mobile filter panel.
 - Expanded admin letters stats with exact workflow buckets so workflow filters can show useful counts.
+- Reframed workflow filters as advanced stored pipeline-stage filters with clearer labels, because they are not the same as live queue/running worker state.
 
 Sort-model questions:
 
@@ -160,6 +161,11 @@ Deferred filter slice:
 - Missing sender, missing recipient, and missing date should be implemented after this dashboard UI pass as cleanup filters with explicit backend query support.
 - Has photos, has extras, has cover, and has telegram should be implemented after this dashboard UI pass as content-shape filters backed by server-side grouped letter counts/types, not current-page client data.
 - These deferred filters should be planned before broader admin rollout so they can reuse the finished dashboard filter model instead of creating another one-off filter pattern.
+
+Deferred processing redesign note:
+
+- The broader transcription/metadata pipeline needs its own redesign after the dashboard pass. Current stored workflow stages can show counts for `TRANSCRIBING` or `METADATA_EXTRACTING` even when nothing is actively queued or running, which makes dashboard filters and processing status feel contradictory.
+- That redesign should separate durable letter content status, live queue/job status, retry/error state, and admin actions instead of using one mixed workflow concept for everything.
 
 ## Phase 2.75 - Dashboard Selection and Bulk Action Redesign
 
@@ -322,3 +328,19 @@ Goals:
 
 - Apply proven shell and component patterns to Content, Processing, Notes, Upload, Settings, and related pages.
 - Redesign each page only after its workflow and desired layout are clear.
+
+## Phase 6 - Processing Pipeline Redesign
+
+Status: pending
+
+Why this exists:
+
+- The current transcription/metadata pipeline mixes durable letter workflow stage, content completeness, live queue state, and admin action state.
+- This causes confusing UI states, including stored `TRANSCRIBING`/`METADATA_EXTRACTING` counts when the live queue may have nothing actively running.
+
+Goals:
+
+- Audit backend processing state, job queue state, worker status, letter content statuses, and admin processing actions.
+- Define separate source-of-truth fields for durable letter state versus live job/queue state.
+- Redesign the Processing page and related dashboard status/filter language around those separate concepts.
+- Preserve data integrity and avoid changing processing semantics until the state model is explicitly designed.

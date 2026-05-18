@@ -14,8 +14,8 @@ export default function WorkflowFilterSection({
   toggleWorkflowFilter,
 }: WorkflowFilterSectionProps) {
   return (
-    <section className="filter-panel-section">
-      <span className="filter-panel-label">Workflow</span>
+    <section className="filter-panel-section filter-panel-section--advanced">
+      <span className="filter-panel-label">Advanced: Pipeline stage</span>
       <div className="filter-button-grid filter-button-grid--workflow">
         {WORKFLOW_FILTERS.map((filter) => {
           const isActive = workflowFilters.includes(filter.value);
@@ -26,6 +26,8 @@ export default function WorkflowFilterSection({
               className={`filter-pill ${filter.className} ${isActive ? "active" : ""}`}
               onClick={() => toggleWorkflowFilter(filter.value)}
               aria-pressed={isActive}
+              title={filter.title}
+              aria-label={`${filter.label}: ${filter.title}`}
             >
               <span className="filter-pill-count">{stats[filter.countKey]}</span>
               <span>{filter.label}</span>

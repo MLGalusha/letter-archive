@@ -170,7 +170,7 @@ export function useDashboardActiveFilters({
       const option = WORKFLOW_FILTERS.find((filter) => filter.value === workflow);
       chips.push({
         key: `workflow-${workflow}`,
-        label: option?.label ?? workflow.toLowerCase().replace(/_/g, " "),
+        label: `Pipeline: ${option?.label ?? workflow.toLowerCase().replace(/_/g, " ")}`,
         onRemove: () => toggleWorkflowFilter(workflow),
       });
     });

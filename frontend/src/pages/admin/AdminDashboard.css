@@ -326,6 +326,10 @@
   box-sizing: border-box;
 }
 
+.filter-panel-section--advanced {
+  background: color-mix(in srgb, var(--bg-light) 74%, var(--bg) 26%);
+}
+
 .filter-panel-label,
 .collection-filter-field span {
   font-size: 0.68rem;

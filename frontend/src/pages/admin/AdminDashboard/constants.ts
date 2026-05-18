@@ -111,42 +111,49 @@ export const FLAGGED_FILTERS = [
 export const WORKFLOW_FILTERS: Array<{
   value: WorkflowState;
   label: string;
+  title: string;
   countKey: "uploaded" | "transcribing" | "transcribed" | "metadataExtracting" | "metadataReady" | "reviewed";
   className: string;
 }> = [
   {
     value: "UPLOADED",
-    label: "Uploaded",
+    label: "Awaiting transcript",
+    title: "Stored pipeline stage: uploaded and not yet transcribed.",
     countKey: "uploaded",
     className: "filter-uploaded",
   },
   {
     value: "TRANSCRIBING",
-    label: "Transcribing",
+    label: "Transcribing now",
+    title: "Stored pipeline stage: transcription is marked as in progress.",
     countKey: "transcribing",
     className: "filter-transcribing",
   },
   {
     value: "TRANSCRIBED",
-    label: "Transcribed",
+    label: "Awaiting metadata",
+    title: "Stored pipeline stage: transcript exists and metadata has not been drafted.",
     countKey: "transcribed",
     className: "filter-transcribed",
   },
   {
     value: "METADATA_EXTRACTING",
-    label: "Extracting",
+    label: "Extracting now",
+    title: "Stored pipeline stage: metadata extraction is marked as in progress.",
     countKey: "metadataExtracting",
     className: "filter-metadata-extracting",
   },
   {
     value: "METADATA_DRAFTED",
-    label: "Metadata",
+    label: "Metadata drafted",
+    title: "Stored pipeline stage: metadata draft exists and is ready for review.",
     countKey: "metadataReady",
     className: "filter-metadata-ready",
   },
   {
     value: "REVIEWED",
     label: "Reviewed",
+    title: "Stored pipeline stage: letter has been marked reviewed.",
     countKey: "reviewed",
     className: "filter-reviewed",
   },

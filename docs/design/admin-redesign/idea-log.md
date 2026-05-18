@@ -51,3 +51,22 @@ Scope recommendation:
 
 - Treat as a correctness follow-up in the selection/bulk phase.
 - Do not silently change UI copy or backend queries without deciding whether counts should be exact across all selected IDs or explicitly scoped to loaded rows.
+
+### Saved Views Need Current/Dirty State Before Update-In-Place
+
+Idea:
+
+- Track which saved dashboard view is currently applied and whether the current dashboard state has drifted from that saved state. That would enable clear actions such as "Update view" or "Save as new" without guessing.
+
+Why it is relevant:
+
+- Saved views already preserve filters, sort, visible columns, and column order. As the dashboard view model matures, users will expect to know whether they are looking at a named saved view or an edited variant.
+
+What triggered it:
+
+- Hook-level saved-view tests made the current lifecycle explicit: create, apply, delete, and cap at 12. There is no identity or dirty-state tracking after apply.
+
+Scope recommendation:
+
+- Good candidate for the saved views maturity pass.
+- Do not implement automatically until the desired user-facing behavior is decided, especially whether updating an existing saved view should be allowed or whether the system should stay save-as-new only.

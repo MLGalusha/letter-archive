@@ -21,7 +21,7 @@ export default function SavedViewsMenu({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleSaveView = () => {
-    onSaveView(newViewName || "Dashboard view");
+    onSaveView(newViewName.trim() || "Dashboard view");
     setNewViewName("");
     setOpen(false);
   };

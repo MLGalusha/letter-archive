@@ -90,6 +90,26 @@ describe("SavedViewsMenu", () => {
     expect(screen.queryByRole("dialog", { name: "Saved views" })).not.toBeInTheDocument();
   });
 
+  it("trims whitespace before saving a dashboard view", async () => {
+    const user = userEvent.setup();
+    const onSaveView = vi.fn();
+
+    render(
+      <SavedViewsMenu
+        savedViews={[]}
+        onSaveView={onSaveView}
+        onApplyView={vi.fn()}
+        onDeleteView={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Save view" }));
+    await user.type(screen.getByPlaceholderText("View name"), "  Cleanup  ");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSaveView).toHaveBeenCalledWith("Cleanup");
+  });
+
   it("applies a saved view and closes the manager", async () => {
     const user = userEvent.setup();
     const onApplyView = vi.fn();

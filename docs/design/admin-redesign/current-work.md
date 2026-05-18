@@ -43,4 +43,62 @@ Verification plan:
 ## Progress Log
 
 - 2026-05-18: Started autonomous tracking and selection/bulk-action audit.
+- 2026-05-18: Read selection state hooks, row gesture handling, filtered select-all behavior, row rendering, bulk toolbar sections, table tests, bulk toolbar tests, and responsive CSS.
+- 2026-05-18: Verified current focused tests and targeted ESLint for selection/table/bulk files.
+- 2026-05-18: Measured current selected-row and bulk-toolbar behavior in Playwright at 1440x900 and 390x844.
 
+## Selection Audit
+
+### Current Behavior
+
+- Row click opens the letter detail page when not in edit/selection mode.
+- Checkbox click stops row navigation and toggles the row through `onCheckboxChange`.
+- Shift-clicking a checkbox selects the range between the last clicked row and the current row.
+- Drag selection starts from non-input/non-button row content. The drag mode is determined by the starting row: dragging from an unselected row selects the range, while dragging from a selected row deselects the range.
+- Selection opens the bulk edit toolbar through `useDashboardCopyPasteEdit` when `selectedIds.size > 0`.
+- When selected rows exist, clicking a row in edit mode toggles selection instead of navigating.
+- Copy mode reuses the same bulk toolbar and changes sender/recipient cell clicks into copy/paste field edits.
+- `Select page` adds all currently loaded rows to the selected set. If the full page is already selected, the same control clears selection.
+- `Select all filtered` fetches all filtered IDs from the backend and marks the selection as filtered-global.
+- Changing filters/sort refetches page 1 and prunes selected IDs against the filtered ID list. If pruning removes everything, the edit toolbar closes.
+- Bulk publish/hide and content visibility actions mutate selected IDs but do not automatically clear selection afterward.
+- Destructive clear/delete actions and saved copy edits exit edit mode after success.
+
+### Current Code Ownership
+
+- `useDashboardSelection` owns selected IDs, all-filtered state, page selection, clear selection, and select-all-filtered state assignment.
+- `useDashboardRowSelection` owns checkbox range selection, drag selection, last clicked index, and drag suppression for row navigation.
+- `useDashboardFilteredSelection` owns filter/sort-change refetching, selected-ID pruning, and fetching all filtered IDs.
+- `useDashboardCopyPasteEdit` owns whether the bulk toolbar/edit mode is visible, copy mode, pending copy/paste changes, save, and edit-mode row-click interception.
+- `RecentActivityRow` renders row selected state, checkbox behavior, and row mouse/click gesture wiring.
+- `BulkEditToolbar` renders the bulk action region and groups Selection, Edit, Process, Publish, Danger, and completion controls.
+- `BulkPublishingMenu` already uses the shared manager shell; other bulk toolbar groups are inline controls.
+
+### Current Responsive Findings
+
+- Desktop selected row and toolbar are structurally stable. At 1440x900, the fixed toolbar measured about 72px tall, and table bottom padding reserves space for it.
+- Mobile selected row uses the same horizontally scrollable table model. The checkbox column is static and scrolls with the table, matching the accepted decision to avoid a detached sticky selection rail in this pass.
+- At 390x844, the bulk toolbar measured about 206px tall after selecting one row. It preserves access to actions but consumes a large part of the viewport.
+- The mobile right-side bulk action row can overflow horizontally, especially with Publish and Danger controls together.
+- The selected row uses continuous row background across cells, with a left inset accent on the checkbox cell.
+
+### Risks
+
+- Selection and copy-edit mode are tightly coupled: changing toolbar visibility or row click behavior can break copy/paste edits.
+- `Select page` doubling as "clear selection" when the page is fully selected may be efficient but is semantically overloaded.
+- Bulk action visibility on mobile is dense. Making it compact will likely require choosing which actions are primary versus secondary.
+- Filter/sort pruning depends on backend ID fetches and closes edit mode when the selection becomes empty; tests should cover this before deeper refactors.
+
+### Safe Next Implementation Slices
+
+1. Add focused tests around `useDashboardSelection` and `useDashboardRowSelection` behavior before UI changes.
+2. Clarify selection model naming and return shape so page selection, filtered selection, and row gestures are easier to reason about.
+3. Group table selection props into clearer row-selection and page-selection models if it reduces prop ambiguity without changing behavior.
+4. Improve mobile bulk toolbar structure only after the target hierarchy is documented.
+
+### Product-Level Choices To Avoid Making Silently
+
+- Whether mobile bulk actions should show every action inline or collapse secondary actions into managers.
+- Whether `Select page` should continue clearing all selection when the page is already selected.
+- Whether row click in selection mode should toggle selection, open detail, or require explicit checkbox use.
+- Whether bulk publish/hide should keep selection after success or exit edit mode like destructive actions.

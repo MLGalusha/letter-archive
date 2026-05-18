@@ -167,6 +167,7 @@ export default function RecentActivityRow({
         return (
           <td key={columnId} data-column="flag" className="flag-cell">
             <button
+              type="button"
               className={`flag-btn ${letter.flagged ? "flagged" : ""}`}
               onClick={(event) => {
                 event.stopPropagation();

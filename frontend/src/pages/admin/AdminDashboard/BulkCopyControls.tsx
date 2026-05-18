@@ -18,6 +18,7 @@ export default function BulkCopyControls({
   return (
     <>
       <button
+        type="button"
         className={`toolbar-copy-btn ${copyModeActive ? "active" : ""}`}
         onClick={onToggleCopyMode}
         disabled={isSaving}

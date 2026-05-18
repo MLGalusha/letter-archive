@@ -16,6 +16,7 @@ export default function BulkDestructiveControls({
   return (
     <div className="toolbar-destructive-actions">
       <button
+        type="button"
         className="toolbar-btn-destructive"
         onClick={onClearTranscriptions}
         disabled={selectedCount === 0 || bulkActionLoading}
@@ -23,6 +24,7 @@ export default function BulkDestructiveControls({
         Clear Transcripts
       </button>
       <button
+        type="button"
         className="toolbar-btn-destructive"
         onClick={onClearMetadata}
         disabled={selectedCount === 0 || bulkActionLoading}
@@ -30,6 +32,7 @@ export default function BulkDestructiveControls({
         Clear Metadata
       </button>
       <button
+        type="button"
         className="toolbar-btn-danger"
         onClick={onDelete}
         disabled={selectedCount === 0}

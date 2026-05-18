@@ -28,11 +28,12 @@ export default function BulkSelectionControls({
         {selectedCount} selected
       </span>
       <div className="toolbar-select-actions">
-        <button className={`toolbar-select-btn ${allPageSelected ? "active" : ""}`} onClick={onSelectPage}>
+        <button type="button" className={`toolbar-select-btn ${allPageSelected ? "active" : ""}`} onClick={onSelectPage}>
           {pageButtonLabel}
         </button>
         {totalCount > pageCount && (
           <button
+            type="button"
             className={`toolbar-select-btn ${allFilteredSelected ? "active" : ""}`}
             onClick={allFilteredSelected ? onClearSelection : onSelectAllFiltered}
           >

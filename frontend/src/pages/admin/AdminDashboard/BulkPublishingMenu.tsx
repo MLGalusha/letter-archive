@@ -25,6 +25,7 @@ export default function BulkPublishingMenu({
   return (
     <div className="publish-menu-container" ref={publishMenuRef}>
       <button
+        type="button"
         className={`toolbar-process-btn${showPublishMenu ? " active" : ""}`}
         onClick={() => setShowPublishMenu((current) => !current)}
         disabled={selectedCount === 0}
@@ -48,6 +49,7 @@ export default function BulkPublishingMenu({
             </div>
             <div className="publish-menu-actions">
               <button
+                type="button"
                 className="publish-menu-btn publish-menu-btn--unpublish"
                 onClick={() => { onBulkHide(); setShowPublishMenu(false); }}
                 disabled={bulkActionLoading}
@@ -55,6 +57,7 @@ export default function BulkPublishingMenu({
                 Hide
               </button>
               <button
+                type="button"
                 className="publish-menu-btn publish-menu-btn--publish"
                 onClick={() => { onBulkPublish(); setShowPublishMenu(false); }}
                 disabled={bulkActionLoading}
@@ -73,6 +76,7 @@ export default function BulkPublishingMenu({
             </div>
             <div className="publish-menu-actions">
               <button
+                type="button"
                 className="publish-menu-btn publish-menu-btn--unpublish"
                 onClick={() => { onBulkContentVisibility("transcriptPublished", false); setShowPublishMenu(false); }}
                 disabled={bulkActionLoading}
@@ -80,6 +84,7 @@ export default function BulkPublishingMenu({
                 Hide
               </button>
               <button
+                type="button"
                 className="publish-menu-btn publish-menu-btn--publish"
                 onClick={() => { onBulkContentVisibility("transcriptPublished", true); setShowPublishMenu(false); }}
                 disabled={bulkActionLoading}
@@ -98,6 +103,7 @@ export default function BulkPublishingMenu({
             </div>
             <div className="publish-menu-actions">
               <button
+                type="button"
                 className="publish-menu-btn publish-menu-btn--unpublish"
                 onClick={() => { onBulkContentVisibility("metadataPublished", false); setShowPublishMenu(false); }}
                 disabled={bulkActionLoading}
@@ -105,6 +111,7 @@ export default function BulkPublishingMenu({
                 Hide
               </button>
               <button
+                type="button"
                 className="publish-menu-btn publish-menu-btn--publish"
                 onClick={() => { onBulkContentVisibility("metadataPublished", true); setShowPublishMenu(false); }}
                 disabled={bulkActionLoading}

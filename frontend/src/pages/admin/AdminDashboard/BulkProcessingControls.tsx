@@ -26,10 +26,10 @@ export default function BulkProcessingControls({
   if (!processingStatus?.isRunning) {
     return (
       <div className="toolbar-process-actions">
-        <button className="toolbar-process-btn" onClick={onOpenTranscription}>
+        <button type="button" className="toolbar-process-btn" onClick={onOpenTranscription}>
           Transcribe{selectedCount > 0 ? ` (${selectedCount})` : ""}
         </button>
-        <button className="toolbar-process-btn" onClick={onOpenMetadataExtraction}>
+        <button type="button" className="toolbar-process-btn" onClick={onOpenMetadataExtraction}>
           Extract Metadata{selectedCount > 0 ? ` (${selectedCount})` : ""}
         </button>
       </div>
@@ -56,11 +56,12 @@ export default function BulkProcessingControls({
         </div>
       </div>
       {processingStatus.isPaused ? (
-        <button onClick={onResumeProcessing} className="toolbar-process-btn toolbar-process-resume">
+        <button type="button" onClick={onResumeProcessing} className="toolbar-process-btn toolbar-process-resume">
           Resume
         </button>
       ) : (
         <button
+          type="button"
           onClick={onPauseProcessing}
           className="toolbar-process-btn toolbar-process-pause"
           disabled={pausePending || abortPending}
@@ -69,6 +70,7 @@ export default function BulkProcessingControls({
         </button>
       )}
       <button
+        type="button"
         onClick={onAbortProcessing}
         className="toolbar-process-btn toolbar-process-abort"
         disabled={abortPending}

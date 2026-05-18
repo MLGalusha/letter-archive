@@ -21,6 +21,7 @@ export default function DashboardPagination({
       {pagination.totalPages > 1 ? (
         <>
           <button
+            type="button"
             className="pagination-btn"
             onClick={() => onPageChange(pagination.page - 1)}
             disabled={pagination.page <= 1 || loading}
@@ -31,6 +32,7 @@ export default function DashboardPagination({
             Page {pagination.page} of {pagination.totalPages}
           </span>
           <button
+            type="button"
             className="pagination-btn"
             onClick={() => onPageChange(pagination.page + 1)}
             disabled={pagination.page >= pagination.totalPages || loading}

@@ -159,11 +159,11 @@ export default function BulkEditToolbar({
           </ToolbarSection>
           <div className="toolbar-completion-actions">
             {completion.pendingChangesCount > 0 ? (
-              <button className="toolbar-done-btn" onClick={completion.onDone} disabled={completion.isSaving}>
+              <button type="button" className="toolbar-done-btn" onClick={completion.onDone} disabled={completion.isSaving}>
                 {completion.isSaving ? "Saving..." : "Save & Close"}
               </button>
             ) : (
-              <button className="toolbar-close-btn" onClick={completion.onExit} aria-label="Clear selection" title="Clear selection">
+              <button type="button" className="toolbar-close-btn" onClick={completion.onExit} aria-label="Clear selection" title="Clear selection">
                 <Icon name="close" size={16} />
               </button>
             )}

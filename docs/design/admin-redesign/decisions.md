@@ -67,3 +67,11 @@ Keep collections separate for the first dashboard redesign.
 The first build should focus on the letters dashboard and admin shell. The existing collections list/management flow should remain available, but filtered collection drill-down should not be part of the first implementation slice.
 
 Future direction: a filtered collections dashboard could show only collections containing letters that match the active filters, with matched-letter counts and a separate explicit manage action. That is useful, but it is a product behavior change and should not block the first structure pass.
+
+### Selection and Bulk Actions
+
+The dashboard selection model needs a dedicated redesign pass.
+
+The problem is broader than checkbox styling. It includes mobile horizontal scroll, sticky columns, row click behavior, selection mode, bulk toolbar hierarchy, drag/shift selection, edit mode, and accessibility. Treat this as a dashboard interaction system before promoting any table or bulk-action pattern to other admin pages.
+
+Open question: mobile selection should use one of these models after inspection: sticky selection column with stronger boundary treatment, explicit selection mode, or a row-level control lane. Do not choose by CSS tweak alone.

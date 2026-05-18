@@ -161,6 +161,55 @@ Deferred filter slice:
 - Has photos, has extras, has cover, and has telegram should be implemented after this dashboard UI pass as content-shape filters backed by server-side grouped letter counts/types, not current-page client data.
 - These deferred filters should be planned before broader admin rollout so they can reuse the finished dashboard filter model instead of creating another one-off filter pattern.
 
+## Phase 2.75 - Dashboard Selection and Bulk Action Redesign
+
+Status: pending
+
+Why this exists:
+
+- The current checkbox/selection UI feels bolted onto the table instead of designed as part of the table interaction model.
+- Mobile horizontal scrolling currently leaves the checkbox column feeling detached from the rest of the row, especially when the table content moves underneath or beside it.
+- Selection affects row opening, drag/shift selection, select-all-page, select-all-filtered, edit mode, copy/paste, bulk processing, publishing, destructive actions, and mobile action placement. This is a larger UX/system redesign, not just visual checkbox styling.
+
+Goals:
+
+- Redesign selection as a first-class table state with clear normal, hover, focused, selected, partial-selected, disabled/loading, and edit-mode states.
+- Define whether mobile keeps a sticky selection column, moves selection into a row action/control lane, or uses an explicit selection mode that changes row behavior.
+- Make the mobile table scroll model and selection model feel like one system, not two overlapping layers.
+- Redesign bulk actions so selected state, count, page selection, filtered selection, processing actions, publishing actions, and destructive actions have a clear hierarchy.
+- Preserve existing backend behavior and bulk-action semantics unless a specific follow-up decision changes them.
+- Improve accessibility: keyboard reachable checkboxes/actions, visible focus states, accurate selected counts, and predictable row click vs selection behavior.
+
+Code-quality goals:
+
+- Keep selection state ownership in hooks, not scattered table row conditionals.
+- Keep table rendering focused on structure and state display; mutation workflows stay in action hooks.
+- Prefer grouped models for table, selection, and bulk toolbar props over long prop lists.
+- Avoid styling fixes that rely on fragile sticky offsets or duplicated mobile/desktop markup unless there is a documented structural reason.
+
+Investigation tasks:
+
+- Inspect current row selection, drag selection, shift selection, edit mode, and bulk toolbar ownership.
+- Measure rendered mobile table geometry with the sticky selection column enabled.
+- Decide a mobile selection interaction model before editing CSS: sticky column, selection mode, or row-level control lane.
+- Identify which bulk actions are primary, secondary, dangerous, and processing-related.
+
+Likely implementation slices:
+
+- Selection interaction model and table selection visuals.
+- Mobile table/selection scroll behavior.
+- Bulk action toolbar hierarchy and responsive placement.
+- Accessibility and keyboard/focus pass.
+- Focused tests for selection pruning, select-all-filtered, and row click/selection behavior.
+
+Exit criteria:
+
+- Selection does not feel visually detached on mobile horizontal scroll.
+- Selected rows and selected counts are obvious without overwhelming the table.
+- Bulk actions are grouped by intent and danger level.
+- Row opening, checkbox selection, drag/shift selection, and edit mode have predictable behavior on desktop and mobile.
+- Browser verification covers desktop, narrow mobile, selected rows, bulk toolbar visible, and horizontal table scroll.
+
 ## Phase 3 - Dashboard Responsive UI
 
 Status: active
@@ -188,6 +237,10 @@ Progress:
 - Mobile filters now open as a focused bottom sheet with backdrop and close behavior instead of expanding the dashboard stack inline.
 - Mobile table now favors horizontal scroll with readable minimum column widths instead of hiding most columns and compressing the remaining ones.
 
+Dependency:
+
+- Finish or intentionally defer Phase 2.75 before calling the dashboard responsive table pass complete, because selection and horizontal scroll are coupled.
+
 ## Phase 4 - Reusable Admin Patterns
 
 Status: pending
@@ -196,6 +249,7 @@ Goals:
 
 - Extract reusable patterns only after they prove useful in the dashboard.
 - Candidate patterns: admin toolbar, filter drawer, active chips, sort menu, saved view menu, compact data table, bulk action bar, confirmation dialogs.
+- Only promote the redesigned selection/bulk-action model into reusable patterns after it works on the dashboard.
 
 ## Phase 5 - Broader Admin Rollout
 

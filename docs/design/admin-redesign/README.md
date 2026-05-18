@@ -19,6 +19,7 @@ The implementation should improve code structure first, then visual polish. The 
 - `roadmap.md` - current phases, active scope, and what is intentionally out of scope.
 - `decisions.md` - accepted decisions and unresolved questions.
 - `dashboard-design.md` - working design notes for the admin dashboard.
+- `implementation-principles.md` - agent-facing rules for code quality, autonomy, and redesign discipline.
 
 ## Working Rule
 

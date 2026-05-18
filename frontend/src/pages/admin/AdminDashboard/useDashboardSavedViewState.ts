@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { useToast } from "../../../contexts/ToastContext";
 import type { ContentStatus, WorkflowState } from "../../../types/Letter";
+import { DEFAULT_COLUMN_ORDER } from "./constants";
 import type {
   ColumnId,
   DashboardViewState,
@@ -16,6 +17,8 @@ interface UseDashboardSavedViewStateOptions {
   setSortColumns: Dispatch<SetStateAction<SortColumn[]>>;
   visibleColumns: Set<ColumnId>;
   setVisibleColumns: Dispatch<SetStateAction<Set<ColumnId>>>;
+  columnOrder: ColumnId[];
+  setColumnOrder: Dispatch<SetStateAction<ColumnId[]>>;
 }
 
 export function useDashboardSavedViewState({
@@ -24,6 +27,8 @@ export function useDashboardSavedViewState({
   setSortColumns,
   visibleColumns,
   setVisibleColumns,
+  columnOrder,
+  setColumnOrder,
 }: UseDashboardSavedViewStateOptions) {
   const { showToast } = useToast();
   const {
@@ -76,6 +81,7 @@ export function useDashboardSavedViewState({
     workflowFilters,
     flaggedFilter,
     visibleColumns: Array.from(visibleColumns),
+    columnOrder,
   }), [
     visibilityFilter,
     collectionFilter,
@@ -93,6 +99,7 @@ export function useDashboardSavedViewState({
     workflowFilters,
     flaggedFilter,
     visibleColumns,
+    columnOrder,
   ]);
 
   const applyDashboardViewState = useCallback((state: DashboardViewState) => {
@@ -114,6 +121,7 @@ export function useDashboardSavedViewState({
     setWorkflowFilters((state.workflowFilters ?? []) as WorkflowState[]);
     setFlaggedFilter(state.flaggedFilter ?? "ALL");
     setVisibleColumns(new Set(state.visibleColumns));
+    setColumnOrder(state.columnOrder ?? DEFAULT_COLUMN_ORDER);
   }, [
     setVisibilityFilter,
     setCollectionFilter,
@@ -133,6 +141,7 @@ export function useDashboardSavedViewState({
     setWorkflowFilters,
     setFlaggedFilter,
     setVisibleColumns,
+    setColumnOrder,
   ]);
 
   return useSavedDashboardViews({

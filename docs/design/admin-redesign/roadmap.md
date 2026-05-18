@@ -234,7 +234,7 @@ Exit criteria:
 
 ## Phase 2.8 - Dashboard Column Configuration
 
-Status: pending
+Status: active
 
 Why this exists:
 
@@ -264,6 +264,14 @@ Likely implementation slices:
 - Update the column menu to show ordered columns with move controls.
 - Refactor table header and row rendering to consume the same ordered column list.
 - Update saved dashboard views and tests for column order.
+
+Progress:
+
+- Added persisted `columnOrder` alongside visible columns, with migration for older saved column settings.
+- Added move up/down and reset controls to the column menu instead of introducing drag-and-drop.
+- Updated saved dashboard views to capture and restore column order.
+- Refactored table header and row rendering to consume one shared ordered column list, preventing header/body drift.
+- Browser-verified that moving a column updates both header and row order together and persists to local storage.
 
 ## Phase 3 - Dashboard Responsive UI
 

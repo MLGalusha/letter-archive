@@ -1,24 +1,21 @@
 import type { RefObject, ReactNode } from "react";
 import { Icon } from "../../../components/common/Icon";
 import ColumnToggleHeader from "./ColumnToggleHeader";
-import { FILE_TYPE_COLUMNS } from "./constants";
 import SortableTableHeader from "./SortableTableHeader";
-import type { ColumnId, ExtendedSortField, SortInfo } from "./types";
+import type { ColumnDef, ColumnId, ExtendedSortField, SortInfo } from "./types";
 
 interface HeaderColumn {
-  id: ColumnId;
-  field: ExtendedSortField;
+  field?: ExtendedSortField;
   dataColumn: string;
   label: ReactNode;
   className?: string;
 }
 
-const PRIMARY_SORTABLE_HEADER_COLUMNS: HeaderColumn[] = [
-  { id: "sender", field: "sender", dataColumn: "sender", label: "Sender" },
-  { id: "recipient", field: "recipient", dataColumn: "recipient", label: "Recipient" },
-  { id: "date", field: "letterDate", dataColumn: "date", className: "date-header", label: "Date" },
-  {
-    id: "collection",
+const HEADER_COLUMNS: Record<ColumnId, HeaderColumn> = {
+  sender: { field: "sender", dataColumn: "sender", label: "Sender" },
+  recipient: { field: "recipient", dataColumn: "recipient", label: "Recipient" },
+  date: { field: "letterDate", dataColumn: "date", className: "date-header", label: "Date" },
+  collection: {
     field: "collection",
     dataColumn: "collection",
     label: (
@@ -28,16 +25,15 @@ const PRIMARY_SORTABLE_HEADER_COLUMNS: HeaderColumn[] = [
       </>
     ),
   },
-  { id: "letters", field: "letters", dataColumn: "letters", label: "Letters" },
-  { id: "extras", field: "extras", dataColumn: "extras", label: "Extras" },
-  { id: "photos", field: "photos", dataColumn: "photos", label: "Photos" },
-];
-
-const TRAILING_SORTABLE_HEADER_COLUMNS: HeaderColumn[] = [
-  { id: "created", field: "createdAt", dataColumn: "created", label: "Created" },
-  { id: "updated", field: "updatedAt", dataColumn: "updated", label: "Updated" },
-  {
-    id: "lastOpened",
+  letters: { field: "letters", dataColumn: "letters", label: "Letters" },
+  extras: { field: "extras", dataColumn: "extras", label: "Extras" },
+  photos: { field: "photos", dataColumn: "photos", label: "Photos" },
+  transcript: { dataColumn: "transcript", className: "status-header", label: "Transcript" },
+  metadata: { dataColumn: "metadata", className: "status-header", label: "Metadata" },
+  visibility: { dataColumn: "visibility", label: "Visibility" },
+  created: { field: "createdAt", dataColumn: "created", label: "Created" },
+  updated: { field: "updatedAt", dataColumn: "updated", label: "Updated" },
+  lastOpened: {
     field: "lastOpenedAt",
     dataColumn: "lastOpened",
     label: (
@@ -47,52 +43,48 @@ const TRAILING_SORTABLE_HEADER_COLUMNS: HeaderColumn[] = [
       </>
     ),
   },
-  {
-    id: "flag",
+  flag: {
     field: "flagged",
     dataColumn: "flag",
     className: "flag-header",
     label: <Icon name="flag" size={14} />,
   },
-];
-
-function renderSortableHeader(
-  column: HeaderColumn,
-  getSortInfo: (field: ExtendedSortField) => SortInfo | null,
-  onSort: (field: ExtendedSortField) => void,
-) {
-  return (
-    <SortableTableHeader
-      key={column.id}
-      field={column.field}
-      dataColumn={column.dataColumn}
-      className={column.className}
-      label={column.label}
-      getSortInfo={getSortInfo}
-      onSort={onSort}
-    />
-  );
-}
+  type_letter: { dataColumn: "type_letter", label: "Letters" },
+  type_cover: { dataColumn: "type_cover", label: "Covers" },
+  type_telegram: { dataColumn: "type_telegram", label: "Telegrams" },
+  type_photo: { dataColumn: "type_photo", label: "Photos" },
+  type_card: { dataColumn: "type_card", label: "Cards" },
+  type_ephemera: { dataColumn: "type_ephemera", label: "Ephemera" },
+  type_voice: { dataColumn: "type_voice", label: "Voice" },
+  type_article: { dataColumn: "type_article", label: "Articles" },
+  type_diary: { dataColumn: "type_diary", label: "Diary" },
+};
 
 interface RecentActivityTableHeaderProps {
   visibleColumns: Set<ColumnId>;
+  orderedColumns: ColumnDef[];
   getSortInfo: (field: ExtendedSortField) => SortInfo | null;
   onSort: (field: ExtendedSortField) => void;
   allColumns: Array<{ id: ColumnId; label: string }>;
   showColumnMenu: boolean;
   onToggleColumnMenu: () => void;
   onToggleColumn: (id: ColumnId) => void;
+  onMoveColumn: (id: ColumnId, direction: -1 | 1) => void;
+  onResetColumnOrder: () => void;
   columnMenuRef: RefObject<HTMLTableCellElement | null>;
 }
 
 export default function RecentActivityTableHeader({
   visibleColumns,
+  orderedColumns,
   getSortInfo,
   onSort,
   allColumns,
   showColumnMenu,
   onToggleColumnMenu,
   onToggleColumn,
+  onMoveColumn,
+  onResetColumnOrder,
   columnMenuRef,
 }: RecentActivityTableHeaderProps) {
   return (
@@ -100,30 +92,37 @@ export default function RecentActivityTableHeader({
       <tr>
         <ColumnToggleHeader
           allColumns={allColumns}
+          orderedColumns={orderedColumns}
           visibleColumns={visibleColumns}
           showColumnMenu={showColumnMenu}
           onToggleColumnMenu={onToggleColumnMenu}
           onToggleColumn={onToggleColumn}
+          onMoveColumn={onMoveColumn}
+          onResetColumnOrder={onResetColumnOrder}
           columnMenuRef={columnMenuRef}
         />
-        {PRIMARY_SORTABLE_HEADER_COLUMNS
-          .filter((column) => visibleColumns.has(column.id))
-          .map((column) => renderSortableHeader(column, getSortInfo, onSort))}
-        {visibleColumns.has("transcript") && (
-          <th data-column="transcript" className="status-header">Transcript</th>
-        )}
-        {visibleColumns.has("metadata") && (
-          <th data-column="metadata" className="status-header">Metadata</th>
-        )}
-        {visibleColumns.has("visibility") && (
-          <th data-column="visibility">Visibility</th>
-        )}
-        {TRAILING_SORTABLE_HEADER_COLUMNS
-          .filter((column) => visibleColumns.has(column.id))
-          .map((column) => renderSortableHeader(column, getSortInfo, onSort))}
-        {FILE_TYPE_COLUMNS.filter((col) => visibleColumns.has(col.id)).map((col) => (
-          <th key={col.id} data-column={col.id}>{col.label}</th>
-        ))}
+        {orderedColumns.filter((column) => visibleColumns.has(column.id)).map((column) => {
+          const header = HEADER_COLUMNS[column.id];
+          if (header.field) {
+            return (
+              <SortableTableHeader
+                key={column.id}
+                field={header.field}
+                dataColumn={header.dataColumn}
+                className={header.className}
+                label={header.label}
+                getSortInfo={getSortInfo}
+                onSort={onSort}
+              />
+            );
+          }
+
+          return (
+            <th key={column.id} data-column={header.dataColumn} className={header.className}>
+              {header.label}
+            </th>
+          );
+        })}
       </tr>
     </thead>
   );

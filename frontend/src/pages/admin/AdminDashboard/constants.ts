@@ -199,6 +199,8 @@ export const DEFAULT_VISIBLE_COLUMNS = new Set<ColumnId>(
   ALL_COLUMNS.filter((column) => column.defaultVisible).map((column) => column.id),
 );
 
+export const DEFAULT_COLUMN_ORDER = ALL_COLUMNS.map((column) => column.id);
+
 export const COLUMN_STORAGE_KEY = "adminDashboardColumns";
 
 export const STORAGE_KEY = "adminDashboardState";

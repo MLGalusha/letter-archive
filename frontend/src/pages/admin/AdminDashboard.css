@@ -2503,13 +2503,50 @@
   border: solid 1px var(--border);
   border-radius: var(--radius-md);
   box-shadow: 0 4px 12px hsla(0, 0%, 0%, 0.15);
-  min-width: 160px;
+  min-width: 230px;
   z-index: 200;
   padding: 0.5rem 0;
   max-height: 300px;
   overflow-y: auto;
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE/Edge */
+}
+
+.column-toggle-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.column-toggle-header-row button,
+.column-order-actions button {
+  min-width: 28px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.column-toggle-header-row button {
+  padding: 0 0.45rem;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  text-transform: none;
+}
+
+.column-toggle-header-row button:hover,
+.column-order-actions button:hover:not(:disabled) {
+  border-color: var(--text-muted);
+  color: var(--text);
 }
 
 .column-toggle-dropdown::-webkit-scrollbar {
@@ -2525,9 +2562,9 @@
 .column-toggle-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
   padding: 0.375rem 0.75rem;
-  cursor: pointer;
   font-size: var(--font-xs);
   color: var(--text);
   transition: background-color 0.15s ease;
@@ -2576,8 +2613,29 @@
 }
 
 .column-toggle-item label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   cursor: pointer;
   flex: 1;
+  min-width: 0;
+}
+
+.column-toggle-item label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.column-order-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 0.25rem;
+}
+
+.column-order-actions button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 /* Table toolbar above table */

@@ -88,6 +88,7 @@ export interface PersistedState {
 
 export interface DashboardViewState extends PersistedState {
   visibleColumns: ColumnId[];
+  columnOrder: ColumnId[];
 }
 
 export interface SavedDashboardView {

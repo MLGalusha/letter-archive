@@ -4,7 +4,7 @@ import type { Letter, ContentStatus } from "../../../types/Letter";
 import DashboardPagination from "./DashboardPagination";
 import RecentActivityRow from "./RecentActivityRow";
 import RecentActivityTableHeader from "./RecentActivityTableHeader";
-import type { ColumnId, ExtendedSortField, PendingChange, SortInfo } from "./types";
+import type { ColumnDef, ColumnId, ExtendedSortField, PendingChange, SortInfo } from "./types";
 
 export interface PaginationState {
   page: number;
@@ -59,9 +59,12 @@ export interface TablePaginationModel {
 export interface TableColumnModel {
   visibleColumns: Set<ColumnId>;
   allColumns: Array<{ id: ColumnId; label: string }>;
+  orderedColumns: ColumnDef[];
   showColumnMenu: boolean;
   onToggleColumnMenu: () => void;
   onToggleColumn: (id: ColumnId) => void;
+  onMoveColumn: (id: ColumnId, direction: -1 | 1) => void;
+  onResetColumnOrder: () => void;
   columnMenuRef: RefObject<HTMLTableCellElement | null>;
 }
 
@@ -101,12 +104,15 @@ export default function RecentActivityTable({
         <table className="letters-table">
           <RecentActivityTableHeader
             visibleColumns={columns.visibleColumns}
+            orderedColumns={columns.orderedColumns}
             getSortInfo={sorting.getSortInfo}
             onSort={sorting.onSort}
             allColumns={columns.allColumns}
             showColumnMenu={columns.showColumnMenu}
             onToggleColumnMenu={columns.onToggleColumnMenu}
             onToggleColumn={columns.onToggleColumn}
+            onMoveColumn={columns.onMoveColumn}
+            onResetColumnOrder={columns.onResetColumnOrder}
             columnMenuRef={columns.columnMenuRef}
           />
           <tbody>

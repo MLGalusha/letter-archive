@@ -56,9 +56,16 @@ describe("RecentActivityTable", () => {
             { id: "recipient", label: "Recipient" },
             { id: "date", label: "Date" },
           ],
+          orderedColumns: [
+            { id: "sender", label: "Sender", defaultVisible: true },
+            { id: "recipient", label: "Recipient", defaultVisible: true },
+            { id: "date", label: "Date", defaultVisible: true },
+          ],
           showColumnMenu: false,
           onToggleColumnMenu: vi.fn(),
           onToggleColumn: vi.fn(),
+          onMoveColumn: vi.fn(),
+          onResetColumnOrder: vi.fn(),
           columnMenuRef: createRef<HTMLTableCellElement>(),
         }}
         sorting={{

@@ -48,9 +48,14 @@ export default function AdminDashboard() {
   const {
     visibleColumns,
     setVisibleColumns,
+    columnOrder,
+    setColumnOrder,
+    orderedColumns,
     showColumnMenu,
     columnMenuRef,
     toggleColumnVisibility,
+    moveColumn,
+    resetColumnOrder,
     toggleColumnMenu,
   } = useDashboardColumns();
 
@@ -208,6 +213,8 @@ export default function AdminDashboard() {
     setSortColumns,
     visibleColumns,
     setVisibleColumns,
+    columnOrder,
+    setColumnOrder,
   });
 
   if (loading && isInitialLoad) {
@@ -267,9 +274,12 @@ export default function AdminDashboard() {
           columns={{
             visibleColumns,
             allColumns: ALL_COLUMNS,
+            orderedColumns,
             showColumnMenu,
             onToggleColumnMenu: toggleColumnMenu,
             onToggleColumn: toggleColumnVisibility,
+            onMoveColumn: moveColumn,
+            onResetColumnOrder: resetColumnOrder,
             columnMenuRef,
           }}
           sorting={{

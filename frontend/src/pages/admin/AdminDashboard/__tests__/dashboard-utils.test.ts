@@ -160,6 +160,7 @@ describe("admin dashboard utils", () => {
         workflowFilters: ["UPLOADED"],
         flaggedFilter: "FLAGGED",
         visibleColumns: ["date", "collection", "visibility", "lastOpened"],
+        columnOrder: ["date", "collection", "visibility", "lastOpened"],
       },
     };
 

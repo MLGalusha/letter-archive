@@ -6,7 +6,6 @@ import {
   hasRelatedExtraContent,
   shouldShowPhotoDescriptionWorkflow,
 } from "../../../utils/letterContent";
-import { FILE_TYPE_COLUMNS } from "./constants";
 import type {
   TableColumnModel,
   TableCopyEditModel,
@@ -98,6 +97,93 @@ export default function RecentActivityRow({
         hasPrimaryTranscriptContent(letter),
         hasRelatedExtraContent(letter),
       );
+  const renderColumnCell = (columnId: string) => {
+    switch (columnId) {
+      case "sender":
+        return (
+          <CopyableTextCell
+            key={columnId}
+            letter={letter}
+            column="sender"
+            value={letter.metadata.sender}
+            visible
+            copyModeActive={copyEdit.copyModeActive}
+            sourceCell={copyEdit.sourceCell}
+            pendingChanges={copyEdit.pendingChanges}
+            onCellClick={copyEdit.onCellClick}
+          />
+        );
+      case "recipient":
+        return (
+          <CopyableTextCell
+            key={columnId}
+            letter={letter}
+            column="recipient"
+            value={letter.metadata.recipient}
+            visible
+            copyModeActive={copyEdit.copyModeActive}
+            sourceCell={copyEdit.sourceCell}
+            pendingChanges={copyEdit.pendingChanges}
+            onCellClick={copyEdit.onCellClick}
+          />
+        );
+      case "date":
+        return <td key={columnId} data-column="date" className="date-cell">{formattedDate}</td>;
+      case "collection":
+        return <td key={columnId} data-column="collection">{letter.collectionCode || "—"}</td>;
+      case "letters":
+        return <td key={columnId} data-column="letters" className="count-cell">{pageCount || "—"}</td>;
+      case "extras":
+        return <td key={columnId} data-column="extras" className="count-cell">{extrasCount || "—"}</td>;
+      case "photos":
+        return <td key={columnId} data-column="photos" className="count-cell">{photosCount || "—"}</td>;
+      case "transcript":
+        return (
+          <td key={columnId} data-column="transcript" className="status-cell">
+            {formatting.renderStatusIcon(contentStatus, "T")}
+          </td>
+        );
+      case "metadata":
+        return (
+          <td key={columnId} data-column="metadata" className="status-cell">
+            {formatting.renderStatusIcon(letter.metadataContentStatus, "M")}
+          </td>
+        );
+      case "visibility":
+        return (
+          <td key={columnId} data-column="visibility">
+            <VisibilityBadge state={letter.visibility} />
+          </td>
+        );
+      case "created":
+        return <td key={columnId} data-column="created" className="date-cell">{formatting.formatDate(letter.createdAt)}</td>;
+      case "updated":
+        return <td key={columnId} data-column="updated" className="date-cell">{letter.updatedAt ? formatting.formatDate(letter.updatedAt) : "—"}</td>;
+      case "lastOpened":
+        return <td key={columnId} data-column="lastOpened" className="date-cell">{letter.lastOpenedAt ? formatting.formatDate(letter.lastOpenedAt) : "—"}</td>;
+      case "flag":
+        return (
+          <td key={columnId} data-column="flag" className="flag-cell">
+            <button
+              className={`flag-btn ${letter.flagged ? "flagged" : ""}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                rowActions.onToggleFlag(letter.id, !letter.flagged);
+              }}
+              aria-label={letter.flagged ? "Unflag letter" : "Flag letter"}
+            >
+              <Icon name={letter.flagged ? "flag-filled" : "flag"} size={16} />
+            </button>
+          </td>
+        );
+      default: {
+        if (!columnId.startsWith("type_")) return null;
+        const typeKey = columnId.replace("type_", "");
+        const count = letter.images.filter((image) => image.type === typeKey).length;
+        return <td key={columnId} data-column={columnId} className="count-cell">{count || "—"}</td>;
+      }
+    }
+  };
 
   return (
     <tr
@@ -126,79 +212,9 @@ export default function RecentActivityRow({
         />
       </td>
 
-      <CopyableTextCell
-        letter={letter}
-        column="sender"
-        value={letter.metadata.sender}
-        visible={visibleColumns.has("sender")}
-        copyModeActive={copyEdit.copyModeActive}
-        sourceCell={copyEdit.sourceCell}
-        pendingChanges={copyEdit.pendingChanges}
-        onCellClick={copyEdit.onCellClick}
-      />
-      <CopyableTextCell
-        letter={letter}
-        column="recipient"
-        value={letter.metadata.recipient}
-        visible={visibleColumns.has("recipient")}
-        copyModeActive={copyEdit.copyModeActive}
-        sourceCell={copyEdit.sourceCell}
-        pendingChanges={copyEdit.pendingChanges}
-        onCellClick={copyEdit.onCellClick}
-      />
-
-      {visibleColumns.has("date") && <td data-column="date" className="date-cell">{formattedDate}</td>}
-      {visibleColumns.has("collection") && <td data-column="collection">{letter.collectionCode || "—"}</td>}
-      {visibleColumns.has("letters") && <td data-column="letters" className="count-cell">{pageCount || "—"}</td>}
-      {visibleColumns.has("extras") && <td data-column="extras" className="count-cell">{extrasCount || "—"}</td>}
-      {visibleColumns.has("photos") && <td data-column="photos" className="count-cell">{photosCount || "—"}</td>}
-
-      {visibleColumns.has("transcript") && (
-        <td data-column="transcript" className="status-cell">
-          {formatting.renderStatusIcon(contentStatus, "T")}
-        </td>
-      )}
-
-      {visibleColumns.has("metadata") && (
-        <td data-column="metadata" className="status-cell">
-          {formatting.renderStatusIcon(letter.metadataContentStatus, "M")}
-        </td>
-      )}
-
-      {visibleColumns.has("visibility") && (
-        <td data-column="visibility">
-          <VisibilityBadge state={letter.visibility} />
-        </td>
-      )}
-
-      {visibleColumns.has("created") && (
-        <td data-column="created" className="date-cell">{formatting.formatDate(letter.createdAt)}</td>
-      )}
-      {visibleColumns.has("updated") && (
-        <td data-column="updated" className="date-cell">{letter.updatedAt ? formatting.formatDate(letter.updatedAt) : "—"}</td>
-      )}
-      {visibleColumns.has("lastOpened") && (
-        <td data-column="lastOpened" className="date-cell">{letter.lastOpenedAt ? formatting.formatDate(letter.lastOpenedAt) : "—"}</td>
-      )}
-      {visibleColumns.has("flag") && (
-        <td data-column="flag" className="flag-cell">
-          <button
-            className={`flag-btn ${letter.flagged ? "flagged" : ""}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              rowActions.onToggleFlag(letter.id, !letter.flagged);
-            }}
-            aria-label={letter.flagged ? "Unflag letter" : "Flag letter"}
-          >
-            <Icon name={letter.flagged ? "flag-filled" : "flag"} size={16} />
-          </button>
-        </td>
-      )}
-      {FILE_TYPE_COLUMNS.filter((column) => visibleColumns.has(column.id)).map((column) => {
-        const typeKey = column.id.replace("type_", "");
-        const count = letter.images.filter((image) => image.type === typeKey).length;
-        return <td key={column.id} data-column={column.id} className="count-cell">{count || "—"}</td>;
-      })}
+      {columns.orderedColumns
+        .filter((column) => visibleColumns.has(column.id))
+        .map((column) => renderColumnCell(column.id))}
     </tr>
   );
 }

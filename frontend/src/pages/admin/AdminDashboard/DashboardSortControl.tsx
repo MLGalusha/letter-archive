@@ -50,8 +50,6 @@ export default function DashboardSortControl({
 
   useEffect(() => {
     if (!open) return;
-    setDraftSortColumns(sortColumns);
-    setActivePicker(null);
 
     const handleClickOutside = (event: MouseEvent) => {
       if (sortMenuRef.current && !sortMenuRef.current.contains(event.target as Node)) {
@@ -62,7 +60,20 @@ export default function DashboardSortControl({
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open, sortColumns]);
+  }, [open]);
+
+  const handleToggleOpen = () => {
+    setOpen((current) => {
+      if (current) {
+        setActivePicker(null);
+        return false;
+      }
+
+      setDraftSortColumns(sortColumns);
+      setActivePicker(null);
+      return true;
+    });
+  };
 
   const handleToggleDirection = (index: number) => {
     setDraftSortColumns((previous) => previous.map((rule, ruleIndex) => {
@@ -121,7 +132,7 @@ export default function DashboardSortControl({
       <button
         type="button"
         className={`dashboard-control-btn sort-manager-btn ${open ? "active" : ""}`}
-        onClick={() => setOpen((current) => !current)}
+        onClick={handleToggleOpen}
         aria-expanded={open}
         aria-haspopup="dialog"
       >

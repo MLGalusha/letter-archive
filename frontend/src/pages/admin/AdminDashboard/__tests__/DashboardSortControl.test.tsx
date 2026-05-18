@@ -55,4 +55,29 @@ describe("DashboardSortControl", () => {
 
     expect(screen.queryByRole("dialog", { name: "Sort rules" })).not.toBeInTheDocument();
   });
+
+  it("discards unapplied draft changes when reopened", async () => {
+    const user = userEvent.setup();
+    render(
+      <SortControlHarness
+        initialSort={[{ field: "letterDate", direction: "asc" }]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Sort/i }));
+
+    await user.click(screen.getByRole("button", {
+      name: /Letter date is sorted oldest first/i,
+    }));
+    expect(screen.getByRole("button", {
+      name: /Letter date is sorted newest first/i,
+    })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: /Sort/i }));
+
+    expect(screen.getByRole("button", {
+      name: /Letter date is sorted oldest first/i,
+    })).toBeInTheDocument();
+  });
 });

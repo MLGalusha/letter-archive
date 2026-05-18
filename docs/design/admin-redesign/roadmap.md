@@ -458,6 +458,7 @@ Phase 3.25 progress:
 - Migrated the bulk Publishing menu onto the same shell, keeping its dark toolbar styling while sharing the dialog/header/close/body conventions.
 - Restored the mobile manager placement rule: Sort, Saved views, Columns, and Publishing use the shared bottom-sheet manager pattern on mobile unless a future surface has a documented reason to opt out.
 - Made the Sort manager's nested add-rule picker open upward from the mobile sheet footer, so bottom-sheet managers do not rely on off-screen downward dropdown behavior.
+- Moved Sort manager draft initialization into the open interaction instead of synchronizing state from an effect, preserving staged-edit behavior while satisfying the local ESLint/React Compiler rule.
 - Reworked the Date filter from a nested dropdown inside Filters into an inline filter-panel section, removing the date dropdown ref/outside-click state and making mobile filter scrolling simpler.
 
 Related responsive UI progress:

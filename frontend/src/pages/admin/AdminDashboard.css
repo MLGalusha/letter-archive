@@ -257,7 +257,7 @@
   z-index: 220;
   width: min(620px, calc(100vw - 2rem));
   max-height: min(720px, calc(100vh - 5rem));
-  overflow-y: auto;
+  overflow: visible;
   padding: var(--spacing-sm);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -346,8 +346,18 @@
   white-space: nowrap;
 }
 
-.sort-rule-field,
-.sort-add-select {
+.sort-field-picker {
+  position: relative;
+  min-width: 0;
+}
+
+.sort-field-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  width: 100%;
+  min-width: 0;
   min-width: 0;
   height: 36px;
   padding: 0 0.65rem;
@@ -356,6 +366,81 @@
   background: var(--bg-light);
   color: var(--text);
   font: inherit;
+  font-size: var(--font-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sort-field-trigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sort-field-trigger.active,
+.sort-field-trigger:hover,
+.sort-field-trigger:focus-visible {
+  border-color: var(--text-muted);
+  background: var(--bg);
+}
+
+.sort-field-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 260;
+  display: grid;
+  width: min(360px, calc(100vw - 3rem));
+  max-height: min(330px, calc(100vh - 14rem));
+  overflow-y: auto;
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-light);
+  box-shadow: 0 10px 28px hsla(0, 0%, 0%, 0.18);
+}
+
+.sort-field-option {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: baseline;
+  min-width: 0;
+  padding: 0.55rem 0.65rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--font-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sort-field-option:hover,
+.sort-field-option:focus-visible,
+.sort-field-option.selected {
+  background: var(--bg);
+}
+
+.sort-field-option span {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sort-field-option small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sort-field-empty {
+  padding: 0.65rem;
+  color: var(--text-muted);
   font-size: var(--font-sm);
 }
 
@@ -401,6 +486,13 @@
 
 .sort-add-select {
   width: min(350px, 100%);
+}
+
+.sort-manager-footer .sort-field-picker {
+  width: min(350px, 100%);
+}
+
+.sort-manager-footer .sort-field-trigger {
   border-style: dashed;
 }
 
@@ -2310,7 +2402,7 @@
     grid-area: prefix;
   }
 
-  .sort-rule-field {
+  .sort-field-picker {
     grid-area: field;
   }
 
@@ -2326,7 +2418,7 @@
     grid-area: remove;
   }
 
-  .sort-add-select {
+  .sort-manager-footer .sort-field-picker {
     width: 100%;
   }
 

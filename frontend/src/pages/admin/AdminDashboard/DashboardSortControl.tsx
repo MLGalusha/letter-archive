@@ -28,11 +28,14 @@ const SORT_OPTIONS: Array<{
   { value: "photos", label: "Photos", description: "Photo count" },
 ];
 
+type SortOption = (typeof SORT_OPTIONS)[number];
+
 export default function DashboardSortControl({
   sortColumns,
   setSortColumns,
 }: DashboardSortControlProps) {
   const [open, setOpen] = useState(false);
+  const [activePicker, setActivePicker] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
 
@@ -56,6 +59,7 @@ export default function DashboardSortControl({
     const handleClickOutside = (event: MouseEvent) => {
       if (sortMenuRef.current && !sortMenuRef.current.contains(event.target as Node)) {
         setOpen(false);
+        setActivePicker(null);
       }
     };
 
@@ -173,21 +177,18 @@ export default function DashboardSortControl({
                     <Icon name="grip-vertical" size={16} />
                   </button>
                   <span className="sort-rule-prefix">{index === 0 ? "sort by" : "then by"}</span>
-                  <select
-                    className="sort-rule-field"
+                  <SortFieldPicker
+                    id={`rule-${index}`}
+                    label={`Sort rule ${index + 1}`}
                     value={rule.field}
-                    onChange={(event) => handleFieldChange(index, event.target.value as ExtendedSortField)}
-                    aria-label={`Sort rule ${index + 1} column`}
-                  >
-                    {SORT_OPTIONS.filter((option) => (
+                    options={SORT_OPTIONS.filter((option) => (
                       option.value === rule.field ||
                       !sortColumns.some((column) => column.field === option.value)
-                    )).map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
                     ))}
-                  </select>
+                    activePicker={activePicker}
+                    onOpenChange={setActivePicker}
+                    onSelect={(field) => handleFieldChange(index, field)}
+                  />
                   <span className="sort-rule-direction-label">ascending</span>
                   <button
                     type="button"
@@ -212,31 +213,85 @@ export default function DashboardSortControl({
           )}
 
           <div className="sort-manager-footer">
-            <select
-              className="sort-add-select"
-              value=""
-              onChange={(event) => {
-                if (event.target.value) {
-                  handleAddRule(event.target.value as ExtendedSortField);
-                }
-              }}
-              aria-label={sortColumns.length > 0 ? "Pick another column to sort by" : "Pick a column to sort by"}
-            >
-              <option value="">
-                {sortColumns.length > 0 ? "Pick another column to sort by" : "Pick a column to sort by"}
-              </option>
-              {availableAddOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label} - {option.description}
-                </option>
-              ))}
-            </select>
+            <SortFieldPicker
+              id="add-rule"
+              label="Add sort rule"
+              placeholder="Add sort rule"
+              options={availableAddOptions}
+              activePicker={activePicker}
+              onOpenChange={setActivePicker}
+              onSelect={handleAddRule}
+            />
           </div>
 
           {hasSecondaryRules && hasCurrentPageRules && (
             <p className="sort-manager-note">
               Secondary rules refine the currently loaded page until the API supports ranked server-side sorting.
             </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface SortFieldPickerProps {
+  id: string;
+  label: string;
+  value?: ExtendedSortField;
+  placeholder?: string;
+  options: SortOption[];
+  activePicker: string | null;
+  onOpenChange: (id: string | null) => void;
+  onSelect: (field: ExtendedSortField) => void;
+}
+
+function SortFieldPicker({
+  id,
+  label,
+  value,
+  placeholder = "Select sort",
+  options,
+  activePicker,
+  onOpenChange,
+  onSelect,
+}: SortFieldPickerProps) {
+  const selectedOption = value ? SORT_OPTIONS.find((option) => option.value === value) : null;
+  const open = activePicker === id;
+
+  return (
+    <div className="sort-field-picker">
+      <button
+        type="button"
+        className={`sort-field-trigger ${open ? "active" : ""}`}
+        onClick={() => onOpenChange(open ? null : id)}
+        aria-label={label}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+      >
+        <span>{selectedOption?.label ?? placeholder}</span>
+        <Icon name="chevron-down" size={14} />
+      </button>
+
+      {open && (
+        <div className="sort-field-menu" role="listbox" aria-label={label}>
+          {options.length > 0 ? options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={`sort-field-option ${option.value === value ? "selected" : ""}`}
+              onClick={() => {
+                onSelect(option.value);
+                onOpenChange(null);
+              }}
+              role="option"
+              aria-selected={option.value === value}
+            >
+              <span>{option.label}</span>
+              <small>{option.description}</small>
+            </button>
+          )) : (
+            <span className="sort-field-empty">No more sort rules</span>
           )}
         </div>
       )}

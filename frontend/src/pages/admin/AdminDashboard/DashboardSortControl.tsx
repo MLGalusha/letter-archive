@@ -174,7 +174,9 @@ export default function DashboardSortControl({
                   <span className="sort-rule-field">
                     {getFieldLabel(rule.field)}
                   </span>
-                  <span className="sort-rule-direction-label">ascending</span>
+                  <span className="sort-rule-direction-label">
+                    {getDirectionLabel(rule.field, rule.direction)}
+                  </span>
                   <button
                     type="button"
                     className={`sort-rule-direction ${rule.direction === "asc" ? "active" : ""}`}

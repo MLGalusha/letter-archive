@@ -30,12 +30,15 @@ describe("DashboardSortControl", () => {
     const toggle = screen.getByRole("button", {
       name: /Letter date is sorted oldest first/i,
     });
+    expect(screen.getByText("oldest first")).toBeInTheDocument();
 
     await user.click(toggle);
     expect(toggle).toHaveAccessibleName(/Letter date is sorted newest first/i);
+    expect(screen.getByText("newest first")).toBeInTheDocument();
 
     await user.click(toggle);
     expect(toggle).toHaveAccessibleName(/Letter date is sorted oldest first/i);
+    expect(screen.getByText("oldest first")).toBeInTheDocument();
   });
 
   it("renders sort rules inside the shared manager dialog and closes with escape", async () => {

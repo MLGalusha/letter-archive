@@ -96,6 +96,8 @@ Progress:
 - Toolbar-level tests now cover mobile filter open/close wiring, active search-chip clearing, and hiding letter-only controls when switching to Collections.
 - Saved dashboard view integration now has coverage for capturing/restoring filters, sorting, visible columns, column order, and legacy saved-view fallbacks through the dashboard state hook.
 - Dashboard sort option metadata, default directions, equality checks, and button summaries are split into a pure sort model with focused tests.
+- Filter panel UI is grouped into worklist, content, refine, and advanced sections while keeping one shared filter controller for desktop and mobile.
+- Mobile filter sheet now has explicit header, scroll-body, and footer ownership so the filter list scrolls independently without the Done action overlapping content.
 
 Out of scope:
 

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Icon from "../../../components/common/Icon";
 import ContentShapeFilterSection from "./ContentShapeFilterSection";
 import ContentStatusFilterSection from "./ContentStatusFilterSection";
@@ -33,6 +34,7 @@ export default function DashboardFilterPanel({
   const {
     collectionInput,
     handleCollectionInputChange,
+    collectionFilter,
     visibilityFilter,
     toggleVisibilityFilter,
     contentFilterView,
@@ -68,6 +70,20 @@ export default function DashboardFilterPanel({
     handleClearAllFilters,
   } = filters;
 
+  const worklistActiveCount =
+    (visibilityFilter !== "ALL" ? 1 : 0)
+    + (flaggedFilter !== "ALL" ? 1 : 0)
+    + missingFilters.length;
+  const contentActiveCount =
+    contentShapeFilters.length
+    + transcriptStatusFilters.length
+    + metadataStatusFilters.length
+    + extraContentStatusFilters.length;
+  const refineActiveCount =
+    (hasDateFilter ? 1 : 0)
+    + (collectionFilter !== "all" ? 1 : 0);
+  const advancedActiveCount = workflowFilters.length;
+
   return (
     <div className={`dashboard-filter-panel ${open ? "open" : ""}`}>
       <div className="filter-panel-header">
@@ -87,81 +103,150 @@ export default function DashboardFilterPanel({
         </div>
       </div>
 
-      <VisibilityFilterSection
-        stats={stats}
-        visibilityFilter={visibilityFilter}
-        toggleVisibilityFilter={toggleVisibilityFilter}
-      />
-
-      <FlaggedFilterSection
-        stats={stats}
-        flaggedFilter={flaggedFilter}
-        toggleFlaggedFilter={toggleFlaggedFilter}
-      />
-
-      <WorkflowFilterSection
-        stats={stats}
-        workflowFilters={workflowFilters}
-        toggleWorkflowFilter={toggleWorkflowFilter}
-      />
-
-      <MissingDataFilterSection
-        stats={stats}
-        missingFilters={missingFilters}
-        toggleMissingFilter={toggleMissingFilter}
-      />
-
-      <ContentShapeFilterSection
-        stats={stats}
-        contentShapeFilters={contentShapeFilters}
-        toggleContentShapeFilter={toggleContentShapeFilter}
-      />
-
-      <ContentStatusFilterSection
-        stats={stats}
-        contentFilterView={contentFilterView}
-        setContentFilterView={setContentFilterView}
-        transcriptStatusFilters={transcriptStatusFilters}
-        toggleTranscriptFilter={toggleTranscriptFilter}
-        metadataStatusFilters={metadataStatusFilters}
-        toggleMetadataFilter={toggleMetadataFilter}
-        extraContentStatusFilters={extraContentStatusFilters}
-        toggleExtraContentFilter={toggleExtraContentFilter}
-      />
-
-      <DashboardDateFilterControl
-        dateMode={dateMode}
-        setDateMode={setDateMode}
-        hasDateFilter={hasDateFilter}
-        yearFilter={yearFilter}
-        setYearFilter={setYearFilter}
-        monthFilter={monthFilter}
-        setMonthFilter={setMonthFilter}
-        dayFilter={dayFilter}
-        setDayFilter={setDayFilter}
-        dateFromFilter={dateFromFilter}
-        setDateFromFilter={setDateFromFilter}
-        dateToFilter={dateToFilter}
-        setDateToFilter={setDateToFilter}
-        clearDateFilters={clearDateFilters}
-        getDateButtonText={getDateButtonText}
-        dateRawToDisplay={dateRawToDisplay}
-        displayToDateRaw={displayToDateRaw}
-      />
-
-      <section className="filter-panel-section filter-panel-fields">
-        <label className="collection-filter-field">
-          <span>Collection</span>
-          <input
-            type="text"
-            className="collection-input"
-            placeholder="000"
-            value={collectionInput}
-            onChange={(event) => handleCollectionInputChange(event.target.value)}
-            maxLength={3}
+      <div className="filter-panel-body">
+        <FilterPanelGroup
+          id="worklist"
+          title="Worklist"
+          activeCount={worklistActiveCount}
+        >
+          <VisibilityFilterSection
+            stats={stats}
+            visibilityFilter={visibilityFilter}
+            toggleVisibilityFilter={toggleVisibilityFilter}
           />
-        </label>
-      </section>
+
+          <FlaggedFilterSection
+            stats={stats}
+            flaggedFilter={flaggedFilter}
+            toggleFlaggedFilter={toggleFlaggedFilter}
+          />
+
+          <MissingDataFilterSection
+            stats={stats}
+            missingFilters={missingFilters}
+            toggleMissingFilter={toggleMissingFilter}
+          />
+        </FilterPanelGroup>
+
+        <FilterPanelGroup
+          id="content"
+          title="Content"
+          activeCount={contentActiveCount}
+          wide
+        >
+          <ContentShapeFilterSection
+            stats={stats}
+            contentShapeFilters={contentShapeFilters}
+            toggleContentShapeFilter={toggleContentShapeFilter}
+          />
+
+          <ContentStatusFilterSection
+            stats={stats}
+            contentFilterView={contentFilterView}
+            setContentFilterView={setContentFilterView}
+            transcriptStatusFilters={transcriptStatusFilters}
+            toggleTranscriptFilter={toggleTranscriptFilter}
+            metadataStatusFilters={metadataStatusFilters}
+            toggleMetadataFilter={toggleMetadataFilter}
+            extraContentStatusFilters={extraContentStatusFilters}
+            toggleExtraContentFilter={toggleExtraContentFilter}
+          />
+        </FilterPanelGroup>
+
+        <FilterPanelGroup
+          id="refine"
+          title="Refine"
+          activeCount={refineActiveCount}
+        >
+          <DashboardDateFilterControl
+            dateMode={dateMode}
+            setDateMode={setDateMode}
+            hasDateFilter={hasDateFilter}
+            yearFilter={yearFilter}
+            setYearFilter={setYearFilter}
+            monthFilter={monthFilter}
+            setMonthFilter={setMonthFilter}
+            dayFilter={dayFilter}
+            setDayFilter={setDayFilter}
+            dateFromFilter={dateFromFilter}
+            setDateFromFilter={setDateFromFilter}
+            dateToFilter={dateToFilter}
+            setDateToFilter={setDateToFilter}
+            clearDateFilters={clearDateFilters}
+            getDateButtonText={getDateButtonText}
+            dateRawToDisplay={dateRawToDisplay}
+            displayToDateRaw={displayToDateRaw}
+          />
+
+          <section className="filter-panel-section filter-panel-fields">
+            <label className="collection-filter-field">
+              <span>Collection</span>
+              <input
+                type="text"
+                className="collection-input"
+                placeholder="000"
+                value={collectionInput}
+                onChange={(event) => handleCollectionInputChange(event.target.value)}
+                maxLength={3}
+              />
+            </label>
+          </section>
+        </FilterPanelGroup>
+
+        <FilterPanelGroup
+          id="advanced"
+          title="Advanced"
+          activeCount={advancedActiveCount}
+          wide
+        >
+          <WorkflowFilterSection
+            stats={stats}
+            workflowFilters={workflowFilters}
+            toggleWorkflowFilter={toggleWorkflowFilter}
+          />
+        </FilterPanelGroup>
+      </div>
+
+      <div className="filter-panel-footer">
+        <button type="button" className="filter-panel-done" onClick={onClose}>
+          Done
+        </button>
+      </div>
     </div>
+  );
+}
+
+interface FilterPanelGroupProps {
+  id: string;
+  title: string;
+  activeCount: number;
+  wide?: boolean;
+  children: ReactNode;
+}
+
+function FilterPanelGroup({
+  id,
+  title,
+  activeCount,
+  wide = false,
+  children,
+}: FilterPanelGroupProps) {
+  const headingId = `filter-panel-group-${id}`;
+
+  return (
+    <section
+      className={`filter-panel-group filter-panel-group--${id} ${wide ? "filter-panel-group--wide" : ""}`}
+      aria-labelledby={headingId}
+    >
+      <div className="filter-panel-group-header">
+        <div>
+          <h3 id={headingId}>{title}</h3>
+        </div>
+        {activeCount > 0 && (
+          <span className="filter-panel-group-count">{activeCount}</span>
+        )}
+      </div>
+      <div className="filter-panel-group-content">{children}</div>
+    </section>
   );
 }

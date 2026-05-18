@@ -11,6 +11,30 @@ Each entry should include:
 
 ## Ideas
 
+### Frontend Full-Suite Timing Failures Need Reliability Cleanup
+
+Idea:
+
+- Track the two observed Vitest timeout failures as test reliability debt instead of treating them as dashboard filter regressions.
+
+Why it is relevant:
+
+- The full frontend suite timed out under load in `HomePage.test.tsx` and `AdminDashboardPage.test.tsx`, but each failing file passed when rerun individually immediately afterward.
+- That pattern points to test timing, async waiting, or full-suite resource contention rather than the new dashboard filter query contract.
+
+What triggered it:
+
+- After adding server-backed cleanup/content-type filters and ranked sort, the focused backend tests, backend typecheck, full backend tests, focused dashboard tests, frontend build, and individual reruns all passed.
+- Only the full frontend suite showed two timeout failures:
+  - `src/pages/__tests__/HomePage.test.tsx > appends later archive pages from the load-more control`
+  - `src/pages/admin/__tests__/AdminDashboardPage.test.tsx > opens the sender and recipient modal when exactly one letter is selected`
+
+Scope recommendation:
+
+- Handle in a focused test-reliability pass, not inside the filter UI slice.
+- Prefer making the tests wait for explicit UI/data conditions and reducing shared timing assumptions over raising global timeouts.
+- Re-run the full frontend suite after the reliability cleanup to confirm the failures are gone under suite load.
+
 ### Mobile Bulk Actions As Primary Row Plus Action Managers
 
 Idea:

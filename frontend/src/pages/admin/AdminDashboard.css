@@ -686,10 +686,7 @@
 }
 
 .dashboard-filter-panel {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  align-items: stretch;
-  gap: var(--spacing-sm);
+  display: block;
   padding: var(--spacing-sm);
   border-top: 1px solid var(--border);
   background: var(--bg);
@@ -702,6 +699,82 @@
 
 .filter-panel-header {
   display: none;
+}
+
+.filter-panel-body {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: var(--spacing-sm);
+}
+
+.filter-panel-footer {
+  display: none;
+}
+
+.filter-panel-group {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.filter-panel-group--wide {
+  grid-column: 1 / -1;
+}
+
+.filter-panel-group-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  padding-inline: 0.1rem;
+}
+
+.filter-panel-group-header h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--font-sm);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.filter-panel-group-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding-inline: 0.35rem;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #8a4b21;
+  font-size: var(--font-xs);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.filter-panel-group-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  align-items: start;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.filter-panel-group--content .filter-panel-group-content {
+  grid-template-columns: minmax(220px, 0.8fr) minmax(360px, 1.7fr);
+}
+
+.filter-panel-group--refine .filter-panel-group-content {
+  grid-template-columns: minmax(260px, 1fr) minmax(170px, 0.45fr);
+  max-width: 760px;
+}
+
+.filter-panel-group-content > .filter-panel-section--advanced,
+.filter-panel-group-content > .content-filter-section,
+.filter-panel-group-content > .date-filter-section {
+  grid-column: auto;
 }
 
 .filter-panel-section {
@@ -780,6 +853,26 @@
 .filter-panel-clear:focus-visible {
   border-color: #8a4b21;
   background: #fff7ed;
+}
+
+.filter-panel-done {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 38px;
+  border: 1px solid #8a4b21;
+  border-radius: var(--radius-sm);
+  background: #8a4b21;
+  color: #fff;
+  font-size: var(--font-sm);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.filter-panel-done:hover,
+.filter-panel-done:focus-visible {
+  background: #6f3b18;
 }
 
 .filter-button-grid {
@@ -2544,30 +2637,64 @@
 
   .dashboard-filter-panel {
     display: none;
-    grid-template-columns: 1fr;
-    gap: 0.65rem;
     padding: 0.75rem;
   }
 
   .dashboard-filter-panel.open {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     position: fixed;
     right: 0;
     bottom: 0;
     left: 0;
     z-index: 240;
     max-height: min(74vh, 620px);
-    overflow-y: auto;
+    overflow: hidden;
     border-top: 1px solid var(--border);
     border-radius: 14px 14px 0 0;
     background: var(--bg);
     box-shadow: 0 -18px 40px rgba(0, 0, 0, 0.22);
   }
 
+  .filter-panel-body {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: 0.75rem;
+    overscroll-behavior: contain;
+  }
+
+  .filter-panel-group,
+  .filter-panel-group--wide {
+    grid-column: auto;
+  }
+
+  .filter-panel-group-header {
+    padding-inline: 0;
+  }
+
+  .filter-panel-group-header h3 {
+    font-size: var(--font-md);
+  }
+
+  .filter-panel-group-content {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-panel-group--content .filter-panel-group-content,
+  .filter-panel-group--refine .filter-panel-group-content {
+    grid-template-columns: 1fr;
+    max-width: none;
+  }
+
   .filter-panel-header {
-    position: sticky;
-    top: -0.75rem;
+    position: relative;
+    top: auto;
     z-index: 1;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2621,6 +2748,18 @@
 
   .filter-panel-close {
     width: 32px;
+  }
+
+  .filter-panel-footer {
+    position: relative;
+    bottom: auto;
+    z-index: 1;
+    flex-shrink: 0;
+    display: block;
+    margin: 0 -0.75rem -0.75rem;
+    padding: 0.65rem 0.75rem calc(0.75rem + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+    background: var(--bg);
   }
 
   .filter-panel-fields {

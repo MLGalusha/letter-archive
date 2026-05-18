@@ -54,7 +54,9 @@ Selector/dropdown UI is not considered finished yet. The dashboard should move t
 
 Do not polish every dropdown independently. Prove the shared manager structure on Sort and Columns first, then reuse that structure for saved views, filters/date, and bulk menus where it fits.
 
-Shared manager code does not mean identical mobile placement. Short, lightweight toolbar managers such as Sort and Saved views should stay anchored near their trigger when that is the better interaction. Long or high-touch managers such as Columns can use a mobile bottom sheet.
+Mobile manager surfaces should default to bottom sheets with shared header, scroll, and action ownership. This keeps Sort, Columns, Saved views, and similar managers from becoming separate mobile dropdown systems. A manager can opt out only when its interaction is proven to work better as an anchored mobile popover.
+
+Nested selectors inside a mobile bottom-sheet manager should be sheet-aware. For example, the Sort manager's add-rule picker opens upward from the sticky footer instead of using a normal downward dropdown that would fall off-screen.
 
 Until the API supports ordered server-side sort rules, only the first server-backed rule is sent to the backend. Additional rules refine the currently loaded page and must be labeled as such.
 

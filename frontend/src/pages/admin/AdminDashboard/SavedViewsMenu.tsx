@@ -51,6 +51,7 @@ export default function SavedViewsMenu({
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
         aria-haspopup="dialog"
+        aria-label="Save view"
       >
         <Icon name="save" size={15} />
         <span>Save view</span>

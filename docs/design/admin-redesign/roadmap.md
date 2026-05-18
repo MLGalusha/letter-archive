@@ -163,7 +163,7 @@ Deferred filter slice:
 
 ## Phase 2.75 - Dashboard Selection and Bulk Action Redesign
 
-Status: pending
+Status: active
 
 Why this exists:
 
@@ -193,6 +193,20 @@ Investigation tasks:
 - Measure rendered mobile table geometry with the sticky selection column enabled.
 - Decide a mobile selection interaction model before editing CSS: sticky column, selection mode, or row-level control lane.
 - Identify which bulk actions are primary, secondary, dangerous, and processing-related.
+
+Current audit findings:
+
+- Selection state is centralized reasonably well in `useDashboardSelection` and `useDashboardRowSelection`, but rendered checkbox behavior is not accessible yet because row checkboxes are `readOnly` and removed from tab order.
+- Row click opens the letter, while checkbox click selects and row mouse drag can select ranges. This is powerful on desktop but needs clearer visual boundaries and mobile behavior.
+- The table currently has duplicate checkbox styling rules in `AdminDashboard.css`, which makes the checkbox visual system harder to reason about.
+- Mobile horizontal scroll pins the checkbox column at `x=0` while the table content scrolls left, so the selection column reads as detached from the row instead of part of a deliberate frozen lane.
+- The bulk toolbar is already split into selection, copy, processing, publishing, and destructive sections, but the visual hierarchy still reads as one dense fixed bar.
+
+Current implementation direction:
+
+- Desktop can keep direct checkbox and range-selection power behavior, but it needs clearer selected-row visuals, focus states, and checkbox accessibility.
+- Mobile should not keep the current detached sticky checkbox treatment. Prefer either a deliberate frozen selection rail with boundary treatment and row-state continuity, or remove sticky selection on mobile and let the selection column scroll with the table. Choose the simpler stable model first unless inspection proves selection becomes too hard to access.
+- Bulk actions should be restyled around hierarchy before extracting reusable patterns: selection summary first, common actions next, dangerous actions visually separated.
 
 Likely implementation slices:
 

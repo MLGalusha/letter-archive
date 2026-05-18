@@ -70,3 +70,24 @@ Scope recommendation:
 
 - Good candidate for the saved views maturity pass.
 - Do not implement automatically until the desired user-facing behavior is decided, especially whether updating an existing saved view should be allowed or whether the system should stay save-as-new only.
+
+### Saved View Persistence Needs A Versioned Shape
+
+Idea:
+
+- Split the latest in-memory `DashboardViewState` type from the looser persisted saved-view shape that can be missing fields added by later dashboard releases.
+- Add a small normalizer/migration function that turns persisted saved-view state into the current dashboard view state before applying it.
+
+Why it is relevant:
+
+- The runtime already backfills missing `extraContentStatusFilters`, `workflowFilters`, `flaggedFilter`, and `columnOrder` when applying old saved views.
+- The TypeScript type currently says saved-view state always has the newest fields, which makes tests and future migrations more awkward than the runtime behavior really is.
+
+What triggered it:
+
+- While adding saved-view integration tests, I had to cast a legacy saved-view state with missing newer fields even though that legacy case is intentionally supported by `useDashboardSavedViewState`.
+
+Scope recommendation:
+
+- Good code-quality follow-up if saved views keep growing.
+- Do not expand it into backend/API saved views yet; this is only about making local persisted state migration explicit and typed.

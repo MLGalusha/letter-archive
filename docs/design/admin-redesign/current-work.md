@@ -59,6 +59,7 @@ Verification plan:
 - 2026-05-18: Increased mobile selected-state table bottom reservation to match the bulk toolbar's mobile height envelope, preventing lower rows from sitting behind the fixed toolbar.
 - 2026-05-18: Started saved dashboard views maturity pass with menu tests for default save name, apply, and delete, plus hook tests for persistence, apply, delete, blank-name ignore, and the 12-view cap.
 - 2026-05-18: Normalized saved-view names in the menu so whitespace-only input uses the default name and padded names are trimmed before saving.
+- 2026-05-18: Started filter manager cleanup with focused filter-panel tests for active count, clear, close, and collection input wiring.
 
 ## Selection Audit
 

@@ -101,14 +101,6 @@ export default function ColumnToggleHeader({
               onDrop={(event) => handleDrop(event, col.id)}
               onDragEnd={handleDragEnd}
             >
-              <label>
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.has(col.id)}
-                  onChange={() => onToggleColumn(col.id)}
-                />
-                <span>{col.label}</span>
-              </label>
               <button
                 type="button"
                 className="column-order-handle"
@@ -122,6 +114,14 @@ export default function ColumnToggleHeader({
               >
                 <Icon name="grip-vertical" size={15} />
               </button>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.has(col.id)}
+                  onChange={() => onToggleColumn(col.id)}
+                />
+                <span>{col.label}</span>
+              </label>
             </div>
           ))}
         </div>

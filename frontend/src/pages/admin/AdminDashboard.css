@@ -2968,10 +2968,10 @@
 
 .column-toggle-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px;
+  grid-template-columns: 28px minmax(0, 1fr);
   align-items: center;
   gap: 0.5rem;
-  padding: 0.2rem 0.2rem 0.2rem 0.45rem;
+  padding: 0.2rem 0.45rem 0.2rem 0.2rem;
   border-radius: var(--radius-sm);
   font-size: var(--font-xs);
   color: var(--text);

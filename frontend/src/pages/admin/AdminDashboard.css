@@ -3053,27 +3053,12 @@
   min-height: 30px;
 }
 
-.column-toggle-label-text {
-  display: grid;
-  min-width: 0;
-}
-
-.column-toggle-label-text span,
-.column-toggle-label-text small {
+.column-toggle-item label span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.column-toggle-label-text span {
   color: var(--text);
   font-weight: 650;
-}
-
-.column-toggle-label-text small {
-  color: var(--text-muted);
-  font-size: 0.7rem;
-  font-weight: 500;
 }
 
 .column-order-handle {

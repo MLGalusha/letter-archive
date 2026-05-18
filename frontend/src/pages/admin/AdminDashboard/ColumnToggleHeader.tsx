@@ -137,10 +137,7 @@ export default function ColumnToggleHeader({
                       checked={visibleColumns.has(col.id)}
                       onChange={() => onToggleColumn(col.id)}
                     />
-                    <span className="column-toggle-label-text">
-                      <span>{col.label}</span>
-                      {col.description && <small>{col.description}</small>}
-                    </span>
+                    <span>{col.label}</span>
                   </label>
                 </div>
               </div>

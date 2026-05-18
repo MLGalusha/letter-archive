@@ -68,6 +68,19 @@ Current filter groups:
 - Content status: transcript, metadata, and existing extra-content status.
 - Date, collection, and search.
 
+Current filter manager order:
+
+1. Visibility.
+2. Content status: transcript, metadata, and extras.
+3. Collection code.
+4. Date.
+5. Content type / contains.
+6. Pipeline stage.
+7. Cleanup/data quality.
+8. Review flag.
+
+Desktop and mobile use the same ordered filter module tree. Desktop lays the modules into a responsive grid; mobile keeps the same modules in a single-column sheet.
+
 Saved views are local dashboard presets for now. They save filters, sort, and visible columns without changing backend/API behavior. If they become multi-user or cross-device later, promote the same shape to an API-backed model.
 
 Default letters sort is Last opened descending. This keeps recent activity discoverable through sorting instead of a separate Recent edits button.

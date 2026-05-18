@@ -18,7 +18,7 @@ export default function ContentShapeFilterSection({
       <div className="filter-section-heading">
         <h3>Contains</h3>
       </div>
-      <div className="filter-button-grid">
+      <div className="filter-button-grid filter-button-grid--shape">
         {CONTENT_SHAPE_FILTERS.map((filter) => {
           const isActive = contentShapeFilters.includes(filter.value);
 

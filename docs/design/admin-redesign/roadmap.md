@@ -104,6 +104,8 @@ Progress:
 - Scope filters now lead the filter manager, with date and collection implemented as first-class controls before worklist/content/pipeline filters.
 - Collection filtering now uses a small multi-rule code field: admins can add several collection codes and remove them individually, while an empty rule list represents all collections.
 - The admin letters API accepts the same collection query as a single code, comma-separated codes, or repeated codes so saved views and existing links remain backward compatible.
+- Filter manager organization now uses one ordered module grid instead of nested worklist/content/scope groups, keeping desktop and mobile on the same filter order and component tree.
+- The current filter priority order is visibility, content status, collection, date, content type, pipeline, cleanup, and review.
 
 Out of scope:
 

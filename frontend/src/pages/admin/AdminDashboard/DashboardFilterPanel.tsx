@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef } from "react";
 import Icon from "../../../components/common/Icon";
 import ContentShapeFilterSection from "./ContentShapeFilterSection";
 import ContentStatusFilterSection from "./ContentStatusFilterSection";
@@ -39,7 +39,6 @@ export default function DashboardFilterPanel({
     collectionFilters,
     addCollectionFilter,
     removeCollectionFilter,
-    collectionFilter,
     visibilityFilter,
     toggleVisibilityFilter,
     contentFilterView,
@@ -75,20 +74,6 @@ export default function DashboardFilterPanel({
     handleClearAllFilters,
   } = filters;
 
-  const worklistActiveCount =
-    (visibilityFilter !== "ALL" ? 1 : 0)
-    + (flaggedFilter !== "ALL" ? 1 : 0)
-    + missingFilters.length;
-  const contentActiveCount =
-    contentShapeFilters.length
-    + transcriptStatusFilters.length
-    + metadataStatusFilters.length
-    + extraContentStatusFilters.length;
-  const refineActiveCount =
-    (hasDateFilter ? 1 : 0)
-    + (collectionFilter !== "all" ? 1 : 0);
-  const advancedActiveCount = workflowFilters.length;
-
   useEffect(() => {
     if (open) {
       const body = bodyRef.current;
@@ -118,101 +103,75 @@ export default function DashboardFilterPanel({
       </div>
 
       <div className="filter-panel-body" ref={bodyRef}>
-        <FilterPanelGroup
-          id="scope"
-          title="Scope"
-          activeCount={refineActiveCount}
-        >
-          <DashboardDateFilterControl
-            dateMode={dateMode}
-            setDateMode={setDateMode}
-            hasDateFilter={hasDateFilter}
-            yearFilter={yearFilter}
-            setYearFilter={setYearFilter}
-            monthFilter={monthFilter}
-            setMonthFilter={setMonthFilter}
-            dayFilter={dayFilter}
-            setDayFilter={setDayFilter}
-            dateFromFilter={dateFromFilter}
-            setDateFromFilter={setDateFromFilter}
-            dateToFilter={dateToFilter}
-            setDateToFilter={setDateToFilter}
-            clearDateFilters={clearDateFilters}
-            getDateButtonText={getDateButtonText}
-            dateRawToDisplay={dateRawToDisplay}
-            displayToDateRaw={displayToDateRaw}
-          />
+        <VisibilityFilterSection
+          stats={stats}
+          visibilityFilter={visibilityFilter}
+          toggleVisibilityFilter={toggleVisibilityFilter}
+        />
 
-          <DashboardCollectionFilterControl
-            collectionInput={collectionInput}
-            collectionFilters={collectionFilters}
-            onCollectionInputChange={handleCollectionInputChange}
-            onAddCollectionFilter={addCollectionFilter}
-            onRemoveCollectionFilter={removeCollectionFilter}
-          />
-        </FilterPanelGroup>
+        <ContentStatusFilterSection
+          stats={stats}
+          contentFilterView={contentFilterView}
+          setContentFilterView={setContentFilterView}
+          transcriptStatusFilters={transcriptStatusFilters}
+          toggleTranscriptFilter={toggleTranscriptFilter}
+          metadataStatusFilters={metadataStatusFilters}
+          toggleMetadataFilter={toggleMetadataFilter}
+          extraContentStatusFilters={extraContentStatusFilters}
+          toggleExtraContentFilter={toggleExtraContentFilter}
+        />
 
-        <FilterPanelGroup
-          id="worklist"
-          title="Worklist"
-          activeCount={worklistActiveCount}
-        >
-          <VisibilityFilterSection
-            stats={stats}
-            visibilityFilter={visibilityFilter}
-            toggleVisibilityFilter={toggleVisibilityFilter}
-          />
+        <DashboardCollectionFilterControl
+          collectionInput={collectionInput}
+          collectionFilters={collectionFilters}
+          onCollectionInputChange={handleCollectionInputChange}
+          onAddCollectionFilter={addCollectionFilter}
+          onRemoveCollectionFilter={removeCollectionFilter}
+        />
 
-          <FlaggedFilterSection
-            stats={stats}
-            flaggedFilter={flaggedFilter}
-            toggleFlaggedFilter={toggleFlaggedFilter}
-          />
+        <DashboardDateFilterControl
+          dateMode={dateMode}
+          setDateMode={setDateMode}
+          hasDateFilter={hasDateFilter}
+          yearFilter={yearFilter}
+          setYearFilter={setYearFilter}
+          monthFilter={monthFilter}
+          setMonthFilter={setMonthFilter}
+          dayFilter={dayFilter}
+          setDayFilter={setDayFilter}
+          dateFromFilter={dateFromFilter}
+          setDateFromFilter={setDateFromFilter}
+          dateToFilter={dateToFilter}
+          setDateToFilter={setDateToFilter}
+          clearDateFilters={clearDateFilters}
+          getDateButtonText={getDateButtonText}
+          dateRawToDisplay={dateRawToDisplay}
+          displayToDateRaw={displayToDateRaw}
+        />
 
-          <MissingDataFilterSection
-            stats={stats}
-            missingFilters={missingFilters}
-            toggleMissingFilter={toggleMissingFilter}
-          />
-        </FilterPanelGroup>
+        <ContentShapeFilterSection
+          stats={stats}
+          contentShapeFilters={contentShapeFilters}
+          toggleContentShapeFilter={toggleContentShapeFilter}
+        />
 
-        <FilterPanelGroup
-          id="content"
-          title="Content"
-          activeCount={contentActiveCount}
-          wide
-        >
-          <ContentShapeFilterSection
-            stats={stats}
-            contentShapeFilters={contentShapeFilters}
-            toggleContentShapeFilter={toggleContentShapeFilter}
-          />
+        <WorkflowFilterSection
+          stats={stats}
+          workflowFilters={workflowFilters}
+          toggleWorkflowFilter={toggleWorkflowFilter}
+        />
 
-          <ContentStatusFilterSection
-            stats={stats}
-            contentFilterView={contentFilterView}
-            setContentFilterView={setContentFilterView}
-            transcriptStatusFilters={transcriptStatusFilters}
-            toggleTranscriptFilter={toggleTranscriptFilter}
-            metadataStatusFilters={metadataStatusFilters}
-            toggleMetadataFilter={toggleMetadataFilter}
-            extraContentStatusFilters={extraContentStatusFilters}
-            toggleExtraContentFilter={toggleExtraContentFilter}
-          />
-        </FilterPanelGroup>
+        <MissingDataFilterSection
+          stats={stats}
+          missingFilters={missingFilters}
+          toggleMissingFilter={toggleMissingFilter}
+        />
 
-        <FilterPanelGroup
-          id="pipeline"
-          title="Pipeline"
-          activeCount={advancedActiveCount}
-          wide
-        >
-          <WorkflowFilterSection
-            stats={stats}
-            workflowFilters={workflowFilters}
-            toggleWorkflowFilter={toggleWorkflowFilter}
-          />
-        </FilterPanelGroup>
+        <FlaggedFilterSection
+          stats={stats}
+          flaggedFilter={flaggedFilter}
+          toggleFlaggedFilter={toggleFlaggedFilter}
+        />
       </div>
 
       <div className="filter-panel-footer">
@@ -221,40 +180,5 @@ export default function DashboardFilterPanel({
         </button>
       </div>
     </div>
-  );
-}
-
-interface FilterPanelGroupProps {
-  id: string;
-  title: string;
-  activeCount: number;
-  wide?: boolean;
-  children: ReactNode;
-}
-
-function FilterPanelGroup({
-  id,
-  title,
-  activeCount,
-  wide = false,
-  children,
-}: FilterPanelGroupProps) {
-  const headingId = `filter-panel-group-${id}`;
-
-  return (
-    <section
-      className={`filter-panel-group filter-panel-group--${id} ${wide ? "filter-panel-group--wide" : ""}`}
-      aria-labelledby={headingId}
-    >
-      <div className="filter-panel-group-header">
-        <div>
-          <h3 id={headingId}>{title}</h3>
-        </div>
-        {activeCount > 0 && (
-          <span className="filter-panel-group-count">{activeCount}</span>
-        )}
-      </div>
-      <div className="filter-panel-group-content">{children}</div>
-    </section>
   );
 }

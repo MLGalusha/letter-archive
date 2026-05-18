@@ -39,6 +39,7 @@ export default function ContentStatusFilterSection({
 
   return (
     <section className="filter-panel-section content-filter-section">
+      <span className="filter-panel-label">Content status</span>
       <div className="content-filter-toggle">
         <button
           type="button"

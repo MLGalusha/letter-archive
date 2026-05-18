@@ -26,6 +26,7 @@ export function useDashboardSelectionDetails({
   }, [letters, selectedIds]);
 
   const publishCounts = useMemo(() => {
+    // Counts are limited to loaded rows; select-all-filtered can include IDs from unloaded pages.
     const selected = filteredLetters.filter((letter) => selectedIds.has(letter.id));
 
     return {

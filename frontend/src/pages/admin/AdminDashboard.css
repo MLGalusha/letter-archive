@@ -528,6 +528,10 @@
   width: min(350px, 100%);
 }
 
+.sort-manager-popover {
+  overflow: visible;
+}
+
 .dashboard-manager-footer .sort-field-picker {
   width: min(300px, 100%);
 }

@@ -38,7 +38,7 @@ function makeFilters(): DashboardFilterControls {
     extraContentStatusFilters: [],
     workflowFilters: [],
     flaggedFilter: "ALL",
-  } as DashboardFilterControls;
+  } as unknown as DashboardFilterControls;
 }
 
 function useFilteredSelectionHarness({

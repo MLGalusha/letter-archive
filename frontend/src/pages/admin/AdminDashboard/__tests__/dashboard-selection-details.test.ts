@@ -10,7 +10,7 @@ function makeLetter(overrides: Partial<Letter> & Pick<Letter, "id">): Letter {
     collectionCode: overrides.collectionCode ?? "001",
     images: overrides.images ?? [],
     transcript: overrides.transcript ?? { pages: [], fullText: "", verified: false },
-    metadata: overrides.metadata ?? { sender: null, recipient: null, dateRaw: null, verified: false },
+    metadata: overrides.metadata ?? { sender: undefined, recipient: undefined, dateRaw: undefined, verified: false },
     status: overrides.status ?? "uploaded",
     workflowState: overrides.workflowState ?? "UPLOADED",
     visibility: overrides.visibility ?? "HIDDEN",
@@ -26,8 +26,6 @@ function makeLetter(overrides: Partial<Letter> & Pick<Letter, "id">): Letter {
     lettersCount: overrides.lettersCount,
     extrasCount: overrides.extrasCount,
     photosCount: overrides.photosCount,
-    metadataPublishedAt: overrides.metadataPublishedAt,
-    transcriptPublishedAt: overrides.transcriptPublishedAt,
     photoDescriptionStatus: overrides.photoDescriptionStatus,
   };
 }

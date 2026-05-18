@@ -2745,7 +2745,7 @@
   }
 
   .admin-dashboard > .admin-content.has-edit-toolbar {
-    padding-bottom: 180px;
+    padding-bottom: min(46vh, 280px);
   }
 }
 

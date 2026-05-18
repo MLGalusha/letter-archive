@@ -98,7 +98,7 @@ Out of scope:
 
 ## Phase 2.5 - Dashboard Filter Model Review
 
-Status: pending
+Status: active
 
 Goals:
 
@@ -116,6 +116,17 @@ Candidate filter categories:
 - Historical/entity filters: sender, recipient, mentioned person, place, date range.
 - Content-shape filters: has extras, has photos, has cover, has telegram, flagged.
 
+Current audit findings:
+
+- The admin letters API already supports collection, visibility, search, date components, date ranges, transcript status, metadata status, workflow, flagged, extra content status, and one server sort at a time.
+- The frontend dashboard currently exposes collection, visibility, search, date, transcript status, metadata status, saved views, visible columns, and a shared sort stack.
+- The frontend API type already has `flagged`, but the dashboard filter adapter does not expose it yet.
+- The backend supports `extraContentStatus`, but the frontend API type and dashboard state do not expose it yet.
+- The API stats response includes flagged and extra-content status counts, but the dashboard normalized stats currently only maps flagged, transcript, and metadata counts.
+- Data-completeness filters such as missing sender, missing recipient, and missing date are not supported by the admin letters API yet and would require backend query additions.
+- Entity-style filters such as mentioned person, place, topic, tone, and relationship exist in public archive search patterns, but are not currently wired into the admin letters endpoint.
+- Content-shape filters such as has photos, has extras, has cover, or has telegram are visible in row count/column data but are not currently query filters.
+
 Sort-model questions:
 
 - Should the toolbar sort be the primary/simple sort while column headers remain desktop power controls?
@@ -123,6 +134,13 @@ Sort-model questions:
 - How should the toolbar label multi-sort states created from column headers: custom sort, primary sort plus count, or another pattern?
 - Should choosing a toolbar sort replace the existing sort stack, while column headers can build a multi-sort stack?
 - How should saved dashboard views describe and restore multi-sort state?
+
+Sort audit findings:
+
+- The backend only supports one server-side sort field and direction per admin letters request.
+- The dashboard sort state can hold multiple sort columns, but only the last server-sort column is sent to the API.
+- Count sorts for letters, extras, and photos are applied client-side after the paginated server response, which means they only sort the current page rather than the full filtered result set.
+- The toolbar sort is currently the primary server sort selector; column headers can create a broader sort stack, which risks feeling like duplicate sorting unless the UI labels the relationship clearly.
 
 Exit criteria:
 

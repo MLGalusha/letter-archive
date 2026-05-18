@@ -1,6 +1,7 @@
 import { useMemo } from "react";
-import type { ContentStatus } from "../../../types/Letter";
-import type { VisibilityFilter } from "./types";
+import type { ContentStatus, WorkflowState } from "../../../types/Letter";
+import { WORKFLOW_FILTERS } from "./constants";
+import type { FlaggedFilter, VisibilityFilter } from "./types";
 
 export interface DashboardFilterChip {
   key: string;
@@ -14,6 +15,9 @@ interface UseDashboardActiveFiltersOptions {
   searchQuery: string;
   transcriptStatusFilters: ContentStatus[];
   metadataStatusFilters: ContentStatus[];
+  extraContentStatusFilters: ContentStatus[];
+  workflowFilters: WorkflowState[];
+  flaggedFilter: FlaggedFilter;
   yearFilter: number | null;
   monthFilter: number | null;
   dayFilter: number | null;
@@ -28,6 +32,9 @@ interface UseDashboardActiveFiltersOptions {
   clearDateFilters: () => void;
   toggleTranscriptFilter: (value: ContentStatus) => void;
   toggleMetadataFilter: (value: ContentStatus) => void;
+  toggleExtraContentFilter: (value: ContentStatus) => void;
+  toggleWorkflowFilter: (value: WorkflowState) => void;
+  toggleFlaggedFilter: (value: Exclude<FlaggedFilter, "ALL">) => void;
 }
 
 export function useDashboardActiveFilters({
@@ -36,6 +43,9 @@ export function useDashboardActiveFilters({
   searchQuery,
   transcriptStatusFilters,
   metadataStatusFilters,
+  extraContentStatusFilters,
+  workflowFilters,
+  flaggedFilter,
   yearFilter,
   monthFilter,
   dayFilter,
@@ -50,6 +60,9 @@ export function useDashboardActiveFilters({
   clearDateFilters,
   toggleTranscriptFilter,
   toggleMetadataFilter,
+  toggleExtraContentFilter,
+  toggleWorkflowFilter,
+  toggleFlaggedFilter,
 }: UseDashboardActiveFiltersOptions) {
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -58,6 +71,9 @@ export function useDashboardActiveFilters({
     if (searchQuery) count++;
     if (transcriptStatusFilters.length > 0) count += transcriptStatusFilters.length;
     if (metadataStatusFilters.length > 0) count += metadataStatusFilters.length;
+    if (extraContentStatusFilters.length > 0) count += extraContentStatusFilters.length;
+    if (workflowFilters.length > 0) count += workflowFilters.length;
+    if (flaggedFilter !== "ALL") count++;
     if (yearFilter !== null) count++;
     if (monthFilter !== null) count++;
     if (dayFilter !== null) count++;
@@ -70,6 +86,9 @@ export function useDashboardActiveFilters({
     searchQuery,
     transcriptStatusFilters,
     metadataStatusFilters,
+    extraContentStatusFilters,
+    workflowFilters,
+    flaggedFilter,
     yearFilter,
     monthFilter,
     dayFilter,
@@ -85,6 +104,14 @@ export function useDashboardActiveFilters({
         key: "visibility",
         label: visibilityFilter === "PUBLISHED" ? "Published" : "Hidden",
         onRemove: () => toggleVisibilityFilter(visibilityFilter),
+      });
+    }
+
+    if (flaggedFilter !== "ALL") {
+      chips.push({
+        key: "flagged",
+        label: flaggedFilter === "FLAGGED" ? "Flagged" : "Unflagged",
+        onRemove: () => toggleFlaggedFilter(flaggedFilter),
       });
     }
 
@@ -131,6 +158,23 @@ export function useDashboardActiveFilters({
       });
     });
 
+    extraContentStatusFilters.forEach((status) => {
+      chips.push({
+        key: `extras-${status}`,
+        label: `Extras ${status.toLowerCase().replace("_", " ")}`,
+        onRemove: () => toggleExtraContentFilter(status),
+      });
+    });
+
+    workflowFilters.forEach((workflow) => {
+      const option = WORKFLOW_FILTERS.find((filter) => filter.value === workflow);
+      chips.push({
+        key: `workflow-${workflow}`,
+        label: option?.label ?? workflow.toLowerCase().replace(/_/g, " "),
+        onRemove: () => toggleWorkflowFilter(workflow),
+      });
+    });
+
     return chips;
   }, [
     visibilityFilter,
@@ -139,6 +183,9 @@ export function useDashboardActiveFilters({
     hasDateFilter,
     transcriptStatusFilters,
     metadataStatusFilters,
+    extraContentStatusFilters,
+    workflowFilters,
+    flaggedFilter,
     toggleVisibilityFilter,
     handleCollectionInputChange,
     setSearchInput,
@@ -147,6 +194,9 @@ export function useDashboardActiveFilters({
     clearDateFilters,
     toggleTranscriptFilter,
     toggleMetadataFilter,
+    toggleExtraContentFilter,
+    toggleWorkflowFilter,
+    toggleFlaggedFilter,
   ]);
 
   return { activeFilterCount, activeFilterChips };

@@ -77,6 +77,9 @@ export function useDashboardFilteredSelection({
     filterQueryFields.dateToFilter,
     filterQueryFields.transcriptStatusFilters,
     filterQueryFields.metadataStatusFilters,
+    filterQueryFields.extraContentStatusFilters,
+    filterQueryFields.workflowFilters,
+    filterQueryFields.flaggedFilter,
   ]);
 
   const handleSelectAllFiltered = async () => {

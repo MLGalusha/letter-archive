@@ -149,7 +149,9 @@ export interface AdminLettersResponse {
   stats: {
     total: number;
     uploaded: number;
+    transcribing: number;
     transcribed: number;
+    metadataExtracting: number;
     metadataReady: number;
     reviewed: number;
     published: number;
@@ -191,7 +193,7 @@ export async function queryAdminLetters(
         letters: [],
         pagination: { page: query.page, limit: query.limit, total: 0, totalPages: 0 },
         stats: {
-          total: 0, uploaded: 0, transcribed: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0, flagged: 0,
+          total: 0, uploaded: 0, transcribing: 0, transcribed: 0, metadataExtracting: 0, metadataReady: 0, reviewed: 0, published: 0, hidden: 0, flagged: 0,
           transcript: { empty: 0, aiDraft: 0, edited: 0, verified: 0 },
           metadata: { empty: 0, aiDraft: 0, edited: 0, verified: 0 },
           extraContent: { empty: 0, aiDraft: 0, edited: 0, verified: 0 },
@@ -522,9 +524,11 @@ export async function queryAdminLetters(
     stats: {
       // Total
       total: Number(rawStats.total),
-      // Legacy workflow stats (for backward compat)
-      uploaded: Number(rawStats.uploaded) + Number(rawStats.transcribing),
-      transcribed: Number(rawStats.transcribed) + Number(rawStats.metadataExtracting),
+      // Workflow stats
+      uploaded: Number(rawStats.uploaded),
+      transcribing: Number(rawStats.transcribing),
+      transcribed: Number(rawStats.transcribed),
+      metadataExtracting: Number(rawStats.metadataExtracting),
       metadataReady: Number(rawStats.metadataReady),
       reviewed: Number(rawStats.reviewed),
       // Visibility stats

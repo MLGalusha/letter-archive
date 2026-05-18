@@ -1,3 +1,4 @@
+import type { WorkflowState } from "../../../types/Letter";
 import type { ColumnDef, ColumnId, SortColumn } from "./types";
 
 export const YEAR_OPTIONS = Array.from({ length: 151 }, (_, i) => 1800 + i);
@@ -92,6 +93,65 @@ export const VISIBILITY_FILTERS = [
   },
 ] as const;
 
+export const FLAGGED_FILTERS = [
+  {
+    value: "FLAGGED",
+    label: "Flagged",
+    className: "filter-flagged",
+    title: "Flagged letters",
+  },
+  {
+    value: "UNFLAGGED",
+    label: "Unflagged",
+    className: "filter-unflagged",
+    title: "Unflagged letters",
+  },
+] as const;
+
+export const WORKFLOW_FILTERS: Array<{
+  value: WorkflowState;
+  label: string;
+  countKey: "uploaded" | "transcribing" | "transcribed" | "metadataExtracting" | "metadataReady" | "reviewed";
+  className: string;
+}> = [
+  {
+    value: "UPLOADED",
+    label: "Uploaded",
+    countKey: "uploaded",
+    className: "filter-uploaded",
+  },
+  {
+    value: "TRANSCRIBING",
+    label: "Transcribing",
+    countKey: "transcribing",
+    className: "filter-transcribing",
+  },
+  {
+    value: "TRANSCRIBED",
+    label: "Transcribed",
+    countKey: "transcribed",
+    className: "filter-transcribed",
+  },
+  {
+    value: "METADATA_EXTRACTING",
+    label: "Extracting",
+    countKey: "metadataExtracting",
+    className: "filter-metadata-extracting",
+  },
+  {
+    value: "METADATA_DRAFTED",
+    label: "Metadata",
+    countKey: "metadataReady",
+    className: "filter-metadata-ready",
+  },
+  {
+    value: "REVIEWED",
+    label: "Reviewed",
+    countKey: "reviewed",
+    className: "filter-reviewed",
+  },
+];
+
 export const CONTENT_STATUS_FILTERS = [
   {
     value: "EMPTY",
@@ -99,6 +159,7 @@ export const CONTENT_STATUS_FILTERS = [
     countKeys: {
       transcript: "transcriptEmpty",
       metadata: "metadataEmpty",
+      extras: "extraContentEmpty",
     },
     className: "filter-content-none",
   },
@@ -108,6 +169,7 @@ export const CONTENT_STATUS_FILTERS = [
     countKeys: {
       transcript: "transcriptAiDraft",
       metadata: "metadataAiDraft",
+      extras: "extraContentAiDraft",
     },
     className: "filter-content-draft",
   },
@@ -117,6 +179,7 @@ export const CONTENT_STATUS_FILTERS = [
     countKeys: {
       transcript: "transcriptEdited",
       metadata: "metadataEdited",
+      extras: "extraContentEdited",
     },
     className: "filter-content-edited",
   },
@@ -126,6 +189,7 @@ export const CONTENT_STATUS_FILTERS = [
     countKeys: {
       transcript: "transcriptVerified",
       metadata: "metadataVerified",
+      extras: "extraContentVerified",
     },
     className: "filter-content-verified",
   },

@@ -2,7 +2,9 @@ export type VisibilityFilter = "ALL" | "PUBLISHED" | "HIDDEN";
 
 export type DateMode = "specific" | "range";
 
-export type ContentFilterView = "transcript" | "metadata";
+export type ContentFilterView = "transcript" | "metadata" | "extras";
+
+export type FlaggedFilter = "ALL" | "FLAGGED" | "UNFLAGGED";
 
 export type DashboardView = "letters" | "collections";
 
@@ -79,6 +81,9 @@ export interface PersistedState {
   dateTo: string | null;
   transcriptStatusFilters: string[];
   metadataStatusFilters: string[];
+  extraContentStatusFilters: string[];
+  workflowFilters: string[];
+  flaggedFilter: FlaggedFilter;
 }
 
 export interface DashboardViewState extends PersistedState {
@@ -98,8 +103,16 @@ export interface PendingChange {
 }
 
 export interface DashboardFilterStats {
+  total: number;
   published: number;
   hidden: number;
+  flagged: number;
+  uploaded: number;
+  transcribing: number;
+  transcribed: number;
+  metadataExtracting: number;
+  metadataReady: number;
+  reviewed: number;
   transcriptEmpty: number;
   transcriptAiDraft: number;
   transcriptEdited: number;
@@ -108,4 +121,8 @@ export interface DashboardFilterStats {
   metadataAiDraft: number;
   metadataEdited: number;
   metadataVerified: number;
+  extraContentEmpty: number;
+  extraContentAiDraft: number;
+  extraContentEdited: number;
+  extraContentVerified: number;
 }

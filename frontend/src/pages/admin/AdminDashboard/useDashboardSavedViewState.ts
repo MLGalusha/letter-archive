@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { useToast } from "../../../contexts/ToastContext";
-import type { ContentStatus } from "../../../types/Letter";
+import type { ContentStatus, WorkflowState } from "../../../types/Letter";
 import type {
   ColumnId,
   DashboardViewState,
@@ -51,6 +51,12 @@ export function useDashboardSavedViewState({
     setTranscriptStatusFilters,
     metadataStatusFilters,
     setMetadataStatusFilters,
+    extraContentStatusFilters,
+    setExtraContentStatusFilters,
+    workflowFilters,
+    setWorkflowFilters,
+    flaggedFilter,
+    setFlaggedFilter,
   } = filters;
 
   const getCurrentDashboardViewState = useCallback((): DashboardViewState => ({
@@ -66,6 +72,9 @@ export function useDashboardSavedViewState({
     dateTo: dateToFilter,
     transcriptStatusFilters,
     metadataStatusFilters,
+    extraContentStatusFilters,
+    workflowFilters,
+    flaggedFilter,
     visibleColumns: Array.from(visibleColumns),
   }), [
     visibilityFilter,
@@ -80,6 +89,9 @@ export function useDashboardSavedViewState({
     dateToFilter,
     transcriptStatusFilters,
     metadataStatusFilters,
+    extraContentStatusFilters,
+    workflowFilters,
+    flaggedFilter,
     visibleColumns,
   ]);
 
@@ -98,6 +110,9 @@ export function useDashboardSavedViewState({
     setDateToFilter(state.dateTo);
     setTranscriptStatusFilters(state.transcriptStatusFilters as ContentStatus[]);
     setMetadataStatusFilters(state.metadataStatusFilters as ContentStatus[]);
+    setExtraContentStatusFilters((state.extraContentStatusFilters ?? []) as ContentStatus[]);
+    setWorkflowFilters((state.workflowFilters ?? []) as WorkflowState[]);
+    setFlaggedFilter(state.flaggedFilter ?? "ALL");
     setVisibleColumns(new Set(state.visibleColumns));
   }, [
     setVisibilityFilter,
@@ -114,6 +129,9 @@ export function useDashboardSavedViewState({
     setDateToFilter,
     setTranscriptStatusFilters,
     setMetadataStatusFilters,
+    setExtraContentStatusFilters,
+    setWorkflowFilters,
+    setFlaggedFilter,
     setVisibleColumns,
   ]);
 

@@ -1,7 +1,9 @@
 import Icon from "../../../components/common/Icon";
 import ContentStatusFilterSection from "./ContentStatusFilterSection";
 import DashboardDateFilterControl from "./DashboardDateFilterControl";
+import FlaggedFilterSection from "./FlaggedFilterSection";
 import VisibilityFilterSection from "./VisibilityFilterSection";
+import WorkflowFilterSection from "./WorkflowFilterSection";
 import type { DashboardFilterStats } from "./types";
 import type { DashboardFilterControls } from "./useDashboardFilters";
 
@@ -37,6 +39,12 @@ export default function DashboardFilterPanel({
     toggleTranscriptFilter,
     metadataStatusFilters,
     toggleMetadataFilter,
+    extraContentStatusFilters,
+    toggleExtraContentFilter,
+    workflowFilters,
+    toggleWorkflowFilter,
+    flaggedFilter,
+    toggleFlaggedFilter,
     showDateDropdown,
     setShowDateDropdown,
     dateDropdownRef,
@@ -82,6 +90,18 @@ export default function DashboardFilterPanel({
         toggleVisibilityFilter={toggleVisibilityFilter}
       />
 
+      <FlaggedFilterSection
+        stats={stats}
+        flaggedFilter={flaggedFilter}
+        toggleFlaggedFilter={toggleFlaggedFilter}
+      />
+
+      <WorkflowFilterSection
+        stats={stats}
+        workflowFilters={workflowFilters}
+        toggleWorkflowFilter={toggleWorkflowFilter}
+      />
+
       <ContentStatusFilterSection
         stats={stats}
         contentFilterView={contentFilterView}
@@ -90,6 +110,8 @@ export default function DashboardFilterPanel({
         toggleTranscriptFilter={toggleTranscriptFilter}
         metadataStatusFilters={metadataStatusFilters}
         toggleMetadataFilter={toggleMetadataFilter}
+        extraContentStatusFilters={extraContentStatusFilters}
+        toggleExtraContentFilter={toggleExtraContentFilter}
       />
 
       <section className="filter-panel-section filter-panel-fields">

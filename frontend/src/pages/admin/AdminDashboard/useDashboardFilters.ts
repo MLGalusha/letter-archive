@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StartProcessingOptions } from '../../../api/admin';
-import type { ContentStatus } from '../../../types/Letter';
+import type { ContentStatus, WorkflowState } from '../../../types/Letter';
 import { loadPersistedState } from './utils';
-import type { ContentFilterView, DateMode, VisibilityFilter } from './types';
+import type { ContentFilterView, DateMode, FlaggedFilter, VisibilityFilter } from './types';
 
 export function useDashboardFilters() {
   const persistedState = useRef(loadPersistedState());
@@ -26,6 +26,15 @@ export function useDashboardFilters() {
   );
   const [metadataStatusFilters, setMetadataStatusFilters] = useState<ContentStatus[]>(
     (persistedState.current.metadataStatusFilters as ContentStatus[]) ?? [],
+  );
+  const [extraContentStatusFilters, setExtraContentStatusFilters] = useState<ContentStatus[]>(
+    (persistedState.current.extraContentStatusFilters as ContentStatus[]) ?? [],
+  );
+  const [workflowFilters, setWorkflowFilters] = useState<WorkflowState[]>(
+    (persistedState.current.workflowFilters as WorkflowState[]) ?? [],
+  );
+  const [flaggedFilter, setFlaggedFilter] = useState<FlaggedFilter>(
+    persistedState.current.flaggedFilter ?? 'ALL',
   );
   const [collectionFilter, setCollectionFilter] = useState<string>(
     persistedState.current.collectionFilter ?? 'all',
@@ -108,6 +117,26 @@ export function useDashboardFilters() {
     );
   }, []);
 
+  const toggleExtraContentFilter = useCallback((value: ContentStatus) => {
+    setExtraContentStatusFilters((previous) =>
+      previous.includes(value)
+        ? previous.filter((status) => status !== value)
+        : [...previous, value],
+    );
+  }, []);
+
+  const toggleWorkflowFilter = useCallback((value: WorkflowState) => {
+    setWorkflowFilters((previous) =>
+      previous.includes(value)
+        ? previous.filter((workflow) => workflow !== value)
+        : [...previous, value],
+    );
+  }, []);
+
+  const toggleFlaggedFilter = useCallback((value: Exclude<FlaggedFilter, 'ALL'>) => {
+    setFlaggedFilter((current) => (current === value ? 'ALL' : value));
+  }, []);
+
   const clearDateFilters = useCallback(() => {
     setYearFilter(null);
     setMonthFilter(null);
@@ -118,8 +147,11 @@ export function useDashboardFilters() {
 
   const handleClearAllFilters = useCallback(() => {
     setVisibilityFilter('ALL');
+    setFlaggedFilter('ALL');
     setTranscriptStatusFilters([]);
     setMetadataStatusFilters([]);
+    setExtraContentStatusFilters([]);
+    setWorkflowFilters([]);
     setCollectionFilter('all');
     setCollectionInput('');
     setSearchInput('');
@@ -154,6 +186,15 @@ export function useDashboardFilters() {
     metadataStatusFilters,
     setMetadataStatusFilters,
     toggleMetadataFilter,
+    extraContentStatusFilters,
+    setExtraContentStatusFilters,
+    toggleExtraContentFilter,
+    workflowFilters,
+    setWorkflowFilters,
+    toggleWorkflowFilter,
+    flaggedFilter,
+    setFlaggedFilter,
+    toggleFlaggedFilter,
     collectionFilter,
     setCollectionFilter,
     yearFilter,
@@ -190,6 +231,9 @@ export interface DashboardFilterQueryFields {
   dateToFilter: string | null;
   transcriptStatusFilters: ContentStatus[];
   metadataStatusFilters: ContentStatus[];
+  extraContentStatusFilters: ContentStatus[];
+  workflowFilters: WorkflowState[];
+  flaggedFilter: FlaggedFilter;
 }
 
 export function getDashboardFilterQueryFields(
@@ -206,6 +250,9 @@ export function getDashboardFilterQueryFields(
     dateToFilter: filters.dateToFilter,
     transcriptStatusFilters: filters.transcriptStatusFilters,
     metadataStatusFilters: filters.metadataStatusFilters,
+    extraContentStatusFilters: filters.extraContentStatusFilters,
+    workflowFilters: filters.workflowFilters,
+    flaggedFilter: filters.flaggedFilter,
   };
 }
 

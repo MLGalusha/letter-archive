@@ -222,7 +222,9 @@ function createLettersResponse(letters: Letter[] = [makeLetter()]) {
     stats: {
       total: letters.length,
       uploaded: letters.length,
+      transcribing: 0,
       transcribed: 0,
+      metadataExtracting: 0,
       metadataReady: 0,
       reviewed: 0,
       published: 0,
@@ -237,6 +239,12 @@ function createLettersResponse(letters: Letter[] = [makeLetter()]) {
       metadata: {
         empty: 0,
         aiDraft: letters.length,
+        edited: 0,
+        verified: 0,
+      },
+      extraContent: {
+        empty: letters.length,
+        aiDraft: 0,
         edited: 0,
         verified: 0,
       },

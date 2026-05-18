@@ -22,6 +22,9 @@ export function useDashboardPersistedState({
     dateToFilter,
     transcriptStatusFilters,
     metadataStatusFilters,
+    extraContentStatusFilters,
+    workflowFilters,
+    flaggedFilter,
   } = filters;
 
   useEffect(() => {
@@ -38,6 +41,9 @@ export function useDashboardPersistedState({
       dateTo: dateToFilter,
       transcriptStatusFilters,
       metadataStatusFilters,
+      extraContentStatusFilters,
+      workflowFilters,
+      flaggedFilter,
     });
   }, [
     visibilityFilter,
@@ -52,5 +58,8 @@ export function useDashboardPersistedState({
     dateToFilter,
     transcriptStatusFilters,
     metadataStatusFilters,
+    extraContentStatusFilters,
+    workflowFilters,
+    flaggedFilter,
   ]);
 }

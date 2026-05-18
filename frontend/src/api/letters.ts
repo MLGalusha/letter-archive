@@ -60,7 +60,9 @@ export interface AdminLettersResponse {
   stats: {
     total: number;
     uploaded: number;
+    transcribing?: number;
     transcribed: number;
+    metadataExtracting?: number;
     metadataReady: number;
     reviewed: number;
     published: number;
@@ -74,6 +76,12 @@ export interface AdminLettersResponse {
       verified: number;
     };
     metadata: {
+      empty: number;
+      aiDraft: number;
+      edited: number;
+      verified: number;
+    };
+    extraContent?: {
       empty: number;
       aiDraft: number;
       edited: number;
@@ -101,6 +109,7 @@ export interface AdminLetterQueryParams {
   visibility?: VisibilityState;
   collection?: string;
   search?: string;
+  workflow?: string;
   sort?: SortField;
   sortOrder?: SortOrder;
   // Date filters
@@ -112,6 +121,7 @@ export interface AdminLetterQueryParams {
   // Content status filters (comma-separated if multiple)
   transcriptStatus?: string;
   metadataStatus?: string;
+  extraContentStatus?: string;
   flagged?: string;
 }
 
@@ -205,6 +215,7 @@ export async function getAdminLetters(params: AdminLetterQueryParams = {}): Prom
     visibility: params.visibility,
     collection: params.collection,
     search: params.search,
+    workflow: params.workflow,
     sort: params.sort,
     sortOrder: params.sortOrder,
     // Date filters
@@ -216,6 +227,7 @@ export async function getAdminLetters(params: AdminLetterQueryParams = {}): Prom
     // Content status filters
     transcriptStatus: params.transcriptStatus,
     metadataStatus: params.metadataStatus,
+    extraContentStatus: params.extraContentStatus,
     flagged: params.flagged,
   });
 }

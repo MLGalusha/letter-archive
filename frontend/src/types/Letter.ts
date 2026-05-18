@@ -16,6 +16,8 @@ export type WorkflowState =
   | 'METADATA_DRAFTED'
   | 'REVIEWED';
 
+export type WorkflowFilterValue = WorkflowState;
+
 export type VisibilityState = 'PUBLISHED' | 'HIDDEN';
 
 // Two-track content status system

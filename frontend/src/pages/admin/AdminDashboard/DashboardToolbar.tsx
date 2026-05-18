@@ -65,6 +65,12 @@ export default function DashboardToolbar({
     toggleTranscriptFilter,
     metadataStatusFilters,
     toggleMetadataFilter,
+    extraContentStatusFilters,
+    toggleExtraContentFilter,
+    workflowFilters,
+    toggleWorkflowFilter,
+    flaggedFilter,
+    toggleFlaggedFilter,
     collectionFilter,
     yearFilter,
     monthFilter,
@@ -86,6 +92,9 @@ export default function DashboardToolbar({
     searchQuery,
     transcriptStatusFilters,
     metadataStatusFilters,
+    extraContentStatusFilters,
+    workflowFilters,
+    flaggedFilter,
     yearFilter,
     monthFilter,
     dayFilter,
@@ -100,6 +109,9 @@ export default function DashboardToolbar({
     clearDateFilters,
     toggleTranscriptFilter,
     toggleMetadataFilter,
+    toggleExtraContentFilter,
+    toggleWorkflowFilter,
+    toggleFlaggedFilter,
   });
 
   return (

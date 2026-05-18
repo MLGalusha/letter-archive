@@ -87,6 +87,9 @@ describe("admin dashboard utils", () => {
       dateToFilter: "18861231",
       transcriptStatusFilters: ["EMPTY", "AI_DRAFT"],
       metadataStatusFilters: [],
+      extraContentStatusFilters: ["EDITED"],
+      workflowFilters: ["REVIEWED"],
+      flaggedFilter: "FLAGGED",
     })).toMatchObject({
       collection: "003",
       visibility: "PUBLISHED",
@@ -96,6 +99,9 @@ describe("admin dashboard utils", () => {
       year: 1886,
       dateTo: "18861231",
       transcriptStatus: "EMPTY,AI_DRAFT",
+      extraContentStatus: "EDITED",
+      workflow: "REVIEWED",
+      flagged: "true",
     });
   });
 
@@ -113,6 +119,9 @@ describe("admin dashboard utils", () => {
       dateTo: null,
       transcriptStatusFilters: [],
       metadataStatusFilters: [],
+      extraContentStatusFilters: [],
+      workflowFilters: [],
+      flaggedFilter: "ALL" as const,
     };
 
     savePersistedState(state);
@@ -147,6 +156,9 @@ describe("admin dashboard utils", () => {
         dateTo: null,
         transcriptStatusFilters: ["EMPTY"],
         metadataStatusFilters: [],
+        extraContentStatusFilters: [],
+        workflowFilters: ["UPLOADED"],
+        flaggedFilter: "FLAGGED",
         visibleColumns: ["date", "collection", "visibility", "lastOpened"],
       },
     };

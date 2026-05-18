@@ -127,6 +127,12 @@ Current audit findings:
 - Entity-style filters such as mentioned person, place, topic, tone, and relationship exist in public archive search patterns, but are not currently wired into the admin letters endpoint.
 - Content-shape filters such as has photos, has extras, has cover, or has telegram are visible in row count/column data but are not currently query filters.
 
+Progress:
+
+- Added approved low-risk filters to the letters dashboard: flagged, workflow, and extra-content status.
+- Wired the new filters through API query construction, active filter chips, saved dashboard views, persisted dashboard state, stats normalization, select-all-filtered, and the desktop/mobile filter panel.
+- Expanded admin letters stats with exact workflow buckets so workflow filters can show useful counts.
+
 Sort-model questions:
 
 - Should the toolbar sort be the primary/simple sort while column headers remain desktop power controls?
@@ -148,6 +154,12 @@ Exit criteria:
 - Each accepted filter has a clear source of truth and query strategy.
 - Saved dashboard views include any new accepted filter state.
 - The accepted sort model has one shared state, clear mobile behavior, and no duplicate-feeling controls.
+
+Deferred filter slice:
+
+- Missing sender, missing recipient, and missing date should be implemented after this dashboard UI pass as cleanup filters with explicit backend query support.
+- Has photos, has extras, has cover, and has telegram should be implemented after this dashboard UI pass as content-shape filters backed by server-side grouped letter counts/types, not current-page client data.
+- These deferred filters should be planned before broader admin rollout so they can reuse the finished dashboard filter model instead of creating another one-off filter pattern.
 
 ## Phase 3 - Dashboard Responsive UI
 

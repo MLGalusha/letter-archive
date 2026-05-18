@@ -10,6 +10,8 @@ interface ContentStatusFilterSectionProps {
   toggleTranscriptFilter: (value: ContentStatus) => void;
   metadataStatusFilters: ContentStatus[];
   toggleMetadataFilter: (value: ContentStatus) => void;
+  extraContentStatusFilters: ContentStatus[];
+  toggleExtraContentFilter: (value: ContentStatus) => void;
 }
 
 export default function ContentStatusFilterSection({
@@ -20,13 +22,19 @@ export default function ContentStatusFilterSection({
   toggleTranscriptFilter,
   metadataStatusFilters,
   toggleMetadataFilter,
+  extraContentStatusFilters,
+  toggleExtraContentFilter,
 }: ContentStatusFilterSectionProps) {
-  const selectedFilters = contentFilterView === "transcript"
-    ? transcriptStatusFilters
-    : metadataStatusFilters;
-  const toggleFilter = contentFilterView === "transcript"
-    ? toggleTranscriptFilter
-    : toggleMetadataFilter;
+  const selectedFilters = {
+    transcript: transcriptStatusFilters,
+    metadata: metadataStatusFilters,
+    extras: extraContentStatusFilters,
+  }[contentFilterView];
+  const toggleFilter = {
+    transcript: toggleTranscriptFilter,
+    metadata: toggleMetadataFilter,
+    extras: toggleExtraContentFilter,
+  }[contentFilterView];
 
   return (
     <section className="filter-panel-section content-filter-section">
@@ -49,6 +57,16 @@ export default function ContentStatusFilterSection({
           Metadata
           {contentFilterView !== "metadata" && metadataStatusFilters.length > 0 && (
             <span className="toggle-badge">{metadataStatusFilters.length}</span>
+          )}
+        </button>
+        <button
+          type="button"
+          className={`content-toggle-btn ${contentFilterView === "extras" ? "active" : ""}`}
+          onClick={() => setContentFilterView("extras")}
+        >
+          Extras
+          {contentFilterView !== "extras" && extraContentStatusFilters.length > 0 && (
+            <span className="toggle-badge">{extraContentStatusFilters.length}</span>
           )}
         </button>
       </div>

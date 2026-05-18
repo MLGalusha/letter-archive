@@ -296,7 +296,7 @@
 
 .dashboard-filter-panel {
   display: grid;
-  grid-template-columns: 180px minmax(320px, 1fr) auto;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(130px, 0.65fr) minmax(260px, 1.35fr) minmax(320px, 1.5fr) auto;
   align-items: stretch;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm);
@@ -341,6 +341,14 @@
 }
 
 .filter-button-grid--visibility {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.filter-button-grid--flagged {
+  grid-template-columns: 1fr;
+}
+
+.filter-button-grid--workflow {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -1091,6 +1099,13 @@
   border-color: #ffeeba;
 }
 
+.filter-pill.filter-transcribing,
+.filter-pill.filter-metadata-extracting {
+  background: #e7f5ff;
+  color: #0b7285;
+  border-color: #a5d8ff;
+}
+
 .filter-pill.filter-transcribed {
   background: #d1ecf1;
   color: #0c5460;
@@ -1122,6 +1137,13 @@
   border-color: #dee2e6;
 }
 
+.filter-pill.filter-flagged,
+.filter-pill.filter-unflagged {
+  background: #fff1f2;
+  color: #be123c;
+  border-color: #fecdd3;
+}
+
 /* Active state - strong visual indicator */
 .filter-pill.active {
   font-weight: 700;
@@ -1150,6 +1172,11 @@
   background: #ffecb3;
 }
 
+.filter-pill.filter-transcribing.active,
+.filter-pill.filter-metadata-extracting.active {
+  background: #d0ebff;
+}
+
 .filter-pill.filter-transcribed.active {
   background: #b2ebf2;
 }
@@ -1168,6 +1195,11 @@
 
 .filter-pill.filter-hidden.active {
   background: #d6d8db;
+}
+
+.filter-pill.filter-flagged.active,
+.filter-pill.filter-unflagged.active {
+  background: #ffe4e6;
 }
 
 /* Transcript status filter colors */
@@ -2109,6 +2141,8 @@
   }
 
   .filter-button-grid--visibility,
+  .filter-button-grid--flagged,
+  .filter-button-grid--workflow,
   .filter-button-grid--content {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

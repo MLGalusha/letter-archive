@@ -25,6 +25,8 @@ const DEFAULT_STATS = {
   published: 0,
   hidden: 0,
   flagged: 0,
+  transcribing: 0,
+  metadataExtracting: 0,
   transcriptEmpty: 0,
   transcriptAiDraft: 0,
   transcriptEdited: 0,
@@ -33,6 +35,10 @@ const DEFAULT_STATS = {
   metadataAiDraft: 0,
   metadataEdited: 0,
   metadataVerified: 0,
+  extraContentEmpty: 0,
+  extraContentAiDraft: 0,
+  extraContentEdited: 0,
+  extraContentVerified: 0,
 };
 
 interface UseDashboardLettersDataOptions {
@@ -69,7 +75,9 @@ export function useDashboardLettersData({
       setStats({
         total: response.stats.total ?? 0,
         uploaded: response.stats.uploaded ?? 0,
+        transcribing: response.stats.transcribing ?? 0,
         transcribed: response.stats.transcribed ?? 0,
+        metadataExtracting: response.stats.metadataExtracting ?? 0,
         metadataReady: response.stats.metadataReady ?? 0,
         reviewed: response.stats.reviewed ?? 0,
         published: response.stats.published ?? 0,
@@ -83,6 +91,10 @@ export function useDashboardLettersData({
         metadataAiDraft: response.stats.metadata?.aiDraft ?? 0,
         metadataEdited: response.stats.metadata?.edited ?? 0,
         metadataVerified: response.stats.metadata?.verified ?? 0,
+        extraContentEmpty: response.stats.extraContent?.empty ?? 0,
+        extraContentAiDraft: response.stats.extraContent?.aiDraft ?? 0,
+        extraContentEdited: response.stats.extraContent?.edited ?? 0,
+        extraContentVerified: response.stats.extraContent?.verified ?? 0,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load letters");
@@ -98,6 +110,9 @@ export function useDashboardLettersData({
     filterQueryFields.dayFilter,
     filterQueryFields.metadataStatusFilters,
     filterQueryFields.monthFilter,
+    filterQueryFields.extraContentStatusFilters,
+    filterQueryFields.flaggedFilter,
+    filterQueryFields.workflowFilters,
     pagination.page,
     filterQueryFields.searchQuery,
     sortColumns,

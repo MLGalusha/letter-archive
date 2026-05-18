@@ -4,6 +4,7 @@ import { MONTH_OPTIONS, SAVED_VIEWS_STORAGE_KEY, SERVER_SORT_FIELDS, STORAGE_KEY
 import type {
   DateMode,
   ExtendedSortField,
+  FlaggedFilter,
   PersistedState,
   SavedDashboardView,
   ServerSortField,
@@ -32,6 +33,9 @@ interface DashboardLetterQueryOptions {
   dateToFilter: string | null;
   transcriptStatusFilters: ContentStatus[];
   metadataStatusFilters: ContentStatus[];
+  extraContentStatusFilters: ContentStatus[];
+  workflowFilters: string[];
+  flaggedFilter: FlaggedFilter;
 }
 
 export function buildDashboardLetterQuery({
@@ -49,6 +53,9 @@ export function buildDashboardLetterQuery({
   dateToFilter,
   transcriptStatusFilters,
   metadataStatusFilters,
+  extraContentStatusFilters,
+  workflowFilters,
+  flaggedFilter,
 }: DashboardLetterQueryOptions): AdminLetterQueryParams {
   const serverSort = [...sortColumns]
     .reverse()
@@ -70,6 +77,9 @@ export function buildDashboardLetterQuery({
     dateTo: dateToFilter ?? undefined,
     transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(",") : undefined,
     metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(",") : undefined,
+    extraContentStatus: extraContentStatusFilters.length > 0 ? extraContentStatusFilters.join(",") : undefined,
+    workflow: workflowFilters.length > 0 ? workflowFilters.join(",") : undefined,
+    flagged: flaggedFilter === "FLAGGED" ? "true" : flaggedFilter === "UNFLAGGED" ? "false" : undefined,
   };
 }
 

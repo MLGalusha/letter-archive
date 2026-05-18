@@ -87,6 +87,7 @@ Progress:
 - Dashboard dialogs now consume grouped bulk-action and processing-action models instead of a long modal prop list from the page component.
 - Bulk edit toolbar destructive actions are split into their own control component, matching the existing selection, copy, processing, and publishing sections.
 - Recent activity table header composition and sortable column definitions are split into a table-header component, leaving the table focused on header/row/pagination structure.
+- Recent activity table props are grouped into column, sorting, selection, copy-edit, formatting, pagination, and row-action models to clarify table ownership.
 
 Out of scope:
 

@@ -93,6 +93,7 @@ export default function ColumnToggleHeader({
         <DashboardManagerSurface
           title="Columns"
           ariaLabel="Column settings"
+          closeBoundaryRef={columnMenuRef}
           className="column-toggle-dropdown column-toggle-left"
           onClose={onToggleColumnMenu}
           footer={(

@@ -80,4 +80,23 @@ describe("DashboardSortControl", () => {
       name: /Letter date is sorted oldest first/i,
     })).toBeInTheDocument();
   });
+
+  it("closes when clicking outside the shared manager boundary", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <SortControlHarness
+          initialSort={[{ field: "lastOpenedAt", direction: "desc" }]}
+        />
+        <button type="button">Outside action</button>
+      </>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Sort/i }));
+    expect(screen.getByRole("dialog", { name: "Sort rules" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Outside action" }));
+
+    expect(screen.queryByRole("dialog", { name: "Sort rules" })).not.toBeInTheDocument();
+  });
 });

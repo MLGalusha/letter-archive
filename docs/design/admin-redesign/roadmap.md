@@ -88,6 +88,8 @@ Progress:
 - Bulk edit toolbar destructive actions are split into their own control component, matching the existing selection, copy, processing, and publishing sections.
 - Recent activity table header composition and sortable column definitions are split into a table-header component, leaving the table focused on header/row/pagination structure.
 - Recent activity table props are grouped into column, sorting, selection, copy-edit, formatting, pagination, and row-action models to clarify table ownership.
+- Shared dashboard manager surfaces now own outside-click dismissal through the trigger/surface boundary, so Sort, Saved views, Columns, and Publishing no longer duplicate document-level close listeners.
+- Column settings initialization no longer reads from a ref during render, keeping the touched dashboard column hook compatible with the React Compiler lint rules.
 
 Out of scope:
 

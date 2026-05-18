@@ -1,10 +1,11 @@
 import { useEffect } from "react";
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import Icon from "../../../components/common/Icon";
 
 interface DashboardManagerSurfaceProps {
   title: string;
   ariaLabel?: string;
+  closeBoundaryRef?: RefObject<HTMLElement | null>;
   className?: string;
   children: ReactNode;
   footer?: ReactNode;
@@ -14,6 +15,7 @@ interface DashboardManagerSurfaceProps {
 export default function DashboardManagerSurface({
   title,
   ariaLabel,
+  closeBoundaryRef,
   className = "",
   children,
   footer,
@@ -29,6 +31,19 @@ export default function DashboardManagerSurface({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
+
+  useEffect(() => {
+    if (!closeBoundaryRef) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (closeBoundaryRef.current && !closeBoundaryRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [closeBoundaryRef, onClose]);
 
   return (
     <div className={`dashboard-manager-surface ${className}`} role="dialog" aria-label={ariaLabel ?? title}>

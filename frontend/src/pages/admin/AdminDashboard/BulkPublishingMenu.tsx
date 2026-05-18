@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import DashboardManagerSurface from "./DashboardManagerSurface";
 import type { PublishCounts } from "./useDashboardSelectionDetails";
 
@@ -22,19 +22,6 @@ export default function BulkPublishingMenu({
   const [showPublishMenu, setShowPublishMenu] = useState(false);
   const publishMenuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!showPublishMenu) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (publishMenuRef.current && !publishMenuRef.current.contains(event.target as Node)) {
-        setShowPublishMenu(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showPublishMenu]);
-
   return (
     <div className="publish-menu-container" ref={publishMenuRef}>
       <button
@@ -48,6 +35,7 @@ export default function BulkPublishingMenu({
         <DashboardManagerSurface
           title="Publishing"
           ariaLabel="Publishing actions"
+          closeBoundaryRef={publishMenuRef}
           className="publish-menu-dropdown"
           onClose={() => setShowPublishMenu(false)}
         >

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Icon from "../../../components/common/Icon";
 import DashboardManagerSurface from "./DashboardManagerSurface";
 import type { SavedDashboardView } from "./types";
@@ -19,19 +19,6 @@ export default function SavedViewsMenu({
   const [open, setOpen] = useState(false);
   const [newViewName, setNewViewName] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
 
   const handleSaveView = () => {
     onSaveView(newViewName || "Dashboard view");
@@ -61,6 +48,7 @@ export default function SavedViewsMenu({
         <DashboardManagerSurface
           title="Views"
           ariaLabel="Saved views"
+          closeBoundaryRef={containerRef}
           className="saved-view-popover"
           onClose={handleClose}
         >

@@ -103,12 +103,12 @@ function loadColumnState(): { visibleColumns: Set<ColumnId>; columnOrder: Column
 }
 
 export function useDashboardColumns() {
-  const initialColumnState = useRef(loadColumnState());
+  const [initialColumnState] = useState(loadColumnState);
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnId>>(
-    initialColumnState.current.visibleColumns,
+    initialColumnState.visibleColumns,
   );
   const [columnOrder, setColumnOrder] = useState<ColumnId[]>(
-    initialColumnState.current.columnOrder,
+    initialColumnState.columnOrder,
   );
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const columnMenuRef = useRef<HTMLTableCellElement>(null);
@@ -124,21 +124,6 @@ export function useDashboardColumns() {
       console.warn('Failed to save column settings:', error);
     }
   }, [columnOrder, visibleColumns]);
-
-  useEffect(() => {
-    if (!showColumnMenu) {
-      return;
-    }
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (columnMenuRef.current && !columnMenuRef.current.contains(event.target as Node)) {
-        setShowColumnMenu(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showColumnMenu]);
 
   const toggleColumnVisibility = useCallback((columnId: ColumnId) => {
     setVisibleColumns((previous) => {

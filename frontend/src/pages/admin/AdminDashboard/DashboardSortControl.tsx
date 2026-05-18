@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Icon from "../../../components/common/Icon";
 import DashboardManagerSurface from "./DashboardManagerSurface";
 import type { ExtendedSortField, SortColumn, SortDirection } from "./types";
@@ -47,20 +47,6 @@ export default function DashboardSortControl({
 
   const buttonSummary = getSortButtonSummary(sortColumns);
   const hasDraftChanges = !areSortColumnsEqual(draftSortColumns, sortColumns);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (sortMenuRef.current && !sortMenuRef.current.contains(event.target as Node)) {
-        setOpen(false);
-        setActivePicker(null);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
 
   const handleToggleOpen = () => {
     setOpen((current) => {
@@ -148,6 +134,7 @@ export default function DashboardSortControl({
         <DashboardManagerSurface
           title="Sort"
           ariaLabel="Sort rules"
+          closeBoundaryRef={sortMenuRef}
           className="sort-manager-popover"
           onClose={handleClose}
           footer={(

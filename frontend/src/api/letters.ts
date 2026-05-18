@@ -87,10 +87,21 @@ export interface AdminLettersResponse {
       edited: number;
       verified: number;
     };
+    missing?: {
+      sender: number;
+      recipient: number;
+      date: number;
+    };
+    contentShape?: {
+      extras: number;
+      photos: number;
+      cover: number;
+      telegram: number;
+    };
   };
 }
 
-export type SortField = 'createdAt' | 'updatedAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection' | 'lastOpenedAt' | 'flagged';
+export type SortField = 'createdAt' | 'updatedAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection' | 'lastOpenedAt' | 'flagged' | 'letters' | 'extras' | 'photos';
 export type SortOrder = 'asc' | 'desc';
 
 export interface LetterQueryParams {
@@ -112,6 +123,7 @@ export interface AdminLetterQueryParams {
   workflow?: string;
   sort?: SortField;
   sortOrder?: SortOrder;
+  sortRules?: string;
   // Date filters
   year?: number;
   month?: number;
@@ -123,6 +135,8 @@ export interface AdminLetterQueryParams {
   metadataStatus?: string;
   extraContentStatus?: string;
   flagged?: string;
+  missing?: string;
+  contentShape?: string;
 }
 
 /**
@@ -218,6 +232,7 @@ export async function getAdminLetters(params: AdminLetterQueryParams = {}): Prom
     workflow: params.workflow,
     sort: params.sort,
     sortOrder: params.sortOrder,
+    sortRules: params.sortRules,
     // Date filters
     year: params.year,
     month: params.month,
@@ -229,6 +244,8 @@ export async function getAdminLetters(params: AdminLetterQueryParams = {}): Prom
     metadataStatus: params.metadataStatus,
     extraContentStatus: params.extraContentStatus,
     flagged: params.flagged,
+    missing: params.missing,
+    contentShape: params.contentShape,
   });
 }
 

@@ -1,13 +1,13 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { getAdminLetters } from "../../../api/letters";
 import type { Letter } from "../../../types/Letter";
 import { DEFAULT_DASHBOARD_SORT } from "./constants";
-import type { ExtendedSortField, SortColumn } from "./types";
+import type { SortColumn } from "./types";
 import {
   getDashboardFilterQueryFields,
   type DashboardFilterControls,
 } from "./useDashboardFilters";
-import { buildDashboardLetterQuery, isServerSortField } from "./utils";
+import { buildDashboardLetterQuery } from "./utils";
 
 const DEFAULT_PAGINATION = {
   page: 1,
@@ -39,6 +39,13 @@ const DEFAULT_STATS = {
   extraContentAiDraft: 0,
   extraContentEdited: 0,
   extraContentVerified: 0,
+  missingSender: 0,
+  missingRecipient: 0,
+  missingDate: 0,
+  hasExtras: 0,
+  hasPhotos: 0,
+  hasCover: 0,
+  hasTelegram: 0,
 };
 
 interface UseDashboardLettersDataOptions {
@@ -95,6 +102,13 @@ export function useDashboardLettersData({
         extraContentAiDraft: response.stats.extraContent?.aiDraft ?? 0,
         extraContentEdited: response.stats.extraContent?.edited ?? 0,
         extraContentVerified: response.stats.extraContent?.verified ?? 0,
+        missingSender: response.stats.missing?.sender ?? 0,
+        missingRecipient: response.stats.missing?.recipient ?? 0,
+        missingDate: response.stats.missing?.date ?? 0,
+        hasExtras: response.stats.contentShape?.extras ?? 0,
+        hasPhotos: response.stats.contentShape?.photos ?? 0,
+        hasCover: response.stats.contentShape?.cover ?? 0,
+        hasTelegram: response.stats.contentShape?.telegram ?? 0,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load letters");
@@ -109,8 +123,10 @@ export function useDashboardLettersData({
     filterQueryFields.dateToFilter,
     filterQueryFields.dayFilter,
     filterQueryFields.metadataStatusFilters,
+    filterQueryFields.missingFilters,
     filterQueryFields.monthFilter,
     filterQueryFields.extraContentStatusFilters,
+    filterQueryFields.contentShapeFilters,
     filterQueryFields.flaggedFilter,
     filterQueryFields.workflowFilters,
     pagination.page,
@@ -121,27 +137,7 @@ export function useDashboardLettersData({
     filterQueryFields.yearFilter,
   ]);
 
-  const filteredLetters = useMemo(() => {
-    const primaryServerSortIndex = sortColumns.findIndex((column) => isServerSortField(column.field));
-    const clientSortColumns = sortColumns.filter((_, index) => index !== primaryServerSortIndex);
-
-    if (clientSortColumns.length === 0) {
-      return letters;
-    }
-
-    return [...letters].sort((a, b) => {
-      for (const { field, direction } of clientSortColumns) {
-        let comparison = 0;
-
-        comparison = compareLettersByField(a, b, field);
-
-        if (comparison !== 0) {
-          return direction === "asc" ? comparison : -comparison;
-        }
-      }
-      return 0;
-    });
-  }, [letters, sortColumns]);
+  const filteredLetters = letters;
 
   return {
     letters,
@@ -154,54 +150,4 @@ export function useDashboardLettersData({
     stats,
     fetchLetters,
   };
-}
-
-function compareLettersByField(a: Letter, b: Letter, field: ExtendedSortField): number {
-  switch (field) {
-    case "letters":
-      return getLetterPageCount(a) - getLetterPageCount(b);
-    case "extras":
-      return getExtrasCount(a) - getExtrasCount(b);
-    case "photos":
-      return getPhotosCount(a) - getPhotosCount(b);
-    case "sender":
-      return compareStrings(a.metadata.sender, b.metadata.sender);
-    case "recipient":
-      return compareStrings(a.metadata.recipient, b.metadata.recipient);
-    case "collection":
-      return compareStrings(a.collectionCode, b.collectionCode);
-    case "letterDate":
-      return compareStrings(a.metadata.dateRaw ?? a.metadata.date, b.metadata.dateRaw ?? b.metadata.date);
-    case "createdAt":
-      return compareStrings(a.createdAt, b.createdAt);
-    case "updatedAt":
-      return compareStrings(a.updatedAt, b.updatedAt);
-    case "lastOpenedAt":
-      return compareStrings(a.lastOpenedAt, b.lastOpenedAt);
-    case "workflow":
-      return compareStrings(a.workflowState, b.workflowState);
-    case "visibility":
-      return compareStrings(a.visibility, b.visibility);
-    case "flagged":
-      return Number(a.flagged) - Number(b.flagged);
-  }
-}
-
-function compareStrings(a: string | undefined, b: string | undefined): number {
-  if (!a && !b) return 0;
-  if (!a) return 1;
-  if (!b) return -1;
-  return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
-}
-
-function getLetterPageCount(letter: Letter): number {
-  return letter.lettersCount ?? letter.images.filter((img) => img.type === "letter").length;
-}
-
-function getExtrasCount(letter: Letter): number {
-  return letter.extrasCount ?? letter.images.filter((img) => img.type !== "letter").length;
-}
-
-function getPhotosCount(letter: Letter): number {
-  return letter.photosCount ?? letter.images.filter((img) => img.type === "photo").length;
 }

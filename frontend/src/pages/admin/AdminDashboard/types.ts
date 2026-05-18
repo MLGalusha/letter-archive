@@ -6,6 +6,10 @@ export type ContentFilterView = "transcript" | "metadata" | "extras";
 
 export type FlaggedFilter = "ALL" | "FLAGGED" | "UNFLAGGED";
 
+export type MissingFilter = "sender" | "recipient" | "date";
+
+export type ContentShapeFilter = "extras" | "photos" | "cover" | "telegram";
+
 export type DashboardView = "letters" | "collections";
 
 export type ServerSortField =
@@ -18,9 +22,12 @@ export type ServerSortField =
   | "workflow"
   | "visibility"
   | "collection"
-  | "flagged";
+  | "flagged"
+  | "letters"
+  | "extras"
+  | "photos";
 
-export type ClientSortField = "letters" | "extras" | "photos";
+export type ClientSortField = never;
 
 export type ExtendedSortField = ServerSortField | ClientSortField;
 
@@ -84,6 +91,8 @@ export interface PersistedState {
   extraContentStatusFilters: string[];
   workflowFilters: string[];
   flaggedFilter: FlaggedFilter;
+  missingFilters: MissingFilter[];
+  contentShapeFilters: ContentShapeFilter[];
 }
 
 export interface DashboardViewState extends PersistedState {
@@ -126,4 +135,11 @@ export interface DashboardFilterStats {
   extraContentAiDraft: number;
   extraContentEdited: number;
   extraContentVerified: number;
+  missingSender: number;
+  missingRecipient: number;
+  missingDate: number;
+  hasExtras: number;
+  hasPhotos: number;
+  hasCover: number;
+  hasTelegram: number;
 }

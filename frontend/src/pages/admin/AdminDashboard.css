@@ -724,6 +724,15 @@
   gap: var(--spacing-sm);
 }
 
+.filter-section-heading h3 {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
 .filter-panel-section--advanced {
   background: color-mix(in srgb, var(--bg-light) 74%, var(--bg) 26%);
 }
@@ -1583,6 +1592,18 @@
   border-color: #fecdd3;
 }
 
+.filter-pill.filter-missing {
+  background: #fff7ed;
+  color: #9a3412;
+  border-color: #fed7aa;
+}
+
+.filter-pill.filter-content-shape {
+  background: #eef2ff;
+  color: #3730a3;
+  border-color: #c7d2fe;
+}
+
 /* Active state - strong visual indicator */
 .filter-pill.active {
   font-weight: 700;
@@ -1639,6 +1660,14 @@
 .filter-pill.filter-flagged.active,
 .filter-pill.filter-unflagged.active {
   background: #ffe4e6;
+}
+
+.filter-pill.filter-missing.active {
+  background: #ffedd5;
+}
+
+.filter-pill.filter-content-shape.active {
+  background: #e0e7ff;
 }
 
 /* Transcript status filter colors */

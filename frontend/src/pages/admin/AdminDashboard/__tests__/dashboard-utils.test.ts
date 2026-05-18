@@ -23,7 +23,7 @@ describe("admin dashboard utils", () => {
 
   it("detects server-sortable fields", () => {
     expect(isServerSortField("createdAt")).toBe(true);
-    expect(isServerSortField("letters")).toBe(false);
+    expect(isServerSortField("letters")).toBe(true);
   });
 
   it("combines transcript statuses for letter+extras correctly", () => {
@@ -90,18 +90,23 @@ describe("admin dashboard utils", () => {
       extraContentStatusFilters: ["EDITED"],
       workflowFilters: ["REVIEWED"],
       flaggedFilter: "FLAGGED",
+      missingFilters: ["sender", "date"],
+      contentShapeFilters: ["extras", "photos"],
     })).toMatchObject({
       collection: "003",
       visibility: "PUBLISHED",
       search: "molly",
-      sort: "createdAt",
-      sortOrder: "desc",
+      sort: "letters",
+      sortOrder: "asc",
+      sortRules: "letters:asc,createdAt:desc",
       year: 1886,
       dateTo: "18861231",
       transcriptStatus: "EMPTY,AI_DRAFT",
       extraContentStatus: "EDITED",
       workflow: "REVIEWED",
       flagged: "true",
+      missing: "sender,date",
+      contentShape: "extras,photos",
     });
   });
 
@@ -122,6 +127,8 @@ describe("admin dashboard utils", () => {
       extraContentStatusFilters: [],
       workflowFilters: [],
       flaggedFilter: "ALL" as const,
+      missingFilters: [],
+      contentShapeFilters: [],
     };
 
     savePersistedState(state);
@@ -159,6 +166,8 @@ describe("admin dashboard utils", () => {
         extraContentStatusFilters: [],
         workflowFilters: ["UPLOADED"],
         flaggedFilter: "FLAGGED",
+        missingFilters: [],
+        contentShapeFilters: [],
         visibleColumns: ["date", "collection", "visibility", "lastOpened"],
         columnOrder: ["date", "collection", "visibility", "lastOpened"],
       },

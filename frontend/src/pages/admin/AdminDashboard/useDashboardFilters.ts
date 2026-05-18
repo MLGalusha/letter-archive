@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StartProcessingOptions } from '../../../api/admin';
 import type { ContentStatus, WorkflowState } from '../../../types/Letter';
 import { loadPersistedState } from './utils';
-import type { ContentFilterView, DateMode, FlaggedFilter, VisibilityFilter } from './types';
+import type { ContentFilterView, ContentShapeFilter, DateMode, FlaggedFilter, MissingFilter, VisibilityFilter } from './types';
 
 export function useDashboardFilters() {
   const persistedState = useRef(loadPersistedState());
@@ -33,6 +33,12 @@ export function useDashboardFilters() {
   );
   const [flaggedFilter, setFlaggedFilter] = useState<FlaggedFilter>(
     persistedState.current.flaggedFilter ?? 'ALL',
+  );
+  const [missingFilters, setMissingFilters] = useState<MissingFilter[]>(
+    persistedState.current.missingFilters ?? [],
+  );
+  const [contentShapeFilters, setContentShapeFilters] = useState<ContentShapeFilter[]>(
+    persistedState.current.contentShapeFilters ?? [],
   );
   const [collectionFilter, setCollectionFilter] = useState<string>(
     persistedState.current.collectionFilter ?? 'all',
@@ -123,6 +129,22 @@ export function useDashboardFilters() {
     setFlaggedFilter((current) => (current === value ? 'ALL' : value));
   }, []);
 
+  const toggleMissingFilter = useCallback((value: MissingFilter) => {
+    setMissingFilters((previous) =>
+      previous.includes(value)
+        ? previous.filter((filter) => filter !== value)
+        : [...previous, value],
+    );
+  }, []);
+
+  const toggleContentShapeFilter = useCallback((value: ContentShapeFilter) => {
+    setContentShapeFilters((previous) =>
+      previous.includes(value)
+        ? previous.filter((filter) => filter !== value)
+        : [...previous, value],
+    );
+  }, []);
+
   const clearDateFilters = useCallback(() => {
     setYearFilter(null);
     setMonthFilter(null);
@@ -138,6 +160,8 @@ export function useDashboardFilters() {
     setMetadataStatusFilters([]);
     setExtraContentStatusFilters([]);
     setWorkflowFilters([]);
+    setMissingFilters([]);
+    setContentShapeFilters([]);
     setCollectionFilter('all');
     setCollectionInput('');
     setSearchInput('');
@@ -178,6 +202,12 @@ export function useDashboardFilters() {
     flaggedFilter,
     setFlaggedFilter,
     toggleFlaggedFilter,
+    missingFilters,
+    setMissingFilters,
+    toggleMissingFilter,
+    contentShapeFilters,
+    setContentShapeFilters,
+    toggleContentShapeFilter,
     collectionFilter,
     setCollectionFilter,
     yearFilter,
@@ -217,6 +247,8 @@ export interface DashboardFilterQueryFields {
   extraContentStatusFilters: ContentStatus[];
   workflowFilters: WorkflowState[];
   flaggedFilter: FlaggedFilter;
+  missingFilters: MissingFilter[];
+  contentShapeFilters: ContentShapeFilter[];
 }
 
 export function getDashboardFilterQueryFields(
@@ -236,6 +268,8 @@ export function getDashboardFilterQueryFields(
     extraContentStatusFilters: filters.extraContentStatusFilters,
     workflowFilters: filters.workflowFilters,
     flaggedFilter: filters.flaggedFilter,
+    missingFilters: filters.missingFilters,
+    contentShapeFilters: filters.contentShapeFilters,
   };
 }
 

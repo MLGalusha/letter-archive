@@ -29,6 +29,13 @@ const emptyStats: DashboardFilterStats = {
   extraContentAiDraft: 0,
   extraContentEdited: 0,
   extraContentVerified: 0,
+  missingSender: 0,
+  missingRecipient: 0,
+  missingDate: 0,
+  hasExtras: 0,
+  hasPhotos: 0,
+  hasCover: 0,
+  hasTelegram: 0,
 };
 
 function makeFilters(overrides: Partial<DashboardFilterControls> = {}): DashboardFilterControls {
@@ -49,6 +56,10 @@ function makeFilters(overrides: Partial<DashboardFilterControls> = {}): Dashboar
     toggleWorkflowFilter: vi.fn(),
     flaggedFilter: "ALL",
     toggleFlaggedFilter: vi.fn(),
+    missingFilters: [],
+    toggleMissingFilter: vi.fn(),
+    contentShapeFilters: [],
+    toggleContentShapeFilter: vi.fn(),
     dateMode: "specific",
     setDateMode: vi.fn(),
     hasDateFilter: false,
@@ -124,5 +135,27 @@ describe("DashboardFilterPanel", () => {
     });
 
     expect(handleCollectionInputChange).toHaveBeenLastCalledWith("123");
+  });
+
+  it("routes cleanup and content-shape filters through the filter controller", async () => {
+    const user = userEvent.setup();
+    const toggleMissingFilter = vi.fn();
+    const toggleContentShapeFilter = vi.fn();
+    const filters = makeFilters({ toggleMissingFilter, toggleContentShapeFilter });
+
+    renderFilterPanel({
+      filters,
+      stats: {
+        ...emptyStats,
+        missingSender: 4,
+        hasPhotos: 3,
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: "4 Missing sender" }));
+    await user.click(screen.getByRole("button", { name: "3 Has photos" }));
+
+    expect(toggleMissingFilter).toHaveBeenCalledWith("sender");
+    expect(toggleContentShapeFilter).toHaveBeenCalledWith("photos");
   });
 });

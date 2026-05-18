@@ -29,6 +29,13 @@ const emptyStats: DashboardFilterStats = {
   extraContentAiDraft: 0,
   extraContentEdited: 0,
   extraContentVerified: 0,
+  missingSender: 0,
+  missingRecipient: 0,
+  missingDate: 0,
+  hasExtras: 0,
+  hasPhotos: 0,
+  hasCover: 0,
+  hasTelegram: 0,
 };
 
 function makeFilters(overrides: Partial<DashboardFilterControls> = {}): DashboardFilterControls {
@@ -50,6 +57,10 @@ function makeFilters(overrides: Partial<DashboardFilterControls> = {}): Dashboar
     toggleWorkflowFilter: vi.fn(),
     flaggedFilter: "ALL",
     toggleFlaggedFilter: vi.fn(),
+    missingFilters: [],
+    toggleMissingFilter: vi.fn(),
+    contentShapeFilters: [],
+    toggleContentShapeFilter: vi.fn(),
     searchInput: "",
     setSearchInput: vi.fn(),
     searchQuery: "",

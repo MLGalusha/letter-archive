@@ -36,6 +36,8 @@ interface DashboardLetterQueryOptions {
   extraContentStatusFilters: ContentStatus[];
   workflowFilters: string[];
   flaggedFilter: FlaggedFilter;
+  missingFilters: string[];
+  contentShapeFilters: string[];
 }
 
 export function buildDashboardLetterQuery({
@@ -56,10 +58,15 @@ export function buildDashboardLetterQuery({
   extraContentStatusFilters,
   workflowFilters,
   flaggedFilter,
+  missingFilters,
+  contentShapeFilters,
 }: DashboardLetterQueryOptions): AdminLetterQueryParams {
-  const serverSort = sortColumns
-    .find((col): col is SortColumn & { field: ServerSortField } => isServerSortField(col.field));
+  const serverSortColumns = sortColumns
+    .filter((col): col is SortColumn & { field: ServerSortField } => isServerSortField(col.field));
   const fallbackSortField = isServerSortField(defaultSort.field) ? defaultSort.field : undefined;
+  const sortRules = serverSortColumns.length > 0
+    ? serverSortColumns.map((column) => `${column.field}:${column.direction}`).join(",")
+    : fallbackSortField ? `${fallbackSortField}:${defaultSort.direction}` : undefined;
 
   return {
     page,
@@ -67,8 +74,9 @@ export function buildDashboardLetterQuery({
     collection: collectionFilter === "all" ? undefined : collectionFilter,
     visibility: visibilityFilter !== "ALL" ? visibilityFilter : undefined,
     search: searchQuery || undefined,
-    sort: serverSort ? serverSort.field : fallbackSortField,
-    sortOrder: serverSort ? serverSort.direction : fallbackSortField ? defaultSort.direction : undefined,
+    sort: serverSortColumns[0]?.field ?? fallbackSortField,
+    sortOrder: serverSortColumns[0]?.direction ?? (fallbackSortField ? defaultSort.direction : undefined),
+    sortRules,
     year: yearFilter ?? undefined,
     month: monthFilter ?? undefined,
     day: dayFilter ?? undefined,
@@ -79,6 +87,8 @@ export function buildDashboardLetterQuery({
     extraContentStatus: extraContentStatusFilters.length > 0 ? extraContentStatusFilters.join(",") : undefined,
     workflow: workflowFilters.length > 0 ? workflowFilters.join(",") : undefined,
     flagged: flaggedFilter === "FLAGGED" ? "true" : flaggedFilter === "UNFLAGGED" ? "false" : undefined,
+    missing: missingFilters.length > 0 ? missingFilters.join(",") : undefined,
+    contentShape: contentShapeFilters.length > 0 ? contentShapeFilters.join(",") : undefined,
   };
 }
 
@@ -185,7 +195,7 @@ export function loadPersistedState(): Partial<PersistedState> {
       const parsed = JSON.parse(saved) as Partial<PersistedState>;
       // Filter out any unknown sort fields that may be stale in localStorage
       if (parsed.sortColumns) {
-        const validFields = new Set([...SERVER_SORT_FIELDS, 'letters', 'extras', 'photos']);
+        const validFields = new Set(SERVER_SORT_FIELDS);
         parsed.sortColumns = parsed.sortColumns.filter(
           sc => validFields.has(sc.field)
         );

@@ -24,6 +24,8 @@ const savedView: SavedDashboardView = {
     extraContentStatusFilters: [],
     workflowFilters: [],
     flaggedFilter: "ALL",
+    missingFilters: [],
+    contentShapeFilters: [],
     visibleColumns: [],
     columnOrder: [],
   },

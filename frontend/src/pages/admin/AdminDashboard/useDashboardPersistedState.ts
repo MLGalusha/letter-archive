@@ -25,6 +25,8 @@ export function useDashboardPersistedState({
     extraContentStatusFilters,
     workflowFilters,
     flaggedFilter,
+    missingFilters,
+    contentShapeFilters,
   } = filters;
 
   useEffect(() => {
@@ -44,6 +46,8 @@ export function useDashboardPersistedState({
       extraContentStatusFilters,
       workflowFilters,
       flaggedFilter,
+      missingFilters,
+      contentShapeFilters,
     });
   }, [
     visibilityFilter,
@@ -61,5 +65,7 @@ export function useDashboardPersistedState({
     extraContentStatusFilters,
     workflowFilters,
     flaggedFilter,
+    missingFilters,
+    contentShapeFilters,
   ]);
 }

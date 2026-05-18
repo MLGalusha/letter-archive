@@ -62,6 +62,10 @@ export function useDashboardSavedViewState({
     setWorkflowFilters,
     flaggedFilter,
     setFlaggedFilter,
+    missingFilters,
+    setMissingFilters,
+    contentShapeFilters,
+    setContentShapeFilters,
   } = filters;
 
   const getCurrentDashboardViewState = useCallback((): DashboardViewState => ({
@@ -80,6 +84,8 @@ export function useDashboardSavedViewState({
     extraContentStatusFilters,
     workflowFilters,
     flaggedFilter,
+    missingFilters,
+    contentShapeFilters,
     visibleColumns: Array.from(visibleColumns),
     columnOrder,
   }), [
@@ -98,6 +104,8 @@ export function useDashboardSavedViewState({
     extraContentStatusFilters,
     workflowFilters,
     flaggedFilter,
+    missingFilters,
+    contentShapeFilters,
     visibleColumns,
     columnOrder,
   ]);
@@ -120,6 +128,8 @@ export function useDashboardSavedViewState({
     setExtraContentStatusFilters((state.extraContentStatusFilters ?? []) as ContentStatus[]);
     setWorkflowFilters((state.workflowFilters ?? []) as WorkflowState[]);
     setFlaggedFilter(state.flaggedFilter ?? "ALL");
+    setMissingFilters(state.missingFilters ?? []);
+    setContentShapeFilters(state.contentShapeFilters ?? []);
     setVisibleColumns(new Set(state.visibleColumns));
     setColumnOrder(state.columnOrder ?? DEFAULT_COLUMN_ORDER);
   }, [
@@ -140,6 +150,8 @@ export function useDashboardSavedViewState({
     setExtraContentStatusFilters,
     setWorkflowFilters,
     setFlaggedFilter,
+    setMissingFilters,
+    setContentShapeFilters,
     setVisibleColumns,
     setColumnOrder,
   ]);

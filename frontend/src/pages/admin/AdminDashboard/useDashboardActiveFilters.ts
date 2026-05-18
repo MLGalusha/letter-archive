@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { ContentStatus, WorkflowState } from "../../../types/Letter";
-import { WORKFLOW_FILTERS } from "./constants";
-import type { FlaggedFilter, VisibilityFilter } from "./types";
+import { CONTENT_SHAPE_FILTERS, MISSING_FILTERS, WORKFLOW_FILTERS } from "./constants";
+import type { ContentShapeFilter, FlaggedFilter, MissingFilter, VisibilityFilter } from "./types";
 
 export interface DashboardFilterChip {
   key: string;
@@ -18,6 +18,8 @@ interface UseDashboardActiveFiltersOptions {
   extraContentStatusFilters: ContentStatus[];
   workflowFilters: WorkflowState[];
   flaggedFilter: FlaggedFilter;
+  missingFilters: MissingFilter[];
+  contentShapeFilters: ContentShapeFilter[];
   hasDateFilter: boolean;
   toggleVisibilityFilter: (value: "PUBLISHED" | "HIDDEN") => void;
   handleCollectionInputChange: (value: string) => void;
@@ -30,6 +32,8 @@ interface UseDashboardActiveFiltersOptions {
   toggleExtraContentFilter: (value: ContentStatus) => void;
   toggleWorkflowFilter: (value: WorkflowState) => void;
   toggleFlaggedFilter: (value: Exclude<FlaggedFilter, "ALL">) => void;
+  toggleMissingFilter: (value: MissingFilter) => void;
+  toggleContentShapeFilter: (value: ContentShapeFilter) => void;
 }
 
 function formatContentStatusLabel(status: ContentStatus) {
@@ -41,6 +45,14 @@ function formatWorkflowLabel(workflow: WorkflowState) {
   return option?.label ?? workflow.toLowerCase().replace(/_/g, " ");
 }
 
+function formatMissingFilterLabel(filter: MissingFilter) {
+  return MISSING_FILTERS.find((option) => option.value === filter)?.label ?? filter;
+}
+
+function formatContentShapeFilterLabel(filter: ContentShapeFilter) {
+  return CONTENT_SHAPE_FILTERS.find((option) => option.value === filter)?.label ?? filter;
+}
+
 export function useDashboardActiveFilters({
   collectionFilter,
   visibilityFilter,
@@ -50,6 +62,8 @@ export function useDashboardActiveFilters({
   extraContentStatusFilters,
   workflowFilters,
   flaggedFilter,
+  missingFilters,
+  contentShapeFilters,
   hasDateFilter,
   toggleVisibilityFilter,
   handleCollectionInputChange,
@@ -62,6 +76,8 @@ export function useDashboardActiveFilters({
   toggleExtraContentFilter,
   toggleWorkflowFilter,
   toggleFlaggedFilter,
+  toggleMissingFilter,
+  toggleContentShapeFilter,
 }: UseDashboardActiveFiltersOptions) {
   const activeFilterChips = useMemo<DashboardFilterChip[]>(() => {
     const chips: DashboardFilterChip[] = [];
@@ -141,6 +157,22 @@ export function useDashboardActiveFilters({
       });
     });
 
+    missingFilters.forEach((filter) => {
+      chips.push({
+        key: `missing-${filter}`,
+        label: formatMissingFilterLabel(filter),
+        onRemove: () => toggleMissingFilter(filter),
+      });
+    });
+
+    contentShapeFilters.forEach((filter) => {
+      chips.push({
+        key: `content-shape-${filter}`,
+        label: formatContentShapeFilterLabel(filter),
+        onRemove: () => toggleContentShapeFilter(filter),
+      });
+    });
+
     return chips;
   }, [
     visibilityFilter,
@@ -152,6 +184,8 @@ export function useDashboardActiveFilters({
     extraContentStatusFilters,
     workflowFilters,
     flaggedFilter,
+    missingFilters,
+    contentShapeFilters,
     toggleVisibilityFilter,
     handleCollectionInputChange,
     setSearchInput,
@@ -163,6 +197,8 @@ export function useDashboardActiveFilters({
     toggleExtraContentFilter,
     toggleWorkflowFilter,
     toggleFlaggedFilter,
+    toggleMissingFilter,
+    toggleContentShapeFilter,
   ]);
 
   const activeFilterCount = activeFilterChips.length;

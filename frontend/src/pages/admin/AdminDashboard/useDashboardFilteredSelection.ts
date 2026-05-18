@@ -80,6 +80,8 @@ export function useDashboardFilteredSelection({
     filterQueryFields.extraContentStatusFilters,
     filterQueryFields.workflowFilters,
     filterQueryFields.flaggedFilter,
+    filterQueryFields.missingFilters,
+    filterQueryFields.contentShapeFilters,
   ]);
 
   const handleSelectAllFiltered = async () => {

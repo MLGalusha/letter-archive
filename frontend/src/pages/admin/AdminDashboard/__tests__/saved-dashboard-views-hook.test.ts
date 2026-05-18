@@ -21,6 +21,8 @@ function makeState(overrides: Partial<DashboardViewState> = {}): DashboardViewSt
     extraContentStatusFilters: [],
     workflowFilters: [],
     flaggedFilter: "ALL",
+    missingFilters: [],
+    contentShapeFilters: [],
     visibleColumns: ["sender", "recipient"],
     columnOrder: ["sender", "recipient"],
     ...overrides,

@@ -1,7 +1,9 @@
 import Icon from "../../../components/common/Icon";
+import ContentShapeFilterSection from "./ContentShapeFilterSection";
 import ContentStatusFilterSection from "./ContentStatusFilterSection";
 import DashboardDateFilterControl from "./DashboardDateFilterControl";
 import FlaggedFilterSection from "./FlaggedFilterSection";
+import MissingDataFilterSection from "./MissingDataFilterSection";
 import VisibilityFilterSection from "./VisibilityFilterSection";
 import WorkflowFilterSection from "./WorkflowFilterSection";
 import type { DashboardFilterStats } from "./types";
@@ -45,6 +47,10 @@ export default function DashboardFilterPanel({
     toggleWorkflowFilter,
     flaggedFilter,
     toggleFlaggedFilter,
+    missingFilters,
+    toggleMissingFilter,
+    contentShapeFilters,
+    toggleContentShapeFilter,
     dateMode,
     setDateMode,
     hasDateFilter,
@@ -97,6 +103,18 @@ export default function DashboardFilterPanel({
         stats={stats}
         workflowFilters={workflowFilters}
         toggleWorkflowFilter={toggleWorkflowFilter}
+      />
+
+      <MissingDataFilterSection
+        stats={stats}
+        missingFilters={missingFilters}
+        toggleMissingFilter={toggleMissingFilter}
+      />
+
+      <ContentShapeFilterSection
+        stats={stats}
+        contentShapeFilters={contentShapeFilters}
+        toggleContentShapeFilter={toggleContentShapeFilter}
       />
 
       <ContentStatusFilterSection

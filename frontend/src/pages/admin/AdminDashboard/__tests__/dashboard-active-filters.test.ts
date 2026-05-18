@@ -12,6 +12,8 @@ function renderActiveFilters(overrides: Partial<Parameters<typeof useDashboardAc
     extraContentStatusFilters: [],
     workflowFilters: [],
     flaggedFilter: "ALL",
+    missingFilters: [],
+    contentShapeFilters: [],
     hasDateFilter: false,
     toggleVisibilityFilter: vi.fn(),
     handleCollectionInputChange: vi.fn(),
@@ -24,6 +26,8 @@ function renderActiveFilters(overrides: Partial<Parameters<typeof useDashboardAc
     toggleExtraContentFilter: vi.fn(),
     toggleWorkflowFilter: vi.fn(),
     toggleFlaggedFilter: vi.fn(),
+    toggleMissingFilter: vi.fn(),
+    toggleContentShapeFilter: vi.fn(),
     ...overrides,
   };
 
@@ -44,11 +48,13 @@ describe("useDashboardActiveFilters", () => {
       extraContentStatusFilters: ["VERIFIED"],
       workflowFilters: ["METADATA_DRAFTED"],
       flaggedFilter: "FLAGGED",
+      missingFilters: ["sender", "date"],
+      contentShapeFilters: ["photos"],
       hasDateFilter: true,
       getDateButtonText: () => "1886",
     });
 
-    expect(result.current.activeFilterCount).toBe(9);
+    expect(result.current.activeFilterCount).toBe(12);
     expect(result.current.activeFilterChips.map((chip) => chip.label)).toEqual([
       "Published",
       "Flagged",
@@ -59,6 +65,9 @@ describe("useDashboardActiveFilters", () => {
       "Metadata edited",
       "Extras verified",
       "Pipeline: Metadata drafted",
+      "Missing sender",
+      "Missing date",
+      "Has photos",
     ]);
   });
 
@@ -70,6 +79,8 @@ describe("useDashboardActiveFilters", () => {
     const setSearchQuery = vi.fn();
     const clearDateFilters = vi.fn();
     const toggleTranscriptFilter = vi.fn();
+    const toggleMissingFilter = vi.fn();
+    const toggleContentShapeFilter = vi.fn();
 
     const { result } = renderActiveFilters({
       collectionFilter: "009",
@@ -77,6 +88,8 @@ describe("useDashboardActiveFilters", () => {
       searchQuery: "jimmie",
       transcriptStatusFilters: ["EMPTY"],
       flaggedFilter: "UNFLAGGED",
+      missingFilters: ["recipient"],
+      contentShapeFilters: ["telegram"],
       hasDateFilter: true,
       getDateButtonText: () => "1947",
       toggleVisibilityFilter,
@@ -86,6 +99,8 @@ describe("useDashboardActiveFilters", () => {
       setSearchQuery,
       clearDateFilters,
       toggleTranscriptFilter,
+      toggleMissingFilter,
+      toggleContentShapeFilter,
     });
 
     for (const chip of result.current.activeFilterChips) {
@@ -99,5 +114,7 @@ describe("useDashboardActiveFilters", () => {
     expect(setSearchQuery).toHaveBeenCalledWith("");
     expect(clearDateFilters).toHaveBeenCalled();
     expect(toggleTranscriptFilter).toHaveBeenCalledWith("EMPTY");
+    expect(toggleMissingFilter).toHaveBeenCalledWith("recipient");
+    expect(toggleContentShapeFilter).toHaveBeenCalledWith("telegram");
   });
 });

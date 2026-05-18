@@ -31,6 +31,9 @@ export const SERVER_SORT_FIELDS = [
   "visibility",
   "collection",
   "flagged",
+  "letters",
+  "extras",
+  "photos",
 ] as const;
 
 export const DEFAULT_DASHBOARD_SORT: SortColumn = {
@@ -158,6 +161,54 @@ export const WORKFLOW_FILTERS: Array<{
     className: "filter-reviewed",
   },
 ];
+
+export const MISSING_FILTERS = [
+  {
+    value: "sender",
+    label: "Missing sender",
+    countKey: "missingSender",
+    className: "filter-missing",
+  },
+  {
+    value: "recipient",
+    label: "Missing recipient",
+    countKey: "missingRecipient",
+    className: "filter-missing",
+  },
+  {
+    value: "date",
+    label: "Missing date",
+    countKey: "missingDate",
+    className: "filter-missing",
+  },
+] as const;
+
+export const CONTENT_SHAPE_FILTERS = [
+  {
+    value: "extras",
+    label: "Has extras",
+    countKey: "hasExtras",
+    className: "filter-content-shape",
+  },
+  {
+    value: "photos",
+    label: "Has photos",
+    countKey: "hasPhotos",
+    className: "filter-content-shape",
+  },
+  {
+    value: "cover",
+    label: "Has cover",
+    countKey: "hasCover",
+    className: "filter-content-shape",
+  },
+  {
+    value: "telegram",
+    label: "Has telegram",
+    countKey: "hasTelegram",
+    className: "filter-content-shape",
+  },
+] as const;
 
 export const CONTENT_STATUS_FILTERS = [
   {

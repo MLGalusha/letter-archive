@@ -55,6 +55,8 @@ function makeViewState(overrides: Partial<DashboardViewState> = {}): DashboardVi
     extraContentStatusFilters: [],
     workflowFilters: [],
     flaggedFilter: "ALL",
+    missingFilters: [],
+    contentShapeFilters: [],
     visibleColumns: ["sender", "recipient"],
     columnOrder: ["sender", "recipient"],
     ...overrides,
@@ -92,6 +94,8 @@ describe("useDashboardSavedViewState", () => {
       result.current.filters.setExtraContentStatusFilters(["VERIFIED"]);
       result.current.filters.setWorkflowFilters(["METADATA_DRAFTED"]);
       result.current.filters.setFlaggedFilter("FLAGGED");
+      result.current.filters.setMissingFilters(["sender", "date"]);
+      result.current.filters.setContentShapeFilters(["extras", "photos"]);
       result.current.setSortColumns([{ field: "letterDate", direction: "asc" }]);
     });
 
@@ -112,6 +116,8 @@ describe("useDashboardSavedViewState", () => {
       extraContentStatusFilters: ["VERIFIED"],
       workflowFilters: ["METADATA_DRAFTED"],
       flaggedFilter: "FLAGGED",
+      missingFilters: ["sender", "date"],
+      contentShapeFilters: ["extras", "photos"],
       visibleColumns: ["sender", "date"],
       columnOrder: ["date", "sender"],
     });
@@ -134,6 +140,8 @@ describe("useDashboardSavedViewState", () => {
       extraContentStatusFilters: undefined,
       workflowFilters: undefined,
       flaggedFilter: undefined,
+      missingFilters: undefined,
+      contentShapeFilters: undefined,
       columnOrder: undefined,
     } as Partial<DashboardViewState>);
 
@@ -152,6 +160,8 @@ describe("useDashboardSavedViewState", () => {
     expect(result.current.filters.extraContentStatusFilters).toEqual([]);
     expect(result.current.filters.workflowFilters).toEqual([]);
     expect(result.current.filters.flaggedFilter).toBe("ALL");
+    expect(result.current.filters.missingFilters).toEqual([]);
+    expect(result.current.filters.contentShapeFilters).toEqual([]);
     expect(result.current.sortColumns).toEqual([{ field: "sender", direction: "asc" }]);
     expect([...result.current.visibleColumns]).toEqual(["recipient", "visibility"]);
     expect(result.current.columnOrder).toEqual(DEFAULT_COLUMN_ORDER);

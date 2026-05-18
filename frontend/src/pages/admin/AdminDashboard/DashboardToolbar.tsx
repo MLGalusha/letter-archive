@@ -71,6 +71,10 @@ export default function DashboardToolbar({
     toggleWorkflowFilter,
     flaggedFilter,
     toggleFlaggedFilter,
+    missingFilters,
+    toggleMissingFilter,
+    contentShapeFilters,
+    toggleContentShapeFilter,
     collectionFilter,
     searchInput,
     setSearchInput,
@@ -90,6 +94,8 @@ export default function DashboardToolbar({
     extraContentStatusFilters,
     workflowFilters,
     flaggedFilter,
+    missingFilters,
+    contentShapeFilters,
     hasDateFilter,
     toggleVisibilityFilter,
     handleCollectionInputChange,
@@ -102,6 +108,8 @@ export default function DashboardToolbar({
     toggleExtraContentFilter,
     toggleWorkflowFilter,
     toggleFlaggedFilter,
+    toggleMissingFilter,
+    toggleContentShapeFilter,
   });
 
   return (

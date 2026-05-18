@@ -38,6 +38,8 @@ function makeFilters(): DashboardFilterControls {
     extraContentStatusFilters: [],
     workflowFilters: [],
     flaggedFilter: "ALL",
+    missingFilters: [],
+    contentShapeFilters: [],
   } as unknown as DashboardFilterControls;
 }
 

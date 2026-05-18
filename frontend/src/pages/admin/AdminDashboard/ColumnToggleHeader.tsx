@@ -3,14 +3,6 @@ import type { DragEvent, KeyboardEvent, RefObject } from "react";
 import { Icon } from "../../../components/common/Icon";
 import type { ColumnDef, ColumnId } from "./types";
 
-const COLUMN_GROUP_LABELS: Record<ColumnDef["group"], string> = {
-  core: "Core fields",
-  workflow: "Workflow status",
-  admin: "Admin activity",
-  counts: "Grouped counts",
-  contentTypes: "File type counts",
-};
-
 interface ColumnToggleHeaderProps {
   orderedColumns: ColumnDef[];
   visibleColumns: Set<ColumnId>;
@@ -101,48 +93,37 @@ export default function ColumnToggleHeader({
               Reset
             </button>
           </div>
-          {orderedColumns.map((col, index) => {
-            const previousColumn = orderedColumns[index - 1];
-            const showGroupLabel = !previousColumn || previousColumn.group !== col.group;
-
-            return (
-              <div key={col.id} className="column-toggle-group">
-                {showGroupLabel && (
-                  <div className="column-toggle-group-label">
-                    {COLUMN_GROUP_LABELS[col.group]}
-                  </div>
-                )}
-                <div
-                  className={`column-toggle-item ${draggedColumn === col.id ? "is-dragging" : ""} ${dropTargetColumn === col.id ? "is-drop-target" : ""}`}
-                  onDragOver={(event) => handleDragOver(event, col.id)}
-                  onDrop={(event) => handleDrop(event, col.id)}
-                  onDragEnd={handleDragEnd}
-                >
-                  <button
-                    type="button"
-                    className="column-order-handle"
-                    draggable={orderedColumns.length > 1}
-                    onDragStart={(event) => handleDragStart(event, col.id)}
-                    onDragEnd={handleDragEnd}
-                    onKeyDown={(event) => handleReorderKeyDown(event, col)}
-                    aria-label={`Drag to reorder ${col.label}. Use arrow keys to move.`}
-                    title="Drag to reorder. Arrow keys also move this column."
-                    disabled={orderedColumns.length < 2 || (index === 0 && orderedColumns.length === 1)}
-                  >
-                    <Icon name="grip-vertical" size={15} />
-                  </button>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={visibleColumns.has(col.id)}
-                      onChange={() => onToggleColumn(col.id)}
-                    />
-                    <span>{col.label}</span>
-                  </label>
-                </div>
-              </div>
-            );
-          })}
+          {orderedColumns.map((col, index) => (
+            <div
+              key={col.id}
+              className={`column-toggle-item ${draggedColumn === col.id ? "is-dragging" : ""} ${dropTargetColumn === col.id ? "is-drop-target" : ""}`}
+              onDragOver={(event) => handleDragOver(event, col.id)}
+              onDrop={(event) => handleDrop(event, col.id)}
+              onDragEnd={handleDragEnd}
+            >
+              <button
+                type="button"
+                className="column-order-handle"
+                draggable={orderedColumns.length > 1}
+                onDragStart={(event) => handleDragStart(event, col.id)}
+                onDragEnd={handleDragEnd}
+                onKeyDown={(event) => handleReorderKeyDown(event, col)}
+                aria-label={`Drag to reorder ${col.label}. Use arrow keys to move.`}
+                title="Drag to reorder. Arrow keys also move this column."
+                disabled={orderedColumns.length < 2 || (index === 0 && orderedColumns.length === 1)}
+              >
+                <Icon name="grip-vertical" size={15} />
+              </button>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.has(col.id)}
+                  onChange={() => onToggleColumn(col.id)}
+                />
+                <span>{col.label}</span>
+              </label>
+            </div>
+          ))}
         </div>
       )}
     </th>

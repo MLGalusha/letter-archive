@@ -51,9 +51,9 @@ describe("RecentActivityTable", () => {
             "created",
           ]),
           orderedColumns: [
-            { id: "sender", label: "Sender", group: "core", defaultVisible: true },
-            { id: "recipient", label: "Recipient", group: "core", defaultVisible: true },
-            { id: "date", label: "Letter date", group: "core", defaultVisible: true },
+            { id: "sender", label: "Sender", defaultVisible: true },
+            { id: "recipient", label: "Recipient", defaultVisible: true },
+            { id: "date", label: "Letter date", defaultVisible: true },
           ],
           showColumnMenu: false,
           onToggleColumnMenu: vi.fn(),

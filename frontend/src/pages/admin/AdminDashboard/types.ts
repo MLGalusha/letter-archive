@@ -65,7 +65,6 @@ export type ColumnId =
 export interface ColumnDef {
   id: ColumnId;
   label: string;
-  group: "core" | "workflow" | "admin" | "counts" | "contentTypes";
   defaultVisible: boolean;
 }
 

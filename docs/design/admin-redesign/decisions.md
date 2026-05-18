@@ -34,7 +34,7 @@ A saved view should preserve filters, sort state, and visible columns. It should
 
 Column order is part of the dashboard view model. Use a single drag-handle affordance in the column menu instead of separate up/down arrow buttons; arrow-key support remains available for keyboard users.
 
-Column picker labels should describe the admin-facing meaning, not the internal field name. Keep persisted column IDs stable, but group and rename visible choices so count columns, workflow status columns, admin activity columns, and file-type columns are not confused with each other.
+Column picker labels should describe the admin-facing meaning, not the internal field name. Keep persisted column IDs stable. Do not use fixed group headers inside the reorderable column list because custom order can split groups and make repeated headers confusing.
 
 ### Data Table Controls
 

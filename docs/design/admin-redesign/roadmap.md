@@ -363,7 +363,7 @@ Progress:
 - Refactored table header and row rendering to consume one shared ordered column list, preventing header/body drift.
 - Browser-verified that moving a column updates both header and row order together and persists to local storage.
 - Refined the column menu so the grip is the only drag start, but the full row is the dragged/drop target object. This matches the sort manager interaction and keeps checkbox toggling separate from reordering.
-- Audited the selectable column labels. The column picker now keeps stable internal IDs but presents clearer labels and groups: core fields, workflow status, admin activity, grouped counts, and file type counts.
+- Audited the selectable column labels. The column picker now keeps stable internal IDs and clearer labels without fixed group headers, because user-controlled reordering makes persistent section labels misleading.
 
 Column naming decisions:
 

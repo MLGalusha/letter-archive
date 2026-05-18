@@ -92,6 +92,10 @@ Progress:
 - Column settings initialization no longer reads from a ref during render, keeping the touched dashboard column hook compatible with the React Compiler lint rules.
 - Column manager wiring now separates trigger toggling from explicit close behavior, matching the shared manager surface contract and avoiding accidental state inversion.
 - Sort add-rule state now reflects the current single-picker design instead of carrying the older generic multi-picker registry shape.
+- Active-filter summary construction now has one source of truth: the chip list drives the displayed count, clear-all visibility, and component state.
+- Toolbar-level tests now cover mobile filter open/close wiring, active search-chip clearing, and hiding letter-only controls when switching to Collections.
+- Saved dashboard view integration now has coverage for capturing/restoring filters, sorting, visible columns, column order, and legacy saved-view fallbacks through the dashboard state hook.
+- Dashboard sort option metadata, default directions, equality checks, and button summaries are split into a pure sort model with focused tests.
 
 Out of scope:
 
@@ -464,6 +468,7 @@ Phase 3.25 progress:
 - Made the Sort manager's nested add-rule picker open upward from the mobile sheet footer, so bottom-sheet managers do not rely on off-screen downward dropdown behavior.
 - Moved Sort manager draft initialization into the open interaction instead of synchronizing state from an effect, preserving staged-edit behavior while satisfying the local ESLint/React Compiler rule.
 - Reworked the Date filter from a nested dropdown inside Filters into an inline filter-panel section, removing the date dropdown ref/outside-click state and making mobile filter scrolling simpler.
+- Fixed Sort manager visible direction text so it uses the same field-aware label as the accessible toggle name, avoiding mismatches such as a newest-first sort displaying as "ascending."
 
 Related responsive UI progress:
 

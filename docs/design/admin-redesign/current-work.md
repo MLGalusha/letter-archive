@@ -13,32 +13,31 @@ This file tracks autonomous implementation slices for the admin dashboard redesi
 
 ## Current Phase
 
-Phase 2.75/3 dependency: Selection and Bulk Actions, because responsive table completion depends on a coherent selection model.
+Phase 3/3.25 dependency: dashboard manager and responsive-table reliability after selection groundwork.
 
 ## Current Slice
 
-Selection and bulk-action audit.
+Dashboard control reliability and state-boundary cleanup.
 
 Why this is next:
 
-- The roadmap identifies selection and bulk actions as a dedicated unresolved interaction system, not checkbox styling.
-- Mobile horizontal scrolling and selected-row affordances are coupled.
-- The dashboard cannot be considered responsive-table complete while selection behavior is visually and structurally transitional.
+- Selection groundwork exposed the dashboard's highest-risk shared surfaces: toolbar managers, active chips, saved views, sort, and bulk actions.
+- These surfaces coordinate mobile sheets, desktop controls, persisted state, table state, and selected-state actions.
+- Before broader visual polish, the state boundaries need tests and single-source-of-truth helpers so future UI changes do not reintroduce drift.
 
 Definition of done:
 
-- Current selection behavior is documented across row click, checkbox click, shift selection, drag selection, select page, select all filtered, clear selection, copy/edit mode, and bulk toolbar visibility.
-- Current code ownership is mapped across hooks/components.
-- Risks and product-level decisions are separated from safe implementation work.
-- Next implementation slices are listed with completion criteria.
-- No behavior-changing UI implementation occurs before the model is clear.
+- Toolbar, active chip, sort, saved-view, selection, and bulk-action behavior have focused coverage around their state boundaries.
+- Pure dashboard models are separated from UI components where that clearly improves reuse and testability.
+- Browser smoke checks cover mobile and desktop manager surfaces after meaningful UI changes.
+- Roadmap and idea logs reflect completed checkpoints and deferred product/code-quality ideas.
 
 Verification plan:
 
-- Read selection and bulk-action code paths.
-- Run existing focused tests.
-- Use Playwright smoke checks on desktop and mobile for current behavior.
-- Update roadmap/decisions if the audit clarifies the target model.
+- Run focused tests for touched dashboard controls and hooks.
+- Run full frontend tests and production build before final handoff.
+- Use Playwright smoke checks for mobile and desktop manager surfaces.
+- Update roadmap/current-work/idea-log when a checkpoint or deferred idea becomes clear.
 
 ## Progress Log
 

@@ -33,6 +33,11 @@ export default function ColumnToggleHeader({
     setDraggedColumn(columnId);
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", columnId);
+
+    const row = event.currentTarget.closest(".column-toggle-item");
+    if (row instanceof HTMLElement) {
+      event.dataTransfer.setDragImage(row, 16, 16);
+    }
   };
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>, columnId: ColumnId) => {
@@ -94,6 +99,7 @@ export default function ColumnToggleHeader({
               className={`column-toggle-item ${draggedColumn === col.id ? "is-dragging" : ""} ${dropTargetColumn === col.id ? "is-drop-target" : ""}`}
               onDragOver={(event) => handleDragOver(event, col.id)}
               onDrop={(event) => handleDrop(event, col.id)}
+              onDragEnd={handleDragEnd}
             >
               <label>
                 <input
@@ -106,7 +112,7 @@ export default function ColumnToggleHeader({
               <button
                 type="button"
                 className="column-order-handle"
-                draggable
+                draggable={orderedColumns.length > 1}
                 onDragStart={(event) => handleDragStart(event, col.id)}
                 onDragEnd={handleDragEnd}
                 onKeyDown={(event) => handleReorderKeyDown(event, col)}

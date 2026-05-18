@@ -362,6 +362,7 @@ Progress:
 - Updated saved dashboard views to capture and restore column order.
 - Refactored table header and row rendering to consume one shared ordered column list, preventing header/body drift.
 - Browser-verified that moving a column updates both header and row order together and persists to local storage.
+- Refined the column menu so the grip is the only drag start, but the full row is the dragged/drop target object. This matches the sort manager interaction and keeps checkbox toggling separate from reordering.
 
 ## Phase 3 - Dashboard Responsive UI
 

@@ -106,7 +106,7 @@ Out of scope:
 
 ## Phase 2.5 - Dashboard Filter Model Review
 
-Status: active
+Status: completed
 
 Goals:
 
@@ -133,16 +133,14 @@ Target data-table control model:
 - Mobile should use the manager/sheet pattern first, because horizontal header interactions are less discoverable and harder to hit.
 - The implementation should keep one source of truth for filter, sort, column visibility, and column order state so saved views and select-all-filtered behavior do not drift.
 
-Current audit findings:
+Resolved audit findings:
 
-- The admin letters API already supports collection, visibility, search, date components, date ranges, transcript status, metadata status, workflow, flagged, extra content status, and one server sort at a time.
-- The frontend dashboard currently exposes collection, visibility, search, date, transcript status, metadata status, saved views, visible columns, and a shared sort stack.
-- The frontend API type already has `flagged`, but the dashboard filter adapter does not expose it yet.
-- The backend supports `extraContentStatus`, but the frontend API type and dashboard state do not expose it yet.
-- The API stats response includes flagged and extra-content status counts, but the dashboard normalized stats currently only maps flagged, transcript, and metadata counts.
-- Data-completeness filters such as missing sender, missing recipient, and missing date are not supported by the admin letters API yet and would require backend query additions.
+- The admin letters API supports collection, visibility, search, date components, date ranges, transcript status, metadata status, workflow, flagged, extra-content status, cleanup filters, content-shape filters, and ordered server-side sort rules.
+- The frontend dashboard exposes collection, visibility, search, date, transcript status, metadata status, cleanup, content-shape, saved views, visible columns, and a shared sort stack.
+- Flagged, workflow, extra-content status, cleanup, and content-shape filters are now wired through backend query support, frontend query construction, active filter chips, saved dashboard views, persisted dashboard state, stats normalization, select-all-filtered, and the desktop/mobile filter panel.
+- Cleanup filters are missing sender, missing recipient, and missing parsed date. Missing collection was not added because `letters.collection_id` is required and there is not currently a meaningful uncategorized letter state.
+- Content-shape filters are has extras, has photos, has cover, and has telegram. They use server-side grouped item/page existence, not current-page row data.
 - Entity-style filters such as mentioned person, place, topic, tone, and relationship exist in public archive search patterns, but are not currently wired into the admin letters endpoint.
-- Content-shape filters such as has photos, has extras, has cover, or has telegram are visible in row count/column data but are not currently query filters.
 
 Progress:
 
@@ -150,6 +148,9 @@ Progress:
 - Wired the new filters through API query construction, active filter chips, saved dashboard views, persisted dashboard state, stats normalization, select-all-filtered, and the desktop/mobile filter panel.
 - Expanded admin letters stats with exact workflow buckets so workflow filters can show useful counts.
 - Reframed workflow filters as advanced stored pipeline-stage filters with clearer labels, because they are not the same as live queue/running worker state.
+- Added cleanup/data-quality filters: missing sender, missing recipient, and missing parsed date.
+- Added content-shape filters backed by actual grouped item/page existence: has extras, has photos, has cover, and has telegram.
+- Added stats buckets for cleanup and content-shape filters so filter controls use the same contract as the query.
 
 Sort-model questions:
 
@@ -159,22 +160,21 @@ Sort-model questions:
 - How should sort rules be reordered, removed, and restored in saved dashboard views?
 - Which page-only sorts should remain visible after server-backed count sorts are implemented?
 
-Sort audit findings:
+Resolved sort audit findings:
 
-- The backend only supports one server-side sort field and direction per admin letters request.
-- The dashboard sort state can hold multiple sort columns, but only one server-sort column can be sent to the API today.
-- Count sorts for letters, extras, and photos are applied client-side after the paginated server response, which means they only sort the current page rather than the full filtered result set.
+- The backend now accepts ordered `sortRules` while keeping the legacy one-field `sort`/`sortOrder` params as fallback compatibility.
+- The dashboard sends the full ranked Sort manager stack to the API.
+- Count sorts for letters, extras, and photos are now applied server-side before pagination.
 - Column-header sorting created a duplicate-feeling sort path and should be removed in favor of one Supabase-style sort manager.
 
 Sort-model decision:
 
 - Short term: make the toolbar `Sort` manager the only dashboard sorting surface.
 - Short term: support adding, removing, reordering, and toggling sort rules in that manager.
-- Short term: send the first server-backed rule to the API and label later rules as current-page refinement until backend multi-sort exists.
+- Short term: send the full ordered rule stack to the API for all currently exposed dashboard sort fields.
 - Short term: keep sort popover edits as a draft until the user clicks `Apply sorting`, so arranging rules does not refetch/reorder the table mid-edit.
 - Target direction: replace the dropdown-feeling sort control with a Supabase-style `Sort` manager that shows ordered sort rules.
-- Target direction: avoid exposing true multi-sort until the API can apply it server-side across the full filtered result set.
-- Future backend slice: implement server-backed ranked multi-sort so the full ordered sort stack is applied before pagination, not just within the currently loaded page.
+- Target direction: keep Sort manager fields server-backed across the full filtered result set.
 
 Progress:
 
@@ -184,28 +184,27 @@ Progress:
 - Replaced native browser sort-field selects with an in-app menu and renamed the add control to `Add sort rule`.
 - Existing sort rules now render as fixed ranked rows instead of nested field dropdowns; the field picker only appears when adding another rule.
 - Sort manager now has an apply-step interaction: draft rule edits are staged in the popover and committed through `Apply sorting`.
-- Kept the backend limitation explicit: the first server-backed rule drives the API request; additional rules refine the currently loaded page until backend multi-sort is implemented.
+- Replaced page-only secondary sorting with backend ranked multi-sort for the current Sort manager fields.
+- Preserved the older `sort`/`sortOrder` request shape as a fallback while adding `sortRules` for ordered rules.
 - Removed stale table-header sort affordance styling so column headers no longer look like a second sorting path.
 
 Exit criteria:
 
-- A narrowed filter set is approved before implementation.
-- Each accepted filter has a clear source of truth and query strategy.
-- Saved dashboard views include any new accepted filter state.
-- The accepted sort model has one shared state, clear mobile behavior, and no duplicate-feeling controls.
+- A narrowed filter set is approved before implementation. Completed for cleanup/content-shape filters.
+- Each accepted filter has a clear source of truth and query strategy. Completed through the admin letters API query contract.
+- Saved dashboard views include any new accepted filter state. Completed.
+- The accepted sort model has one shared state, clear mobile behavior, and no duplicate-feeling controls. Completed for the current dashboard Sort manager.
 
 Deferred filter slice:
 
-- Missing sender, missing recipient, and missing date should be implemented after this dashboard UI pass as cleanup filters with explicit backend query support.
-- Has photos, has extras, has cover, and has telegram should be implemented after this dashboard UI pass as content-shape filters backed by server-side grouped letter counts/types, not current-page client data.
-- These deferred filters should be planned before broader admin rollout so they can reuse the finished dashboard filter model instead of creating another one-off filter pattern.
+- Missing collection remains deferred until there is a real uncategorized/missing-collection state. `letters.collection_id` is required today.
 - Column-local filter actions should be considered after the filter manager state is stable. Examples: filter this sender, filter this recipient, filter this collection, filter this status, show blank values, or show nonblank values.
+- Entity/historical filters such as sender, recipient, mentioned person, place, topic, tone, and relationship remain deferred because they need picker/index/query decisions beyond the cleanup-filter contract.
 
 Deferred sort slice:
 
-- Add server-backed ranked multi-sort after the current dashboard UI pass. The admin letters API should accept ordered sort rules instead of one `sort`/`sortOrder` pair, validate allowed fields/directions, apply every rule before pagination, and preserve the ordered stack in saved dashboard views.
-- Move letters/extras/photos count sorting to the backend so those columns can sort the full filtered result set instead of only the current page.
-- Add backend/frontend tests that prove multi-sort ordering is stable across page boundaries, not only inside the currently loaded page.
+- Future sort work should focus on any new sort fields introduced by later entity/workflow redesigns. Current dashboard Sort manager fields are server-backed.
+- Integration-level pagination tests would still be useful if this query grows more complex, but focused backend SQL-contract tests now cover ranked rule construction and count-sort placement before pagination.
 
 Deferred processing redesign note:
 

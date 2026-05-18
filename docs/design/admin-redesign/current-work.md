@@ -13,30 +13,32 @@ This file tracks autonomous implementation slices for the admin dashboard redesi
 
 ## Current Phase
 
-Phase 3/3.25 dependency: dashboard manager and responsive-table reliability after selection groundwork.
+Phase 2.5 completion checkpoint: dashboard filter model and ranked sort contract.
 
 ## Current Slice
 
-Dashboard control reliability and state-boundary cleanup.
+Cleanup/content-shape filters and backend-ranked dashboard sort.
 
-Why this is next:
+Why this was next:
 
-- Selection groundwork exposed the dashboard's highest-risk shared surfaces: toolbar managers, active chips, saved views, sort, and bulk actions.
-- These surfaces coordinate mobile sheets, desktop controls, persisted state, table state, and selected-state actions.
-- Before broader visual polish, the state boundaries need tests and single-source-of-truth helpers so future UI changes do not reintroduce drift.
+- Phase 2.5 is the dashboard data contract phase. Later selection, responsive UI, and reusable pattern work should not sit on top of incomplete filter/sort semantics.
+- Cleanup filters and content-shape filters need backend query support so saved views, active chips, select-all-filtered behavior, and stats all mean the same thing.
+- The Sort manager already supports ordered rules, so the backend needed to apply the same ranked stack before pagination instead of leaving secondary rules as page-only refinements.
 
 Definition of done:
 
-- Toolbar, active chip, sort, saved-view, selection, and bulk-action behavior have focused coverage around their state boundaries.
-- Pure dashboard models are separated from UI components where that clearly improves reuse and testability.
-- Browser smoke checks cover mobile and desktop manager surfaces after meaningful UI changes.
-- Roadmap and idea logs reflect completed checkpoints and deferred product/code-quality ideas.
+- Backend accepts and validates cleanup/content-shape filters and ordered sort rules.
+- Backend stats and filtering use the same grouped representative-letter semantics.
+- Frontend query construction, persisted state, saved views, active chips, filter panel controls, and select-all-filtered wiring include the accepted filters.
+- Count sorts exposed in the Sort manager are server-backed before pagination.
+- Roadmap, decisions, and dashboard design notes reflect completed Phase 2.5 scope and explicit deferrals.
 
 Verification plan:
 
 - Run focused tests for touched dashboard controls and hooks.
-- Run full frontend tests and production build before final handoff.
-- Use Playwright smoke checks for mobile and desktop manager surfaces.
+- Run focused backend query tests and backend typecheck.
+- Run frontend production build before final handoff.
+- Use browser smoke checks for mobile and desktop filter/sort surfaces.
 - Update roadmap/current-work/idea-log when a checkpoint or deferred idea becomes clear.
 
 ## Progress Log
@@ -67,6 +69,11 @@ Verification plan:
 - 2026-05-18: Extracted the dashboard sort option/label/default-direction model from the Sort manager component and covered the pure model with focused tests.
 - 2026-05-18: Added saved-view integration coverage for capturing/restoring filters, sorting, visible columns, column order, and legacy saved-view fallbacks through the dashboard state hook.
 - 2026-05-18: Browser smoke testing caught and fixed stale visible Sort manager direction text so it now matches the field-aware direction label used by the accessible toggle name.
+- 2026-05-18: Added backend query contract support for cleanup filters (`missing=sender,recipient,date`), content-shape filters (`contentShape=extras,photos,cover,telegram`), matching stats buckets, and ordered `sortRules`.
+- 2026-05-18: Added backend query tests for cleanup filtering, content-shape filtering, workflow enum casting, extra-content status scoping, and ranked sort SQL before pagination.
+- 2026-05-18: Wired cleanup/content-shape filters through dashboard state, query adapter, active chips, saved views, persisted state, filter panel sections, and select-all-filtered dependency tracking.
+- 2026-05-18: Moved letter-page, extra-item, and photo-item sorts to the server-backed Sort manager path and removed current-page secondary sort behavior for current Sort manager fields.
+- 2026-05-18: Updated Phase 2.5 docs to mark cleanup/content-shape filters and ranked sort complete, with missing collection and entity/historical filters deferred.
 
 ## Selection Audit
 

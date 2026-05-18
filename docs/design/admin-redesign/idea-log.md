@@ -91,3 +91,22 @@ Scope recommendation:
 
 - Good code-quality follow-up if saved views keep growing.
 - Do not expand it into backend/API saved views yet; this is only about making local persisted state migration explicit and typed.
+
+### Missing Collection Filter Needs A Real Data State
+
+Idea:
+
+- If admins need a "missing collection" cleanup workflow later, model it as an explicit import/triage state instead of pretending nullable collection data exists on letters.
+
+Why it is relevant:
+
+- Phase 2.5 added missing sender, missing recipient, and missing date filters. Missing collection was part of the candidate list, but `letters.collection_id` is required and every letter belongs to a collection today.
+
+What triggered it:
+
+- While adding backend cleanup filters, the schema showed `collection_id` is `notNull()`, so a dashboard filter named "Missing collection" would either never return rows or would have to mean something else.
+
+Scope recommendation:
+
+- Defer until upload/import workflows define an uncategorized or needs-collection-review state.
+- Do not add a dashboard filter until that state has clear backend semantics and real rows can enter it.

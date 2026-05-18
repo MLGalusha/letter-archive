@@ -57,9 +57,20 @@ Current toolbar structure:
 
 The mobile filter panel is intentionally not a second navigation system. It edits the same filter state used by the desktop dashboard.
 
+Current filter groups:
+
+- Visibility and review flag.
+- Stored pipeline stage.
+- Cleanup/data quality: missing sender, recipient, or parsed date.
+- Content shape: groups with extras, photos, covers, or telegrams.
+- Content status: transcript, metadata, and existing extra-content status.
+- Date, collection, and search.
+
 Saved views are local dashboard presets for now. They save filters, sort, and visible columns without changing backend/API behavior. If they become multi-user or cross-device later, promote the same shape to an API-backed model.
 
 Default letters sort is Last opened descending. This keeps recent activity discoverable through sorting instead of a separate Recent edits button.
+
+The Sort manager stores ordered rules and sends the full ranked stack to the backend before pagination. Count sorts for letter pages, extra items, and photo items are server-backed dashboard sorts now, not current-page refinements.
 
 ## Letters vs Collections
 

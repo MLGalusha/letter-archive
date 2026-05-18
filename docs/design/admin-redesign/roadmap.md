@@ -156,6 +156,7 @@ Progress:
 - Mobile uses top app bar plus dashboard-level controls instead of a bottom nav.
 - Sort is a first-class dashboard control and includes Last opened, replacing the need for Recent edits as a primary action.
 - Mobile filters now open as a focused bottom sheet with backdrop and close behavior instead of expanding the dashboard stack inline.
+- Mobile table now favors horizontal scroll with readable minimum column widths instead of hiding most columns and compressing the remaining ones.
 
 ## Phase 4 - Reusable Admin Patterns
 

@@ -2124,58 +2124,41 @@
   }
 
   .letters-table {
-    width: 100%;
-    min-width: 0;
-    table-layout: fixed;
+    width: max-content;
+    min-width: 920px;
+    table-layout: auto;
   }
 
   .letters-table th,
   .letters-table td {
     box-sizing: border-box;
     height: 44px;
-    padding: 0.35rem 0.25rem;
-    font-size: 0.72rem;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.74rem;
     letter-spacing: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .letters-table th[data-column="sender"],
-  .letters-table td[data-column="sender"],
-  .letters-table th[data-column="recipient"],
-  .letters-table td[data-column="recipient"],
-  .letters-table th[data-column="letters"],
-  .letters-table td[data-column="letters"],
-  .letters-table th[data-column="extras"],
-  .letters-table td[data-column="extras"],
-  .letters-table th[data-column="photos"],
-  .letters-table td[data-column="photos"],
-  .letters-table th[data-column="transcript"],
-  .letters-table td[data-column="transcript"],
-  .letters-table th[data-column="metadata"],
-  .letters-table td[data-column="metadata"],
-  .letters-table th[data-column="created"],
-  .letters-table td[data-column="created"],
-  .letters-table th[data-column="updated"],
-  .letters-table td[data-column="updated"],
-  .letters-table th[data-column^="type_"],
-  .letters-table td[data-column^="type_"] {
-    display: none;
+    overflow: visible;
+    text-overflow: clip;
   }
 
   .checkbox-header,
   .checkbox-cell {
-    width: 28px;
-    min-width: 28px;
-    max-width: 28px;
+    position: sticky;
+    left: 0;
+    z-index: 12;
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
     padding: 0 !important;
     overflow: visible;
     text-overflow: clip;
+    background: var(--bg);
   }
 
   .checkbox-cell {
     display: table-cell;
     vertical-align: middle;
+    z-index: 6;
+    background: var(--bg-light);
   }
 
   .checkbox-cell input[type="checkbox"] {
@@ -2183,29 +2166,63 @@
     height: 16px;
   }
 
+  .letters-table th[data-column="sender"],
+  .letters-table td[data-column="sender"],
+  .letters-table th[data-column="recipient"],
+  .letters-table td[data-column="recipient"] {
+    min-width: 140px;
+    text-align: left;
+  }
+
   .letters-table th[data-column="date"],
   .letters-table td[data-column="date"] {
-    width: 76px;
+    min-width: 96px;
   }
 
   .letters-table th[data-column="collection"],
   .letters-table td[data-column="collection"] {
-    width: 48px;
+    min-width: 88px;
+  }
+
+  .letters-table th[data-column="letters"],
+  .letters-table td[data-column="letters"],
+  .letters-table th[data-column="extras"],
+  .letters-table td[data-column="extras"],
+  .letters-table th[data-column="photos"],
+  .letters-table td[data-column="photos"],
+  .letters-table th[data-column^="type_"],
+  .letters-table td[data-column^="type_"] {
+    min-width: 72px;
+  }
+
+  .letters-table th[data-column="transcript"],
+  .letters-table td[data-column="transcript"],
+  .letters-table th[data-column="metadata"],
+  .letters-table td[data-column="metadata"] {
+    min-width: 96px;
   }
 
   .letters-table th[data-column="visibility"],
   .letters-table td[data-column="visibility"] {
-    width: 86px;
+    min-width: 112px;
+  }
+
+  .letters-table th[data-column="created"],
+  .letters-table td[data-column="created"],
+  .letters-table th[data-column="updated"],
+  .letters-table td[data-column="updated"] {
+    min-width: 116px;
   }
 
   .letters-table th[data-column="lastOpened"],
   .letters-table td[data-column="lastOpened"] {
-    width: 100px;
+    min-width: 132px;
   }
 
   .letters-table th[data-column="flag"],
   .letters-table td[data-column="flag"] {
-    width: 28px;
+    width: 44px;
+    min-width: 44px;
     padding-inline: 0;
   }
 
@@ -2231,10 +2248,8 @@
   }
 
   .letters-table td[data-column="visibility"] .badge-visibility {
-    max-width: 76px;
+    max-width: none;
     padding-inline: 0.4rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .filter-pill {

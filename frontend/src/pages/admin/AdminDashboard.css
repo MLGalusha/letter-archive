@@ -2028,58 +2028,8 @@
 }
 
 
-.sortable-header {
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.2s;
-}
-
-.sortable-header:hover {
-  background-color: var(--bg-light);
-}
-
-.sortable-header.sorted {
-  background-color: #f0f0f0;
-}
-
-/* Ensure sorted headers maintain solid background when sticky */
-.letters-table th.sortable-header.sorted {
-  background-color: #f0f0f0;
-}
-
-.sortable-header .header-content {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-}
-
 .mobile-header-label {
   display: none;
-}
-
-.sortable-header .sort-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.125rem;
-}
-
-.sortable-header .sort-arrow {
-  font-size: 0.75rem;
-  opacity: 0.8;
-}
-
-.sortable-header .sort-priority {
-  font-size: 0.625rem;
-  font-weight: 700;
-  background: var(--text);
-  color: var(--bg);
-  width: 1rem;
-  height: 1rem;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
 }
 
 .letters-table tbody {
@@ -2093,23 +2043,6 @@
   color: var(--text-muted);
   text-align: center;
   white-space: nowrap;
-}
-
-/* Date column headers (Year/Month/Day) - sortable */
-.date-header {
-  text-align: center;
-  font-weight: 600;
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.2s;
-}
-
-.date-header:hover {
-  background-color: var(--bg-light);
-}
-
-.date-header.sorted {
-  background-color: #f0f0f0;
 }
 
 /* Date cells should not wrap */
@@ -2694,11 +2627,6 @@
     width: 44px;
     min-width: 44px;
     padding-inline: 0;
-  }
-
-  .letters-table th[data-column="collection"] .header-content,
-  .letters-table th[data-column="lastOpened"] .header-content {
-    gap: 0.2rem;
   }
 
   .letters-table th[data-column="collection"] .desktop-header-label,

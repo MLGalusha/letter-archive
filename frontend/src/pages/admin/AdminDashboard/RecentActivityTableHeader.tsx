@@ -13,7 +13,7 @@ interface HeaderColumn {
 const HEADER_COLUMNS: Record<ColumnId, HeaderColumn> = {
   sender: { dataColumn: "sender", label: "Sender" },
   recipient: { dataColumn: "recipient", label: "Recipient" },
-  date: { dataColumn: "date", className: "date-header", label: "Letter date" },
+  date: { dataColumn: "date", label: "Letter date" },
   collection: {
     dataColumn: "collection",
     label: (

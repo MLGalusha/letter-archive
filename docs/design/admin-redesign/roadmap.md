@@ -177,6 +177,7 @@ Progress:
 - Existing sort rules now render as fixed ranked rows instead of nested field dropdowns; the field picker only appears when adding another rule.
 - Sort manager now has an apply-step interaction: draft rule edits are staged in the popover and committed through `Apply sorting`.
 - Kept the backend limitation explicit: the first server-backed rule drives the API request; additional rules refine the currently loaded page until backend multi-sort is implemented.
+- Removed stale table-header sort affordance styling so column headers no longer look like a second sorting path.
 
 Exit criteria:
 

@@ -8,6 +8,8 @@ interface SavedViewsMenuProps {
   onSaveView: (name: string) => void;
   onApplyView: (view: SavedDashboardView) => void;
   onDeleteView: (viewId: string) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export default function SavedViewsMenu({
@@ -15,10 +17,20 @@ export default function SavedViewsMenu({
   onSaveView,
   onApplyView,
   onDeleteView,
+  open: controlledOpen,
+  onOpenChange,
 }: SavedViewsMenuProps) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [newViewName, setNewViewName] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const open = controlledOpen ?? uncontrolledOpen;
+
+  const setOpen = (nextOpen: boolean) => {
+    if (controlledOpen === undefined) {
+      setUncontrolledOpen(nextOpen);
+    }
+    onOpenChange?.(nextOpen);
+  };
 
   const handleSaveView = () => {
     onSaveView(newViewName.trim() || "Dashboard view");
@@ -35,7 +47,7 @@ export default function SavedViewsMenu({
       <button
         className={`dashboard-control-btn saved-view-btn ${open ? "active" : ""}`}
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label="Save view"

@@ -16,17 +16,29 @@ import type { ExtendedSortField, SortColumn } from "./types";
 interface DashboardSortControlProps {
   sortColumns: SortColumn[];
   setSortColumns: Dispatch<SetStateAction<SortColumn[]>>;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export default function DashboardSortControl({
   sortColumns,
   setSortColumns,
+  open: controlledOpen,
+  onOpenChange,
 }: DashboardSortControlProps) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [addRulePickerOpen, setAddRulePickerOpen] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [draftSortColumns, setDraftSortColumns] = useState<SortColumn[]>(sortColumns);
   const sortMenuRef = useRef<HTMLDivElement>(null);
+  const open = controlledOpen ?? uncontrolledOpen;
+
+  const setOpen = (nextOpen: boolean) => {
+    if (controlledOpen === undefined) {
+      setUncontrolledOpen(nextOpen);
+    }
+    onOpenChange?.(nextOpen);
+  };
 
   const availableAddOptions = useMemo(
     () => SORT_OPTIONS.filter((option) => !draftSortColumns.some((column) => column.field === option.value)),
@@ -37,16 +49,15 @@ export default function DashboardSortControl({
   const hasDraftChanges = !areSortColumnsEqual(draftSortColumns, sortColumns);
 
   const handleToggleOpen = () => {
-    setOpen((current) => {
-      if (current) {
-        setAddRulePickerOpen(false);
-        return false;
-      }
-
-      setDraftSortColumns(sortColumns);
+    if (open) {
       setAddRulePickerOpen(false);
-      return true;
-    });
+      setOpen(false);
+      return;
+    }
+
+    setDraftSortColumns(sortColumns);
+    setAddRulePickerOpen(false);
+    setOpen(true);
   };
 
   const handleToggleDirection = (index: number) => {

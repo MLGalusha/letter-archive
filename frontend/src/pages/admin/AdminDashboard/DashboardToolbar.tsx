@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import type { ProcessingStatus } from "../../../api/admin";
 import ActiveFilterChips from "./ActiveFilterChips";
 import DashboardFilterPanel from "./DashboardFilterPanel";
@@ -15,6 +15,8 @@ import type {
   SortColumn,
 } from "./types";
 import { useDashboardActiveFilters } from "./useDashboardActiveFilters";
+
+type ToolbarManager = "savedViews" | "sort";
 
 interface DashboardToolbarProps {
   dashboardView: DashboardView;
@@ -114,6 +116,30 @@ export default function DashboardToolbar({
     toggleContentShapeFilter,
   });
 
+  const [openManager, setOpenManager] = useState<ToolbarManager | null>(null);
+
+  const handleFiltersToggle = () => {
+    const nextFiltersOpen = !filtersOpen;
+    if (nextFiltersOpen) {
+      setOpenManager(null);
+    }
+    onFiltersOpenChange(nextFiltersOpen);
+  };
+
+  const handleSavedViewsOpenChange = (open: boolean) => {
+    setOpenManager(open ? "savedViews" : null);
+    if (open) {
+      onFiltersOpenChange(false);
+    }
+  };
+
+  const handleSortOpenChange = (open: boolean) => {
+    setOpenManager(open ? "sort" : null);
+    if (open) {
+      onFiltersOpenChange(false);
+    }
+  };
+
   return (
     <div className="dashboard-toolbar-stack">
       <div className="dashboard-toolbar-primary">
@@ -133,7 +159,7 @@ export default function DashboardToolbar({
             <DashboardFilterTrigger
               activeFilterCount={activeFilterCount}
               filtersOpen={filtersOpen}
-              onToggle={() => onFiltersOpenChange((open) => !open)}
+              onToggle={handleFiltersToggle}
             />
 
             <SavedViewsMenu
@@ -141,11 +167,15 @@ export default function DashboardToolbar({
               onSaveView={onSaveView}
               onApplyView={onApplyView}
               onDeleteView={onDeleteView}
+              open={openManager === "savedViews"}
+              onOpenChange={handleSavedViewsOpenChange}
             />
 
             <DashboardSortControl
               sortColumns={sortColumns}
               setSortColumns={setSortColumns}
+              open={openManager === "sort"}
+              onOpenChange={handleSortOpenChange}
             />
           </>
         )}

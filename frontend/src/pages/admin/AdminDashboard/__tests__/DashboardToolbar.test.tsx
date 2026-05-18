@@ -179,4 +179,26 @@ describe("DashboardToolbar", () => {
     expect(screen.queryByPlaceholderText("Search letters, senders, recipients...")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Active filters")).not.toBeInTheDocument();
   });
+
+  it("keeps only one dashboard toolbar manager open at a time", async () => {
+    const user = userEvent.setup();
+    render(<ToolbarHarness />);
+
+    const filtersTrigger = screen.getByRole("button", { name: /Filters/ });
+    await user.click(filtersTrigger);
+    expect(screen.getByRole("heading", { name: "Filters" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save view" }));
+    expect(filtersTrigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("heading", { name: "Filters" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Saved views" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Sort/i }));
+    expect(screen.queryByRole("dialog", { name: "Saved views" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Sort rules" })).toBeInTheDocument();
+
+    await user.click(filtersTrigger);
+    expect(screen.queryByRole("dialog", { name: "Sort rules" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Filters" })).toBeInTheDocument();
+  });
 });

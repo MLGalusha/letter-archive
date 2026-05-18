@@ -110,4 +110,16 @@ describe("BulkEditToolbar", () => {
     expect(screen.getByRole("button", { name: "Save & Close" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Clear selection" })).not.toBeInTheDocument();
   });
+
+  it("opens publishing actions in the shared manager dialog", async () => {
+    const user = userEvent.setup();
+
+    render(<BulkEditToolbar {...makeToolbarModels()} />);
+
+    await user.click(screen.getByRole("button", { name: "Publishing" }));
+
+    expect(screen.getByRole("dialog", { name: "Publishing actions" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Publishing" })).toBeInTheDocument();
+    expect(screen.getAllByText("1 published · 2 hidden")).toHaveLength(2);
+  });
 });

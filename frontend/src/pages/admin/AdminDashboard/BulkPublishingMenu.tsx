@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import DashboardManagerSurface from "./DashboardManagerSurface";
 import type { PublishCounts } from "./useDashboardSelectionDetails";
 
 interface BulkPublishingMenuProps {
@@ -44,7 +45,12 @@ export default function BulkPublishingMenu({
         Publishing
       </button>
       {showPublishMenu && (
-        <div className="publish-menu-dropdown">
+        <DashboardManagerSurface
+          title="Publishing"
+          ariaLabel="Publishing actions"
+          className="publish-menu-dropdown"
+          onClose={() => setShowPublishMenu(false)}
+        >
           <div className="publish-menu-section">
             <div className="publish-menu-header">
               <span className="publish-menu-label">Letters</span>
@@ -119,7 +125,7 @@ export default function BulkPublishingMenu({
               </button>
             </div>
           </div>
-        </div>
+        </DashboardManagerSurface>
       )}
     </div>
   );

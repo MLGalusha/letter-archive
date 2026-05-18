@@ -19,31 +19,25 @@ export default function BulkSelectionControls({
   onSelectAllFiltered,
   onClearSelection,
 }: BulkSelectionControlsProps) {
+  const pageButtonLabel = allPageSelected ? "Page ✓" : `Page (${pageCount})`;
+  const filteredButtonLabel = allFilteredSelected ? `All ${totalCount} ✓` : `All ${totalCount}`;
+
   return (
     <>
       <span className="toolbar-selection-count">
         {selectedCount} selected
       </span>
       <div className="toolbar-select-actions">
-        {!allPageSelected ? (
-          <button className="toolbar-select-btn" onClick={onSelectPage}>
-            Page ({pageCount})
-          </button>
-        ) : (
-          <button className="toolbar-select-btn active" onClick={onSelectPage}>
-            Page ✓
-          </button>
-        )}
+        <button className={`toolbar-select-btn ${allPageSelected ? "active" : ""}`} onClick={onSelectPage}>
+          {pageButtonLabel}
+        </button>
         {totalCount > pageCount && (
-          !allFilteredSelected ? (
-            <button className="toolbar-select-btn" onClick={onSelectAllFiltered}>
-              All {totalCount}
-            </button>
-          ) : (
-            <button className="toolbar-select-btn active" onClick={onClearSelection}>
-              All {totalCount} ✓
-            </button>
-          )
+          <button
+            className={`toolbar-select-btn ${allFilteredSelected ? "active" : ""}`}
+            onClick={allFilteredSelected ? onClearSelection : onSelectAllFiltered}
+          >
+            {filteredButtonLabel}
+          </button>
         )}
       </div>
     </>

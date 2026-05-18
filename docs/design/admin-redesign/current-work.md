@@ -48,6 +48,7 @@ Verification plan:
 - 2026-05-18: Measured current selected-row and bulk-toolbar behavior in Playwright at 1440x900 and 390x844.
 - 2026-05-18: Defined conservative target selection model that preserves current behavior and defers mobile bulk hierarchy decisions.
 - 2026-05-18: Added focused hook tests for page selection, filtered selection state, shift-range checkbox selection, drag-select, and drag-deselect behavior.
+- 2026-05-18: Tightened the copy/edit-to-row-selection boundary so edit-mode row clicks pass explicit row-selection options instead of a full React mouse event.
 
 ## Selection Audit
 

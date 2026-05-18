@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useState, type Dispatch, type MouseEvent, type SetStateAction } from "react";
 
 interface IdentifiableRow {
   id: string;
@@ -6,10 +6,14 @@ interface IdentifiableRow {
 
 type DragMode = "select" | "deselect";
 
+export interface RowSelectionToggleOptions {
+  shiftKey?: boolean;
+}
+
 interface UseDashboardRowSelectionOptions<T extends IdentifiableRow> {
   rows: T[];
   selectedIds: Set<string>;
-  setSelectedIds: (value: Set<string>) => void;
+  setSelectedIds: Dispatch<SetStateAction<Set<string>>>;
   setAllFilteredSelected: (value: boolean) => void;
   toggleSelection: (id: string) => void;
 }
@@ -28,7 +32,7 @@ export function useDashboardRowSelection<T extends IdentifiableRow>({
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const [hasDragMoved, setHasDragMoved] = useState(false);
 
-  const handleCheckboxChange = useCallback((letterId: string, index: number, options?: { shiftKey?: boolean }) => {
+  const handleCheckboxChange = useCallback((letterId: string, index: number, options?: RowSelectionToggleOptions) => {
     if (options?.shiftKey && lastClickedIndex !== null) {
       const start = Math.min(lastClickedIndex, index);
       const end = Math.max(lastClickedIndex, index);

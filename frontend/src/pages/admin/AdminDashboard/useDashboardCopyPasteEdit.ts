@@ -3,6 +3,7 @@ import type { MouseEvent } from "react";
 import { bulkUpdateFields } from "../../../api/admin";
 import { useToast } from "../../../contexts/ToastContext";
 import type { PendingChange } from "./types";
+import type { RowSelectionToggleOptions } from "./useDashboardRowSelection";
 
 type CopyPasteColumn = "sender" | "recipient";
 
@@ -14,7 +15,7 @@ interface SourceCell {
 interface UseDashboardCopyPasteEditOptions {
   selectedIds: Set<string>;
   clearSelection: () => void;
-  handleCheckboxChange: (letterId: string, index: number, event: MouseEvent) => void;
+  handleCheckboxChange: (letterId: string, index: number, options?: RowSelectionToggleOptions) => void;
   fetchLetters: () => Promise<void>;
 }
 
@@ -119,7 +120,8 @@ export function useDashboardCopyPasteEdit({
         const next = new Map(prev);
         const existing = next.get(letterId);
         if (existing) {
-          const { [column]: removed, ...rest } = existing;
+          const rest = { ...existing };
+          delete rest[column];
           if (Object.keys(rest).length === 0) {
             next.delete(letterId);
           } else {
@@ -145,7 +147,7 @@ export function useDashboardCopyPasteEdit({
   ) => {
     if (copyModeActive) return true;
     if (selectedIds.size > 0 || pendingChanges.size > 0) {
-      handleCheckboxChange(letterId, index, event);
+      handleCheckboxChange(letterId, index, { shiftKey: event.shiftKey });
       return true;
     }
     return false;

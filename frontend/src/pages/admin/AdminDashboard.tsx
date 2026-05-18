@@ -57,6 +57,7 @@ export default function AdminDashboard() {
     reorderColumn,
     resetColumnOrder,
     toggleColumnMenu,
+    closeColumnMenu,
   } = useDashboardColumns();
 
   useDashboardPersistedState({ filters: dashboardFilters, sortColumns });
@@ -76,12 +77,10 @@ export default function AdminDashboard() {
     sortColumns,
   });
 
-  // Auth check — runs once on mount
   useEffect(() => {
     if (!isAuthenticated()) {
       navigate("/admin-login");
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
   const {
@@ -92,7 +91,6 @@ export default function AdminDashboard() {
     toggleSelection,
     clearSelection,
     allPageSelected,
-    somePageSelected: _somePageSelected,
     handleSelectAllPage,
     selectAllFiltered,
   } = useDashboardSelection(filteredLetters);
@@ -276,6 +274,7 @@ export default function AdminDashboard() {
             orderedColumns,
             showColumnMenu,
             onToggleColumnMenu: toggleColumnMenu,
+            onCloseColumnMenu: closeColumnMenu,
             onToggleColumn: toggleColumnVisibility,
             onMoveColumn: moveColumn,
             onReorderColumn: reorderColumn,

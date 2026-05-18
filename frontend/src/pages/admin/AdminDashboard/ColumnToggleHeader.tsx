@@ -9,6 +9,7 @@ interface ColumnToggleHeaderProps {
   visibleColumns: Set<ColumnId>;
   showColumnMenu: boolean;
   onToggleColumnMenu: () => void;
+  onCloseColumnMenu: () => void;
   onToggleColumn: (id: ColumnId) => void;
   onMoveColumn: (id: ColumnId, direction: -1 | 1) => void;
   onReorderColumn: (id: ColumnId, targetIndex: number) => void;
@@ -21,6 +22,7 @@ export default function ColumnToggleHeader({
   visibleColumns,
   showColumnMenu,
   onToggleColumnMenu,
+  onCloseColumnMenu,
   onToggleColumn,
   onMoveColumn,
   onReorderColumn,
@@ -95,7 +97,7 @@ export default function ColumnToggleHeader({
           ariaLabel="Column settings"
           closeBoundaryRef={columnMenuRef}
           className="column-toggle-dropdown column-toggle-left"
-          onClose={onToggleColumnMenu}
+          onClose={onCloseColumnMenu}
           footer={(
             <button type="button" className="column-reset-btn" onClick={onResetColumnOrder}>
               Reset

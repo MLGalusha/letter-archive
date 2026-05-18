@@ -69,6 +69,7 @@ describe("RecentActivityTable", () => {
           ],
           showColumnMenu,
           onToggleColumnMenu: vi.fn(),
+          onCloseColumnMenu: vi.fn(),
           onToggleColumn: vi.fn(),
           onMoveColumn: vi.fn(),
           onReorderColumn: vi.fn(),

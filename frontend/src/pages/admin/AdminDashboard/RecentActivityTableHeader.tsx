@@ -62,6 +62,7 @@ interface RecentActivityTableHeaderProps {
   orderedColumns: ColumnDef[];
   showColumnMenu: boolean;
   onToggleColumnMenu: () => void;
+  onCloseColumnMenu: () => void;
   onToggleColumn: (id: ColumnId) => void;
   onMoveColumn: (id: ColumnId, direction: -1 | 1) => void;
   onReorderColumn: (id: ColumnId, targetIndex: number) => void;
@@ -74,6 +75,7 @@ export default function RecentActivityTableHeader({
   orderedColumns,
   showColumnMenu,
   onToggleColumnMenu,
+  onCloseColumnMenu,
   onToggleColumn,
   onMoveColumn,
   onReorderColumn,
@@ -88,6 +90,7 @@ export default function RecentActivityTableHeader({
           visibleColumns={visibleColumns}
           showColumnMenu={showColumnMenu}
           onToggleColumnMenu={onToggleColumnMenu}
+          onCloseColumnMenu={onCloseColumnMenu}
           onToggleColumn={onToggleColumn}
           onMoveColumn={onMoveColumn}
           onReorderColumn={onReorderColumn}

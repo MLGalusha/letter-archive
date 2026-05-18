@@ -56,6 +56,7 @@ export interface TableColumnModel {
   orderedColumns: ColumnDef[];
   showColumnMenu: boolean;
   onToggleColumnMenu: () => void;
+  onCloseColumnMenu: () => void;
   onToggleColumn: (id: ColumnId) => void;
   onMoveColumn: (id: ColumnId, direction: -1 | 1) => void;
   onReorderColumn: (id: ColumnId, targetIndex: number) => void;
@@ -100,6 +101,7 @@ export default function RecentActivityTable({
             orderedColumns={columns.orderedColumns}
             showColumnMenu={columns.showColumnMenu}
             onToggleColumnMenu={columns.onToggleColumnMenu}
+            onCloseColumnMenu={columns.onCloseColumnMenu}
             onToggleColumn={columns.onToggleColumn}
             onMoveColumn={columns.onMoveColumn}
             onReorderColumn={columns.onReorderColumn}

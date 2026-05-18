@@ -173,6 +173,10 @@ export function useDashboardColumns() {
     setShowColumnMenu((previous) => !previous);
   }, []);
 
+  const closeColumnMenu = useCallback(() => {
+    setShowColumnMenu(false);
+  }, []);
+
   const columnById = new Map(ALL_COLUMNS.map((column) => [column.id, column]));
   const orderedColumns = columnOrder
     .map((id) => columnById.get(id))
@@ -185,12 +189,12 @@ export function useDashboardColumns() {
     setColumnOrder,
     orderedColumns,
     showColumnMenu,
-    setShowColumnMenu,
     columnMenuRef,
     toggleColumnVisibility,
     moveColumn,
     reorderColumn,
     resetColumnOrder,
     toggleColumnMenu,
+    closeColumnMenu,
   };
 }

@@ -34,6 +34,16 @@ A saved view should preserve filters, sort state, and visible columns. It should
 
 Column order is part of the dashboard view model. Use a single drag-handle affordance in the column menu instead of separate up/down arrow buttons; arrow-key support remains available for keyboard users.
 
+### Data Table Controls
+
+Evolve dashboard sorting and filtering toward a Supabase-style data-table model.
+
+The target direction is one shared table state with column-aware sorting/filtering shortcuts, active chips, saved views, and manager surfaces for mobile or complex edits. Header and column-menu actions should be shortcuts into the same state, not separate systems from top-level controls.
+
+The top sort/filter controls should become managers: concise buttons that open a menu/sheet showing active rules, adding/removing rules, and explaining scope. Column headers and column menus can expose quick sort/filter actions on desktop, while mobile should rely more on the top manager/sheet pattern because horizontal table headers are harder to use.
+
+Long term, meaningful sorts and filters should be server-backed for the full filtered result set. Page-only sorting is acceptable as an explicitly labeled temporary state, not the final design.
+
 ### Mobile Data View
 
 Start from a compact table/list-table approach rather than forcing desktop columns onto mobile.

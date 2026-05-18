@@ -104,10 +104,11 @@ Goals:
 
 - Audit the current data shapes and API query support before adding more filters.
 - Compare likely admin workflows against archive-app patterns: broad search, high-value structured filters, advanced filters, active chips, and saved views.
+- Move toward a Supabase-style data-table model: column-aware sorting/filtering shortcuts, active chips, saved views, and a top-level manager surface for complex edits.
 - Present proposed filters with what each would do, why it would be useful, and whether it should be primary or advanced.
 - Let Mason decide which filters to add or skip before implementation.
 - Define how selected filters interact with saved dashboard views, mobile filter sheets, active chips, select-all-filtered behavior, and backend query parameters.
-- Review the dashboard sort model so the toolbar sort control and sortable column headers are not two competing systems.
+- Review the dashboard sort/filter model so top controls, column headers, and column menus are shortcuts into one shared state instead of competing systems.
 
 Candidate filter categories:
 
@@ -115,6 +116,14 @@ Candidate filter categories:
 - Data-completeness filters: missing sender, missing recipient, missing date, missing collection, missing metadata.
 - Historical/entity filters: sender, recipient, mentioned person, place, date range.
 - Content-shape filters: has extras, has photos, has cover, has telegram, flagged.
+
+Target data-table control model:
+
+- Top controls should read as managers: `Filters`, `Sort`, `Columns`, and `Views`.
+- Active chips summarize the current rules and provide quick removal.
+- Desktop column headers/menus can provide fast column-local actions such as sort ascending, sort descending, clear sort, filter this value/status, hide column, and eventually pin/reorder if the table needs it.
+- Mobile should use the manager/sheet pattern first, because horizontal header interactions are less discoverable and harder to hit.
+- The implementation should keep one source of truth for filter, sort, column visibility, and column order state so saved views and select-all-filtered behavior do not drift.
 
 Current audit findings:
 
@@ -136,11 +145,11 @@ Progress:
 
 Sort-model questions:
 
-- Should the toolbar sort be the primary/simple sort while column headers remain desktop power controls?
-- Should mobile expose only the toolbar sort, or also keep header sorting?
-- How should the toolbar label multi-sort states created from column headers: custom sort, primary sort plus count, or another pattern?
-- Should choosing a toolbar sort replace the existing sort stack, while column headers can build a multi-sort stack?
-- How should saved dashboard views describe and restore multi-sort state?
+- What should the `Sort` manager UI look like: compact menu, side panel, or mobile bottom sheet?
+- Should column headers open a column menu with sort/filter actions instead of cycling sort directly on click?
+- Should server-backed multi-sort be added before we expose true multi-sort in the UI?
+- How should sort rules be reordered, removed, and restored in saved dashboard views?
+- Which page-only sorts should remain visible after server-backed count sorts are implemented?
 
 Sort audit findings:
 
@@ -151,9 +160,11 @@ Sort audit findings:
 
 Sort-model decision:
 
-- Treat the toolbar dropdown as the primary server sort for the full filtered result set.
-- Treat count-column header sorts for letters, extras, and photos as page-level secondary sorts until the backend supports those sorts server-side.
-- Keep server-sortable column headers wired to the same primary server sort state, but label the sort scope so the toolbar and headers do not read as unrelated competing systems.
+- Short term: treat the toolbar dropdown as the primary server sort for the full filtered result set.
+- Short term: treat count-column header sorts for letters, extras, and photos as page-level secondary sorts until the backend supports those sorts server-side.
+- Short term: keep server-sortable column headers wired to the same primary server sort state, but label the sort scope so the toolbar and headers do not read as unrelated competing systems.
+- Target direction: replace the dropdown-feeling sort control with a `Sort` manager that shows ordered sort rules and lets desktop column headers/menus act as shortcuts into the same rules.
+- Target direction: avoid exposing true multi-sort until the API can apply it server-side across the full filtered result set.
 
 Progress:
 
@@ -172,6 +183,13 @@ Deferred filter slice:
 - Missing sender, missing recipient, and missing date should be implemented after this dashboard UI pass as cleanup filters with explicit backend query support.
 - Has photos, has extras, has cover, and has telegram should be implemented after this dashboard UI pass as content-shape filters backed by server-side grouped letter counts/types, not current-page client data.
 - These deferred filters should be planned before broader admin rollout so they can reuse the finished dashboard filter model instead of creating another one-off filter pattern.
+- Column-local filter actions should be considered after the filter manager state is stable. Examples: filter this sender, filter this recipient, filter this collection, filter this status, show blank values, or show nonblank values.
+
+Deferred sort slice:
+
+- Add server-backed multi-sort only after the admin letters API accepts ordered sort rules instead of one `sort`/`sortOrder` pair.
+- Move letters/extras/photos count sorting to the backend so those columns can sort the full filtered result set instead of only the current page.
+- Replace the temporary primary-sort dropdown with a `Sort` manager once server-side sort behavior is clear enough to avoid misleading UI.
 
 Deferred processing redesign note:
 
@@ -300,6 +318,7 @@ Goals:
 - Implement the mobile dashboard based on compact scanning, top toolbar controls, active filter chips, and drawer/sheet controls.
 - Add a matching desktop control for any mobile-only view toggle that survives design review.
 - Revisit mobile table behavior so readability wins over forced column compression.
+- Turn top-level filter/sort controls into manager buttons/sheets rather than permanent form controls when the rule set becomes complex.
 
 Mobile table direction:
 
@@ -317,6 +336,12 @@ Progress:
 - Mobile filters now open as a focused bottom sheet with backdrop and close behavior instead of expanding the dashboard stack inline.
 - Mobile table now favors horizontal scroll with readable minimum column widths instead of hiding most columns and compressing the remaining ones.
 
+Target responsive direction:
+
+- Desktop can support both toolbar managers and column-local shortcuts.
+- Mobile should prioritize top-level `Filters`, `Sort`, `Columns`, and `Views` managers because table header interactions are less reliable while horizontally scrolling.
+- Active chips should remain visible enough to explain the current data set without making the toolbar tall or noisy.
+
 Dependency:
 
 - Finish or intentionally defer Phase 2.75 before calling the dashboard responsive table pass complete, because selection and horizontal scroll are coupled.
@@ -328,7 +353,7 @@ Status: pending
 Goals:
 
 - Extract reusable patterns only after they prove useful in the dashboard.
-- Candidate patterns: admin toolbar, filter drawer, active chips, sort menu, saved view menu, compact data table, bulk action bar, confirmation dialogs.
+- Candidate patterns: admin toolbar, filter manager, sort manager, active chips, column manager, saved view menu, compact data table, bulk action bar, confirmation dialogs.
 - Only promote the redesigned selection/bulk-action model into reusable patterns after it works on the dashboard.
 
 ## Phase 5 - Broader Admin Rollout

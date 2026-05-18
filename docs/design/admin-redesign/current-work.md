@@ -65,6 +65,7 @@ Verification plan:
 - 2026-05-18: Tightened the active-filter chip component API so the visual chip list, clear-all control, and tests derive active state from the chip list instead of duplicate count props.
 - 2026-05-18: Added toolbar-level coverage for mobile filter open/close, active search chip clearing, and letter-only control visibility when switching to Collections.
 - 2026-05-18: Hardened dashboard toolbar, pagination, row flag, and bulk-action buttons with explicit button types so future form or manager-shell placement cannot accidentally submit.
+- 2026-05-18: Extracted the dashboard sort option/label/default-direction model from the Sort manager component and covered the pure model with focused tests.
 
 ## Selection Audit
 

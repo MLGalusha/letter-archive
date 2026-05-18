@@ -28,8 +28,8 @@ export function useDashboardRowSelection<T extends IdentifiableRow>({
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const [hasDragMoved, setHasDragMoved] = useState(false);
 
-  const handleCheckboxChange = useCallback((letterId: string, index: number, event: MouseEvent) => {
-    if (event.shiftKey && lastClickedIndex !== null) {
+  const handleCheckboxChange = useCallback((letterId: string, index: number, options?: { shiftKey?: boolean }) => {
+    if (options?.shiftKey && lastClickedIndex !== null) {
       const start = Math.min(lastClickedIndex, index);
       const end = Math.max(lastClickedIndex, index);
       const nextSelected = new Set(selectedIds);

@@ -147,7 +147,7 @@ vi.mock("../AdminDashboard/RecentActivityTable", () => ({
   }: {
     filteredLetters: Letter[];
     selection: {
-      onCheckboxChange: (letterId: string, index: number, event: unknown) => void;
+      onCheckboxChange: (letterId: string, index: number, options?: { shiftKey?: boolean }) => void;
       selectedIds: Set<string>;
     };
   }) => (
@@ -157,7 +157,7 @@ vi.mock("../AdminDashboard/RecentActivityTable", () => ({
         <button
           key={letter.id}
           type="button"
-          onClick={(event) => selection.onCheckboxChange(letter.id, index, event)}
+          onClick={(event) => selection.onCheckboxChange(letter.id, index, { shiftKey: event.shiftKey })}
         >
           {selection.selectedIds.has(letter.id) ? `Selected ${letter.title}` : `Select ${letter.title}`}
         </button>

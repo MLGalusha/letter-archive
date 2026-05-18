@@ -134,7 +134,7 @@ describe("RecentActivityTable", () => {
 
     await user.click(screen.getByRole("checkbox", { name: "Select Test Letter" }));
 
-    expect(onCheckboxChange).toHaveBeenCalledWith("letter-1", 0, expect.anything());
+    expect(onCheckboxChange).toHaveBeenCalledWith("letter-1", 0, { shiftKey: false });
     expect(onRowClick).not.toHaveBeenCalled();
   });
 });

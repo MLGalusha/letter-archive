@@ -16,7 +16,7 @@ export interface TableSelectionModel {
   onRowClick: (letterId: string, index: number, e: React.MouseEvent) => void;
   onRowMouseDown: (index: number, e: React.MouseEvent) => void;
   onRowMouseEnter: (index: number) => void;
-  onCheckboxChange: (letterId: string, index: number, e: React.MouseEvent) => void;
+  onCheckboxChange: (letterId: string, index: number, options?: { shiftKey?: boolean }) => void;
 }
 
 export interface TableCopyEditModel {

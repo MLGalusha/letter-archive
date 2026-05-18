@@ -208,9 +208,14 @@ export default function RecentActivityRow({
           checked={isSelected}
           onClick={(event) => {
             event.stopPropagation();
-            selection.onCheckboxChange(letter.id, index, event);
           }}
-          onChange={() => undefined}
+          onChange={(event) => {
+            event.stopPropagation();
+            const nativeEvent = event.nativeEvent;
+            selection.onCheckboxChange(letter.id, index, {
+              shiftKey: "shiftKey" in nativeEvent ? Boolean(nativeEvent.shiftKey) : false,
+            });
+          }}
         />
       </td>
 

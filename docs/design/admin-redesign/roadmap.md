@@ -309,12 +309,14 @@ Progress:
 - Grouped the bulk toolbar into selection, edit, processing, publishing, and danger sections so the action hierarchy is visible before deeper visual polish.
 - Tightened the table selection contract so row checkboxes pass a small selection intent instead of leaking raw React mouse events through the table model.
 - Grouped `BulkEditToolbar` props by toolbar section so the component API matches the selection, edit, processing, publishing, danger, and completion ownership boundaries.
+- Refined the bulk toolbar into a named bulk-actions region with reusable labeled sections, a clearer selected-state emphasis, and mobile behavior where selection stays full-width while action groups scroll independently.
+- Added focused toolbar tests for section labeling, clear-selection completion, and pending-edit save completion.
 
 Likely implementation slices:
 
 - Selection interaction model and table selection visuals.
-- Mobile table/selection scroll behavior.
-- Bulk action toolbar hierarchy and responsive placement.
+- Mobile table/selection scroll behavior. (Mostly complete for the current pass; keep watching during responsive table polish.)
+- Bulk action toolbar hierarchy and responsive placement. (Structurally complete for the current pass; deeper visual styling can happen with the broader dashboard style pass.)
 - Accessibility and keyboard/focus pass.
 - Focused tests for selection pruning, select-all-filtered, and row click/selection behavior.
 

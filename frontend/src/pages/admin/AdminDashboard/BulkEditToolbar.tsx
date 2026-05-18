@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { ProcessingStatus } from "../../../api/admin";
 import Icon from "../../../components/common/Icon";
 import BulkCopyControls from "./BulkCopyControls";
@@ -69,6 +70,21 @@ interface BulkEditToolbarProps {
   completion: BulkCompletionToolbarModel;
 }
 
+interface ToolbarSectionProps {
+  label: string;
+  modifier: string;
+  children: ReactNode;
+}
+
+function ToolbarSection({ label, modifier, children }: ToolbarSectionProps) {
+  return (
+    <section className={`toolbar-section toolbar-section--${modifier}`} aria-label={`${label} actions`}>
+      <span className="toolbar-section-label">{label}</span>
+      <div className="toolbar-section-controls">{children}</div>
+    </section>
+  );
+}
+
 export default function BulkEditToolbar({
   selection,
   copy,
@@ -78,11 +94,10 @@ export default function BulkEditToolbar({
   completion,
 }: BulkEditToolbarProps) {
   return (
-    <div className="edit-toolbar visible">
+    <div className="edit-toolbar visible" role="region" aria-label="Bulk actions">
       <div className="edit-toolbar-content">
         <div className="edit-toolbar-left">
-          <div className="toolbar-section toolbar-section--selection">
-            <span className="toolbar-section-label">Selection</span>
+          <ToolbarSection label="Selection" modifier="selection">
             <BulkSelectionControls
               selectedCount={selection.selectedCount}
               pageCount={selection.pageCount}
@@ -93,9 +108,8 @@ export default function BulkEditToolbar({
               onSelectAllFiltered={selection.onSelectAllFiltered}
               onClearSelection={selection.onClearSelection}
             />
-          </div>
-          <div className="toolbar-section toolbar-section--copy">
-            <span className="toolbar-section-label">Edit</span>
+          </ToolbarSection>
+          <ToolbarSection label="Edit" modifier="copy">
             <BulkCopyControls
               copyModeActive={copy.copyModeActive}
               copiedValue={copy.copiedValue}
@@ -104,12 +118,11 @@ export default function BulkEditToolbar({
               isSaving={copy.isSaving}
               onToggleCopyMode={copy.onToggleCopyMode}
             />
-          </div>
+          </ToolbarSection>
         </div>
 
         <div className="edit-toolbar-center">
-          <div className="toolbar-section toolbar-section--processing">
-            <span className="toolbar-section-label">Process</span>
+          <ToolbarSection label="Process" modifier="processing">
             <BulkProcessingControls
               selectedCount={selection.selectedCount}
               processingStatus={processing.processingStatus}
@@ -121,12 +134,11 @@ export default function BulkEditToolbar({
               onResumeProcessing={processing.onResumeProcessing}
               onAbortProcessing={processing.onAbortProcessing}
             />
-          </div>
+          </ToolbarSection>
         </div>
 
         <div className="edit-toolbar-right">
-          <div className="toolbar-section toolbar-section--publishing">
-            <span className="toolbar-section-label">Publish</span>
+          <ToolbarSection label="Publish" modifier="publishing">
             <BulkPublishingMenu
               selectedCount={selection.selectedCount}
               bulkActionLoading={publishing.bulkActionLoading}
@@ -135,9 +147,8 @@ export default function BulkEditToolbar({
               onBulkPublish={publishing.onBulkPublish}
               onBulkContentVisibility={publishing.onBulkContentVisibility}
             />
-          </div>
-          <div className="toolbar-section toolbar-section--danger">
-            <span className="toolbar-section-label">Danger</span>
+          </ToolbarSection>
+          <ToolbarSection label="Danger" modifier="danger">
             <BulkDestructiveControls
               selectedCount={selection.selectedCount}
               bulkActionLoading={danger.bulkActionLoading}
@@ -145,16 +156,18 @@ export default function BulkEditToolbar({
               onClearMetadata={danger.onClearMetadata}
               onDelete={danger.onDelete}
             />
+          </ToolbarSection>
+          <div className="toolbar-completion-actions">
+            {completion.pendingChangesCount > 0 ? (
+              <button className="toolbar-done-btn" onClick={completion.onDone} disabled={completion.isSaving}>
+                {completion.isSaving ? "Saving..." : "Save & Close"}
+              </button>
+            ) : (
+              <button className="toolbar-close-btn" onClick={completion.onExit} aria-label="Clear selection" title="Clear selection">
+                <Icon name="close" size={16} />
+              </button>
+            )}
           </div>
-          {completion.pendingChangesCount > 0 ? (
-            <button className="toolbar-done-btn" onClick={completion.onDone} disabled={completion.isSaving}>
-              {completion.isSaving ? "Saving..." : "Save & Close"}
-            </button>
-          ) : (
-            <button className="toolbar-close-btn" onClick={completion.onExit} title="Clear selection">
-              <Icon name="close" size={16} />
-            </button>
-          )}
         </div>
       </div>
     </div>

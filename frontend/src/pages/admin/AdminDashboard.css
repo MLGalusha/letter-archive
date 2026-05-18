@@ -3262,7 +3262,6 @@
   overflow: visible;
 }
 
-/* Left section: selection count and copy buttons */
 .edit-toolbar-left {
   display: flex;
   align-items: center;
@@ -3274,6 +3273,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
+  box-sizing: border-box;
   min-height: 36px;
   padding: 4px 6px;
   border: 1px solid rgba(75, 85, 99, 0.7);
@@ -3281,9 +3281,21 @@
   background: rgba(17, 24, 39, 0.55);
 }
 
+.toolbar-section--selection {
+  background: rgba(30, 64, 175, 0.16);
+  border-color: rgba(96, 165, 250, 0.45);
+}
+
 .toolbar-section--danger {
   border-color: rgba(239, 68, 68, 0.35);
   background: rgba(127, 29, 29, 0.18);
+}
+
+.toolbar-section-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
 }
 
 .toolbar-section-label {
@@ -3496,6 +3508,12 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
+  flex-shrink: 0;
+}
+
+.toolbar-completion-actions {
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
 }
 
@@ -3721,21 +3739,43 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
-    gap: 0.45rem;
-    max-height: min(42vh, 260px);
+    gap: 0.4rem;
+    max-height: min(46vh, 280px);
     overflow-y: auto;
-    padding: 0.65rem;
+    padding: 0.55rem;
   }
 
   .edit-toolbar-left,
   .edit-toolbar-center,
   .edit-toolbar-right {
+    display: flex;
     width: 100%;
     min-width: 0;
     justify-content: flex-start;
-    gap: 0.45rem;
+    gap: 0.4rem;
     overflow-x: auto;
     scrollbar-width: thin;
+  }
+
+  .edit-toolbar-left {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: visible;
+  }
+
+  .edit-toolbar-left .toolbar-section--copy {
+    overflow-x: auto;
+  }
+
+  .edit-toolbar-right {
+    padding-inline-end: 2px;
+  }
+
+  .edit-toolbar-right .toolbar-completion-actions {
+    position: sticky;
+    right: 0;
+    padding-inline-start: 4px;
+    background: #1f2937;
   }
 
   .toolbar-section {
@@ -3744,6 +3784,20 @@
     gap: 0.35rem;
     min-height: 34px;
     padding: 4px 5px;
+  }
+
+  .toolbar-section--selection {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .toolbar-section--selection .toolbar-section-controls {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .toolbar-section-controls {
+    flex: 0 0 auto;
   }
 
   .toolbar-section-label {

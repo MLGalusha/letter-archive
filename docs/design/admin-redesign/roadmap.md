@@ -307,6 +307,7 @@ Progress:
 - Fixed a table header/body ordering mismatch where flag, transcript, metadata, and visibility headers could appear over the wrong cells.
 - Added selected-row continuity across the row cells with a clear selection rail on the checkbox cell.
 - Grouped the bulk toolbar into selection, edit, processing, publishing, and danger sections so the action hierarchy is visible before deeper visual polish.
+- Tightened the table selection contract so row checkboxes pass a small selection intent instead of leaking raw React mouse events through the table model.
 
 Likely implementation slices:
 

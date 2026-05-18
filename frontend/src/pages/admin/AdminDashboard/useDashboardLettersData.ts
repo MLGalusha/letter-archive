@@ -46,6 +46,11 @@ const DEFAULT_STATS = {
   hasPhotos: 0,
   hasCover: 0,
   hasTelegram: 0,
+  hasCard: 0,
+  hasEphemera: 0,
+  hasArticle: 0,
+  hasDiary: 0,
+  hasVoice: 0,
 };
 
 interface UseDashboardLettersDataOptions {
@@ -109,6 +114,11 @@ export function useDashboardLettersData({
         hasPhotos: response.stats.contentShape?.photos ?? 0,
         hasCover: response.stats.contentShape?.cover ?? 0,
         hasTelegram: response.stats.contentShape?.telegram ?? 0,
+        hasCard: response.stats.contentShape?.card ?? 0,
+        hasEphemera: response.stats.contentShape?.ephemera ?? 0,
+        hasArticle: response.stats.contentShape?.article ?? 0,
+        hasDiary: response.stats.contentShape?.diary ?? 0,
+        hasVoice: response.stats.contentShape?.voice ?? 0,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load letters");

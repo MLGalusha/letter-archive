@@ -39,8 +39,11 @@ describe("dashboardSortModel", () => {
     expect(getFieldLabel("lastOpenedAt")).toBe("Last opened");
     expect(getDefaultDirection("lastOpenedAt")).toBe("desc");
     expect(getDefaultDirection("sender")).toBe("asc");
+    expect(getDefaultDirection("telegram")).toBe("desc");
     expect(getDirectionLabel("flagged", "desc")).toBe("flagged first");
     expect(getDirectionLabel("letters", "asc")).toBe("low to high");
+    expect(getDirectionLabel("telegram", "desc")).toBe("high to low");
+    expect(getFieldLabel("telegram")).toBe("Telegrams");
     expect(getDirectionLabel("visibility", "desc")).toBe("public first");
   });
 });

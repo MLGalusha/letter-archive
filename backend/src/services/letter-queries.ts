@@ -69,7 +69,7 @@ export async function fetchLetterWithRelatedAndTransform(
 // Content status enum values for validation
 const contentStatusValues = ['EMPTY', 'AI_DRAFT', 'EDITED', 'VERIFIED'] as const;
 const missingFieldValues = ['sender', 'recipient', 'date'] as const;
-const contentShapeValues = ['extras', 'photos', 'cover', 'telegram'] as const;
+const contentShapeValues = ['extras', 'photos', 'cover', 'telegram', 'card', 'ephemera', 'article', 'diary', 'voice'] as const;
 const adminSortFieldValues = [
   'createdAt',
   'updatedAt',
@@ -84,8 +84,28 @@ const adminSortFieldValues = [
   'letters',
   'extras',
   'photos',
+  'cover',
+  'telegram',
+  'card',
+  'ephemera',
+  'article',
+  'diary',
+  'voice',
 ] as const;
 const sortDirectionValues = ['asc', 'desc'] as const;
+
+type ContentShapeValue = typeof contentShapeValues[number];
+
+const contentShapeTypeMap = {
+  photos: ['P'],
+  cover: ['C'],
+  telegram: ['T'],
+  card: ['N'],
+  ephemera: ['E'],
+  article: ['A'],
+  diary: ['D'],
+  voice: ['V'],
+} as const satisfies Record<Exclude<ContentShapeValue, 'extras'>, readonly string[]>;
 
 const commaSeparatedArray = (val: unknown) => {
   if (typeof val === 'string') {
@@ -109,6 +129,29 @@ const sortRuleSchema = z.object({
   field: z.enum(adminSortFieldValues),
   direction: z.enum(sortDirectionValues),
 });
+
+const getContentShapeBooleanExpression = (shape: ContentShapeValue) => {
+  switch (shape) {
+    case 'extras':
+      return sql`has_extras = true`;
+    case 'photos':
+      return sql`has_photos = true`;
+    case 'cover':
+      return sql`has_cover = true`;
+    case 'telegram':
+      return sql`has_telegram = true`;
+    case 'card':
+      return sql`has_card = true`;
+    case 'ephemera':
+      return sql`has_ephemera = true`;
+    case 'article':
+      return sql`has_article = true`;
+    case 'diary':
+      return sql`has_diary = true`;
+    case 'voice':
+      return sql`has_voice = true`;
+  }
+};
 
 export const adminLettersQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -205,7 +248,17 @@ export interface AdminLettersResponse {
     metadata: { empty: number; aiDraft: number; edited: number; verified: number };
     extraContent: { empty: number; aiDraft: number; edited: number; verified: number };
     missing: { sender: number; recipient: number; date: number };
-    contentShape: { extras: number; photos: number; cover: number; telegram: number };
+    contentShape: {
+      extras: number;
+      photos: number;
+      cover: number;
+      telegram: number;
+      card: number;
+      ephemera: number;
+      article: number;
+      diary: number;
+      voice: number;
+    };
   };
 }
 
@@ -267,7 +320,7 @@ export async function queryAdminLetters(
           metadata: { empty: 0, aiDraft: 0, edited: 0, verified: 0 },
           extraContent: { empty: 0, aiDraft: 0, edited: 0, verified: 0 },
           missing: { sender: 0, recipient: 0, date: 0 },
-          contentShape: { extras: 0, photos: 0, cover: 0, telegram: 0 },
+          contentShape: { extras: 0, photos: 0, cover: 0, telegram: 0, card: 0, ephemera: 0, article: 0, diary: 0, voice: 0 },
         },
       };
     }
@@ -301,6 +354,11 @@ export async function queryAdminLetters(
         ${hasContentTypeExpression(['P'])} as has_photos,
         ${hasContentTypeExpression(['C'])} as has_cover,
         ${hasContentTypeExpression(['T'])} as has_telegram,
+        ${hasContentTypeExpression(['N'])} as has_card,
+        ${hasContentTypeExpression(['E'])} as has_ephemera,
+        ${hasContentTypeExpression(['A'])} as has_article,
+        ${hasContentTypeExpression(['D'])} as has_diary,
+        ${hasContentTypeExpression(['V'])} as has_voice,
         ${hasExtrasExpression()} as has_extras
       FROM letters
       WHERE TRUE ${collectionFilter}
@@ -336,6 +394,11 @@ export async function queryAdminLetters(
       COUNT(*) FILTER (WHERE has_photos) as has_photos_count,
       COUNT(*) FILTER (WHERE has_cover) as has_cover_count,
       COUNT(*) FILTER (WHERE has_telegram) as has_telegram_count,
+      COUNT(*) FILTER (WHERE has_card) as has_card_count,
+      COUNT(*) FILTER (WHERE has_ephemera) as has_ephemera_count,
+      COUNT(*) FILTER (WHERE has_article) as has_article_count,
+      COUNT(*) FILTER (WHERE has_diary) as has_diary_count,
+      COUNT(*) FILTER (WHERE has_voice) as has_voice_count,
       COUNT(*) FILTER (WHERE flagged = true) as flagged_count
     FROM unique_groups
   `);
@@ -371,6 +434,11 @@ export async function queryAdminLetters(
     hasPhotos: Number(statsRow.has_photos_count || 0),
     hasCover: Number(statsRow.has_cover_count || 0),
     hasTelegram: Number(statsRow.has_telegram_count || 0),
+    hasCard: Number(statsRow.has_card_count || 0),
+    hasEphemera: Number(statsRow.has_ephemera_count || 0),
+    hasArticle: Number(statsRow.has_article_count || 0),
+    hasDiary: Number(statsRow.has_diary_count || 0),
+    hasVoice: Number(statsRow.has_voice_count || 0),
     flaggedCount: Number(statsRow.flagged_count || 0),
   };
 
@@ -449,18 +517,7 @@ export async function queryAdminLetters(
       clauses.push(sql`(${sql.join(missingClauses, sql` OR `)})`);
     }
     if (query.contentShape && query.contentShape.length > 0) {
-      const shapeClauses = query.contentShape.map((shape) => {
-        switch (shape) {
-          case 'extras':
-            return sql`has_extras = true`;
-          case 'photos':
-            return sql`has_photos = true`;
-          case 'cover':
-            return sql`has_cover = true`;
-          case 'telegram':
-            return sql`has_telegram = true`;
-        }
-      });
+      const shapeClauses = query.contentShape.map(getContentShapeBooleanExpression);
       clauses.push(sql`(${sql.join(shapeClauses, sql` OR `)})`);
     }
     return clauses.length > 0
@@ -485,6 +542,11 @@ export async function queryAdminLetters(
         ${hasContentTypeExpression(['P'])} as has_photos,
         ${hasContentTypeExpression(['C'])} as has_cover,
         ${hasContentTypeExpression(['T'])} as has_telegram,
+        ${hasContentTypeExpression(['N'])} as has_card,
+        ${hasContentTypeExpression(['E'])} as has_ephemera,
+        ${hasContentTypeExpression(['A'])} as has_article,
+        ${hasContentTypeExpression(['D'])} as has_diary,
+        ${hasContentTypeExpression(['V'])} as has_voice,
         ${hasExtrasExpression()} as has_extras
       FROM letters
       WHERE ${whereClause}
@@ -502,6 +564,15 @@ export async function queryAdminLetters(
     : [{ field: query.sort, direction: query.sortOrder }];
 
   const getSortDirection = (direction: 'asc' | 'desc') => direction === 'asc' ? sql`ASC` : sql`DESC`;
+  const countGroupPagesForTypes = (types: readonly string[]) => sql`(
+    SELECT COUNT(*)
+    FROM letters count_item
+    INNER JOIN letter_pages count_page ON count_page.letter_id = count_item.id
+    WHERE count_item.collection_id = filtered.collection_id
+      AND count_item.date_raw = filtered.date_raw
+      AND count_item.type_sequence = filtered.type_sequence
+      AND count_item.type = ANY(ARRAY[${sql.join(types.map(type => sql`${type}`), sql`, `)}]::letter_type[])
+  )`;
 
   const getSortExpression = (field: typeof adminSortFieldValues[number]) => {
     switch (field) {
@@ -544,15 +615,14 @@ export async function queryAdminLetters(
             AND count_extra.type != 'L'
         )`;
       case 'photos':
-        return sql`(
-          SELECT COUNT(*)
-          FROM letters count_photo
-          INNER JOIN letter_pages count_page ON count_page.letter_id = count_photo.id
-          WHERE count_photo.collection_id = filtered.collection_id
-            AND count_photo.date_raw = filtered.date_raw
-            AND count_photo.type_sequence = filtered.type_sequence
-            AND count_photo.type = 'P'
-        )`;
+      case 'cover':
+      case 'telegram':
+      case 'card':
+      case 'ephemera':
+      case 'article':
+      case 'diary':
+      case 'voice':
+        return countGroupPagesForTypes(contentShapeTypeMap[field]);
       case 'createdAt':
       default:
         return sql`filtered.created_at`;
@@ -580,6 +650,11 @@ export async function queryAdminLetters(
           ${hasContentTypeExpression(['P'])} as has_photos,
           ${hasContentTypeExpression(['C'])} as has_cover,
           ${hasContentTypeExpression(['T'])} as has_telegram,
+          ${hasContentTypeExpression(['N'])} as has_card,
+          ${hasContentTypeExpression(['E'])} as has_ephemera,
+          ${hasContentTypeExpression(['A'])} as has_article,
+          ${hasContentTypeExpression(['D'])} as has_diary,
+          ${hasContentTypeExpression(['V'])} as has_voice,
           ${hasExtrasExpression()} as has_extras
         FROM letters
         WHERE ${whereClause}
@@ -743,6 +818,11 @@ export async function queryAdminLetters(
         photos: Number(rawStats.hasPhotos),
         cover: Number(rawStats.hasCover),
         telegram: Number(rawStats.hasTelegram),
+        card: Number(rawStats.hasCard),
+        ephemera: Number(rawStats.hasEphemera),
+        article: Number(rawStats.hasArticle),
+        diary: Number(rawStats.hasDiary),
+        voice: Number(rawStats.hasVoice),
       },
     },
   };

@@ -1,4 +1,5 @@
 import type { ExtendedSortField, SortColumn, SortDirection } from "./types";
+import { CONTENT_TYPE_SORT_OPTIONS } from "./contentTypeModel";
 
 export const SORT_OPTIONS: Array<{
   value: ExtendedSortField;
@@ -15,8 +16,7 @@ export const SORT_OPTIONS: Array<{
   { value: "visibility", label: "Visibility", description: "Public or hidden state" },
   { value: "flagged", label: "Flagged", description: "Flagged state" },
   { value: "letters", label: "Letters", description: "Letter-page count" },
-  { value: "extras", label: "Extras", description: "Extra-content count" },
-  { value: "photos", label: "Photos", description: "Photo count" },
+  ...CONTENT_TYPE_SORT_OPTIONS,
 ];
 
 export type SortOption = (typeof SORT_OPTIONS)[number];
@@ -52,8 +52,16 @@ export function getDefaultDirection(field: ExtendedSortField): SortDirection {
     case "updatedAt":
     case "flagged":
     case "letters":
+      return "desc";
     case "extras":
     case "photos":
+    case "cover":
+    case "telegram":
+    case "card":
+    case "ephemera":
+    case "article":
+    case "diary":
+    case "voice":
       return "desc";
     case "letterDate":
     case "sender":
@@ -70,11 +78,18 @@ export function getDirectionLabel(field: ExtendedSortField, direction: SortDirec
     return direction === "asc" ? "unflagged first" : "flagged first";
   }
 
-  if (field === "letters" || field === "extras" || field === "photos") {
-    return direction === "asc" ? "low to high" : "high to low";
-  }
-
   switch (field) {
+    case "letters":
+    case "extras":
+    case "photos":
+    case "cover":
+    case "telegram":
+    case "card":
+    case "ephemera":
+    case "article":
+    case "diary":
+    case "voice":
+      return direction === "asc" ? "low to high" : "high to low";
     case "lastOpenedAt":
     case "createdAt":
     case "updatedAt":

@@ -158,7 +158,7 @@ describe('queryAdminLetters extra-content filtering', () => {
       limit: 50,
       sort: 'createdAt',
       sortOrder: 'desc',
-      contentShape: ['photos', 'telegram'],
+      contentShape: ['photos', 'telegram', 'card'],
     });
 
     const statsSql = renderSql(executeMock.mock.calls[0]?.[0]);
@@ -167,10 +167,13 @@ describe('queryAdminLetters extra-content filtering', () => {
 
     expect(statsSql).toContain('has_photos_count');
     expect(statsSql).toContain('has_telegram_count');
+    expect(statsSql).toContain('has_card_count');
     expect(countSql).toContain('has_photos = true');
     expect(countSql).toContain('has_telegram = true');
+    expect(countSql).toContain('has_card = true');
     expect(representativeSql).toContain('has_photos = true');
     expect(representativeSql).toContain('has_telegram = true');
+    expect(representativeSql).toContain('has_card = true');
   });
 
   it('orders representative ids with ordered backend sort rules before pagination', async () => {
@@ -180,15 +183,16 @@ describe('queryAdminLetters extra-content filtering', () => {
       sort: 'createdAt',
       sortOrder: 'desc',
       sortRules: [
-        { field: 'extras', direction: 'desc' },
+        { field: 'telegram', direction: 'desc' },
         { field: 'sender', direction: 'asc' },
       ],
     });
 
     const representativeSql = renderSql(executeMock.mock.calls[2]?.[0]);
 
-    expect(representativeSql).toContain('count_extra.collection_id = filtered.collection_id');
-    expect(representativeSql).toContain('count_extra.type != \'L\'');
+    expect(representativeSql).toContain('count_item.collection_id = filtered.collection_id');
+    expect(representativeSql).toContain('::letter_type[]');
+    expect(representativeSql).toContain('T');
     expect(representativeSql).toContain('filtered.sender ASC NULLS LAST');
     expect(representativeSql).toContain('filtered.id ASC');
     expect(representativeSql).toContain('LIMIT 25');

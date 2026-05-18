@@ -58,15 +58,15 @@ Mobile manager surfaces should default to bottom sheets with shared header, scro
 
 Nested selectors inside a mobile bottom-sheet manager should be sheet-aware. For example, the Sort manager's add-rule picker opens upward from the sticky footer instead of using a normal downward dropdown that would fall off-screen.
 
-The admin letters API now supports ordered server-side sort rules for every field exposed by the dashboard Sort manager, including letter-page, extra-item, and photo-item counts. The frontend sends the ordered sort stack through `sortRules`, while preserving the older `sort`/`sortOrder` shape as a compatibility fallback.
+The admin letters API now supports ordered server-side sort rules for every field exposed by the dashboard Sort manager, including letter-page counts, aggregate extra-item counts, and per-content-type counts. The frontend sends the ordered sort stack through `sortRules`, while preserving the older `sort`/`sortOrder` shape as a compatibility fallback.
 
 Meaningful sorts and filters should stay server-backed for the full filtered result set. Page-only sorting should not be reintroduced for dashboard Sort manager fields unless the limitation is explicitly documented.
 
-Extra-content status filters apply only to letter groups that actually have extra items. A representative letter with `extra_content_status = EMPTY` is not enough to count as "Extras: None"; the group must have non-letter items first. A future `has extras` filter is a separate content-shape filter, while the current extras status buttons are workflow/status filters for existing extra content.
+Extra-content status filters apply only to letter groups that actually have extra items. A representative letter with `extra_content_status = EMPTY` is not enough to count as "Extras: None"; the group must have non-letter items first. `Extra items` is a separate Contains filter for showing every group with non-letter items regardless of status, while the extras status buttons are workflow/status filters for existing extra content.
 
 Cleanup filters are dashboard-native data-quality filters. `Missing sender`, `Missing recipient`, and `Missing date` filter representative letter groups through the backend query contract and are saved/restored with dashboard views.
 
-Content-shape filters are based on actual related item/page existence for the representative letter group. `Has extras`, `Has photos`, `Has cover`, and `Has telegram` are not current-page client filters.
+Contains/content-type filters are based on actual related item/page existence for the representative letter group. The dashboard keeps aggregate `Extra items` plus specific type filters for photos, covers, telegrams, cards, ephemera, articles, diary, and voice. These are not current-page client filters.
 
 ### Mobile Data View
 

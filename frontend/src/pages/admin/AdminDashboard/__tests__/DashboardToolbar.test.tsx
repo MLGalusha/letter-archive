@@ -36,6 +36,11 @@ const emptyStats: DashboardFilterStats = {
   hasPhotos: 0,
   hasCover: 0,
   hasTelegram: 0,
+  hasCard: 0,
+  hasEphemera: 0,
+  hasArticle: 0,
+  hasDiary: 0,
+  hasVoice: 0,
 };
 
 function makeFilters(overrides: Partial<DashboardFilterControls> = {}): DashboardFilterControls {

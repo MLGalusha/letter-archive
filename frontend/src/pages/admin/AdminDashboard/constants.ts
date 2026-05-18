@@ -1,5 +1,6 @@
 import type { WorkflowState } from "../../../types/Letter";
 import type { ColumnDef, ColumnId, SortColumn } from "./types";
+export { CONTENT_SHAPE_FILTERS } from "./contentTypeModel";
 
 export const YEAR_OPTIONS = Array.from({ length: 151 }, (_, i) => 1800 + i);
 
@@ -34,6 +35,13 @@ export const SERVER_SORT_FIELDS = [
   "letters",
   "extras",
   "photos",
+  "cover",
+  "telegram",
+  "card",
+  "ephemera",
+  "article",
+  "diary",
+  "voice",
 ] as const;
 
 export const DEFAULT_DASHBOARD_SORT: SortColumn = {
@@ -180,33 +188,6 @@ export const MISSING_FILTERS = [
     label: "Missing date",
     countKey: "missingDate",
     className: "filter-missing",
-  },
-] as const;
-
-export const CONTENT_SHAPE_FILTERS = [
-  {
-    value: "extras",
-    label: "Has extras",
-    countKey: "hasExtras",
-    className: "filter-content-shape",
-  },
-  {
-    value: "photos",
-    label: "Has photos",
-    countKey: "hasPhotos",
-    className: "filter-content-shape",
-  },
-  {
-    value: "cover",
-    label: "Has cover",
-    countKey: "hasCover",
-    className: "filter-content-shape",
-  },
-  {
-    value: "telegram",
-    label: "Has telegram",
-    countKey: "hasTelegram",
-    className: "filter-content-shape",
   },
 ] as const;
 

@@ -62,7 +62,7 @@ Current filter groups:
 - Visibility and review flag.
 - Stored pipeline stage.
 - Cleanup/data quality: missing sender, recipient, or parsed date.
-- Content shape: groups with extras, photos, covers, or telegrams.
+- Contains: groups with extra items or specific stored content types: photos, covers, telegrams, cards, ephemera, articles, diary, or voice.
 - Content status: transcript, metadata, and existing extra-content status.
 - Date, collection, and search.
 
@@ -70,7 +70,7 @@ Saved views are local dashboard presets for now. They save filters, sort, and vi
 
 Default letters sort is Last opened descending. This keeps recent activity discoverable through sorting instead of a separate Recent edits button.
 
-The Sort manager stores ordered rules and sends the full ranked stack to the backend before pagination. Count sorts for letter pages, extra items, and photo items are server-backed dashboard sorts now, not current-page refinements.
+The Sort manager stores ordered rules and sends the full ranked stack to the backend before pagination. Count sorts for letter pages, aggregate extra items, and each stored content type are server-backed dashboard sorts now, not current-page refinements.
 
 ## Letters vs Collections
 

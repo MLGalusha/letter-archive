@@ -15,7 +15,7 @@ export default function ContentShapeFilterSection({
   return (
     <section className="filter-panel-section">
       <div className="filter-section-heading">
-        <h3>Content shape</h3>
+        <h3>Contains</h3>
       </div>
       <div className="filter-button-grid">
         {CONTENT_SHAPE_FILTERS.map((filter) => {

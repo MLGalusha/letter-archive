@@ -67,7 +67,7 @@ describe("useDashboardActiveFilters", () => {
       "Pipeline: Metadata drafted",
       "Missing sender",
       "Missing date",
-      "Has photos",
+      "Photos",
     ]);
   });
 

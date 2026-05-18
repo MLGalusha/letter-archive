@@ -97,11 +97,16 @@ export interface AdminLettersResponse {
       photos: number;
       cover: number;
       telegram: number;
+      card: number;
+      ephemera: number;
+      article: number;
+      diary: number;
+      voice: number;
     };
   };
 }
 
-export type SortField = 'createdAt' | 'updatedAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection' | 'lastOpenedAt' | 'flagged' | 'letters' | 'extras' | 'photos';
+export type SortField = 'createdAt' | 'updatedAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection' | 'lastOpenedAt' | 'flagged' | 'letters' | 'extras' | 'photos' | 'cover' | 'telegram' | 'card' | 'ephemera' | 'article' | 'diary' | 'voice';
 export type SortOrder = 'asc' | 'desc';
 
 export interface LetterQueryParams {

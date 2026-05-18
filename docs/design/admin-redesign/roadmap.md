@@ -123,7 +123,7 @@ Candidate filter categories:
 - Workflow filters: needs review, missing transcript, transcript confirmed, metadata failed/complete, processing state.
 - Data-completeness filters: missing sender, missing recipient, missing date, missing collection, missing metadata.
 - Historical/entity filters: sender, recipient, mentioned person, place, date range.
-- Content-shape filters: has extras, has photos, has cover, has telegram, flagged.
+- Contains/content-type filters: extra items, photos, covers, telegrams, cards, ephemera, articles, diary, voice, flagged.
 
 Target data-table control model:
 
@@ -135,11 +135,11 @@ Target data-table control model:
 
 Resolved audit findings:
 
-- The admin letters API supports collection, visibility, search, date components, date ranges, transcript status, metadata status, workflow, flagged, extra-content status, cleanup filters, content-shape filters, and ordered server-side sort rules.
-- The frontend dashboard exposes collection, visibility, search, date, transcript status, metadata status, cleanup, content-shape, saved views, visible columns, and a shared sort stack.
-- Flagged, workflow, extra-content status, cleanup, and content-shape filters are now wired through backend query support, frontend query construction, active filter chips, saved dashboard views, persisted dashboard state, stats normalization, select-all-filtered, and the desktop/mobile filter panel.
+- The admin letters API supports collection, visibility, search, date components, date ranges, transcript status, metadata status, workflow, flagged, extra-content status, cleanup filters, content-type filters, and ordered server-side sort rules.
+- The frontend dashboard exposes collection, visibility, search, date, transcript status, metadata status, cleanup, content-type filters, saved views, visible columns, and a shared sort stack.
+- Flagged, workflow, extra-content status, cleanup, and content-type filters are now wired through backend query support, frontend query construction, active filter chips, saved dashboard views, persisted dashboard state, stats normalization, select-all-filtered, and the desktop/mobile filter panel.
 - Cleanup filters are missing sender, missing recipient, and missing parsed date. Missing collection was not added because `letters.collection_id` is required and there is not currently a meaningful uncategorized letter state.
-- Content-shape filters are has extras, has photos, has cover, and has telegram. They use server-side grouped item/page existence, not current-page row data.
+- Contains/content-type filters are aggregate extra items plus photos, covers, telegrams, cards, ephemera, articles, diary, and voice. They use server-side grouped item/page existence, not current-page row data.
 - Entity-style filters such as mentioned person, place, topic, tone, and relationship exist in public archive search patterns, but are not currently wired into the admin letters endpoint.
 
 Progress:
@@ -149,8 +149,8 @@ Progress:
 - Expanded admin letters stats with exact workflow buckets so workflow filters can show useful counts.
 - Reframed workflow filters as advanced stored pipeline-stage filters with clearer labels, because they are not the same as live queue/running worker state.
 - Added cleanup/data-quality filters: missing sender, missing recipient, and missing parsed date.
-- Added content-shape filters backed by actual grouped item/page existence: has extras, has photos, has cover, and has telegram.
-- Added stats buckets for cleanup and content-shape filters so filter controls use the same contract as the query.
+- Added content-type filters backed by actual grouped item/page existence: extra items, photos, covers, telegrams, cards, ephemera, articles, diary, and voice.
+- Added stats buckets for cleanup and content-type filters so filter controls use the same contract as the query.
 
 Sort-model questions:
 
@@ -164,7 +164,7 @@ Resolved sort audit findings:
 
 - The backend now accepts ordered `sortRules` while keeping the legacy one-field `sort`/`sortOrder` params as fallback compatibility.
 - The dashboard sends the full ranked Sort manager stack to the API.
-- Count sorts for letters, extras, and photos are now applied server-side before pagination.
+- Count sorts for letters, aggregate extras, and each exposed content type are now applied server-side before pagination.
 - Column-header sorting created a duplicate-feeling sort path and should be removed in favor of one Supabase-style sort manager.
 
 Sort-model decision:
@@ -190,7 +190,7 @@ Progress:
 
 Exit criteria:
 
-- A narrowed filter set is approved before implementation. Completed for cleanup/content-shape filters.
+- A narrowed filter set is approved before implementation. Completed for cleanup/content-type filters.
 - Each accepted filter has a clear source of truth and query strategy. Completed through the admin letters API query contract.
 - Saved dashboard views include any new accepted filter state. Completed.
 - The accepted sort model has one shared state, clear mobile behavior, and no duplicate-feeling controls. Completed for the current dashboard Sort manager.
@@ -225,7 +225,7 @@ Goals:
 
 - Define the dashboard meaning clearly: extra-content status filters apply only to groups that have extra items.
 - Make `Extras > None` mean "has extra items, but no extra-content transcript/status yet", not "the representative letter has `extra_content_status = EMPTY`".
-- Keep "has extras" as a separate future content-shape filter for showing every group with extra items regardless of status.
+- Keep `Extra items` as a separate Contains filter for showing every group with non-letter items regardless of status.
 - Preserve the existing detail/review page behavior unless the audit finds a direct inconsistency.
 - Add focused backend coverage so status counts and filtering cannot drift from actual extra-item existence again.
 

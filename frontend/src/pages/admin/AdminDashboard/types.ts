@@ -8,7 +8,16 @@ export type FlaggedFilter = "ALL" | "FLAGGED" | "UNFLAGGED";
 
 export type MissingFilter = "sender" | "recipient" | "date";
 
-export type ContentShapeFilter = "extras" | "photos" | "cover" | "telegram";
+export type ContentShapeFilter =
+  | "extras"
+  | "photos"
+  | "cover"
+  | "telegram"
+  | "card"
+  | "ephemera"
+  | "article"
+  | "diary"
+  | "voice";
 
 export type DashboardView = "letters" | "collections";
 
@@ -25,7 +34,14 @@ export type ServerSortField =
   | "flagged"
   | "letters"
   | "extras"
-  | "photos";
+  | "photos"
+  | "cover"
+  | "telegram"
+  | "card"
+  | "ephemera"
+  | "article"
+  | "diary"
+  | "voice";
 
 export type ClientSortField = never;
 
@@ -142,4 +158,9 @@ export interface DashboardFilterStats {
   hasPhotos: number;
   hasCover: number;
   hasTelegram: number;
+  hasCard: number;
+  hasEphemera: number;
+  hasArticle: number;
+  hasDiary: number;
+  hasVoice: number;
 }

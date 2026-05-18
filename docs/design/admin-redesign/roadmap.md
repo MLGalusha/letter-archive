@@ -149,6 +149,17 @@ Sort audit findings:
 - Count sorts for letters, extras, and photos are applied client-side after the paginated server response, which means they only sort the current page rather than the full filtered result set.
 - The toolbar sort is currently the primary server sort selector; column headers can create a broader sort stack, which risks feeling like duplicate sorting unless the UI labels the relationship clearly.
 
+Sort-model decision:
+
+- Treat the toolbar dropdown as the primary server sort for the full filtered result set.
+- Treat count-column header sorts for letters, extras, and photos as page-level secondary sorts until the backend supports those sorts server-side.
+- Keep server-sortable column headers wired to the same primary server sort state, but label the sort scope so the toolbar and headers do not read as unrelated competing systems.
+
+Progress:
+
+- Dashboard sort UI now labels the dropdown as `Primary sort`, exposes page-level count sorts separately, and lets admins clear page sorts without clearing the primary server sort.
+- Sortable column headers now advertise whether they affect the full filtered result set or only the currently loaded page.
+
 Exit criteria:
 
 - A narrowed filter set is approved before implementation.
@@ -254,7 +265,7 @@ Goals:
 - Keep checkbox/selection controls first and outside user reorder for now.
 - Persist column order locally and include it in saved dashboard views.
 - Render table headers and row cells from one shared ordered column model so header/body order cannot drift.
-- Avoid drag-and-drop for the first slice unless a later design requires it; simple up/down/reset controls are easier to make touch and keyboard accessible.
+- Use one clear reorder handle in the column menu, with keyboard arrow support as the accessible fallback.
 
 Current audit findings:
 
@@ -266,15 +277,15 @@ Current audit findings:
 Likely implementation slices:
 
 - Add `columnOrder` state and persistence migration in `useDashboardColumns`.
-- Expose ordered columns, move-column controls, and reset-order controls.
-- Update the column menu to show ordered columns with move controls.
+- Expose ordered columns, reorder-handle controls, and reset-order controls.
+- Update the column menu to show ordered columns with one reorder affordance per row.
 - Refactor table header and row rendering to consume the same ordered column list.
 - Update saved dashboard views and tests for column order.
 
 Progress:
 
 - Added persisted `columnOrder` alongside visible columns, with migration for older saved column settings.
-- Added move up/down and reset controls to the column menu instead of introducing drag-and-drop.
+- Added a single grip-style reorder handle and reset control to the column menu.
 - Updated saved dashboard views to capture and restore column order.
 - Refactored table header and row rendering to consume one shared ordered column list, preventing header/body drift.
 - Browser-verified that moving a column updates both header and row order together and persists to local storage.

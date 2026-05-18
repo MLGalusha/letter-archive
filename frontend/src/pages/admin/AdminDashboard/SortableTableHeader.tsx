@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { ExtendedSortField, SortInfo } from "./types";
+import { isServerSortField } from "./utils";
 
 interface SortableTableHeaderProps {
   field: ExtendedSortField;
@@ -19,12 +20,17 @@ export default function SortableTableHeader({
   onSort,
 }: SortableTableHeaderProps) {
   const sortInfo = getSortInfo(field);
+  const sortScope = isServerSortField(field)
+    ? "Sorts the full filtered result set."
+    : "Sorts the currently loaded page only.";
 
   return (
     <th
       data-column={dataColumn}
       className={`${className} sortable-header ${sortInfo ? "sorted" : ""}`.trim()}
       onClick={() => onSort(field)}
+      title={sortScope}
+      aria-sort={sortInfo ? (sortInfo.direction === "asc" ? "ascending" : "descending") : "none"}
     >
       <span className="header-content">
         {label}

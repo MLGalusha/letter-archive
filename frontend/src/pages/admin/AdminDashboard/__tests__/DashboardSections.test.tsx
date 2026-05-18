@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Letter } from "../../../../types/Letter";
 import type { ContentStatus } from "../../../../types/Letter";
 import RecentActivityTable from "../RecentActivityTable";
+import type { TableCopyEditModel, TableSelectionModel } from "../RecentActivityTable";
 
 function makeLetter(): Letter {
   return {
@@ -30,10 +31,17 @@ function makeLetter(): Letter {
 }
 
 describe("RecentActivityTable", () => {
-  it("renders rows and forwards table interactions", async () => {
-    const user = userEvent.setup();
-    const onCellClick = vi.fn();
-
+  function renderRecentActivityTable({
+    selectedIds = new Set<string>(),
+    onRowClick = vi.fn(),
+    onCheckboxChange = vi.fn(),
+    onCellClick = vi.fn(),
+  }: {
+    selectedIds?: Set<string>;
+    onRowClick?: TableSelectionModel["onRowClick"];
+    onCheckboxChange?: TableSelectionModel["onCheckboxChange"];
+    onCellClick?: TableCopyEditModel["onCellClick"];
+  } = {}) {
     render(
       <RecentActivityTable
         filteredLetters={[makeLetter()]}
@@ -64,11 +72,11 @@ describe("RecentActivityTable", () => {
           columnMenuRef: createRef<HTMLTableCellElement>(),
         }}
         selection={{
-          selectedIds: new Set(),
-          onRowClick: vi.fn(),
+          selectedIds,
+          onRowClick,
           onRowMouseDown: vi.fn(),
           onRowMouseEnter: vi.fn(),
-          onCheckboxChange: vi.fn(),
+          onCheckboxChange,
         }}
         copyEdit={{
           editMode: false,
@@ -92,6 +100,15 @@ describe("RecentActivityTable", () => {
       />,
     );
 
+    return { onCellClick, onCheckboxChange, onRowClick };
+  }
+
+  it("renders rows and forwards table interactions", async () => {
+    const user = userEvent.setup();
+    const onCellClick = vi.fn();
+
+    renderRecentActivityTable({ onCellClick });
+
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
 
@@ -99,5 +116,25 @@ describe("RecentActivityTable", () => {
 
     await user.click(screen.getByText("Alice"));
     expect(onCellClick).toHaveBeenCalled();
+  });
+
+  it("exposes selected rows through checkbox and row state", () => {
+    renderRecentActivityTable({ selectedIds: new Set(["letter-1"]) });
+
+    const checkbox = screen.getByRole("checkbox", { name: "Select Test Letter" });
+    expect(checkbox).toBeChecked();
+    expect(checkbox.closest("tr")).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("uses the row checkbox without triggering row open", async () => {
+    const user = userEvent.setup();
+    const onCheckboxChange = vi.fn();
+    const onRowClick = vi.fn();
+    renderRecentActivityTable({ onCheckboxChange, onRowClick });
+
+    await user.click(screen.getByRole("checkbox", { name: "Select Test Letter" }));
+
+    expect(onCheckboxChange).toHaveBeenCalledWith("letter-1", 0, expect.anything());
+    expect(onRowClick).not.toHaveBeenCalled();
   });
 });

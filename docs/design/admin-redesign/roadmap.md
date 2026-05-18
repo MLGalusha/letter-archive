@@ -473,6 +473,10 @@ Related responsive UI progress:
 - Mobile filters now open as a focused bottom sheet with backdrop and close behavior instead of expanding the dashboard stack inline.
 - Mobile table now favors horizontal scroll with readable minimum column widths instead of hiding most columns and compressing the remaining ones.
 - The desktop filter panel now uses a responsive section grid so wider filter groups, such as pipeline stage, content status, and date, can span enough space without label/button collisions.
+- Selection and bulk actions have a documented audit and conservative target model before deeper UI changes.
+- Selection behavior now has focused coverage for page selection, select-all-filtered, filtered pruning, shift range selection, drag select/deselect, copy-mode row interception, selected-letter details, and bulk toolbar selection actions.
+- Row checkbox event isolation is owned by a dedicated component, making the table row renderer less responsible for selection mechanics.
+- Mobile selected-state table layout now reserves enough bottom space for the fixed bulk toolbar so lower rows do not sit behind it.
 
 Target responsive direction:
 

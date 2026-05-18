@@ -1,12 +1,9 @@
 import type React from "react";
 import type { RefObject } from "react";
-import { Icon } from "../../../components/common/Icon";
 import type { Letter, ContentStatus } from "../../../types/Letter";
-import ColumnToggleHeader from "./ColumnToggleHeader";
-import { FILE_TYPE_COLUMNS } from "./constants";
 import DashboardPagination from "./DashboardPagination";
 import RecentActivityRow from "./RecentActivityRow";
-import SortableTableHeader from "./SortableTableHeader";
+import RecentActivityTableHeader from "./RecentActivityTableHeader";
 import type { ColumnId, ExtendedSortField, PendingChange, SortInfo } from "./types";
 
 interface PaginationState {
@@ -95,135 +92,16 @@ export default function RecentActivityTable({
         aria-label="Letters table"
       >
         <table className="letters-table">
-          <thead>
-            <tr>
-              <ColumnToggleHeader
-                allColumns={allColumns}
-                visibleColumns={visibleColumns}
-                showColumnMenu={showColumnMenu}
-                onToggleColumnMenu={onToggleColumnMenu}
-                onToggleColumn={onToggleColumn}
-                columnMenuRef={columnMenuRef}
-              />
-              {visibleColumns.has("sender") && (
-                <SortableTableHeader
-                  field="sender"
-                  dataColumn="sender"
-                  label="Sender"
-                  getSortInfo={getSortInfo}
-                  onSort={onSort}
-                />
-              )}
-              {visibleColumns.has("recipient") && (
-                <SortableTableHeader
-                  field="recipient"
-                  dataColumn="recipient"
-                  label="Recipient"
-                  getSortInfo={getSortInfo}
-                  onSort={onSort}
-                />
-              )}
-              {visibleColumns.has("date") && (
-                <SortableTableHeader
-                  field="letterDate"
-                  dataColumn="date"
-                  className="date-header"
-                  label="Date"
-                  getSortInfo={getSortInfo}
-                  onSort={onSort}
-                />
-              )}
-              {visibleColumns.has("collection") && (
-                <SortableTableHeader
-                  field="collection"
-                  dataColumn="collection"
-                  label={
-                    <>
-                    <span className="desktop-header-label">Collection</span>
-                    <span className="mobile-header-label">Coll.</span>
-                    </>
-                  }
-                  getSortInfo={getSortInfo}
-                  onSort={onSort}
-                />
-              )}
-              {visibleColumns.has("letters") && (
-                <SortableTableHeader
-                  field="letters"
-                  dataColumn="letters"
-                  label="Letters"
-                  getSortInfo={getSortInfo}
-                  onSort={onSort}
-                />
-              )}
-              {visibleColumns.has("extras") && (
-                <SortableTableHeader
-                  field="extras"
-                  dataColumn="extras"
-                  label="Extras"
-                  getSortInfo={getSortInfo}
-                  onSort={onSort}
-                />
-              )}
-              {visibleColumns.has("photos") && (
-                <SortableTableHeader
-                  field="photos"
-                  dataColumn="photos"
-                  label="Photos"
-                  getSortInfo={getSortInfo}
-                  onSort={onSort}
-                />
-              )}
-              {visibleColumns.has("transcript") && <th data-column="transcript" className="status-header">Transcript</th>}
-              {visibleColumns.has("metadata") && <th data-column="metadata" className="status-header">Metadata</th>}
-              {visibleColumns.has("visibility") && <th data-column="visibility">Visibility</th>}
-              {visibleColumns.has("created") && (
-                <SortableTableHeader
-                  field="createdAt"
-                  dataColumn="created"
-                  label="Created"
-                  getSortInfo={getSortInfo}
-                  onSort={onSort}
-                />
-              )}
-              {visibleColumns.has("updated") && (
-                <SortableTableHeader
-                  field="updatedAt"
-                  dataColumn="updated"
-                  label="Updated"
-                  getSortInfo={getSortInfo}
-                  onSort={onSort}
-                />
-              )}
-              {visibleColumns.has("lastOpened") && (
-                <SortableTableHeader
-                  field="lastOpenedAt"
-                  dataColumn="lastOpened"
-                  label={
-                    <>
-                    <span className="desktop-header-label">Last Opened</span>
-                    <span className="mobile-header-label">Opened</span>
-                    </>
-                  }
-                  getSortInfo={getSortInfo}
-                  onSort={onSort}
-                />
-              )}
-              {visibleColumns.has("flag") && (
-                <SortableTableHeader
-                  field="flagged"
-                  dataColumn="flag"
-                  className="flag-header"
-                  label={<Icon name="flag" size={14} />}
-                  getSortInfo={getSortInfo}
-                  onSort={onSort}
-                />
-              )}
-              {FILE_TYPE_COLUMNS.filter(col => visibleColumns.has(col.id)).map(col => (
-                <th key={col.id} data-column={col.id}>{col.label}</th>
-              ))}
-            </tr>
-          </thead>
+          <RecentActivityTableHeader
+            visibleColumns={visibleColumns}
+            getSortInfo={getSortInfo}
+            onSort={onSort}
+            allColumns={allColumns}
+            showColumnMenu={showColumnMenu}
+            onToggleColumnMenu={onToggleColumnMenu}
+            onToggleColumn={onToggleColumn}
+            columnMenuRef={columnMenuRef}
+          />
           <tbody>
             {filteredLetters.map((letter, index) => (
               <RecentActivityRow

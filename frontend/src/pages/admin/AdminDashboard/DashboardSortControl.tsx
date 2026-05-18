@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "../../../components/common/Icon";
+import DashboardManagerSurface from "./DashboardManagerSurface";
 import type { ExtendedSortField, SortColumn, SortDirection } from "./types";
 
 interface DashboardSortControlProps {
@@ -110,6 +111,11 @@ export default function DashboardSortControl({
     setOpen(false);
   };
 
+  const handleClose = () => {
+    setOpen(false);
+    setActivePicker(null);
+  };
+
   return (
     <div className="dashboard-sort-manager" ref={sortMenuRef}>
       <button
@@ -128,7 +134,37 @@ export default function DashboardSortControl({
       </button>
 
       {open && (
-        <div className="sort-manager-popover" role="dialog" aria-label="Sort rules">
+        <DashboardManagerSurface
+          title="Sort"
+          ariaLabel="Sort rules"
+          className="sort-manager-popover"
+          onClose={handleClose}
+          footer={(
+            <>
+              {availableAddOptions.length > 0 ? (
+                <SortFieldPicker
+                  id="add-rule"
+                  label="Add sort rule"
+                  placeholder="Add sort rule"
+                  options={availableAddOptions}
+                  activePicker={activePicker}
+                  onOpenChange={setActivePicker}
+                  onSelect={handleAddRule}
+                />
+              ) : (
+                <span className="sort-field-empty">All sort options have been added</span>
+              )}
+              <button
+                type="button"
+                className="sort-apply-btn"
+                onClick={handleApplySorting}
+                disabled={!hasDraftChanges}
+              >
+                Apply sorting
+              </button>
+            </>
+          )}
+        >
           {draftSortColumns.length > 0 && (
             <div className="sort-rule-list">
               {draftSortColumns.map((rule, index) => (
@@ -174,31 +210,7 @@ export default function DashboardSortControl({
               ))}
             </div>
           )}
-
-          <div className="sort-manager-footer">
-            {availableAddOptions.length > 0 ? (
-              <SortFieldPicker
-                id="add-rule"
-                label="Add sort rule"
-                placeholder="Add sort rule"
-                options={availableAddOptions}
-                activePicker={activePicker}
-                onOpenChange={setActivePicker}
-                onSelect={handleAddRule}
-              />
-            ) : (
-              <span className="sort-field-empty">All sort options have been added</span>
-            )}
-            <button
-              type="button"
-              className="sort-apply-btn"
-              onClick={handleApplySorting}
-              disabled={!hasDraftChanges}
-            >
-              Apply sorting
-            </button>
-          </div>
-        </div>
+        </DashboardManagerSurface>
       )}
     </div>
   );

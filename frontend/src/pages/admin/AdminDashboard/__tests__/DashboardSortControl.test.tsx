@@ -37,4 +37,22 @@ describe("DashboardSortControl", () => {
     await user.click(toggle);
     expect(toggle).toHaveAccessibleName(/Letter date is sorted oldest first/i);
   });
+
+  it("renders sort rules inside the shared manager dialog and closes with escape", async () => {
+    const user = userEvent.setup();
+    render(
+      <SortControlHarness
+        initialSort={[{ field: "lastOpenedAt", direction: "desc" }]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Sort/i }));
+
+    expect(screen.getByRole("dialog", { name: "Sort rules" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sort" })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog", { name: "Sort rules" })).not.toBeInTheDocument();
+  });
 });

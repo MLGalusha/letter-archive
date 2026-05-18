@@ -448,7 +448,13 @@ Exit criteria:
 - The dashboard does not contain competing one-off dropdown styles for equivalent tasks.
 - Roadmap/decision notes explain which surfaces still use transitional dropdowns and why.
 
-Progress:
+Phase 3.25 progress:
+
+- Added a shared `DashboardManagerSurface` shell with a named dialog, compact header, close action, scrollable body, optional footer/action area, and Escape-to-close behavior.
+- Migrated the Sort manager onto the shared shell as the first proving surface.
+- Changed the Sort manager's mobile behavior from a cramped anchored popover to a bottom sheet with clear header/body/footer ownership.
+
+Related responsive UI progress:
 
 - Letters/collections view switch is visible on both desktop and mobile.
 - Mobile uses top app bar plus dashboard-level controls instead of a bottom nav.

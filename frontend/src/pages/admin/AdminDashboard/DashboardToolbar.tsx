@@ -58,7 +58,8 @@ export default function DashboardToolbar({
   selectedCount,
 }: DashboardToolbarProps) {
   const {
-    handleCollectionInputChange,
+    collectionFilters,
+    removeCollectionFilter,
     visibilityFilter,
     toggleVisibilityFilter,
     transcriptStatusFilters,
@@ -87,6 +88,7 @@ export default function DashboardToolbar({
 
   const { activeFilterCount, activeFilterChips } = useDashboardActiveFilters({
     collectionFilter,
+    collectionFilters,
     visibilityFilter,
     searchQuery,
     transcriptStatusFilters,
@@ -98,7 +100,7 @@ export default function DashboardToolbar({
     contentShapeFilters,
     hasDateFilter,
     toggleVisibilityFilter,
-    handleCollectionInputChange,
+    removeCollectionFilter,
     setSearchInput,
     setSearchQuery,
     getDateButtonText,

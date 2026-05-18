@@ -11,6 +11,7 @@ export interface DashboardFilterChip {
 
 interface UseDashboardActiveFiltersOptions {
   collectionFilter: string;
+  collectionFilters: string[];
   visibilityFilter: VisibilityFilter;
   searchQuery: string;
   transcriptStatusFilters: ContentStatus[];
@@ -22,7 +23,7 @@ interface UseDashboardActiveFiltersOptions {
   contentShapeFilters: ContentShapeFilter[];
   hasDateFilter: boolean;
   toggleVisibilityFilter: (value: "PUBLISHED" | "HIDDEN") => void;
-  handleCollectionInputChange: (value: string) => void;
+  removeCollectionFilter: (code: string) => void;
   setSearchInput: (value: string) => void;
   setSearchQuery: (value: string) => void;
   getDateButtonText: () => string;
@@ -55,6 +56,7 @@ function formatContentShapeFilterLabel(filter: ContentShapeFilter) {
 
 export function useDashboardActiveFilters({
   collectionFilter,
+  collectionFilters,
   visibilityFilter,
   searchQuery,
   transcriptStatusFilters,
@@ -66,7 +68,7 @@ export function useDashboardActiveFilters({
   contentShapeFilters,
   hasDateFilter,
   toggleVisibilityFilter,
-  handleCollectionInputChange,
+  removeCollectionFilter,
   setSearchInput,
   setSearchQuery,
   getDateButtonText,
@@ -99,10 +101,13 @@ export function useDashboardActiveFilters({
     }
 
     if (collectionFilter !== "all") {
-      chips.push({
-        key: "collection",
-        label: `Collection ${collectionFilter}`,
-        onRemove: () => handleCollectionInputChange(""),
+      const activeCollectionFilters = collectionFilters.length > 0 ? collectionFilters : collectionFilter.split(",");
+      activeCollectionFilters.forEach((code) => {
+        chips.push({
+          key: `collection-${code}`,
+          label: `Collection ${code}`,
+          onRemove: () => removeCollectionFilter(code),
+        });
       });
     }
 
@@ -177,6 +182,7 @@ export function useDashboardActiveFilters({
   }, [
     visibilityFilter,
     collectionFilter,
+    collectionFilters,
     searchQuery,
     hasDateFilter,
     transcriptStatusFilters,
@@ -187,7 +193,7 @@ export function useDashboardActiveFilters({
     missingFilters,
     contentShapeFilters,
     toggleVisibilityFilter,
-    handleCollectionInputChange,
+    removeCollectionFilter,
     setSearchInput,
     setSearchQuery,
     getDateButtonText,

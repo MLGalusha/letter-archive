@@ -1,8 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StartProcessingOptions } from '../../../api/admin';
 import type { ContentStatus, WorkflowState } from '../../../types/Letter';
 import { loadPersistedState } from './utils';
 import type { ContentFilterView, ContentShapeFilter, DateMode, FlaggedFilter, MissingFilter, VisibilityFilter } from './types';
+
+function parseCollectionFilter(value: string | null | undefined): string[] {
+  if (!value || value === 'all') return [];
+
+  return Array.from(new Set(
+    value
+      .split(',')
+      .map((code) => code.replace(/\D/g, '').slice(0, 3))
+      .filter((code) => code !== '' && Number(code) !== 0),
+  ));
+}
 
 export function useDashboardFilters() {
   const persistedState = useRef(loadPersistedState());
@@ -11,11 +22,7 @@ export function useDashboardFilters() {
     persistedState.current.dateMode ?? 'specific',
   );
   const [contentFilterView, setContentFilterView] = useState<ContentFilterView>('transcript');
-  const [collectionInput, setCollectionInput] = useState(
-    persistedState.current.collectionFilter === 'all'
-      ? ''
-      : persistedState.current.collectionFilter ?? '',
-  );
+  const [collectionInput, setCollectionInput] = useState('');
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>(
     persistedState.current.visibilityFilter ?? 'ALL',
   );
@@ -40,8 +47,8 @@ export function useDashboardFilters() {
   const [contentShapeFilters, setContentShapeFilters] = useState<ContentShapeFilter[]>(
     persistedState.current.contentShapeFilters ?? [],
   );
-  const [collectionFilter, setCollectionFilter] = useState<string>(
-    persistedState.current.collectionFilter ?? 'all',
+  const [collectionFilters, setCollectionFilters] = useState<string[]>(
+    parseCollectionFilter(persistedState.current.collectionFilter),
   );
   const [yearFilter, setYearFilter] = useState<number | null>(
     persistedState.current.year ?? null,
@@ -78,15 +85,33 @@ export function useDashboardFilters() {
     };
   }, [searchInput]);
 
+  const collectionFilter = useMemo(
+    () => collectionFilters.length > 0 ? collectionFilters.join(',') : 'all',
+    [collectionFilters],
+  );
+
   const handleCollectionInputChange = useCallback((value: string) => {
     const cleaned = value.replace(/\D/g, '').slice(0, 3);
     setCollectionInput(cleaned);
+  }, []);
 
-    if (cleaned === '' || Number(cleaned) === 0) {
-      setCollectionFilter('all');
-    } else {
-      setCollectionFilter(cleaned);
-    }
+  const addCollectionFilter = useCallback(() => {
+    const cleaned = collectionInput.replace(/\D/g, '').slice(0, 3);
+    if (cleaned === '' || Number(cleaned) === 0) return;
+
+    setCollectionFilters((previous) => (
+      previous.includes(cleaned) ? previous : [...previous, cleaned]
+    ));
+    setCollectionInput('');
+  }, [collectionInput]);
+
+  const removeCollectionFilter = useCallback((code: string) => {
+    setCollectionFilters((previous) => previous.filter((collectionCode) => collectionCode !== code));
+  }, []);
+
+  const setCollectionFilter = useCallback((value: string) => {
+    setCollectionFilters(parseCollectionFilter(value));
+    setCollectionInput('');
   }, []);
 
   const toggleVisibilityFilter = useCallback((value: 'PUBLISHED' | 'HIDDEN') => {
@@ -162,7 +187,7 @@ export function useDashboardFilters() {
     setWorkflowFilters([]);
     setMissingFilters([]);
     setContentShapeFilters([]);
-    setCollectionFilter('all');
+    setCollectionFilters([]);
     setCollectionInput('');
     setSearchInput('');
     setSearchQuery('');
@@ -184,6 +209,9 @@ export function useDashboardFilters() {
     collectionInput,
     setCollectionInput,
     handleCollectionInputChange,
+    collectionFilters,
+    addCollectionFilter,
+    removeCollectionFilter,
     visibilityFilter,
     setVisibilityFilter,
     toggleVisibilityFilter,

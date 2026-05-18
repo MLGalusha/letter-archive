@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import DashboardFilterPanel from "../DashboardFilterPanel";
@@ -47,7 +47,10 @@ function makeFilters(overrides: Partial<DashboardFilterControls> = {}): Dashboar
   return {
     collectionInput: "",
     collectionFilter: "all",
+    collectionFilters: [],
     handleCollectionInputChange: vi.fn(),
+    addCollectionFilter: vi.fn(),
+    removeCollectionFilter: vi.fn(),
     visibilityFilter: "ALL",
     toggleVisibilityFilter: vi.fn(),
     contentFilterView: "transcript",
@@ -130,9 +133,10 @@ describe("DashboardFilterPanel", () => {
     expect(screen.queryByRole("button", { name: "Clear" })).not.toBeInTheDocument();
   });
 
-  it("routes collection input changes through the filter controller", async () => {
+  it("routes collection input changes and additions through the filter controller", async () => {
     const handleCollectionInputChange = vi.fn();
-    const filters = makeFilters({ handleCollectionInputChange });
+    const addCollectionFilter = vi.fn();
+    const filters = makeFilters({ handleCollectionInputChange, addCollectionFilter });
 
     renderFilterPanel({ filters });
 
@@ -141,6 +145,13 @@ describe("DashboardFilterPanel", () => {
     });
 
     expect(handleCollectionInputChange).toHaveBeenLastCalledWith("123");
+
+    cleanup();
+    renderFilterPanel({ filters: makeFilters({ collectionInput: "123", addCollectionFilter }) });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add collection filter" }));
+
+    expect(addCollectionFilter).toHaveBeenCalled();
   });
 
   it("routes cleanup and content-shape filters through the filter controller", async () => {

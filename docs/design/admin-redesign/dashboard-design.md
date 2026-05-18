@@ -55,7 +55,7 @@ Current toolbar structure:
 - Active filter chips: visible on desktop and mobile, horizontally scrollable when needed.
 - Filter editing panel: opened from Filters on desktop and mobile. Desktop keeps the panel inline but height-capped with its own scroll owner so the table remains visible; mobile uses a bottom sheet with fixed header/footer and a scrollable body.
 - The filter manager starts with Scope controls because date and collection are the most common narrowing actions. Worklist, content, and pipeline filters follow the same shared state model.
-- Collection filtering is a single code field with contextual clear behavior. Empty code means all collections, so there is no separate All button.
+- Collection filtering uses a compact multi-code rule list. Empty rules mean all collections, so there is no separate All button; each added code becomes its own removable active filter.
 
 The mobile filter panel is intentionally not a second navigation system. It edits the same filter state used by the desktop dashboard.
 

@@ -102,7 +102,8 @@ Progress:
 - Filter option controls now share a single checkbox/label/count primitive with calmer color accents, replacing the earlier loud pill-grid styling across worklist, content, scope, and pipeline filters.
 - Collection code filtering now renders as a full-width manager field instead of a tiny detached code input, so it fits the same desktop/mobile filter surface as date and status controls.
 - Scope filters now lead the filter manager, with date and collection implemented as first-class controls before worklist/content/pipeline filters.
-- Collection filtering uses one code field plus contextual clear behavior; it does not show a redundant "All" button because an empty code already represents all collections.
+- Collection filtering now uses a small multi-rule code field: admins can add several collection codes and remove them individually, while an empty rule list represents all collections.
+- The admin letters API accepts the same collection query as a single code, comma-separated codes, or repeated codes so saved views and existing links remain backward compatible.
 
 Out of scope:
 

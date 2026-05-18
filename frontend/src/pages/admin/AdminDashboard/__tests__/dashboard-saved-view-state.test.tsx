@@ -151,7 +151,8 @@ describe("useDashboardSavedViewState", () => {
 
     expect(result.current.filters.visibilityFilter).toBe("HIDDEN");
     expect(result.current.filters.collectionFilter).toBe("012");
-    expect(result.current.filters.collectionInput).toBe("012");
+    expect(result.current.filters.collectionFilters).toEqual(["012"]);
+    expect(result.current.filters.collectionInput).toBe("");
     expect(result.current.filters.searchInput).toBe("jimmie");
     expect(result.current.filters.searchQuery).toBe("jimmie");
     expect(result.current.filters.yearFilter).toBe(1947);

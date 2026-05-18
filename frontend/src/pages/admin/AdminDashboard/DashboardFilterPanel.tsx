@@ -36,6 +36,9 @@ export default function DashboardFilterPanel({
   const {
     collectionInput,
     handleCollectionInputChange,
+    collectionFilters,
+    addCollectionFilter,
+    removeCollectionFilter,
     collectionFilter,
     visibilityFilter,
     toggleVisibilityFilter,
@@ -142,8 +145,10 @@ export default function DashboardFilterPanel({
 
           <DashboardCollectionFilterControl
             collectionInput={collectionInput}
-            collectionFilter={collectionFilter}
+            collectionFilters={collectionFilters}
             onCollectionInputChange={handleCollectionInputChange}
+            onAddCollectionFilter={addCollectionFilter}
+            onRemoveCollectionFilter={removeCollectionFilter}
           />
         </FilterPanelGroup>
 

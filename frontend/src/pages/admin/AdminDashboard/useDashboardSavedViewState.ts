@@ -113,7 +113,7 @@ export function useDashboardSavedViewState({
   const applyDashboardViewState = useCallback((state: DashboardViewState) => {
     setVisibilityFilter(state.visibilityFilter);
     setCollectionFilter(state.collectionFilter);
-    setCollectionInput(state.collectionFilter === "all" ? "" : state.collectionFilter);
+    setCollectionInput("");
     setSearchInput(state.searchQuery);
     setSearchQuery(state.searchQuery);
     setSortColumns(state.sortColumns);

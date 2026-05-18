@@ -62,7 +62,7 @@ vi.mock('../../dto/index.js', () => ({
   transformLetterWithRelatedToDTO: vi.fn(),
 }));
 
-import { queryAdminLetters } from '../letter-queries.js';
+import { adminLettersQuerySchema, queryAdminLetters } from '../letter-queries.js';
 
 describe('queryAdminLetters extra-content filtering', () => {
   beforeEach(() => {
@@ -200,5 +200,45 @@ describe('queryAdminLetters extra-content filtering', () => {
     expect(representativeSql).toContain('filtered.id ASC');
     expect(representativeSql).toContain('LIMIT 25');
     expect(representativeSql).toContain('OFFSET 25');
+  });
+
+  it('resolves multiple collection codes into one collection-id filter', async () => {
+    findCollectionsMock.mockResolvedValueOnce([{ id: 'collection-003' }, { id: 'collection-009' }]);
+
+    await queryAdminLetters({
+      page: 1,
+      limit: 50,
+      sort: 'createdAt',
+      sortOrder: 'desc',
+      collection: ['003', '009'],
+    });
+
+    expect(findCollectionsMock).toHaveBeenCalledWith({
+      where: {
+        clauses: [
+          { field: 'collections.collectionCode', value: '%003' },
+          { field: 'collections.collectionCode', value: '%009' },
+        ],
+      },
+    });
+
+    const statsSql = renderSql(executeMock.mock.calls[0]?.[0]);
+    const countSql = renderSql(executeMock.mock.calls[1]?.[0]);
+    const representativeSql = renderSql(executeMock.mock.calls[2]?.[0]);
+
+    expect(statsSql).toContain('collection-003');
+    expect(statsSql).toContain('collection-009');
+    expect(countSql).toContain('collection-003');
+    expect(countSql).toContain('collection-009');
+    expect(representativeSql).toContain('collection-003');
+    expect(representativeSql).toContain('collection-009');
+  });
+
+  it('parses comma-separated collection codes from the admin query string', () => {
+    const query = adminLettersQuerySchema.parse({
+      collection: '003,009',
+    });
+
+    expect(query.collection).toEqual(['003', '009']);
   });
 });

@@ -47,7 +47,10 @@ function makeFilters(overrides: Partial<DashboardFilterControls> = {}): Dashboar
   return {
     collectionInput: "",
     collectionFilter: "all",
+    collectionFilters: [],
     handleCollectionInputChange: vi.fn(),
+    addCollectionFilter: vi.fn(),
+    removeCollectionFilter: vi.fn(),
     visibilityFilter: "ALL",
     toggleVisibilityFilter: vi.fn(),
     contentFilterView: "transcript",

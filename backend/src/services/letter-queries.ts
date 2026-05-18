@@ -70,6 +70,16 @@ export async function fetchLetterWithRelatedAndTransform(
 const contentStatusValues = ['EMPTY', 'AI_DRAFT', 'EDITED', 'VERIFIED'] as const;
 const missingFieldValues = ['sender', 'recipient', 'date'] as const;
 const contentShapeValues = ['extras', 'photos', 'cover', 'telegram', 'card', 'ephemera', 'article', 'diary', 'voice'] as const;
+const collectionCodesValue = (val: unknown) => {
+  if (typeof val !== 'string') return val;
+
+  const codes = val
+    .split(',')
+    .map(code => code.trim())
+    .filter(Boolean);
+
+  return codes.length > 1 ? codes : val;
+};
 const adminSortFieldValues = [
   'createdAt',
   'updatedAt',
@@ -171,7 +181,7 @@ export const adminLettersQuerySchema = z.object({
       z.array(z.enum(['UPLOADED', 'TRANSCRIBING', 'TRANSCRIBED', 'METADATA_EXTRACTING', 'METADATA_DRAFTED', 'REVIEWED'])),
     ]).optional()
   ),
-  collection: z.string().optional(),
+  collection: z.preprocess(collectionCodesValue, z.union([z.string(), z.array(z.string())]).optional()),
   search: z.string().optional(),
   sort: z.enum(adminSortFieldValues).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
@@ -301,14 +311,18 @@ export async function queryAdminLetters(
   // Collection filter - supports partial matching (e.g., "7" matches "007", "017", "107")
   let collectionIds: string[] = [];
   if (query.collection && query.collection !== 'all') {
+    const collectionCodes = Array.isArray(query.collection) ? query.collection : [query.collection];
     // Find all collections whose code ends with the input (for partial matching)
     // Escape SQL LIKE wildcards to prevent unintended pattern matching
-    const escapedCollection = query.collection.replace(/%/g, '\\%').replace(/_/g, '\\_');
+    const collectionCodeClauses = collectionCodes.map((collectionCode) => {
+      const escapedCollection = collectionCode.replace(/%/g, '\\%').replace(/_/g, '\\_');
+      return ilike(collections.collectionCode, `%${escapedCollection}`);
+    });
     const matchingCollections = await db.query.collections.findMany({
-      where: ilike(collections.collectionCode, `%${escapedCollection}`),
+      where: or(...collectionCodeClauses),
     });
     if (matchingCollections.length > 0) {
-      collectionIds = matchingCollections.map(c => c.id);
+      collectionIds = Array.from(new Set(matchingCollections.map(c => c.id)));
     } else {
       // No collections found, return empty
       return {

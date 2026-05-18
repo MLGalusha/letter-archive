@@ -15,7 +15,7 @@ export default function WorkflowFilterSection({
 }: WorkflowFilterSectionProps) {
   return (
     <section className="filter-panel-section filter-panel-section--advanced">
-      <span className="filter-panel-label">Advanced: Pipeline stage</span>
+      <span className="filter-panel-label">Stage</span>
       <div className="filter-button-grid filter-button-grid--workflow">
         {WORKFLOW_FILTERS.map((filter) => {
           const isActive = workflowFilters.includes(filter.value);

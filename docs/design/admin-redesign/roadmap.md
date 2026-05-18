@@ -96,7 +96,7 @@ Progress:
 - Toolbar-level tests now cover mobile filter open/close wiring, active search-chip clearing, and hiding letter-only controls when switching to Collections.
 - Saved dashboard view integration now has coverage for capturing/restoring filters, sorting, visible columns, column order, and legacy saved-view fallbacks through the dashboard state hook.
 - Dashboard sort option metadata, default directions, equality checks, and button summaries are split into a pure sort model with focused tests.
-- Filter panel UI is grouped into worklist, content, refine, and advanced sections while keeping one shared filter controller for desktop and mobile.
+- Filter panel UI is grouped into worklist, content, scope, and pipeline sections while keeping one shared filter controller for desktop and mobile.
 - Mobile filter sheet now has explicit header, scroll-body, and footer ownership so the filter list scrolls independently without the Done action overlapping content.
 
 Out of scope:
@@ -150,6 +150,7 @@ Progress:
 - Wired the new filters through API query construction, active filter chips, saved dashboard views, persisted dashboard state, stats normalization, select-all-filtered, and the desktop/mobile filter panel.
 - Expanded admin letters stats with exact workflow buckets so workflow filters can show useful counts.
 - Reframed workflow filters as advanced stored pipeline-stage filters with clearer labels, because they are not the same as live queue/running worker state.
+- Workflow filters now apply after representative letter-group selection, matching the workflow badge counts and avoiding extra-content rows pulling unrelated groups into pipeline-stage results.
 - Added cleanup/data-quality filters: missing sender, missing recipient, and missing parsed date.
 - Added content-type filters backed by actual grouped item/page existence: extra items, photos, covers, telegrams, cards, ephemera, articles, diary, and voice.
 - Added stats buckets for cleanup and content-type filters so filter controls use the same contract as the query.

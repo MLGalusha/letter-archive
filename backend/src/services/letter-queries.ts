@@ -443,9 +443,8 @@ export async function queryAdminLetters(
   };
 
   // Build WHERE clause fragments for the raw SQL queries.
-  // Content status filters (transcript/metadata/extraContent) are applied AFTER
-  // DISTINCT ON so they match the representative row (preferring type='L'),
-  // not arbitrary rows in the group that happen to match.
+  // Representative-specific filters are applied after DISTINCT ON so they match
+  // the primary row (preferring type='L'), not arbitrary extra rows in a group.
   const buildWhereClause = () => {
     const clauses: ReturnType<typeof sql>[] = [sql`TRUE`];
 
@@ -454,9 +453,6 @@ export async function queryAdminLetters(
     }
     if (query.visibility && query.visibility !== 'all') {
       clauses.push(sql`visibility = ${query.visibility}`);
-    }
-    if (workflowValues && workflowValues.length > 0) {
-      clauses.push(sql`workflow = ANY(ARRAY[${sql.join(workflowValues.map(w => sql`${w}`), sql`, `)}]::workflow_state[])`);
     }
     if (query.search && query.search.trim()) {
       const searchTerm = `%${query.search.trim()}%`;
@@ -490,10 +486,11 @@ export async function queryAdminLetters(
     return sql.join(clauses, sql` AND `);
   };
 
-  // Content status filters applied AFTER DISTINCT ON picks the representative row.
-  // This ensures we filter on the primary (type='L') row's status, not a cover/telegram.
-  const buildContentStatusClause = () => {
+  const buildRepresentativeFilterClause = () => {
     const clauses: ReturnType<typeof sql>[] = [];
+    if (workflowValues && workflowValues.length > 0) {
+      clauses.push(sql`workflow = ANY(ARRAY[${sql.join(workflowValues.map(w => sql`${w}`), sql`, `)}]::workflow_state[])`);
+    }
     if (query.transcriptStatus && query.transcriptStatus.length > 0) {
       clauses.push(sql`transcript_status = ANY(ARRAY[${sql.join(query.transcriptStatus.map(s => sql`${s}`), sql`, `)}]::content_status[])`);
     }
@@ -526,13 +523,14 @@ export async function queryAdminLetters(
   };
 
   const whereClause = buildWhereClause();
-  const contentStatusClause = buildContentStatusClause();
+  const representativeFilterClause = buildRepresentativeFilterClause();
 
   // Get total count for filtered results (for pagination)
-  // DISTINCT ON picks representative per group, then content status filters applied
+  // DISTINCT ON picks representative per group, then representative filters apply.
   const countResult = await db.execute(sql`
     SELECT COUNT(*) as count FROM (
       SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
+        workflow,
         transcript_status,
         metadata_content_status,
         extra_content_status,
@@ -553,7 +551,7 @@ export async function queryAdminLetters(
       ORDER BY collection_id, date_raw, type_sequence,
         CASE WHEN type = 'L' THEN 0 ELSE 1 END, type
     ) representatives
-    ${contentStatusClause}
+    ${representativeFilterClause}
   `);
   const countRows = getRows<{ count: number | bigint }>(countResult);
   const totalFiltered = Number(countRows[0]?.count || 0);
@@ -638,9 +636,8 @@ export async function queryAdminLetters(
   // Prefers 'L' type if available, otherwise uses first available type
   const offset = (query.page - 1) * query.limit;
 
-  // Content status filters are applied as a post-DISTINCT-ON WHERE so they
-  // always match the representative row (type='L' preferred), not a stray
-  // cover/telegram row whose status differs from the primary letter.
+  // Representative filters are applied as a post-DISTINCT-ON WHERE so they
+  // match the representative row, not a stray extra-content row in the group.
   const representativeIdsResult = await db.execute(sql`
     SELECT id FROM (
       SELECT * FROM (
@@ -661,7 +658,7 @@ export async function queryAdminLetters(
         ORDER BY collection_id, date_raw, type_sequence,
           CASE WHEN type = 'L' THEN 0 ELSE 1 END, type
       ) representatives
-      ${contentStatusClause}
+      ${representativeFilterClause}
     ) filtered
     ORDER BY ${sortClause}, filtered.id ASC
     LIMIT ${query.limit}

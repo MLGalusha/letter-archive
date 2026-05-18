@@ -154,8 +154,8 @@ export default function DashboardFilterPanel({
         </FilterPanelGroup>
 
         <FilterPanelGroup
-          id="refine"
-          title="Refine"
+          id="scope"
+          title="Scope"
           activeCount={refineActiveCount}
         >
           <DashboardDateFilterControl
@@ -194,8 +194,8 @@ export default function DashboardFilterPanel({
         </FilterPanelGroup>
 
         <FilterPanelGroup
-          id="advanced"
-          title="Advanced"
+          id="pipeline"
+          title="Pipeline"
           activeCount={advancedActiveCount}
           wide
         >

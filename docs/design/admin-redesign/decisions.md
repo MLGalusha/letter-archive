@@ -64,6 +64,8 @@ Meaningful sorts and filters should stay server-backed for the full filtered res
 
 Extra-content status filters apply only to letter groups that actually have extra items. A representative letter with `extra_content_status = EMPTY` is not enough to count as "Extras: None"; the group must have non-letter items first. `Extra items` is a separate Contains filter for showing every group with non-letter items regardless of status, while the extras status buttons are workflow/status filters for existing extra content.
 
+Pipeline-stage filters apply to the representative letter-group row after grouping, not to any row inside the group. This keeps pipeline badge counts and filtered result totals aligned when a group contains extra-content rows with different workflow values.
+
 Cleanup filters are dashboard-native data-quality filters. `Missing sender`, `Missing recipient`, and `Missing date` filter representative letter groups through the backend query contract and are saved/restored with dashboard views.
 
 Contains/content-type filters are based on actual related item/page existence for the representative letter group. The dashboard keeps aggregate `Extra items` plus specific type filters for photos, covers, telegrams, cards, ephemera, articles, diary, and voice. These are not current-page client filters.

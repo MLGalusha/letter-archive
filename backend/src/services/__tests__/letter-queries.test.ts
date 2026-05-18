@@ -116,7 +116,7 @@ describe('queryAdminLetters extra-content filtering', () => {
     expect(representativeSql).toContain('has_extras = true AND extra_content_status = ANY');
   });
 
-  it('casts workflow filters to the database workflow enum', async () => {
+  it('filters workflow after representative rows are selected', async () => {
     await queryAdminLetters({
       page: 1,
       limit: 50,
@@ -132,6 +132,9 @@ describe('queryAdminLetters extra-content filtering', () => {
     expect(countSql).toContain('::workflow_state[]');
     expect(representativeSql).toContain('::workflow_state[]');
     expect(countSql).not.toContain('::text[]');
+    expect(countSql).toContain(') representatives');
+    expect(countSql.indexOf(') representatives')).toBeLessThan(countSql.indexOf('workflow = ANY'));
+    expect(representativeSql.indexOf(') representatives')).toBeLessThan(representativeSql.indexOf('workflow = ANY'));
   });
 
   it('filters representative rows by missing cleanup fields', async () => {

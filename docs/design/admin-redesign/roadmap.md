@@ -84,6 +84,7 @@ Progress:
 - Persisted dashboard state and saved dashboard views now consume the same filter controller, reducing repeated setter lists and making future filter additions less brittle.
 - Letter fetching, filtered selection pruning/select-all, and processing start actions now consume the same filter controller instead of each receiving duplicate filter prop lists.
 - Dashboard filter-to-query translation is centralized in filter adapter helpers, so letter queries and processing actions derive API fields from the same source.
+- Dashboard dialogs now consume grouped bulk-action and processing-action models instead of a long modal prop list from the page component.
 
 Out of scope:
 

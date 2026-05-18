@@ -164,8 +164,7 @@ export default function DashboardSortControl({
                   </button>
                   <span className="sort-rule-prefix">{index === 0 ? "sort by" : "then by"}</span>
                   <span className="sort-rule-field">
-                    <strong>{getFieldLabel(rule.field)}</strong>
-                    <small>{getFieldDescription(rule.field)}</small>
+                    {getFieldLabel(rule.field)}
                   </span>
                   <span className="sort-rule-direction-label">ascending</span>
                   <button
@@ -341,8 +340,4 @@ function getDirectionLabel(field: ExtendedSortField, direction: SortDirection): 
 
 function getFieldLabel(field: ExtendedSortField): string {
   return SORT_OPTIONS.find((option) => option.value === field)?.label ?? field;
-}
-
-function getFieldDescription(field: ExtendedSortField): string {
-  return SORT_OPTIONS.find((option) => option.value === field)?.description ?? "";
 }

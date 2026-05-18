@@ -12,12 +12,14 @@ export default function DashboardViewToggle({
   return (
     <div className="dashboard-view-toggle" aria-label="Dashboard view">
       <button
+        type="button"
         className={`view-toggle-btn ${dashboardView === "letters" ? "active" : ""}`}
         onClick={() => onDashboardViewChange("letters")}
       >
         Letters
       </button>
       <button
+        type="button"
         className={`view-toggle-btn ${dashboardView === "collections" ? "active" : ""}`}
         onClick={() => onDashboardViewChange("collections")}
       >

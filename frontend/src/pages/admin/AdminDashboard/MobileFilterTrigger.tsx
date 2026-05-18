@@ -13,6 +13,7 @@ export default function MobileFilterTrigger({
 }: MobileFilterTriggerProps) {
   return (
     <button
+      type="button"
       className={`dashboard-control-btn mobile-filter-trigger ${activeFilterCount > 0 ? "has-filters" : ""}`}
       onClick={onToggle}
       aria-expanded={mobileFiltersOpen}

@@ -21,6 +21,7 @@ export default function DashboardSearchField({
       />
       {searchInput && (
         <button
+          type="button"
           className="dashboard-search-clear"
           onClick={() => {
             setSearchInput("");

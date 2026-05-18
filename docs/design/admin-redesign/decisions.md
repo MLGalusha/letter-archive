@@ -30,6 +30,8 @@ Treat saved presets as saved dashboard views.
 
 A saved view should preserve filters, sort state, and visible columns. It should not be only a named filter set.
 
+Column order is part of the dashboard view model. Use a single drag-handle affordance in the column menu instead of separate up/down arrow buttons; arrow-key support remains available for keyboard users.
+
 ### Mobile Data View
 
 Start from a compact table/list-table approach rather than forcing desktop columns onto mobile.

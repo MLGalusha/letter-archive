@@ -51,7 +51,8 @@ export type IconName =
   | 'home'
   | 'info'
   | 'heart'
-  | 'menu';
+  | 'menu'
+  | 'grip-vertical';
 
 interface IconProps {
   name: IconName;
@@ -338,6 +339,16 @@ const iconPaths: Record<IconName, React.ReactNode> = {
       <line x1="4" y1="6" x2="20" y2="6" />
       <line x1="4" y1="12" x2="20" y2="12" />
       <line x1="4" y1="18" x2="20" y2="18" />
+    </>
+  ),
+  'grip-vertical': (
+    <>
+      <circle cx="9" cy="5" r="1" />
+      <circle cx="9" cy="12" r="1" />
+      <circle cx="9" cy="19" r="1" />
+      <circle cx="15" cy="5" r="1" />
+      <circle cx="15" cy="12" r="1" />
+      <circle cx="15" cy="19" r="1" />
     </>
   ),
 };

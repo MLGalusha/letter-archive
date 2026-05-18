@@ -131,6 +131,20 @@ export function useDashboardColumns() {
     });
   }, []);
 
+  const reorderColumn = useCallback((columnId: ColumnId, targetIndex: number) => {
+    setColumnOrder((previous) => {
+      const currentIndex = previous.indexOf(columnId);
+      if (currentIndex === -1 || targetIndex < 0 || targetIndex >= previous.length) {
+        return previous;
+      }
+
+      const next = [...previous];
+      const [column] = next.splice(currentIndex, 1);
+      next.splice(targetIndex, 0, column);
+      return next;
+    });
+  }, []);
+
   const resetColumnOrder = useCallback(() => {
     setColumnOrder(DEFAULT_COLUMN_ORDER);
   }, []);
@@ -155,6 +169,7 @@ export function useDashboardColumns() {
     columnMenuRef,
     toggleColumnVisibility,
     moveColumn,
+    reorderColumn,
     resetColumnOrder,
     toggleColumnMenu,
   };

@@ -2526,7 +2526,7 @@
 }
 
 .column-toggle-header-row button,
-.column-order-actions button {
+.column-order-handle {
   min-width: 28px;
   height: 26px;
   border: 1px solid var(--border);
@@ -2544,7 +2544,7 @@
 }
 
 .column-toggle-header-row button:hover,
-.column-order-actions button:hover:not(:disabled) {
+.column-order-handle:hover:not(:disabled) {
   border-color: var(--text-muted);
   color: var(--text);
 }
@@ -2572,6 +2572,15 @@
 
 .column-toggle-item:hover {
   background: var(--bg);
+}
+
+.column-toggle-item.is-dragging {
+  opacity: 0.48;
+}
+
+.column-toggle-item.is-drop-target {
+  background: var(--bg);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .column-toggle-item input[type="checkbox"] {
@@ -2627,13 +2636,22 @@
   white-space: nowrap;
 }
 
-.column-order-actions {
+.column-order-handle {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
-  gap: 0.25rem;
+  padding: 0;
+  cursor: grab;
+  color: var(--text-muted);
+  touch-action: none;
 }
 
-.column-order-actions button:disabled {
+.column-order-handle:active {
+  cursor: grabbing;
+}
+
+.column-order-handle:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }

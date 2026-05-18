@@ -6,7 +6,6 @@ import RecentActivityTable from "./AdminDashboard/RecentActivityTable";
 import DashboardToolbar from "./AdminDashboard/DashboardToolbar";
 import BulkEditToolbar from "./AdminDashboard/BulkEditToolbar";
 import DashboardDialogs from "./AdminDashboard/DashboardDialogs";
-import { ALL_COLUMNS } from "./AdminDashboard/constants";
 import {
   dateRawToDisplay,
   displayToDateRaw,
@@ -55,6 +54,7 @@ export default function AdminDashboard() {
     columnMenuRef,
     toggleColumnVisibility,
     moveColumn,
+    reorderColumn,
     resetColumnOrder,
     toggleColumnMenu,
   } = useDashboardColumns();
@@ -273,12 +273,12 @@ export default function AdminDashboard() {
           filteredLetters={filteredLetters}
           columns={{
             visibleColumns,
-            allColumns: ALL_COLUMNS,
             orderedColumns,
             showColumnMenu,
             onToggleColumnMenu: toggleColumnMenu,
             onToggleColumn: toggleColumnVisibility,
             onMoveColumn: moveColumn,
+            onReorderColumn: reorderColumn,
             onResetColumnOrder: resetColumnOrder,
             columnMenuRef,
           }}

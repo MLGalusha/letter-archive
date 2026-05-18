@@ -65,11 +65,11 @@ interface RecentActivityTableHeaderProps {
   orderedColumns: ColumnDef[];
   getSortInfo: (field: ExtendedSortField) => SortInfo | null;
   onSort: (field: ExtendedSortField) => void;
-  allColumns: Array<{ id: ColumnId; label: string }>;
   showColumnMenu: boolean;
   onToggleColumnMenu: () => void;
   onToggleColumn: (id: ColumnId) => void;
   onMoveColumn: (id: ColumnId, direction: -1 | 1) => void;
+  onReorderColumn: (id: ColumnId, targetIndex: number) => void;
   onResetColumnOrder: () => void;
   columnMenuRef: RefObject<HTMLTableCellElement | null>;
 }
@@ -79,11 +79,11 @@ export default function RecentActivityTableHeader({
   orderedColumns,
   getSortInfo,
   onSort,
-  allColumns,
   showColumnMenu,
   onToggleColumnMenu,
   onToggleColumn,
   onMoveColumn,
+  onReorderColumn,
   onResetColumnOrder,
   columnMenuRef,
 }: RecentActivityTableHeaderProps) {
@@ -91,13 +91,13 @@ export default function RecentActivityTableHeader({
     <thead>
       <tr>
         <ColumnToggleHeader
-          allColumns={allColumns}
           orderedColumns={orderedColumns}
           visibleColumns={visibleColumns}
           showColumnMenu={showColumnMenu}
           onToggleColumnMenu={onToggleColumnMenu}
           onToggleColumn={onToggleColumn}
           onMoveColumn={onMoveColumn}
+          onReorderColumn={onReorderColumn}
           onResetColumnOrder={onResetColumnOrder}
           columnMenuRef={columnMenuRef}
         />

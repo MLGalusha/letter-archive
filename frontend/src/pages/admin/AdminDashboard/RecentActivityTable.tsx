@@ -58,12 +58,12 @@ export interface TablePaginationModel {
 
 export interface TableColumnModel {
   visibleColumns: Set<ColumnId>;
-  allColumns: Array<{ id: ColumnId; label: string }>;
   orderedColumns: ColumnDef[];
   showColumnMenu: boolean;
   onToggleColumnMenu: () => void;
   onToggleColumn: (id: ColumnId) => void;
   onMoveColumn: (id: ColumnId, direction: -1 | 1) => void;
+  onReorderColumn: (id: ColumnId, targetIndex: number) => void;
   onResetColumnOrder: () => void;
   columnMenuRef: RefObject<HTMLTableCellElement | null>;
 }
@@ -107,11 +107,11 @@ export default function RecentActivityTable({
             orderedColumns={columns.orderedColumns}
             getSortInfo={sorting.getSortInfo}
             onSort={sorting.onSort}
-            allColumns={columns.allColumns}
             showColumnMenu={columns.showColumnMenu}
             onToggleColumnMenu={columns.onToggleColumnMenu}
             onToggleColumn={columns.onToggleColumn}
             onMoveColumn={columns.onMoveColumn}
+            onReorderColumn={columns.onReorderColumn}
             onResetColumnOrder={columns.onResetColumnOrder}
             columnMenuRef={columns.columnMenuRef}
           />

@@ -51,11 +51,6 @@ describe("RecentActivityTable", () => {
             "visibility",
             "created",
           ]),
-          allColumns: [
-            { id: "sender", label: "Sender" },
-            { id: "recipient", label: "Recipient" },
-            { id: "date", label: "Date" },
-          ],
           orderedColumns: [
             { id: "sender", label: "Sender", defaultVisible: true },
             { id: "recipient", label: "Recipient", defaultVisible: true },
@@ -65,6 +60,7 @@ describe("RecentActivityTable", () => {
           onToggleColumnMenu: vi.fn(),
           onToggleColumn: vi.fn(),
           onMoveColumn: vi.fn(),
+          onReorderColumn: vi.fn(),
           onResetColumnOrder: vi.fn(),
           columnMenuRef: createRef<HTMLTableCellElement>(),
         }}

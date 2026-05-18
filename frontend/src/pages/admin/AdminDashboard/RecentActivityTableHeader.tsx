@@ -12,7 +12,7 @@ interface HeaderColumn {
 const HEADER_COLUMNS: Record<ColumnId, HeaderColumn> = {
   sender: { dataColumn: "sender", label: "Sender" },
   recipient: { dataColumn: "recipient", label: "Recipient" },
-  date: { dataColumn: "date", className: "date-header", label: "Date" },
+  date: { dataColumn: "date", className: "date-header", label: "Letter date" },
   collection: {
     dataColumn: "collection",
     label: (
@@ -22,19 +22,19 @@ const HEADER_COLUMNS: Record<ColumnId, HeaderColumn> = {
       </>
     ),
   },
-  letters: { dataColumn: "letters", label: "Letters" },
-  extras: { dataColumn: "extras", label: "Extras" },
-  photos: { dataColumn: "photos", label: "Photos" },
+  letters: { dataColumn: "letters", label: "Letter pages" },
+  extras: { dataColumn: "extras", label: "Extra items" },
+  photos: { dataColumn: "photos", label: "Photo items" },
   transcript: { dataColumn: "transcript", className: "status-header", label: "Transcript" },
   metadata: { dataColumn: "metadata", className: "status-header", label: "Metadata" },
   visibility: { dataColumn: "visibility", label: "Visibility" },
-  created: { dataColumn: "created", label: "Created" },
-  updated: { dataColumn: "updated", label: "Updated" },
+  created: { dataColumn: "created", label: "Uploaded" },
+  updated: { dataColumn: "updated", label: "Last updated" },
   lastOpened: {
     dataColumn: "lastOpened",
     label: (
       <>
-        <span className="desktop-header-label">Last Opened</span>
+        <span className="desktop-header-label">Last opened</span>
         <span className="mobile-header-label">Opened</span>
       </>
     ),
@@ -44,15 +44,15 @@ const HEADER_COLUMNS: Record<ColumnId, HeaderColumn> = {
     className: "flag-header",
     label: <Icon name="flag" size={14} />,
   },
-  type_letter: { dataColumn: "type_letter", label: "Letters" },
-  type_cover: { dataColumn: "type_cover", label: "Covers" },
-  type_telegram: { dataColumn: "type_telegram", label: "Telegrams" },
-  type_photo: { dataColumn: "type_photo", label: "Photos" },
-  type_card: { dataColumn: "type_card", label: "Cards" },
-  type_ephemera: { dataColumn: "type_ephemera", label: "Ephemera" },
-  type_voice: { dataColumn: "type_voice", label: "Voice" },
-  type_article: { dataColumn: "type_article", label: "Articles" },
-  type_diary: { dataColumn: "type_diary", label: "Diary" },
+  type_letter: { dataColumn: "type_letter", label: "Letter files" },
+  type_cover: { dataColumn: "type_cover", label: "Cover files" },
+  type_telegram: { dataColumn: "type_telegram", label: "Telegram files" },
+  type_photo: { dataColumn: "type_photo", label: "Photo files" },
+  type_card: { dataColumn: "type_card", label: "Card files" },
+  type_ephemera: { dataColumn: "type_ephemera", label: "Ephemera files" },
+  type_voice: { dataColumn: "type_voice", label: "Voice files" },
+  type_article: { dataColumn: "type_article", label: "Article files" },
+  type_diary: { dataColumn: "type_diary", label: "Diary files" },
 };
 
 interface RecentActivityTableHeaderProps {

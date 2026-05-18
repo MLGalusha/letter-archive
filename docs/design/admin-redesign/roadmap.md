@@ -363,6 +363,17 @@ Progress:
 - Refactored table header and row rendering to consume one shared ordered column list, preventing header/body drift.
 - Browser-verified that moving a column updates both header and row order together and persists to local storage.
 - Refined the column menu so the grip is the only drag start, but the full row is the dragged/drop target object. This matches the sort manager interaction and keeps checkbox toggling separate from reordering.
+- Audited the selectable column labels. The column picker now keeps stable internal IDs but presents clearer labels, descriptions, and groups: core fields, workflow status, admin activity, grouped counts, and file type counts.
+
+Column naming decisions:
+
+- Keep all current columns for now. The issue was mainly ambiguous naming, not proven redundancy.
+- `letters` means grouped letter-page count, so expose it as `Letter pages`.
+- `extras` means related non-letter content count, so expose it as `Extra items`.
+- `photos` means related photo count, so expose it as `Photo items`.
+- `type_*` columns mean file-type counts, so expose them as `Letter files`, `Photo files`, `Telegram files`, etc.
+- `created` is shown as `Uploaded` because it reflects record creation/upload timing in the admin workflow.
+- `flag` is shown as `Review flag` in the column picker to make the manual admin purpose clearer.
 
 ## Phase 3 - Dashboard Responsive UI
 

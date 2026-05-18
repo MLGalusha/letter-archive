@@ -13,10 +13,45 @@ interface SavedColumnsState {
   order?: ColumnId[];
 }
 
+const LEGACY_DEFAULT_COLUMN_ORDER: ColumnId[] = [
+  'sender',
+  'recipient',
+  'date',
+  'collection',
+  'letters',
+  'extras',
+  'photos',
+  'transcript',
+  'metadata',
+  'visibility',
+  'created',
+  'updated',
+  'lastOpened',
+  'flag',
+  'type_letter',
+  'type_cover',
+  'type_telegram',
+  'type_photo',
+  'type_card',
+  'type_ephemera',
+  'type_voice',
+  'type_article',
+  'type_diary',
+];
+
+function areColumnOrdersEqual(left: ColumnId[], right: ColumnId[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index]);
+}
+
 function normalizeColumnOrder(savedOrder?: ColumnId[]): ColumnId[] {
   const allColumnIds = new Set(DEFAULT_COLUMN_ORDER);
   const normalized = (savedOrder ?? [])
     .filter((id): id is ColumnId => allColumnIds.has(id));
+
+  if (areColumnOrdersEqual(normalized, LEGACY_DEFAULT_COLUMN_ORDER)) {
+    return DEFAULT_COLUMN_ORDER;
+  }
+
   const savedSet = new Set(normalized);
   return [
     ...normalized,

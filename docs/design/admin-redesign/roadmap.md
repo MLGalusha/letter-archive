@@ -91,6 +91,7 @@ Progress:
 - Shared dashboard manager surfaces now own outside-click dismissal through the trigger/surface boundary, so Sort, Saved views, Columns, and Publishing no longer duplicate document-level close listeners.
 - Column settings initialization no longer reads from a ref during render, keeping the touched dashboard column hook compatible with the React Compiler lint rules.
 - Column manager wiring now separates trigger toggling from explicit close behavior, matching the shared manager surface contract and avoiding accidental state inversion.
+- Sort add-rule state now reflects the current single-picker design instead of carrying the older generic multi-picker registry shape.
 
 Out of scope:
 

@@ -35,7 +35,7 @@ export default function DashboardSortControl({
   setSortColumns,
 }: DashboardSortControlProps) {
   const [open, setOpen] = useState(false);
-  const [activePicker, setActivePicker] = useState<string | null>(null);
+  const [addRulePickerOpen, setAddRulePickerOpen] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [draftSortColumns, setDraftSortColumns] = useState<SortColumn[]>(sortColumns);
   const sortMenuRef = useRef<HTMLDivElement>(null);
@@ -51,12 +51,12 @@ export default function DashboardSortControl({
   const handleToggleOpen = () => {
     setOpen((current) => {
       if (current) {
-        setActivePicker(null);
+        setAddRulePickerOpen(false);
         return false;
       }
 
       setDraftSortColumns(sortColumns);
-      setActivePicker(null);
+      setAddRulePickerOpen(false);
       return true;
     });
   };
@@ -104,13 +104,13 @@ export default function DashboardSortControl({
 
   const handleApplySorting = () => {
     setSortColumns(draftSortColumns);
-    setActivePicker(null);
+    setAddRulePickerOpen(false);
     setOpen(false);
   };
 
   const handleClose = () => {
     setOpen(false);
-    setActivePicker(null);
+    setAddRulePickerOpen(false);
   };
 
   return (
@@ -141,12 +141,12 @@ export default function DashboardSortControl({
             <>
               {availableAddOptions.length > 0 ? (
                 <SortFieldPicker
-                  id="add-rule"
                   label="Add sort rule"
                   placeholder="Add sort rule"
                   options={availableAddOptions}
-                  activePicker={activePicker}
-                  onOpenChange={setActivePicker}
+                  open={addRulePickerOpen}
+                  onToggle={() => setAddRulePickerOpen((current) => !current)}
+                  onClose={() => setAddRulePickerOpen(false)}
                   onSelect={handleAddRule}
                 />
               ) : (
@@ -215,35 +215,34 @@ export default function DashboardSortControl({
 }
 
 interface SortFieldPickerProps {
-  id: string;
   label: string;
   value?: ExtendedSortField;
   placeholder?: string;
   options: SortOption[];
-  activePicker: string | null;
-  onOpenChange: (id: string | null) => void;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
   onSelect: (field: ExtendedSortField) => void;
 }
 
 function SortFieldPicker({
-  id,
   label,
   value,
   placeholder = "Select sort",
   options,
-  activePicker,
-  onOpenChange,
+  open,
+  onToggle,
+  onClose,
   onSelect,
 }: SortFieldPickerProps) {
   const selectedOption = value ? SORT_OPTIONS.find((option) => option.value === value) : null;
-  const open = activePicker === id;
 
   return (
     <div className="sort-field-picker">
       <button
         type="button"
         className={`sort-field-trigger ${open ? "active" : ""}`}
-        onClick={() => onOpenChange(open ? null : id)}
+        onClick={onToggle}
         aria-label={label}
         aria-expanded={open}
         aria-haspopup="listbox"
@@ -261,7 +260,7 @@ function SortFieldPicker({
               className={`sort-field-option ${option.value === value ? "selected" : ""}`}
               onClick={() => {
                 onSelect(option.value);
-                onOpenChange(null);
+                onClose();
               }}
               role="option"
               aria-selected={option.value === value}

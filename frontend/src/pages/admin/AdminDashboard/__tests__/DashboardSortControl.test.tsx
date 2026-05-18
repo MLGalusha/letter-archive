@@ -81,6 +81,23 @@ describe("DashboardSortControl", () => {
     })).toBeInTheDocument();
   });
 
+  it("adds a draft sort rule through the add-rule picker", async () => {
+    const user = userEvent.setup();
+    render(
+      <SortControlHarness
+        initialSort={[{ field: "lastOpenedAt", direction: "desc" }]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Sort/i }));
+    await user.click(screen.getByRole("button", { name: "Add sort rule" }));
+    await user.click(screen.getByRole("option", { name: /Letter date/i }));
+
+    expect(screen.queryByRole("listbox", { name: "Add sort rule" })).not.toBeInTheDocument();
+    expect(screen.getByText("then by")).toBeInTheDocument();
+    expect(screen.getByText("Letter date")).toBeInTheDocument();
+  });
+
   it("closes when clicking outside the shared manager boundary", async () => {
     const user = userEvent.setup();
     render(

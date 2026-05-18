@@ -18,11 +18,6 @@ interface UseDashboardActiveFiltersOptions {
   extraContentStatusFilters: ContentStatus[];
   workflowFilters: WorkflowState[];
   flaggedFilter: FlaggedFilter;
-  yearFilter: number | null;
-  monthFilter: number | null;
-  dayFilter: number | null;
-  dateFromFilter: string | null;
-  dateToFilter: string | null;
   hasDateFilter: boolean;
   toggleVisibilityFilter: (value: "PUBLISHED" | "HIDDEN") => void;
   handleCollectionInputChange: (value: string) => void;
@@ -46,11 +41,6 @@ export function useDashboardActiveFilters({
   extraContentStatusFilters,
   workflowFilters,
   flaggedFilter,
-  yearFilter,
-  monthFilter,
-  dayFilter,
-  dateFromFilter,
-  dateToFilter,
   hasDateFilter,
   toggleVisibilityFilter,
   handleCollectionInputChange,
@@ -74,11 +64,7 @@ export function useDashboardActiveFilters({
     if (extraContentStatusFilters.length > 0) count += extraContentStatusFilters.length;
     if (workflowFilters.length > 0) count += workflowFilters.length;
     if (flaggedFilter !== "ALL") count++;
-    if (yearFilter !== null) count++;
-    if (monthFilter !== null) count++;
-    if (dayFilter !== null) count++;
-    if (dateFromFilter !== null) count++;
-    if (dateToFilter !== null) count++;
+    if (hasDateFilter) count++;
     return count;
   }, [
     collectionFilter,
@@ -89,11 +75,7 @@ export function useDashboardActiveFilters({
     extraContentStatusFilters,
     workflowFilters,
     flaggedFilter,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
+    hasDateFilter,
   ]);
 
   const activeFilterChips = useMemo<DashboardFilterChip[]>(() => {

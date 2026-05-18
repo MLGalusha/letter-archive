@@ -54,6 +54,8 @@ Selector/dropdown UI is not considered finished yet. The dashboard should move t
 
 Do not polish every dropdown independently. Prove the shared manager structure on Sort and Columns first, then reuse that structure for saved views, filters/date, and bulk menus where it fits.
 
+Shared manager code does not mean identical mobile placement. Short, lightweight toolbar managers such as Sort and Saved views should stay anchored near their trigger when that is the better interaction. Long or high-touch managers such as Columns can use a mobile bottom sheet.
+
 Until the API supports ordered server-side sort rules, only the first server-backed rule is sent to the backend. Additional rules refine the currently loaded page and must be labeled as such.
 
 Long term, meaningful sorts and filters should be server-backed for the full filtered result set. Page-only sorting is acceptable as a temporary state, not the final design. Server-backed ranked multi-sort is a future backend slice and should apply the full ordered sort stack before pagination.

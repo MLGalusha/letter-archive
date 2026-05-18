@@ -456,6 +456,7 @@ Phase 3.25 progress:
 - Migrated the Columns manager onto the same shell, keeping its table-header trigger while sharing dialog, close, body, footer, and mobile sheet conventions with Sort.
 - Migrated Saved views onto the same manager shell so save/apply/delete view behavior no longer uses a separate one-off popover structure.
 - Migrated the bulk Publishing menu onto the same shell, keeping its dark toolbar styling while sharing the dialog/header/close/body conventions.
+- Corrected the mobile placement rule: lightweight toolbar managers such as Sort and Saved views remain anchored near their trigger, while heavier managers such as Columns and Publishing can opt into bottom-sheet placement.
 
 Related responsive UI progress:
 

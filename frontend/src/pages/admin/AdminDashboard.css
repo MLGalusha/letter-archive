@@ -346,6 +346,33 @@
   white-space: nowrap;
 }
 
+.sort-rule-field {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.55rem;
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--font-sm);
+}
+
+.sort-rule-field strong,
+.sort-rule-field small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sort-rule-field strong {
+  font-weight: 700;
+}
+
+.sort-rule-field small {
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+}
+
 .sort-field-picker {
   position: relative;
   min-width: 0;
@@ -2402,6 +2429,7 @@
     grid-area: prefix;
   }
 
+  .sort-rule-field,
   .sort-field-picker {
     grid-area: field;
   }

@@ -172,6 +172,7 @@ Progress:
 - Removed column-header sorting so there is one sorting surface across desktop and mobile.
 - Added ordered sort rules with drag ranking, column selection, ascending toggles, and removal.
 - Replaced native browser sort-field selects with an in-app menu and renamed the add control to `Add sort rule`.
+- Existing sort rules now render as fixed ranked rows instead of nested field dropdowns; the field picker only appears when adding another rule.
 - Kept the backend limitation explicit: the first server-backed rule drives the API request; additional rules refine the currently loaded page until backend multi-sort is implemented.
 
 Exit criteria:

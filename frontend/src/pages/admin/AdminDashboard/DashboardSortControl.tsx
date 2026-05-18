@@ -71,20 +71,6 @@ export default function DashboardSortControl({
     setSortColumns((previous) => previous.map((rule, ruleIndex) => (ruleIndex === index ? nextRule : rule)));
   };
 
-  const handleFieldChange = (index: number, field: ExtendedSortField) => {
-    setSortColumns((previous) => {
-      if (previous.some((rule, ruleIndex) => ruleIndex !== index && rule.field === field)) {
-        return previous;
-      }
-
-      return previous.map((rule, ruleIndex) => (
-        ruleIndex === index
-          ? { field, direction: getDefaultDirection(field) }
-          : rule
-      ));
-    });
-  };
-
   const handleToggleDirection = (index: number) => {
     const currentRule = sortColumns[index];
     if (!currentRule) return;
@@ -152,7 +138,7 @@ export default function DashboardSortControl({
               <span className="sort-manager-subtitle">
                 {sortColumns.length > 0
                   ? "Drag rules to rank them. The first server-backed rule sorts the full result set."
-                  : "Add a column below to sort the view."}
+                  : "Add a sort rule below to order the view."}
               </span>
             </div>
           </div>
@@ -177,18 +163,10 @@ export default function DashboardSortControl({
                     <Icon name="grip-vertical" size={16} />
                   </button>
                   <span className="sort-rule-prefix">{index === 0 ? "sort by" : "then by"}</span>
-                  <SortFieldPicker
-                    id={`rule-${index}`}
-                    label={`Sort rule ${index + 1}`}
-                    value={rule.field}
-                    options={SORT_OPTIONS.filter((option) => (
-                      option.value === rule.field ||
-                      !sortColumns.some((column) => column.field === option.value)
-                    ))}
-                    activePicker={activePicker}
-                    onOpenChange={setActivePicker}
-                    onSelect={(field) => handleFieldChange(index, field)}
-                  />
+                  <span className="sort-rule-field">
+                    <strong>{getFieldLabel(rule.field)}</strong>
+                    <small>{getFieldDescription(rule.field)}</small>
+                  </span>
                   <span className="sort-rule-direction-label">ascending</span>
                   <button
                     type="button"
@@ -363,4 +341,8 @@ function getDirectionLabel(field: ExtendedSortField, direction: SortDirection): 
 
 function getFieldLabel(field: ExtendedSortField): string {
   return SORT_OPTIONS.find((option) => option.value === field)?.label ?? field;
+}
+
+function getFieldDescription(field: ExtendedSortField): string {
+  return SORT_OPTIONS.find((option) => option.value === field)?.description ?? "";
 }

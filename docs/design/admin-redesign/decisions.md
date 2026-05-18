@@ -44,6 +44,8 @@ The top sort/filter controls should become managers: concise buttons that open a
 
 The top `Sort` manager owns all dashboard sorting. Column headers should not sort in this pass; that keeps desktop and mobile behavior aligned and avoids duplicate sort paths.
 
+Existing sort rules should be fixed ranked rows, not field dropdowns. To change a rule's field in this pass, remove the rule and add the intended field again. This keeps the manager visually clear while the sort model is still being stabilized.
+
 Until the API supports ordered server-side sort rules, only the first server-backed rule is sent to the backend. Additional rules refine the currently loaded page and must be labeled as such.
 
 Long term, meaningful sorts and filters should be server-backed for the full filtered result set. Page-only sorting is acceptable as an explicitly labeled temporary state, not the final design.

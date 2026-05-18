@@ -100,6 +100,22 @@ describe('queryAdminLetters extra-content filtering', () => {
     });
   });
 
+  it('counts visibility stats from any matching row in a grouped letter', async () => {
+    await queryAdminLetters({
+      page: 1,
+      limit: 50,
+      sort: 'createdAt',
+      sortOrder: 'desc',
+    });
+
+    const statsSql = renderSql(executeMock.mock.calls[0]?.[0]);
+
+    expect(statsSql).toContain('visibility_item.visibility = PUBLISHED');
+    expect(statsSql).toContain('visibility_item.visibility = HIDDEN');
+    expect(statsSql).toContain('COUNT(*) FILTER (WHERE has_published) as published');
+    expect(statsSql).toContain('COUNT(*) FILTER (WHERE has_hidden) as hidden');
+  });
+
   it('requires extra item pages when filtering by extra-content status', async () => {
     await queryAdminLetters({
       page: 1,

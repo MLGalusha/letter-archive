@@ -307,6 +307,16 @@ export async function queryAdminLetters(
         AND extra.type = ANY(ARRAY[${sql.join(types.map(type => sql`${type}`), sql`, `)}]::letter_type[])
     )
   `;
+  const hasVisibilityExpression = (visibility: 'PUBLISHED' | 'HIDDEN') => sql`
+    EXISTS (
+      SELECT 1
+      FROM letters visibility_item
+      WHERE visibility_item.collection_id = letters.collection_id
+        AND visibility_item.date_raw = letters.date_raw
+        AND visibility_item.type_sequence = letters.type_sequence
+        AND visibility_item.visibility = ${visibility}
+    )
+  `;
 
   // Collection filter - supports partial matching (e.g., "7" matches "007", "017", "107")
   let collectionIds: string[] = [];
@@ -365,6 +375,8 @@ export async function queryAdminLetters(
         recipient,
         letter_date,
         date_raw,
+        ${hasVisibilityExpression('PUBLISHED')} as has_published,
+        ${hasVisibilityExpression('HIDDEN')} as has_hidden,
         ${hasContentTypeExpression(['P'])} as has_photos,
         ${hasContentTypeExpression(['C'])} as has_cover,
         ${hasContentTypeExpression(['T'])} as has_telegram,
@@ -387,8 +399,8 @@ export async function queryAdminLetters(
       COUNT(*) FILTER (WHERE workflow = 'METADATA_EXTRACTING') as metadata_extracting,
       COUNT(*) FILTER (WHERE workflow = 'METADATA_DRAFTED') as metadata_ready,
       COUNT(*) FILTER (WHERE workflow = 'REVIEWED') as reviewed,
-      COUNT(*) FILTER (WHERE visibility = 'PUBLISHED') as published,
-      COUNT(*) FILTER (WHERE visibility = 'HIDDEN') as hidden,
+      COUNT(*) FILTER (WHERE has_published) as published,
+      COUNT(*) FILTER (WHERE has_hidden) as hidden,
       COUNT(*) FILTER (WHERE transcript_status = 'EMPTY') as transcript_empty,
       COUNT(*) FILTER (WHERE transcript_status = 'AI_DRAFT') as transcript_ai_draft,
       COUNT(*) FILTER (WHERE transcript_status = 'EDITED') as transcript_edited,

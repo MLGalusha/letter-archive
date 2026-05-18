@@ -3024,18 +3024,39 @@
 
   .checkbox-header,
   .checkbox-cell {
-    position: static;
-    width: 36px;
-    min-width: 36px;
-    max-width: 36px;
+    position: sticky;
+    left: 0;
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
     padding: 0 !important;
     overflow: visible;
     text-overflow: clip;
+    box-shadow: 1px 0 0 var(--border);
+  }
+
+  .checkbox-header {
+    z-index: 14;
+    background: var(--bg);
   }
 
   .checkbox-cell {
+    z-index: 4;
     display: table-cell;
     vertical-align: middle;
+    background: var(--bg-light);
+  }
+
+  .letter-row:hover .checkbox-cell {
+    background: var(--bg);
+  }
+
+  .letter-row.selected .checkbox-cell {
+    background: #eef6ff;
+  }
+
+  .letter-row.selected:hover .checkbox-cell {
+    background: #dbeafe;
   }
 
   .letters-table th[data-column="sender"],

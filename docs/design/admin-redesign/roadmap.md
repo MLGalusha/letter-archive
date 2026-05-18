@@ -109,6 +109,8 @@ Progress:
 - The desktop filter manager uses a single-column right-side surface; mobile keeps the existing prioritized bottom-sheet presentation.
 - Opening the mobile admin navigation now closes dashboard manager overlays such as Filters so the sidebar and dashboard sheets do not stack.
 - Collections dashboard column selection now reuses the shared dashboard column manager surface with visibility and ordering support instead of a separate one-off dropdown.
+- Mobile table selection now uses a real sticky checkbox column with its own background/border so horizontally scrolled data columns cannot visually slide behind the checkbox controls.
+- Dashboard visibility stats now count grouped rows that contain hidden or published items, keeping Hidden/Public filter counts aligned with grouped visibility filtering.
 
 Out of scope:
 

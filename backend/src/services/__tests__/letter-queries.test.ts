@@ -115,4 +115,22 @@ describe('queryAdminLetters extra-content filtering', () => {
     expect(countSql).toContain('has_extras = true AND extra_content_status = ANY');
     expect(representativeSql).toContain('has_extras = true AND extra_content_status = ANY');
   });
+
+  it('casts workflow filters to the database workflow enum', async () => {
+    await queryAdminLetters({
+      page: 1,
+      limit: 50,
+      sort: 'createdAt',
+      sortOrder: 'desc',
+      workflow: ['UPLOADED', 'REVIEWED'],
+    });
+
+    const countSql = renderSql(executeMock.mock.calls[1]?.[0]);
+    const representativeSql = renderSql(executeMock.mock.calls[2]?.[0]);
+
+    expect(countSql).toContain('workflow = ANY');
+    expect(countSql).toContain('::workflow_state[]');
+    expect(representativeSql).toContain('::workflow_state[]');
+    expect(countSql).not.toContain('::text[]');
+  });
 });

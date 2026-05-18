@@ -308,7 +308,7 @@ export async function queryAdminLetters(
       clauses.push(sql`visibility = ${query.visibility}`);
     }
     if (workflowValues && workflowValues.length > 0) {
-      clauses.push(sql`workflow = ANY(ARRAY[${sql.join(workflowValues.map(w => sql`${w}`), sql`, `)}]::text[])`);
+      clauses.push(sql`workflow = ANY(ARRAY[${sql.join(workflowValues.map(w => sql`${w}`), sql`, `)}]::workflow_state[])`);
     }
     if (query.search && query.search.trim()) {
       const searchTerm = `%${query.search.trim()}%`;

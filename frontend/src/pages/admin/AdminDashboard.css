@@ -2423,36 +2423,41 @@
   }
 
   .sort-rule-row {
-    grid-template-columns: 28px minmax(0, 1fr) 50px 30px;
-    grid-template-areas:
-      "grip field toggle remove"
-      ". prefix direction .";
-    row-gap: 0.25rem;
+    grid-template-columns: 24px auto minmax(64px, 1fr) auto 36px 24px;
+    gap: 0.25rem;
+    padding-inline: 0.45rem;
   }
 
   .sort-rule-grip {
-    grid-area: grip;
+    width: 24px;
+    height: 24px;
   }
 
   .sort-rule-prefix {
-    grid-area: prefix;
-  }
-
-  .sort-rule-field,
-  .sort-field-picker {
-    grid-area: field;
+    font-size: var(--font-xs);
   }
 
   .sort-rule-direction-label {
-    grid-area: direction;
+    font-size: var(--font-xs);
   }
 
   .sort-rule-direction {
-    grid-area: toggle;
+    width: 34px;
+    height: 20px;
+  }
+
+  .sort-rule-direction span {
+    width: 14px;
+    height: 14px;
+  }
+
+  .sort-rule-direction.active span {
+    transform: translateX(14px);
   }
 
   .sort-rule-remove {
-    grid-area: remove;
+    width: 24px;
+    height: 24px;
   }
 
   .sort-manager-footer .sort-field-picker {

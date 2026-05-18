@@ -7,74 +7,75 @@ import BulkPublishingMenu from "./BulkPublishingMenu";
 import BulkSelectionControls from "./BulkSelectionControls";
 import type { PublishCounts } from "./useDashboardSelectionDetails";
 
-interface BulkEditToolbarProps {
+export interface BulkSelectionToolbarModel {
   selectedCount: number;
   pageCount: number;
   totalCount: number;
   allPageSelected: boolean;
   allFilteredSelected: boolean;
+  onSelectPage: () => void;
+  onSelectAllFiltered: () => void;
+  onClearSelection: () => void;
+}
+
+export interface BulkCopyToolbarModel {
   copyModeActive: boolean;
   copiedValue: string | null;
   sourceCell: { letterId: string; column: "sender" | "recipient" } | null;
   pendingChangesCount: number;
   isSaving: boolean;
-  bulkActionLoading: boolean;
+  onToggleCopyMode: () => void;
+}
+
+export interface BulkProcessingToolbarModel {
   processingStatus: ProcessingStatus | null;
   pausePending: boolean;
   abortPending: boolean;
-  publishCounts: PublishCounts;
-  onSelectPage: () => void;
-  onSelectAllFiltered: () => void;
-  onClearSelection: () => void;
-  onToggleCopyMode: () => void;
   onOpenTranscription: () => void;
   onOpenMetadataExtraction: () => void;
   onPauseProcessing: () => void;
   onResumeProcessing: () => void;
   onAbortProcessing: () => void;
+}
+
+export interface BulkPublishingToolbarModel {
+  bulkActionLoading: boolean;
+  publishCounts: PublishCounts;
   onBulkHide: () => void;
   onBulkPublish: () => void;
   onBulkContentVisibility: (field: "transcriptPublished" | "metadataPublished", value: boolean) => void;
+}
+
+export interface BulkDangerToolbarModel {
+  bulkActionLoading: boolean;
   onClearTranscriptions: () => void;
   onClearMetadata: () => void;
   onDelete: () => void;
+}
+
+export interface BulkCompletionToolbarModel {
+  pendingChangesCount: number;
+  isSaving: boolean;
   onDone: () => void;
   onExit: () => void;
 }
 
+interface BulkEditToolbarProps {
+  selection: BulkSelectionToolbarModel;
+  copy: BulkCopyToolbarModel;
+  processing: BulkProcessingToolbarModel;
+  publishing: BulkPublishingToolbarModel;
+  danger: BulkDangerToolbarModel;
+  completion: BulkCompletionToolbarModel;
+}
+
 export default function BulkEditToolbar({
-  selectedCount,
-  pageCount,
-  totalCount,
-  allPageSelected,
-  allFilteredSelected,
-  copyModeActive,
-  copiedValue,
-  sourceCell,
-  pendingChangesCount,
-  isSaving,
-  bulkActionLoading,
-  processingStatus,
-  pausePending,
-  abortPending,
-  publishCounts,
-  onSelectPage,
-  onSelectAllFiltered,
-  onClearSelection,
-  onToggleCopyMode,
-  onOpenTranscription,
-  onOpenMetadataExtraction,
-  onPauseProcessing,
-  onResumeProcessing,
-  onAbortProcessing,
-  onBulkHide,
-  onBulkPublish,
-  onBulkContentVisibility,
-  onClearTranscriptions,
-  onClearMetadata,
-  onDelete,
-  onDone,
-  onExit,
+  selection,
+  copy,
+  processing,
+  publishing,
+  danger,
+  completion,
 }: BulkEditToolbarProps) {
   return (
     <div className="edit-toolbar visible">
@@ -83,25 +84,25 @@ export default function BulkEditToolbar({
           <div className="toolbar-section toolbar-section--selection">
             <span className="toolbar-section-label">Selection</span>
             <BulkSelectionControls
-              selectedCount={selectedCount}
-              pageCount={pageCount}
-              totalCount={totalCount}
-              allPageSelected={allPageSelected}
-              allFilteredSelected={allFilteredSelected}
-              onSelectPage={onSelectPage}
-              onSelectAllFiltered={onSelectAllFiltered}
-              onClearSelection={onClearSelection}
+              selectedCount={selection.selectedCount}
+              pageCount={selection.pageCount}
+              totalCount={selection.totalCount}
+              allPageSelected={selection.allPageSelected}
+              allFilteredSelected={selection.allFilteredSelected}
+              onSelectPage={selection.onSelectPage}
+              onSelectAllFiltered={selection.onSelectAllFiltered}
+              onClearSelection={selection.onClearSelection}
             />
           </div>
           <div className="toolbar-section toolbar-section--copy">
             <span className="toolbar-section-label">Edit</span>
             <BulkCopyControls
-              copyModeActive={copyModeActive}
-              copiedValue={copiedValue}
-              sourceCell={sourceCell}
-              pendingChangesCount={pendingChangesCount}
-              isSaving={isSaving}
-              onToggleCopyMode={onToggleCopyMode}
+              copyModeActive={copy.copyModeActive}
+              copiedValue={copy.copiedValue}
+              sourceCell={copy.sourceCell}
+              pendingChangesCount={copy.pendingChangesCount}
+              isSaving={copy.isSaving}
+              onToggleCopyMode={copy.onToggleCopyMode}
             />
           </div>
         </div>
@@ -110,15 +111,15 @@ export default function BulkEditToolbar({
           <div className="toolbar-section toolbar-section--processing">
             <span className="toolbar-section-label">Process</span>
             <BulkProcessingControls
-              selectedCount={selectedCount}
-              processingStatus={processingStatus}
-              pausePending={pausePending}
-              abortPending={abortPending}
-              onOpenTranscription={onOpenTranscription}
-              onOpenMetadataExtraction={onOpenMetadataExtraction}
-              onPauseProcessing={onPauseProcessing}
-              onResumeProcessing={onResumeProcessing}
-              onAbortProcessing={onAbortProcessing}
+              selectedCount={selection.selectedCount}
+              processingStatus={processing.processingStatus}
+              pausePending={processing.pausePending}
+              abortPending={processing.abortPending}
+              onOpenTranscription={processing.onOpenTranscription}
+              onOpenMetadataExtraction={processing.onOpenMetadataExtraction}
+              onPauseProcessing={processing.onPauseProcessing}
+              onResumeProcessing={processing.onResumeProcessing}
+              onAbortProcessing={processing.onAbortProcessing}
             />
           </div>
         </div>
@@ -127,30 +128,30 @@ export default function BulkEditToolbar({
           <div className="toolbar-section toolbar-section--publishing">
             <span className="toolbar-section-label">Publish</span>
             <BulkPublishingMenu
-              selectedCount={selectedCount}
-              bulkActionLoading={bulkActionLoading}
-              publishCounts={publishCounts}
-              onBulkHide={onBulkHide}
-              onBulkPublish={onBulkPublish}
-              onBulkContentVisibility={onBulkContentVisibility}
+              selectedCount={selection.selectedCount}
+              bulkActionLoading={publishing.bulkActionLoading}
+              publishCounts={publishing.publishCounts}
+              onBulkHide={publishing.onBulkHide}
+              onBulkPublish={publishing.onBulkPublish}
+              onBulkContentVisibility={publishing.onBulkContentVisibility}
             />
           </div>
           <div className="toolbar-section toolbar-section--danger">
             <span className="toolbar-section-label">Danger</span>
             <BulkDestructiveControls
-              selectedCount={selectedCount}
-              bulkActionLoading={bulkActionLoading}
-              onClearTranscriptions={onClearTranscriptions}
-              onClearMetadata={onClearMetadata}
-              onDelete={onDelete}
+              selectedCount={selection.selectedCount}
+              bulkActionLoading={danger.bulkActionLoading}
+              onClearTranscriptions={danger.onClearTranscriptions}
+              onClearMetadata={danger.onClearMetadata}
+              onDelete={danger.onDelete}
             />
           </div>
-          {pendingChangesCount > 0 ? (
-            <button className="toolbar-done-btn" onClick={onDone} disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save & Close"}
+          {completion.pendingChangesCount > 0 ? (
+            <button className="toolbar-done-btn" onClick={completion.onDone} disabled={completion.isSaving}>
+              {completion.isSaving ? "Saving..." : "Save & Close"}
             </button>
           ) : (
-            <button className="toolbar-close-btn" onClick={onExit} title="Clear selection">
+            <button className="toolbar-close-btn" onClick={completion.onExit} title="Clear selection">
               <Icon name="close" size={16} />
             </button>
           )}

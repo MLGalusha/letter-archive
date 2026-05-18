@@ -308,6 +308,7 @@ Progress:
 - Added selected-row continuity across the row cells with a clear selection rail on the checkbox cell.
 - Grouped the bulk toolbar into selection, edit, processing, publishing, and danger sections so the action hierarchy is visible before deeper visual polish.
 - Tightened the table selection contract so row checkboxes pass a small selection intent instead of leaking raw React mouse events through the table model.
+- Grouped `BulkEditToolbar` props by toolbar section so the component API matches the selection, edit, processing, publishing, danger, and completion ownership boundaries.
 
 Likely implementation slices:
 

@@ -322,38 +322,53 @@ export default function AdminDashboard() {
 
       {editMode && (
         <BulkEditToolbar
-          selectedCount={selectedIds.size}
-          pageCount={filteredLetters.length}
-          totalCount={pagination.total}
-          allPageSelected={allPageSelected}
-          allFilteredSelected={allFilteredSelected}
-          copyModeActive={copyModeActive}
-          copiedValue={copiedValue}
-          sourceCell={sourceCell}
-          pendingChangesCount={pendingChanges.size}
-          isSaving={isSaving}
-          bulkActionLoading={bulkActionLoading}
-          processingStatus={processingStatus}
-          pausePending={pausePending}
-          abortPending={abortPending}
-          publishCounts={publishCounts}
-          onSelectPage={handleSelectAllPage}
-          onSelectAllFiltered={handleSelectAllFiltered}
-          onClearSelection={clearSelection}
-          onToggleCopyMode={toggleCopyMode}
-          onOpenTranscription={handleOpenTranscription}
-          onOpenMetadataExtraction={handleOpenMetadataExtraction}
-          onPauseProcessing={handlePauseProcessing}
-          onResumeProcessing={handleResumeProcessing}
-          onAbortProcessing={handleAbortProcessing}
-          onBulkHide={handleBulkHide}
-          onBulkPublish={handleBulkPublish}
-          onBulkContentVisibility={handleBulkContentVisibility}
-          onClearTranscriptions={handleClearTranscriptionsClick}
-          onClearMetadata={handleClearMetadataClick}
-          onDelete={handleDeleteClick}
-          onDone={handleDone}
-          onExit={exitEditMode}
+          selection={{
+            selectedCount: selectedIds.size,
+            pageCount: filteredLetters.length,
+            totalCount: pagination.total,
+            allPageSelected,
+            allFilteredSelected,
+            onSelectPage: handleSelectAllPage,
+            onSelectAllFiltered: handleSelectAllFiltered,
+            onClearSelection: clearSelection,
+          }}
+          copy={{
+            copyModeActive,
+            copiedValue,
+            sourceCell,
+            pendingChangesCount: pendingChanges.size,
+            isSaving,
+            onToggleCopyMode: toggleCopyMode,
+          }}
+          processing={{
+            processingStatus,
+            pausePending,
+            abortPending,
+            onOpenTranscription: handleOpenTranscription,
+            onOpenMetadataExtraction: handleOpenMetadataExtraction,
+            onPauseProcessing: handlePauseProcessing,
+            onResumeProcessing: handleResumeProcessing,
+            onAbortProcessing: handleAbortProcessing,
+          }}
+          publishing={{
+            bulkActionLoading,
+            publishCounts,
+            onBulkHide: handleBulkHide,
+            onBulkPublish: handleBulkPublish,
+            onBulkContentVisibility: handleBulkContentVisibility,
+          }}
+          danger={{
+            bulkActionLoading,
+            onClearTranscriptions: handleClearTranscriptionsClick,
+            onClearMetadata: handleClearMetadataClick,
+            onDelete: handleDeleteClick,
+          }}
+          completion={{
+            pendingChangesCount: pendingChanges.size,
+            isSaving,
+            onDone: handleDone,
+            onExit: exitEditMode,
+          }}
         />
       )}
       </>}

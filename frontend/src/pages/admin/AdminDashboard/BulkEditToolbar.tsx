@@ -1,6 +1,7 @@
 import type { ProcessingStatus } from "../../../api/admin";
 import Icon from "../../../components/common/Icon";
 import BulkCopyControls from "./BulkCopyControls";
+import BulkDestructiveControls from "./BulkDestructiveControls";
 import BulkProcessingControls from "./BulkProcessingControls";
 import BulkPublishingMenu from "./BulkPublishingMenu";
 import BulkSelectionControls from "./BulkSelectionControls";
@@ -124,29 +125,13 @@ export default function BulkEditToolbar({
             onBulkContentVisibility={onBulkContentVisibility}
           />
           <div className="toolbar-divider" />
-          <div className="toolbar-destructive-actions">
-            <button
-              className="toolbar-btn-destructive"
-              onClick={onClearTranscriptions}
-              disabled={selectedCount === 0 || bulkActionLoading}
-            >
-              Clear Transcripts
-            </button>
-            <button
-              className="toolbar-btn-destructive"
-              onClick={onClearMetadata}
-              disabled={selectedCount === 0 || bulkActionLoading}
-            >
-              Clear Metadata
-            </button>
-            <button
-              className="toolbar-btn-danger"
-              onClick={onDelete}
-              disabled={selectedCount === 0}
-            >
-              Delete
-            </button>
-          </div>
+          <BulkDestructiveControls
+            selectedCount={selectedCount}
+            bulkActionLoading={bulkActionLoading}
+            onClearTranscriptions={onClearTranscriptions}
+            onClearMetadata={onClearMetadata}
+            onDelete={onDelete}
+          />
           <div className="toolbar-divider" />
           {pendingChangesCount > 0 ? (
             <button className="toolbar-done-btn" onClick={onDone} disabled={isSaving}>

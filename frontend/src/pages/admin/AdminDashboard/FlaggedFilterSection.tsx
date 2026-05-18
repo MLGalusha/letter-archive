@@ -1,4 +1,5 @@
 import { FLAGGED_FILTERS } from "./constants";
+import FilterOptionButton from "./FilterOptionButton";
 import type { DashboardFilterStats, FlaggedFilter } from "./types";
 
 interface FlaggedFilterSectionProps {
@@ -23,17 +24,15 @@ export default function FlaggedFilterSection({
             : Math.max(stats.total - stats.flagged, 0);
 
           return (
-            <button
+            <FilterOptionButton
               key={filter.value}
-              type="button"
-              className={`filter-pill ${filter.className} ${isActive ? "active" : ""}`}
+              className={filter.className}
+              count={count}
+              label={filter.label}
+              active={isActive}
               onClick={() => toggleFlaggedFilter(filter.value)}
-              aria-pressed={isActive}
               title={filter.title}
-            >
-              <span className="filter-pill-count">{count}</span>
-              <span>{filter.label}</span>
-            </button>
+            />
           );
         })}
       </div>

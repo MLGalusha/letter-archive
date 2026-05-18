@@ -135,7 +135,7 @@ describe("DashboardFilterPanel", () => {
 
     renderFilterPanel({ filters });
 
-    fireEvent.change(screen.getByRole("textbox", { name: "Collection" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Collection code" }), {
       target: { value: "123" },
     });
 
@@ -157,8 +157,8 @@ describe("DashboardFilterPanel", () => {
       },
     });
 
-    await user.click(screen.getByRole("button", { name: "4 Missing sender" }));
-    await user.click(screen.getByRole("button", { name: "3 Photos" }));
+    await user.click(screen.getByRole("button", { name: "Missing sender 4" }));
+    await user.click(screen.getByRole("button", { name: "Photos 3" }));
 
     expect(toggleMissingFilter).toHaveBeenCalledWith("sender");
     expect(toggleContentShapeFilter).toHaveBeenCalledWith("photos");

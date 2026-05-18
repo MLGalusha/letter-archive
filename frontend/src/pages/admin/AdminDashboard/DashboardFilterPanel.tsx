@@ -178,13 +178,17 @@ export default function DashboardFilterPanel({
             displayToDateRaw={displayToDateRaw}
           />
 
-          <section className="filter-panel-section filter-panel-fields">
+          <section className="filter-panel-section filter-panel-fields collection-filter-section">
             <label className="collection-filter-field">
-              <span>Collection</span>
+              <span className="filter-panel-label">Collection</span>
+              <span className="filter-panel-summary">
+                {collectionFilter === "all" ? "All collections" : `Collection ${collectionFilter}`}
+              </span>
               <input
                 type="text"
                 className="collection-input"
-                placeholder="000"
+                aria-label="Collection code"
+                placeholder="Any"
                 value={collectionInput}
                 onChange={(event) => handleCollectionInputChange(event.target.value)}
                 maxLength={3}

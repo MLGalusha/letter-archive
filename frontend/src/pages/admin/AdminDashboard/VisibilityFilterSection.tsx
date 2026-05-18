@@ -1,4 +1,5 @@
 import { VISIBILITY_FILTERS } from "./constants";
+import FilterOptionButton from "./FilterOptionButton";
 import type { DashboardFilterStats, VisibilityFilter } from "./types";
 
 interface VisibilityFilterSectionProps {
@@ -19,17 +20,15 @@ export default function VisibilityFilterSection({
         {VISIBILITY_FILTERS.map((filter) => {
           const isActive = visibilityFilter === filter.value;
           return (
-            <button
+            <FilterOptionButton
               key={filter.value}
-              type="button"
-              className={`filter-pill ${filter.className} ${isActive ? "active" : ""}`}
+              className={filter.className}
+              count={stats[filter.countKey]}
+              label={filter.label}
+              active={isActive}
               onClick={() => toggleVisibilityFilter(filter.value)}
-              aria-pressed={isActive}
               title={filter.title}
-            >
-              <span className="filter-pill-count">{stats[filter.countKey]}</span>
-              <span>{filter.label}</span>
-            </button>
+            />
           );
         })}
       </div>

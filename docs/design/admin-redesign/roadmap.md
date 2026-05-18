@@ -99,6 +99,8 @@ Progress:
 - Filter panel UI is grouped into worklist, content, scope, and pipeline sections while keeping one shared filter controller for desktop and mobile.
 - Desktop filter editing now uses an inline, height-capped manager surface with its own scroll owner, so opening Filters does not push the table out of view.
 - Mobile filter sheet now has explicit header, scroll-body, and footer ownership so the filter list scrolls independently without the Done action overlapping content.
+- Filter option controls now share a single checkbox/label/count primitive with calmer color accents, replacing the earlier loud pill-grid styling across worklist, content, scope, and pipeline filters.
+- Collection code filtering now renders as a full-width manager field instead of a tiny detached code input, so it fits the same desktop/mobile filter surface as date and status controls.
 
 Out of scope:
 

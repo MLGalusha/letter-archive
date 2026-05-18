@@ -1,4 +1,5 @@
 import { MISSING_FILTERS } from "./constants";
+import FilterOptionButton from "./FilterOptionButton";
 import type { DashboardFilterStats, MissingFilter } from "./types";
 
 interface MissingDataFilterSectionProps {
@@ -22,16 +23,14 @@ export default function MissingDataFilterSection({
           const isActive = missingFilters.includes(filter.value);
 
           return (
-            <button
+            <FilterOptionButton
               key={filter.value}
-              type="button"
-              className={`filter-pill ${filter.className} ${isActive ? "active" : ""}`}
+              className={filter.className}
+              count={stats[filter.countKey]}
+              label={filter.label}
+              active={isActive}
               onClick={() => toggleMissingFilter(filter.value)}
-              aria-pressed={isActive}
-            >
-              <span className="filter-pill-count">{stats[filter.countKey]}</span>
-              <span>{filter.label}</span>
-            </button>
+            />
           );
         })}
       </div>

@@ -1,5 +1,6 @@
 import type { ContentStatus } from "../../../types/Letter";
 import { CONTENT_STATUS_FILTERS } from "./constants";
+import FilterOptionButton from "./FilterOptionButton";
 import type { ContentFilterView, DashboardFilterStats } from "./types";
 
 interface ContentStatusFilterSectionProps {
@@ -75,16 +76,14 @@ export default function ContentStatusFilterSection({
           const isActive = selectedFilters.includes(filter.value);
 
           return (
-            <button
+            <FilterOptionButton
               key={filter.value}
-              type="button"
-              className={`filter-pill ${filter.className} ${isActive ? "active" : ""}`}
+              className={filter.className}
+              count={stats[filter.countKeys[contentFilterView]]}
+              label={filter.label}
+              active={isActive}
               onClick={() => toggleFilter(filter.value)}
-              aria-pressed={isActive}
-            >
-              <span className="filter-pill-count">{stats[filter.countKeys[contentFilterView]]}</span>
-              <span>{filter.label}</span>
-            </button>
+            />
           );
         })}
       </div>

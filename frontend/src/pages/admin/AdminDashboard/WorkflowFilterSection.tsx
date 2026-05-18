@@ -1,5 +1,6 @@
 import type { WorkflowState } from "../../../types/Letter";
 import { WORKFLOW_FILTERS } from "./constants";
+import FilterOptionButton from "./FilterOptionButton";
 import type { DashboardFilterStats } from "./types";
 
 interface WorkflowFilterSectionProps {
@@ -20,18 +21,16 @@ export default function WorkflowFilterSection({
         {WORKFLOW_FILTERS.map((filter) => {
           const isActive = workflowFilters.includes(filter.value);
           return (
-            <button
+            <FilterOptionButton
               key={filter.value}
-              type="button"
-              className={`filter-pill ${filter.className} ${isActive ? "active" : ""}`}
+              className={filter.className}
+              count={stats[filter.countKey]}
+              label={filter.label}
+              active={isActive}
               onClick={() => toggleWorkflowFilter(filter.value)}
-              aria-pressed={isActive}
               title={filter.title}
               aria-label={`${filter.label}: ${filter.title}`}
-            >
-              <span className="filter-pill-count">{stats[filter.countKey]}</span>
-              <span>{filter.label}</span>
-            </button>
+            />
           );
         })}
       </div>

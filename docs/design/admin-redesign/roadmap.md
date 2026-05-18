@@ -163,8 +163,10 @@ Sort-model decision:
 - Short term: make the toolbar `Sort` manager the only dashboard sorting surface.
 - Short term: support adding, removing, reordering, and toggling sort rules in that manager.
 - Short term: send the first server-backed rule to the API and label later rules as current-page refinement until backend multi-sort exists.
+- Short term: keep sort popover edits as a draft until the user clicks `Apply sorting`, so arranging rules does not refetch/reorder the table mid-edit.
 - Target direction: replace the dropdown-feeling sort control with a Supabase-style `Sort` manager that shows ordered sort rules.
 - Target direction: avoid exposing true multi-sort until the API can apply it server-side across the full filtered result set.
+- Future backend slice: implement server-backed ranked multi-sort so the full ordered sort stack is applied before pagination, not just within the currently loaded page.
 
 Progress:
 
@@ -173,6 +175,7 @@ Progress:
 - Added ordered sort rules with drag ranking, column selection, ascending toggles, and removal.
 - Replaced native browser sort-field selects with an in-app menu and renamed the add control to `Add sort rule`.
 - Existing sort rules now render as fixed ranked rows instead of nested field dropdowns; the field picker only appears when adding another rule.
+- Sort manager now has an apply-step interaction: draft rule edits are staged in the popover and committed through `Apply sorting`.
 - Kept the backend limitation explicit: the first server-backed rule drives the API request; additional rules refine the currently loaded page until backend multi-sort is implemented.
 
 Exit criteria:
@@ -191,9 +194,9 @@ Deferred filter slice:
 
 Deferred sort slice:
 
-- Add server-backed multi-sort only after the admin letters API accepts ordered sort rules instead of one `sort`/`sortOrder` pair.
+- Add server-backed ranked multi-sort after the current dashboard UI pass. The admin letters API should accept ordered sort rules instead of one `sort`/`sortOrder` pair, validate allowed fields/directions, apply every rule before pagination, and preserve the ordered stack in saved dashboard views.
 - Move letters/extras/photos count sorting to the backend so those columns can sort the full filtered result set instead of only the current page.
-- Replace the temporary primary-sort dropdown with a `Sort` manager once server-side sort behavior is clear enough to avoid misleading UI.
+- Add backend/frontend tests that prove multi-sort ordering is stable across page boundaries, not only inside the currently loaded page.
 
 Deferred processing redesign note:
 

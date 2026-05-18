@@ -2,7 +2,6 @@ import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "../../../components/common/Icon";
 import type { ExtendedSortField, SortColumn, SortDirection } from "./types";
-import { isServerSortField } from "./utils";
 
 interface DashboardSortControlProps {
   sortColumns: SortColumn[];
@@ -37,24 +36,21 @@ export default function DashboardSortControl({
   const [open, setOpen] = useState(false);
   const [activePicker, setActivePicker] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [draftSortColumns, setDraftSortColumns] = useState<SortColumn[]>(sortColumns);
   const sortMenuRef = useRef<HTMLDivElement>(null);
 
   const availableAddOptions = useMemo(
-    () => SORT_OPTIONS.filter((option) => !sortColumns.some((column) => column.field === option.value)),
-    [sortColumns],
+    () => SORT_OPTIONS.filter((option) => !draftSortColumns.some((column) => column.field === option.value)),
+    [draftSortColumns],
   );
 
-  const primaryServerSortIndex = sortColumns.findIndex((column) => isServerSortField(column.field));
-  const hasSecondaryRules = sortColumns.length > 1;
-  const hasCurrentPageRules = sortColumns.some((column, index) => {
-    if (!isServerSortField(column.field)) return true;
-    return primaryServerSortIndex !== -1 && index !== primaryServerSortIndex;
-  });
-
   const buttonSummary = getSortButtonSummary(sortColumns);
+  const hasDraftChanges = !areSortColumnsEqual(draftSortColumns, sortColumns);
 
   useEffect(() => {
     if (!open) return;
+    setDraftSortColumns(sortColumns);
+    setActivePicker(null);
 
     const handleClickOutside = (event: MouseEvent) => {
       if (sortMenuRef.current && !sortMenuRef.current.contains(event.target as Node)) {
@@ -65,10 +61,10 @@ export default function DashboardSortControl({
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
+  }, [open, sortColumns]);
 
   const updateRule = (index: number, nextRule: SortColumn) => {
-    setSortColumns((previous) => previous.map((rule, ruleIndex) => (ruleIndex === index ? nextRule : rule)));
+    setDraftSortColumns((previous) => previous.map((rule, ruleIndex) => (ruleIndex === index ? nextRule : rule)));
   };
 
   const handleToggleDirection = (index: number) => {
@@ -82,11 +78,11 @@ export default function DashboardSortControl({
   };
 
   const handleRemoveRule = (index: number) => {
-    setSortColumns((previous) => previous.filter((_, ruleIndex) => ruleIndex !== index));
+    setDraftSortColumns((previous) => previous.filter((_, ruleIndex) => ruleIndex !== index));
   };
 
   const handleAddRule = (field: ExtendedSortField) => {
-    setSortColumns((previous) => {
+    setDraftSortColumns((previous) => {
       if (previous.some((rule) => rule.field === field)) {
         return previous;
       }
@@ -101,7 +97,7 @@ export default function DashboardSortControl({
       return;
     }
 
-    setSortColumns((previous) => {
+    setDraftSortColumns((previous) => {
       const next = [...previous];
       const [movedRule] = next.splice(dragIndex, 1);
       if (!movedRule) return previous;
@@ -109,6 +105,12 @@ export default function DashboardSortControl({
       return next;
     });
     setDragIndex(null);
+  };
+
+  const handleApplySorting = () => {
+    setSortColumns(draftSortColumns);
+    setActivePicker(null);
+    setOpen(false);
   };
 
   return (
@@ -130,22 +132,9 @@ export default function DashboardSortControl({
 
       {open && (
         <div className="sort-manager-popover" role="dialog" aria-label="Sort rules">
-          <div className="sort-manager-header">
-            <div>
-              <span className="sort-manager-title">
-                {sortColumns.length > 0 ? `Sorted by ${sortColumns.length} rule${sortColumns.length === 1 ? "" : "s"}` : "No sorts applied"}
-              </span>
-              <span className="sort-manager-subtitle">
-                {sortColumns.length > 0
-                  ? "Drag rules to rank them. The first server-backed rule sorts the full result set."
-                  : "Add a sort rule below to order the view."}
-              </span>
-            </div>
-          </div>
-
-          {sortColumns.length > 0 && (
+          {draftSortColumns.length > 0 && (
             <div className="sort-rule-list">
-              {sortColumns.map((rule, index) => (
+              {draftSortColumns.map((rule, index) => (
                 <div
                   key={rule.field}
                   className="sort-rule-row"
@@ -190,22 +179,28 @@ export default function DashboardSortControl({
           )}
 
           <div className="sort-manager-footer">
-            <SortFieldPicker
-              id="add-rule"
-              label="Add sort rule"
-              placeholder="Add sort rule"
-              options={availableAddOptions}
-              activePicker={activePicker}
-              onOpenChange={setActivePicker}
-              onSelect={handleAddRule}
-            />
+            {availableAddOptions.length > 0 ? (
+              <SortFieldPicker
+                id="add-rule"
+                label="Add sort rule"
+                placeholder="Add sort rule"
+                options={availableAddOptions}
+                activePicker={activePicker}
+                onOpenChange={setActivePicker}
+                onSelect={handleAddRule}
+              />
+            ) : (
+              <span className="sort-field-empty">All sort options have been added</span>
+            )}
+            <button
+              type="button"
+              className="sort-apply-btn"
+              onClick={handleApplySorting}
+              disabled={!hasDraftChanges}
+            >
+              Apply sorting
+            </button>
           </div>
-
-          {hasSecondaryRules && hasCurrentPageRules && (
-            <p className="sort-manager-note">
-              Secondary rules refine the currently loaded page until the API supports ranked server-side sorting.
-            </p>
-          )}
         </div>
       )}
     </div>
@@ -290,6 +285,14 @@ function getSortButtonSummary(sortColumns: SortColumn[]): { label: string; detai
     label: "Sort",
     detail: `${getFieldLabel(rule.field)}, ${getDirectionLabel(rule.field, rule.direction).toLowerCase()}`,
   };
+}
+
+function areSortColumnsEqual(left: SortColumn[], right: SortColumn[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((column, index) => {
+    const nextColumn = right[index];
+    return nextColumn?.field === column.field && nextColumn.direction === column.direction;
+  });
 }
 
 function getDefaultDirection(field: ExtendedSortField): SortDirection {

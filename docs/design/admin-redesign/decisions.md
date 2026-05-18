@@ -46,9 +46,11 @@ The top `Sort` manager owns all dashboard sorting. Column headers should not sor
 
 Existing sort rules should be fixed ranked rows, not field dropdowns. To change a rule's field in this pass, remove the rule and add the intended field again. This keeps the manager visually clear while the sort model is still being stabilized.
 
+Sort manager edits should be staged until `Apply sorting` is clicked. Closing the popover without applying discards draft edits, which prevents table refetches while the user is still arranging sort rules.
+
 Until the API supports ordered server-side sort rules, only the first server-backed rule is sent to the backend. Additional rules refine the currently loaded page and must be labeled as such.
 
-Long term, meaningful sorts and filters should be server-backed for the full filtered result set. Page-only sorting is acceptable as an explicitly labeled temporary state, not the final design.
+Long term, meaningful sorts and filters should be server-backed for the full filtered result set. Page-only sorting is acceptable as a temporary state, not the final design. Server-backed ranked multi-sort is a future backend slice and should apply the full ordered sort stack before pagination.
 
 ### Mobile Data View
 

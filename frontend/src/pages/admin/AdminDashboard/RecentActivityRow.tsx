@@ -13,6 +13,7 @@ import type {
   TableRowActions,
   TableSelectionModel,
 } from "./RecentActivityTable";
+import RowSelectionCheckboxCell from "./RowSelectionCheckboxCell";
 import type { PendingChange } from "./types";
 
 interface RecentActivityRowProps {
@@ -195,29 +196,11 @@ export default function RecentActivityRow({
       className={`letter-row ${isSelected ? "selected" : ""} ${copyEdit.editMode ? "edit-mode" : ""}`}
       aria-selected={isSelected}
     >
-      <td
-        className="checkbox-cell"
-        onClick={(event) => {
-          event.stopPropagation();
-        }}
-      >
-        <input
-          type="checkbox"
-          className="row-checkbox"
-          aria-label={`Select ${letter.title || formattedDate || "letter"}`}
-          checked={isSelected}
-          onClick={(event) => {
-            event.stopPropagation();
-          }}
-          onChange={(event) => {
-            event.stopPropagation();
-            const nativeEvent = event.nativeEvent;
-            selection.onCheckboxChange(letter.id, index, {
-              shiftKey: "shiftKey" in nativeEvent ? Boolean(nativeEvent.shiftKey) : false,
-            });
-          }}
-        />
-      </td>
+      <RowSelectionCheckboxCell
+        label={`Select ${letter.title || formattedDate || "letter"}`}
+        checked={isSelected}
+        onChange={(options) => selection.onCheckboxChange(letter.id, index, options)}
+      />
 
       {columns.orderedColumns
         .filter((column) => visibleColumns.has(column.id))

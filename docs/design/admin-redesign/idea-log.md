@@ -31,3 +31,23 @@ Scope recommendation:
 
 - In scope for the selection/bulk redesign if we decide mobile should prioritize a compact mode bar.
 - Do not implement automatically until the selection model is documented, because it changes visible workflow hierarchy.
+
+### Publish Counts Need A Clear Scope For Select-All-Filtered
+
+Idea:
+
+- Make bulk publishing counts explicitly correct for the selected scope. If all filtered rows are selected across pages, either fetch aggregate counts for all selected IDs or label the current counts as page-loaded counts.
+
+Why it is relevant:
+
+- Bulk publish/hide actions operate on `selectedIds`, including IDs returned by select-all-filtered.
+- The current `useDashboardSelectionDetails` publish counts are derived from `filteredLetters`, which is the loaded page data, so counts can underrepresent the selected set when selection spans unloaded pages.
+
+What triggered it:
+
+- During selection audit, `selectAllFiltered` was confirmed to fetch all filtered IDs, while `publishCounts` filters only the current `filteredLetters` array.
+
+Scope recommendation:
+
+- Treat as a correctness follow-up in the selection/bulk phase.
+- Do not silently change UI copy or backend queries without deciding whether counts should be exact across all selected IDs or explicitly scoped to loaded rows.

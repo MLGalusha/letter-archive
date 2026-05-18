@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import Icon from "../../../components/common/Icon";
 import ContentShapeFilterSection from "./ContentShapeFilterSection";
 import ContentStatusFilterSection from "./ContentStatusFilterSection";
+import DashboardCollectionFilterControl from "./DashboardCollectionFilterControl";
 import DashboardDateFilterControl from "./DashboardDateFilterControl";
 import FlaggedFilterSection from "./FlaggedFilterSection";
 import MissingDataFilterSection from "./MissingDataFilterSection";
@@ -31,6 +32,7 @@ export default function DashboardFilterPanel({
   activeFilterCount,
   onClose,
 }: DashboardFilterPanelProps) {
+  const bodyRef = useRef<HTMLDivElement | null>(null);
   const {
     collectionInput,
     handleCollectionInputChange,
@@ -84,6 +86,15 @@ export default function DashboardFilterPanel({
     + (collectionFilter !== "all" ? 1 : 0);
   const advancedActiveCount = workflowFilters.length;
 
+  useEffect(() => {
+    if (open) {
+      const body = bodyRef.current;
+      if (body) {
+        body.scrollTop = 0;
+      }
+    }
+  }, [open]);
+
   return (
     <div className={`dashboard-filter-panel ${open ? "open" : ""}`} hidden={!open}>
       <div className="filter-panel-header">
@@ -103,7 +114,39 @@ export default function DashboardFilterPanel({
         </div>
       </div>
 
-      <div className="filter-panel-body">
+      <div className="filter-panel-body" ref={bodyRef}>
+        <FilterPanelGroup
+          id="scope"
+          title="Scope"
+          activeCount={refineActiveCount}
+        >
+          <DashboardDateFilterControl
+            dateMode={dateMode}
+            setDateMode={setDateMode}
+            hasDateFilter={hasDateFilter}
+            yearFilter={yearFilter}
+            setYearFilter={setYearFilter}
+            monthFilter={monthFilter}
+            setMonthFilter={setMonthFilter}
+            dayFilter={dayFilter}
+            setDayFilter={setDayFilter}
+            dateFromFilter={dateFromFilter}
+            setDateFromFilter={setDateFromFilter}
+            dateToFilter={dateToFilter}
+            setDateToFilter={setDateToFilter}
+            clearDateFilters={clearDateFilters}
+            getDateButtonText={getDateButtonText}
+            dateRawToDisplay={dateRawToDisplay}
+            displayToDateRaw={displayToDateRaw}
+          />
+
+          <DashboardCollectionFilterControl
+            collectionInput={collectionInput}
+            collectionFilter={collectionFilter}
+            onCollectionInputChange={handleCollectionInputChange}
+          />
+        </FilterPanelGroup>
+
         <FilterPanelGroup
           id="worklist"
           title="Worklist"
@@ -151,50 +194,6 @@ export default function DashboardFilterPanel({
             extraContentStatusFilters={extraContentStatusFilters}
             toggleExtraContentFilter={toggleExtraContentFilter}
           />
-        </FilterPanelGroup>
-
-        <FilterPanelGroup
-          id="scope"
-          title="Scope"
-          activeCount={refineActiveCount}
-        >
-          <DashboardDateFilterControl
-            dateMode={dateMode}
-            setDateMode={setDateMode}
-            hasDateFilter={hasDateFilter}
-            yearFilter={yearFilter}
-            setYearFilter={setYearFilter}
-            monthFilter={monthFilter}
-            setMonthFilter={setMonthFilter}
-            dayFilter={dayFilter}
-            setDayFilter={setDayFilter}
-            dateFromFilter={dateFromFilter}
-            setDateFromFilter={setDateFromFilter}
-            dateToFilter={dateToFilter}
-            setDateToFilter={setDateToFilter}
-            clearDateFilters={clearDateFilters}
-            getDateButtonText={getDateButtonText}
-            dateRawToDisplay={dateRawToDisplay}
-            displayToDateRaw={displayToDateRaw}
-          />
-
-          <section className="filter-panel-section filter-panel-fields collection-filter-section">
-            <label className="collection-filter-field">
-              <span className="filter-panel-label">Collection</span>
-              <span className="filter-panel-summary">
-                {collectionFilter === "all" ? "All collections" : `Collection ${collectionFilter}`}
-              </span>
-              <input
-                type="text"
-                className="collection-input"
-                aria-label="Collection code"
-                placeholder="Any"
-                value={collectionInput}
-                onChange={(event) => handleCollectionInputChange(event.target.value)}
-                maxLength={3}
-              />
-            </label>
-          </section>
         </FilterPanelGroup>
 
         <FilterPanelGroup

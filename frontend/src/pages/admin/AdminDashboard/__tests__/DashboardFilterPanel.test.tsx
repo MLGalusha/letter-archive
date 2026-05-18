@@ -46,6 +46,7 @@ const emptyStats: DashboardFilterStats = {
 function makeFilters(overrides: Partial<DashboardFilterControls> = {}): DashboardFilterControls {
   return {
     collectionInput: "",
+    collectionFilter: "all",
     handleCollectionInputChange: vi.fn(),
     visibilityFilter: "ALL",
     toggleVisibilityFilter: vi.fn(),

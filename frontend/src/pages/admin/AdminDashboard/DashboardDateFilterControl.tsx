@@ -84,30 +84,39 @@ export default function DashboardDateFilterControl({
 
       {dateMode === "specific" ? (
         <div className="date-dropdowns">
-          <select
-            aria-label="Date year"
-            value={yearFilter ?? ""}
-            onChange={(event) => setYearFilter(event.target.value ? Number(event.target.value) : null)}
-          >
-            <option value="">Year</option>
-            {YEAR_OPTIONS.map((year) => <option key={year} value={year}>{year}</option>)}
-          </select>
-          <select
-            aria-label="Date month"
-            value={monthFilter ?? ""}
-            onChange={(event) => setMonthFilter(event.target.value ? Number(event.target.value) : null)}
-          >
-            <option value="">Month</option>
-            {MONTH_OPTIONS.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}
-          </select>
-          <select
-            aria-label="Date day"
-            value={dayFilter ?? ""}
-            onChange={(event) => setDayFilter(event.target.value ? Number(event.target.value) : null)}
-          >
-            <option value="">Day</option>
-            {DAY_OPTIONS.map((day) => <option key={day} value={day}>{day}</option>)}
-          </select>
+          <label className="date-select-field">
+            <span>Year</span>
+            <select
+              aria-label="Date year"
+              value={yearFilter ?? ""}
+              onChange={(event) => setYearFilter(event.target.value ? Number(event.target.value) : null)}
+            >
+              <option value="">Any</option>
+              {YEAR_OPTIONS.map((year) => <option key={year} value={year}>{year}</option>)}
+            </select>
+          </label>
+          <label className="date-select-field">
+            <span>Month</span>
+            <select
+              aria-label="Date month"
+              value={monthFilter ?? ""}
+              onChange={(event) => setMonthFilter(event.target.value ? Number(event.target.value) : null)}
+            >
+              <option value="">Any</option>
+              {MONTH_OPTIONS.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}
+            </select>
+          </label>
+          <label className="date-select-field">
+            <span>Day</span>
+            <select
+              aria-label="Date day"
+              value={dayFilter ?? ""}
+              onChange={(event) => setDayFilter(event.target.value ? Number(event.target.value) : null)}
+            >
+              <option value="">Any</option>
+              {DAY_OPTIONS.map((day) => <option key={day} value={day}>{day}</option>)}
+            </select>
+          </label>
         </div>
       ) : (
         <div className="date-range-inputs">

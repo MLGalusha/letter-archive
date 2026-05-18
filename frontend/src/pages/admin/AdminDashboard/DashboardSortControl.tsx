@@ -63,18 +63,15 @@ export default function DashboardSortControl({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open, sortColumns]);
 
-  const updateRule = (index: number, nextRule: SortColumn) => {
-    setDraftSortColumns((previous) => previous.map((rule, ruleIndex) => (ruleIndex === index ? nextRule : rule)));
-  };
-
   const handleToggleDirection = (index: number) => {
-    const currentRule = sortColumns[index];
-    if (!currentRule) return;
+    setDraftSortColumns((previous) => previous.map((rule, ruleIndex) => {
+      if (ruleIndex !== index) return rule;
 
-    updateRule(index, {
-      ...currentRule,
-      direction: currentRule.direction === "asc" ? "desc" : "asc",
-    });
+      return {
+        ...rule,
+        direction: rule.direction === "asc" ? "desc" : "asc",
+      };
+    }));
   };
 
   const handleRemoveRule = (index: number) => {

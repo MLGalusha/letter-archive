@@ -54,6 +54,7 @@ Verification plan:
 - 2026-05-18: Added filtered-selection tests for select-all-filtered, pruning invalid selected IDs, and closing edit mode when pruning empties selection.
 - 2026-05-18: Removed unused `somePageSelected` from the selection hook return shape.
 - 2026-05-18: Added selected-detail tests for single selected letter and loaded-row publishing counts, including the current unloaded selected-ID count limitation.
+- 2026-05-18: Added bulk toolbar tests for page selection, all-filtered selection, and active all-filtered clear behavior.
 
 ## Selection Audit
 

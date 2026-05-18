@@ -111,6 +111,31 @@ describe("BulkEditToolbar", () => {
     expect(screen.queryByRole("button", { name: "Clear selection" })).not.toBeInTheDocument();
   });
 
+  it("routes page and filtered selection actions to their handlers", async () => {
+    const user = userEvent.setup();
+    const models = makeToolbarModels();
+
+    render(<BulkEditToolbar {...models} />);
+
+    await user.click(screen.getByRole("button", { name: "Page (25)" }));
+    await user.click(screen.getByRole("button", { name: "All 98" }));
+
+    expect(models.selection.onSelectPage).toHaveBeenCalled();
+    expect(models.selection.onSelectAllFiltered).toHaveBeenCalled();
+  });
+
+  it("clears selection from the active all-filtered control", async () => {
+    const user = userEvent.setup();
+    const models = makeToolbarModels();
+    models.selection.allFilteredSelected = true;
+
+    render(<BulkEditToolbar {...models} />);
+
+    await user.click(screen.getByRole("button", { name: "All 98 ✓" }));
+
+    expect(models.selection.onClearSelection).toHaveBeenCalled();
+  });
+
   it("opens publishing actions in the shared manager dialog", async () => {
     const user = userEvent.setup();
 

@@ -53,7 +53,7 @@ Current toolbar structure:
 
 - Primary row: letters/collections switch, search, filter manager, saved view action, sort.
 - Active filter chips: visible on desktop and mobile, horizontally scrollable when needed.
-- Filter editing panel: opened from Filters on desktop and mobile. Desktop keeps the panel inline but height-capped with its own scroll owner so the table remains visible; mobile uses a bottom sheet with fixed header/footer and a scrollable body.
+- Filter editing panel: opened from Filters on desktop and mobile. Desktop uses an overlay manager anchored to the toolbar so opening filters does not move the table; mobile keeps the bottom sheet with fixed header/footer and a scrollable body.
 - The filter manager starts with Scope controls because date and collection are the most common narrowing actions. Worklist, content, and pipeline filters follow the same shared state model.
 - Collection filtering uses a compact multi-code rule list. Empty rules mean all collections, so there is no separate All button; each added code becomes its own removable active filter.
 
@@ -79,7 +79,7 @@ Current filter manager order:
 7. Cleanup/data quality.
 8. Review flag.
 
-Desktop and mobile use the same ordered filter module tree. Desktop lays the modules into a responsive grid; mobile keeps the same modules in a single-column sheet.
+Desktop and mobile use the same ordered filter module tree. Desktop presents the modules in a right-side overlay manager above the table; mobile keeps the same modules in a single-column sheet.
 
 Saved views are local dashboard presets for now. They save filters, sort, and visible columns without changing backend/API behavior. If they become multi-user or cross-device later, promote the same shape to an API-backed model.
 

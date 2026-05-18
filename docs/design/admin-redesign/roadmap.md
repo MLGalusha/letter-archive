@@ -97,7 +97,7 @@ Progress:
 - Saved dashboard view integration now has coverage for capturing/restoring filters, sorting, visible columns, column order, and legacy saved-view fallbacks through the dashboard state hook.
 - Dashboard sort option metadata, default directions, equality checks, and button summaries are split into a pure sort model with focused tests.
 - Filter panel UI is grouped into worklist, content, scope, and pipeline sections while keeping one shared filter controller for desktop and mobile.
-- Desktop filter editing now uses an inline, height-capped manager surface with its own scroll owner, so opening Filters does not push the table out of view.
+- Desktop filter editing now uses an overlay manager anchored to the toolbar, so opening Filters does not move the table or turn the filter controls into a permanent board above the data.
 - Mobile filter sheet now has explicit header, scroll-body, and footer ownership so the filter list scrolls independently without the Done action overlapping content.
 - Filter option controls now share a single checkbox/label/count primitive with calmer color accents, replacing the earlier loud pill-grid styling across worklist, content, scope, and pipeline filters.
 - Collection code filtering now renders as a full-width manager field instead of a tiny detached code input, so it fits the same desktop/mobile filter surface as date and status controls.
@@ -106,6 +106,7 @@ Progress:
 - The admin letters API accepts the same collection query as a single code, comma-separated codes, or repeated codes so saved views and existing links remain backward compatible.
 - Filter manager organization now uses one ordered module grid instead of nested worklist/content/scope groups, keeping desktop and mobile on the same filter order and component tree.
 - The current filter priority order is visibility, content status, collection, date, content type, pipeline, cleanup, and review.
+- The desktop filter manager uses a single-column right-side surface; mobile keeps the existing prioritized bottom-sheet presentation.
 
 Out of scope:
 

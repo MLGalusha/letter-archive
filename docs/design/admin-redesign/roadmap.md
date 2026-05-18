@@ -170,6 +170,7 @@ Progress:
 
 - Dashboard sort UI now labels the dropdown as `Primary sort`, exposes page-level count sorts separately, and lets admins clear page sorts without clearing the primary server sort.
 - Sortable column headers now advertise whether they affect the full filtered result set or only the currently loaded page.
+- Replaced the always-visible primary sort dropdown with a `Sort` manager button/popover that shows primary sort rules and page-only sort rules in one place.
 
 Exit criteria:
 

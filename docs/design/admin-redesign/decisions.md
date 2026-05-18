@@ -100,4 +100,4 @@ The dashboard selection model needs a dedicated redesign pass.
 
 The problem is broader than checkbox styling. It includes mobile horizontal scroll, sticky columns, row click behavior, selection mode, bulk toolbar hierarchy, drag/shift selection, edit mode, and accessibility. Treat this as a dashboard interaction system before promoting any table or bulk-action pattern to other admin pages.
 
-Open question: mobile selection should use one of these models after inspection: sticky selection column with stronger boundary treatment, explicit selection mode, or a row-level control lane. Do not choose by CSS tweak alone.
+Mobile selection should use the same horizontal scroll model as the table for this pass. The checkbox column should move with the row content instead of staying sticky, because the sticky version read as detached from the row. Reconsider a frozen selection rail only if a later design gives it a stronger boundary and row-state continuity.

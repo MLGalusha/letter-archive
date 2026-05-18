@@ -80,59 +80,71 @@ export default function BulkEditToolbar({
     <div className="edit-toolbar visible">
       <div className="edit-toolbar-content">
         <div className="edit-toolbar-left">
-          <BulkSelectionControls
-            selectedCount={selectedCount}
-            pageCount={pageCount}
-            totalCount={totalCount}
-            allPageSelected={allPageSelected}
-            allFilteredSelected={allFilteredSelected}
-            onSelectPage={onSelectPage}
-            onSelectAllFiltered={onSelectAllFiltered}
-            onClearSelection={onClearSelection}
-          />
-          <div className="toolbar-divider" />
-          <BulkCopyControls
-            copyModeActive={copyModeActive}
-            copiedValue={copiedValue}
-            sourceCell={sourceCell}
-            pendingChangesCount={pendingChangesCount}
-            isSaving={isSaving}
-            onToggleCopyMode={onToggleCopyMode}
-          />
+          <div className="toolbar-section toolbar-section--selection">
+            <span className="toolbar-section-label">Selection</span>
+            <BulkSelectionControls
+              selectedCount={selectedCount}
+              pageCount={pageCount}
+              totalCount={totalCount}
+              allPageSelected={allPageSelected}
+              allFilteredSelected={allFilteredSelected}
+              onSelectPage={onSelectPage}
+              onSelectAllFiltered={onSelectAllFiltered}
+              onClearSelection={onClearSelection}
+            />
+          </div>
+          <div className="toolbar-section toolbar-section--copy">
+            <span className="toolbar-section-label">Edit</span>
+            <BulkCopyControls
+              copyModeActive={copyModeActive}
+              copiedValue={copiedValue}
+              sourceCell={sourceCell}
+              pendingChangesCount={pendingChangesCount}
+              isSaving={isSaving}
+              onToggleCopyMode={onToggleCopyMode}
+            />
+          </div>
         </div>
 
         <div className="edit-toolbar-center">
-          <BulkProcessingControls
-            selectedCount={selectedCount}
-            processingStatus={processingStatus}
-            pausePending={pausePending}
-            abortPending={abortPending}
-            onOpenTranscription={onOpenTranscription}
-            onOpenMetadataExtraction={onOpenMetadataExtraction}
-            onPauseProcessing={onPauseProcessing}
-            onResumeProcessing={onResumeProcessing}
-            onAbortProcessing={onAbortProcessing}
-          />
+          <div className="toolbar-section toolbar-section--processing">
+            <span className="toolbar-section-label">Process</span>
+            <BulkProcessingControls
+              selectedCount={selectedCount}
+              processingStatus={processingStatus}
+              pausePending={pausePending}
+              abortPending={abortPending}
+              onOpenTranscription={onOpenTranscription}
+              onOpenMetadataExtraction={onOpenMetadataExtraction}
+              onPauseProcessing={onPauseProcessing}
+              onResumeProcessing={onResumeProcessing}
+              onAbortProcessing={onAbortProcessing}
+            />
+          </div>
         </div>
 
         <div className="edit-toolbar-right">
-          <BulkPublishingMenu
-            selectedCount={selectedCount}
-            bulkActionLoading={bulkActionLoading}
-            publishCounts={publishCounts}
-            onBulkHide={onBulkHide}
-            onBulkPublish={onBulkPublish}
-            onBulkContentVisibility={onBulkContentVisibility}
-          />
-          <div className="toolbar-divider" />
-          <BulkDestructiveControls
-            selectedCount={selectedCount}
-            bulkActionLoading={bulkActionLoading}
-            onClearTranscriptions={onClearTranscriptions}
-            onClearMetadata={onClearMetadata}
-            onDelete={onDelete}
-          />
-          <div className="toolbar-divider" />
+          <div className="toolbar-section toolbar-section--publishing">
+            <span className="toolbar-section-label">Publish</span>
+            <BulkPublishingMenu
+              selectedCount={selectedCount}
+              bulkActionLoading={bulkActionLoading}
+              publishCounts={publishCounts}
+              onBulkHide={onBulkHide}
+              onBulkPublish={onBulkPublish}
+              onBulkContentVisibility={onBulkContentVisibility}
+            />
+          </div>
+          <div className="toolbar-section toolbar-section--danger">
+            <span className="toolbar-section-label">Danger</span>
+            <BulkDestructiveControls
+              selectedCount={selectedCount}
+              bulkActionLoading={bulkActionLoading}
+              onClearTranscriptions={onClearTranscriptions}
+              onClearMetadata={onClearMetadata}
+              onDelete={onDelete}
+            />
+          </div>
           {pendingChangesCount > 0 ? (
             <button className="toolbar-done-btn" onClick={onDone} disabled={isSaving}>
               {isSaving ? "Saving..." : "Save & Close"}

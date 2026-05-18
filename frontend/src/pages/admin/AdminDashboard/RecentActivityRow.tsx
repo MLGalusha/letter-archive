@@ -89,6 +89,7 @@ export default function RecentActivityRow({
     letter.photosCount ??
     letter.images.filter((image) => image.type === "photo").length;
   const formattedDate = formatting.formatDateRaw(letter.metadata.dateRaw);
+  const isSelected = selectedIds.has(letter.id);
   const contentStatus = shouldShowPhotoDescriptionWorkflow(letter)
     ? (letter.photoDescriptionStatus ?? "EMPTY")
     : formatting.getCombinedTranscriptStatus(
@@ -191,7 +192,8 @@ export default function RecentActivityRow({
       onClick={(event) => selection.onRowClick(letter.id, index, event)}
       onMouseDown={(event) => selection.onRowMouseDown(index, event)}
       onMouseEnter={() => selection.onRowMouseEnter(index)}
-      className={`letter-row ${selectedIds.has(letter.id) ? "selected" : ""} ${copyEdit.editMode ? "edit-mode" : ""}`}
+      className={`letter-row ${isSelected ? "selected" : ""} ${copyEdit.editMode ? "edit-mode" : ""}`}
+      aria-selected={isSelected}
     >
       <td
         className="checkbox-cell"
@@ -203,7 +205,7 @@ export default function RecentActivityRow({
           type="checkbox"
           className="row-checkbox"
           aria-label={`Select ${letter.title || formattedDate || "letter"}`}
-          checked={selectedIds.has(letter.id)}
+          checked={isSelected}
           onClick={(event) => {
             event.stopPropagation();
             selection.onCheckboxChange(letter.id, index, event);

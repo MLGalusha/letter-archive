@@ -205,7 +205,7 @@ Deferred processing redesign note:
 
 ## Phase 2.6 - Extra Content Data Model Correction
 
-Status: active
+Status: completed
 
 Why this exists:
 
@@ -305,6 +305,8 @@ Progress:
 - Consolidated duplicate checkbox CSS into one row checkbox visual model with hover, checked, and focus-visible states.
 - Changed the mobile bulk toolbar into compact stacked action rows with row-level horizontal overflow, reducing the selected-state toolbar footprint.
 - Fixed a table header/body ordering mismatch where flag, transcript, metadata, and visibility headers could appear over the wrong cells.
+- Added selected-row continuity across the row cells with a clear selection rail on the checkbox cell.
+- Grouped the bulk toolbar into selection, edit, processing, publishing, and danger sections so the action hierarchy is visible before deeper visual polish.
 
 Likely implementation slices:
 
@@ -324,7 +326,7 @@ Exit criteria:
 
 ## Phase 2.8 - Dashboard Column Configuration
 
-Status: active
+Status: completed
 
 Why this exists:
 

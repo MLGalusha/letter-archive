@@ -2120,7 +2120,7 @@
 
 .letter-row {
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color 0.2s, box-shadow 0.2s;
 }
 
 .letter-row:hover {
@@ -2128,11 +2128,23 @@
 }
 
 .letter-row.selected {
-  background: #e3f2fd;
+  background: #eef6ff;
 }
 
 .letter-row.selected:hover {
-  background: #bbdefb;
+  background: #dbeafe;
+}
+
+.letter-row.selected td {
+  background: #eef6ff;
+}
+
+.letter-row.selected:hover td {
+  background: #dbeafe;
+}
+
+.letter-row.selected .checkbox-cell {
+  box-shadow: inset 3px 0 0 #2563eb;
 }
 
 /* Edit mode cursor and selection behavior */
@@ -2161,6 +2173,7 @@
 
 .checkbox-cell {
   cursor: default;
+  background: inherit;
 }
 
 .row-checkbox {
@@ -2191,8 +2204,8 @@
 }
 
 .row-checkbox:checked {
-  background: var(--text);
-  border-color: var(--text);
+  background: #2563eb;
+  border-color: #2563eb;
 }
 
 .row-checkbox:checked::after {
@@ -3240,7 +3253,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-lg);
+  gap: var(--spacing-md);
   padding: var(--spacing-sm) var(--spacing-lg);
   background: #1f2937;
   border-top: 1px solid #374151;
@@ -3253,8 +3266,32 @@
 .edit-toolbar-left {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm);
   flex-shrink: 0;
+}
+
+.toolbar-section {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-height: 36px;
+  padding: 4px 6px;
+  border: 1px solid rgba(75, 85, 99, 0.7);
+  border-radius: 6px;
+  background: rgba(17, 24, 39, 0.55);
+}
+
+.toolbar-section--danger {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(127, 29, 29, 0.18);
+}
+
+.toolbar-section-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9ca3af;
 }
 
 .toolbar-selection-count {
@@ -3290,12 +3327,6 @@
   background: rgba(96, 165, 250, 0.2);
   border-color: #60a5fa;
   color: #60a5fa;
-}
-
-.toolbar-divider {
-  width: 1px;
-  height: 24px;
-  background: #4b5563;
 }
 
 .toolbar-copy-buttons {
@@ -3336,7 +3367,7 @@
 .edit-toolbar-center {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm);
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -3707,6 +3738,18 @@
     scrollbar-width: thin;
   }
 
+  .toolbar-section {
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 34px;
+    padding: 4px 5px;
+  }
+
+  .toolbar-section-label {
+    font-size: 0.58rem;
+  }
+
   .edit-toolbar-left::-webkit-scrollbar,
   .edit-toolbar-center::-webkit-scrollbar,
   .edit-toolbar-right::-webkit-scrollbar {
@@ -3731,10 +3774,6 @@
   .toolbar-visibility-actions {
     flex: 0 0 auto;
     flex-wrap: nowrap;
-  }
-
-  .toolbar-divider {
-    display: none;
   }
 
   .toolbar-copy-btn,

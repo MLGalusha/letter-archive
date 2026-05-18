@@ -30,10 +30,6 @@ export function useDashboardSelection<T extends IdentifiableRow>(rows: T[]) {
     () => rows.length > 0 && rows.every((row) => selectedIds.has(row.id)),
     [rows, selectedIds],
   );
-  const somePageSelected = useMemo(
-    () => rows.some((row) => selectedIds.has(row.id)),
-    [rows, selectedIds],
-  );
 
   const handleSelectAllPage = useCallback(() => {
     if (allPageSelected) {
@@ -64,7 +60,6 @@ export function useDashboardSelection<T extends IdentifiableRow>(rows: T[]) {
     toggleSelection,
     clearSelection,
     allPageSelected,
-    somePageSelected,
     handleSelectAllPage,
     selectAllFiltered,
   };

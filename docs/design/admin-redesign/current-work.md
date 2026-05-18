@@ -52,6 +52,7 @@ Verification plan:
 - 2026-05-18: Added focused copy/edit hook tests for row-click interception in selection mode and copy mode.
 - 2026-05-18: Extracted the row selection checkbox cell so checkbox event isolation is owned by a named component instead of being embedded in the full row renderer.
 - 2026-05-18: Added filtered-selection tests for select-all-filtered, pruning invalid selected IDs, and closing edit mode when pruning empties selection.
+- 2026-05-18: Removed unused `somePageSelected` from the selection hook return shape.
 
 ## Selection Audit
 

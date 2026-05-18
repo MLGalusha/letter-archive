@@ -46,6 +46,8 @@ Verification plan:
 - 2026-05-18: Read selection state hooks, row gesture handling, filtered select-all behavior, row rendering, bulk toolbar sections, table tests, bulk toolbar tests, and responsive CSS.
 - 2026-05-18: Verified current focused tests and targeted ESLint for selection/table/bulk files.
 - 2026-05-18: Measured current selected-row and bulk-toolbar behavior in Playwright at 1440x900 and 390x844.
+- 2026-05-18: Defined conservative target selection model that preserves current behavior and defers mobile bulk hierarchy decisions.
+- 2026-05-18: Added focused hook tests for page selection, filtered selection state, shift-range checkbox selection, drag-select, and drag-deselect behavior.
 
 ## Selection Audit
 
@@ -102,3 +104,34 @@ Verification plan:
 - Whether `Select page` should continue clearing all selection when the page is already selected.
 - Whether row click in selection mode should toggle selection, open detail, or require explicit checkbox use.
 - Whether bulk publish/hide should keep selection after success or exit edit mode like destructive actions.
+
+## Target Selection Model
+
+This target model is conservative. It preserves current behavior while making the system easier to verify and evolve.
+
+### Invariants
+
+- Row navigation remains the default when no selection/edit mode is active.
+- Checkbox selection never opens a row.
+- In selection/edit mode, row clicks continue to toggle selection instead of navigating.
+- Shift checkbox selection continues to select a contiguous range from the last clicked row.
+- Drag selection continues to select or deselect ranges based on the starting row state.
+- Select-all-page and select-all-filtered remain distinct states.
+- Filter/sort changes continue to prune selected IDs against backend-filtered IDs.
+- Copy mode continues to use the selected/edit toolbar and sender/recipient cell interactions.
+- Mobile keeps the checkbox column inside the horizontal table flow for this pass.
+
+### Ownership Direction
+
+- `useDashboardSelection` should own page/filter selection state and expose names that make page versus filtered selection explicit.
+- `useDashboardRowSelection` should own row-level gestures only: checkbox range selection, drag selection, and row-click suppression after drag.
+- `useDashboardCopyPasteEdit` should own edit toolbar visibility and copy/paste state, not page-selection semantics.
+- Table components should receive a table selection model with clearly named row gesture callbacks.
+- Bulk toolbar components should receive a bulk selection model with clearly named page/filter actions.
+
+### Good-Enough Completion Criteria For This Phase
+
+- Current selection behavior has focused tests before behavior-preserving refactors.
+- Selection and row gesture props read as intentional models, not generic callback bags.
+- Mobile and desktop browser checks show no selected-row/table regression.
+- Any mobile bulk toolbar hierarchy change is deferred unless explicitly approved.

@@ -311,13 +311,14 @@ Progress:
 - Grouped `BulkEditToolbar` props by toolbar section so the component API matches the selection, edit, processing, publishing, danger, and completion ownership boundaries.
 - Refined the bulk toolbar into a named bulk-actions region with reusable labeled sections, a clearer selected-state emphasis, and mobile behavior where selection stays full-width while action groups scroll independently.
 - Added focused toolbar tests for section labeling, clear-selection completion, and pending-edit save completion.
+- Added explicit accessible names/state for the column configuration trigger and icon-only review-flag header.
 
 Likely implementation slices:
 
 - Selection interaction model and table selection visuals.
 - Mobile table/selection scroll behavior. (Mostly complete for the current pass; keep watching during responsive table polish.)
 - Bulk action toolbar hierarchy and responsive placement. (Structurally complete for the current pass; deeper visual styling can happen with the broader dashboard style pass.)
-- Accessibility and keyboard/focus pass.
+- Accessibility and keyboard/focus pass. (In progress: table controls now expose clearer names; keyboard row-opening and deeper range-selection behavior still need a later decision.)
 - Focused tests for selection pruning, select-all-filtered, and row click/selection behavior.
 
 Exit criteria:

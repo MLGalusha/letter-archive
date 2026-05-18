@@ -57,11 +57,13 @@ describe("RecentActivityTable", () => {
             "metadata",
             "visibility",
             "created",
+            "flag",
           ]),
           orderedColumns: [
             { id: "sender", label: "Sender", defaultVisible: true },
             { id: "recipient", label: "Recipient", defaultVisible: true },
             { id: "date", label: "Letter date", defaultVisible: true },
+            { id: "flag", label: "Review flag", defaultVisible: true },
           ],
           showColumnMenu: false,
           onToggleColumnMenu: vi.fn(),
@@ -113,6 +115,8 @@ describe("RecentActivityTable", () => {
     expect(screen.getByText("Bob")).toBeInTheDocument();
 
     expect(screen.getByRole("columnheader", { name: /Sender/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Configure columns" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("columnheader", { name: "Review flag" })).toBeInTheDocument();
 
     await user.click(screen.getByText("Alice"));
     expect(onCellClick).toHaveBeenCalled();

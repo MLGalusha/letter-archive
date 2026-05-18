@@ -7,6 +7,7 @@ interface HeaderColumn {
   dataColumn: string;
   label: ReactNode;
   className?: string;
+  ariaLabel?: string;
 }
 
 const HEADER_COLUMNS: Record<ColumnId, HeaderColumn> = {
@@ -42,6 +43,7 @@ const HEADER_COLUMNS: Record<ColumnId, HeaderColumn> = {
   flag: {
     dataColumn: "flag",
     className: "flag-header",
+    ariaLabel: "Review flag",
     label: <Icon name="flag" size={14} />,
   },
   type_letter: { dataColumn: "type_letter", label: "Letter files" },
@@ -95,7 +97,12 @@ export default function RecentActivityTableHeader({
         {orderedColumns.filter((column) => visibleColumns.has(column.id)).map((column) => {
           const header = HEADER_COLUMNS[column.id];
           return (
-            <th key={column.id} data-column={header.dataColumn} className={header.className}>
+            <th
+              key={column.id}
+              data-column={header.dataColumn}
+              className={header.className}
+              aria-label={header.ariaLabel}
+            >
               {header.label}
             </th>
           );

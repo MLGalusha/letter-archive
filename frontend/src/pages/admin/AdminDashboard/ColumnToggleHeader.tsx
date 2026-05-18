@@ -81,6 +81,9 @@ export default function ColumnToggleHeader({
       <button
         className={`column-toggle-btn ${showColumnMenu ? "active" : ""}`}
         onClick={onToggleColumnMenu}
+        aria-label="Configure columns"
+        aria-expanded={showColumnMenu}
+        aria-haspopup="menu"
         title="Toggle columns"
       >
         <Icon name="columns" size={14} />

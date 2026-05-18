@@ -339,6 +339,7 @@ Progress:
 - Moved desktop destructive actions into a Danger manager, reducing toolbar overflow and separating risky actions from routine selected-state controls.
 - Browser-verified desktop and mobile selected-state layouts.
 - Fixed selected-state edge cases found during audit: desktop Publish/Danger managers now render as viewport-anchored popovers above the fixed toolbar, and mobile table/pagination bottom reservation now matches the compact toolbar height instead of reserving nearly half the viewport.
+- Tightened the mobile selected-state surface to two rows: selected count/scope/exit, then one horizontal command row for Page, All, Edit, Process, Publishing, and Danger. Mobile dashboard managers now clear selection mode when opened.
 
 Product-level choices to resolve:
 

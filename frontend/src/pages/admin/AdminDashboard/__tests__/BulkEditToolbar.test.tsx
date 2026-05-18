@@ -208,7 +208,9 @@ describe("BulkEditToolbar", () => {
     render(<BulkEditToolbar {...makeToolbarModels()} />);
 
     expect(screen.getByRole("region", { name: "Bulk actions" })).toHaveTextContent(/3\s*selected/);
+    expect(screen.getByLabelText("Bulk selection and action controls")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Select page (25)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Select all (98)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Process" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Publishing" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Danger" })).toBeInTheDocument();

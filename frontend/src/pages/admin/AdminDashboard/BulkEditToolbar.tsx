@@ -148,22 +148,25 @@ function MobileBulkEditToolbar({
           )}
         </div>
 
-        <div className="mobile-bulk-scope-actions" aria-label="Selection scope actions">
-          <button type="button" className={`toolbar-select-btn ${selection.allPageSelected ? "active" : ""}`} onClick={selection.onSelectPage}>
-            {selection.allPageSelected ? "Page selected" : `Select page (${selection.pageCount})`}
+        <div className="mobile-bulk-command-row" aria-label="Bulk selection and action controls">
+          <button
+            type="button"
+            className={`toolbar-select-btn ${selection.allPageSelected ? "active" : ""}`}
+            onClick={selection.onSelectPage}
+            aria-label={selection.allPageSelected ? "Page selected" : `Select page (${selection.pageCount})`}
+          >
+            {selection.allPageSelected ? "Page ✓" : `Page (${selection.pageCount})`}
           </button>
           {selection.totalCount > selection.pageCount && (
             <button
               type="button"
               className={`toolbar-select-btn ${selection.allFilteredSelected ? "active" : ""}`}
               onClick={selection.allFilteredSelected ? selection.onClearSelection : selection.onSelectAllFiltered}
+              aria-label={selection.allFilteredSelected ? "Clear all filtered selection" : `Select all (${selection.totalCount})`}
             >
-              {selection.allFilteredSelected ? "Clear all filtered" : `Select all (${selection.totalCount})`}
+              {selection.allFilteredSelected ? "All ✓" : `All (${selection.totalCount})`}
             </button>
           )}
-        </div>
-
-        <div className="mobile-bulk-action-row" aria-label="Bulk action groups">
           <ToolbarSection label="Edit" modifier="copy">
             <BulkCopyControls
               copyModeActive={copy.copyModeActive}

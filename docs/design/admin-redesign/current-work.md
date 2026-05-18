@@ -137,6 +137,7 @@ Selection and bulk actions should behave like a designed admin workflow, not lik
 - 2026-05-18: Moved destructive bulk actions behind a Danger manager on desktop, reducing toolbar overflow and making dangerous actions a deliberate secondary surface.
 - 2026-05-18: Browser-verified selected-state toolbar behavior at 1440x900 and 390x844. Mobile selected toolbar measured about 137px tall, down from the earlier 206px dense toolbar measurement.
 - 2026-05-18: Fixed desktop Publish/Danger manager positioning so toolbar popovers are anchored to the viewport above the fixed toolbar instead of being clipped by the toolbar scroller. Tightened mobile selected-state bottom reservation to match the actual compact toolbar height.
+- 2026-05-18: Compressed the mobile selected-state surface again by moving Page, All, Edit, Process, Publishing, and Danger into one command row. Opening mobile Filters, Save view, or Sort now exits selection mode so manager sheets are not hidden behind the selected-state bar.
 
 ## Selection Audit
 

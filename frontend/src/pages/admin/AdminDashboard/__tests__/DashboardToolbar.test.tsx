@@ -95,9 +95,11 @@ function makeFilters(overrides: Partial<DashboardFilterControls> = {}): Dashboar
 function ToolbarHarness({
   initialView = "letters",
   filters = makeFilters(),
+  onManagerOpen,
 }: {
   initialView?: DashboardView;
   filters?: DashboardFilterControls;
+  onManagerOpen?: () => void;
 }) {
   const [dashboardView, setDashboardView] = useState<DashboardView>(initialView);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -122,6 +124,7 @@ function ToolbarHarness({
       displayToDateRaw={(display) => display || null}
       processingStatus={null}
       selectedCount={0}
+      onManagerOpen={onManagerOpen}
     />
   );
 }
@@ -200,5 +203,17 @@ describe("DashboardToolbar", () => {
     await user.click(filtersTrigger);
     expect(screen.queryByRole("dialog", { name: "Sort rules" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Filters" })).toBeInTheDocument();
+  });
+
+  it("announces toolbar manager opens for mobile selection dismissal", async () => {
+    const user = userEvent.setup();
+    const onManagerOpen = vi.fn();
+    render(<ToolbarHarness onManagerOpen={onManagerOpen} />);
+
+    await user.click(screen.getByRole("button", { name: /Filters/ }));
+    await user.click(screen.getByRole("button", { name: "Save view" }));
+    await user.click(screen.getByRole("button", { name: /Sort/i }));
+
+    expect(onManagerOpen).toHaveBeenCalledTimes(3);
   });
 });

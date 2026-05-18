@@ -37,6 +37,7 @@ interface DashboardToolbarProps {
   displayToDateRaw: (display: string) => string | null;
   processingStatus: ProcessingStatus | null;
   selectedCount: number;
+  onManagerOpen?: () => void;
 }
 
 export default function DashboardToolbar({
@@ -58,6 +59,7 @@ export default function DashboardToolbar({
   displayToDateRaw,
   processingStatus,
   selectedCount,
+  onManagerOpen,
 }: DashboardToolbarProps) {
   const {
     collectionFilters,
@@ -122,6 +124,7 @@ export default function DashboardToolbar({
     const nextFiltersOpen = !filtersOpen;
     if (nextFiltersOpen) {
       setOpenManager(null);
+      onManagerOpen?.();
     }
     onFiltersOpenChange(nextFiltersOpen);
   };
@@ -130,6 +133,7 @@ export default function DashboardToolbar({
     setOpenManager(open ? "savedViews" : null);
     if (open) {
       onFiltersOpenChange(false);
+      onManagerOpen?.();
     }
   };
 
@@ -137,6 +141,7 @@ export default function DashboardToolbar({
     setOpenManager(open ? "sort" : null);
     if (open) {
       onFiltersOpenChange(false);
+      onManagerOpen?.();
     }
   };
 

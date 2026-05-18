@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
 import AdminLayout from "../../components/AdminLayout";
+import useIsMobile from "../../hooks/useIsMobile";
 import RecentActivityTable from "./AdminDashboard/RecentActivityTable";
 import DashboardToolbar from "./AdminDashboard/DashboardToolbar";
 import BulkEditToolbar from "./AdminDashboard/BulkEditToolbar";
@@ -37,6 +38,7 @@ import "./AdminDashboard.css";
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const isMobile = useIsMobile(768);
   const { dashboardView, handleDashboardViewChange } = useDashboardViewState();
 
   const dashboardFilters = useDashboardFilters();
@@ -156,6 +158,12 @@ export default function AdminDashboard() {
     navigate(`/admin/letters/${letterId}`);
   };
 
+  const handleToolbarManagerOpen = () => {
+    if (isMobile && selectedIds.size > 0) {
+      exitEditMode();
+    }
+  };
+
   const { singleSelectedLetter, publishCounts } = useDashboardSelectionDetails({
     letters,
     filteredLetters,
@@ -272,6 +280,7 @@ export default function AdminDashboard() {
           displayToDateRaw={displayToDateRaw}
           processingStatus={processingStatus}
           selectedCount={selectedIds.size}
+          onManagerOpen={handleToolbarManagerOpen}
         />
       </section>
       {dashboardView === 'collections' && <CollectionsDashboard />}

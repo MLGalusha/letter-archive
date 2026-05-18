@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import BulkEditToolbar from "../BulkEditToolbar";
 import type {
   BulkCompletionToolbarModel,
@@ -81,7 +81,32 @@ function makeToolbarModels({
   return { selection, copy, processing, publishing, danger, completion };
 }
 
+const originalMatchMedia = window.matchMedia;
+
+function mockMobileViewport(isMobile: boolean) {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: isMobile,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
 describe("BulkEditToolbar", () => {
+  afterEach(() => {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: originalMatchMedia,
+    });
+  });
+
   it("renders grouped bulk-action sections as one named region", () => {
     render(<BulkEditToolbar {...makeToolbarModels()} />);
 
@@ -136,6 +161,19 @@ describe("BulkEditToolbar", () => {
     expect(models.selection.onClearSelection).toHaveBeenCalled();
   });
 
+  it("keeps the active page-selection control wired to the page selection handler", async () => {
+    const user = userEvent.setup();
+    const models = makeToolbarModels();
+    models.selection.allPageSelected = true;
+
+    render(<BulkEditToolbar {...models} />);
+
+    await user.click(screen.getByRole("button", { name: "Page ✓" }));
+
+    expect(models.selection.onSelectPage).toHaveBeenCalled();
+    expect(models.selection.onClearSelection).not.toHaveBeenCalled();
+  });
+
   it("opens publishing actions in the shared manager dialog", async () => {
     const user = userEvent.setup();
 
@@ -146,5 +184,40 @@ describe("BulkEditToolbar", () => {
     expect(screen.getByRole("dialog", { name: "Publishing actions" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Publishing" })).toBeInTheDocument();
     expect(screen.getAllByText("1 published · 2 hidden")).toHaveLength(2);
+  });
+
+  it("opens destructive actions in a danger manager instead of showing them inline", async () => {
+    const user = userEvent.setup();
+
+    render(<BulkEditToolbar {...makeToolbarModels()} />);
+
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Danger" }));
+
+    expect(screen.getByRole("dialog", { name: "Danger actions" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear Transcripts" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear Metadata" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+  });
+
+  it("uses a compact mobile selected-state surface with grouped action sheets", async () => {
+    const user = userEvent.setup();
+    mockMobileViewport(true);
+
+    render(<BulkEditToolbar {...makeToolbarModels()} />);
+
+    expect(screen.getByRole("region", { name: "Bulk actions" })).toHaveTextContent(/3\s*selected/);
+    expect(screen.getByRole("button", { name: "Select page (25)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Process" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publishing" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Danger" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Process" }));
+    expect(screen.getByRole("dialog", { name: "Processing actions" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Close Process selected" }));
+    await user.click(screen.getByRole("button", { name: "Danger" }));
+    expect(screen.getByRole("dialog", { name: "Danger actions" })).toBeInTheDocument();
   });
 });

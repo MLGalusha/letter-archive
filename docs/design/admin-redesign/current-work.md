@@ -13,33 +13,89 @@ This file tracks autonomous implementation slices for the admin dashboard redesi
 
 ## Current Phase
 
-Phase 2.5 completion checkpoint: dashboard filter model and ranked sort contract.
+Phase 2.75: dashboard selection and bulk-action redesign.
 
 ## Current Slice
 
-Cleanup/content-type filters and backend-ranked dashboard sort.
+Docs checkpoint and first-principles UX framing before implementation.
 
-Why this was next:
+Why this is next:
 
-- Phase 2.5 is the dashboard data contract phase. Later selection, responsive UI, and reusable pattern work should not sit on top of incomplete filter/sort semantics.
-- Cleanup filters and content-type filters need backend query support so saved views, active chips, select-all-filtered behavior, and stats all mean the same thing.
-- The Sort manager already supports ordered rules, so the backend needed to apply the same ranked stack before pagination instead of leaving secondary rules as page-only refinements.
+- The dashboard filter/sort model is now mature enough that selection and bulk actions can be redesigned against stable table state.
+- Current selection behavior works, but it reads as a patched-on system, especially on mobile where selected state, horizontal scrolling, and bulk action placement compete for attention.
+- The next pass should not start by styling checkboxes. It should define the selection goals, action hierarchy, and device-specific interaction model first.
 
-Definition of done:
+Definition of done for this docs checkpoint:
 
-- Backend accepts and validates cleanup/content-type filters and ordered sort rules.
-- Backend stats and filtering use the same grouped representative-letter semantics.
-- Frontend query construction, persisted state, saved views, active chips, filter panel controls, and select-all-filtered wiring include the accepted filters.
-- Count sorts exposed in the Sort manager are server-backed before pagination.
-- Roadmap, decisions, and dashboard design notes reflect completed Phase 2.5 scope and explicit deferrals.
+- Roadmap, current-work, dashboard-design, and decisions docs reflect that Phase 2.75 is the next active design/implementation phase.
+- Stale mobile-selection guidance is corrected: the current sticky checkbox column is a tactical fix, not a final product decision.
+- The docs explicitly allow desktop and mobile selection/bulk-action UX to diverge when that better serves the workflow.
+- Product-level choices that should be discussed before implementation are listed clearly.
 
-Verification plan:
+Working assumptions for the next implementation pass:
 
-- Run focused tests for touched dashboard controls and hooks.
-- Run focused backend query tests and backend typecheck.
-- Run frontend production build before final handoff.
-- Use browser smoke checks for mobile and desktop filter/sort surfaces.
-- Update roadmap/current-work/idea-log when a checkpoint or deferred idea becomes clear.
+- Preserve existing backend semantics and bulk mutation behavior unless a specific decision changes them.
+- Keep code quality ahead of visual polish: state ownership, prop contracts, tests, and accessibility should come before final styling.
+- Treat selection as a modeful interaction system: row opening, selecting, range selecting, dragging, editing, processing, publishing, and destructive actions all need to fit together.
+- Avoid promoting any selector or bulk-action pattern to shared admin UI until it works well on both desktop and mobile.
+
+Verification plan for the eventual implementation pass:
+
+- Add or preserve focused tests around row selection, range selection, drag selection, select-all-page, select-all-filtered, pruning, edit mode, and bulk toolbar completion paths.
+- Use browser checks at desktop and narrow mobile sizes with selected rows, horizontal table scroll, and the bulk action surface visible.
+- Confirm keyboard focus and accessible names for selection controls and bulk action controls.
+- Update docs at each meaningful checkpoint before committing.
+
+## Phase 2.75 Implementation Plan
+
+### Core Workflow Goal
+
+Selection and bulk actions should behave like a designed admin workflow, not like table checkboxes plus a fixed button pile. At every point the admin should understand what is selected, what scope an action will affect, how to add/remove/clear selection, which actions are routine versus risky, and how to return to normal browsing.
+
+### Desktop Success Criteria
+
+- Normal row click opens the letter when not in selection/edit mode.
+- Row checkboxes are visible, keyboard reachable, and have clear focus and checked states.
+- Selected rows read as continuous selected objects across all visible cells.
+- Shift-select and drag-select remain available for cleanup-heavy desktop workflows.
+- Selection scope controls are distinct from mutation actions.
+- Bulk actions are grouped by intent: scope, edit/copy, process, publish/visibility, and danger.
+- Dangerous actions are visually separated and continue to use confirmation flows.
+
+### Mobile Success Criteria
+
+- Selecting a row creates an obvious mobile selection mode.
+- The selected count, selected scope, and clear/exit action are always obvious.
+- The selector does not feel like an accidental overlay on top of horizontally scrolling table content.
+- Primary actions stay reachable without a fixed toolbar consuming a large share of the viewport.
+- Secondary actions can move into manager sheets or grouped menus instead of full inline parity with desktop.
+- Row opening remains clear outside selection mode.
+
+### Target UX Direction
+
+- Desktop keeps direct table selection: checkbox click selects, row click opens unless selection/edit mode is active, shift-select and drag-select stay available.
+- Mobile should move toward explicit selection mode. Once selection exists, row taps should toggle selection by default; opening detail should require exiting selection or using a deliberate row affordance.
+- The current mobile sticky checkbox lane can remain as a tactical control lane only if it is styled as a deliberate frozen selection rail with row-state continuity. If it continues to feel detached, prefer a non-sticky selector or explicit selection-mode control.
+- Desktop can keep a selected-state action bar, but the bar should be calmer and grouped by action intent.
+- Mobile should use a compact selected-state mode bar for count, scope, and exit/save, with grouped manager surfaces for secondary action families.
+
+### First Code Slices
+
+1. Add or tighten tests around existing row and toolbar behavior so the redesign has a regression boundary.
+2. Refactor naming and prop contracts where needed: table selection, row gestures, selection scope, edit/copy, processing, publishing, danger, and completion should stay separate.
+3. Improve desktop selected-row and bulk-toolbar hierarchy without changing backend semantics.
+4. Implement the mobile selected-state mode bar and grouped action surfaces.
+5. Run accessibility and browser verification before promoting any reusable pattern.
+
+### Current Audit Notes
+
+- `useDashboardSelection` owns selected IDs, page selection, all-filtered state, and clear/select operations.
+- `useDashboardRowSelection` owns checkbox shift selection and drag selection. It still operates as a desktop-style pointer interaction and should not drive the whole mobile model by default.
+- `useDashboardCopyPasteEdit` opens edit mode when there is selection and currently makes row clicks toggle selection when selected IDs or pending edits exist.
+- `RecentActivityTable` already receives grouped table models, which is a good base. Selection still mixes row navigation, checkbox selection, pointer drag, and edit-mode behavior in one model.
+- `BulkEditToolbar` already has grouped prop models and section components. The main remaining problem is hierarchy and responsive presentation, not basic ownership.
+- `BulkSelectionControls` currently makes `Page` both a select-page and clear-selection toggle when the page is fully selected. That behavior is efficient but ambiguous and should be reconsidered before UI polish.
+- Publish counts are loaded-row counts when all-filtered selection spans unloaded pages. The UI should either label that limitation or fetch exact counts before presenting scoped publishing details.
 
 ## Progress Log
 
@@ -75,6 +131,11 @@ Verification plan:
 - 2026-05-18: Moved letter-page, aggregate extra-item, and per-content-type sorts to the server-backed Sort manager path and removed current-page secondary sort behavior for current Sort manager fields.
 - 2026-05-18: Updated Phase 2.5 docs to mark cleanup/content-type filters and ranked sort complete, with missing collection and entity/historical filters deferred.
 - 2026-05-18: Centralized dashboard content-type filter/sort labels in a frontend catalog and expanded the backend contract to all stored letter content types instead of a partial photos/covers/telegrams subset.
+- 2026-05-18: Reframed Phase 2.75 docs around first-principles selection and bulk-action goals, with desktop and mobile allowed to diverge.
+- 2026-05-18: Added regression tests for keyboard-reachable row checkboxes and the current active page-selection toggle behavior.
+- 2026-05-18: Added a mobile-specific selected-state bulk surface with count/scope/exit, compact scope controls, and grouped action entry points instead of the dense desktop toolbar.
+- 2026-05-18: Moved destructive bulk actions behind a Danger manager on desktop, reducing toolbar overflow and making dangerous actions a deliberate secondary surface.
+- 2026-05-18: Browser-verified selected-state toolbar behavior at 1440x900 and 390x844. Mobile selected toolbar measured about 137px tall, down from the earlier 206px dense toolbar measurement.
 
 ## Selection Audit
 
@@ -106,7 +167,8 @@ Verification plan:
 ### Current Responsive Findings
 
 - Desktop selected row and toolbar are structurally stable. At 1440x900, the fixed toolbar measured about 72px tall, and table bottom padding reserves space for it.
-- Mobile selected row uses the same horizontally scrollable table model. The checkbox column is static and scrolls with the table, matching the accepted decision to avoid a detached sticky selection rail in this pass.
+- Mobile selection recently moved to a real sticky checkbox column with its own background and border so horizontally scrolled data columns do not slide behind the checkbox lane.
+- The sticky checkbox column is a tactical stability fix, not the final Phase 2.75 UX answer. The redesign should decide whether mobile needs a deliberate frozen selection rail, an explicit selection mode, or a different row-level control pattern.
 - At 390x844, the bulk toolbar measured about 206px tall after selecting one row. It preserves access to actions but consumes a large part of the viewport.
 - The mobile right-side bulk action row can overflow horizontally, especially with Publish and Danger controls together.
 - The selected row uses continuous row background across cells, with a left inset accent on the checkbox cell.
@@ -131,10 +193,13 @@ Verification plan:
 - Whether `Select page` should continue clearing all selection when the page is already selected.
 - Whether row click in selection mode should toggle selection, open detail, or require explicit checkbox use.
 - Whether bulk publish/hide should keep selection after success or exit edit mode like destructive actions.
+- Whether mobile should optimize for always-visible selection controls, maximum table readability, or a distinct selection mode that changes row behavior.
+- Whether desktop should keep power-user range/drag selection while mobile uses a simpler tap-oriented model.
+- Whether copy/paste edit mode belongs in the same visible bulk-action surface as processing, publishing, and destructive actions.
 
 ## Target Selection Model
 
-This target model is conservative. It preserves current behavior while making the system easier to verify and evolve.
+This older target model is intentionally conservative and behavior-preserving. It remains useful as a regression boundary, but Phase 2.75 may replace parts of it after the first-principles UX discussion.
 
 ### Invariants
 
@@ -146,7 +211,7 @@ This target model is conservative. It preserves current behavior while making th
 - Select-all-page and select-all-filtered remain distinct states.
 - Filter/sort changes continue to prune selected IDs against backend-filtered IDs.
 - Copy mode continues to use the selected/edit toolbar and sender/recipient cell interactions.
-- Mobile keeps the checkbox column inside the horizontal table flow for this pass.
+- Mobile selection must feel structurally connected to the selected row. The final design may use a deliberate sticky rail, a scrolling column, or an explicit selection mode, but it should not feel like an accidental overlay on top of table content.
 
 ### Ownership Direction
 
@@ -161,4 +226,50 @@ This target model is conservative. It preserves current behavior while making th
 - Current selection behavior has focused tests before behavior-preserving refactors.
 - Selection and row gesture props read as intentional models, not generic callback bags.
 - Mobile and desktop browser checks show no selected-row/table regression.
-- Any mobile bulk toolbar hierarchy change is deferred unless explicitly approved.
+- Mobile bulk toolbar hierarchy changes should follow an approved device-specific interaction model instead of trying to fit all desktop actions into one small fixed bar.
+
+## Current Implementation Checkpoint
+
+What changed in this checkpoint:
+
+- Desktop keeps the existing selected-state action bar, but destructive actions now open from a Danger manager instead of rendering three destructive buttons inline.
+- Mobile now renders a dedicated selected-state surface: selected count, scope text, clear/save, page/all-filtered scope actions, and compact entry points for Edit, Process, Publishing, and Danger.
+- Process and Danger actions use mobile manager sheets. Publishing already used the shared manager surface and remains available from the compact action row.
+- Existing row selection, shift selection, drag selection, edit mode, select-all-filtered, and bulk mutation semantics were preserved.
+
+Verification:
+
+- Focused selection suite passed: `dashboard-selection-hooks`, `dashboard-filtered-selection`, `dashboard-copy-paste-edit`, `dashboard-selection-details`, `BulkEditToolbar`, and `DashboardSections`.
+- Frontend production build passed.
+- Browser checks covered desktop and mobile selected rows, mobile Process sheet opening, desktop toolbar fit, and mobile sticky checkbox lane with the new compact toolbar.
+
+Known follow-ups:
+
+- The selected scope model still needs a clearer final decision for `Select page` toggling into clear-selection behavior.
+- Publish counts remain loaded-row counts when all-filtered selection includes unloaded rows.
+- Mobile row taps in selection mode still rely on the existing edit-mode row-click behavior; a deeper mobile selection-mode pass should make that interaction explicit.
+
+## First-Principles UX Questions For Phase 2.75
+
+### Selection Goals
+
+- Make it obvious which rows are selected and how many selected items an action will affect.
+- Keep ordinary row opening fast when the user is browsing.
+- Make selection entry and exit deliberate enough that destructive bulk actions are not reached accidentally.
+- Preserve efficient desktop workflows for admins doing lots of cleanup work.
+- Make mobile selection usable with one thumb, narrow width, and horizontal table scrolling.
+
+### Bulk Action Goals
+
+- Separate selection scope controls from mutation actions.
+- Separate routine actions from processing actions and dangerous actions.
+- Make selected-page versus selected-filtered scope explicit before a large operation.
+- Keep the highest-frequency actions reachable without forcing every action to be visible at once.
+- Avoid using one dense toolbar as the only answer for desktop and mobile.
+
+### Device Direction To Explore
+
+- Desktop can support direct checkboxes, keyboard focus, shift selection, drag selection, and a wider action bar because the table has enough space and pointer precision.
+- Mobile may need a different interaction model: a selection mode, a deliberate frozen lane, row-level checkmarks, or a compact mode bar with manager sheets for secondary actions.
+- The mobile design should prioritize clarity and controlled action hierarchy over full parity in one visible surface.
+- Desktop and mobile should share state and mutation semantics, but they do not need identical layout or control density.

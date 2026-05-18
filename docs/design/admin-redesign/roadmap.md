@@ -282,17 +282,20 @@ Status: active
 Why this exists:
 
 - The current checkbox/selection UI feels bolted onto the table instead of designed as part of the table interaction model.
-- Mobile horizontal scrolling currently leaves the checkbox column feeling detached from the rest of the row, especially when the table content moves underneath or beside it.
+- Mobile selection has had tactical fixes, including a real sticky checkbox column with its own background/border, but the product interaction model has not been designed from first principles yet.
 - Selection affects row opening, drag/shift selection, select-all-page, select-all-filtered, edit mode, copy/paste, bulk processing, publishing, destructive actions, and mobile action placement. This is a larger UX/system redesign, not just visual checkbox styling.
+- The current bulk toolbar exposes too much hierarchy at once on mobile and does not clearly separate selection scope, routine actions, processing actions, publishing/visibility, and dangerous actions.
 
 Goals:
 
 - Redesign selection as a first-class table state with clear normal, hover, focused, selected, partial-selected, disabled/loading, and edit-mode states.
-- Define whether mobile keeps a sticky selection column, moves selection into a row action/control lane, or uses an explicit selection mode that changes row behavior.
-- Make the mobile table scroll model and selection model feel like one system, not two overlapping layers.
+- Define desktop and mobile selection models separately when the workflow calls for it, while keeping shared state and mutation semantics.
+- Decide whether mobile should use a deliberate sticky selection rail, a non-sticky row-level selector, or an explicit selection mode that changes row behavior.
+- Make the mobile table scroll model, row state, and selection model feel like one system.
 - Redesign bulk actions so selected state, count, page selection, filtered selection, processing actions, publishing actions, and destructive actions have a clear hierarchy.
 - Preserve existing backend behavior and bulk-action semantics unless a specific follow-up decision changes them.
 - Improve accessibility: keyboard reachable checkboxes/actions, visible focus states, accurate selected counts, and predictable row click vs selection behavior.
+- Keep ordinary row opening fast and obvious when the user is browsing rather than selecting.
 
 Code-quality goals:
 
@@ -300,50 +303,50 @@ Code-quality goals:
 - Keep table rendering focused on structure and state display; mutation workflows stay in action hooks.
 - Prefer grouped models for table, selection, and bulk toolbar props over long prop lists.
 - Avoid styling fixes that rely on fragile sticky offsets or duplicated mobile/desktop markup unless there is a documented structural reason.
+- Add tests before behavior changes, especially where selection intersects with edit mode and select-all-filtered behavior.
+
+Current checkpoint:
+
+- Phase 2.75 should restart from goals before UI implementation.
+- The current sticky checkbox column is accepted only as a tactical stability fix for mobile horizontal scrolling.
+- Desktop may keep power-user direct selection behaviors if they are made accessible and visually clear.
+- Mobile may need a distinct interaction model that favors reachability, clarity, and action hierarchy over full desktop parity.
+- Docs should stay current as choices are made, because this phase will set patterns for future admin table interactions.
 
 Investigation tasks:
 
-- Inspect current row selection, drag selection, shift selection, edit mode, and bulk toolbar ownership.
+- Re-audit current row selection, drag selection, shift selection, edit mode, and bulk toolbar ownership after the latest dashboard cleanup commits.
 - Measure rendered mobile table geometry with the sticky selection column enabled.
-- Decide a mobile selection interaction model before editing CSS: sticky column, selection mode, or row-level control lane.
-- Identify which bulk actions are primary, secondary, dangerous, and processing-related.
-
-Current audit findings:
-
-- Selection state is centralized reasonably well in `useDashboardSelection` and `useDashboardRowSelection`, but rendered checkbox behavior is not accessible yet because row checkboxes are `readOnly` and removed from tab order.
-- Row click opens the letter, while checkbox click selects and row mouse drag can select ranges. This is powerful on desktop but needs clearer visual boundaries and mobile behavior.
-- The table currently has duplicate checkbox styling rules in `AdminDashboard.css`, which makes the checkbox visual system harder to reason about.
-- Mobile horizontal scroll pins the checkbox column at `x=0` while the table content scrolls left, so the selection column reads as detached from the row instead of part of a deliberate frozen lane.
-- The bulk toolbar is already split into selection, copy, processing, publishing, and destructive sections, but the visual hierarchy still reads as one dense fixed bar.
-
-Current implementation direction:
-
-- Desktop can keep direct checkbox and range-selection power behavior, but it needs clearer selected-row visuals, focus states, and checkbox accessibility.
-- Mobile should not keep the current detached sticky checkbox treatment. Prefer either a deliberate frozen selection rail with boundary treatment and row-state continuity, or remove sticky selection on mobile and let the selection column scroll with the table. Choose the simpler stable model first unless inspection proves selection becomes too hard to access.
-- Bulk actions should be restyled around hierarchy before extracting reusable patterns: selection summary first, common actions next, dangerous actions visually separated.
-
-Progress:
-
-- Removed the mobile sticky checkbox column so selection moves with the horizontally scrolling table instead of detaching from it.
-- Made row checkboxes real focusable controls instead of read-only, pointer-disabled inputs handled only by the table cell.
-- Consolidated duplicate checkbox CSS into one row checkbox visual model with hover, checked, and focus-visible states.
-- Changed the mobile bulk toolbar into compact stacked action rows with row-level horizontal overflow, reducing the selected-state toolbar footprint.
-- Fixed a table header/body ordering mismatch where flag, transcript, metadata, and visibility headers could appear over the wrong cells.
-- Added selected-row continuity across the row cells with a clear selection rail on the checkbox cell.
-- Grouped the bulk toolbar into selection, edit, processing, publishing, and danger sections so the action hierarchy is visible before deeper visual polish.
-- Tightened the table selection contract so row checkboxes pass a small selection intent instead of leaking raw React mouse events through the table model.
-- Grouped `BulkEditToolbar` props by toolbar section so the component API matches the selection, edit, processing, publishing, danger, and completion ownership boundaries.
-- Refined the bulk toolbar into a named bulk-actions region with reusable labeled sections, a clearer selected-state emphasis, and mobile behavior where selection stays full-width while action groups scroll independently.
-- Added focused toolbar tests for section labeling, clear-selection completion, and pending-edit save completion.
-- Added explicit accessible names/state for the column configuration trigger and icon-only review-flag header.
+- Map bulk actions into selection scope, edit/copy, processing, publishing/visibility, and danger groups.
+- Decide the mobile selection interaction model before editing CSS.
+- Decide which actions must be primary on mobile and which can move into manager sheets or secondary surfaces.
 
 Likely implementation slices:
 
-- Selection interaction model and table selection visuals.
-- Mobile table/selection scroll behavior. (Mostly complete for the current pass; keep watching during responsive table polish.)
-- Bulk action toolbar hierarchy and responsive placement. (Structurally complete for the current pass; deeper visual styling can happen with the broader dashboard style pass.)
-- Accessibility and keyboard/focus pass. (In progress: table controls now expose clearer names; keyboard row-opening and deeper range-selection behavior still need a later decision.)
-- Focused tests for selection pruning, select-all-filtered, and row click/selection behavior.
+- Docs and first-principles UX model.
+- Selection interaction model and selected-row visuals.
+- Mobile table/selection model.
+- Bulk action hierarchy and responsive placement.
+- Accessibility and keyboard/focus pass.
+- Focused tests for selection pruning, select-all-filtered, row click/selection behavior, edit mode, and bulk toolbar completion paths.
+
+Progress:
+
+- Reframed Phase 2.75 around first-principles selection and bulk-action goals instead of checkbox polish.
+- Added focused regression coverage for keyboard-reachable row checkboxes and current active page-selection behavior.
+- Introduced a mobile selected-state surface with count, scope, clear/save, page/all-filtered scope actions, and compact action group entry points.
+- Moved mobile Process and Danger actions into manager sheets so the fixed selected-state surface does not need to expose every action inline.
+- Moved desktop destructive actions into a Danger manager, reducing toolbar overflow and separating risky actions from routine selected-state controls.
+- Browser-verified desktop and mobile selected-state layouts.
+
+Product-level choices to resolve:
+
+- Should mobile support full bulk-action parity immediately, or only expose primary actions with secondary groups behind managers? Current direction: primary inline actions plus grouped manager surfaces.
+- Should `Select page` continue to toggle into clear selection when the current page is already fully selected? Current concern: this is efficient but ambiguous.
+- Should row taps in selection mode toggle selection, open detail, or require explicit checkbox/checkmark use? Current direction: row taps toggle selection once mobile selection mode is active.
+- Should bulk publish/hide preserve selection after success, or exit selection like destructive actions and saved copy edits?
+- Should copy/paste edit mode be part of the same bulk-action surface as processing and publishing? Current direction: keep the same selected-state mode, but visually separate edit/copy from processing and publishing.
+- Should publish counts for all-filtered selection be exact across all selected IDs, or explicitly labeled as loaded-row counts?
 
 Exit criteria:
 

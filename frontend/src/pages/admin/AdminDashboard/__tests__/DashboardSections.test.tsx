@@ -152,4 +152,15 @@ describe("RecentActivityTable", () => {
     expect(onCheckboxChange).toHaveBeenCalledWith("letter-1", 0, { shiftKey: false });
     expect(onRowClick).not.toHaveBeenCalled();
   });
+
+  it("keeps row checkboxes keyboard focusable", async () => {
+    const user = userEvent.setup();
+    renderRecentActivityTable();
+
+    await user.tab();
+    await user.tab();
+    await user.tab();
+
+    expect(screen.getByRole("checkbox", { name: "Select Test Letter" })).toHaveFocus();
+  });
 });

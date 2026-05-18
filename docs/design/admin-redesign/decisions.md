@@ -114,6 +114,12 @@ Future direction: a filtered collections dashboard could show only collections c
 
 The dashboard selection model needs a dedicated redesign pass.
 
-The problem is broader than checkbox styling. It includes mobile horizontal scroll, sticky columns, row click behavior, selection mode, bulk toolbar hierarchy, drag/shift selection, edit mode, and accessibility. Treat this as a dashboard interaction system before promoting any table or bulk-action pattern to other admin pages.
+The problem is broader than checkbox styling. It includes mobile horizontal scroll, sticky columns, row click behavior, selection mode, bulk toolbar hierarchy, drag/shift selection, edit mode, processing actions, publishing actions, destructive actions, and accessibility. Treat this as a dashboard interaction system before promoting any table or bulk-action pattern to other admin pages.
 
-Mobile selection should use the same horizontal scroll model as the table for this pass. The checkbox column should move with the row content instead of staying sticky, because the sticky version read as detached from the row. Reconsider a frozen selection rail only if a later design gives it a stronger boundary and row-state continuity.
+The current mobile sticky checkbox column is accepted as a tactical stability fix: it prevents horizontally scrolled cells from sliding behind the checkbox lane and gives selection controls a real background/border. It is not the final Phase 2.75 product decision.
+
+Phase 2.75 should decide the mobile selection model from first principles. Acceptable outcomes include a deliberate frozen selection rail with strong row-state continuity, a non-sticky row-level selector that scrolls with table content, or an explicit mobile selection mode with a different action surface. Do not assume the desktop table selector and mobile selector need to share the same visual layout.
+
+Desktop can keep power-user selection behaviors such as checkboxes, shift range selection, drag selection, and a wider action bar if they remain understandable and accessible. Mobile should prioritize clarity, reachable controls, and action hierarchy over showing the full desktop bulk action set inline.
+
+Bulk actions should be redesigned around action intent: selection scope, edit/copy actions, processing actions, publishing/visibility actions, and dangerous actions. The UI should make selected-page versus selected-filtered scope clear before large operations.

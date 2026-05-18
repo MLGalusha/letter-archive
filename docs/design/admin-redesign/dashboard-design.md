@@ -49,6 +49,41 @@ Implemented first pass: the mobile letters table uses this compact field set and
 
 Fields such as sender, recipient, transcript status, metadata status, created date, and page/extras counts can appear in an expanded row, detail mode, or alternate density later.
 
+## Selection and Bulk Actions
+
+Selection is not just a checkbox treatment. It is a modeful dashboard interaction that affects row opening, row state, keyboard focus, range selection, drag selection, edit/copy mode, bulk processing, publishing, destructive actions, and selected-scope messaging.
+
+Design goals:
+
+- Normal browsing should keep row opening fast and obvious.
+- Selection should make row state, selected count, and selected scope obvious.
+- Page selection and all-filtered selection should read as different scopes.
+- Bulk actions should be grouped by intent instead of appearing as one dense action row.
+- Dangerous actions should be separated visually and behaviorally from routine actions.
+- Mobile should not be forced to expose every desktop action inline.
+
+Desktop direction:
+
+- Desktop can keep direct table checkboxes and power-user gestures such as shift range selection and drag selection.
+- The selected-row state should be visible across the row, with focus states and accessible checkbox names.
+- A desktop bulk action surface can be wider and more persistent, but should still organize actions into selection scope, edit/copy, process, publish/visibility, and danger groups.
+
+Mobile direction:
+
+- Mobile does not need to use the exact desktop selector layout.
+- The current sticky checkbox lane is a tactical fix for horizontal table scroll, not a final UX decision.
+- The redesign should compare a deliberate frozen selection rail, a row-level selector that scrolls with the table, and an explicit selection mode with a compact action surface.
+- A compact mobile selected-state bar with manager sheets for secondary action groups may be better than stacking every bulk action in a fixed toolbar.
+- The final mobile model should feel connected to the selected row and remain usable with one thumb.
+
+Current target:
+
+- Desktop keeps direct checkbox selection, shift selection, drag selection, and a grouped selected-state action bar.
+- Mobile moves toward explicit selection mode: after selection starts, row taps toggle selection instead of opening detail, and the mode bar owns selected count, scope, and exit/save.
+- Mobile secondary action families such as processing, publishing, and danger can open manager sheets instead of living in one fixed toolbar.
+- Selection scope controls should distinguish selected page, all filtered results, and manually selected rows.
+- Publishing details should not imply exact selected-set counts when all-filtered selection includes unloaded rows unless exact aggregate counts are fetched.
+
 Current toolbar structure:
 
 - Primary row: letters/collections switch, search, filter manager, saved view action, sort.

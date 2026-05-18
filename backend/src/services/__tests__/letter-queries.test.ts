@@ -133,4 +133,65 @@ describe('queryAdminLetters extra-content filtering', () => {
     expect(representativeSql).toContain('::workflow_state[]');
     expect(countSql).not.toContain('::text[]');
   });
+
+  it('filters representative rows by missing cleanup fields', async () => {
+    await queryAdminLetters({
+      page: 1,
+      limit: 50,
+      sort: 'createdAt',
+      sortOrder: 'desc',
+      missing: ['sender', 'date'],
+    });
+
+    const countSql = renderSql(executeMock.mock.calls[1]?.[0]);
+    const representativeSql = renderSql(executeMock.mock.calls[2]?.[0]);
+
+    expect(countSql).toContain("sender IS NULL OR BTRIM(sender) = ''");
+    expect(countSql).toContain('letter_date IS NULL');
+    expect(representativeSql).toContain("sender IS NULL OR BTRIM(sender) = ''");
+    expect(representativeSql).toContain('letter_date IS NULL');
+  });
+
+  it('filters representative rows by actual content-shape existence', async () => {
+    await queryAdminLetters({
+      page: 1,
+      limit: 50,
+      sort: 'createdAt',
+      sortOrder: 'desc',
+      contentShape: ['photos', 'telegram'],
+    });
+
+    const statsSql = renderSql(executeMock.mock.calls[0]?.[0]);
+    const countSql = renderSql(executeMock.mock.calls[1]?.[0]);
+    const representativeSql = renderSql(executeMock.mock.calls[2]?.[0]);
+
+    expect(statsSql).toContain('has_photos_count');
+    expect(statsSql).toContain('has_telegram_count');
+    expect(countSql).toContain('has_photos = true');
+    expect(countSql).toContain('has_telegram = true');
+    expect(representativeSql).toContain('has_photos = true');
+    expect(representativeSql).toContain('has_telegram = true');
+  });
+
+  it('orders representative ids with ordered backend sort rules before pagination', async () => {
+    await queryAdminLetters({
+      page: 2,
+      limit: 25,
+      sort: 'createdAt',
+      sortOrder: 'desc',
+      sortRules: [
+        { field: 'extras', direction: 'desc' },
+        { field: 'sender', direction: 'asc' },
+      ],
+    });
+
+    const representativeSql = renderSql(executeMock.mock.calls[2]?.[0]);
+
+    expect(representativeSql).toContain('count_extra.collection_id = filtered.collection_id');
+    expect(representativeSql).toContain('count_extra.type != \'L\'');
+    expect(representativeSql).toContain('filtered.sender ASC NULLS LAST');
+    expect(representativeSql).toContain('filtered.id ASC');
+    expect(representativeSql).toContain('LIMIT 25');
+    expect(representativeSql).toContain('OFFSET 25');
+  });
 });

@@ -68,6 +68,47 @@ export async function fetchLetterWithRelatedAndTransform(
 
 // Content status enum values for validation
 const contentStatusValues = ['EMPTY', 'AI_DRAFT', 'EDITED', 'VERIFIED'] as const;
+const missingFieldValues = ['sender', 'recipient', 'date'] as const;
+const contentShapeValues = ['extras', 'photos', 'cover', 'telegram'] as const;
+const adminSortFieldValues = [
+  'createdAt',
+  'updatedAt',
+  'letterDate',
+  'sender',
+  'recipient',
+  'workflow',
+  'visibility',
+  'collection',
+  'lastOpenedAt',
+  'flagged',
+  'letters',
+  'extras',
+  'photos',
+] as const;
+const sortDirectionValues = ['asc', 'desc'] as const;
+
+const commaSeparatedArray = (val: unknown) => {
+  if (typeof val === 'string') {
+    return val.split(',').map((item) => item.trim()).filter(Boolean);
+  }
+  return val;
+};
+
+const sortRulesValue = (val: unknown) => {
+  if (typeof val !== 'string') return val;
+  return val
+    .split(',')
+    .map((rule) => {
+      const [field, direction] = rule.split(':').map((part) => part.trim());
+      return { field, direction };
+    })
+    .filter((rule) => rule.field && rule.direction);
+};
+
+const sortRuleSchema = z.object({
+  field: z.enum(adminSortFieldValues),
+  direction: z.enum(sortDirectionValues),
+});
 
 export const adminLettersQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -89,9 +130,12 @@ export const adminLettersQuerySchema = z.object({
   ),
   collection: z.string().optional(),
   search: z.string().optional(),
-  sort: z.enum(['createdAt', 'updatedAt', 'letterDate', 'sender', 'recipient', 'workflow', 'visibility', 'collection', 'lastOpenedAt', 'flagged']).default('createdAt'),
+  sort: z.enum(adminSortFieldValues).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  sortRules: z.preprocess(sortRulesValue, z.array(sortRuleSchema).max(8).optional()),
   flagged: z.enum(['all', 'true', 'false']).optional(),
+  missing: z.preprocess(commaSeparatedArray, z.array(z.enum(missingFieldValues)).optional()),
+  contentShape: z.preprocess(commaSeparatedArray, z.array(z.enum(contentShapeValues)).optional()),
   // Date filters - individual components
   year: z.coerce.number().min(1800).max(2100).optional(),
   month: z.coerce.number().min(1).max(12).optional(),
@@ -160,6 +204,8 @@ export interface AdminLettersResponse {
     transcript: { empty: number; aiDraft: number; edited: number; verified: number };
     metadata: { empty: number; aiDraft: number; edited: number; verified: number };
     extraContent: { empty: number; aiDraft: number; edited: number; verified: number };
+    missing: { sender: number; recipient: number; date: number };
+    contentShape: { extras: number; photos: number; cover: number; telegram: number };
   };
 }
 
@@ -187,6 +233,17 @@ export async function queryAdminLetters(
         AND extra.type != 'L'
     )
   `;
+  const hasContentTypeExpression = (types: readonly string[]) => sql`
+    EXISTS (
+      SELECT 1
+      FROM letters extra
+      INNER JOIN letter_pages extra_page ON extra_page.letter_id = extra.id
+      WHERE extra.collection_id = letters.collection_id
+        AND extra.date_raw = letters.date_raw
+        AND extra.type_sequence = letters.type_sequence
+        AND extra.type = ANY(ARRAY[${sql.join(types.map(type => sql`${type}`), sql`, `)}]::letter_type[])
+    )
+  `;
 
   // Collection filter - supports partial matching (e.g., "7" matches "007", "017", "107")
   let collectionIds: string[] = [];
@@ -209,6 +266,8 @@ export async function queryAdminLetters(
           transcript: { empty: 0, aiDraft: 0, edited: 0, verified: 0 },
           metadata: { empty: 0, aiDraft: 0, edited: 0, verified: 0 },
           extraContent: { empty: 0, aiDraft: 0, edited: 0, verified: 0 },
+          missing: { sender: 0, recipient: 0, date: 0 },
+          contentShape: { extras: 0, photos: 0, cover: 0, telegram: 0 },
         },
       };
     }
@@ -235,6 +294,13 @@ export async function queryAdminLetters(
         metadata_content_status,
         extra_content_status,
         flagged,
+        sender,
+        recipient,
+        letter_date,
+        date_raw,
+        ${hasContentTypeExpression(['P'])} as has_photos,
+        ${hasContentTypeExpression(['C'])} as has_cover,
+        ${hasContentTypeExpression(['T'])} as has_telegram,
         ${hasExtrasExpression()} as has_extras
       FROM letters
       WHERE TRUE ${collectionFilter}
@@ -263,6 +329,13 @@ export async function queryAdminLetters(
       COUNT(*) FILTER (WHERE has_extras AND extra_content_status = 'AI_DRAFT') as extra_content_ai_draft,
       COUNT(*) FILTER (WHERE has_extras AND extra_content_status = 'EDITED') as extra_content_edited,
       COUNT(*) FILTER (WHERE has_extras AND extra_content_status = 'VERIFIED') as extra_content_verified,
+      COUNT(*) FILTER (WHERE sender IS NULL OR BTRIM(sender) = '') as missing_sender,
+      COUNT(*) FILTER (WHERE recipient IS NULL OR BTRIM(recipient) = '') as missing_recipient,
+      COUNT(*) FILTER (WHERE letter_date IS NULL) as missing_date,
+      COUNT(*) FILTER (WHERE has_extras) as has_extras_count,
+      COUNT(*) FILTER (WHERE has_photos) as has_photos_count,
+      COUNT(*) FILTER (WHERE has_cover) as has_cover_count,
+      COUNT(*) FILTER (WHERE has_telegram) as has_telegram_count,
       COUNT(*) FILTER (WHERE flagged = true) as flagged_count
     FROM unique_groups
   `);
@@ -291,6 +364,13 @@ export async function queryAdminLetters(
     extraContentAiDraft: Number(statsRow.extra_content_ai_draft || 0),
     extraContentEdited: Number(statsRow.extra_content_edited || 0),
     extraContentVerified: Number(statsRow.extra_content_verified || 0),
+    missingSender: Number(statsRow.missing_sender || 0),
+    missingRecipient: Number(statsRow.missing_recipient || 0),
+    missingDate: Number(statsRow.missing_date || 0),
+    hasExtras: Number(statsRow.has_extras_count || 0),
+    hasPhotos: Number(statsRow.has_photos_count || 0),
+    hasCover: Number(statsRow.has_cover_count || 0),
+    hasTelegram: Number(statsRow.has_telegram_count || 0),
     flaggedCount: Number(statsRow.flagged_count || 0),
   };
 
@@ -355,6 +435,34 @@ export async function queryAdminLetters(
     if (query.extraContentStatus && query.extraContentStatus.length > 0) {
       clauses.push(sql`has_extras = true AND extra_content_status = ANY(ARRAY[${sql.join(query.extraContentStatus.map(s => sql`${s}`), sql`, `)}]::content_status[])`);
     }
+    if (query.missing && query.missing.length > 0) {
+      const missingClauses = query.missing.map((field) => {
+        switch (field) {
+          case 'sender':
+            return sql`sender IS NULL OR BTRIM(sender) = ''`;
+          case 'recipient':
+            return sql`recipient IS NULL OR BTRIM(recipient) = ''`;
+          case 'date':
+            return sql`letter_date IS NULL`;
+        }
+      });
+      clauses.push(sql`(${sql.join(missingClauses, sql` OR `)})`);
+    }
+    if (query.contentShape && query.contentShape.length > 0) {
+      const shapeClauses = query.contentShape.map((shape) => {
+        switch (shape) {
+          case 'extras':
+            return sql`has_extras = true`;
+          case 'photos':
+            return sql`has_photos = true`;
+          case 'cover':
+            return sql`has_cover = true`;
+          case 'telegram':
+            return sql`has_telegram = true`;
+        }
+      });
+      clauses.push(sql`(${sql.join(shapeClauses, sql` OR `)})`);
+    }
     return clauses.length > 0
       ? sql`WHERE ${sql.join(clauses, sql` AND `)}`
       : sql``;
@@ -371,6 +479,12 @@ export async function queryAdminLetters(
         transcript_status,
         metadata_content_status,
         extra_content_status,
+        sender,
+        recipient,
+        letter_date,
+        ${hasContentTypeExpression(['P'])} as has_photos,
+        ${hasContentTypeExpression(['C'])} as has_cover,
+        ${hasContentTypeExpression(['T'])} as has_telegram,
         ${hasExtrasExpression()} as has_extras
       FROM letters
       WHERE ${whereClause}
@@ -383,35 +497,72 @@ export async function queryAdminLetters(
   const totalFiltered = Number(countRows[0]?.count || 0);
   const totalPages = Math.ceil(totalFiltered / query.limit);
 
-  // Determine sort order direction for raw SQL
-  const sortDir = query.sortOrder === 'asc' ? sql`ASC` : sql`DESC`;
+  const sortRules = query.sortRules && query.sortRules.length > 0
+    ? query.sortRules
+    : [{ field: query.sort, direction: query.sortOrder }];
 
-  // Build ORDER BY expression for raw SQL
-  const getSortExpression = () => {
-    switch (query.sort) {
+  const getSortDirection = (direction: 'asc' | 'desc') => direction === 'asc' ? sql`ASC` : sql`DESC`;
+
+  const getSortExpression = (field: typeof adminSortFieldValues[number]) => {
+    switch (field) {
       case 'letterDate':
-        return sql`REPLACE(date_raw, 'X', '0')`;
+        return sql`REPLACE(filtered.date_raw, 'X', '0')`;
       case 'sender':
-        return sql`sender`;
+        return sql`filtered.sender`;
       case 'recipient':
-        return sql`recipient`;
+        return sql`filtered.recipient`;
       case 'workflow':
-        return sql`workflow`;
+        return sql`filtered.workflow`;
       case 'visibility':
-        return sql`visibility`;
+        return sql`filtered.visibility`;
       case 'collection':
-        return sql`(SELECT collection_code FROM collections WHERE id = collection_id)`;
+        return sql`(SELECT collection_code FROM collections c WHERE c.id = filtered.collection_id)`;
       case 'updatedAt':
-        return sql`updated_at`;
+        return sql`filtered.updated_at`;
       case 'lastOpenedAt':
-        return sql`COALESCE((SELECT last_opened_at FROM letter_views WHERE letter_id = id), '1970-01-01'::timestamptz)`;
+        return sql`COALESCE((SELECT last_opened_at FROM letter_views WHERE letter_id = filtered.id), '1970-01-01'::timestamptz)`;
       case 'flagged':
-        return sql`flagged`;
+        return sql`filtered.flagged`;
+      case 'letters':
+        return sql`(
+          SELECT COUNT(*)
+          FROM letters count_letter
+          INNER JOIN letter_pages count_page ON count_page.letter_id = count_letter.id
+          WHERE count_letter.collection_id = filtered.collection_id
+            AND count_letter.date_raw = filtered.date_raw
+            AND count_letter.type_sequence = filtered.type_sequence
+            AND count_letter.type = 'L'
+        )`;
+      case 'extras':
+        return sql`(
+          SELECT COUNT(*)
+          FROM letters count_extra
+          INNER JOIN letter_pages count_page ON count_page.letter_id = count_extra.id
+          WHERE count_extra.collection_id = filtered.collection_id
+            AND count_extra.date_raw = filtered.date_raw
+            AND count_extra.type_sequence = filtered.type_sequence
+            AND count_extra.type != 'L'
+        )`;
+      case 'photos':
+        return sql`(
+          SELECT COUNT(*)
+          FROM letters count_photo
+          INNER JOIN letter_pages count_page ON count_page.letter_id = count_photo.id
+          WHERE count_photo.collection_id = filtered.collection_id
+            AND count_photo.date_raw = filtered.date_raw
+            AND count_photo.type_sequence = filtered.type_sequence
+            AND count_photo.type = 'P'
+        )`;
       case 'createdAt':
       default:
-        return sql`created_at`;
+        return sql`filtered.created_at`;
     }
   };
+
+  const sortClause = sql.join(
+    sortRules.map((rule) => sql`${getSortExpression(rule.field)} ${getSortDirection(rule.direction)} NULLS LAST`),
+    sql`, `,
+  );
 
   // Fetch paginated results using DISTINCT ON to get one row per letter group
   // Prefers 'L' type if available, otherwise uses first available type
@@ -424,9 +575,12 @@ export async function queryAdminLetters(
     SELECT id FROM (
       SELECT * FROM (
         SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
-          id, transcript_status, metadata_content_status, extra_content_status,
-          ${hasExtrasExpression()} as has_extras,
-          ${getSortExpression()} as sort_key
+          id, collection_id, date_raw, type_sequence, sender, recipient, workflow, visibility, flagged, created_at, updated_at, letter_date,
+          transcript_status, metadata_content_status, extra_content_status,
+          ${hasContentTypeExpression(['P'])} as has_photos,
+          ${hasContentTypeExpression(['C'])} as has_cover,
+          ${hasContentTypeExpression(['T'])} as has_telegram,
+          ${hasExtrasExpression()} as has_extras
         FROM letters
         WHERE ${whereClause}
         ORDER BY collection_id, date_raw, type_sequence,
@@ -434,7 +588,7 @@ export async function queryAdminLetters(
       ) representatives
       ${contentStatusClause}
     ) filtered
-    ORDER BY sort_key ${sortDir}
+    ORDER BY ${sortClause}, filtered.id ASC
     LIMIT ${query.limit}
     OFFSET ${offset}
   `);
@@ -578,6 +732,17 @@ export async function queryAdminLetters(
         aiDraft: Number(rawStats.extraContentAiDraft),
         edited: Number(rawStats.extraContentEdited),
         verified: Number(rawStats.extraContentVerified),
+      },
+      missing: {
+        sender: Number(rawStats.missingSender),
+        recipient: Number(rawStats.missingRecipient),
+        date: Number(rawStats.missingDate),
+      },
+      contentShape: {
+        extras: Number(rawStats.hasExtras),
+        photos: Number(rawStats.hasPhotos),
+        cover: Number(rawStats.hasCover),
+        telegram: Number(rawStats.hasTelegram),
       },
     },
   };

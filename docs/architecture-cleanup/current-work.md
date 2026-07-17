@@ -7,8 +7,9 @@ Last updated: July 17, 2026
 - Working branch: `architecture-cleanup`
 - Recovery point: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 001 — complete; commit this checkpoint before new edits
-- Next queued slice: 002 — characterize processing ownership and recovery safety
+- Current checkpoint: 002 — complete; commit this checkpoint before new edits
+- Last green checkpoint: Slice 001 at `01879bd9`
+- Next queued slice: 003 — repair the extra-content job-status lifecycle
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -29,8 +30,8 @@ Measured on `bb0bfb29` before cleanup:
 
 Architecture indicators:
 
-- Three processing execution paths remain active: autonomous worker, legacy queue,
-  and API-process registry runner.
+- Three batch execution paths remain active—autonomous worker, legacy queue, and
+  API-process registry runner—plus direct request-owned AI actions.
 - API and worker startup both recover `RUNNING` transcription, metadata, and entity
   extraction rows, allowing an API restart to reset work owned by a live worker.
   Extra-content jobs have a separate status and are not recovered by this function.
@@ -55,7 +56,9 @@ Architecture indicators:
 
 ### B. Processing correctness and ownership
 
-- [ ] Characterize every API- and worker-owned execution/recovery path in tests.
+- [x] Characterize every API- and worker-owned execution/recovery path in tests.
+- [ ] Give extra-content jobs a truthful claimed/success/failed lifecycle.
+- [ ] Require letter-only transcription to claim the job before AI execution.
 - [ ] Add persisted owner/lease/heartbeat semantics and expiry-aware reconciliation.
 - [ ] Make recovery worker-owned so API startup cannot reset active work.
 - [ ] Establish one eligibility definition per processing stage.
@@ -141,7 +144,7 @@ Evidence:
 
 ## Slice 002 — Processing Ownership Safety Characterization
 
-Status: queued; start only after the Slice 001 checkpoint is committed cleanly
+Status: complete in this checkpoint
 
 Problem:
 
@@ -153,19 +156,21 @@ fallback. Removing API recovery first would trade duplicate execution for a diff
 failure: API-owned work could remain `RUNNING` indefinitely after an API crash while
 the worker stays alive.
 
-Invariant to establish:
+Target invariant:
 
-Every transition to `RUNNING` has an explicit owner and a tested, time-bounded recovery
-path. Recovery ownership must not move until that invariant can remain true.
+Every execution must first acquire a durable, fenced claim, and every `RUNNING` status
+must correspond to exactly one live claim. Recovery ownership must not move until that
+invariant can remain true.
 
 Planned minimum:
 
 - Trace and document all code paths that claim, execute, and recover each job stage.
-- Add focused characterization tests for the API process-registry runner, legacy queue
-  fallback, worker claim path, and startup recovery behavior.
-- Use the evidence to frame the smallest safe behavior-changing slice: either leases
-  and periodic expiry-aware reconciliation first, or removal of API execution while
-  retaining recovery until worker-only ownership is complete.
+- Add a lightweight one-way architecture boundary over known stage-entrypoint names,
+  canonical claim callers, direct `RUNNING` writers, and recovery callers. Existing
+  owners may be deleted without changing the allowlists.
+- Use the evidence to frame the smallest safe behavior-changing slices before leases
+  or executor migration. The first two are the extra-content lifecycle and the
+  unclaimed letter-only path identified below.
 - Run the focused tests, backend typecheck, and full backend suite.
 
 Non-goal:
@@ -173,6 +178,31 @@ Non-goal:
 Do not remove API recovery in this characterization slice. Two workers can still reset
 each other's work, and extra-content jobs still lack recovery; both risks remain
 explicit until ownership and lease semantics are implemented coherently.
+
+Discoveries so far:
+
+- The exact hybrid topology and failure matrix are recorded in
+  [processing-ownership.md](processing-ownership.md).
+- Extra-content batches never transition `extraContentJobStatus`, so completed rows can
+  remain `PENDING` and eligible forever.
+- `transcribeLetterOnly()` performs AI work while its job status is `PENDING`, allowing
+  a worker to claim the same letter concurrently.
+- The root architecture README described a target state that does not exist: API-owned
+  AI execution and in-memory pause/abort are active today. It now describes the current
+  transitional architecture and links the ownership map.
+- The architecture test is intentionally a lightweight, one-way tripwire rather than
+  an AST-level proof. It permits deletion of every allowlisted owner and does not assert
+  blind startup recovery as desired behavior.
+
+Acceptance evidence:
+
+- Ownership map covers the worker loop, registry runner, legacy fallback, bulk
+  fallback, direct content routes, claim writers, and both recovery callers.
+- Focused architecture boundary: 4/4 tests passed.
+- Backend typecheck: passed.
+- Full backend suite: 42 files and 296 tests passed.
+- `git diff --check`: passed before checkpoint review.
+- No production runtime behavior changed in this slice.
 
 ## Decision Log
 
@@ -199,3 +229,16 @@ explicit until ownership and lease semantics are implemented coherently.
   retaining the frontend lint failure count as explicit debt.
 - Linked this program from the documentation index and marked the old redesign queue
   as historical.
+- Green checkpoint: `01879bd9`.
+
+### Slice 002
+
+- Replaced the unsafe worker-only-recovery proposal with an evidence-backed map of all
+  queue-backed execution, claim, and recovery owners.
+- Added a one-way architecture tripwire for known execution entrypoints, canonical
+  claim callers, direct `RUNNING` writes, and recovery callers; deletion remains easy.
+- Corrected the root README's false worker-only and durable-pause claims.
+- Recorded the extra-content lifecycle and letter-only claim defects as the next two
+  contained correctness slices before lease-aware recovery.
+- Independent backend review found no blockers; skeptical review findings about
+  overclaiming and incomplete claim tracking were incorporated before checkpointing.

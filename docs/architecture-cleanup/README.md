@@ -5,7 +5,8 @@ features. It exists so a long-running agent can resume from repository state ins
 of relying on chat history or memory.
 
 The mutable checkpoint is in [current-work.md](current-work.md). Read that file before
-starting a cleanup slice.
+starting a cleanup slice. The current backend processing topology is mapped separately
+in [processing-ownership.md](processing-ownership.md).
 
 ## Goal
 
@@ -147,8 +148,8 @@ agent framework:
   (updated May 8, 2026) shows that success remains probabilistic and task-dependent,
   even as frontier agents handle longer software tasks. That supports small,
   self-contained slices instead of trusting one unbounded refactor run.
-- [MirrorCode](https://arxiv.org/abs/2606.30182) (submitted June 29, 2026) is the
-  strongest recent evidence for very long autonomous coding runs, but its exact-output
+- [MirrorCode](https://arxiv.org/abs/2606.30182) (submitted June 29, 2026) provides
+  recent evidence about very long autonomous coding runs, but its exact-output
   programs have precise visible and hidden end-to-end tests. Its strongest model
   scored 56% overall, and one large attempt cost about $2,600 over 19 days; this is
   evidence for exact oracles and recovery, not for an unbounded subjective refactor.

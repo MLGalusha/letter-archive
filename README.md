@@ -232,25 +232,23 @@ Below this section the Settings page also exposes site-wide values — public co
                                    │  REST + SSE
                                    ▼
                 ┌─────────────────────────────────────┐
-                │     Express Backend (TypeScript)    │ ─ ─ ─ ─ ─ ─ ─ ─ ┐
-                │   Routes · Services · Auth · DTOs   │   triggers job  │
-                └──────┬───────────────────────┬──────┘                 │
-                       │                       │                        │
-                       ▼                       ▼                        │
-              ┌─────────────────┐     ┌─────────────────┐               │
-              │   PostgreSQL    │     │  Shared Storage │               │
-              │  Drizzle · CSQL │     │  scans + assets │               │
-              │                 │     │  gcsfuse / FS   │               │
-              └────────▲────────┘     └────────▲────────┘               │
-                       │                       │                        │
-                       │ jobs · pause          │ reads scans            │
-                       │ flag · heartbeat      │ for vision             │
-                       │                       │                        ▼
-                ┌──────┴───────────────────────┴─────────────────────────┐
-                │            Background Worker (Cloud Run Job)           │
-                │   triggered on demand · drains queue · honors pause    │
-                └──────────────────┬─────────────────────────────────────┘
+                │     Express Backend (TypeScript)    │──────────────┐
+                │ Routes · Auth · API-owned AI paths  │ triggers job │
+                └──────┬──────────────┬───────────────┘              │
+                       │              │                              ▼
+                       │              │                   ┌─────────────────────┐
+                       │              │                   │ Background Worker   │
+                       │              │                   │ poll or Job mode    │
+                       │              │                   └──────┬──────────────┘
+                       ▼              ▼                          │
+              ┌─────────────────┐  ┌─────────────────┐           │
+              │   PostgreSQL    │  │ Shared Storage  │◄──────────┤
+              │ jobs + heartbeat│  │ gcsfuse / FS    │           │
+              └────────▲────────┘  └─────────────────┘           │
+                       │                                         │
+                       └─────────────────────────────────────────┘
                                    │
+                         API and worker both call
                                    ▼
                 ┌─────────────────────────────────────┐
                 │              OpenAI API             │
@@ -262,12 +260,16 @@ A few things worth knowing that the diagram glosses:
 
 - **Storage is filesystem, not the GCS API.** In production the scan bucket is mounted into both the backend and worker containers via `gcsfuse` — see the volume mount in [`deploy/cloudrun/backend-worker-job.yaml`](deploy/cloudrun/backend-worker-job.yaml). In dev it's a local directory. Both processes call `getAbsoluteStoragePath()` and read files; nobody calls the GCS REST API directly.
 - **Image serving goes through the backend, not direct GCS URLs.** `GET /images/:pageId` ([`routes/images.ts`](backend/src/routes/images.ts)) streams the file with on-the-fly Sharp resize keyed by a `?w=` query param, cached in an in-process LRU (max 1000 variants). No signed URLs.
-- **The worker is a Cloud Run *Job*, fired on demand — not a long-running service, and not on a fixed schedule.** Admin actions (uploading letters, clicking "Process" on a letter, dispatching a batch from the processing dashboard) call `triggerWorkerJob()` in [`services/cloud-run-job.ts`](backend/src/services/cloud-run-job.ts), which hits `run.googleapis.com/v2/.../jobs/:run` to start a fresh execution. An active-heartbeat dedup prevents concurrent triggers from fanning out. The job runs with `EXIT_WHEN_EMPTY=true` ([`backend/src/worker.ts`](backend/src/worker.ts)): polls every 5 s in batches of 5 until the queue is empty, then exits. There's no always-on worker process to babysit.
-- **Pause is DB-backed.** A singleton row in `worker_state` carries `isPaused` / `pausedAt` / `pausedReason` alongside the worker's heartbeat fields ([`services/worker-state.ts`](backend/src/services/worker-state.ts)). The worker reads the flag between stages (transcription → metadata → entity extraction) and between letters within a stage, but never mid-stage — the current call finishes and saves first. The pause moved to Postgres specifically so it could survive Job-mode container restarts; the previous in-memory flag was invisible to fresh executions. An admin "Process this letter" click can override pause via a `BYPASS_PAUSE=true` container override on that one job execution — set through the Cloud Run Jobs API's `containerOverrides`, not a global toggle.
+- **The worker has two modes.** Locally it is normally a long-running polling process. With `EXIT_WHEN_EMPTY=true` it drains the queue and exits, which is the Cloud Run Job shape. Some legacy and bulk API paths call `triggerWorkerJob()` when production Cloud Run settings are present; their non-production fallback runs the same work inside the API process. The newer processing-dashboard batch runner also executes inside the API process today.
+- **Pause and abort are API-memory controls, not durable worker controls.** The registry runner and legacy queue each keep separate in-memory pause, abort, and progress state. The `worker_state` row contains only heartbeat/observation fields, and the separate worker does not read either API pause flag.
 - **Frontend ↔ Backend uses both REST and SSE.** REST for everything CRUD; a Server-Sent Events stream ([`useNotificationStream`](frontend/src/hooks/useNotificationStream.ts)) holds open for the admin notifications feed and live processing-dashboard updates.
 - **One more external thing not shown:** a Python subprocess (`python/line_finder.py`) runs at upload time to compute per-line bounding boxes for the lightbox overlay. It's invoked by the backend, runs locally in the same container, and writes to `letter_pages.lineSegments` — so it's a sibling of "Backend" rather than a separate node.
 
-The web tier never blocks on AI calls — it writes a job row to Postgres and (if no worker is currently running) fires a Cloud Run Job to drain it. Postgres is the broker for state — the actual queue rows, the pause flag, the worker's heartbeat — and the trigger is the side-channel that wakes the worker up.
+Processing ownership is currently transitional: the API sometimes enqueues and triggers
+the worker, sometimes starts a fire-and-forget in-process batch, and some letter actions
+await AI work directly. PostgreSQL stores stage statuses and the worker heartbeat, but
+not a durable pause flag or an execution lease. The exact paths and known recovery risks
+are tracked in [`docs/architecture-cleanup/processing-ownership.md`](docs/architecture-cleanup/processing-ownership.md).
 
 ## Tech Stack
 

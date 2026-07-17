@@ -7,10 +7,10 @@ Last updated: July 17, 2026
 - Working branch: `architecture-cleanup`
 - Recovery point: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 004 — complete, pending checkpoint commit
-- Last green checkpoint: Slice 003 at `fc99e2d8`
-- Current slice: canonicalize and claim direct transcription
-- Next queued slice: 005 — add leases, heartbeats, and expiry-aware recovery
+- Current checkpoint: 005 — framed, implementation pending
+- Last green checkpoint: Slice 004 at `7156492d`
+- Current slice: lease and reconcile canonical main-transcription attempts
+- Next queued slice: 006 — lease and reconcile fenced extra-content attempts
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -245,6 +245,25 @@ Acceptance evidence:
   overclaiming and incomplete claim tracking were incorporated before checkpointing.
 - Green checkpoint: `32631a9e`.
 
+### Slice 003
+
+- Added one claimed lifecycle for every extra-content producer and fenced late AI
+  publication, cancellation, human edits, and page-source invalidation by run ID.
+- Removed duplicate regeneration and false dashboard completion paths while preserving
+  the local line-review workflow.
+- Green implementation checkpoint: `fc99e2d8`; checkpoint record: `10d3ecd7`.
+
+### Slice 004
+
+- Made the pipeline the only main-transcription producer and routed queued, worker,
+  batch, direct, and regeneration work through one exact-state claim owner.
+- Added persisted run-ID fencing, neutral ownership-loss outcomes, truthful reporting,
+  and atomic human supersession/verification rules.
+- Removed the duplicate direct AI loop and stale server-side line-detection side effect.
+- Final independent audit found two additional ownership defects; the route-level
+  duplicate update was deleted and explicit bulk retries now clear dead-letter state.
+- Green implementation checkpoint: `7156492d`.
+
 ## Slice 003 — Extra-Content Job Lifecycle
 
 Status: complete in this checkpoint
@@ -450,3 +469,81 @@ Evidence:
 - Explicit residuals: run IDs are fences rather than liveness leases; a post-reload page
   change can still race main transcription; regeneration still leaves broader derived
   data attached to replacement text; and the dashboard timing test remains load-sensitive.
+
+## Slice 005 — Durable Main-Transcription Lease
+
+Status: framed; implementation pending
+
+Problem:
+
+The run ID from Slice 004 proves which attempt may publish, but it does not prove that
+the attempt is still alive. Startup recovery therefore still resets the same observed
+run even when another API or worker process is actively transcribing it. Conversely,
+recovery only runs at startup, so a crashed attempt can remain `RUNNING` while another
+long-lived process stays healthy. The existing reset also erases a contract boundary:
+queued transcription may be retried automatically, while a synchronous requested
+regeneration must not silently become a later automatic run with different options.
+
+Invariant:
+
+Every newly claimed main-transcription attempt has one persisted run ID, a database-
+clock lease expiry, and a persisted `QUEUED` or `REQUESTED` claim kind. Only the exact
+unexpired run may renew or publish. Heartbeats extend but cannot resurrect an expired
+lease. Recovery changes only expired leased attempts and uses the persisted kind:
+queued work returns to `PENDING`, while request-owned work fails visibly without
+discarding its existing content or being converted to automatic work. A legacy
+`RUNNING` row with no lease is unknown and is never automatically reset.
+
+Scope:
+
+- Add nullable transcription lease-expiry and claim-kind columns, a partial expiry
+  index, and rollout-safe one-way database checks. Do not fabricate leases for existing
+  `RUNNING` rows.
+- Use PostgreSQL time for claim, renewal, terminal, and expiry comparisons. Keep the run
+  ID as the authority token; do not add a redundant process-owner field or a second
+  heartbeat timestamp.
+- Start one serialized, unref'ed heartbeat immediately after the canonical claim and
+  stop it in `finally`, covering queued, worker, registry, legacy, bulk, and direct
+  execution without caller-specific timers.
+- Require exact run ID plus an unexpired lease for AI success/failure publication.
+  Cancellation and human edits may intentionally revoke either an active or expired
+  observed run and clear the full claim tuple.
+- Keep requested work's prior workflow visible while it runs. On expiry or producer
+  failure, queued work returns to `UPLOADED`; requested work remains on its prior
+  workflow with a visible failed job status.
+- Move transcription expiry recovery into the transcription lifecycle owner as
+  conditional `UPDATE ... RETURNING` operations. Keep the existing API and worker
+  startup callers during the hybrid-executor phase, and reconcile periodically from
+  the long-lived worker.
+- Return actual recovered rows so two reconcilers racing the same expiry report it only
+  once. Keep unknown unleased attempts visible for explicit admin cancellation.
+- Extend the architecture tripwire so non-null transcription leases and claim kinds
+  cannot be written outside the lifecycle owner.
+
+Non-goals:
+
+- Do not lease metadata or entity extraction yet. Their boolean/pre-claimed paths and
+  unfenced terminal writes must first move behind canonical lifecycle owners; entity
+  side effects also need a retry-safe completion boundary.
+- Do not add an attempts table or generic lease framework for one ready consumer.
+- Do not move recovery exclusively to the worker while API-owned execution remains.
+- Do not add extra-content lease recovery in this slice; its fenced lifecycle is the
+  next concrete consumer.
+- Do not change prompts, transcription output, synchronous response contracts, or add
+  product features.
+
+Acceptance:
+
+- Two claims still produce one owner, and every new owner receives a database-clock
+  lease and claim kind.
+- A heartbeat renews only the exact unexpired run, remains active during one slow AI
+  promise, never overlaps itself, and stops after the attempt exits.
+- Expired, cancelled, or replaced owners cannot renew or publish; database errors leave
+  ownership unknown rather than manufacturing success or failure.
+- Recovery ignores unexpired and null leases, loses safely to a concurrent heartbeat,
+  and reports an expired attempt once even with two reconcilers.
+- Queued expiry requeues; requested expiry fails in place and preserves existing
+  content/workflow.
+- The migration applies over a database containing a legacy unleased `RUNNING` row.
+- Focused lifecycle/pipeline/recovery tests, migration validation, backend typecheck,
+  the full backend suite, and the aggregate repository gate pass before checkpointing.

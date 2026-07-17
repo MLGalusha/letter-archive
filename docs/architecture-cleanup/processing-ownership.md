@@ -97,19 +97,21 @@ elsewhere.
 1. **Completed in Slice 003:** give extra-content work a tested, fenced
    `PENDING` → `RUNNING` → terminal lifecycle, including source invalidation and
    cancellation-safe content publication.
-2. **Slice 004:** replace the duplicate letter-only producer with the canonical
-   transcription pipeline, add per-attempt run-ID fencing, and preserve its no-extras
-   request contract.
-3. Add durable, stage-specific execution leases. Instrument every existing executor
-   before changing recovery; during rollout, an unleased `RUNNING` row is unknown and
-   must not be reset automatically.
-4. Make recovery expiry-aware and periodic. Recovery must acquire the expired lease and
-   re-read job status before resetting it.
+2. **Completed in Slice 004:** replace the duplicate letter-only producer with the
+   canonical transcription pipeline, add per-attempt run-ID fencing, and preserve its
+   no-extras request contract.
+3. **Slice 005:** add a database-clock lease and heartbeat at the canonical main-
+   transcription owner, persist queued versus requested recovery semantics, and make
+   transcription recovery expiry-aware. During rollout, an unleased `RUNNING` row is
+   unknown and must not be reset automatically.
+4. Apply the same stage-specific lease only to lifecycles that already have fenced
+   claims and publication. Extra content is ready next; metadata and entity extraction
+   first need canonical terminal owners, and entity persistence must become retry-safe.
 5. Move batch entry points to enqueue/trigger only, then delete the API registry runner
    and legacy in-process batch loop once no caller executes through them.
-6. With the worker as the sole batch owner, consolidate eligibility queries and keep
-   direct request-owned regeneration as an explicitly separate contract if the UI
-   still requires synchronous completion.
+6. With the worker as the sole batch owner, make recovery worker-owned, consolidate
+   eligibility queries, and keep direct request-owned regeneration as an explicitly
+   separate contract if the UI still requires synchronous completion.
 
 This order keeps behavior recoverable at each checkpoint while reducing, rather than
 temporarily increasing, the number of ambiguous owners.

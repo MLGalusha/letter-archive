@@ -1,4 +1,4 @@
-import { runTranscription } from './transcription.js';
+import { runTranscription, type TranscriptionRunOutcome } from './transcription.js';
 import { runMetadataExtractionV2 } from './metadataV2.js';
 import { getLetterById } from '../services/letters.js';
 import { isTranscribableType } from '../services/letter/shared.js';
@@ -6,13 +6,21 @@ import { createLogger } from '../utils/logger.js';
 
 const log = createLogger({ module: 'processor' });
 
+export type SkippedTranscriptionReason = Exclude<
+  TranscriptionRunOutcome,
+  { kind: 'completed' }
+>['kind'];
+export type ProcessLetterOutcome =
+  | void
+  | { kind: 'skipped'; reason: SkippedTranscriptionReason };
+
 /**
  * Processes a letter through the transcription phase only.
  * Metadata extraction is triggered separately after transcript confirmation.
  *
  * Supports all transcribable types (L, T, C, E, N, A, D). Excludes P (Photo) and V (Voice).
  */
-export async function processLetter(letterId: string): Promise<void> {
+export async function processLetter(letterId: string): Promise<ProcessLetterOutcome> {
   const letter = await getLetterById(letterId);
 
   if (!letter) {
@@ -21,17 +29,23 @@ export async function processLetter(letterId: string): Promise<void> {
 
   if (!isTranscribableType(letter.type)) {
     log.debug({ letterId, letterType: letter.type }, 'Skipping non-transcribable type');
-    return;
+    return { kind: 'skipped', reason: 'ineligible' };
   }
 
   log.info({ letterId, workflow: letter.workflow }, 'Processing letter');
 
   // Phase 1: Transcription
   if (letter.workflow === 'UPLOADED' && letter.transcriptionStatus === 'PENDING') {
-    await runTranscription(letterId);
+    const outcome = await runTranscription(letterId);
+    if (outcome.kind !== 'completed') {
+      return { kind: 'skipped', reason: outcome.kind };
+    }
     // After transcription, letter stays in TRANSCRIBED state
     // Metadata extraction requires transcript confirmation first
+    return;
   }
+
+  return { kind: 'skipped', reason: 'ineligible' };
 }
 
 /**

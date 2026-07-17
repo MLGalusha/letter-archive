@@ -26,12 +26,12 @@ const allowedExecutionOwners = new Set([
 const allowedDirectRunningWriters = new Set([
   'routes/admin/letters/content.ts',
   'services/letter/extra-content-job.ts',
+  'services/letter/transcription-job.ts',
   'services/letters.ts',
 ]);
 
 const allowedClaimJobCallers = new Set([
   'pipeline/metadataV2.ts',
-  'pipeline/transcription.ts',
 ]);
 
 const allowedRecoveryCallers = new Set([
@@ -39,7 +39,20 @@ const allowedRecoveryCallers = new Set([
   'worker.ts',
 ]);
 
-const executionCall = /\b(?:processLetter|processMetadata|runTranscription|runMetadataExtractionV2|runEntityExtractionOnly|regenerateTranscription|transcribeLetterOnly|transcribeExtras|processLettersAsync|startBatch)\s*\(|\.runBatch\s*\(/;
+const allowedTranscribeImageCallers = new Set([
+  'ai/openai/transcription.ts',
+  'pipeline/transcription.ts',
+]);
+
+const allowedTranscribeExtraContentCallers = new Set([
+  'ai/openai/transcription.ts',
+  'pipeline/transcription.ts',
+  'services/letter/extra-content.ts',
+]);
+
+const canonicalTranscriptionClaimOwner = 'services/letter/transcription-job.ts';
+
+const executionCall = /\b(?:processLetter|processMetadata|runTranscription|runRequestedTranscription|runMetadataExtractionV2|runEntityExtractionOnly|regenerateTranscription|transcribeLetterOnly|transcribeExtras|processLettersAsync|startBatch)\s*\(|\.runBatch\s*\(/;
 
 async function productionTypeScriptFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -107,6 +120,51 @@ describe('processing execution ownership', () => {
     }
 
     expect(unexpectedCallers.sort()).toEqual([]);
+  });
+
+  it('keeps raw transcription AI calls inside canonical producers', async () => {
+    const files = await productionTypeScriptFiles(sourceRoot);
+    const unexpectedImageCallers: string[] = [];
+    const unexpectedExtraContentCallers: string[] = [];
+
+    for (const absolutePath of files) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      const source = await readFile(absolutePath, 'utf8');
+      if (
+        /\btranscribeImage\s*\(/.test(source) &&
+        !allowedTranscribeImageCallers.has(relativePath)
+      ) {
+        unexpectedImageCallers.push(relativePath);
+      }
+      if (
+        /\btranscribeExtraContent\s*\(/.test(source) &&
+        !allowedTranscribeExtraContentCallers.has(relativePath)
+      ) {
+        unexpectedExtraContentCallers.push(relativePath);
+      }
+    }
+
+    expect(unexpectedImageCallers.sort()).toEqual([]);
+    expect(unexpectedExtraContentCallers.sort()).toEqual([]);
+  });
+
+  it('keeps main-transcription RUNNING transitions inside the claim owner', async () => {
+    const files = await productionTypeScriptFiles(sourceRoot);
+    const unexpectedWriters: string[] = [];
+
+    for (const absolutePath of files) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      if (
+        /\btranscriptionStatus\s*:\s*['"]RUNNING['"]/.test(
+          await readFile(absolutePath, 'utf8'),
+        )
+        && relativePath !== canonicalTranscriptionClaimOwner
+      ) {
+        unexpectedWriters.push(relativePath);
+      }
+    }
+
+    expect(unexpectedWriters.sort()).toEqual([]);
   });
 
   it('allows startup recovery callers to be removed but not silently multiplied', async () => {

@@ -7,9 +7,16 @@ export interface ProcessingStatus {
   currentJob: { letterId: string; type: "transcription" | "metadata" | "entity_extraction" | "entity_resolution" | "line_detection" } | null;
   completed: number;
   failed: number;
+  skipped: number;
   total: number;
   errors: string[];
   lastCompletedAt: number | null;
+}
+
+export function countProcessedJobs(
+  status: Pick<ProcessingStatus, "completed" | "failed" | "skipped">,
+): number {
+  return status.completed + status.failed + (status.skipped ?? 0);
 }
 
 export interface StartProcessingOptions {

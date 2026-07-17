@@ -7,9 +7,10 @@ Last updated: July 17, 2026
 - Working branch: `architecture-cleanup`
 - Recovery point: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 003 — complete
+- Current checkpoint: 004 — complete, pending checkpoint commit
 - Last green checkpoint: Slice 003 at `fc99e2d8`
-- Next queued slice: 004 — require a claim for letter-only transcription
+- Current slice: canonicalize and claim direct transcription
+- Next queued slice: 005 — add leases, heartbeats, and expiry-aware recovery
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -58,7 +59,7 @@ Architecture indicators:
 
 - [x] Characterize every API- and worker-owned execution/recovery path in tests.
 - [x] Give extra-content jobs a truthful claimed/success/failed lifecycle.
-- [ ] Require letter-only transcription to claim the job before AI execution.
+- [x] Require letter-only transcription to claim the job before AI execution.
 - [ ] Add persisted owner/lease/heartbeat semantics and expiry-aware reconciliation.
 - [ ] Make recovery worker-owned so API startup cannot reset active work.
 - [ ] Establish one eligibility definition per processing stage.
@@ -341,3 +342,111 @@ Evidence:
   outside the page/invalidation transaction, and legacy non-extra lifecycle routes
   still need consolidation.
 - Green implementation checkpoint: `fc99e2d8`.
+
+## Slice 004 — Canonical Direct Transcription Ownership
+
+Status: complete in this checkpoint
+
+Problem:
+
+`transcribeLetterOnly()` contains a second, stale copy of the transcription producer.
+It resets even a `RUNNING` row to `PENDING`, performs AI work without a claim, and
+publishes by letter ID. A worker can therefore run the same job concurrently, and a
+cancelled or superseded request can overwrite newer state. The duplicate has also
+drifted from intentional pipeline decisions: it retains an unreliable non-letter text
+precheck and server-side line detection that were separately removed from the canonical
+pipeline.
+
+Invariant:
+
+Every transcription attempt in this slice must atomically move an eligible row to
+`RUNNING` with a unique persisted run ID before AI work. Direct and queued requests
+must claim from the exact job/content state they preflighted instead of exposing a
+reset-through-`PENDING` window. Success, empty success, and failure may mutate the row
+only while that attempt still owns its run ID. Human transcript changes revoke that
+ownership atomically. Claim loss or supersession is a neutral typed outcome, and a
+synchronous direct request maps it to a request-correlated 409 rather than reporting
+false success.
+
+Scope:
+
+- Make `pipeline/transcription.ts` the only main-transcription AI producer.
+- Add a specialized atomic transcription claim that changes status, workflow, and a
+  persisted run ID in one write; remove transcription from the generic claim caller.
+- Return a discriminated outcome with truthful page/text metrics from the canonical
+  runner and fence all terminal writes on the owning run ID.
+- Replace both direct transcription/regeneration reset paths with one preflighted
+  manual-claim entrypoint. Preserve typed 404/400 validation, the synchronous response,
+  all transcribable document types, and `extraContent: 'skip'` composition.
+- Make queued claims compare their observed eligibility and content state, then reload
+  page sources after the claim. Preserve source-array order even when page numbers are
+  sparse.
+- Make manual transcript edits and version restores revoke an active producer in the
+  same write; verification rejects a revision while AI owns it.
+- Propagate neutral transcription outcomes through the processor, worker, and legacy
+  batch runner so cancelled or lost work is not counted or announced as success.
+- Delete the duplicate AI loop and intentionally adopt the canonical semantics for
+  bounded L-page concurrency, non-L transcription, whitespace, empty content,
+  `transcribedAt`, progress, abort, and failure reporting.
+- Remove the stale server-side line-detection side effect. History explicitly moved
+  line detection to the standalone local workflow because it did not fit Cloud Run.
+- Add a one-way architecture tripwire so raw main-transcription AI calls cannot quietly
+  spread outside the canonical producer.
+
+Non-goals:
+
+- Run IDs fence late terminal publication and prevent a stale recovery snapshot from
+  resetting a replacement run. They do not prove that the observed attempt is dead;
+  startup recovery can still reset live work until Slice 005 adds leases, heartbeats,
+  and expiry-aware reconciliation.
+- Reloading page sources after claim narrows, but does not close, the source-change
+  window. A main-transcription source revision or dirty marker remains future work.
+- Do not decide broader derived-data invalidation here. Existing regeneration already
+  leaves legacy structured transcription JSON, reading text, confirmation, metadata,
+  and publication fields attached to the new text; that product contract needs its own
+  characterized slice.
+- Do not change prompt text, add features, or make the API asynchronous.
+- Do not preserve the unreliable non-letter text precheck or automatic server-side line
+  detection merely because they survived in the duplicate path; repository history
+  identifies both as stale omissions.
+
+Acceptance:
+
+- A direct request cannot clobber observed `RUNNING` work, and a worker cannot claim the
+  same row through a reset window.
+- Claim loss and terminal supersession perform no false publication and return 409 for
+  direct callers.
+- Completed and empty results expose truthful page/text metrics; automatic extras run
+  zero times for letter-only work and at most once when explicitly requested by the
+  regeneration route.
+- Focused ownership, producer, service, and route tests pass before the full backend
+  suite and typecheck.
+
+Evidence:
+
+- Full backend suite: 51 files and 393 tests passed; backend typecheck passed.
+- Full frontend suite: 86 files and 593 tests passed. The production build passed with
+  the pre-existing large-chunk warning.
+- Mocked browser suite: 35/35 passed inside the aggregate verifier.
+- Aggregate `./scripts/verify-all.sh`: backend tests/typecheck, frontend tests/build,
+  and mocked browser tests completed successfully. Its first run hit one unrelated
+  dashboard-test timeout under full-suite load; the isolated case, complete file,
+  standalone full frontend suite, and full aggregate rerun all passed without changing
+  the test or its timeout.
+- Migration validation: 5/5 structural checks passed. All 47 migrations applied to a
+  disposable PostgreSQL 17 cluster; `transcription_run_id` was UUID-typed and the
+  `transcription_run_id_matches_running` constraint was present.
+- Focused race coverage includes cancel/retry ABA, stale bulk and legacy queue writes,
+  dead-letter requeueing, post-claim source reload, sparse page numbers, human
+  edit/restore supersession, verification conflict, neutral worker/batch reporting,
+  and stale recovery snapshots.
+- `git diff --check`: passed.
+- Independent reviewers stopped the checkpoint over terminal ownership, stale
+  queued/source state, sparse page ordering, human mutation races, false success
+  reporting, recovery ABA, a duplicate route-level transcript write, and dead-lettered
+  rows reported as queued. The final two findings were fixed by giving `updateLetter()`
+  one write owner and atomically reviving explicit bulk retries. The final focused
+  second pass found no remaining P1/P2 issue.
+- Explicit residuals: run IDs are fences rather than liveness leases; a post-reload page
+  change can still race main transcription; regeneration still leaves broader derived
+  data attached to replacement text; and the dashboard timing test remains load-sensitive.

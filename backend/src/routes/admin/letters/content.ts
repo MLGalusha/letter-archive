@@ -3,9 +3,8 @@ import { Router } from 'express';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db, canonicalPersons, letterPages, letterPersons, letters } from '../../../db/index.js';
 import type { StructuredNote, NoteCategory, NotePriority } from '../../../ai/schemas/metadataV2.js';
-import { savePageLineSegments } from '../../../services/line-finder.js';
+import { savePageLineSegments } from '../../../services/line-segments.js';
 import {
-  buildLetterUpdates,
   createVersion,
   describePhoto,
   getVersions,
@@ -13,6 +12,7 @@ import {
   restoreVersion,
   transcribeExtras,
   transcribeLetterOnly,
+  updateLetter,
   updateAiNotes,
   updateExtraContent,
   updatePhotoDescription,
@@ -86,12 +86,8 @@ router.put('/:letterId', async (req, res, next) => {
     const { letterId } = req.params;
     const updates = parseOrThrow(updateLetterSchema, req.body, 'Invalid request body');
 
-    const result = await buildLetterUpdates(letterId, updates as UpdateLetterInput, getUserId(req));
-    if (!result) throw new NotFoundError('Letter not found');
-
-    await db.update(letters).set(result.dbUpdates).where(eq(letters.id, letterId));
-
-    req.log.info({ letterId, workflowChange: result.workflowChange }, 'Letter updated');
+    const updated = await updateLetter(letterId, updates as UpdateLetterInput, getUserId(req));
+    if (!updated) throw new NotFoundError('Letter not found');
 
     const fieldTriggers: Array<[string | undefined | null, string]> = [
       [updates.sender, 'sender'],

@@ -9,7 +9,6 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-5.4'),
   CORS_ORIGINS: z.string().optional(),
-  PYTHON_VENV_PATH: z.string().default('./python/venv'),
   GOOGLE_APPLICATION_CREDENTIALS: z.string().optional(),
   JWT_SECRET: z.string().default('change-me-in-production'),
   JWT_EXPIRY: z.string().default('24h'),

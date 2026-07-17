@@ -136,11 +136,6 @@ export interface UpdateLetterInput {
   readingText?: string | null;
 }
 
-export interface UpdateLetterResult {
-  dbUpdates: Record<string, unknown>;
-  workflowChange?: string;
-}
-
 export interface VersionInput {
   fieldType: 'transcript' | 'metadata';
   content: string | Record<string, unknown>;

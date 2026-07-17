@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, isNotNull, ne } from 'drizzle-orm';
+import { and, eq, inArray, isNull, isNotNull, ne, or } from 'drizzle-orm';
 import {
   db,
   letters,
@@ -16,6 +16,10 @@ import { shouldUseCloudRunWorkerJob } from '../cloud-run-job.js';
 import { syncLetterParticipantsFromMetadata } from '../entities/participant-sync.js';
 import { propagateName, propagatePlaceholderReplacement } from '../name-propagation.js';
 import { isPlaceholderValue } from '../../utils/placeholders.js';
+import {
+  observeTranscriptionState,
+  observedTranscriptionStateConditions,
+} from './transcription-job.js';
 import {
   isTranscribableType,
   log,
@@ -64,45 +68,75 @@ export async function bulkTranscribe(letterIds: string[], overwrite = false): Pr
     return { queued: 0, skipped: skipReasons.length, skipReasons, processing: false };
   }
 
-  if (overwrite) {
-    const needsReset = eligible.filter(l => l.workflow !== 'UPLOADED').map(l => l.id);
-    if (needsReset.length > 0) {
-      await db.update(letters).set({
-        workflow: 'UPLOADED',
-        transcriptionError: null,
-        transcriptionAttemptCount: 0,
-        deadLetter: false,
-        updatedAt: new Date(),
-      }).where(inArray(letters.id, needsReset));
+  const needsResetLetters = overwrite
+    ? eligible.filter(letter => letter.workflow !== 'UPLOADED')
+    : [];
+  const needsReset = new Set(needsResetLetters.map(letter => letter.id));
+  const queueOnlyLetters = eligible.filter(letter => !needsReset.has(letter.id));
+
+  const observedQueueState = (letter: (typeof eligible)[number]) => and(
+    eq(letters.id, letter.id),
+    ...observedTranscriptionStateConditions(observeTranscriptionState(letter)),
+  );
+
+  const queueLetters = async (
+    candidates: typeof eligible,
+    resetWorkflow: boolean,
+  ) => {
+    if (candidates.length === 0) return [];
+    return db.update(letters).set({
+      transcriptionStatus: 'PENDING',
+      transcriptionRunId: null,
+      transcriptionError: null,
+      transcriptionAttemptCount: 0,
+      deadLetter: false,
+      ...(resetWorkflow ? {
+        workflow: 'UPLOADED' as const,
+      } : {}),
+      updatedAt: new Date(),
+    }).where(or(...candidates.map(observedQueueState))).returning({ id: letters.id });
+  };
+
+  const queued = [
+    ...await queueLetters(needsResetLetters, true),
+    ...await queueLetters(queueOnlyLetters, false),
+  ];
+  const queuedIds = queued.map(letter => letter.id);
+  const queuedIdSet = new Set(queuedIds);
+  for (const letter of eligible) {
+    if (!queuedIdSet.has(letter.id)) {
+      skipReasons.push({
+        letterId: letter.id,
+        reason: 'Transcription changed before it could be queued',
+      });
     }
   }
 
-  await db.update(letters).set({
-    transcriptionStatus: 'PENDING',
-    transcriptionError: null,
-    updatedAt: new Date(),
-  }).where(inArray(letters.id, eligible.map(l => l.id)));
+  if (queuedIds.length === 0) {
+    log.info({ skipped: skipReasons.length }, 'Bulk transcribe: no letters remained eligible');
+    return { queued: 0, skipped: skipReasons.length, skipReasons, processing: false };
+  }
 
   if (!shouldUseCloudRunWorkerJob() && getProcessingStatus().isRunning) {
     log.info(
-      { queued: eligible.length, skipped: skipReasons.length },
+      { queued: queuedIds.length, skipped: skipReasons.length },
       'Bulk transcribe queued (another batch running)',
     );
-    return { queued: eligible.length, skipped: skipReasons.length, skipReasons, processing: false };
+    return { queued: queuedIds.length, skipped: skipReasons.length, skipReasons, processing: false };
   }
 
   if (shouldUseCloudRunWorkerJob()) {
     await requestBackgroundWorkerRun('bulk:transcription');
   } else {
-    resetProcessingState(eligible.length);
-    void processLettersAsync(eligible.map(l => l.id), 'transcription');
+    resetProcessingState(queuedIds.length);
+    void processLettersAsync(queuedIds, 'transcription');
   }
 
   log.info(
-    { queued: eligible.length, skipped: skipReasons.length },
+    { queued: queuedIds.length, skipped: skipReasons.length },
     'Bulk transcribe started immediately',
   );
-  return { queued: eligible.length, skipped: skipReasons.length, skipReasons, processing: true };
+  return { queued: queuedIds.length, skipped: skipReasons.length, skipReasons, processing: true };
 }
 
 export async function bulkExtractMetadata(
@@ -207,6 +241,7 @@ export async function bulkClearTranscriptions(letterIds: string[]): Promise<Bulk
       transcriptConfirmedAt: null,
       transcriptConfirmedBy: null,
       transcriptionStatus: 'FAILED',
+      transcriptionRunId: null,
       transcriptionError: 'Cleared by admin',
       transcriptionAttemptCount: 0,
       deadLetter: false,

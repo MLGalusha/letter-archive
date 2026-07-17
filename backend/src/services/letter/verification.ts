@@ -1,9 +1,21 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 import { db, letters } from '../../db/index.js';
 import { getLetterById } from '../letters.js';
 import { buildHumanExtraContentJobPatch } from './extra-content-job.js';
 import { generateAndSaveReadingView } from './readingView.js';
 import { log } from './shared.js';
+
+function transcriptionTextCondition(transcriptionText: string | null) {
+  return transcriptionText === null
+    ? isNull(letters.transcriptionText)
+    : eq(letters.transcriptionText, transcriptionText);
+}
+
+function transcriptionVerificationConflict(message: string): Error & { status: number } {
+  const error = new Error(message) as Error & { status: number };
+  error.status = 409;
+  return error;
+}
 
 export async function verifyTranscript(letterId: string, userId: string = 'admin'): Promise<{ previousStatus: string } | null> {
   const existingLetter = await getLetterById(letterId);
@@ -11,12 +23,28 @@ export async function verifyTranscript(letterId: string, userId: string = 'admin
 
   const previousStatus = existingLetter.transcriptStatus;
 
-  await db.update(letters).set({
-    transcriptStatus: 'VERIFIED',
-    transcriptVerifiedAt: new Date(),
-    transcriptVerifiedBy: userId,
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
+  const verified = await db
+    .update(letters)
+    .set({
+      transcriptStatus: 'VERIFIED',
+      transcriptVerifiedAt: new Date(),
+      transcriptVerifiedBy: userId,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(letters.id, letterId),
+      eq(letters.transcriptionStatus, existingLetter.transcriptionStatus),
+      ne(letters.transcriptionStatus, 'RUNNING'),
+      eq(letters.transcriptStatus, previousStatus),
+      transcriptionTextCondition(existingLetter.transcriptionText),
+    ))
+    .returning({ id: letters.id });
+
+  if (verified.length === 0) {
+    throw transcriptionVerificationConflict(
+      'Transcript changed before it could be verified; review the latest transcript and try again',
+    );
+  }
 
   log.info({ letterId, previousStatus }, 'Transcript verified');
 
@@ -48,12 +76,28 @@ export async function unverifyTranscript(letterId: string): Promise<true | null>
     throw err;
   }
 
-  await db.update(letters).set({
-    transcriptStatus: 'EDITED',
-    transcriptVerifiedAt: null,
-    transcriptVerifiedBy: null,
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
+  const unverified = await db
+    .update(letters)
+    .set({
+      transcriptStatus: 'EDITED',
+      transcriptVerifiedAt: null,
+      transcriptVerifiedBy: null,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(letters.id, letterId),
+      eq(letters.transcriptionStatus, existingLetter.transcriptionStatus),
+      ne(letters.transcriptionStatus, 'RUNNING'),
+      eq(letters.transcriptStatus, 'VERIFIED'),
+      transcriptionTextCondition(existingLetter.transcriptionText),
+    ))
+    .returning({ id: letters.id });
+
+  if (unverified.length === 0) {
+    throw transcriptionVerificationConflict(
+      'Transcript changed before verification could be removed; refresh and try again',
+    );
+  }
 
   log.info({ letterId }, 'Transcript verification removed');
   return true;

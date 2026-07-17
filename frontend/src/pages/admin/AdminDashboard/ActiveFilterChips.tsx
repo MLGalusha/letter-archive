@@ -1,4 +1,4 @@
-import type { ProcessingStatus } from "../../../api/admin";
+import { countProcessedJobs, type ProcessingStatus } from "../../../api/admin";
 import Icon from "../../../components/common/Icon";
 import type { DashboardFilterChip } from "./useDashboardActiveFilters";
 
@@ -36,7 +36,7 @@ export default function ActiveFilterChips({
       {processingStatus?.isRunning && selectedCount === 0 && (
         <span className="stat-pill stat-processing">
           {processingStatus.currentJob?.type === "transcription" ? "T" : "M"}:{" "}
-          {processingStatus.completed}/{processingStatus.total}
+          {countProcessedJobs(processingStatus)}/{processingStatus.total}
         </span>
       )}
     </div>

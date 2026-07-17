@@ -27,7 +27,6 @@ A dev admin account (`dev@localhost.test` / `dev`) is auto-seeded when `NODE_ENV
 | `OPENAI_MODEL` | `gpt-5.4` | Model for transcription and extraction |
 | `JWT_SECRET` | `change-me-in-production` | JWT signing secret |
 | `JWT_EXPIRY` | `24h` | Token expiration |
-| `PYTHON_VENV_PATH` | `./python/venv` | Python venv for OCR utilities |
 | `CORS_ORIGINS` | — | Additional allowed origins (comma-separated) |
 | `LOG_DIR` | `./logs` | NDJSON log output directory |
 | `LOG_RETENTION_HOURS` | `168` | Log file retention (7 days) |
@@ -51,6 +50,7 @@ A dev admin account (`dev@localhost.test` / `dev`) is auto-seeded when `NODE_ENV
 | `npm run drizzle:migrate` | Apply pending migrations |
 | `npm run logs:query -- --hours 24` | Query recent logs |
 | `npm run logs:errors` | Errors from last 24 hours |
+| `npm run detect-lines` | Run the operator-controlled local Kraken line-segmentation workflow |
 
 ## API Routes
 
@@ -114,7 +114,7 @@ Structured NDJSON logs rotate hourly. Every HTTP response includes `x-request-id
 ```bash
 npm run logs:errors                                                 # Last 24h errors
 npm run logs:query -- --request-id <uuid>                           # Trace a request
-npm run logs:query -- --path /letters/pages/detect-lines --hours 6  # Filter by route
+npm run logs:query -- --path /admin/processing --hours 6            # Filter by route
 ```
 
 ## Architecture

@@ -9,24 +9,37 @@ import { and, eq, ne } from 'drizzle-orm';
 import { db, letters } from '../db/index.js';
 import { syncLetterParticipantsFromMetadata } from './entities/participant-sync.js';
 import { getLetterById } from './letters.js';
-import { log, type UpdateLetterInput, type UpdateLetterResult } from './letter/shared.js';
+import { log, type UpdateLetterInput } from './letter/shared.js';
 
 export * from './letter/index.js';
 
-export async function buildLetterUpdates(
+export async function updateLetter(
   letterId: string,
   updates: UpdateLetterInput,
   userId: string = 'admin',
-): Promise<UpdateLetterResult | null> {
+): Promise<boolean> {
   const existingLetter = await getLetterById(letterId);
-  if (!existingLetter) return null;
+  if (!existingLetter) return false;
 
   const dbUpdates: Record<string, unknown> = {
     updatedAt: new Date(),
   };
 
   if (updates.transcriptionText !== undefined) {
+    const hasTranscription = updates.transcriptionText.trim().length > 0;
     dbUpdates.transcriptionText = updates.transcriptionText;
+    dbUpdates.transcriptionStatus = 'SUCCESS';
+    dbUpdates.transcriptionRunId = null;
+    dbUpdates.transcriptionError = null;
+    dbUpdates.transcriptStatus = hasTranscription ? 'EDITED' : 'EMPTY';
+    dbUpdates.transcriptVerifiedAt = null;
+    dbUpdates.transcriptVerifiedBy = null;
+    dbUpdates.workflow = hasTranscription ? 'TRANSCRIBED' : 'UPLOADED';
+
+    log.debug(
+      { letterId, previousStatus: existingLetter.transcriptStatus },
+      `Transcript status -> ${hasTranscription ? 'EDITED' : 'EMPTY'}`,
+    );
   }
   if (updates.sender !== undefined) {
     dbUpdates.sender = updates.sender;
@@ -76,18 +89,6 @@ export async function buildLetterUpdates(
     dbUpdates.metadataPublished = updates.metadataPublished;
   }
 
-  if (updates.transcriptionText !== undefined) {
-    const currentTranscriptStatus = existingLetter.transcriptStatus;
-    if (currentTranscriptStatus === 'AI_DRAFT' || currentTranscriptStatus === 'VERIFIED') {
-      dbUpdates.transcriptStatus = 'EDITED';
-      if (currentTranscriptStatus === 'VERIFIED') {
-        dbUpdates.transcriptVerifiedAt = null;
-        dbUpdates.transcriptVerifiedBy = null;
-      }
-      log.debug({ letterId, previousStatus: currentTranscriptStatus }, 'Transcript status -> EDITED');
-    }
-  }
-
   const hasMetadataUpdate = [
     updates.sender,
     updates.recipient,
@@ -110,15 +111,6 @@ export async function buildLetterUpdates(
   }
 
   const currentWorkflow = existingLetter.workflow;
-
-  if (updates.transcriptionText !== undefined) {
-    const hasTranscription = updates.transcriptionText && updates.transcriptionText.trim().length > 0;
-    if (hasTranscription && currentWorkflow === 'UPLOADED') {
-      dbUpdates.workflow = 'TRANSCRIBED';
-    } else if (!hasTranscription && ['TRANSCRIBED', 'METADATA_DRAFTED', 'METADATA_EXTRACTING'].includes(currentWorkflow)) {
-      dbUpdates.workflow = 'UPLOADED';
-    }
-  }
 
   if (hasMetadataUpdate) {
     const workflowToCheck = (dbUpdates.workflow as string) || currentWorkflow;
@@ -167,5 +159,5 @@ export async function buildLetterUpdates(
     'Letter updated',
   );
 
-  return { dbUpdates, workflowChange };
+  return true;
 }

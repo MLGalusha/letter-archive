@@ -323,6 +323,13 @@
       "when": 1776508800000,
       "tag": "0045_add_extra_content_job_ownership",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1776595200000,
+      "tag": "0046_add_transcription_job_ownership",
+      "breakpoints": true
     }
   ]
 }

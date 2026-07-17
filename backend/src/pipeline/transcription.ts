@@ -1,41 +1,61 @@
-import { transcribeImage, transcribeExtraContent } from '../ai/openai.js';
-import { getLetterWithPages, updateTranscriptionStatus, updateLetterWorkflow, incrementTranscriptionAttempts, claimJob } from '../services/letters.js';
+import { transcribeExtraContent, transcribeImage } from '../ai/openai.js';
+import { getLetterWithPages } from '../services/letters.js';
+import {
+  claimQueuedTranscription,
+  claimRequestedTranscription,
+  completeTranscription,
+  failTranscription,
+  observeTranscriptionState,
+} from '../services/letter/transcription-job.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
 import { createLogger } from '../utils/logger.js';
-import { updateJobProgress, clearJobProgress, shouldAbortProcessing } from '../services/processing-queue.js';
-import { isTranscribableType, getDocumentTypeFromCode } from '../services/letter/shared.js';
+import {
+  clearJobProgress,
+  shouldAbortProcessing,
+  updateJobProgress,
+} from '../services/processing-queue.js';
+import { getDocumentTypeFromCode, isTranscribableType } from '../services/letter/shared.js';
 import { runAutomaticExtraContent } from '../services/letter/extra-content.js';
-import { db, letters } from '../db/index.js';
-import { eq } from 'drizzle-orm';
 
 const log = createLogger({ module: 'transcription-pipeline' });
 
-/** Max concurrent page transcriptions per letter */
+/** Max concurrent page transcriptions per letter. */
 const PAGE_CONCURRENCY = 3;
 
+export interface TranscriptionOptions {
+  extraContent?: 'automatic' | 'skip';
+}
+
+type ClaimedTranscriptionOutcome =
+  | { kind: 'completed'; pageCount: number; textLength: number }
+  | { kind: 'superseded' };
+
+export type TranscriptionRunOutcome =
+  | ClaimedTranscriptionOutcome
+  | { kind: 'claim_lost' }
+  | { kind: 'ineligible' };
+
+export type RequestedTranscriptionOutcome =
+  | Exclude<TranscriptionRunOutcome, { kind: 'ineligible' }>
+  | { kind: 'not_found' }
+  | { kind: 'not_transcribable'; type: string }
+  | { kind: 'no_pages' };
+
+type TranscriptionLetter = NonNullable<Awaited<ReturnType<typeof getLetterWithPages>>>;
+
 /**
- * Runs transcription for a letter or other transcribable document type.
- * - Supports all transcribable types (L, T, C, E, N, A, D)
- * - Excludes P (Photo) and V (Voice)
- * - For type 'L': uses standard letter transcription prompt, then auto-transcribes related extras
- * - For non-L types: uses specialized extra content prompt, stores in transcriptionText
+ * Runs the one canonical transcription producer after its caller has acquired the
+ * run-ID claim. Publication and failure are conditional on that exact attempt still
+ * owning the row; a lost terminal compare-and-swap is reported as superseded.
  */
-export async function runTranscription(
-  letterId: string,
-  options: { extraContent?: 'automatic' | 'skip' } = {},
-): Promise<void> {
+async function executeClaimedTranscription(
+  letter: TranscriptionLetter,
+  runId: string,
+  options: TranscriptionOptions,
+): Promise<ClaimedTranscriptionOutcome> {
   const start = Date.now();
+  const { id: letterId } = letter;
   const letterLog = log.child({ letterId });
-
-  letterLog.debug('Starting transcription pipeline');
-
-  const letter = await getLetterWithPages(letterId);
-
-  if (!letter) {
-    letterLog.error('Letter not found');
-    throw new Error(`Letter not found: ${letterId}`);
-  }
-
   const context = {
     letterId,
     collectionCode: letter.collection.collectionCode,
@@ -43,20 +63,7 @@ export async function runTranscription(
     type: letter.type,
   };
 
-  if (!isTranscribableType(letter.type)) {
-    letterLog.debug({ type: letter.type }, 'Skipping transcription for non-transcribable type');
-    return;
-  }
-
   letterLog.info({ type: letter.type }, 'Starting transcription');
-
-  // Atomically claim the job — prevents worker and on-demand processing from double-running
-  const claimed = await claimJob(letterId, 'transcriptionStatus', 'PENDING');
-  if (!claimed) {
-    letterLog.info('Transcription job already claimed by another process — skipping');
-    return;
-  }
-  await updateLetterWorkflow(letterId, 'TRANSCRIBING');
 
   try {
     const pages = letter.pages;
@@ -72,13 +79,10 @@ export async function runTranscription(
     let stubMode = false;
 
     if (letter.type === 'L') {
-      // === LETTER TYPE: use standard transcription prompt ===
-      // Process pages in parallel batches for speed, with abort checks between batches
-      const results: { text: string }[] = new Array(pages.length).fill(null);
+      const results: Array<{ text: string } | null> = new Array(pages.length).fill(null);
       let completedCount = 0;
 
       for (let batchStart = 0; batchStart < pages.length; batchStart += PAGE_CONCURRENCY) {
-        // Check for abort between batches
         if (shouldAbortProcessing()) {
           letterLog.info('Transcription aborted between page batches');
           throw new Error('Processing aborted');
@@ -86,17 +90,15 @@ export async function runTranscription(
 
         const batch = pages.slice(batchStart, batchStart + PAGE_CONCURRENCY);
 
-        await Promise.all(batch.map(async (page) => {
+        await Promise.all(batch.map(async (page, batchOffset) => {
           const pageStart = Date.now();
           letterLog.debug(
             { pageNumber: page.pageNumber, totalPages: pages.length },
-            'Transcribing page'
+            'Transcribing page',
           );
 
-          const absolutePath = getAbsoluteStoragePath(page.storagePath);
-
           const result = await transcribeImage({
-            filePath: absolutePath,
+            filePath: getAbsoluteStoragePath(page.storagePath),
             letterId,
             context: {
               collectionCode: letter.collection.collectionCode,
@@ -106,35 +108,35 @@ export async function runTranscription(
             },
           });
 
-          // Store at correct index to preserve page order
-          results[page.pageNumber - 1] = { text: result.text };
+          results[batchStart + batchOffset] = { text: result.text };
           stubMode = result.isStub;
-          completedCount++;
+          completedCount += 1;
 
-          updateJobProgress(letterId, 'transcription', completedCount, pages.length, `${completedCount} of ${pages.length} pages`);
+          updateJobProgress(
+            letterId,
+            'transcription',
+            completedCount,
+            pages.length,
+            `${completedCount} of ${pages.length} pages`,
+          );
 
-          const pageDuration = Date.now() - pageStart;
           letterLog.debug(
             {
               pageNumber: page.pageNumber,
               textLength: result.text.length,
-                duration: pageDuration,
+              duration: Date.now() - pageStart,
               isStub: result.isStub,
             },
-            'Page transcription completed'
+            'Page transcription completed',
           );
         }));
       }
 
-      for (const r of results) {
-        if (r !== null) {
-          pageTranscriptions.push(r.text);
-        }
+      for (const result of results) {
+        if (result !== null) pageTranscriptions.push(result.text);
       }
     } else {
-      // === NON-LETTER TYPE: use extra content transcription prompt ===
-      // Extra content processed sequentially (usually 1-2 pages, needs text-check first)
-      const docType = getDocumentTypeFromCode(letter.type);
+      const documentType = getDocumentTypeFromCode(letter.type);
 
       for (const page of pages) {
         if (shouldAbortProcessing()) {
@@ -143,14 +145,18 @@ export async function runTranscription(
         }
 
         const pageStart = Date.now();
-        updateJobProgress(letterId, 'transcription', page.pageNumber - 1, pages.length, `Page ${page.pageNumber} of ${pages.length}`);
-
-        const absolutePath = getAbsoluteStoragePath(page.storagePath);
+        updateJobProgress(
+          letterId,
+          'transcription',
+          page.pageNumber - 1,
+          pages.length,
+          `Page ${page.pageNumber} of ${pages.length}`,
+        );
 
         const result = await transcribeExtraContent({
-          filePath: absolutePath,
+          filePath: getAbsoluteStoragePath(page.storagePath),
           letterId,
-          documentType: docType,
+          documentType,
           context: {
             collectionCode: letter.collection.collectionCode,
             dateRaw: letter.dateRaw,
@@ -162,71 +168,45 @@ export async function runTranscription(
         }
         stubMode = result.isStub;
 
-        updateJobProgress(letterId, 'transcription', page.pageNumber, pages.length, `Page ${page.pageNumber} of ${pages.length}`);
+        updateJobProgress(
+          letterId,
+          'transcription',
+          page.pageNumber,
+          pages.length,
+          `Page ${page.pageNumber} of ${pages.length}`,
+        );
 
-        const pageDuration = Date.now() - pageStart;
         letterLog.debug(
           {
             pageNumber: page.pageNumber,
             textLength: result.text.length,
-            duration: pageDuration,
+            duration: Date.now() - pageStart,
             isStub: result.isStub,
           },
-          'Page transcription completed'
+          'Page transcription completed',
         );
       }
     }
 
-    if (pageTranscriptions.length === 0) {
+    const combinedTranscription = pageTranscriptions.length === 0
+      ? null
+      : pageTranscriptions.length === 1
+        ? pageTranscriptions[0]
+        : pageTranscriptions
+          .map((text, index) => `--- Page ${index + 1} ---\n\n${text}`)
+          .join('\n\n');
+
+    if (combinedTranscription === null) {
       letterLog.warn('No transcribable text found in any page');
-      await db.update(letters).set({
-        transcriptionText: null,
-        transcriptionStatus: 'SUCCESS',
-        transcriptionError: null,
-        transcribedAt: new Date(),
-        workflow: 'TRANSCRIBED',
-        transcriptStatus: 'EMPTY',
-        updatedAt: new Date(),
-      }).where(eq(letters.id, letterId));
+    }
 
+    const published = await completeTranscription(letterId, runId, combinedTranscription);
+    if (!published) {
+      letterLog.info('Transcription was cancelled or superseded; discarding result');
       clearJobProgress(letterId, 'transcription');
-      return;
+      return { kind: 'superseded' };
     }
 
-    // Combine transcriptions with page separators
-    let combinedTranscription: string;
-    if (pageTranscriptions.length === 1) {
-      combinedTranscription = pageTranscriptions[0];
-    } else {
-      combinedTranscription = pageTranscriptions
-        .map((text, i) => `--- Page ${i + 1} ---\n\n${text}`)
-        .join('\n\n');
-    }
-
-    // Check if the job was cancelled while we were processing
-    const currentState = await db.query.letters.findFirst({
-      where: eq(letters.id, letterId),
-      columns: { transcriptionStatus: true },
-    });
-    if (currentState?.transcriptionStatus === 'FAILED') {
-      letterLog.info('Transcription was cancelled during processing — discarding result');
-      clearJobProgress(letterId, 'transcription');
-      return;
-    }
-
-    // Update letter with transcription - all status updates in one operation
-    // to avoid inconsistent state if the process crashes between updates
-    await db.update(letters).set({
-      transcriptionText: combinedTranscription,
-      transcriptionStatus: 'SUCCESS',
-      transcriptionError: null,
-      transcribedAt: new Date(),
-      workflow: 'TRANSCRIBED',
-      transcriptStatus: 'AI_DRAFT',
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
-
-    // === Automatically transcribe extra content (T, C, E types) — only for type 'L' ===
     let extrasTranscribed = 0;
     if (letter.type === 'L' && options.extraContent !== 'skip') {
       try {
@@ -241,43 +221,116 @@ export async function runTranscription(
           );
         }
       } catch (extrasError) {
-        // Log but don't fail the whole transcription if extras fail
         letterLog.warn({ err: extrasError }, 'Failed to transcribe extra content - continuing');
       }
     }
 
     clearJobProgress(letterId, 'transcription');
 
-    const duration = Date.now() - start;
+    const textLength = combinedTranscription?.length ?? 0;
     letterLog.info(
       {
         ...context,
-        duration,
+        duration: Date.now() - start,
         pageCount: pages.length,
-        totalTextLength: combinedTranscription.length,
+        totalTextLength: textLength,
         stubMode,
-
         extrasTranscribed,
       },
-      'Transcription pipeline completed successfully'
+      'Transcription pipeline completed successfully',
     );
+
+    return {
+      kind: 'completed',
+      pageCount: pages.length,
+      textLength,
+    };
   } catch (error) {
     clearJobProgress(letterId, 'transcription');
-    const duration = Date.now() - start;
     const message = error instanceof Error ? error.message : 'Unknown error';
 
     letterLog.error(
       {
         ...context,
-        duration,
-
+        duration: Date.now() - start,
         err: error,
       },
-      'Transcription pipeline failed'
+      'Transcription pipeline failed',
     );
 
-    await updateTranscriptionStatus(letterId, 'FAILED', null, message);
-    // Don't update workflow to FAILED here - let it stay at TRANSCRIBING so retries can work
+    const failed = await failTranscription(letterId, runId, message);
+    if (!failed) {
+      letterLog.info('Transcription failure was superseded; preserving newer state');
+      return { kind: 'superseded' };
+    }
     throw error;
   }
+}
+
+async function reloadClaimedTranscription(
+  letterId: string,
+  runId: string,
+): Promise<TranscriptionLetter | { kind: 'superseded' }> {
+  const claimedLetter = await getLetterWithPages(letterId);
+  if (claimedLetter) return claimedLetter;
+
+  const error = new Error(`Letter disappeared after transcription claim: ${letterId}`);
+  const failed = await failTranscription(letterId, runId, error.message);
+  if (!failed) return { kind: 'superseded' };
+  throw error;
+}
+
+/** Claims and runs normal PENDING queue work. */
+export async function runTranscription(
+  letterId: string,
+  options: TranscriptionOptions = {},
+): Promise<TranscriptionRunOutcome> {
+  const letterLog = log.child({ letterId });
+  letterLog.debug('Starting transcription pipeline');
+
+  const letter = await getLetterWithPages(letterId);
+  if (!letter) {
+    letterLog.error('Letter not found');
+    throw new Error(`Letter not found: ${letterId}`);
+  }
+
+  if (!isTranscribableType(letter.type)) {
+    letterLog.debug({ type: letter.type }, 'Skipping transcription for non-transcribable type');
+    return { kind: 'ineligible' };
+  }
+
+  const claim = await claimQueuedTranscription(letterId, observeTranscriptionState(letter));
+  if (!claim) {
+    letterLog.info('Transcription job already claimed by another process — skipping');
+    return { kind: 'claim_lost' };
+  }
+
+  const claimedLetter = await reloadClaimedTranscription(letterId, claim.runId);
+  if ('kind' in claimedLetter) return claimedLetter;
+
+  return executeClaimedTranscription(claimedLetter, claim.runId, options);
+}
+
+/**
+ * Validates, atomically claims, and runs synchronous admin-requested transcription.
+ * The default explicitly excludes automatic extras; regeneration owns that optional
+ * follow-up as a separate claimed job.
+ */
+export async function runRequestedTranscription(
+  letterId: string,
+): Promise<RequestedTranscriptionOutcome> {
+  const letter = await getLetterWithPages(letterId);
+  if (!letter) return { kind: 'not_found' };
+  if (!isTranscribableType(letter.type)) {
+    return { kind: 'not_transcribable', type: letter.type };
+  }
+  if (letter.pages.length === 0) return { kind: 'no_pages' };
+
+  const claim = await claimRequestedTranscription(letterId, observeTranscriptionState(letter));
+  if (!claim) return { kind: 'claim_lost' };
+
+  const claimedLetter = await reloadClaimedTranscription(letterId, claim.runId);
+  if ('kind' in claimedLetter) return claimedLetter;
+
+  return executeClaimedTranscription(claimedLetter, claim.runId, { extraContent: 'skip' });
 }

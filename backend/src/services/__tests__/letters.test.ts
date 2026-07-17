@@ -78,7 +78,6 @@ import {
   resolveRepresentativeLetterId,
   resetLetterForProcessing,
   updateMetadataStatus,
-  updateTranscriptionStatus,
 } from '../letters.js';
 
 describe('letters service', () => {
@@ -204,24 +203,6 @@ describe('letters service', () => {
     expect(dirtySql).toContain("WHEN ? = 'RUNNING' THEN true ELSE false");
   });
 
-  it('marks successful transcription results as AI drafts', async () => {
-    await updateTranscriptionStatus('letter-1', 'SUCCESS', 'Dear family', null);
-
-    expect(updateSetMock).toHaveBeenCalledWith({
-      transcriptionStatus: 'SUCCESS',
-      updatedAt: expect.any(Date),
-      transcriptionText: 'Dear family',
-      transcriptionError: null,
-      transcribedAt: expect.any(Date),
-      transcriptStatus: 'AI_DRAFT',
-    });
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'eq',
-      field: 'letters.id',
-      value: 'letter-1',
-    });
-  });
-
   it('marks successful metadata results as AI drafts', async () => {
     await updateMetadataStatus(
       'letter-2',
@@ -254,6 +235,7 @@ describe('letters service', () => {
       expect.objectContaining({
         workflow: 'UPLOADED',
         transcriptionStatus: 'PENDING',
+        transcriptionRunId: null,
         metadataStatus: 'PENDING',
         entityExtractionStatus: 'PENDING',
         entityExtractionError: null,

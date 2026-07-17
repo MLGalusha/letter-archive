@@ -234,6 +234,8 @@ export async function removeFromQueue(
   if (spec.processKey === 'extra_content') {
     updates.extraContentJobRunId = null;
     updates.extraContentJobDirty = false;
+  } else if (spec.processKey === 'transcription') {
+    updates.transcriptionRunId = null;
   }
 
   const removed = await db
@@ -266,6 +268,8 @@ export async function clearQueue(
   if (spec.processKey === 'extra_content') {
     updates.extraContentJobRunId = null;
     updates.extraContentJobDirty = false;
+  } else if (spec.processKey === 'transcription') {
+    updates.transcriptionRunId = null;
   }
 
   const cleared = await db
@@ -299,6 +303,7 @@ export async function retryJob(
   if (spec.retryWorkflow) updates.workflow = spec.retryWorkflow;
   if (spec.processKey === 'transcription') {
     updates.transcriptionAttemptCount = 0;
+    updates.transcriptionRunId = null;
     updates.deadLetter = false;
   } else if (spec.processKey === 'metadata') {
     updates.metadataAttemptCount = 0;
@@ -332,7 +337,27 @@ export async function cancelActive(
   }
   let cancelled: Array<{ id: string }>;
 
-  if (spec.processKey === 'extra_content') {
+  if (spec.processKey === 'transcription') {
+    const observedRunId = letter.transcriptionRunId;
+    if (!observedRunId) {
+      throw new ProcessingError('Cannot cancel: transcription job has no active run ID', 409);
+    }
+    cancelled = await db
+      .update(letters)
+      .set({
+        transcriptionStatus: 'FAILED',
+        transcriptionError: 'Cancelled by admin',
+        transcriptionRunId: null,
+        workflow: spec.retryWorkflow,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(letters.id, letterId),
+        eq(letters.transcriptionStatus, 'RUNNING'),
+        eq(letters.transcriptionRunId, observedRunId),
+      ))
+      .returning({ id: letters.id });
+  } else if (spec.processKey === 'extra_content') {
     const observedRunId = letter.extraContentJobRunId;
     const observedDirty = letter.extraContentJobDirty;
     const runIdCondition = observedRunId === null

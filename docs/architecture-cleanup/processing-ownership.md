@@ -17,17 +17,20 @@ existing owner remains frictionless, while behavior tests remain the authority.
 | `POST /admin/letters/processing/processes/:key/start` | API process | Transcription, metadata, entity extraction, extra content | `processes/runner.ts` starts a fire-and-forget in-memory batch through `letter-process-helpers.ts` | Pause, abort, progress, and the batch mutex live only in API memory; extra-content attempts additionally use a persisted run-ID fence |
 | Legacy processing endpoints and post-upload auto-start | Worker in configured production, otherwise API process | Transcription, metadata, entity extraction | `processing-queue.ts` triggers a Cloud Run Job when configured and otherwise falls back to `processLettersAsync()` | Legacy pause, abort, and progress live only in API memory; API and worker startup both run recovery |
 | Bulk transcription and metadata operations | Worker in configured production, otherwise API process | Transcription, metadata | `bulk-operations.ts` repeats the Cloud Run versus `processLettersAsync()` choice | Uses the same legacy in-memory state but bypasses `startQueuedProcessing()` |
-| Letter content actions | API request process | Letter-only transcription, metadata, entity extraction, extra content | The route awaits pipeline or regeneration functions directly | Extra content uses the same persisted run-ID owner as batch/automatic work; other direct actions retain the mixed claim behavior described below |
+| Letter content actions | API request process | Letter-only transcription, metadata, entity extraction, extra content | The route awaits pipeline or regeneration functions directly | Main transcription and extra content share their respective canonical, persisted run-ID owners with batch/automatic work |
 
-The pipeline functions themselves own most compare-and-swap claims and terminal status
-updates. The process registry's shared runner adds UI lifecycle state around those
-functions; it is not a durable job runner.
+The transcription and extra-content lifecycle helpers own their compare-and-swap claims
+and terminal publication. The process registry's shared runner adds UI lifecycle state
+around those functions; it is not a durable job runner.
 
 ## Recovery Coverage
 
-`recoverOrphanedJobs()` currently resets every `RUNNING` transcription, metadata, and
-entity-extraction row to `PENDING`, regardless of which process owns it or whether that
-owner is still alive. It runs at both API and worker startup.
+`recoverOrphanedJobs()` currently attempts to reset each `RUNNING` transcription,
+metadata, and entity-extraction row to `PENDING`. Every update must still match
+`RUNNING`; transcription also matches the observed run ID, so its stale startup snapshot
+cannot overwrite a replacement attempt. Metadata and entity recovery remain status-only.
+No stage has a lease or liveness signal, so recovery can reset the same attempt while its
+owner is alive. Recovery runs at both API and worker startup.
 
 | Failure | Current result |
 | --- | --- |
@@ -67,14 +70,36 @@ recovery for an extra-content attempt whose process crashes while `RUNNING`.
 Forced file replacement also precedes the database transaction and cannot be rolled
 back with it; that broader filesystem/database compensation gap remains ingestion debt.
 
+## Main-Transcription Ownership Repair
+
+Queue work, the polling worker, dashboard batches, letter-only transcription, and main
+transcription regeneration now enter one canonical producer:
+
+- automatic work claims only an eligible `PENDING` row and compares the workflow,
+  dead-letter flag, attempt state, and observed transcript content state;
+- direct request work uses a separate explicit claim policy but the same producer, and
+  keeps its existing no-extras contract;
+- every active attempt has a persisted run ID. Completion, failure, and cancellation
+  must still own that run ID before changing terminal state;
+- page sources are reloaded after the claim so work does not continue from the preflight
+  page snapshot;
+- human transcript writes revoke an active AI attempt before publishing the human value;
+- ownership loss and stale eligibility propagate as `skipped`, so the worker and both
+  batch reporters do not announce a false transcription success.
+
+As with extra content, this run ID prevents stale publication but does not yet provide
+lease expiry or a heartbeat. Startup recovery still resets a candidate when that same
+observed run remains `RUNNING`, so it remains unsafe while valid work may be running
+elsewhere.
+
 ## Safe Simplification Sequence
 
 1. **Completed in Slice 003:** give extra-content work a tested, fenced
    `PENDING` → `RUNNING` → terminal lifecycle, including source invalidation and
    cancellation-safe content publication.
-2. Make letter-only transcription acquire a claim before performing AI work, then
-   characterize whether its duplicate pipeline can be replaced by the canonical
-   transcription pipeline without changing its no-extras contract.
+2. **Slice 004:** replace the duplicate letter-only producer with the canonical
+   transcription pipeline, add per-attempt run-ID fencing, and preserve its no-extras
+   request contract.
 3. Add durable, stage-specific execution leases. Instrument every existing executor
    before changing recovery; during rollout, an unleased `RUNNING` row is unknown and
    must not be reset automatically.

@@ -1,6 +1,6 @@
 # Admin API
 
-Routes: `backend/src/routes/admin/letters.ts`, `uploads.ts`
+Routes: `backend/src/routes/admin/letters.ts`, `backend/src/routes/admin/letters/`, `uploads.ts`
 
 All prefixed with `/admin`.
 
@@ -12,7 +12,9 @@ The admin letters route file is a thin routing layer. Business logic lives in se
 |---------|------|---------------|
 | Letter Queries | `services/letter-queries.ts` | Listing, filtering, pagination, stats |
 | Processing Queue | `services/processing-queue.ts` | Background processing, queue CRUD, pause/resume/abort |
-| Letter Operations | `services/letter-operations.ts` | Bulk ops, updates, versions, verification, transcription, entities, resync |
+| Letter Operations facade | `services/letter-operations.ts` | Stable import surface for the smaller modules under `services/letter/` |
+| Transcription pipeline | `pipeline/transcription.ts` | Canonical queue and direct-request transcription producer |
+| Transcription ownership | `services/letter/transcription-job.ts` | Claim, run-ID fencing, and terminal publication |
 
 ---
 
@@ -38,7 +40,7 @@ Returns letter with related items and linked entities.
 ### PUT /admin/letters/:letterId
 Update fields. All optional: `transcriptionText`, `sender`, `recipient`, `locationWritten`, `hook`, `summary`, `visibility`, `notes`, `extractedDate`, `extractedDateConfidence`, `tags`.
 
-**Service**: `buildLetterUpdates()` in `letter-operations.ts`
+**Service**: `updateLetter()` in `letter-operations.ts`
 
 ### POST /admin/letters/:letterId/process
 Re-enqueue letter for processing.
@@ -51,7 +53,8 @@ Soft delete.
 ## Processing Queue
 
 ### GET /admin/processing/status
-Current on-demand processing state.
+Current on-demand processing state. Terminal counts are reported separately as
+`completed`, `failed`, and `skipped`; ownership loss is never counted as success.
 
 **Service**: `getProcessingStatus()` in `processing-queue.ts`
 
@@ -139,7 +142,7 @@ Re-run entity extraction only. Requires transcription.
 ## Two-Track Verification
 
 ### POST /admin/letters/:letterId/verify-transcript | unverify-transcript
-**Service**: `verifyTranscript()`, `unverifyTranscript()` in `letter-operations.ts`
+**Service**: `verifyTranscript()`, `unverifyTranscript()` in `services/letter/verification.ts` (re-exported by `letter-operations.ts`)
 
 ### POST /admin/letters/:letterId/verify-metadata | unverify-metadata
 **Service**: `verifyMetadata()`, `unverifyMetadata()` in `letter-operations.ts`
@@ -154,17 +157,17 @@ Re-run entity extraction only. Requires transcription.
 ### POST /admin/letters/:letterId/regenerate-transcription
 Re-run transcription. Query: `includeExtras=true` to include extras.
 
-**Service**: `regenerateTranscription()` in `letter-operations.ts`
+**Service**: `regenerateTranscription()` in `services/letter/regeneration.ts`. Main-letter work uses the canonical `pipeline/transcription.ts` producer; optional extra-content work has its own lifecycle.
 
 ### POST /admin/letters/:letterId/transcribe-letter
 Transcribe only the letter pages.
 
-**Service**: `transcribeLetterOnly()` in `letter-operations.ts`
+**Service**: `transcribeLetterOnly()` in `services/letter/regeneration.ts`. It uses the canonical transcription producer with extra-content work disabled.
 
 ### POST /admin/letters/:letterId/transcribe-extras
 Transcribe extra content items.
 
-**Service**: `transcribeExtras()` in `letter-operations.ts`
+**Service**: `transcribeExtras()` in `services/letter/extra-content.ts`
 
 ---
 

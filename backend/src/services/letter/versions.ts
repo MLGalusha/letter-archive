@@ -99,9 +99,18 @@ export async function restoreVersion(
   const content = version.content as Record<string, unknown>;
 
   if (fieldType === 'transcript') {
+    const transcriptionText = (content.text as string) || '';
+    const hasTranscription = transcriptionText.trim().length > 0;
+
     await db.update(letters).set({
-      transcriptionText: (content.text as string) || '',
-      transcriptStatus: 'EDITED',
+      transcriptionText,
+      transcriptionStatus: 'SUCCESS',
+      transcriptionRunId: null,
+      transcriptionError: null,
+      transcriptStatus: hasTranscription ? 'EDITED' : 'EMPTY',
+      transcriptVerifiedAt: null,
+      transcriptVerifiedBy: null,
+      workflow: hasTranscription ? 'TRANSCRIBED' : 'UPLOADED',
       updatedAt: new Date(),
     }).where(eq(letters.id, letterId));
   } else {

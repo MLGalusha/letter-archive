@@ -1,4 +1,4 @@
-import type { ProcessingStatus } from "../../../api/admin";
+import { countProcessedJobs, type ProcessingStatus } from "../../../api/admin";
 
 interface BulkProcessingControlsProps {
   selectedCount: number;
@@ -36,21 +36,26 @@ export default function BulkProcessingControls({
     );
   }
 
+  const processed = countProcessedJobs(processingStatus);
+
   return (
     <div className="toolbar-processing-controls">
       <div className="toolbar-progress">
         <span className="toolbar-progress-text">
           {processingStatus.currentJob?.type === "transcription" ? "Transcribing" : "Extracting"}:{" "}
-          {processingStatus.completed}/{processingStatus.total}
+          {processed}/{processingStatus.total}
           {processingStatus.failed > 0 && (
             <span className="failed-count"> ({processingStatus.failed} failed)</span>
+          )}
+          {processingStatus.skipped > 0 && (
+            <span> ({processingStatus.skipped} skipped)</span>
           )}
         </span>
         <div className="toolbar-progress-bar">
           <div
             className="toolbar-progress-fill"
             style={{
-              width: `${processingStatus.total > 0 ? (processingStatus.completed / processingStatus.total) * 100 : 0}%`,
+              width: `${processingStatus.total > 0 ? (processed / processingStatus.total) * 100 : 0}%`,
             }}
           />
         </div>

@@ -195,6 +195,7 @@ export const letters = pgTable(
     transcriptionJson: jsonb('transcription_json'),
     transcriptionError: text('transcription_error'),
     transcriptionAttemptCount: integer('transcription_attempt_count').notNull().default(0),
+    transcriptionRunId: uuid('transcription_run_id'),
     transcribedAt: timestamp('transcribed_at', { withTimezone: true }),
 
     // Dead-letter flag: set when a job (transcription/metadata/entity) hits MAX_JOB_ATTEMPTS.
@@ -291,6 +292,10 @@ export const letters = pgTable(
     // Check constraint: attempt counts >= 0
     check('transcription_attempt_count_positive', sql`transcription_attempt_count >= 0`),
     check('metadata_attempt_count_positive', sql`metadata_attempt_count >= 0`),
+    check(
+      'transcription_run_id_matches_running',
+      sql`(${table.transcriptionStatus} = 'RUNNING') = (${table.transcriptionRunId} IS NOT NULL)`,
+    ),
     check(
       'extra_content_job_run_id_matches_running',
       sql`(${table.extraContentJobStatus} = 'RUNNING') = (${table.extraContentJobRunId} IS NOT NULL)`,

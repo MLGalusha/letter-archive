@@ -152,9 +152,10 @@ const server = app.listen(env.PORT, () => {
     'Server started'
   );
 
-  // Recover any jobs left in RUNNING state from a previous crash/restart
+  // Attempt startup recovery for RUNNING candidates. This is not lease-aware
+  // and cannot prove that an observed owner is no longer live.
   recoverOrphanedJobs().catch(err => {
-    logger.error({ err }, 'Failed to recover orphaned jobs');
+    logger.error({ err }, 'Failed to run startup job recovery');
   });
 
   // Wire the SSE broadcaster into notify() so every notification pushes to connected clients

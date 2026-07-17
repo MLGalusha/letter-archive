@@ -6,17 +6,21 @@ const {
   updateSetMock,
   updateWhereMock,
   updateReturningMock,
+  generateAndSaveReadingViewMock,
 } = vi.hoisted(() => ({
   dbUpdateMock: vi.fn(),
   getLetterByIdMock: vi.fn(),
   updateSetMock: vi.fn(),
   updateWhereMock: vi.fn(),
   updateReturningMock: vi.fn(),
+  generateAndSaveReadingViewMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
   and: vi.fn((...clauses: unknown[]) => ({ kind: 'and', clauses })),
   eq: vi.fn((field: unknown, value: unknown) => ({ kind: 'eq', field, value })),
+  isNull: vi.fn((field: unknown) => ({ kind: 'isNull', field })),
+  ne: vi.fn((field: unknown, value: unknown) => ({ kind: 'ne', field, value })),
 }));
 
 vi.mock('../../db/index.js', () => {
@@ -29,6 +33,9 @@ vi.mock('../../db/index.js', () => {
     letters: {
       id: 'letters.id',
       updatedAt: 'letters.updatedAt',
+      transcriptionStatus: 'letters.transcriptionStatus',
+      transcriptionText: 'letters.transcriptionText',
+      transcriptStatus: 'letters.transcriptStatus',
       extraContentStatus: 'letters.extraContentStatus',
     },
   };
@@ -36,7 +43,9 @@ vi.mock('../../db/index.js', () => {
 
 vi.mock('../letters.js', () => ({ getLetterById: getLetterByIdMock }));
 
-vi.mock('../letter/readingView.js', () => ({ generateAndSaveReadingView: vi.fn() }));
+vi.mock('../letter/readingView.js', () => ({
+  generateAndSaveReadingView: generateAndSaveReadingViewMock,
+}));
 
 vi.mock('../../utils/logger.js', () => ({
   createLogger: vi.fn(() => ({
@@ -47,7 +56,125 @@ vi.mock('../../utils/logger.js', () => ({
   })),
 }));
 
-import { unverifyExtraContent, verifyExtraContent } from '../letter/verification.js';
+import {
+  unverifyExtraContent,
+  unverifyTranscript,
+  verifyExtraContent,
+  verifyTranscript,
+} from '../letter/verification.js';
+
+describe('transcript verification ownership', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    updateReturningMock.mockResolvedValue([{ id: 'updated-letter' }]);
+  });
+
+  it('verifies only the exact idle transcript revision the reviewer loaded', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-1',
+      type: 'T',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'Reviewed text',
+      transcriptStatus: 'EDITED',
+      readingText: null,
+    });
+
+    await expect(verifyTranscript('letter-1', 'reviewer-1')).resolves.toEqual({
+      previousStatus: 'EDITED',
+    });
+
+    expect(updateSetMock).toHaveBeenCalledWith({
+      transcriptStatus: 'VERIFIED',
+      transcriptVerifiedAt: expect.any(Date),
+      transcriptVerifiedBy: 'reviewer-1',
+      updatedAt: expect.any(Date),
+    });
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+        { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
+        { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
+        { kind: 'eq', field: 'letters.transcriptStatus', value: 'EDITED' },
+        { kind: 'eq', field: 'letters.transcriptionText', value: 'Reviewed text' },
+      ],
+    });
+  });
+
+  it('refuses to verify while an AI producer owns the transcript', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-2',
+      type: 'L',
+      transcriptionStatus: 'RUNNING',
+      transcriptionText: 'Previously reviewed text',
+      transcriptStatus: 'EDITED',
+      readingText: null,
+    });
+    updateReturningMock.mockResolvedValue([]);
+
+    await expect(verifyTranscript('letter-2', 'reviewer-1')).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining('changed before it could be verified'),
+    });
+    expect(generateAndSaveReadingViewMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses verification when a nullable transcript revision changed after it was loaded', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-3',
+      type: 'T',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: null,
+      transcriptStatus: 'EMPTY',
+      readingText: null,
+    });
+    updateReturningMock.mockResolvedValue([]);
+
+    await expect(verifyTranscript('letter-3', 'reviewer-1')).rejects.toMatchObject({ status: 409 });
+    expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
+      clauses: expect.arrayContaining([
+        { kind: 'isNull', field: 'letters.transcriptionText' },
+      ]),
+    }));
+  });
+
+  it('unverifies only the exact idle transcript revision the reviewer loaded', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-4',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'Verified text',
+      transcriptStatus: 'VERIFIED',
+    });
+
+    await expect(unverifyTranscript('letter-4')).resolves.toBe(true);
+
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        { kind: 'eq', field: 'letters.id', value: 'letter-4' },
+        { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
+        { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
+        { kind: 'eq', field: 'letters.transcriptStatus', value: 'VERIFIED' },
+        { kind: 'eq', field: 'letters.transcriptionText', value: 'Verified text' },
+      ],
+    });
+  });
+
+  it('refuses to remove verification while an AI producer owns the transcript', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-5',
+      transcriptionStatus: 'RUNNING',
+      transcriptionText: 'Verified text',
+      transcriptStatus: 'VERIFIED',
+    });
+    updateReturningMock.mockResolvedValue([]);
+
+    await expect(unverifyTranscript('letter-5')).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining('changed before verification could be removed'),
+    });
+  });
+});
 
 describe('extra-content verification ownership', () => {
   beforeEach(() => {

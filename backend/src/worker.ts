@@ -111,9 +111,16 @@ async function processPendingJobs(): Promise<boolean> {
       'Starting transcription job'
     );
     try {
-      await processLetter(letter.id);
+      const outcome = await processLetter(letter.id);
       publishHeartbeat(totalPendingThisCycle);
       const duration = Date.now() - jobStart;
+      if (outcome) {
+        log.info(
+          { letterId: letter.id, duration, reason: outcome.reason },
+          'Transcription job skipped',
+        );
+        continue;
+      }
       log.info({ letterId: letter.id, duration }, 'Transcription job completed');
       void notify({
         type: 'transcription_success',
@@ -264,9 +271,8 @@ async function main() {
     'Background worker starting'
   );
 
-  // Recover any jobs left stuck in RUNNING by a previously-crashed run.
-  // Safe to call before processing begins — the compare-and-swap claim
-  // still protects against double-processing if another worker is active.
+  // Legacy startup recovery is deliberately broad and not lease-aware. It can
+  // reset work owned by another live process; Slice 005 tracks the durable fix.
   try {
     await recoverOrphanedJobs();
   } catch (error) {

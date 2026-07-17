@@ -10,7 +10,7 @@ const {
   updateReturningMock,
   dbDeleteMock,
   deleteWhereMock,
-  runTranscriptionMock,
+  runRequestedTranscriptionMock,
   runRegeneratedExtraContentMock,
   transcribeExtrasMock,
   getLetterByIdMock,
@@ -29,7 +29,7 @@ const {
   updateReturningMock: vi.fn(),
   dbDeleteMock: vi.fn(),
   deleteWhereMock: vi.fn(),
-  runTranscriptionMock: vi.fn(),
+  runRequestedTranscriptionMock: vi.fn(),
   runRegeneratedExtraContentMock: vi.fn(),
   transcribeExtrasMock: vi.fn(),
   getLetterByIdMock: vi.fn(),
@@ -121,8 +121,8 @@ vi.mock('../letter/extra-content.js', () => ({
   transcribeExtras: transcribeExtrasMock,
 }));
 
-vi.mock('../../pipeline/processor.js', () => ({
-  runTranscription: runTranscriptionMock,
+vi.mock('../../pipeline/transcription.js', () => ({
+  runRequestedTranscription: runRequestedTranscriptionMock,
 }));
 
 vi.mock('../../pipeline/metadataV2.js', () => ({
@@ -139,10 +139,6 @@ vi.mock('../../ai/openai.js', () => ({
 
 vi.mock('../storage.js', () => ({
   getAbsoluteStoragePath: getAbsoluteStoragePathMock,
-}));
-
-vi.mock('../line-finder.js', () => ({
-  detectAndStoreLinesForPages: vi.fn(),
 }));
 
 vi.mock('../../utils/logger.js', () => ({
@@ -168,11 +164,11 @@ vi.mock('../entities/participant-sync.js', () => ({
 import {
   bulkClearTranscriptions,
   bulkClearMetadata,
-  buildLetterUpdates,
   describePhoto as describePhotoWorkflow,
   normalizeRelationshipType,
   regenerateTranscription,
   transcribeLetterOnly,
+  updateLetter,
   updateExtraContent,
   updatePhotoDescription,
 } from '../letter-operations.js';
@@ -185,6 +181,11 @@ describe('letter operations service', () => {
     deleteWhereMock.mockResolvedValue(undefined);
     findManyMock.mockResolvedValue([]);
     runRegeneratedExtraContentMock.mockResolvedValue({ kind: 'completed', value: 0 });
+    runRequestedTranscriptionMock.mockResolvedValue({
+      kind: 'completed',
+      pageCount: 1,
+      textLength: 15,
+    });
     getLetterByIdMock.mockResolvedValue(undefined);
     getAbsoluteStoragePathMock.mockImplementation((value: string) => value);
   });
@@ -230,6 +231,7 @@ describe('letter operations service', () => {
     });
     expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
       transcriptionStatus: 'FAILED',
+      transcriptionRunId: null,
       extraContentJobStatus: 'FAILED',
       extraContentJobRunId: null,
       extraContentJobDirty: false,
@@ -264,54 +266,62 @@ describe('letter operations service', () => {
   });
 
   it('does not reset transcription state when letter-only transcription is rejected for missing pages', async () => {
-    findFirstMock.mockResolvedValue({
-      id: 'letter-3',
-      type: 'L',
-      collection: { collectionCode: '009' },
-      dateRaw: '19470810',
-      pages: [],
-    });
+    runRequestedTranscriptionMock.mockResolvedValue({ kind: 'no_pages' });
 
     await expect(transcribeLetterOnly('letter-3')).rejects.toMatchObject({
       message: 'Letter has no pages to transcribe',
       status: 400,
     });
     expect(dbUpdateMock).not.toHaveBeenCalled();
-    expect(runTranscriptionMock).not.toHaveBeenCalled();
+    expect(runRequestedTranscriptionMock).toHaveBeenCalledWith('letter-3');
   });
 
   it('does not reset transcription state when regeneration is rejected for missing pages', async () => {
-    findFirstMock.mockResolvedValue({
-      id: 'letter-4',
-      type: 'L',
-      collection: { collectionCode: '009' },
-      dateRaw: '19470810',
-      pages: [],
-    });
+    runRequestedTranscriptionMock.mockResolvedValue({ kind: 'no_pages' });
 
     await expect(regenerateTranscription('letter-4', false)).rejects.toMatchObject({
       message: 'Letter has no pages to transcribe',
       status: 400,
     });
     expect(dbUpdateMock).not.toHaveBeenCalled();
-    expect(runTranscriptionMock).not.toHaveBeenCalled();
+    expect(runRequestedTranscriptionMock).toHaveBeenCalledWith('letter-4');
+  });
+
+  it('returns canonical metrics for letter-only transcription without extras', async () => {
+    runRequestedTranscriptionMock.mockResolvedValue({
+      kind: 'completed',
+      pageCount: 2,
+      textLength: 42,
+    });
+
+    await expect(transcribeLetterOnly('letter-3')).resolves.toEqual({
+      pageCount: 2,
+      textLength: 42,
+    });
+    expect(runRequestedTranscriptionMock).toHaveBeenCalledWith('letter-3');
+    expect(runRegeneratedExtraContentMock).not.toHaveBeenCalled();
+  });
+
+  it('returns a conflict when direct transcription loses or outlives its claim', async () => {
+    runRequestedTranscriptionMock.mockResolvedValueOnce({ kind: 'claim_lost' });
+    await expect(transcribeLetterOnly('letter-3')).rejects.toMatchObject({
+      status: 409,
+      message: 'Transcription conflicted with another job update',
+    });
+
+    runRequestedTranscriptionMock.mockResolvedValueOnce({ kind: 'superseded' });
+    await expect(transcribeLetterOnly('letter-3')).rejects.toMatchObject({
+      status: 409,
+      message: 'Transcription was cancelled or superseded',
+    });
   });
 
   it('suppresses automatic extras and runs the regeneration producer exactly once', async () => {
-    findFirstMock.mockResolvedValue({
-      id: 'letter-4',
-      type: 'L',
-      collectionId: 'collection-1',
-      collection: { collectionCode: '009' },
-      dateRaw: '19470810',
-      typeSequence: 1,
-      pages: [{ id: 'page-1' }],
-    });
     runRegeneratedExtraContentMock.mockResolvedValue({ kind: 'completed', value: 2 });
 
     const result = await regenerateTranscription('letter-4', true);
 
-    expect(runTranscriptionMock).toHaveBeenCalledWith('letter-4', { extraContent: 'skip' });
+    expect(runRequestedTranscriptionMock).toHaveBeenCalledWith('letter-4');
     expect(runRegeneratedExtraContentMock).toHaveBeenCalledTimes(1);
     expect(runRegeneratedExtraContentMock).toHaveBeenCalledWith('letter-4');
     expect(result).toEqual({
@@ -322,17 +332,9 @@ describe('letter operations service', () => {
   });
 
   it('does not run any extra-content producer when regeneration excludes extras', async () => {
-    findFirstMock.mockResolvedValue({
-      id: 'letter-4',
-      type: 'L',
-      collection: { collectionCode: '009' },
-      dateRaw: '19470810',
-      pages: [{ id: 'page-1' }],
-    });
-
     const result = await regenerateTranscription('letter-4', false);
 
-    expect(runTranscriptionMock).toHaveBeenCalledWith('letter-4', { extraContent: 'skip' });
+    expect(runRequestedTranscriptionMock).toHaveBeenCalledWith('letter-4');
     expect(runRegeneratedExtraContentMock).not.toHaveBeenCalled();
     expect(result).toEqual({
       mainTranscript: true,
@@ -342,13 +344,6 @@ describe('letter operations service', () => {
   });
 
   it('returns a conflict when regeneration loses the extra-content claim', async () => {
-    findFirstMock.mockResolvedValue({
-      id: 'letter-4',
-      type: 'L',
-      collection: { collectionCode: '009' },
-      dateRaw: '19470810',
-      pages: [{ id: 'page-1' }],
-    });
     runRegeneratedExtraContentMock.mockResolvedValue({ kind: 'claim_lost' });
 
     await expect(regenerateTranscription('letter-4', true)).rejects.toMatchObject({
@@ -365,16 +360,77 @@ describe('letter operations service', () => {
       metadataContentStatus: 'EDITED',
     });
 
-    const result = await buildLetterUpdates('letter-verified-transcript', {
+    const result = await updateLetter('letter-verified-transcript', {
       transcriptionText: 'Corrected transcript text',
     });
 
-    expect(result).not.toBeNull();
-    expect(result?.dbUpdates).toEqual({
+    expect(result).toBe(true);
+    expect(updateSetMock).toHaveBeenCalledWith({
       transcriptionText: 'Corrected transcript text',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionRunId: null,
+      transcriptionError: null,
       transcriptStatus: 'EDITED',
       transcriptVerifiedAt: null,
       transcriptVerifiedBy: null,
+      workflow: 'TRANSCRIBED',
+      updatedAt: expect.any(Date),
+    });
+  });
+
+  it('atomically applies a manual transcript edit and revokes the active AI attempt', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-running-transcript',
+      workflow: 'TRANSCRIBING',
+      transcriptStatus: 'AI_DRAFT',
+      transcriptionStatus: 'RUNNING',
+      transcriptionRunId: 'old-run',
+      metadataContentStatus: 'EMPTY',
+    });
+
+    const result = await updateLetter('letter-running-transcript', {
+      transcriptionText: 'Typed by an admin',
+    });
+
+    expect(result).toBe(true);
+    expect(updateSetMock).toHaveBeenCalledWith({
+      transcriptionText: 'Typed by an admin',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionRunId: null,
+      transcriptionError: null,
+      transcriptStatus: 'EDITED',
+      transcriptVerifiedAt: null,
+      transcriptVerifiedBy: null,
+      workflow: 'TRANSCRIBED',
+      updatedAt: expect.any(Date),
+    });
+    expect(dbUpdateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks a cleared manual transcript empty while revoking the active AI attempt', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-cleared-transcript',
+      workflow: 'TRANSCRIBING',
+      transcriptStatus: 'VERIFIED',
+      transcriptionStatus: 'RUNNING',
+      transcriptionRunId: 'old-run',
+      metadataContentStatus: 'EMPTY',
+    });
+
+    const result = await updateLetter('letter-cleared-transcript', {
+      transcriptionText: '   ',
+    });
+
+    expect(result).toBe(true);
+    expect(updateSetMock).toHaveBeenCalledWith({
+      transcriptionText: '   ',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionRunId: null,
+      transcriptionError: null,
+      transcriptStatus: 'EMPTY',
+      transcriptVerifiedAt: null,
+      transcriptVerifiedBy: null,
+      workflow: 'UPLOADED',
       updatedAt: expect.any(Date),
     });
   });
@@ -387,12 +443,12 @@ describe('letter operations service', () => {
       metadataContentStatus: 'VERIFIED',
     });
 
-    const result = await buildLetterUpdates('letter-verified-metadata', {
+    const result = await updateLetter('letter-verified-metadata', {
       sender: 'Alicia Smith',
     });
 
-    expect(result).not.toBeNull();
-    expect(result?.dbUpdates).toEqual({
+    expect(result).toBe(true);
+    expect(updateSetMock).toHaveBeenCalledWith({
       sender: 'Alicia Smith',
       metadataContentStatus: 'EDITED',
       metadataVerifiedAt: null,

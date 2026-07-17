@@ -1,13 +1,10 @@
 import { and, eq } from 'drizzle-orm';
 import { db, letters } from '../../db/index.js';
-import { checkExtraContentForText, describePhoto as generatePhotoDescription, transcribeExtraContent, transcribeImage } from '../../ai/openai.js';
-import { runTranscription } from '../../pipeline/processor.js';
-import { detectAndStoreLinesForPages } from '../line-finder.js';
+import { describePhoto as generatePhotoDescription } from '../../ai/openai.js';
+import { runRequestedTranscription } from '../../pipeline/transcription.js';
 import { getAbsoluteStoragePath } from '../storage.js';
 import {
   contentStatusValues,
-  getDocumentTypeFromCode,
-  isTranscribableType,
   log,
   type DescribePhotoResult,
   type TranscribeLetterOnlyResult,
@@ -18,6 +15,34 @@ import { runRegeneratedExtraContent } from './extra-content.js';
 import { buildHumanExtraContentJobPatch } from './extra-content-job.js';
 
 export { transcribeExtras } from './extra-content.js';
+
+function statusError(message: string, status: number): Error & { status: number } {
+  return Object.assign(new Error(message), { status });
+}
+
+async function runDirectMainTranscription(
+  letterId: string,
+): Promise<TranscribeLetterOnlyResult | null> {
+  const outcome = await runRequestedTranscription(letterId);
+
+  switch (outcome.kind) {
+    case 'completed':
+      return {
+        pageCount: outcome.pageCount,
+        textLength: outcome.textLength,
+      };
+    case 'not_found':
+      return null;
+    case 'not_transcribable':
+      throw statusError(`Cannot transcribe type '${outcome.type}'`, 400);
+    case 'no_pages':
+      throw statusError('Letter has no pages to transcribe', 400);
+    case 'claim_lost':
+      throw statusError('Transcription conflicted with another job update', 409);
+    case 'superseded':
+      throw statusError('Transcription was cancelled or superseded', 409);
+  }
+}
 
 function buildLinkedLetterContext(letter: {
   sender?: string | null;
@@ -73,48 +98,8 @@ export async function regenerateTranscription(
   letterId: string,
   includeExtras: boolean,
 ): Promise<TranscriptionRegenerateResult | null> {
-  const letter = await db.query.letters.findFirst({
-    where: eq(letters.id, letterId),
-    with: {
-      collection: true,
-      pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
-    },
-  });
-
-  if (!letter) return null;
-
-  if (!isTranscribableType(letter.type)) {
-    const err = new Error(`Cannot transcribe type '${letter.type}' (only letter, telegram, cover, ephemera, card, article, diary supported)`) as Error & { status: number };
-    err.status = 400;
-    throw err;
-  }
-
-  if (letter.pages.length === 0) {
-    const err = new Error('Letter has no pages to transcribe') as Error & { status: number };
-    err.status = 400;
-    throw err;
-  }
-
-  log.info({ letterId, type: letter.type, includeExtras }, 'Starting transcription regeneration');
-
-  await db.update(letters).set({
-    workflow: 'UPLOADED',
-    transcriptionStatus: 'PENDING',
-    transcriptionError: null,
-    transcriptionAttemptCount: 0,
-    deadLetter: false,
-    transcriptStatus: 'EMPTY',
-    transcriptVerifiedAt: null,
-    transcriptVerifiedBy: null,
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
-
-  await runTranscription(letterId, { extraContent: 'skip' });
-
-  await db.update(letters).set({
-    transcriptStatus: 'AI_DRAFT',
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
+  const mainTranscription = await runDirectMainTranscription(letterId);
+  if (!mainTranscription) return null;
 
   let extrasTranscribed = 0;
 
@@ -145,123 +130,7 @@ export async function regenerateTranscription(
 export async function transcribeLetterOnly(
   letterId: string,
 ): Promise<TranscribeLetterOnlyResult | null> {
-  const letter = await db.query.letters.findFirst({
-    where: eq(letters.id, letterId),
-    with: {
-      collection: true,
-      pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
-    },
-  });
-
-  if (!letter) return null;
-
-  if (!isTranscribableType(letter.type)) {
-    const err = new Error(`Cannot transcribe type '${letter.type}'`) as Error & { status: number };
-    err.status = 400;
-    throw err;
-  }
-
-  const pages = letter.pages;
-  if (pages.length === 0) {
-    const err = new Error('Letter has no pages to transcribe') as Error & { status: number };
-    err.status = 400;
-    throw err;
-  }
-
-  log.info({ letterId, type: letter.type }, 'Starting letter-only transcription');
-
-  await db.update(letters).set({
-    workflow: 'UPLOADED',
-    transcriptionStatus: 'PENDING',
-    transcriptionError: null,
-    transcriptionAttemptCount: 0,
-    deadLetter: false,
-    transcriptStatus: 'EMPTY',
-    transcriptVerifiedAt: null,
-    transcriptVerifiedBy: null,
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
-
-  const pageTranscriptions: string[] = [];
-
-  if (letter.type === 'L') {
-    // Standard letter transcription
-    for (const page of pages) {
-      const absolutePath = getAbsoluteStoragePath(page.storagePath);
-
-      const result = await transcribeImage({
-        filePath: absolutePath,
-        letterId,
-        context: {
-          collectionCode: letter.collection.collectionCode,
-          dateRaw: letter.dateRaw,
-          pageNumber: page.pageNumber,
-          totalPages: pages.length,
-        },
-      });
-
-      pageTranscriptions.push(result.text);
-    }
-  } else {
-    // Non-letter type: use extra content transcription prompt
-    const docType = getDocumentTypeFromCode(letter.type);
-    for (const page of pages) {
-      const absolutePath = getAbsoluteStoragePath(page.storagePath);
-
-      const checkResult = await checkExtraContentForText({
-        filePath: absolutePath,
-        letterId,
-        documentType: docType,
-      });
-
-      if (!checkResult.hasTranscribableText) continue;
-
-      const result = await transcribeExtraContent({
-        filePath: absolutePath,
-        letterId,
-        documentType: docType,
-        context: {
-          collectionCode: letter.collection.collectionCode,
-          dateRaw: letter.dateRaw,
-        },
-      });
-
-      if (result.text.trim()) {
-        pageTranscriptions.push(result.text.trim());
-      }
-    }
-  }
-
-  let combinedTranscription: string;
-  if (pageTranscriptions.length === 1) {
-    combinedTranscription = pageTranscriptions[0];
-  } else {
-    combinedTranscription = pageTranscriptions
-      .map((text, i) => `--- Page ${i + 1} ---\n\n${text}`)
-      .join('\n\n');
-  }
-
-  await db.update(letters).set({
-    transcriptionText: combinedTranscription,
-    transcriptionStatus: 'SUCCESS',
-    transcriptionError: null,
-    workflow: 'TRANSCRIBED',
-    transcriptStatus: 'AI_DRAFT',
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
-
-  try {
-    await detectAndStoreLinesForPages(pages, getAbsoluteStoragePath);
-  } catch (lineError) {
-    log.warn({ letterId, err: lineError }, 'Failed to store line detection results after letter-only transcription');
-  }
-
-  log.info({ letterId, pageCount: pages.length }, 'Letter-only transcription completed');
-
-  return {
-    pageCount: pages.length,
-    textLength: combinedTranscription.length,
-  };
+  return runDirectMainTranscription(letterId);
 }
 
 export async function updateExtraContent(

@@ -29,6 +29,7 @@ export interface ProcessingState {
   currentJob: { letterId: string; type: 'transcription' | 'metadata' | 'entity_extraction' } | null;
   completed: number;
   failed: number;
+  skipped: number;
   total: number;
   errors: string[];
   lastCompletedAt: number | null;
@@ -41,10 +42,15 @@ let processingState: ProcessingState = {
   currentJob: null,
   completed: 0,
   failed: 0,
+  skipped: 0,
   total: 0,
   errors: [],
   lastCompletedAt: null,
 };
+
+function processedJobCount(): number {
+  return processingState.completed + processingState.failed + processingState.skipped;
+}
 
 // ============================================================================
 // JOB PROGRESS TRACKING
@@ -92,6 +98,7 @@ export function resetProcessingState(total: number): void {
     currentJob: null,
     completed: 0,
     failed: 0,
+    skipped: 0,
     total,
     errors: [],
     lastCompletedAt: null,
@@ -196,7 +203,12 @@ export async function processLettersAsync(letterIds: string[], type: 'transcript
   for (const letterId of letterIds) {
     // Check for abort
     if (processingState.shouldAbort) {
-      log.info({ type, completed: processingState.completed, failed: processingState.failed }, 'Processing aborted');
+      log.info({
+        type,
+        completed: processingState.completed,
+        failed: processingState.failed,
+        skipped: processingState.skipped,
+      }, 'Processing aborted');
       processingState.isRunning = false;
       break;
     }
@@ -213,7 +225,12 @@ export async function processLettersAsync(letterIds: string[], type: 'transcript
     }
 
     if (processingState.shouldAbort) {
-      log.info({ type, completed: processingState.completed, failed: processingState.failed }, 'Processing aborted after pause');
+      log.info({
+        type,
+        completed: processingState.completed,
+        failed: processingState.failed,
+        skipped: processingState.skipped,
+      }, 'Processing aborted after pause');
       processingState.isRunning = false;
       break;
     }
@@ -222,17 +239,42 @@ export async function processLettersAsync(letterIds: string[], type: 'transcript
     const jobStart = Date.now();
 
     try {
+      let skippedReason: string | null = null;
       if (type === 'transcription') {
-        await processLetter(letterId);
+        const outcome = await processLetter(letterId);
+        skippedReason = outcome?.reason ?? null;
       } else if (type === 'metadata') {
         await processMetadata(letterId);
       } else if (type === 'entity_extraction') {
         await runEntityExtractionOnly(letterId);
       }
+
+      if (skippedReason) {
+        processingState.skipped++;
+        processingState.lastCompletedAt = Date.now();
+        const jobDuration = Date.now() - jobStart;
+        log.info(
+          {
+            letterId,
+            type,
+            reason: skippedReason,
+            duration: jobDuration,
+            progress: `${processedJobCount()}/${processingState.total}`,
+          },
+          'Job skipped',
+        );
+        continue;
+      }
+
       processingState.completed++;
       processingState.lastCompletedAt = Date.now();
       const jobDuration = Date.now() - jobStart;
-      log.debug({ letterId, type, duration: jobDuration, progress: `${processingState.completed}/${processingState.total}` }, 'Job completed');
+      log.debug({
+        letterId,
+        type,
+        duration: jobDuration,
+        progress: `${processedJobCount()}/${processingState.total}`,
+      }, 'Job completed');
     } catch (error) {
       processingState.failed++;
       processingState.lastCompletedAt = Date.now();
@@ -267,6 +309,7 @@ export async function processLettersAsync(letterIds: string[], type: 'transcript
       total: processingState.total,
       completed: processingState.completed,
       failed: processingState.failed,
+      skipped: processingState.skipped,
       duration: batchDuration,
     },
     'Async processing batch finished'
@@ -278,11 +321,12 @@ export async function processLettersAsync(letterIds: string[], type: 'transcript
       type: 'batch_complete',
       severity: processingState.failed > 0 ? 'warn' : 'info',
       title: 'Batch complete',
-      message: `${processingState.completed} succeeded, ${processingState.failed} failed (${type})`,
+      message: `${processingState.completed} succeeded, ${processingState.failed} failed, ${processingState.skipped} skipped (${type})`,
       link: '/admin/processing',
       metadata: {
         succeeded: processingState.completed,
         failed: processingState.failed,
+        skipped: processingState.skipped,
         total: processingState.total,
         jobType: type,
         durationMs: batchDuration,
@@ -333,53 +377,119 @@ export function getProcessingStatus(): ProcessingState {
 }
 
 /**
- * Recover orphaned jobs stuck in RUNNING status (e.g., after server restart).
- * Resets them back to PENDING so they can be reprocessed.
+ * Attempts startup recovery for rows observed in RUNNING state. A matching run
+ * ID prevents stale transcription snapshots from resetting a newer attempt,
+ * but without leases this cannot prove that the observed owner is no longer live.
  */
 export async function recoverOrphanedJobs(): Promise<void> {
-  const orphanedLetters = await db.query.letters.findMany({
+  const recoveryCandidates = await db.query.letters.findMany({
     where: or(
       eq(letters.transcriptionStatus, 'RUNNING'),
       eq(letters.metadataStatus, 'RUNNING'),
       eq(letters.entityExtractionStatus, 'RUNNING')
     ),
-    columns: { id: true, dateRaw: true, transcriptionStatus: true, metadataStatus: true, entityExtractionStatus: true, workflow: true },
+    columns: {
+      id: true,
+      dateRaw: true,
+      transcriptionStatus: true,
+      transcriptionRunId: true,
+      metadataStatus: true,
+      entityExtractionStatus: true,
+    },
   });
 
-  if (orphanedLetters.length === 0) return;
+  if (recoveryCandidates.length === 0) return;
 
-  log.warn({ count: orphanedLetters.length }, 'Found orphaned jobs in RUNNING status — resetting to PENDING');
+  log.warn({ count: recoveryCandidates.length }, 'Found jobs in RUNNING status — attempting startup recovery');
 
-  for (const letter of orphanedLetters) {
-    const updates: Record<string, unknown> = { updatedAt: new Date() };
+  const recoveredLetterIds = new Set<string>();
 
+  for (const letter of recoveryCandidates) {
     if (letter.transcriptionStatus === 'RUNNING') {
-      updates.transcriptionStatus = 'PENDING';
-      updates.workflow = 'UPLOADED';
-      log.info({ letterId: letter.id, dateRaw: letter.dateRaw }, 'Resetting orphaned transcription job');
+      if (!letter.transcriptionRunId) {
+        log.warn(
+          { letterId: letter.id, dateRaw: letter.dateRaw },
+          'Skipping invalid RUNNING transcription without a run ID',
+        );
+      } else {
+        const recovered = await db
+          .update(letters)
+          .set({
+            transcriptionStatus: 'PENDING',
+            transcriptionRunId: null,
+            workflow: 'UPLOADED',
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(letters.id, letter.id),
+            eq(letters.transcriptionStatus, 'RUNNING'),
+            eq(letters.transcriptionRunId, letter.transcriptionRunId),
+          ))
+          .returning({ id: letters.id });
+
+        if (recovered.length > 0) {
+          recoveredLetterIds.add(letter.id);
+          log.info({ letterId: letter.id, dateRaw: letter.dateRaw }, 'Reset startup transcription candidate');
+        } else {
+          log.info(
+            { letterId: letter.id, runId: letter.transcriptionRunId },
+            'Skipped transcription recovery because ownership changed',
+          );
+        }
+      }
     }
     if (letter.metadataStatus === 'RUNNING') {
-      updates.metadataStatus = 'PENDING';
-      updates.workflow = 'TRANSCRIBED';
-      log.info({ letterId: letter.id, dateRaw: letter.dateRaw }, 'Resetting orphaned metadata job');
+      const recovered = await db
+        .update(letters)
+        .set({
+          metadataStatus: 'PENDING',
+          workflow: 'TRANSCRIBED',
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(letters.id, letter.id),
+          eq(letters.metadataStatus, 'RUNNING'),
+        ))
+        .returning({ id: letters.id });
+      if (recovered.length > 0) {
+        recoveredLetterIds.add(letter.id);
+        log.info({ letterId: letter.id, dateRaw: letter.dateRaw }, 'Reset startup metadata candidate');
+      }
     }
     if (letter.entityExtractionStatus === 'RUNNING') {
-      updates.entityExtractionStatus = 'PENDING';
-      log.info({ letterId: letter.id, dateRaw: letter.dateRaw }, 'Resetting orphaned entity extraction job');
+      const recovered = await db
+        .update(letters)
+        .set({
+          entityExtractionStatus: 'PENDING',
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(letters.id, letter.id),
+          eq(letters.entityExtractionStatus, 'RUNNING'),
+        ))
+        .returning({ id: letters.id });
+      if (recovered.length > 0) {
+        recoveredLetterIds.add(letter.id);
+        log.info({ letterId: letter.id, dateRaw: letter.dateRaw }, 'Reset startup entity candidate');
+      }
     }
-
-    await db.update(letters).set(updates).where(eq(letters.id, letter.id));
   }
 
-  log.info({ count: orphanedLetters.length }, 'Orphaned job recovery complete');
+  if (recoveredLetterIds.size === 0) {
+    log.info('Startup recovery found no attempts that were still owned');
+    return;
+  }
+
+  const recoveredIds = [...recoveredLetterIds];
+  log.info({ count: recoveredIds.length }, 'Startup job recovery complete');
 
   void notify({
     type: 'job_orphan_recovered',
-    title: `Recovered ${orphanedLetters.length} orphaned job${orphanedLetters.length === 1 ? '' : 's'}`,
-    message: `Reset RUNNING jobs back to PENDING after restart.`,
+    title: `Reset ${recoveredIds.length} startup job${recoveredIds.length === 1 ? '' : 's'}`,
+    message: 'Reset RUNNING attempts that still matched the startup snapshot.',
     metadata: {
-      count: orphanedLetters.length,
-      letterIds: orphanedLetters.map(l => l.id),
+      count: recoveredIds.length,
+      letterIds: recoveredIds,
     },
     dedupeKey: 'job_orphan_recovered',
     dedupeWindowMinutes: 5,
@@ -733,15 +843,19 @@ export function pauseProcessing(): { message: string } {
     throw new ProcessingError('No processing in progress', 400);
   }
   processingState.isPaused = true;
-  log.info({ completed: processingState.completed, total: processingState.total }, 'Processing paused');
+  const processed = processedJobCount();
+  log.info({ processed, total: processingState.total }, 'Processing paused');
   void notify({
     type: 'queue_paused',
     title: 'Processing queue paused',
-    message: `Paused at ${processingState.completed}/${processingState.total}`,
+    message: `Paused at ${processed}/${processingState.total}`,
     link: '/admin/processing',
     sourceType: 'admin',
     metadata: {
       completed: processingState.completed,
+      failed: processingState.failed,
+      skipped: processingState.skipped,
+      processed,
       total: processingState.total,
     },
   });
@@ -756,15 +870,19 @@ export function resumeProcessing(): { message: string } {
     throw new ProcessingError('No processing in progress', 400);
   }
   processingState.isPaused = false;
-  log.info({ completed: processingState.completed, total: processingState.total }, 'Processing resumed');
+  const processed = processedJobCount();
+  log.info({ processed, total: processingState.total }, 'Processing resumed');
   void notify({
     type: 'queue_resumed',
     title: 'Processing queue resumed',
-    message: `Resumed at ${processingState.completed}/${processingState.total}`,
+    message: `Resumed at ${processed}/${processingState.total}`,
     link: '/admin/processing',
     sourceType: 'admin',
     metadata: {
       completed: processingState.completed,
+      failed: processingState.failed,
+      skipped: processingState.skipped,
+      processed,
       total: processingState.total,
     },
   });
@@ -781,7 +899,12 @@ export function abortProcessing(): { message: string } {
 
   processingState.shouldAbort = true;
   log.info(
-    { completed: processingState.completed, failed: processingState.failed, total: processingState.total },
+    {
+      completed: processingState.completed,
+      failed: processingState.failed,
+      skipped: processingState.skipped,
+      total: processingState.total,
+    },
     'Processing abort requested'
   );
 
@@ -824,11 +947,22 @@ export async function removeFromQueue(letterId: string, type: QueueJobType): Pro
     if (letter.transcriptionStatus !== 'PENDING') {
       throw new ProcessingError(`Cannot remove: transcription status is ${letter.transcriptionStatus}`, 400);
     }
-    await db.update(letters).set({
-      transcriptionStatus: 'FAILED',
-      transcriptionError: 'Removed from queue by admin',
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
+    const removed = await db
+      .update(letters)
+      .set({
+        transcriptionStatus: 'FAILED',
+        transcriptionRunId: null,
+        transcriptionError: 'Removed from queue by admin',
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(letters.id, letterId),
+        eq(letters.transcriptionStatus, 'PENDING'),
+      ))
+      .returning({ id: letters.id });
+    if (removed.length === 0) {
+      throw new ProcessingError('Cannot remove: transcription is no longer pending', 409);
+    }
   } else if (type === 'metadata') {
     if (letter.metadataStatus !== 'PENDING') {
       throw new ProcessingError(`Cannot remove: metadata status is ${letter.metadataStatus}`, 400);
@@ -868,12 +1002,20 @@ export async function clearQueue(type: QueueJobType): Promise<{ message: string;
       columns: { id: true },
     });
     if (queued.length > 0) {
-      await db.update(letters).set({
-        transcriptionStatus: 'FAILED',
-        transcriptionError: 'Cleared from queue by admin',
-        updatedAt: new Date(),
-      }).where(inArray(letters.id, queued.map(l => l.id)));
-      cleared = queued.length;
+      const clearedRows = await db
+        .update(letters)
+        .set({
+          transcriptionStatus: 'FAILED',
+          transcriptionRunId: null,
+          transcriptionError: 'Cleared from queue by admin',
+          updatedAt: new Date(),
+        })
+        .where(and(
+          inArray(letters.id, queued.map(l => l.id)),
+          eq(letters.transcriptionStatus, 'PENDING'),
+        ))
+        .returning({ id: letters.id });
+      cleared = clearedRows.length;
     }
   } else if (type === 'metadata') {
     const queued = await db.query.letters.findMany({
@@ -931,14 +1073,25 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
     if (letter.transcriptionStatus !== 'FAILED') {
       throw new ProcessingError(`Cannot retry: transcription status is ${letter.transcriptionStatus}`, 400);
     }
-    await db.update(letters).set({
-      transcriptionStatus: 'PENDING',
-      transcriptionError: null,
-      transcriptionAttemptCount: 0,
-      deadLetter: false,
-      workflow: 'UPLOADED',
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
+    const retried = await db
+      .update(letters)
+      .set({
+        transcriptionStatus: 'PENDING',
+        transcriptionRunId: null,
+        transcriptionError: null,
+        transcriptionAttemptCount: 0,
+        deadLetter: false,
+        workflow: 'UPLOADED',
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(letters.id, letterId),
+        eq(letters.transcriptionStatus, 'FAILED'),
+      ))
+      .returning({ id: letters.id });
+    if (retried.length === 0) {
+      throw new ProcessingError('Cannot retry: transcription is no longer failed', 409);
+    }
   } else if (type === 'metadata') {
     if (letter.metadataStatus !== 'FAILED') {
       throw new ProcessingError(`Cannot retry: metadata status is ${letter.metadataStatus}`, 400);
@@ -968,7 +1121,7 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
 }
 
 /**
- * Cancel an active (RUNNING) job by resetting its status back to PENDING.
+ * Cancel an active (RUNNING) job by marking it FAILED with an admin reason.
  */
 export async function cancelActiveJob(letterId: string, type: QueueJobType): Promise<{ message: string }> {
   const letter = await db.query.letters.findFirst({
@@ -983,12 +1136,27 @@ export async function cancelActiveJob(letterId: string, type: QueueJobType): Pro
     if (letter.transcriptionStatus !== 'RUNNING') {
       throw new ProcessingError(`Cannot cancel: transcription status is ${letter.transcriptionStatus}`, 400);
     }
-    await db.update(letters).set({
-      transcriptionStatus: 'FAILED',
-      transcriptionError: 'Cancelled by admin',
-      workflow: 'UPLOADED',
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
+    if (!letter.transcriptionRunId) {
+      throw new ProcessingError('Cannot cancel: transcription job has no active run ID', 409);
+    }
+    const cancelled = await db
+      .update(letters)
+      .set({
+        transcriptionStatus: 'FAILED',
+        transcriptionRunId: null,
+        transcriptionError: 'Cancelled by admin',
+        workflow: 'UPLOADED',
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(letters.id, letterId),
+        eq(letters.transcriptionStatus, 'RUNNING'),
+        eq(letters.transcriptionRunId, letter.transcriptionRunId),
+      ))
+      .returning({ id: letters.id });
+    if (cancelled.length === 0) {
+      throw new ProcessingError('Cannot cancel: transcription attempt changed since it was loaded', 409);
+    }
   } else if (type === 'metadata') {
     if (letter.metadataStatus !== 'RUNNING') {
       throw new ProcessingError(`Cannot cancel: metadata status is ${letter.metadataStatus}`, 400);

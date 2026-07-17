@@ -190,7 +190,7 @@ export async function invalidateExtraContentJobForSourceChange(
  */
 export async function claimJob(
   letterId: string,
-  field: 'transcriptionStatus' | 'metadataStatus' | 'entityExtractionStatus',
+  field: 'metadataStatus' | 'entityExtractionStatus',
   expectedStatus: JobStatus = 'PENDING',
 ): Promise<boolean> {
   const result = await db
@@ -219,61 +219,6 @@ export async function updateLetterWorkflow(
       updatedAt: new Date(),
     })
     .where(eq(letters.id, letterId));
-}
-
-/**
- * Updates letter transcription status.
- */
-export async function updateTranscriptionStatus(
-  letterId: string,
-  status: JobStatus,
-  text?: string | null,
-  error?: string | null
-): Promise<void> {
-  const updates: Partial<Letter> = {
-    transcriptionStatus: status,
-    updatedAt: new Date(),
-  };
-
-  if (text !== undefined) {
-    updates.transcriptionText = text;
-  }
-
-  if (error !== undefined) {
-    updates.transcriptionError = error;
-  }
-
-  if (status === 'SUCCESS') {
-    updates.transcribedAt = new Date();
-    // Set two-track content status to AI_DRAFT when AI completes
-    updates.transcriptStatus = 'AI_DRAFT';
-  }
-
-  await db.update(letters).set(updates).where(eq(letters.id, letterId));
-}
-
-/**
- * Increments transcription attempt count. If the new count reaches
- * MAX_JOB_ATTEMPTS, marks the letter dead_letter and fires a critical
- * notification so an admin investigates.
- */
-export async function incrementTranscriptionAttempts(letterId: string): Promise<void> {
-  const [updated] = await db
-    .update(letters)
-    .set({
-      transcriptionAttemptCount: sql`${letters.transcriptionAttemptCount} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(eq(letters.id, letterId))
-    .returning({
-      attempts: letters.transcriptionAttemptCount,
-      deadLetter: letters.deadLetter,
-      dateRaw: letters.dateRaw,
-    });
-
-  if (updated && !updated.deadLetter && updated.attempts >= MAX_JOB_ATTEMPTS) {
-    await markDeadLetter(letterId, 'transcription', updated.attempts, updated.dateRaw);
-  }
 }
 
 /**
@@ -323,8 +268,7 @@ export async function updateMetadataStatus(
 }
 
 /**
- * Increments metadata attempt count. Same dead-letter behavior as the
- * transcription counter — see incrementTranscriptionAttempts.
+ * Increments metadata attempt count and dead-letters repeatedly failing jobs.
  */
 export async function incrementMetadataAttempts(letterId: string): Promise<void> {
   const [updated] = await db
@@ -382,6 +326,7 @@ export async function resetLetterForProcessing(letterId: string): Promise<void> 
     .set({
       workflow: 'UPLOADED',
       transcriptionStatus: 'PENDING',
+      transcriptionRunId: null,
       transcriptionError: null,
       transcriptionAttemptCount: 0,
       metadataStatus: 'PENDING',

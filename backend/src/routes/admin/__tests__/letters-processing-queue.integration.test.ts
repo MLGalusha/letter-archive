@@ -108,10 +108,6 @@ vi.mock('../../../services/storage.js', () => ({
   getAbsoluteStoragePath: vi.fn(),
 }));
 
-vi.mock('../../../services/line-finder.js', () => ({
-  detectAndStorePageLines: vi.fn(),
-}));
-
 vi.mock('../../../services/letters.js', () => ({
   getLetterById: getLetterByIdMock,
   resetLetterForProcessing: resetLetterForProcessingMock,
@@ -152,7 +148,7 @@ vi.mock('../../../services/letter-operations.js', () => ({
   bulkClearTranscriptions: vi.fn(),
   bulkUpdateFields: vi.fn(),
   bulkClearMetadata: vi.fn(),
-  buildLetterUpdates: vi.fn(),
+  updateLetter: vi.fn(),
   getVersions: vi.fn(),
   createVersion: vi.fn(),
   restoreVersion: vi.fn(),
@@ -205,6 +201,7 @@ function createQueueStatus() {
       currentJob: null,
       completed: 0,
       failed: 0,
+      skipped: 0,
       total: 0,
       errors: [],
       lastCompletedAt: null,

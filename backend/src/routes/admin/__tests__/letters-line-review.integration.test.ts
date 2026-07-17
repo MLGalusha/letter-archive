@@ -10,10 +10,9 @@ const {
   updateSetMock,
   updateWhereMock,
   getAbsoluteStoragePathMock,
-  detectAndStorePageLinesMock,
   getLetterByIdMock,
   fetchLetterWithRelatedAndTransformMock,
-  buildLetterUpdatesMock,
+  updateLetterMock,
   createVersionMock,
   verifyTranscriptMock,
   unverifyTranscriptMock,
@@ -39,10 +38,9 @@ const {
   updateSetMock: vi.fn(),
   updateWhereMock: vi.fn(),
   getAbsoluteStoragePathMock: vi.fn(),
-  detectAndStorePageLinesMock: vi.fn(),
   getLetterByIdMock: vi.fn(),
   fetchLetterWithRelatedAndTransformMock: vi.fn(),
-  buildLetterUpdatesMock: vi.fn(),
+  updateLetterMock: vi.fn(),
   createVersionMock: vi.fn(),
   verifyTranscriptMock: vi.fn(),
   unverifyTranscriptMock: vi.fn(),
@@ -116,7 +114,7 @@ vi.mock('../../../services/storage.js', () => ({
   getAbsoluteStoragePath: getAbsoluteStoragePathMock,
 }));
 
-vi.mock('../../../services/line-finder.js', () => ({
+vi.mock('../../../services/line-segments.js', () => ({
   savePageLineSegments: vi.fn(),
 }));
 
@@ -160,7 +158,7 @@ vi.mock('../../../services/letter-operations.js', () => ({
   bulkClearTranscriptions: vi.fn(),
   bulkUpdateFields: vi.fn(),
   bulkClearMetadata: vi.fn(),
-  buildLetterUpdates: buildLetterUpdatesMock,
+  updateLetter: updateLetterMock,
   getVersions: vi.fn(),
   createVersion: createVersionMock,
   restoreVersion: vi.fn(),
@@ -257,13 +255,7 @@ describe('admin letters line review route integration', () => {
   });
 
   it('updates transcript text through the letter update route and returns the refreshed DTO', async () => {
-    buildLetterUpdatesMock.mockResolvedValueOnce({
-      dbUpdates: {
-        transcriptionText: 'Edited line one\nEdited line two',
-      },
-      workflowChange: null,
-    });
-    updateWhereMock.mockResolvedValueOnce(undefined);
+    updateLetterMock.mockResolvedValueOnce(true);
     fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(createLetterDto());
 
     const response = await invokeRouter(lettersRouter, {
@@ -277,16 +269,14 @@ describe('admin letters line review route integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(buildLetterUpdatesMock).toHaveBeenCalledWith(
+    expect(updateLetterMock).toHaveBeenCalledWith(
       LETTER_ID,
       {
         transcriptionText: 'Edited line one\nEdited line two',
       },
       'admin',
     );
-    expect(updateSetMock).toHaveBeenCalledWith({
-      transcriptionText: 'Edited line one\nEdited line two',
-    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
     expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(LETTER_ID);
     expect(response.body).toEqual(createLetterDto());
   });
@@ -390,6 +380,28 @@ describe('admin letters line review route integration', () => {
     });
   });
 
+  it('returns canonical transcription metrics with the refreshed letter DTO', async () => {
+    transcribeLetterOnlyMock.mockResolvedValueOnce({ pageCount: 2, textLength: 42 });
+    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(createLetterDto());
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/transcribe-letter`,
+      path: `/letters/${LETTER_ID}/transcribe-letter`,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(transcribeLetterOnlyMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(response.body).toEqual({
+      letter: createLetterDto(),
+      transcribed: {
+        pageCount: 2,
+        textLength: 42,
+      },
+    });
+  });
+
   it('returns a request-correlated 400 when transcribe-letter hits a typed status error', async () => {
     transcribeLetterOnlyMock.mockRejectedValueOnce(
       Object.assign(new Error('Letter has no pages to transcribe'), { status: 400 }),
@@ -405,6 +417,28 @@ describe('admin letters line review route integration', () => {
     expect(response.statusCode).toBe(400);
     expect(response.body).toEqual({
       error: 'Letter has no pages to transcribe',
+      requestId: expect.any(String),
+    });
+    expect(response.headers['x-request-id']).toBe(
+      (response.body as { requestId: string }).requestId,
+    );
+  });
+
+  it('returns a request-correlated 409 when direct transcription loses its claim', async () => {
+    transcribeLetterOnlyMock.mockRejectedValueOnce(
+      Object.assign(new Error('Transcription conflicted with another job update'), { status: 409 }),
+    );
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/transcribe-letter`,
+      path: `/letters/${LETTER_ID}/transcribe-letter`,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toEqual({
+      error: 'Transcription conflicted with another job update',
       requestId: expect.any(String),
     });
     expect(response.headers['x-request-id']).toBe(

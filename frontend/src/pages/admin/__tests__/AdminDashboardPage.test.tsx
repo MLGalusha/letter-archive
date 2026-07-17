@@ -271,6 +271,7 @@ describe("AdminDashboard processing", () => {
       currentJob: null,
       completed: 0,
       failed: 0,
+      skipped: 0,
       total: 0,
       errors: [],
       lastCompletedAt: null,

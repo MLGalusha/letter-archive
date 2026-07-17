@@ -7,9 +7,9 @@ Last updated: July 17, 2026
 - Working branch: `architecture-cleanup`
 - Recovery point: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 002 — complete; commit this checkpoint before new edits
-- Last green checkpoint: Slice 001 at `01879bd9`
-- Next queued slice: 003 — repair the extra-content job-status lifecycle
+- Current checkpoint: 003 — complete
+- Last green checkpoint: Slice 003 at `fc99e2d8`
+- Next queued slice: 004 — require a claim for letter-only transcription
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -57,7 +57,7 @@ Architecture indicators:
 ### B. Processing correctness and ownership
 
 - [x] Characterize every API- and worker-owned execution/recovery path in tests.
-- [ ] Give extra-content jobs a truthful claimed/success/failed lifecycle.
+- [x] Give extra-content jobs a truthful claimed/success/failed lifecycle.
 - [ ] Require letter-only transcription to claim the job before AI execution.
 - [ ] Add persisted owner/lease/heartbeat semantics and expiry-aware reconciliation.
 - [ ] Make recovery worker-owned so API startup cannot reset active work.
@@ -242,3 +242,102 @@ Acceptance evidence:
   contained correctness slices before lease-aware recovery.
 - Independent backend review found no blockers; skeptical review findings about
   overclaiming and incomplete claim tracking were incorporated before checkpointing.
+- Green checkpoint: `32631a9e`.
+
+## Slice 003 — Extra-Content Job Lifecycle
+
+Status: complete in this checkpoint
+
+Problem:
+
+Three paths produce extra-content transcripts, but none originally claimed or completed
+`extraContentJobStatus`. Successful work remained `PENDING`, active/recent reporting
+was false, and the same work remained eligible to run again. The first status-only
+repair exposed four deeper correctness requirements: cancellation must fence late AI
+results, regeneration must not run two extra producers, empty letters must not become
+successful extra jobs, and later T/C/E uploads must invalidate derived content.
+
+Invariant:
+
+Every eligible extra-content execution owns a unique persisted run ID. The producer
+calculates a content patch but cannot publish it; one fenced terminal update atomically
+commits the patch with `SUCCESS`, or records `FAILED`. Cancellation, immediate retry,
+and a committed source change cannot leave an older attempt as terminal `SUCCESS`.
+New or changed T/C/E pages either reset an idle representative L job to `PENDING` or
+mark a running attempt dirty so its stale patch is discarded and requeued. Human edits
+revoke an active AI publisher in the same atomic write; verification also checks the
+content revision the reviewer observed.
+
+Scope:
+
+- Add a specialized extra-content run-ID claim and atomic patch/status publication
+  boundary; keep the generic stage claim helper unchanged.
+- Extract the three extra-content producers from the transcription and regeneration
+  pipelines. Preserve their distinct text-check, trimming, and header-format contracts
+  behind one lifecycle owner.
+- Make automatic work establish related-item eligibility before claiming, claim only
+  `PENDING`, compare the observed letter revision, and reload source pages after claim.
+- Suppress automatic extras inside regeneration. `includeExtras=false` now runs no
+  extra producer; `true` runs the regeneration producer exactly once. Commit history
+  confirms that this is the intended optional contract and the nested execution was a
+  composition defect.
+- Persist run ID and dirty-source state. Persist a changed T/C/E page and invalidate
+  only its matching L-type correspondence identity in one database transaction.
+- Enforce at the database boundary that `RUNNING` has exactly one run ID and dirty
+  state cannot exist outside a running attempt.
+- Make cancellation a conditional `RUNNING` compare-and-swap and clear the extra run
+  fence only when cancellation wins. Queue removal, retry, and bulk clear also recheck
+  the state they intend to mutate.
+- Make manual edits clear verification metadata unconditionally and atomically revoke
+  an active run. Verification itself compares the observed content revision.
+- Represent batch claim loss, supersession, missing work, and eligibility loss as
+  neutral `skipped` outcomes across backend state, SSE contracts, and the processing
+  UI. They do not emit failure notifications.
+- Reconcile the Processing page periodically because worker writes occur outside the
+  API process's in-memory SSE broadcaster.
+- Add focused lifecycle race, source invalidation, producer-format, pipeline-wiring,
+  batch-outcome, route-contract, and UI-progress tests.
+
+Non-goals:
+
+- Do not add blind extra-content startup recovery, lease expiry, or heartbeats. Run IDs
+  fence attempts but do not prove liveness.
+- Do not change the three existing prompt/format variants.
+- Do not migrate the other processing stages to run IDs in this slice.
+- Do not add extra job state to the Letter Review DTO; direct contention remains an
+  explicit request-correlated 409, while the Processing page owns queue visibility.
+- Do not claim filesystem rollback: forced file replacement still happens before the
+  page/invalidation database transaction and remains tracked ingestion debt.
+
+Acceptance:
+
+- Eligible work alone can claim; normal success and failure leave truthful terminal
+  state, while cancellation/retry and a committed source-page transaction cannot
+  leave stale content as terminal `SUCCESS`.
+- All three formatting contracts and the one-producer regeneration contract are
+  executable tests.
+- Dashboard contention is skipped, direct contention is a request-correlated 409, and
+  mixed completed/failed/skipped progress reaches 100%.
+- Migration validation, backend typecheck/full suite, frontend test/build, aggregate
+  verification, and independent review pass before checkpointing.
+
+Evidence:
+
+- Full backend suite: 47 files and 340 tests passed; backend typecheck passed.
+- Full frontend suite: 86 files and 592 tests passed; the production build passed with
+  the pre-existing large-chunk warning.
+- Mocked browser suite: 35/35 passed in both the aggregate verifier and an isolated
+  single-worker CI-mode run.
+- Aggregate `./scripts/verify-all.sh`: backend tests/typecheck, frontend tests/build,
+  and mocked browser tests completed successfully.
+- Migration validation: 5/5 structural checks passed. All 46 migrations also applied
+  successfully to a disposable PostgreSQL 17 cluster, where both new ownership
+  constraints were present.
+- `git diff --check`: passed.
+- Three independent first-pass reviews stopped the checkpoint over source, admin-CAS,
+  and human-edit races. Those findings were fixed; two focused second-pass reviews
+  found no remaining P1 extra-content integrity blocker.
+- Residuals remain explicit: run IDs are not leases, forced filesystem replacement is
+  outside the page/invalidation transaction, and legacy non-extra lifecycle routes
+  still need consolidation.
+- Green implementation checkpoint: `fc99e2d8`.

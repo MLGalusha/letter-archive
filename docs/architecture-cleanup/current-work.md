@@ -7,10 +7,10 @@ Last updated: July 17, 2026
 - Working branch: `architecture-cleanup`
 - Recovery point: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 005 — framed, implementation pending
-- Last green checkpoint: Slice 004 at `7156492d`
-- Current slice: lease and reconcile canonical main-transcription attempts
-- Next queued slice: 006 — lease and reconcile fenced extra-content attempts
+- Current checkpoint: 005 — complete
+- Last green implementation checkpoint: Slice 005 at `985b8172`
+- Current slice: 006 — lease and reconcile fenced extra-content attempts
+- Next queued slice: canonical metadata/entity lifecycle boundaries
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -60,7 +60,8 @@ Architecture indicators:
 - [x] Characterize every API- and worker-owned execution/recovery path in tests.
 - [x] Give extra-content jobs a truthful claimed/success/failed lifecycle.
 - [x] Require letter-only transcription to claim the job before AI execution.
-- [ ] Add persisted owner/lease/heartbeat semantics and expiry-aware reconciliation.
+- [x] Add persisted owner/lease/heartbeat semantics and expiry-aware reconciliation to
+  the canonical main-transcription lifecycle.
 - [ ] Make recovery worker-owned so API startup cannot reset active work.
 - [ ] Establish one eligibility definition per processing stage.
 - [ ] Make the worker the sole executor; APIs enqueue, cancel, retry, and report.
@@ -215,6 +216,15 @@ Acceptance evidence:
   baseline to normalize.
 - The worker is the intended processing executor. The process catalog may remain UI
   metadata, but API-process execution is not the target architecture.
+- Process startup is not evidence that another attempt died. Automatic recovery is
+  permitted only when persisted liveness evidence has expired.
+- A rollout-safe `NOT VALID` database check is preferable to either accepting new
+  cross-stage conflicts or blocking deployment on already-existing conflicts. Legacy
+  violations must be repaired and the constraint validated in a later operational step.
+- Worker availability handoff is correctness state: a failed final unavailable write
+  must fail the Cloud Run attempt so configured retries can reconcile it.
+- Metadata `SUCCESS` and its workflow advance are one publication boundary; exposing a
+  terminal status before the workflow write creates a claim window for the next stage.
 
 ## Checkpoint Log
 
@@ -263,6 +273,25 @@ Acceptance evidence:
 - Final independent audit found two additional ownership defects; the route-level
   duplicate update was deleted and explicit bulk retries now clear dead-letter state.
 - Green implementation checkpoint: `7156492d`.
+
+### Slice 005
+
+- Added a database-clock lease and queued/requested recovery semantics to every new
+  canonical main-transcription claim. An immediate serialized heartbeat renews only
+  the exact live run, and stale producers cannot publish.
+- Replaced blind startup recovery with exact expired-lease reconciliation. API startup
+  retains the safe reconciler during the hybrid-executor phase; the worker also runs it
+  at startup and periodically.
+- Removed unsafe metadata/entity startup resets because those stages cannot yet prove
+  an observed `RUNNING` attempt is abandoned.
+- Closed worker enqueue-versus-exit lost wakeups with a serialized availability
+  publisher, queue rechecks, queued-lease waiting, strict relinquish, and three Cloud
+  Run retries.
+- Added application and database cross-stage exclusion. Conditional route, reset, and
+  bulk operations preserve that invariant; metadata success and its workflow advance
+  now publish atomically, and entity claims require exact metadata success.
+- Final adversarial concurrency and simplicity reviews found no remaining P1/P2 issue.
+- Green implementation checkpoint: `985b8172`.
 
 ## Slice 003 — Extra-Content Job Lifecycle
 
@@ -472,7 +501,7 @@ Evidence:
 
 ## Slice 005 — Durable Main-Transcription Lease
 
-Status: framed; implementation pending
+Status: complete in this checkpoint
 
 Problem:
 
@@ -547,3 +576,44 @@ Acceptance:
 - The migration applies over a database containing a legacy unleased `RUNNING` row.
 - Focused lifecycle/pipeline/recovery tests, migration validation, backend typecheck,
   the full backend suite, and the aggregate repository gate pass before checkpointing.
+
+Evidence:
+
+- Full backend suite: 56 files and 448 tests passed; backend typecheck passed.
+- Full frontend suite: 86 files and 593 tests passed. The production build passed with
+  the pre-existing large-chunk warning.
+- Mocked browser suite: 35/35 passed inside the final aggregate verifier.
+- Aggregate `./scripts/verify-all.sh`: backend tests/typecheck, frontend tests/build,
+  and mocked browser tests completed successfully after all final fixes.
+- PostgreSQL 17 migration proof: all migrations applied; a legacy conflicting
+  main/downstream `RUNNING` row did not block migration, while a new conflicting write
+  and a partial lease tuple were rejected. A valid leased row succeeded; the expiry
+  precision and partial expiry index matched the schema.
+- Focused coverage includes database-clock claim/renewal, one slow AI heartbeat,
+  expiry/cancellation/replacement fencing, queued versus requested recovery, racing
+  reconcilers, startup and periodic reconciliation, exit-when-empty handoff, stale
+  confirmation/regeneration snapshots, conditional bulk clears, and cross-stage claims.
+- `git diff --check`: passed.
+- Independent adversarial reviews repeatedly stopped the slice over legacy
+  cancellation, rolling deployment, worker exit races, unsafe downstream startup
+  resets, stale route snapshots, direct/bulk reset windows, and metadata's terminal
+  publication gap. After those fixes, final concurrency and simplicity passes found no
+  remaining P1/P2 issue.
+- Green implementation checkpoint: `985b8172`.
+
+Residuals carried forward:
+
+- Metadata and entity extraction still lack run IDs and leases; explicit cancellation
+  can still race a late terminal write, and entity/junction persistence is neither
+  transactional nor retry-token-fenced.
+- Extra content has a run-ID fence but no lease or recovery yet; this is Slice 006.
+- Legacy unleased main-transcription attempts require explicit administrative
+  cancellation. A legacy cross-stage conflict must be repaired before the new
+  `NOT VALID` constraint can later be validated.
+- An old binary in a rolling deployment can still reset a new leased main attempt. The
+  run-ID fence blocks stale publication, but duplicate compute remains possible until
+  old instances are gone.
+- Main-page source revisions and the broader invalidation contract for derived
+  transcript/metadata/publication data remain unowned.
+- API batch execution and its in-memory registry/legacy loop remain active, so recovery
+  cannot yet become exclusively worker-owned.

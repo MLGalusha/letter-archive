@@ -13,9 +13,9 @@ existing owner remains frictionless, while behavior tests remain the authority.
 
 | Entry point | Runtime owner | Stages | Execution model | Control and recovery |
 | --- | --- | --- | --- | --- |
-| `worker.ts` polling loop | Worker process | Transcription, metadata, entity extraction | Queries `PENDING` rows and invokes the pipeline directly | Heartbeat is persisted; recovery runs once at worker startup |
+| `worker.ts` polling loop | Worker process | Transcription, metadata, entity extraction | Queries `PENDING` rows and invokes the pipeline directly | Worker availability is persisted; transcription attempts have their own database-clock lease and heartbeat. Expired transcription leases are reconciled at startup and every 60 seconds. Exit-when-empty waits for an in-flight queued lease, rechecks before relinquishing availability, and exits nonzero if that strict handoff fails. |
 | `POST /admin/letters/processing/processes/:key/start` | API process | Transcription, metadata, entity extraction, extra content | `processes/runner.ts` starts a fire-and-forget in-memory batch through `letter-process-helpers.ts` | Pause, abort, progress, and the batch mutex live only in API memory; extra-content attempts additionally use a persisted run-ID fence |
-| Legacy processing endpoints and post-upload auto-start | Worker in configured production, otherwise API process | Transcription, metadata, entity extraction | `processing-queue.ts` triggers a Cloud Run Job when configured and otherwise falls back to `processLettersAsync()` | Legacy pause, abort, and progress live only in API memory; API and worker startup both run recovery |
+| Legacy processing endpoints and post-upload auto-start | Worker in configured production, otherwise API process | Transcription, metadata, entity extraction | `processing-queue.ts` triggers a Cloud Run Job when configured and otherwise falls back to `processLettersAsync()` | Legacy pause, abort, and progress live only in API memory. API startup and the worker safely reconcile expired leased transcription attempts; blind metadata/entity startup resets have been removed. |
 | Bulk transcription and metadata operations | Worker in configured production, otherwise API process | Transcription, metadata | `bulk-operations.ts` repeats the Cloud Run versus `processLettersAsync()` choice | Uses the same legacy in-memory state but bypasses `startQueuedProcessing()` |
 | Letter content actions | API request process | Letter-only transcription, metadata, entity extraction, extra content | The route awaits pipeline or regeneration functions directly | Main transcription and extra content share their respective canonical, persisted run-ID owners with batch/automatic work |
 
@@ -25,23 +25,41 @@ around those functions; it is not a durable job runner.
 
 ## Recovery Coverage
 
-`recoverOrphanedJobs()` currently attempts to reset each `RUNNING` transcription,
-metadata, and entity-extraction row to `PENDING`. Every update must still match
-`RUNNING`; transcription also matches the observed run ID, so its stale startup snapshot
-cannot overwrite a replacement attempt. Metadata and entity recovery remain status-only.
-No stage has a lease or liveness signal, so recovery can reset the same attempt while its
-owner is alive. Recovery runs at both API and worker startup.
+Main transcription is the first stage with a durable liveness contract. A claim stores
+a run ID, a PostgreSQL-clock lease expiry, and a `QUEUED` or `REQUESTED` claim kind.
+The canonical producer renews that lease with one non-overlapping heartbeat and must
+still own the exact live lease to publish success or failure. Recovery changes only a
+provably expired leased attempt: queued work returns to `PENDING`/`UPLOADED`, while
+requested work becomes visibly `FAILED` without discarding its previous content or
+workflow. A rolling-deployment-era `RUNNING` row without a lease remains visible but is
+never guessed dead; an administrator can cancel it explicitly.
+
+Safe transcription reconciliation runs at API startup while API-owned execution still
+exists, and at worker startup plus every 60 seconds. A Cloud Run exit-when-empty worker
+waits for a queued lease it can observe, rechecks the queue before relinquishing worker
+availability, and propagates a failed relinquish so the job exits nonzero. The deployment
+retains three job retries. Two reconcilers can race, but conditional updates return each
+expired attempt only once.
+
+The old startup reset of `RUNNING` metadata and entity rows was deleted. Those stages do
+not yet have a run token or lease, so resetting them merely because another process
+started could duplicate live work. Until their lifecycle owners are repaired, an
+orphaned `RUNNING` row stays visible for deliberate intervention instead of being
+silently made claimable again. Extra content has a run-ID fence but still has no lease.
 
 | Failure | Current result |
 | --- | --- |
-| API restarts while a worker is active | API recovery can reset the worker's live job, making it claimable twice |
-| API crashes during API-owned transcription, metadata, or entity work | A later API or worker startup resets the row |
-| API crashes during extra-content work | No recovery covers `extraContentJobStatus` |
-| Two workers overlap at startup | Either worker can reset work owned by the other |
-| A long-running process stays alive after another process crashes | Recovery is startup-only, so an orphan can remain until a later restart |
+| API restarts while a worker transcribes | Only an expired leased attempt is reconciled; an active heartbeat remains authoritative |
+| API crashes during queued transcription | The expired lease is returned to `PENDING` for a later worker attempt |
+| API crashes during requested transcription | The expired lease becomes `FAILED` in place; it is not silently converted to queued work |
+| API or worker crashes during metadata/entity work | The row remains `RUNNING` and visible; automatic recovery is intentionally deferred until these stages have fenced lifecycle owners |
+| API crashes during extra-content work | The run ID prevents stale publication, but no lease yet recovers the abandoned attempt |
+| Two reconcilers overlap | Exact expired-lease compare-and-swap lets only one report and transition an attempt |
+| Legacy unleased transcription is encountered | It remains visible for explicit cancellation; automatic recovery does not invent liveness evidence |
 
-Removing API recovery before removing API execution is therefore unsafe: it would
-replace the duplicate-execution risk with indefinitely stuck API-owned jobs.
+API startup still calls the safe transcription reconciler because API-owned execution
+has not yet been removed. Recovery can become worker-only after batch execution becomes
+worker-only; that executor migration remains a separate simplification.
 
 ## Extra-Content Ownership Repair
 
@@ -87,10 +105,18 @@ transcription regeneration now enter one canonical producer:
 - ownership loss and stale eligibility propagate as `skipped`, so the worker and both
   batch reporters do not announce a false transcription success.
 
-As with extra content, this run ID prevents stale publication but does not yet provide
-lease expiry or a heartbeat. Startup recovery still resets a candidate when that same
-observed run remains `RUNNING`, so it remains unsafe while valid work may be running
-elsewhere.
+Each new claim now also stores a database-clock expiry and queued/requested claim kind.
+The producer starts an immediate, serialized heartbeat, and exact run ID plus a live
+lease is required for renewal and terminal publication. Recovery can therefore act on
+expired attempts without treating process startup as evidence of death. Cancellation
+and human replacement revoke the entire ownership tuple atomically.
+
+Main transcription is also excluded from downstream work in both application claims
+and a rollout-safe database check. The check is `NOT VALID`: it blocks every newly
+introduced main-versus-downstream `RUNNING` conflict without making deployment fail on
+a legacy conflicting row. Metadata success and its `METADATA_DRAFTED` workflow publish
+atomically, and entity extraction can claim only exact metadata `SUCCESS`. Route and
+bulk reset paths use conditional updates rather than briefly reopening all stages.
 
 ## Safe Simplification Sequence
 
@@ -100,13 +126,13 @@ elsewhere.
 2. **Completed in Slice 004:** replace the duplicate letter-only producer with the
    canonical transcription pipeline, add per-attempt run-ID fencing, and preserve its
    no-extras request contract.
-3. **Slice 005:** add a database-clock lease and heartbeat at the canonical main-
+3. **Completed in Slice 005:** add a database-clock lease and heartbeat at the canonical main-
    transcription owner, persist queued versus requested recovery semantics, and make
    transcription recovery expiry-aware. During rollout, an unleased `RUNNING` row is
    unknown and must not be reset automatically.
-4. Apply the same stage-specific lease only to lifecycles that already have fenced
-   claims and publication. Extra content is ready next; metadata and entity extraction
-   first need canonical terminal owners, and entity persistence must become retry-safe.
+4. **Slice 006:** apply the same stage-specific lease only to the already-fenced extra-
+   content lifecycle. Metadata and entity extraction first need canonical terminal
+   owners, and entity persistence must become retry-safe.
 5. Move batch entry points to enqueue/trigger only, then delete the API registry runner
    and legacy in-process batch loop once no caller executes through them.
 6. With the worker as the sole batch owner, make recovery worker-owned, consolidate

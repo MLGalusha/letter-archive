@@ -9,6 +9,7 @@ const pipelineDefinitions = new Set([
   'pipeline/metadataV2.ts',
   'pipeline/processor.ts',
   'pipeline/transcription.ts',
+  'services/letter/extra-content.ts',
   'services/letter/regeneration.ts',
 ]);
 
@@ -24,6 +25,7 @@ const allowedExecutionOwners = new Set([
 
 const allowedDirectRunningWriters = new Set([
   'routes/admin/letters/content.ts',
+  'services/letter/extra-content-job.ts',
   'services/letters.ts',
 ]);
 

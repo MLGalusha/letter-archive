@@ -1,7 +1,11 @@
 import { eq, and } from 'drizzle-orm';
 import sharp from 'sharp';
-import { db, letterPages, type LetterPage } from '../db/index.js';
+import { db, letterPages, type Database, type LetterPage } from '../db/index.js';
 import { getAbsoluteStoragePath } from './storage.js';
+import {
+  invalidateExtraContentJobForSourceChange,
+  type ExtraContentGroupIdentity,
+} from './letters.js';
 
 export interface CreatePageParams {
   letterId: string;
@@ -11,6 +15,12 @@ export interface CreatePageParams {
   checksumSha256?: string;
   force?: boolean;
 }
+
+export interface PageChangeEffects {
+  extraContentSource?: ExtraContentGroupIdentity;
+}
+
+type PageDatabase = Pick<Database, 'query' | 'insert' | 'update'>;
 
 /** Read width/height from an image file's header (no full decode). */
 async function getImageDimensions(storagePath: string): Promise<{ width: number; height: number } | null> {
@@ -27,8 +37,11 @@ async function getImageDimensions(storagePath: string): Promise<{ width: number;
  * Finds an existing page by letter ID and page number, or creates a new one.
  * If force=true and page exists, updates the checksum and storage path.
  */
-export async function findOrCreatePage(params: CreatePageParams): Promise<LetterPage> {
-  const existing = await db.query.letterPages.findFirst({
+async function persistPage(
+  params: CreatePageParams,
+  database: PageDatabase,
+): Promise<{ page: LetterPage; changed: boolean }> {
+  const existing = await database.query.letterPages.findFirst({
     where: and(
       eq(letterPages.letterId, params.letterId),
       eq(letterPages.pageNumber, params.pageNumber)
@@ -43,7 +56,7 @@ export async function findOrCreatePage(params: CreatePageParams): Promise<Letter
         params.storagePath !== existing.storagePath)
     ) {
       const dims = await getImageDimensions(params.storagePath);
-      const [updated] = await db
+      const [updated] = await database
         .update(letterPages)
         .set({
           checksumSha256: params.checksumSha256,
@@ -53,13 +66,13 @@ export async function findOrCreatePage(params: CreatePageParams): Promise<Letter
         })
         .where(eq(letterPages.id, existing.id))
         .returning();
-      return updated;
+      return { page: updated, changed: true };
     }
-    return existing;
+    return { page: existing, changed: false };
   }
 
   const dims = await getImageDimensions(params.storagePath);
-  const [created] = await db
+  const [created] = await database
     .insert(letterPages)
     .values({
       letterId: params.letterId,
@@ -71,7 +84,30 @@ export async function findOrCreatePage(params: CreatePageParams): Promise<Letter
     })
     .returning();
 
-  return created;
+  return { page: created, changed: true };
+}
+
+/**
+ * Persist a page and any derived-content invalidation in one database transaction.
+ * If invalidation fails, the page mutation rolls back so a retry cannot mistake the
+ * source as already reconciled.
+ */
+export async function findOrCreatePage(
+  params: CreatePageParams,
+  effects: PageChangeEffects = {},
+): Promise<{ page: LetterPage; changed: boolean }> {
+  const { extraContentSource } = effects;
+  if (!extraContentSource) {
+    return persistPage(params, db);
+  }
+
+  return db.transaction(async (tx) => {
+    const result = await persistPage(params, tx);
+    if (result.changed) {
+      await invalidateExtraContentJobForSourceChange(extraContentSource, tx);
+    }
+    return result;
+  });
 }
 
 /**

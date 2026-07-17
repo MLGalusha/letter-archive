@@ -444,6 +444,31 @@ describe('admin letters line review route integration', () => {
     });
   });
 
+  it('returns a request-correlated 409 when extra-content ownership is contested', async () => {
+    transcribeExtrasMock.mockRejectedValueOnce(
+      Object.assign(
+        new Error('Extra content transcription conflicted with another job update'),
+        { status: 409 },
+      ),
+    );
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/transcribe-extras`,
+      path: `/letters/${LETTER_ID}/transcribe-extras`,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toEqual({
+      error: 'Extra content transcription conflicted with another job update',
+      requestId: expect.any(String),
+    });
+    expect(response.headers['x-request-id']).toBe(
+      (response.body as { requestId: string }).requestId,
+    );
+  });
+
   it('injects requestId into manual extra-content validation errors', async () => {
     const response = await invokeRouter(lettersRouter, {
       method: 'PUT',

@@ -1,6 +1,7 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db, letters } from '../../db/index.js';
 import { getLetterById } from '../letters.js';
+import { buildHumanExtraContentJobPatch } from './extra-content-job.js';
 import { generateAndSaveReadingView } from './readingView.js';
 import { log } from './shared.js';
 
@@ -101,12 +102,29 @@ export async function verifyExtraContent(letterId: string, userId: string = 'adm
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
 
-  await db.update(letters).set({
-    extraContentStatus: 'VERIFIED',
-    extraContentVerifiedAt: new Date(),
-    extraContentVerifiedBy: userId,
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
+  const verified = await db
+    .update(letters)
+    .set({
+      extraContentStatus: 'VERIFIED',
+      extraContentVerifiedAt: new Date(),
+      extraContentVerifiedBy: userId,
+      ...buildHumanExtraContentJobPatch(),
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(letters.id, letterId),
+      eq(letters.updatedAt, existingLetter.updatedAt),
+      eq(letters.extraContentStatus, existingLetter.extraContentStatus),
+    ))
+    .returning({ id: letters.id });
+
+  if (verified.length === 0) {
+    const error = new Error(
+      'Extra content changed before it could be verified; review the latest content and try again',
+    ) as Error & { status: number };
+    error.status = 409;
+    throw error;
+  }
 
   log.info({ letterId, previousStatus: existingLetter.extraContentStatus }, 'Extra content verified');
   return { previousStatus: existingLetter.extraContentStatus };
@@ -123,12 +141,29 @@ export async function unverifyExtraContent(letterId: string): Promise<true | nul
     throw err;
   }
 
-  await db.update(letters).set({
-    extraContentStatus: 'EDITED',
-    extraContentVerifiedAt: null,
-    extraContentVerifiedBy: null,
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
+  const unverified = await db
+    .update(letters)
+    .set({
+      extraContentStatus: 'EDITED',
+      extraContentVerifiedAt: null,
+      extraContentVerifiedBy: null,
+      ...buildHumanExtraContentJobPatch(),
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(letters.id, letterId),
+      eq(letters.updatedAt, existingLetter.updatedAt),
+      eq(letters.extraContentStatus, 'VERIFIED'),
+    ))
+    .returning({ id: letters.id });
+
+  if (unverified.length === 0) {
+    const error = new Error(
+      'Extra content changed before verification could be removed; refresh and try again',
+    ) as Error & { status: number };
+    error.status = 409;
+    throw error;
+  }
 
   log.info({ letterId }, 'Extra content verification removed');
   return true;

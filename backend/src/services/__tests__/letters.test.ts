@@ -64,12 +64,17 @@ vi.mock('../../db/index.js', () => {
       visibility: 'letters.visibility',
       transcriptionAttemptCount: 'letters.transcriptionAttemptCount',
       metadataAttemptCount: 'letters.metadataAttemptCount',
+      extraContentJobStatus: 'letters.extraContentJobStatus',
+      extraContentJobError: 'letters.extraContentJobError',
+      extraContentJobRunId: 'letters.extraContentJobRunId',
+      extraContentJobDirty: 'letters.extraContentJobDirty',
     },
   };
 });
 
 import {
   findOrCreateLetter,
+  invalidateExtraContentJobForSourceChange,
   resolveRepresentativeLetterId,
   resetLetterForProcessing,
   updateMetadataStatus,
@@ -149,6 +154,54 @@ describe('letters service', () => {
     const result = await resolveRepresentativeLetterId('cover-row', { publishedOnly: true });
 
     expect(result).toBe('published-letter-row');
+  });
+
+  it('invalidates only the matching L-type extra-content job identity', async () => {
+    await invalidateExtraContentJobForSourceChange({
+      collectionId: 'collection-1',
+      dateRaw: '19470810',
+      typeSequence: 2,
+    });
+
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        { kind: 'eq', field: 'letters.collectionId', value: 'collection-1' },
+        { kind: 'eq', field: 'letters.dateRaw', value: '19470810' },
+        { kind: 'eq', field: 'letters.type', value: 'L' },
+        { kind: 'eq', field: 'letters.typeSequence', value: 2 },
+      ],
+    });
+
+    const updates = updateSetMock.mock.calls[0]?.[0];
+    expect(updates).toMatchObject({
+      extraContentJobStatus: {
+        kind: 'sql',
+        values: ['letters.extraContentJobStatus', 'letters.extraContentJobStatus'],
+      },
+      extraContentJobError: {
+        kind: 'sql',
+        values: ['letters.extraContentJobStatus', 'letters.extraContentJobError'],
+      },
+      extraContentJobRunId: {
+        kind: 'sql',
+        values: ['letters.extraContentJobStatus', 'letters.extraContentJobRunId'],
+      },
+      extraContentJobDirty: {
+        kind: 'sql',
+        values: ['letters.extraContentJobStatus'],
+      },
+      updatedAt: expect.any(Date),
+    });
+
+    const statusSql = updates.extraContentJobStatus.strings.join('?').replace(/\s+/g, ' ');
+    const errorSql = updates.extraContentJobError.strings.join('?').replace(/\s+/g, ' ');
+    const runIdSql = updates.extraContentJobRunId.strings.join('?').replace(/\s+/g, ' ');
+    const dirtySql = updates.extraContentJobDirty.strings.join('?').replace(/\s+/g, ' ');
+    expect(statusSql).toContain("WHEN ? = 'RUNNING' THEN ? ELSE 'PENDING'::job_status");
+    expect(errorSql).toContain("WHEN ? = 'RUNNING' THEN ? ELSE NULL");
+    expect(runIdSql).toContain("WHEN ? = 'RUNNING' THEN ? ELSE NULL");
+    expect(dirtySql).toContain("WHEN ? = 'RUNNING' THEN true ELSE false");
   });
 
   it('marks successful transcription results as AI drafts', async () => {

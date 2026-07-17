@@ -1,6 +1,7 @@
 import { eq, and, sql } from 'drizzle-orm';
 import {
   db,
+  type Database,
   letters,
   type Letter,
   type LetterType,
@@ -27,6 +28,13 @@ export interface CreateLetterParams extends LetterIdentity {
   letterDate: string | null;
   dateConfidence: DateConfidence;
 }
+
+export type ExtraContentGroupIdentity = Pick<
+  LetterIdentity,
+  'collectionId' | 'dateRaw' | 'typeSequence'
+>;
+
+export type LetterUpdateDatabase = Pick<Database, 'update'>;
 
 /**
  * Finds an existing letter by its identity, or creates a new one.
@@ -132,6 +140,47 @@ export async function resolveRepresentativeLetterId(
   });
 
   return representative?.id ?? null;
+}
+
+/**
+ * Invalidates the primary letter's derived extra-content job after one of its
+ * T/C/E source pages changes. A running owner keeps its attempt ID and is marked
+ * dirty so it can reconcile the newer source; idle jobs return to PENDING.
+ */
+export async function invalidateExtraContentJobForSourceChange(
+  identity: ExtraContentGroupIdentity,
+  database: LetterUpdateDatabase = db,
+): Promise<void> {
+  await database
+    .update(letters)
+    .set({
+      extraContentJobStatus: sql<JobStatus>`CASE
+        WHEN ${letters.extraContentJobStatus} = 'RUNNING'
+          THEN ${letters.extraContentJobStatus}
+        ELSE 'PENDING'::job_status
+      END`,
+      extraContentJobError: sql<string | null>`CASE
+        WHEN ${letters.extraContentJobStatus} = 'RUNNING'
+          THEN ${letters.extraContentJobError}
+        ELSE NULL
+      END`,
+      extraContentJobRunId: sql<string | null>`CASE
+        WHEN ${letters.extraContentJobStatus} = 'RUNNING'
+          THEN ${letters.extraContentJobRunId}
+        ELSE NULL
+      END`,
+      extraContentJobDirty: sql<boolean>`CASE
+        WHEN ${letters.extraContentJobStatus} = 'RUNNING' THEN true
+        ELSE false
+      END`,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(letters.collectionId, identity.collectionId),
+      eq(letters.dateRaw, identity.dateRaw),
+      eq(letters.type, 'L'),
+      eq(letters.typeSequence, identity.typeSequence),
+    ));
 }
 
 /**

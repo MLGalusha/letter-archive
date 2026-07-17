@@ -237,6 +237,8 @@ export const letters = pgTable(
     extraContentVerifiedBy: text('extra_content_verified_by'),
     extraContentJobStatus: jobStatusEnum('extra_content_job_status').notNull().default('PENDING'),
     extraContentJobError: text('extra_content_job_error'),
+    extraContentJobRunId: uuid('extra_content_job_run_id'),
+    extraContentJobDirty: boolean('extra_content_job_dirty').notNull().default(false),
 
     // Photo description workflow
     photoDescription: text('photo_description'),
@@ -289,6 +291,14 @@ export const letters = pgTable(
     // Check constraint: attempt counts >= 0
     check('transcription_attempt_count_positive', sql`transcription_attempt_count >= 0`),
     check('metadata_attempt_count_positive', sql`metadata_attempt_count >= 0`),
+    check(
+      'extra_content_job_run_id_matches_running',
+      sql`(${table.extraContentJobStatus} = 'RUNNING') = (${table.extraContentJobRunId} IS NOT NULL)`,
+    ),
+    check(
+      'extra_content_job_dirty_requires_running',
+      sql`NOT ${table.extraContentJobDirty} OR ${table.extraContentJobStatus} = 'RUNNING'`,
+    ),
   ]
 );
 

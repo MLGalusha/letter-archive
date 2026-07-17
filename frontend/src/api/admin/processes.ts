@@ -79,6 +79,7 @@ export interface ActiveBatchState {
   total: number;
   completed: number;
   failed: number;
+  skipped: number;
   isPaused: boolean;
   shouldAbort: boolean;
   startedAt: string;
@@ -110,6 +111,7 @@ export type ProcessingEvent =
       processKey: ProcessKey;
       completed: number;
       failed: number;
+      skipped: number;
       total: number;
       currentLetterId: string | null;
       stepLabel: string | null;
@@ -119,6 +121,7 @@ export type ProcessingEvent =
       processKey: ProcessKey;
       completed: number;
       failed: number;
+      skipped: number;
       durationMs: number;
     }
   | { type: 'batch-paused'; processKey: ProcessKey }

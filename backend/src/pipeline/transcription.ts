@@ -4,8 +4,9 @@ import { getAbsoluteStoragePath } from '../services/storage.js';
 import { createLogger } from '../utils/logger.js';
 import { updateJobProgress, clearJobProgress, shouldAbortProcessing } from '../services/processing-queue.js';
 import { isTranscribableType, getDocumentTypeFromCode } from '../services/letter/shared.js';
+import { runAutomaticExtraContent } from '../services/letter/extra-content.js';
 import { db, letters } from '../db/index.js';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 const log = createLogger({ module: 'transcription-pipeline' });
 
@@ -19,7 +20,10 @@ const PAGE_CONCURRENCY = 3;
  * - For type 'L': uses standard letter transcription prompt, then auto-transcribes related extras
  * - For non-L types: uses specialized extra content prompt, stores in transcriptionText
  */
-export async function runTranscription(letterId: string): Promise<void> {
+export async function runTranscription(
+  letterId: string,
+  options: { extraContent?: 'automatic' | 'skip' } = {},
+): Promise<void> {
   const start = Date.now();
   const letterLog = log.child({ letterId });
 
@@ -224,83 +228,17 @@ export async function runTranscription(letterId: string): Promise<void> {
 
     // === Automatically transcribe extra content (T, C, E types) — only for type 'L' ===
     let extrasTranscribed = 0;
-    if (letter.type === 'L') {
+    if (letter.type === 'L' && options.extraContent !== 'skip') {
       try {
-        const relatedItems = await db.query.letters.findMany({
-          where: and(
-            eq(letters.collectionId, letter.collectionId),
-            eq(letters.dateRaw, letter.dateRaw),
-            eq(letters.typeSequence, letter.typeSequence),
-            inArray(letters.type, ['T', 'C', 'E'])
-          ),
-          with: {
-            pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
-          },
-          orderBy: (l, { asc }) => [asc(l.type)],
-        });
-
-        if (relatedItems.length > 0) {
-          letterLog.debug({ relatedCount: relatedItems.length }, 'Found related extra content items');
-
-          const typeCounters: Record<string, number> = {};
-          const transcriptions: { type: string; index: number; text: string }[] = [];
-
-          // Process in image order: supplementary items first, covers (C) last
-          const orderedItems = [
-            ...relatedItems.filter((i) => i.type !== 'C'),
-            ...relatedItems.filter((i) => i.type === 'C'),
-          ];
-
-          for (const item of orderedItems) {
-            const docType = getDocumentTypeFromCode(item.type);
-            typeCounters[item.type] = (typeCounters[item.type] || 0) + 1;
-            const typeIndex = typeCounters[item.type];
-
-            for (const page of item.pages) {
-              const filePath = getAbsoluteStoragePath(page.storagePath);
-
-              const transcription = await transcribeExtraContent({
-                filePath,
-                letterId,
-                documentType: docType,
-                context: {
-                  collectionCode: letter.collection.collectionCode,
-                  dateRaw: letter.dateRaw,
-                },
-              });
-
-              if (transcription.text.trim()) {
-                transcriptions.push({
-                  type: docType,
-                  index: typeIndex,
-                  text: transcription.text.replace(/^\n+|\n+$/g, ''),
-                });
-                extrasTranscribed++;
-              }
-            }
-          }
-
-          // Combine transcriptions with headers
-          let combinedExtraContent = '';
-          if (transcriptions.length > 0) {
-            combinedExtraContent = transcriptions
-              .map((t) => {
-                const header = `--- ${t.type.charAt(0).toUpperCase() + t.type.slice(1)} ${t.index} ---`;
-                return `${header}\n\n${t.text}`;
-              })
-              .join('\n\n');
-          }
-
-          // Update letter with extra content
-          await db.update(letters).set({
-            extraContentTranscript: combinedExtraContent || null,
-            extraContentStatus: combinedExtraContent ? 'AI_DRAFT' : 'EMPTY',
-            extraContentVerifiedAt: null,
-            extraContentVerifiedBy: null,
-            updatedAt: new Date(),
-          }).where(eq(letters.id, letterId));
-
+        const extraJob = await runAutomaticExtraContent(letterId);
+        if (extraJob.kind === 'completed') {
+          extrasTranscribed = extraJob.value;
           letterLog.info({ extrasTranscribed }, 'Extra content transcription completed');
+        } else if (extraJob.kind === 'claim_lost' || extraJob.kind === 'superseded') {
+          letterLog.info(
+            { outcome: extraJob.kind },
+            'Extra content job not owned; skipping automatic transcription',
+          );
         }
       } catch (extrasError) {
         // Log but don't fail the whole transcription if extras fail

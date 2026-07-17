@@ -1,8 +1,8 @@
-import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import { db, letters } from '../../db/index.js';
 import { processLetter, processMetadata } from '../../pipeline/processor.js';
 import { runEntityExtractionOnly } from '../../pipeline/metadataV2.js';
-import { transcribeExtras } from '../letter/regeneration.js';
+import { tryTranscribeExtras } from '../letter/extra-content.js';
 import { createLogger } from '../../utils/logger.js';
 import { notify } from '../notifications.js';
 import { allOf } from './filter-helpers.js';
@@ -10,6 +10,7 @@ import {
   clearJobProgress,
   recordJobCompleted,
   recordJobFailed,
+  recordJobSkipped,
   recordJobStart,
 } from './runner.js';
 import type { BatchContext, BatchResult, QueuedItem, RecentJob, ActiveJob } from './types.js';
@@ -38,6 +39,9 @@ export type LetterErrorColumn =
 
 export type PipelineKind = 'transcription' | 'metadata' | 'entity_extraction' | 'extra_content';
 
+type SkippedJobReason = 'claim_lost' | 'superseded' | 'ineligible' | 'missing';
+type LetterRunResult = void | { kind: 'skipped'; reason: SkippedJobReason };
+
 export interface LetterProcessSpec {
   processKey: PipelineKind;
   label: string;
@@ -46,7 +50,7 @@ export interface LetterProcessSpec {
   /** Workflow value to reset to when retry/cancel; undefined = don't touch workflow. */
   retryWorkflow?: 'UPLOADED' | 'TRANSCRIBED';
   /** Pipeline function to invoke per letter. */
-  runOne(letterId: string): Promise<void>;
+  runOne(letterId: string): Promise<LetterRunResult>;
   /** Notification type emitted on per-job failure. */
   failedNotificationType: 'transcription_failed' | 'metadata_failed' | 'entity_failed' | 'extra_content_failed';
 }
@@ -85,7 +89,11 @@ export const letterProcessSpecs: Record<PipelineKind, LetterProcessSpec> = {
     statusColumn: 'extraContentJobStatus',
     errorColumn: 'extraContentJobError',
     retryWorkflow: undefined,
-    runOne: async (id) => { await transcribeExtras(id); },
+    runOne: async (id) => {
+      const result = await tryTranscribeExtras(id, { expectedStatus: 'PENDING' });
+      if (result.kind === 'completed') return;
+      return { kind: 'skipped', reason: result.kind };
+    },
     failedNotificationType: 'extra_content_failed',
   },
 };
@@ -218,14 +226,27 @@ export async function removeFromQueue(
   if (status !== 'PENDING') {
     throw new ProcessingError(`Cannot remove: ${spec.processKey} status is ${status}`, 400);
   }
-  await db
+  const updates: Record<string, unknown> = {
+    [spec.statusColumn]: 'FAILED',
+    [spec.errorColumn]: 'Removed from queue by admin',
+    updatedAt: new Date(),
+  };
+  if (spec.processKey === 'extra_content') {
+    updates.extraContentJobRunId = null;
+    updates.extraContentJobDirty = false;
+  }
+
+  const removed = await db
     .update(letters)
-    .set({
-      [spec.statusColumn]: 'FAILED',
-      [spec.errorColumn]: 'Removed from queue by admin',
-      updatedAt: new Date(),
-    } as Record<string, unknown>)
-    .where(eq(letters.id, letterId));
+    .set(updates)
+    .where(and(
+      eq(letters.id, letterId),
+      eq(letters[spec.statusColumn], 'PENDING'),
+    ))
+    .returning({ id: letters.id });
+  if (removed.length === 0) {
+    throw new ProcessingError(`Cannot remove: ${spec.processKey} is no longer pending`, 409);
+  }
 }
 
 export async function clearQueue(
@@ -237,20 +258,28 @@ export async function clearQueue(
     columns: { id: true },
   });
   if (queued.length === 0) return { cleared: 0 };
-  await db
+  const updates: Record<string, unknown> = {
+    [spec.statusColumn]: 'FAILED',
+    [spec.errorColumn]: 'Cleared from queue by admin',
+    updatedAt: new Date(),
+  };
+  if (spec.processKey === 'extra_content') {
+    updates.extraContentJobRunId = null;
+    updates.extraContentJobDirty = false;
+  }
+
+  const cleared = await db
     .update(letters)
-    .set({
-      [spec.statusColumn]: 'FAILED',
-      [spec.errorColumn]: 'Cleared from queue by admin',
-      updatedAt: new Date(),
-    } as Record<string, unknown>)
-    .where(
+    .set(updates)
+    .where(and(
       inArray(
         letters.id,
         queued.map(q => q.id)
-      )
-    );
-  return { cleared: queued.length };
+      ),
+      eq(letters[spec.statusColumn], 'PENDING'),
+    ))
+    .returning({ id: letters.id });
+  return { cleared: cleared.length };
 }
 
 export async function retryJob(
@@ -274,8 +303,22 @@ export async function retryJob(
   } else if (spec.processKey === 'metadata') {
     updates.metadataAttemptCount = 0;
     updates.deadLetter = false;
+  } else if (spec.processKey === 'extra_content') {
+    updates.extraContentJobRunId = null;
+    updates.extraContentJobDirty = false;
   }
-  await db.update(letters).set(updates).where(eq(letters.id, letterId));
+  const retried = await db
+    .update(letters)
+    .set(updates)
+    .where(and(
+      eq(letters.id, letterId),
+      eq(letters[spec.statusColumn], 'FAILED'),
+      eq(letters.updatedAt, letter.updatedAt),
+    ))
+    .returning({ id: letters.id });
+  if (retried.length === 0) {
+    throw new ProcessingError(`Cannot retry: ${spec.processKey} changed since it was loaded`, 409);
+  }
 }
 
 export async function cancelActive(
@@ -287,13 +330,57 @@ export async function cancelActive(
   if (status !== 'RUNNING') {
     throw new ProcessingError(`Cannot cancel: ${spec.processKey} status is ${status}`, 400);
   }
-  const updates: Record<string, unknown> = {
-    [spec.statusColumn]: 'FAILED',
-    [spec.errorColumn]: 'Cancelled by admin',
-    updatedAt: new Date(),
-  };
-  if (spec.retryWorkflow) updates.workflow = spec.retryWorkflow;
-  await db.update(letters).set(updates).where(eq(letters.id, letterId));
+  let cancelled: Array<{ id: string }>;
+
+  if (spec.processKey === 'extra_content') {
+    const observedRunId = letter.extraContentJobRunId;
+    const observedDirty = letter.extraContentJobDirty;
+    const runIdCondition = observedRunId === null
+      ? isNull(letters.extraContentJobRunId)
+      : eq(letters.extraContentJobRunId, observedRunId);
+    const cancelAttempt = async (dirty: boolean) => db
+      .update(letters)
+      .set({
+        extraContentJobStatus: dirty ? 'PENDING' : 'FAILED',
+        extraContentJobError: dirty ? null : 'Cancelled by admin',
+        extraContentJobRunId: null,
+        extraContentJobDirty: false,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(letters.id, letterId),
+        eq(letters.extraContentJobStatus, 'RUNNING'),
+        runIdCondition,
+        eq(letters.extraContentJobDirty, dirty),
+      ))
+      .returning({ id: letters.id });
+
+    cancelled = await cancelAttempt(observedDirty);
+    // Source invalidation may race a clean cancellation. Preserve it by
+    // requeuing only the same observed attempt if it became dirty.
+    if (cancelled.length === 0 && !observedDirty) {
+      cancelled = await cancelAttempt(true);
+    }
+  } else {
+    const updates: Record<string, unknown> = {
+      [spec.statusColumn]: 'FAILED',
+      [spec.errorColumn]: 'Cancelled by admin',
+      updatedAt: new Date(),
+    };
+    if (spec.retryWorkflow) updates.workflow = spec.retryWorkflow;
+    cancelled = await db
+      .update(letters)
+      .set(updates)
+      .where(and(
+        eq(letters.id, letterId),
+        eq(letters[spec.statusColumn], 'RUNNING'),
+      ))
+      .returning({ id: letters.id });
+  }
+
+  if (cancelled.length === 0) {
+    throw new ProcessingError(`Cannot cancel: ${spec.processKey} is no longer running`, 409);
+  }
   clearJobProgress(letterId, spec.processKey);
   log.info({ letterId, processKey: spec.processKey }, 'Active job cancelled by admin');
 }
@@ -309,6 +396,7 @@ export async function runLetterBatch(
 ): Promise<BatchResult> {
   let completed = 0;
   let failed = 0;
+  let skipped = 0;
 
   for (const letterId of letterIds) {
     if (ctx.shouldAbort()) break;
@@ -319,7 +407,16 @@ export async function runLetterBatch(
     const jobStart = Date.now();
 
     try {
-      await spec.runOne(letterId);
+      const result = await spec.runOne(letterId);
+      if (result?.kind === 'skipped') {
+        skipped += 1;
+        recordJobSkipped(letterId, result.reason);
+        log.info(
+          { letterId, processKey: spec.processKey, reason: result.reason },
+          'Job skipped because this runner did not own it',
+        );
+        continue;
+      }
       completed += 1;
       recordJobCompleted(letterId, Date.now() - jobStart);
     } catch (error) {
@@ -343,5 +440,5 @@ export async function runLetterBatch(
     }
   }
 
-  return { completed, failed };
+  return { completed, failed, skipped };
 }

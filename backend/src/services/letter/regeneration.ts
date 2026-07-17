@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db, letters } from '../../db/index.js';
 import { checkExtraContentForText, describePhoto as generatePhotoDescription, transcribeExtraContent, transcribeImage } from '../../ai/openai.js';
 import { runTranscription } from '../../pipeline/processor.js';
@@ -10,11 +10,14 @@ import {
   isTranscribableType,
   log,
   type DescribePhotoResult,
-  type TranscribeExtrasResult,
   type TranscribeLetterOnlyResult,
   type TranscriptionRegenerateResult,
 } from './shared.js';
 import { getLetterById } from '../letters.js';
+import { runRegeneratedExtraContent } from './extra-content.js';
+import { buildHumanExtraContentJobPatch } from './extra-content-job.js';
+
+export { transcribeExtras } from './extra-content.js';
 
 function buildLinkedLetterContext(letter: {
   sender?: string | null;
@@ -106,7 +109,7 @@ export async function regenerateTranscription(
     updatedAt: new Date(),
   }).where(eq(letters.id, letterId));
 
-  await runTranscription(letterId);
+  await runTranscription(letterId, { extraContent: 'skip' });
 
   await db.update(letters).set({
     transcriptStatus: 'AI_DRAFT',
@@ -116,83 +119,17 @@ export async function regenerateTranscription(
   let extrasTranscribed = 0;
 
   if (includeExtras) {
-    const relatedItems = await db.query.letters.findMany({
-      where: and(
-        eq(letters.collectionId, letter.collectionId),
-        eq(letters.dateRaw, letter.dateRaw),
-        eq(letters.typeSequence, letter.typeSequence),
-        inArray(letters.type, ['T', 'C', 'E'])
-      ),
-      with: {
-        pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
-      },
-      orderBy: (l, { asc }) => [asc(l.type)],
-    });
-
-    if (relatedItems.length > 0) {
-      const typeCounters: Record<string, number> = {};
-      const transcriptions: { type: string; index: number; text: string }[] = [];
-
-      // Process in image order: supplementary items first, covers (C) last
-      const orderedItems = [
-        ...relatedItems.filter((i) => i.type !== 'C'),
-        ...relatedItems.filter((i) => i.type === 'C'),
-      ];
-
-      for (const item of orderedItems) {
-        const docType = getDocumentTypeFromCode(item.type);
-        typeCounters[item.type] = (typeCounters[item.type] || 0) + 1;
-        const typeIndex = typeCounters[item.type];
-
-        for (const page of item.pages) {
-          const filePath = getAbsoluteStoragePath(page.storagePath);
-
-          const checkResult = await checkExtraContentForText({
-            filePath,
-            letterId,
-            documentType: docType,
-          });
-
-          if (!checkResult.hasTranscribableText) continue;
-
-          const transcription = await transcribeExtraContent({
-            filePath,
-            letterId,
-            documentType: docType,
-            context: {
-              collectionCode: letter.collection.collectionCode,
-              dateRaw: letter.dateRaw,
-            },
-          });
-
-          if (transcription.text.trim()) {
-            transcriptions.push({
-              type: docType,
-              index: typeIndex,
-              text: transcription.text.trim(),
-            });
-            extrasTranscribed++;
-          }
-        }
-      }
-
-      let combinedExtraContent = '';
-      if (transcriptions.length > 0) {
-        combinedExtraContent = transcriptions
-          .map((t) => {
-            const header = `--- ${t.type.charAt(0).toUpperCase() + t.type.slice(1)} ${t.index} ---`;
-            return `${header}\n\n${t.text}`;
-          })
-          .join('\n\n');
-      }
-
-      await db.update(letters).set({
-        extraContentTranscript: combinedExtraContent || null,
-        extraContentStatus: combinedExtraContent ? 'AI_DRAFT' : 'EMPTY',
-        extraContentVerifiedAt: null,
-        extraContentVerifiedBy: null,
-        updatedAt: new Date(),
-      }).where(eq(letters.id, letterId));
+    const extraJob = await runRegeneratedExtraContent(letterId);
+    if (extraJob.kind === 'completed' || extraJob.kind === 'ineligible') {
+      extrasTranscribed = extraJob.value;
+    } else {
+      const error = new Error(
+        extraJob.kind === 'claim_lost'
+          ? 'Extra content transcription conflicted with another job update'
+          : 'Extra content transcription was cancelled or superseded',
+      ) as Error & { status: number };
+      error.status = 409;
+      throw error;
     }
   }
 
@@ -327,145 +264,6 @@ export async function transcribeLetterOnly(
   };
 }
 
-export async function transcribeExtras(letterId: string): Promise<TranscribeExtrasResult | null> {
-  const letter = await db.query.letters.findFirst({
-    where: eq(letters.id, letterId),
-    with: {
-      collection: true,
-      pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
-    },
-  });
-
-  if (!letter) return null;
-
-  const relatedItems = await db.query.letters.findMany({
-    where: and(
-      eq(letters.collectionId, letter.collectionId),
-      eq(letters.dateRaw, letter.dateRaw),
-      eq(letters.typeSequence, letter.typeSequence),
-      inArray(letters.type, ['T', 'C', 'E'])
-    ),
-    with: {
-      pages: { orderBy: (p, { asc }) => [asc(p.pageNumber)] },
-    },
-    orderBy: (l, { asc }) => [asc(l.type)],
-  });
-
-  if (relatedItems.length === 0) {
-    await db.update(letters).set({
-      extraContentStatus: 'EMPTY',
-      extraContentTranscript: null,
-      extraContentVerifiedAt: null,
-      extraContentVerifiedBy: null,
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
-
-    return {
-      transcribedCount: 0,
-      extraContentStatus: 'EMPTY',
-      message: 'No extra content found to transcribe',
-    };
-  }
-
-  log.info(
-    { letterId, relatedCount: relatedItems.length, types: relatedItems.map(r => r.type) },
-    'Starting extra content transcription',
-  );
-
-  const typeCounters: Record<string, number> = {};
-  const transcriptions: { type: string; index: number; text: string }[] = [];
-
-  // Process in image order: supplementary items first, covers (C) last
-  const orderedItems = [
-    ...relatedItems.filter((i) => i.type !== 'C'),
-    ...relatedItems.filter((i) => i.type === 'C'),
-  ];
-
-  for (const item of orderedItems) {
-    const docType = getDocumentTypeFromCode(item.type);
-
-    typeCounters[item.type] = (typeCounters[item.type] || 0) + 1;
-    const typeIndex = typeCounters[item.type];
-
-    for (const page of item.pages) {
-      const filePath = getAbsoluteStoragePath(page.storagePath);
-
-      const checkResult = await checkExtraContentForText({
-        filePath,
-        letterId,
-        documentType: docType,
-      });
-
-      if (!checkResult.hasTranscribableText) {
-        log.debug(
-          { pageId: page.id, type: item.type, reason: checkResult.reason },
-          'Skipping page - no transcribable text',
-        );
-        continue;
-      }
-
-      const transcription = await transcribeExtraContent({
-        filePath,
-        letterId,
-        documentType: docType,
-        context: {
-          collectionCode: letter.collection.collectionCode,
-          dateRaw: letter.dateRaw,
-        },
-      });
-
-      if (transcription.text && transcription.text.trim()) {
-        transcriptions.push({
-          type: item.type,
-          index: typeIndex,
-          text: transcription.text.trim(),
-        });
-      }
-    }
-  }
-
-  let combinedTranscript = '';
-  if (transcriptions.length > 0) {
-    const typeTotals: Record<string, number> = {};
-    for (const item of relatedItems) {
-      typeTotals[item.type] = (typeTotals[item.type] || 0) + 1;
-    }
-
-    const parts: string[] = [];
-    for (const t of transcriptions) {
-      const docTypeName = getDocumentTypeFromCode(t.type);
-      const displayName = docTypeName.charAt(0).toUpperCase() + docTypeName.slice(1);
-
-      const label = typeTotals[t.type] > 1
-        ? `--- ${displayName} ${t.index} ---`
-        : `--- ${displayName} ---`;
-
-      parts.push(`${label}\n\n${t.text}`);
-    }
-
-    combinedTranscript = parts.join('\n\n');
-  }
-
-  const newStatus = combinedTranscript ? 'AI_DRAFT' : 'EMPTY';
-  await db.update(letters).set({
-    extraContentTranscript: combinedTranscript || null,
-    extraContentStatus: newStatus,
-    extraContentVerifiedAt: null,
-    extraContentVerifiedBy: null,
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
-
-  log.info(
-    { letterId, transcribedCount: transcriptions.length, status: newStatus },
-    'Extra content transcription completed',
-  );
-
-  return {
-    transcribedCount: transcriptions.length,
-    extraContentStatus: newStatus,
-  };
-}
-
 export async function updateExtraContent(
   letterId: string,
   extraContentTranscript: string | null,
@@ -477,29 +275,17 @@ export async function updateExtraContent(
   const updates: {
     extraContentTranscript: string | null;
     extraContentStatus: typeof contentStatusValues[number];
-    extraContentVerifiedAt?: null;
-    extraContentVerifiedBy?: null;
+    extraContentVerifiedAt: null;
+    extraContentVerifiedBy: null;
     updatedAt: Date;
-  } = {
+  } & ReturnType<typeof buildHumanExtraContentJobPatch> = {
     extraContentTranscript: hasContent ? extraContentTranscript : null,
-    extraContentStatus: existingLetter.extraContentStatus,
+    extraContentStatus: hasContent ? 'EDITED' : 'EMPTY',
+    extraContentVerifiedAt: null,
+    extraContentVerifiedBy: null,
+    ...buildHumanExtraContentJobPatch(),
     updatedAt: new Date(),
   };
-
-  if (!hasContent) {
-    updates.extraContentStatus = 'EMPTY';
-    updates.extraContentVerifiedAt = null;
-    updates.extraContentVerifiedBy = null;
-  } else if (existingLetter.extraContentStatus === 'VERIFIED') {
-    updates.extraContentStatus = 'EDITED';
-    updates.extraContentVerifiedAt = null;
-    updates.extraContentVerifiedBy = null;
-  } else if (
-    existingLetter.extraContentStatus === 'AI_DRAFT' ||
-    existingLetter.extraContentStatus === 'EMPTY'
-  ) {
-    updates.extraContentStatus = 'EDITED';
-  }
 
   await db.update(letters).set(updates).where(eq(letters.id, letterId));
 

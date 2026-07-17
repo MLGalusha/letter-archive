@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateRaw } from '../ProcessingQueuePage';
+import { formatDateRaw, getBatchProgress } from '../ProcessingQueuePage';
 
 describe('ProcessingQueuePage / formatDateRaw', () => {
   it('formats a full YYYYMMDD date with the full month name', () => {
@@ -27,5 +27,16 @@ describe('ProcessingQueuePage / formatDateRaw', () => {
 
   it('returns the raw string when shorter than a year', () => {
     expect(formatDateRaw('47')).toBe('47');
+  });
+});
+
+describe('ProcessingQueuePage / getBatchProgress', () => {
+  it('counts completed, failed, and skipped work toward truthful progress', () => {
+    expect(getBatchProgress({
+      total: 4,
+      completed: 2,
+      failed: 1,
+      skipped: 1,
+    })).toEqual({ processed: 4, percent: 100 });
   });
 });

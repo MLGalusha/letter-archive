@@ -144,6 +144,7 @@ export function startBatch<Filters extends object>(
     total: options.letterIds.length,
     completed: 0,
     failed: 0,
+    skipped: 0,
     isPaused: false,
     shouldAbort: false,
     startedAt,
@@ -185,6 +186,7 @@ async function runBatchLoop<Filters extends object>(
         processKey: config.key,
         completed: activeBatch?.completed ?? 0,
         failed: activeBatch?.failed ?? 0,
+        skipped: activeBatch?.skipped ?? 0,
         total: activeBatch?.total ?? 0,
         currentLetterId: current.letterId,
         stepLabel,
@@ -206,7 +208,12 @@ async function runBatchLoop<Filters extends object>(
     if (activeBatch?.shouldAbort) {
       emitEvent({ type: 'batch-aborted', processKey: config.key });
       log.info(
-        { processKey: config.key, completed: result.completed, failed: result.failed },
+        {
+          processKey: config.key,
+          completed: result.completed,
+          failed: result.failed,
+          skipped: result.skipped,
+        },
         'Batch aborted'
       );
     } else {
@@ -215,10 +222,17 @@ async function runBatchLoop<Filters extends object>(
         processKey: config.key,
         completed: result.completed,
         failed: result.failed,
+        skipped: result.skipped,
         durationMs,
       });
       log.info(
-        { processKey: config.key, completed: result.completed, failed: result.failed, durationMs },
+        {
+          processKey: config.key,
+          completed: result.completed,
+          failed: result.failed,
+          skipped: result.skipped,
+          durationMs,
+        },
         'Batch completed'
       );
     }
@@ -229,11 +243,12 @@ async function runBatchLoop<Filters extends object>(
         type: 'batch_complete',
         severity: result.failed > 0 ? 'warn' : 'info',
         title: 'Batch complete',
-        message: `${result.completed} succeeded, ${result.failed} failed (${config.label})`,
+        message: `${result.completed} succeeded, ${result.failed} failed, ${result.skipped} skipped (${config.label})`,
         link: '/admin/processing',
         metadata: {
           succeeded: result.completed,
           failed: result.failed,
+          skipped: result.skipped,
           total: letterIds.length,
           processKey: config.key,
           durationMs,
@@ -315,6 +330,7 @@ export function recordJobCompleted(letterId: string, durationMs: number): void {
     processKey: activeBatch.processKey,
     completed: activeBatch.completed,
     failed: activeBatch.failed,
+    skipped: activeBatch.skipped,
     total: activeBatch.total,
     currentLetterId: null,
     stepLabel: null,
@@ -338,6 +354,25 @@ export function recordJobFailed(letterId: string, error: string): void {
     processKey: activeBatch.processKey,
     completed: activeBatch.completed,
     failed: activeBatch.failed,
+    skipped: activeBatch.skipped,
+    total: activeBatch.total,
+    currentLetterId: null,
+    stepLabel: null,
+  });
+}
+
+export function recordJobSkipped(letterId: string, reason: string): void {
+  if (!activeBatch) return;
+  activeBatch.skipped += 1;
+  activeBatch.lastProgressAt = new Date().toISOString();
+  activeBatch.currentJob = null;
+  log.info({ letterId, processKey: activeBatch.processKey, reason }, 'Job skipped');
+  emitEvent({
+    type: 'batch-progress',
+    processKey: activeBatch.processKey,
+    completed: activeBatch.completed,
+    failed: activeBatch.failed,
+    skipped: activeBatch.skipped,
     total: activeBatch.total,
     currentLetterId: null,
     stepLabel: null,

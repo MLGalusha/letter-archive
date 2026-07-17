@@ -10,6 +10,8 @@ const {
   updateSetMock,
   updateWhereMock,
   updateReturningMock,
+  dbTransactionMock,
+  invalidateExtraContentJobForSourceChangeMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   findManyMock: vi.fn(),
@@ -20,6 +22,8 @@ const {
   updateSetMock: vi.fn(),
   updateWhereMock: vi.fn(),
   updateReturningMock: vi.fn(),
+  dbTransactionMock: vi.fn(),
+  invalidateExtraContentJobForSourceChangeMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -43,17 +47,24 @@ vi.mock('../../db/index.js', () => {
   updateWhereMock.mockImplementation(() => ({
     returning: updateReturningMock,
   }));
+  const executor = {
+    query: {
+      letterPages: {
+        findFirst: findFirstMock,
+        findMany: findManyMock,
+      },
+    },
+    insert: dbInsertMock,
+    update: dbUpdateMock,
+  };
+  dbTransactionMock.mockImplementation(async (callback: (tx: typeof executor) => unknown) => (
+    callback(executor)
+  ));
 
   return {
     db: {
-      query: {
-        letterPages: {
-          findFirst: findFirstMock,
-          findMany: findManyMock,
-        },
-      },
-      insert: dbInsertMock,
-      update: dbUpdateMock,
+      ...executor,
+      transaction: dbTransactionMock,
     },
     letterPages: {
       id: 'letterPages.id',
@@ -63,6 +74,10 @@ vi.mock('../../db/index.js', () => {
     },
   };
 });
+
+vi.mock('../letters.js', () => ({
+  invalidateExtraContentJobForSourceChange: invalidateExtraContentJobForSourceChangeMock,
+}));
 
 import {
   findOrCreatePage,
@@ -108,12 +123,15 @@ describe('letter pages service', () => {
     });
 
     expect(result).toEqual({
-      id: 'page-created',
-      letterId: 'letter-1',
-      pageNumber: 1,
-      storagePath: 'storage/new.jpg',
-      originalFilename: '009-19470810-L01-01.jpg',
-      checksumSha256: 'checksum-a',
+      page: {
+        id: 'page-created',
+        letterId: 'letter-1',
+        pageNumber: 1,
+        storagePath: 'storage/new.jpg',
+        originalFilename: '009-19470810-L01-01.jpg',
+        checksumSha256: 'checksum-a',
+      },
+      changed: true,
     });
     expect(insertValuesMock).toHaveBeenCalledWith({
       letterId: 'letter-1',
@@ -148,13 +166,98 @@ describe('letter pages service', () => {
       updatedAt: expect.any(Date),
     });
     expect(result).toEqual({
+      page: {
+        id: 'page-existing',
+        letterId: 'letter-1',
+        pageNumber: 1,
+        storagePath: 'storage/updated.jpg',
+        originalFilename: '009-19470810-L01-01.jpg',
+        checksumSha256: 'checksum-a',
+      },
+      changed: true,
+    });
+  });
+
+  it('reports an existing page as unchanged when force mode has no meaningful update', async () => {
+    const existing = {
       id: 'page-existing',
       letterId: 'letter-1',
       pageNumber: 1,
-      storagePath: 'storage/updated.jpg',
+      storagePath: 'storage/existing.jpg',
       originalFilename: '009-19470810-L01-01.jpg',
       checksumSha256: 'checksum-a',
+    };
+    findFirstMock.mockResolvedValue(existing);
+
+    const result = await findOrCreatePage({
+      letterId: 'letter-1',
+      pageNumber: 1,
+      storagePath: 'storage/existing.jpg',
+      originalFilename: '009-19470810-L01-01.jpg',
+      checksumSha256: 'checksum-a',
+      force: true,
     });
+
+    expect(result).toEqual({ page: existing, changed: false });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('persists a changed extra-content page and invalidation in one transaction', async () => {
+    const identity = {
+      collectionId: 'collection-1',
+      dateRaw: '19470810',
+      typeSequence: 1,
+    };
+
+    await findOrCreatePage(
+      {
+        letterId: 'telegram-1',
+        pageNumber: 1,
+        storagePath: 'storage/new.jpg',
+        originalFilename: '009-19470810-T01-01.jpg',
+        checksumSha256: 'checksum-a',
+      },
+      { extraContentSource: identity },
+    );
+
+    expect(dbTransactionMock).toHaveBeenCalledOnce();
+    expect(invalidateExtraContentJobForSourceChangeMock).toHaveBeenCalledWith(
+      identity,
+      expect.objectContaining({ update: dbUpdateMock }),
+    );
+  });
+
+  it('does not invalidate when the transactional page write is unchanged', async () => {
+    const existing = {
+      id: 'page-existing',
+      letterId: 'telegram-1',
+      pageNumber: 1,
+      storagePath: 'storage/existing.jpg',
+      originalFilename: '009-19470810-T01-01.jpg',
+      checksumSha256: 'checksum-a',
+    };
+    findFirstMock.mockResolvedValue(existing);
+
+    await findOrCreatePage(
+      {
+        letterId: 'telegram-1',
+        pageNumber: 1,
+        storagePath: 'storage/existing.jpg',
+        originalFilename: existing.originalFilename,
+        checksumSha256: existing.checksumSha256,
+        force: true,
+      },
+      {
+        extraContentSource: {
+          collectionId: 'collection-1',
+          dateRaw: '19470810',
+          typeSequence: 1,
+        },
+      },
+    );
+
+    expect(dbTransactionMock).toHaveBeenCalledOnce();
+    expect(invalidateExtraContentJobForSourceChangeMock).not.toHaveBeenCalled();
   });
 
   it('returns existing ordered pages for a letter', async () => {

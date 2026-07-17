@@ -352,8 +352,7 @@ interface ActiveBatchPanelProps {
 }
 
 function ActiveBatchPanel({ batch, onPause, onResume, onAbort }: ActiveBatchPanelProps) {
-  const total = batch.total || 1;
-  const pct = Math.round(((batch.completed + batch.failed) / total) * 100);
+  const { processed, percent } = getBatchProgress(batch);
   return (
     <section className="proc-active-batch">
       <div className="proc-active-head">
@@ -373,18 +372,27 @@ function ActiveBatchPanel({ batch, onPause, onResume, onAbort }: ActiveBatchPane
         </div>
       </div>
       <div className="proc-progress-outer">
-        <div className="proc-progress-inner" style={{ width: `${pct}%` }} />
+        <div className="proc-progress-inner" style={{ width: `${percent}%` }} />
       </div>
       <div className="proc-active-stats">
         <span>
-          {batch.completed + batch.failed} / {batch.total}
+          {processed} / {batch.total}
           {batch.failed > 0 && <> · {batch.failed} failed</>}
+          {batch.skipped > 0 && <> · {batch.skipped} skipped</>}
         </span>
         <span>Elapsed {formatDuration(batch.startedAt)}</span>
         {batch.currentJob && <span>Current: {batch.currentJob.letterId.slice(0, 8)}</span>}
       </div>
     </section>
   );
+}
+
+export function getBatchProgress(
+  batch: Pick<ActiveBatchState, 'total' | 'completed' | 'failed' | 'skipped'>,
+) {
+  const processed = batch.completed + batch.failed + batch.skipped;
+  const percent = Math.round((processed / (batch.total || 1)) * 100);
+  return { processed, percent };
 }
 
 // ============================================================================

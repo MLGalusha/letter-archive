@@ -104,6 +104,7 @@ export interface ActiveBatchState {
   total: number;
   completed: number;
   failed: number;
+  skipped: number;
   isPaused: boolean;
   shouldAbort: boolean;
   startedAt: string;
@@ -134,6 +135,7 @@ export interface BatchContext {
 export interface BatchResult {
   completed: number;
   failed: number;
+  skipped: number;
 }
 
 // ============================================================================
@@ -191,11 +193,19 @@ export type ProcessingEvent =
       processKey: ProcessKey;
       completed: number;
       failed: number;
+      skipped: number;
       total: number;
       currentLetterId: string | null;
       stepLabel: string | null;
     }
-  | { type: 'batch-completed'; processKey: ProcessKey; completed: number; failed: number; durationMs: number }
+  | {
+      type: 'batch-completed';
+      processKey: ProcessKey;
+      completed: number;
+      failed: number;
+      skipped: number;
+      durationMs: number;
+    }
   | { type: 'batch-paused'; processKey: ProcessKey }
   | { type: 'batch-resumed'; processKey: ProcessKey }
   | { type: 'batch-aborted'; processKey: ProcessKey }

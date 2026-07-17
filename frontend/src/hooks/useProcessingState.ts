@@ -66,6 +66,7 @@ export function useProcessingState(): UseProcessingStateResult {
                 ...prev.activeBatch,
                 completed: event.completed,
                 failed: event.failed,
+                skipped: event.skipped,
                 total: event.total,
                 currentJob: event.currentLetterId ? { letterId: event.currentLetterId } : null,
               },
@@ -112,12 +113,14 @@ export function useProcessingState(): UseProcessingStateResult {
     onFallback: () => setConnectionState('fallback-polling'),
   });
 
-  // Fallback polling when SSE has given up
+  // SSE broadcasters are process-local, while workers update persisted state in a
+  // separate process. Reconcile periodically even when SSE is healthy; poll faster
+  // only when the stream has fallen back.
   useEffect(() => {
-    if (connectionState !== 'fallback-polling') return;
+    const intervalMs = connectionState === 'fallback-polling' ? 5_000 : 15_000;
     const id = window.setInterval(() => {
       void refresh();
-    }, 5000);
+    }, intervalMs);
     return () => window.clearInterval(id);
   }, [connectionState, refresh]);
 

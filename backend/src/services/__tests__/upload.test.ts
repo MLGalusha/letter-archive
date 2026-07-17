@@ -46,7 +46,8 @@ describe('upload service', () => {
       id: 'letter-1',
     });
     findOrCreatePageMock.mockResolvedValue({
-      id: 'page-1',
+      page: { id: 'page-1' },
+      changed: true,
     });
     storeFileMock.mockResolvedValue({
       storagePath: 'storage/collections/003/19320706/L01/003-19320706-L01-01.jpg',
@@ -81,14 +82,17 @@ describe('upload service', () => {
       expect.stringContaining('storage/collections/003/19320706/L01/003-19320706-L01-01.jpg'),
       false,
     );
-    expect(findOrCreatePageMock).toHaveBeenCalledWith({
-      letterId: 'letter-1',
-      pageNumber: 1,
-      storagePath: 'storage/collections/003/19320706/L01/003-19320706-L01-01.jpg',
-      originalFilename: '003-19320706-L01-01.jpg',
-      checksumSha256: 'abc123',
-      force: false,
-    });
+    expect(findOrCreatePageMock).toHaveBeenCalledWith(
+      {
+        letterId: 'letter-1',
+        pageNumber: 1,
+        storagePath: 'storage/collections/003/19320706/L01/003-19320706-L01-01.jpg',
+        originalFilename: '003-19320706-L01-01.jpg',
+        checksumSha256: 'abc123',
+        force: false,
+      },
+      { extraContentSource: undefined },
+    );
     expect(result).toMatchObject({
       collection: { id: 'collection-1' },
       letter: { id: 'letter-1' },
@@ -96,6 +100,24 @@ describe('upload service', () => {
       alreadyExists: false,
     });
   });
+
+  it.each(['T', 'C', 'E'])(
+    'passes the %s correspondence identity to the transactional page boundary',
+    async (type) => {
+      await processUploadedFile('/tmp/test.jpg', `003-19320706-${type}01-01.jpg`);
+
+      expect(findOrCreatePageMock).toHaveBeenCalledWith(
+        expect.any(Object),
+        {
+          extraContentSource: {
+            collectionId: 'collection-1',
+            dateRaw: '19320706',
+            typeSequence: 1,
+          },
+        },
+      );
+    },
+  );
 
   it('passes through force mode to storage and page updates', async () => {
     await processUploadedFile('/tmp/test.jpg', '003-19320706-L01-01.jpg', true);
@@ -109,6 +131,7 @@ describe('upload service', () => {
       expect.objectContaining({
         force: true,
       }),
+      { extraContentSource: undefined },
     );
   });
 

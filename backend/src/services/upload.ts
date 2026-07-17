@@ -94,14 +94,24 @@ export async function processUploadedFile(
   const { storagePath, checksumSha256, alreadyExists } = await storeFile(tempPath, destPath, force);
 
   // Get or create page record (pass force to update checksum if replacing)
-  const page = await findOrCreatePage({
-    letterId: letter.id,
-    pageNumber: parsed.pageNumber,
-    storagePath,
-    originalFilename,
-    checksumSha256,
-    force,
-  });
+  const extraContentSource = parsed.type === 'T' || parsed.type === 'C' || parsed.type === 'E'
+    ? {
+        collectionId: collection.id,
+        dateRaw: parsed.dateRaw,
+        typeSequence: parsed.typeSequence,
+      }
+    : undefined;
+  const { page } = await findOrCreatePage(
+    {
+      letterId: letter.id,
+      pageNumber: parsed.pageNumber,
+      storagePath,
+      originalFilename,
+      checksumSha256,
+      force,
+    },
+    { extraContentSource },
+  );
 
   const duration = Date.now() - start;
   log.info(

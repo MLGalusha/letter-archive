@@ -3,12 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   findFirstMock,
   findManyMock,
+  dbTransactionMock,
   dbUpdateMock,
   updateSetMock,
   updateWhereMock,
+  updateReturningMock,
   dbDeleteMock,
   deleteWhereMock,
   runTranscriptionMock,
+  runRegeneratedExtraContentMock,
+  transcribeExtrasMock,
   getLetterByIdMock,
   syncLetterParticipantsFromMetadataMock,
   checkExtraContentForTextMock,
@@ -18,12 +22,16 @@ const {
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   findManyMock: vi.fn(),
+  dbTransactionMock: vi.fn(),
   dbUpdateMock: vi.fn(),
   updateSetMock: vi.fn(),
   updateWhereMock: vi.fn(),
+  updateReturningMock: vi.fn(),
   dbDeleteMock: vi.fn(),
   deleteWhereMock: vi.fn(),
   runTranscriptionMock: vi.fn(),
+  runRegeneratedExtraContentMock: vi.fn(),
+  transcribeExtrasMock: vi.fn(),
   getLetterByIdMock: vi.fn(),
   syncLetterParticipantsFromMetadataMock: vi.fn(),
   checkExtraContentForTextMock: vi.fn(),
@@ -35,6 +43,7 @@ const {
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((field: unknown, value: unknown) => ({ kind: 'eq', field, value })),
   and: vi.fn((...clauses: unknown[]) => ({ kind: 'and', clauses })),
+  ne: vi.fn((field: unknown, value: unknown) => ({ kind: 'ne', field, value })),
   inArray: vi.fn((field: unknown, values: unknown[]) => ({ kind: 'inArray', field, values })),
   isNull: vi.fn((field: unknown) => ({ kind: 'isNull', field })),
   isNotNull: vi.fn((field: unknown) => ({ kind: 'isNotNull', field })),
@@ -55,6 +64,9 @@ vi.mock('../../db/index.js', () => {
   dbDeleteMock.mockImplementation(() => ({
     where: deleteWhereMock,
   }));
+  dbTransactionMock.mockImplementation(async (
+    callback: (tx: { update: typeof dbUpdateMock; delete: typeof dbDeleteMock }) => Promise<unknown>,
+  ) => callback({ update: dbUpdateMock, delete: dbDeleteMock }));
 
   return {
     db: {
@@ -66,6 +78,7 @@ vi.mock('../../db/index.js', () => {
       },
       update: dbUpdateMock,
       delete: dbDeleteMock,
+      transaction: dbTransactionMock,
     },
     letters: {
       id: 'letters.id',
@@ -73,6 +86,10 @@ vi.mock('../../db/index.js', () => {
       dateRaw: 'letters.dateRaw',
       typeSequence: 'letters.typeSequence',
       type: 'letters.type',
+      transcriptionStatus: 'letters.transcriptionStatus',
+      metadataStatus: 'letters.metadataStatus',
+      entityExtractionStatus: 'letters.entityExtractionStatus',
+      extraContentJobStatus: 'letters.extraContentJobStatus',
     },
     letterVersions: {
       letterId: 'letterVersions.letterId',
@@ -97,6 +114,11 @@ vi.mock('../../db/index.js', () => {
 
 vi.mock('../letters.js', () => ({
   getLetterById: getLetterByIdMock,
+}));
+
+vi.mock('../letter/extra-content.js', () => ({
+  runRegeneratedExtraContent: runRegeneratedExtraContentMock,
+  transcribeExtras: transcribeExtrasMock,
 }));
 
 vi.mock('../../pipeline/processor.js', () => ({
@@ -144,12 +166,12 @@ vi.mock('../entities/participant-sync.js', () => ({
 }));
 
 import {
+  bulkClearTranscriptions,
   bulkClearMetadata,
   buildLetterUpdates,
   describePhoto as describePhotoWorkflow,
   normalizeRelationshipType,
   regenerateTranscription,
-  transcribeExtras,
   transcribeLetterOnly,
   updateExtraContent,
   updatePhotoDescription,
@@ -158,9 +180,11 @@ import {
 describe('letter operations service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    updateWhereMock.mockResolvedValue(undefined);
+    updateWhereMock.mockImplementation(() => ({ returning: updateReturningMock }));
+    updateReturningMock.mockResolvedValue([]);
     deleteWhereMock.mockResolvedValue(undefined);
     findManyMock.mockResolvedValue([]);
+    runRegeneratedExtraContentMock.mockResolvedValue({ kind: 'completed', value: 0 });
     getLetterByIdMock.mockResolvedValue(undefined);
     getAbsoluteStoragePathMock.mockImplementation((value: string) => value);
   });
@@ -195,6 +219,50 @@ describe('letter operations service', () => {
     );
   });
 
+  it('bulk-clears only idle letters and clears extra-content ownership state', async () => {
+    updateReturningMock.mockResolvedValue([{ id: 'letter-1' }]);
+
+    const result = await bulkClearTranscriptions(['letter-1', 'letter-2']);
+
+    expect(result).toEqual({
+      message: 'Transcriptions cleared',
+      updated: 1,
+    });
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      transcriptionStatus: 'FAILED',
+      extraContentJobStatus: 'FAILED',
+      extraContentJobRunId: null,
+      extraContentJobDirty: false,
+    }));
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        { kind: 'inArray', field: 'letters.id', values: ['letter-1', 'letter-2'] },
+        { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
+        { kind: 'ne', field: 'letters.metadataStatus', value: 'RUNNING' },
+        { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
+        { kind: 'ne', field: 'letters.extraContentJobStatus', value: 'RUNNING' },
+      ],
+    });
+    expect(deleteWhereMock).toHaveBeenCalledTimes(3);
+    expect(deleteWhereMock).toHaveBeenNthCalledWith(1, {
+      kind: 'inArray',
+      field: 'letterPersons.letterId',
+      values: ['letter-1'],
+    });
+  });
+
+  it('does not delete related records when every requested letter is active', async () => {
+    updateReturningMock.mockResolvedValue([]);
+
+    await expect(bulkClearTranscriptions(['letter-running'])).resolves.toEqual({
+      message: 'Transcriptions cleared',
+      updated: 0,
+    });
+
+    expect(deleteWhereMock).not.toHaveBeenCalled();
+  });
+
   it('does not reset transcription state when letter-only transcription is rejected for missing pages', async () => {
     findFirstMock.mockResolvedValue({
       id: 'letter-3',
@@ -227,6 +295,66 @@ describe('letter operations service', () => {
     });
     expect(dbUpdateMock).not.toHaveBeenCalled();
     expect(runTranscriptionMock).not.toHaveBeenCalled();
+  });
+
+  it('suppresses automatic extras and runs the regeneration producer exactly once', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-4',
+      type: 'L',
+      collectionId: 'collection-1',
+      collection: { collectionCode: '009' },
+      dateRaw: '19470810',
+      typeSequence: 1,
+      pages: [{ id: 'page-1' }],
+    });
+    runRegeneratedExtraContentMock.mockResolvedValue({ kind: 'completed', value: 2 });
+
+    const result = await regenerateTranscription('letter-4', true);
+
+    expect(runTranscriptionMock).toHaveBeenCalledWith('letter-4', { extraContent: 'skip' });
+    expect(runRegeneratedExtraContentMock).toHaveBeenCalledTimes(1);
+    expect(runRegeneratedExtraContentMock).toHaveBeenCalledWith('letter-4');
+    expect(result).toEqual({
+      mainTranscript: true,
+      extras: true,
+      extrasCount: 2,
+    });
+  });
+
+  it('does not run any extra-content producer when regeneration excludes extras', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-4',
+      type: 'L',
+      collection: { collectionCode: '009' },
+      dateRaw: '19470810',
+      pages: [{ id: 'page-1' }],
+    });
+
+    const result = await regenerateTranscription('letter-4', false);
+
+    expect(runTranscriptionMock).toHaveBeenCalledWith('letter-4', { extraContent: 'skip' });
+    expect(runRegeneratedExtraContentMock).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      mainTranscript: true,
+      extras: false,
+      extrasCount: 0,
+    });
+  });
+
+  it('returns a conflict when regeneration loses the extra-content claim', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-4',
+      type: 'L',
+      collection: { collectionCode: '009' },
+      dateRaw: '19470810',
+      pages: [{ id: 'page-1' }],
+    });
+    runRegeneratedExtraContentMock.mockResolvedValue({ kind: 'claim_lost' });
+
+    await expect(regenerateTranscription('letter-4', true)).rejects.toMatchObject({
+      status: 409,
+      message: 'Extra content transcription conflicted with another job update',
+    });
   });
 
   it('drops verified transcript edits back to edited in direct letter updates', async () => {
@@ -273,10 +401,13 @@ describe('letter operations service', () => {
     });
   });
 
-  it('marks manual extra-content edits as edited when content is added from an empty state', async () => {
+  it('atomically applies a manual extra-content edit and revokes the active AI attempt', async () => {
     getLetterByIdMock.mockResolvedValue({
       id: 'letter-5',
       extraContentStatus: 'EMPTY',
+      extraContentJobStatus: 'RUNNING',
+      extraContentJobRunId: 'old-run',
+      extraContentJobDirty: true,
     });
 
     const result = await updateExtraContent('letter-5', 'Typed by an admin');
@@ -285,6 +416,12 @@ describe('letter operations service', () => {
     expect(updateSetMock).toHaveBeenCalledWith({
       extraContentTranscript: 'Typed by an admin',
       extraContentStatus: 'EDITED',
+      extraContentVerifiedAt: null,
+      extraContentVerifiedBy: null,
+      extraContentJobStatus: 'SUCCESS',
+      extraContentJobError: null,
+      extraContentJobRunId: null,
+      extraContentJobDirty: false,
       updatedAt: expect.any(Date),
     });
   });
@@ -303,6 +440,10 @@ describe('letter operations service', () => {
       extraContentStatus: 'EMPTY',
       extraContentVerifiedAt: null,
       extraContentVerifiedBy: null,
+      extraContentJobStatus: 'SUCCESS',
+      extraContentJobError: null,
+      extraContentJobRunId: null,
+      extraContentJobDirty: false,
       updatedAt: expect.any(Date),
     });
   });
@@ -321,6 +462,10 @@ describe('letter operations service', () => {
       extraContentStatus: 'EDITED',
       extraContentVerifiedAt: null,
       extraContentVerifiedBy: null,
+      extraContentJobStatus: 'SUCCESS',
+      extraContentJobError: null,
+      extraContentJobRunId: null,
+      extraContentJobDirty: false,
       updatedAt: expect.any(Date),
     });
   });
@@ -362,94 +507,6 @@ describe('letter operations service', () => {
       photoDescriptionVerifiedAt: null,
       photoDescriptionVerifiedBy: null,
       updatedAt: expect.any(Date),
-    });
-  });
-
-  it('clears extra-content verification metadata when no related items exist to transcribe', async () => {
-    findFirstMock.mockResolvedValue({
-      id: 'letter-10',
-      collectionId: 'collection-1',
-      dateRaw: '19470810',
-      typeSequence: 1,
-      collection: { collectionCode: '009' },
-      pages: [],
-    });
-    findManyMock.mockResolvedValue([]);
-
-    const result = await transcribeExtras('letter-10');
-
-    expect(result).toEqual({
-      transcribedCount: 0,
-      extraContentStatus: 'EMPTY',
-      message: 'No extra content found to transcribe',
-    });
-    expect(updateSetMock).toHaveBeenCalledWith({
-      extraContentStatus: 'EMPTY',
-      extraContentTranscript: null,
-      extraContentVerifiedAt: null,
-      extraContentVerifiedBy: null,
-      updatedAt: expect.any(Date),
-    });
-  });
-
-  it('resets extra-content verification when new transcriptions are generated', async () => {
-    findFirstMock.mockResolvedValue({
-      id: 'letter-11',
-      collectionId: 'collection-1',
-      dateRaw: '19470810',
-      typeSequence: 1,
-      collection: { collectionCode: '009' },
-      pages: [{ id: 'page-main' }],
-    });
-    findManyMock.mockResolvedValue([
-      {
-        id: 'cover-1',
-        type: 'C',
-        pages: [
-          {
-            id: 'page-cover-1',
-            storagePath: 'collections/009/19470810/C01/009-19470810-C01-01.jpg',
-          },
-        ],
-      },
-    ]);
-    checkExtraContentForTextMock.mockResolvedValue({
-      hasTranscribableText: true,
-      reason: null,
-    });
-    transcribeExtraContentMock.mockResolvedValue({
-      text: 'Envelope note',
-    });
-
-    const result = await transcribeExtras('letter-11');
-
-    expect(getAbsoluteStoragePathMock).toHaveBeenCalledWith(
-      'collections/009/19470810/C01/009-19470810-C01-01.jpg',
-    );
-    expect(checkExtraContentForTextMock).toHaveBeenCalledWith({
-      filePath: 'collections/009/19470810/C01/009-19470810-C01-01.jpg',
-      letterId: 'letter-11',
-      documentType: 'cover',
-    });
-    expect(transcribeExtraContentMock).toHaveBeenCalledWith({
-      filePath: 'collections/009/19470810/C01/009-19470810-C01-01.jpg',
-      letterId: 'letter-11',
-      documentType: 'cover',
-      context: {
-        collectionCode: '009',
-        dateRaw: '19470810',
-      },
-    });
-    expect(updateSetMock).toHaveBeenCalledWith({
-      extraContentTranscript: '--- Cover ---\n\nEnvelope note',
-      extraContentStatus: 'AI_DRAFT',
-      extraContentVerifiedAt: null,
-      extraContentVerifiedBy: null,
-      updatedAt: expect.any(Date),
-    });
-    expect(result).toEqual({
-      transcribedCount: 1,
-      extraContentStatus: 'AI_DRAFT',
     });
   });
 

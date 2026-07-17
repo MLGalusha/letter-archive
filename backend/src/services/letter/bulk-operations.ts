@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, isNotNull, ne } from 'drizzle-orm';
 import {
   db,
   letters,
@@ -200,62 +200,77 @@ export async function bulkExtractMetadata(
 export async function bulkClearTranscriptions(letterIds: string[]): Promise<BulkClearResult> {
   log.info({ count: letterIds.length }, 'Bulk clear transcriptions requested');
 
-  await db.delete(letterPersons).where(inArray(letterPersons.letterId, letterIds));
-  await db.delete(letterPlaces).where(inArray(letterPlaces.letterId, letterIds));
-  await db.delete(personRelationships).where(inArray(personRelationships.discoveredInLetterId, letterIds));
+  const clearedIds = await db.transaction(async (tx) => {
+    const cleared = await tx.update(letters).set({
+      workflow: 'UPLOADED',
+      transcriptionText: null,
+      transcriptConfirmedAt: null,
+      transcriptConfirmedBy: null,
+      transcriptionStatus: 'FAILED',
+      transcriptionError: 'Cleared by admin',
+      transcriptionAttemptCount: 0,
+      deadLetter: false,
+      extraContentTranscript: null,
+      extraContentStatus: 'EMPTY',
+      extraContentVerifiedAt: null,
+      extraContentVerifiedBy: null,
+      extraContentJobStatus: 'FAILED' as const,
+      extraContentJobError: 'Cleared by admin',
+      extraContentJobRunId: null,
+      extraContentJobDirty: false,
+      metadataStatus: 'FAILED',
+      metadataError: 'Cleared by admin',
+      metadataAttemptCount: 0,
+      sender: null,
+      recipient: null,
+      locationWritten: null,
+      hook: null,
+      summary: null,
+      extractedDate: null,
+      tags: null,
+      metadataJson: null,
+      metadataV2Json: null,
+      emotionalTone: null,
+      senderRecipientRelationship: null,
+      primaryTopics: null,
+      aiNotes: null,
+      entityExtractionJson: null,
+      entityExtractionStatus: 'FAILED',
+      entityExtractionError: 'Cleared by admin',
+      transcriptStatus: 'EMPTY',
+      transcriptVerifiedAt: null,
+      transcriptVerifiedBy: null,
+      metadataContentStatus: 'EMPTY',
+      metadataVerifiedAt: null,
+      metadataVerifiedBy: null,
+      updatedAt: new Date(),
+    }).where(
+      and(
+        inArray(letters.id, letterIds),
+        ne(letters.transcriptionStatus, 'RUNNING'),
+        ne(letters.metadataStatus, 'RUNNING'),
+        ne(letters.entityExtractionStatus, 'RUNNING'),
+        ne(letters.extraContentJobStatus, 'RUNNING'),
+      ),
+    ).returning({ id: letters.id });
 
-  await db.update(letters).set({
-    workflow: 'UPLOADED',
-    transcriptionText: null,
-    transcriptConfirmedAt: null,
-    transcriptConfirmedBy: null,
-    transcriptionStatus: 'FAILED',
-    transcriptionError: 'Cleared by admin',
-    transcriptionAttemptCount: 0,
-    deadLetter: false,
-    extraContentTranscript: null,
-    extraContentStatus: 'EMPTY',
-    extraContentVerifiedAt: null,
-    extraContentVerifiedBy: null,
-    extraContentJobStatus: 'FAILED' as const,
-    extraContentJobError: 'Cleared by admin',
-    metadataStatus: 'FAILED',
-    metadataError: 'Cleared by admin',
-    metadataAttemptCount: 0,
-    sender: null,
-    recipient: null,
-    locationWritten: null,
-    hook: null,
-    summary: null,
-    extractedDate: null,
-    tags: null,
-    metadataJson: null,
-    metadataV2Json: null,
-    emotionalTone: null,
-    senderRecipientRelationship: null,
-    primaryTopics: null,
-    aiNotes: null,
-    entityExtractionJson: null,
-    entityExtractionStatus: 'FAILED',
-    entityExtractionError: 'Cleared by admin',
-    transcriptStatus: 'EMPTY',
-    transcriptVerifiedAt: null,
-    transcriptVerifiedBy: null,
-    metadataContentStatus: 'EMPTY',
-    metadataVerifiedAt: null,
-    metadataVerifiedBy: null,
-    updatedAt: new Date(),
-  }).where(
-    and(
-      inArray(letters.id, letterIds)
-    ),
+    const ids = cleared.map(row => row.id);
+    if (ids.length > 0) {
+      await tx.delete(letterPersons).where(inArray(letterPersons.letterId, ids));
+      await tx.delete(letterPlaces).where(inArray(letterPlaces.letterId, ids));
+      await tx.delete(personRelationships).where(inArray(personRelationships.discoveredInLetterId, ids));
+    }
+    return ids;
+  });
+
+  log.info(
+    { updated: clearedIds.length, skippedActive: letterIds.length - clearedIds.length },
+    'Bulk clear transcriptions completed',
   );
-
-  log.info({ updated: letterIds.length }, 'Bulk clear transcriptions completed');
 
   return {
     message: 'Transcriptions cleared',
-    updated: letterIds.length,
+    updated: clearedIds.length,
   };
 }
 

@@ -1,4 +1,4 @@
-import { eq, type SQL } from 'drizzle-orm';
+import { eq, ne, type SQL } from 'drizzle-orm';
 import { letters } from '../../db/index.js';
 import {
   processingFilterSchema,
@@ -27,6 +27,7 @@ const baseQueueConditions: SQL[] = [
   eq(letters.type, 'L'),
   eq(letters.metadataStatus, 'SUCCESS'),
   eq(letters.entityExtractionStatus, 'PENDING'),
+  ne(letters.transcriptionStatus, 'RUNNING'),
 ];
 
 export const entityExtractionProcess: ProcessConfig<ProcessingFilterOptions> = {

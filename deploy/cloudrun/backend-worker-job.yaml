@@ -15,7 +15,8 @@ spec:
       parallelism: 1
       template:
         spec:
-          maxRetries: 0
+          # Keep Cloud Run's default retry budget; fenced claims make retries safe.
+          maxRetries: 3
           timeoutSeconds: 3600
           serviceAccountName: SERVICE_ACCOUNT_EMAIL
           containers:

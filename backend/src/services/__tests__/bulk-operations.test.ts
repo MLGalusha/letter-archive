@@ -49,6 +49,10 @@ vi.mock('../../db/index.js', () => {
       transcriptionError: 'letters.transcriptionError',
       transcriptionAttemptCount: 'letters.transcriptionAttemptCount',
       transcriptionRunId: 'letters.transcriptionRunId',
+      transcriptionLeaseExpiresAt: 'letters.transcriptionLeaseExpiresAt',
+      transcriptionClaimKind: 'letters.transcriptionClaimKind',
+      metadataStatus: 'letters.metadataStatus',
+      entityExtractionStatus: 'letters.entityExtractionStatus',
       deadLetter: 'letters.deadLetter',
       transcriptStatus: 'letters.transcriptStatus',
     },
@@ -87,7 +91,7 @@ vi.mock('../letter/shared.js', () => ({
   log: { info: vi.fn() },
 }));
 
-import { bulkTranscribe } from '../letter/bulk-operations.js';
+import { bulkExtractMetadata, bulkTranscribe } from '../letter/bulk-operations.js';
 
 const uploadedLetter = {
   id: 'letter-1',
@@ -98,6 +102,10 @@ const uploadedLetter = {
   transcriptionError: null,
   transcriptionAttemptCount: 0,
   transcriptionRunId: null,
+  transcriptionLeaseExpiresAt: null,
+  transcriptionClaimKind: null,
+  metadataStatus: 'PENDING',
+  entityExtractionStatus: 'PENDING',
   deadLetter: false,
   transcriptStatus: 'EMPTY',
   pages: [{ id: 'page-1' }],
@@ -122,6 +130,8 @@ describe('bulk transcription ownership', () => {
     expect(updateSetMock).toHaveBeenCalledWith({
       transcriptionStatus: 'PENDING',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       transcriptionError: null,
       transcriptionAttemptCount: 0,
       deadLetter: false,
@@ -140,6 +150,10 @@ describe('bulk transcription ownership', () => {
             { kind: 'isNull', field: 'letters.transcriptionError' },
             { kind: 'eq', field: 'letters.transcriptionAttemptCount', value: 0 },
             { kind: 'isNull', field: 'letters.transcriptionRunId' },
+            { kind: 'isNull', field: 'letters.transcriptionLeaseExpiresAt' },
+            { kind: 'isNull', field: 'letters.transcriptionClaimKind' },
+            { kind: 'eq', field: 'letters.metadataStatus', value: 'PENDING' },
+            { kind: 'eq', field: 'letters.entityExtractionStatus', value: 'PENDING' },
             { kind: 'eq', field: 'letters.deadLetter', value: false },
             { kind: 'eq', field: 'letters.transcriptStatus', value: 'EMPTY' },
           ],
@@ -183,6 +197,8 @@ describe('bulk transcription ownership', () => {
     expect(updateSetMock).toHaveBeenCalledWith({
       transcriptionStatus: 'PENDING',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       transcriptionError: null,
       transcriptionAttemptCount: 0,
       deadLetter: false,
@@ -239,11 +255,84 @@ describe('bulk transcription ownership', () => {
     expect(updateSetMock).toHaveBeenCalledWith({
       transcriptionStatus: 'PENDING',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       transcriptionError: null,
       workflow: 'UPLOADED',
       transcriptionAttemptCount: 0,
       deadLetter: false,
       updatedAt: expect.any(Date),
     });
+  });
+});
+
+describe('bulk metadata downstream exclusion', () => {
+  const metadataLetter = {
+    ...uploadedLetter,
+    workflow: 'TRANSCRIBED',
+    transcriptionStatus: 'SUCCESS',
+    transcriptConfirmedAt: new Date('2026-01-01T00:00:00Z'),
+    metadataStatus: 'SUCCESS',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    findManyMock.mockResolvedValue([metadataLetter]);
+    updateReturningMock.mockResolvedValue([{ id: 'letter-1' }]);
+    getProcessingStatusMock.mockReturnValue({ isRunning: true });
+    shouldUseCloudRunWorkerJobMock.mockReturnValue(false);
+  });
+
+  it('reports an explicit skip while retranscription is already running', async () => {
+    findManyMock.mockResolvedValue([{
+      ...metadataLetter,
+      transcriptionStatus: 'RUNNING',
+    }]);
+
+    await expect(bulkExtractMetadata(['letter-1'])).resolves.toEqual({
+      queued: 0,
+      skipped: 1,
+      skipReasons: [{ letterId: 'letter-1', reason: 'Transcription already running' }],
+      processing: false,
+      unconfirmedCount: 0,
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('queues metadata through a transcription-idle compare-and-set', async () => {
+    await expect(bulkExtractMetadata(['letter-1'])).resolves.toMatchObject({
+      queued: 1,
+      skipped: 0,
+      processing: false,
+    });
+
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'or',
+      clauses: [{
+        kind: 'and',
+        clauses: [
+          { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+          { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
+          { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
+        ],
+      }],
+    });
+  });
+
+  it('does not report metadata queued when transcription wins after the read', async () => {
+    updateReturningMock.mockResolvedValue([]);
+
+    await expect(bulkExtractMetadata(['letter-1'])).resolves.toEqual({
+      queued: 0,
+      skipped: 1,
+      skipReasons: [{
+        letterId: 'letter-1',
+        reason: 'Letter processing state changed before metadata could be queued',
+      }],
+      processing: false,
+      unconfirmedCount: 0,
+    });
+    expect(processLettersAsyncMock).not.toHaveBeenCalled();
+    expect(resetProcessingStateMock).not.toHaveBeenCalled();
   });
 });

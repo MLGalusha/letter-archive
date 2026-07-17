@@ -106,6 +106,8 @@ export async function restoreVersion(
       transcriptionText,
       transcriptionStatus: 'SUCCESS',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       transcriptionError: null,
       transcriptStatus: hasTranscription ? 'EDITED' : 'EMPTY',
       transcriptVerifiedAt: null,

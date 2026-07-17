@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getLetterByIdMock, runTranscriptionMock } = vi.hoisted(() => ({
+const { getLetterByIdMock, runTranscriptionMock, runMetadataExtractionV2Mock } = vi.hoisted(() => ({
   getLetterByIdMock: vi.fn(),
   runTranscriptionMock: vi.fn(),
+  runMetadataExtractionV2Mock: vi.fn(),
 }));
 
 vi.mock('../../services/letters.js', () => ({
@@ -14,7 +15,7 @@ vi.mock('../transcription.js', () => ({
 }));
 
 vi.mock('../metadataV2.js', () => ({
-  runMetadataExtractionV2: vi.fn(),
+  runMetadataExtractionV2: runMetadataExtractionV2Mock,
 }));
 
 vi.mock('../../utils/logger.js', () => ({
@@ -24,7 +25,7 @@ vi.mock('../../utils/logger.js', () => ({
   })),
 }));
 
-import { processLetter } from '../processor.js';
+import { processLetter, processMetadata } from '../processor.js';
 
 describe('processLetter', () => {
   beforeEach(() => {
@@ -86,5 +87,42 @@ describe('processLetter', () => {
       reason: 'ineligible',
     });
     expect(runTranscriptionMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('processMetadata', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-1',
+      type: 'L',
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'SUCCESS',
+      metadataStatus: 'PENDING',
+      sender: null,
+      recipient: null,
+    });
+  });
+
+  it('starts metadata when the transcript is idle and the letter is eligible', async () => {
+    await processMetadata('letter-1');
+
+    expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith('letter-1', undefined);
+  });
+
+  it('does not start metadata while retranscription is running', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-1',
+      type: 'L',
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'RUNNING',
+      metadataStatus: 'PENDING',
+      sender: null,
+      recipient: null,
+    });
+
+    await processMetadata('letter-1');
+
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
   });
 });

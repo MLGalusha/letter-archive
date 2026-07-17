@@ -123,7 +123,6 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
 
     // Store basic metadata
     await updateMetadataV2(letterId, 'SUCCESS', metadataResult.metadata, null);
-    await updateLetterWorkflow(letterId, 'METADATA_DRAFTED');
 
     const phase1Duration = Date.now() - start;
     letterLog.info(
@@ -212,11 +211,12 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
       corrections: entityCorrections,
     });
 
-    // Store entity extraction JSON
-    await updateEntityExtraction(letterId, 'SUCCESS', entityResult.entities, null);
-
     // Process entities: auto-populate canonical entities, link to letter, create relationships
     const processingResult = await processEntityExtraction(entityResult.entities, letterId);
+
+    // Keep the job RUNNING until entity persistence is complete so downstream
+    // exclusion remains in force for the entire write.
+    await updateEntityExtraction(letterId, 'SUCCESS', entityResult.entities, null);
 
     clearJobProgress(letterId, 'metadata');
 
@@ -355,9 +355,11 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
       return;
     }
 
-    await updateEntityExtraction(letterId, 'SUCCESS', entityResult.entities, null);
-
     const processingResult = await processEntityExtraction(entityResult.entities, letterId);
+
+    // Keep the job RUNNING until entity persistence is complete so downstream
+    // exclusion remains in force for the entire write.
+    await updateEntityExtraction(letterId, 'SUCCESS', entityResult.entities, null);
 
     clearJobProgress(letterId, 'entity_extraction');
 

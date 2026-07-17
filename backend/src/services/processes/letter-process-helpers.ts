@@ -3,6 +3,7 @@ import { db, letters } from '../../db/index.js';
 import { processLetter, processMetadata } from '../../pipeline/processor.js';
 import { runEntityExtractionOnly } from '../../pipeline/metadataV2.js';
 import { tryTranscribeExtras } from '../letter/extra-content.js';
+import { cancelTranscriptionAttempt } from '../letter/transcription-job.js';
 import { createLogger } from '../../utils/logger.js';
 import { notify } from '../notifications.js';
 import { allOf } from './filter-helpers.js';
@@ -236,6 +237,8 @@ export async function removeFromQueue(
     updates.extraContentJobDirty = false;
   } else if (spec.processKey === 'transcription') {
     updates.transcriptionRunId = null;
+    updates.transcriptionLeaseExpiresAt = null;
+    updates.transcriptionClaimKind = null;
   }
 
   const removed = await db
@@ -270,6 +273,8 @@ export async function clearQueue(
     updates.extraContentJobDirty = false;
   } else if (spec.processKey === 'transcription') {
     updates.transcriptionRunId = null;
+    updates.transcriptionLeaseExpiresAt = null;
+    updates.transcriptionClaimKind = null;
   }
 
   const cleared = await db
@@ -304,6 +309,8 @@ export async function retryJob(
   if (spec.processKey === 'transcription') {
     updates.transcriptionAttemptCount = 0;
     updates.transcriptionRunId = null;
+    updates.transcriptionLeaseExpiresAt = null;
+    updates.transcriptionClaimKind = null;
     updates.deadLetter = false;
   } else if (spec.processKey === 'metadata') {
     updates.metadataAttemptCount = 0;
@@ -342,21 +349,9 @@ export async function cancelActive(
     if (!observedRunId) {
       throw new ProcessingError('Cannot cancel: transcription job has no active run ID', 409);
     }
-    cancelled = await db
-      .update(letters)
-      .set({
-        transcriptionStatus: 'FAILED',
-        transcriptionError: 'Cancelled by admin',
-        transcriptionRunId: null,
-        workflow: spec.retryWorkflow,
-        updatedAt: new Date(),
-      })
-      .where(and(
-        eq(letters.id, letterId),
-        eq(letters.transcriptionStatus, 'RUNNING'),
-        eq(letters.transcriptionRunId, observedRunId),
-      ))
-      .returning({ id: letters.id });
+    cancelled = await cancelTranscriptionAttempt(letterId, observedRunId)
+      ? [{ id: letterId }]
+      : [];
   } else if (spec.processKey === 'extra_content') {
     const observedRunId = letter.extraContentJobRunId;
     const observedDirty = letter.extraContentJobDirty;

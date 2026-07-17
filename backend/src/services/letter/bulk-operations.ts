@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, isNotNull, ne, or } from 'drizzle-orm';
+import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import {
   db,
   letters,
@@ -87,6 +87,8 @@ export async function bulkTranscribe(letterIds: string[], overwrite = false): Pr
     return db.update(letters).set({
       transcriptionStatus: 'PENDING',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       transcriptionError: null,
       transcriptionAttemptCount: 0,
       deadLetter: false,
@@ -165,6 +167,8 @@ export async function bulkExtractMetadata(
       skipReasons.push({ letterId: letter.id, reason: `Type '${letter.type}' does not support metadata extraction (only letters)` });
     } else if (!isTranscribableType(letter.type)) {
       skipReasons.push({ letterId: letter.id, reason: `Type '${letter.type}' is not transcribable` });
+    } else if (letter.transcriptionStatus === 'RUNNING') {
+      skipReasons.push({ letterId: letter.id, reason: 'Transcription already running' });
     } else if (letter.workflow === 'UPLOADED') {
       skipReasons.push({ letterId: letter.id, reason: 'Needs transcription first (workflow: UPLOADED)' });
     } else if (letter.workflow !== 'TRANSCRIBED') {
@@ -199,15 +203,40 @@ export async function bulkExtractMetadata(
     };
   }
 
-  await db.update(letters).set({
+  const queuedRows = await db.update(letters).set({
     metadataStatus: 'PENDING',
     metadataError: null,
     updatedAt: new Date(),
-  }).where(inArray(letters.id, eligible.map(l => l.id)));
+  }).where(or(...eligible.map(letter => and(
+    eq(letters.id, letter.id),
+    eq(letters.metadataStatus, letter.metadataStatus),
+    ne(letters.transcriptionStatus, 'RUNNING'),
+  )))).returning({ id: letters.id });
+
+  const queuedIds = queuedRows.map(row => row.id);
+  const queuedIdSet = new Set(queuedIds);
+  for (const letter of eligible) {
+    if (!queuedIdSet.has(letter.id)) {
+      skipReasons.push({
+        letterId: letter.id,
+        reason: 'Letter processing state changed before metadata could be queued',
+      });
+    }
+  }
+
+  if (queuedIds.length === 0) {
+    return {
+      queued: 0,
+      skipped: skipReasons.length,
+      skipReasons,
+      processing: false,
+      unconfirmedCount,
+    };
+  }
 
   if (!shouldUseCloudRunWorkerJob() && getProcessingStatus().isRunning) {
     return {
-      queued: eligible.length,
+      queued: queuedIds.length,
       skipped: skipReasons.length,
       skipReasons,
       processing: false,
@@ -218,12 +247,12 @@ export async function bulkExtractMetadata(
   if (shouldUseCloudRunWorkerJob()) {
     await requestBackgroundWorkerRun('bulk:metadata');
   } else {
-    resetProcessingState(eligible.length);
-    void processLettersAsync(eligible.map(l => l.id), 'metadata');
+    resetProcessingState(queuedIds.length);
+    void processLettersAsync(queuedIds, 'metadata');
   }
 
   return {
-    queued: eligible.length,
+    queued: queuedIds.length,
     skipped: skipReasons.length,
     skipReasons,
     processing: true,
@@ -242,6 +271,8 @@ export async function bulkClearTranscriptions(letterIds: string[]): Promise<Bulk
       transcriptConfirmedBy: null,
       transcriptionStatus: 'FAILED',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       transcriptionError: 'Cleared by admin',
       transcriptionAttemptCount: 0,
       deadLetter: false,
@@ -402,10 +433,6 @@ export async function bulkUpdateFields(updates: BulkUpdateFieldEntry[]): Promise
 }
 
 export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearResult> {
-  await db.delete(letterPersons).where(inArray(letterPersons.letterId, letterIds));
-  await db.delete(letterPlaces).where(inArray(letterPlaces.letterId, letterIds));
-  await db.delete(personRelationships).where(inArray(personRelationships.discoveredInLetterId, letterIds));
-
   const metadataFields = {
     sender: null,
     recipient: null,
@@ -433,30 +460,31 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearR
     updatedAt: new Date(),
   };
 
-  // Letters that still have a transcript → workflow back to TRANSCRIBED
-  await db.update(letters).set({
-    ...metadataFields,
-    workflow: 'TRANSCRIBED',
-  }).where(
-    and(
+  const clearedIds = await db.transaction(async (tx) => {
+    const cleared = await tx.update(letters).set({
+      ...metadataFields,
+      workflow: sql`CASE
+        WHEN ${letters.transcriptionText} IS NULL THEN 'UPLOADED'
+        ELSE 'TRANSCRIBED'
+      END`,
+    }).where(and(
       inArray(letters.id, letterIds),
-      isNotNull(letters.transcriptionText),
-    ),
-  );
+      ne(letters.transcriptionStatus, 'RUNNING'),
+      ne(letters.metadataStatus, 'RUNNING'),
+      ne(letters.entityExtractionStatus, 'RUNNING'),
+    )).returning({ id: letters.id });
 
-  // Letters with no transcript (already cleared) → keep workflow at UPLOADED
-  await db.update(letters).set({
-    ...metadataFields,
-    workflow: 'UPLOADED',
-  }).where(
-    and(
-      inArray(letters.id, letterIds),
-      isNull(letters.transcriptionText),
-    ),
-  );
+    const ids = cleared.map(row => row.id);
+    if (ids.length > 0) {
+      await tx.delete(letterPersons).where(inArray(letterPersons.letterId, ids));
+      await tx.delete(letterPlaces).where(inArray(letterPlaces.letterId, ids));
+      await tx.delete(personRelationships).where(inArray(personRelationships.discoveredInLetterId, ids));
+    }
+    return ids;
+  });
 
   return {
     message: 'Metadata cleared',
-    updated: letterIds.length,
+    updated: clearedIds.length,
   };
 }

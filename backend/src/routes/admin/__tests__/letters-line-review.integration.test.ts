@@ -61,6 +61,7 @@ const {
 
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((field: unknown, value: unknown) => ({ field, value })),
+  ne: vi.fn((field: unknown, value: unknown) => ({ field, value, operator: 'ne' })),
   and: vi.fn((...clauses: unknown[]) => clauses),
   or: vi.fn((...clauses: unknown[]) => clauses),
   inArray: vi.fn((field: unknown, values: unknown[]) => ({ field, values })),

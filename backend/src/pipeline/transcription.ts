@@ -6,6 +6,8 @@ import {
   completeTranscription,
   failTranscription,
   observeTranscriptionState,
+  withTranscriptionHeartbeat,
+  type TranscriptionHeartbeat,
 } from '../services/letter/transcription-job.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
 import { createLogger } from '../utils/logger.js';
@@ -52,6 +54,7 @@ async function executeClaimedTranscription(
   letter: TranscriptionLetter,
   runId: string,
   options: TranscriptionOptions,
+  heartbeat: TranscriptionHeartbeat,
 ): Promise<ClaimedTranscriptionOutcome> {
   const start = Date.now();
   const { id: letterId } = letter;
@@ -78,11 +81,24 @@ async function executeClaimedTranscription(
     const pageTranscriptions: string[] = [];
     let stubMode = false;
 
+    const stopIfLeaseLost = (): ClaimedTranscriptionOutcome | null => {
+      if (heartbeat.hasOwnership()) return null;
+      letterLog.info('Transcription lease was lost; discarding unfinished result');
+      clearJobProgress(letterId, 'transcription');
+      return { kind: 'superseded' };
+    };
+
+    const initialLeaseLoss = stopIfLeaseLost();
+    if (initialLeaseLoss) return initialLeaseLoss;
+
     if (letter.type === 'L') {
       const results: Array<{ text: string } | null> = new Array(pages.length).fill(null);
       let completedCount = 0;
 
       for (let batchStart = 0; batchStart < pages.length; batchStart += PAGE_CONCURRENCY) {
+        const leaseLoss = stopIfLeaseLost();
+        if (leaseLoss) return leaseLoss;
+
         if (shouldAbortProcessing()) {
           letterLog.info('Transcription aborted between page batches');
           throw new Error('Processing aborted');
@@ -130,6 +146,9 @@ async function executeClaimedTranscription(
             'Page transcription completed',
           );
         }));
+
+        const postBatchLeaseLoss = stopIfLeaseLost();
+        if (postBatchLeaseLoss) return postBatchLeaseLoss;
       }
 
       for (const result of results) {
@@ -139,6 +158,9 @@ async function executeClaimedTranscription(
       const documentType = getDocumentTypeFromCode(letter.type);
 
       for (const page of pages) {
+        const leaseLoss = stopIfLeaseLost();
+        if (leaseLoss) return leaseLoss;
+
         if (shouldAbortProcessing()) {
           letterLog.info('Extra content transcription aborted');
           throw new Error('Processing aborted');
@@ -185,6 +207,9 @@ async function executeClaimedTranscription(
           },
           'Page transcription completed',
         );
+
+        const postPageLeaseLoss = stopIfLeaseLost();
+        if (postPageLeaseLoss) return postPageLeaseLoss;
       }
     }
 
@@ -199,6 +224,9 @@ async function executeClaimedTranscription(
     if (combinedTranscription === null) {
       letterLog.warn('No transcribable text found in any page');
     }
+
+    const terminalLeaseLoss = stopIfLeaseLost();
+    if (terminalLeaseLoss) return terminalLeaseLoss;
 
     const published = await completeTranscription(letterId, runId, combinedTranscription);
     if (!published) {
@@ -267,6 +295,19 @@ async function executeClaimedTranscription(
   }
 }
 
+async function runClaimedTranscription(
+  letterId: string,
+  runId: string,
+  options: TranscriptionOptions,
+): Promise<ClaimedTranscriptionOutcome> {
+  return withTranscriptionHeartbeat(letterId, runId, async (heartbeat) => {
+    const claimedLetter = await reloadClaimedTranscription(letterId, runId);
+    if ('kind' in claimedLetter) return claimedLetter;
+    if (!heartbeat.hasOwnership()) return { kind: 'superseded' };
+    return executeClaimedTranscription(claimedLetter, runId, options, heartbeat);
+  });
+}
+
 async function reloadClaimedTranscription(
   letterId: string,
   runId: string,
@@ -305,10 +346,7 @@ export async function runTranscription(
     return { kind: 'claim_lost' };
   }
 
-  const claimedLetter = await reloadClaimedTranscription(letterId, claim.runId);
-  if ('kind' in claimedLetter) return claimedLetter;
-
-  return executeClaimedTranscription(claimedLetter, claim.runId, options);
+  return runClaimedTranscription(letterId, claim.runId, options);
 }
 
 /**
@@ -329,8 +367,5 @@ export async function runRequestedTranscription(
   const claim = await claimRequestedTranscription(letterId, observeTranscriptionState(letter));
   if (!claim) return { kind: 'claim_lost' };
 
-  const claimedLetter = await reloadClaimedTranscription(letterId, claim.runId);
-  if ('kind' in claimedLetter) return claimedLetter;
-
-  return executeClaimedTranscription(claimedLetter, claim.runId, { extraContent: 'skip' });
+  return runClaimedTranscription(letterId, claim.runId, { extraContent: 'skip' });
 }

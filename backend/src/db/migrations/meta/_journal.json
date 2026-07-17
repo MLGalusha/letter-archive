@@ -330,6 +330,13 @@
       "when": 1776595200000,
       "tag": "0046_add_transcription_job_ownership",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1776681600000,
+      "tag": "0047_add_transcription_leases",
+      "breakpoints": true
     }
   ]
 }

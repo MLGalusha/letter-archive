@@ -41,6 +41,11 @@ export const jobStatusEnum = pgEnum('job_status', [
   'FAILED',
 ]);
 
+export const transcriptionClaimKindEnum = pgEnum('transcription_claim_kind', [
+  'QUEUED',
+  'REQUESTED',
+]);
+
 export const dateConfidenceEnum = pgEnum('date_confidence', [
   'exact',
   'unknown',
@@ -196,6 +201,12 @@ export const letters = pgTable(
     transcriptionError: text('transcription_error'),
     transcriptionAttemptCount: integer('transcription_attempt_count').notNull().default(0),
     transcriptionRunId: uuid('transcription_run_id'),
+    // Millisecond precision round-trips losslessly through JavaScript Date for CAS claims.
+    transcriptionLeaseExpiresAt: timestamp('transcription_lease_expires_at', {
+      withTimezone: true,
+      precision: 3,
+    }),
+    transcriptionClaimKind: transcriptionClaimKindEnum('transcription_claim_kind'),
     transcribedAt: timestamp('transcribed_at', { withTimezone: true }),
 
     // Dead-letter flag: set when a job (transcription/metadata/entity) hits MAX_JOB_ATTEMPTS.
@@ -282,6 +293,9 @@ export const letters = pgTable(
     index('idx_letters_workflow').on(table.workflow),
     index('idx_letters_letter_date').on(table.letterDate),
     index('idx_letters_extracted_date').on(table.extractedDate),
+    index('idx_letters_transcription_lease_expires_at')
+      .on(table.transcriptionLeaseExpiresAt)
+      .where(sql`${table.transcriptionStatus} = 'RUNNING' AND ${table.transcriptionLeaseExpiresAt} IS NOT NULL`),
     // Flag index (partial: only flagged=true rows)
     index('idx_letters_flagged').on(table.flagged),
     // V2 indexes
@@ -295,6 +309,19 @@ export const letters = pgTable(
     check(
       'transcription_run_id_matches_running',
       sql`(${table.transcriptionStatus} = 'RUNNING') = (${table.transcriptionRunId} IS NOT NULL)`,
+    ),
+    check(
+      'transcription_lease_metadata_valid',
+      sql`(${table.transcriptionLeaseExpiresAt} IS NULL)
+        = (${table.transcriptionClaimKind} IS NULL)`,
+    ),
+    check(
+      'transcription_excludes_downstream_running',
+      sql`${table.transcriptionStatus} <> 'RUNNING'
+        OR (
+          ${table.metadataStatus} <> 'RUNNING'
+          AND ${table.entityExtractionStatus} <> 'RUNNING'
+        )`,
     ),
     check(
       'extra_content_job_run_id_matches_running',
@@ -880,6 +907,7 @@ export type LetterType = 'L' | 'P' | 'E' | 'V' | 'A' | 'D' | 'C' | 'N' | 'T';
 export type WorkflowState = 'UPLOADED' | 'TRANSCRIBING' | 'TRANSCRIBED' | 'METADATA_EXTRACTING' | 'METADATA_DRAFTED' | 'REVIEWED';
 export type VisibilityState = 'PUBLISHED' | 'HIDDEN';
 export type JobStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
+export type TranscriptionClaimKind = (typeof transcriptionClaimKindEnum.enumValues)[number];
 export type DateConfidence = 'exact' | 'unknown' | 'inferred';
 export type ContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
 

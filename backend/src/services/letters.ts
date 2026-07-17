@@ -1,4 +1,4 @@
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, ne, sql } from 'drizzle-orm';
 import {
   db,
   type Database,
@@ -199,7 +199,14 @@ export async function claimJob(
       [field]: 'RUNNING' as JobStatus,
       updatedAt: new Date(),
     })
-    .where(and(eq(letters.id, letterId), eq(letters[field], expectedStatus)))
+    .where(and(
+      eq(letters.id, letterId),
+      eq(letters[field], expectedStatus),
+      ne(letters.transcriptionStatus, 'RUNNING'),
+      field === 'metadataStatus'
+        ? ne(letters.entityExtractionStatus, 'RUNNING')
+        : eq(letters.metadataStatus, 'SUCCESS'),
+    ))
     .returning({ id: letters.id });
 
   return result.length > 0;
@@ -320,13 +327,15 @@ async function markDeadLetter(
 /**
  * Resets a letter for re-processing.
  */
-export async function resetLetterForProcessing(letterId: string): Promise<void> {
-  await db
+export async function resetLetterForProcessing(letterId: string): Promise<boolean> {
+  const reset = await db
     .update(letters)
     .set({
       workflow: 'UPLOADED',
       transcriptionStatus: 'PENDING',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       transcriptionError: null,
       transcriptionAttemptCount: 0,
       metadataStatus: 'PENDING',
@@ -345,7 +354,15 @@ export async function resetLetterForProcessing(letterId: string): Promise<void> 
       deadLetter: false,
       updatedAt: new Date(),
     })
-    .where(eq(letters.id, letterId));
+    .where(and(
+      eq(letters.id, letterId),
+      ne(letters.transcriptionStatus, 'RUNNING'),
+      ne(letters.metadataStatus, 'RUNNING'),
+      ne(letters.entityExtractionStatus, 'RUNNING'),
+    ))
+    .returning({ id: letters.id });
+
+  return reset.length > 0;
 }
 
 /**
@@ -437,6 +454,9 @@ export async function updateMetadataV2(
   // Set two-track content status to AI_DRAFT when AI completes
   if (status === 'SUCCESS') {
     updates.metadataContentStatus = 'AI_DRAFT';
+    // Publish metadata and its workflow transition as one terminal write. The
+    // producer remains RUNNING until both become visible together.
+    updates.workflow = 'METADATA_DRAFTED';
   }
 
   await db.update(letters).set(updates).where(eq(letters.id, letterId));

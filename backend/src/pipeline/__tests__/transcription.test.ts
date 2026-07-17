@@ -6,6 +6,7 @@ const {
   claimRequestedTranscriptionMock,
   completeTranscriptionMock,
   failTranscriptionMock,
+  withTranscriptionHeartbeatMock,
   transcribeImageMock,
   transcribeExtraContentMock,
   runAutomaticExtraContentMock,
@@ -15,6 +16,7 @@ const {
   claimRequestedTranscriptionMock: vi.fn(),
   completeTranscriptionMock: vi.fn(),
   failTranscriptionMock: vi.fn(),
+  withTranscriptionHeartbeatMock: vi.fn(),
   transcribeImageMock: vi.fn(),
   transcribeExtraContentMock: vi.fn(),
   runAutomaticExtraContentMock: vi.fn(),
@@ -34,12 +36,17 @@ vi.mock('../../services/letter/transcription-job.js', () => ({
   claimRequestedTranscription: claimRequestedTranscriptionMock,
   completeTranscription: completeTranscriptionMock,
   failTranscription: failTranscriptionMock,
+  withTranscriptionHeartbeat: withTranscriptionHeartbeatMock,
   observeTranscriptionState: vi.fn((source: Record<string, unknown>) => ({
     status: source.transcriptionStatus,
     workflow: source.workflow,
     transcriptionText: source.transcriptionText,
     transcriptionError: source.transcriptionError,
     transcriptionAttemptCount: source.transcriptionAttemptCount,
+    transcriptionLeaseExpiresAt: source.transcriptionLeaseExpiresAt,
+    transcriptionClaimKind: source.transcriptionClaimKind,
+    metadataStatus: source.metadataStatus,
+    entityExtractionStatus: source.entityExtractionStatus,
     deadLetter: source.deadLetter,
     transcriptStatus: source.transcriptStatus,
   })),
@@ -83,6 +90,10 @@ function letter(overrides: Record<string, unknown> = {}) {
     transcriptionText: null,
     transcriptionError: null,
     transcriptionAttemptCount: 0,
+    transcriptionLeaseExpiresAt: null,
+    transcriptionClaimKind: null,
+    metadataStatus: 'PENDING',
+    entityExtractionStatus: 'PENDING',
     deadLetter: false,
     transcriptStatus: 'EMPTY',
     updatedAt,
@@ -101,6 +112,13 @@ describe('canonical transcription pipeline', () => {
     claimRequestedTranscriptionMock.mockResolvedValue({ runId: 'run-a' });
     completeTranscriptionMock.mockResolvedValue(true);
     failTranscriptionMock.mockResolvedValue(true);
+    withTranscriptionHeartbeatMock.mockImplementation(
+      async (
+        _letterId: string,
+        _runId: string,
+        operation: (heartbeat: { hasOwnership(): boolean }) => Promise<unknown>,
+      ) => operation({ hasOwnership: () => true }),
+    );
     transcribeImageMock.mockResolvedValue({ text: 'Main transcript', isStub: false });
     transcribeExtraContentMock.mockResolvedValue({ text: 'Document transcript', isStub: false });
     runAutomaticExtraContentMock.mockResolvedValue({ kind: 'completed', value: 1 });
@@ -119,6 +137,10 @@ describe('canonical transcription pipeline', () => {
       transcriptionText: null,
       transcriptionError: null,
       transcriptionAttemptCount: 0,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
+      metadataStatus: 'PENDING',
+      entityExtractionStatus: 'PENDING',
       deadLetter: false,
       transcriptStatus: 'EMPTY',
     });
@@ -126,6 +148,11 @@ describe('canonical transcription pipeline', () => {
       'letter-1',
       'run-a',
       'Main transcript',
+    );
+    expect(withTranscriptionHeartbeatMock).toHaveBeenCalledWith(
+      'letter-1',
+      'run-a',
+      expect.any(Function),
     );
     expect(runAutomaticExtraContentMock).toHaveBeenCalledTimes(1);
     expect(runAutomaticExtraContentMock).toHaveBeenCalledWith('letter-1');
@@ -167,6 +194,10 @@ describe('canonical transcription pipeline', () => {
       transcriptionText: null,
       transcriptionError: null,
       transcriptionAttemptCount: 0,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
+      metadataStatus: 'PENDING',
+      entityExtractionStatus: 'PENDING',
       deadLetter: false,
       transcriptStatus: 'EMPTY',
     });
@@ -188,6 +219,26 @@ describe('canonical transcription pipeline', () => {
 
     await expect(runTranscription('letter-1')).resolves.toEqual({ kind: 'superseded' });
 
+    expect(runAutomaticExtraContentMock).not.toHaveBeenCalled();
+  });
+
+  it('stops before publication when the lease is lost during slow AI work', async () => {
+    let ownsLease = true;
+    withTranscriptionHeartbeatMock.mockImplementation(
+      async (
+        _letterId: string,
+        _runId: string,
+        operation: (heartbeat: { hasOwnership(): boolean }) => Promise<unknown>,
+      ) => operation({ hasOwnership: () => ownsLease }),
+    );
+    transcribeImageMock.mockImplementation(async () => {
+      ownsLease = false;
+      return { text: 'Late transcript', isStub: false };
+    });
+
+    await expect(runTranscription('letter-1')).resolves.toEqual({ kind: 'superseded' });
+
+    expect(completeTranscriptionMock).not.toHaveBeenCalled();
     expect(runAutomaticExtraContentMock).not.toHaveBeenCalled();
   });
 

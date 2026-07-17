@@ -55,6 +55,7 @@ const {
 
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((field: unknown, value: unknown) => ({ field, value })),
+  ne: vi.fn((field: unknown, value: unknown) => ({ field, value, operator: 'ne' })),
   and: vi.fn((...clauses: unknown[]) => clauses),
   or: vi.fn((...clauses: unknown[]) => clauses),
   inArray: vi.fn((field: unknown, values: unknown[]) => ({ field, values })),
@@ -433,7 +434,7 @@ describe('admin letters processing queue integration', () => {
 
   it('re-enqueues an existing letter for processing', async () => {
     getLetterByIdMock.mockResolvedValue({ id: 'letter-8' });
-    resetLetterForProcessingMock.mockResolvedValue(undefined);
+    resetLetterForProcessingMock.mockResolvedValue(true);
 
     const response = await invokeRouter(lettersRouter, {
       method: 'POST',
@@ -450,6 +451,21 @@ describe('admin letters processing queue integration', () => {
     expect(getLetterByIdMock).toHaveBeenCalledWith('letter-8');
     expect(resetLetterForProcessingMock).toHaveBeenCalledWith('letter-8');
     expect(requestBackgroundWorkerRunMock).toHaveBeenCalledWith('letter:process');
+  });
+
+  it('does not re-enqueue a letter when an active job wins the reset race', async () => {
+    getLetterByIdMock.mockResolvedValue({ id: 'letter-8' });
+    resetLetterForProcessingMock.mockResolvedValue(false);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: '/letters/letter-8/process',
+      path: '/letters/letter-8/process',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
   });
 
   it('returns a request-correlated 404 when reprocessing a missing letter', async () => {

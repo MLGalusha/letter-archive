@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, type SQL } from 'drizzle-orm';
+import { and, eq, isNotNull, ne, type SQL } from 'drizzle-orm';
 import { letters } from '../../db/index.js';
 import {
   processingFilterSchema,
@@ -27,6 +27,7 @@ const baseQueueConditions: SQL[] = [
   eq(letters.type, 'L'),
   eq(letters.workflow, 'TRANSCRIBED'),
   eq(letters.metadataStatus, 'PENDING'),
+  ne(letters.transcriptionStatus, 'RUNNING'),
   isNotNull(letters.transcriptConfirmedAt),
 ];
 

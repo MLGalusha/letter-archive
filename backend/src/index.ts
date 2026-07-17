@@ -15,7 +15,10 @@ import { requestLogger } from './middleware/request-logger.js';
 import { env, hasOpenAI } from './config/env.js';
 import { logger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { securityHeaders } from './middleware/security.js';
-import { recoverOrphanedJobs } from './services/processing-queue.js';
+import {
+  recoverExpiredTranscriptionJobs,
+  requestBackgroundWorkerRun,
+} from './services/processing-queue.js';
 import { db, sql, adminUsers } from './db/index.js';
 import { hashPassword } from './auth/jwt.js';
 import { notify } from './services/notifications.js';
@@ -152,11 +155,17 @@ const server = app.listen(env.PORT, () => {
     'Server started'
   );
 
-  // Attempt startup recovery for RUNNING candidates. This is not lease-aware
-  // and cannot prove that an observed owner is no longer live.
-  recoverOrphanedJobs().catch(err => {
-    logger.error({ err }, 'Failed to run startup job recovery');
-  });
+  // Only leased transcription attempts are safe to recover automatically.
+  // Ownerless metadata/entity RUNNING rows remain visible for explicit action.
+  recoverExpiredTranscriptionJobs()
+    .then(({ requeued }) => {
+      if (requeued.length > 0) {
+        void requestBackgroundWorkerRun('startup-recovery');
+      }
+    })
+    .catch(err => {
+      logger.error({ err }, 'Failed to run startup job recovery');
+    });
 
   // Wire the SSE broadcaster into notify() so every notification pushes to connected clients
   initNotificationStreamBroadcaster();

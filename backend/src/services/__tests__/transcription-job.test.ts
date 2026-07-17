@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { randomUUIDMock, dbUpdateMock, updateSetMock } = vi.hoisted(() => ({
+const { randomUUIDMock, dbUpdateMock, updateSetMock, loggerWarnMock } = vi.hoisted(() => ({
   randomUUIDMock: vi.fn(),
   dbUpdateMock: vi.fn(),
   updateSetMock: vi.fn(),
+  loggerWarnMock: vi.fn(),
 }));
 
 vi.mock('node:crypto', () => ({ randomUUID: randomUUIDMock }));
@@ -11,7 +12,18 @@ vi.mock('node:crypto', () => ({ randomUUID: randomUUIDMock }));
 vi.mock('drizzle-orm', () => ({
   and: vi.fn((...clauses: unknown[]) => ({ kind: 'and', clauses })),
   eq: vi.fn((field: unknown, value: unknown) => ({ kind: 'eq', field, value })),
+  gt: vi.fn((field: unknown, value: unknown) => ({ kind: 'gt', field, value })),
+  isNotNull: vi.fn((field: unknown) => ({ kind: 'isNotNull', field })),
   isNull: vi.fn((field: unknown) => ({ kind: 'isNull', field })),
+  lte: vi.fn((field: unknown, value: unknown) => ({ kind: 'lte', field, value })),
+  sql: vi.fn((strings: TemplateStringsArray) => ({
+    kind: 'sql',
+    text: Array.from(strings).join('?'),
+  })),
+}));
+
+vi.mock('../../utils/logger.js', () => ({
+  createLogger: vi.fn(() => ({ warn: loggerWarnMock })),
 }));
 
 vi.mock('../../db/index.js', () => ({
@@ -24,16 +36,25 @@ vi.mock('../../db/index.js', () => ({
     transcriptionError: 'letters.transcriptionError',
     transcriptionAttemptCount: 'letters.transcriptionAttemptCount',
     transcriptionRunId: 'letters.transcriptionRunId',
+    transcriptionLeaseExpiresAt: 'letters.transcriptionLeaseExpiresAt',
+    transcriptionClaimKind: 'letters.transcriptionClaimKind',
+    metadataStatus: 'letters.metadataStatus',
+    entityExtractionStatus: 'letters.entityExtractionStatus',
     deadLetter: 'letters.deadLetter',
     transcriptStatus: 'letters.transcriptStatus',
+    dateRaw: 'letters.dateRaw',
   },
 }));
 
 import {
   claimQueuedTranscription,
   claimRequestedTranscription,
+  cancelTranscriptionAttempt,
   completeTranscription,
   failTranscription,
+  recoverExpiredTranscriptions,
+  renewTranscriptionLease,
+  withTranscriptionHeartbeat,
   type ObservedTranscriptionState,
 } from '../letter/transcription-job.js';
 
@@ -45,15 +66,23 @@ interface TranscriptionRow {
   transcriptionError: string | null;
   transcriptionAttemptCount: number;
   transcriptionRunId: string | null;
+  transcriptionLeaseExpiresAt: Date | null;
+  transcriptionClaimKind: 'QUEUED' | 'REQUESTED' | null;
+  metadataStatus: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
+  entityExtractionStatus: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
   transcribedAt: Date | null;
   deadLetter: boolean;
   transcriptStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
   transcriptVerifiedAt: Date | null;
   transcriptVerifiedBy: string | null;
   updatedAt: Date;
+  dateRaw: string;
 }
 
 let row: TranscriptionRow;
+let databaseNow: Date;
+let returningError: Error | null;
+let returningBarrier: Promise<void> | null;
 
 function observed(overrides: Partial<ObservedTranscriptionState> = {}): ObservedTranscriptionState {
   return {
@@ -62,15 +91,27 @@ function observed(overrides: Partial<ObservedTranscriptionState> = {}): Observed
     transcriptionText: row.transcriptionText,
     transcriptionError: row.transcriptionError,
     transcriptionAttemptCount: row.transcriptionAttemptCount,
+    transcriptionLeaseExpiresAt: row.transcriptionLeaseExpiresAt,
+    transcriptionClaimKind: row.transcriptionClaimKind,
+    metadataStatus: row.metadataStatus,
+    entityExtractionStatus: row.entityExtractionStatus,
     deadLetter: row.deadLetter,
     transcriptStatus: row.transcriptStatus,
     ...overrides,
   };
 }
 
+function sqlValue(value: unknown): Date | unknown {
+  const expression = value as { kind?: string; text?: string };
+  if (expression?.kind === 'sql' && expression.text?.includes('clock_timestamp()')) {
+    return databaseNow;
+  }
+  return value;
+}
+
 function matches(condition: unknown): boolean {
   const clause = condition as {
-    kind: 'and' | 'eq' | 'isNull';
+    kind: 'and' | 'eq' | 'gt' | 'isNotNull' | 'isNull' | 'lte';
     clauses?: unknown[];
     field?: string;
     value?: unknown;
@@ -79,7 +120,26 @@ function matches(condition: unknown): boolean {
   if (!clause.field) return false;
   const key = clause.field.slice('letters.'.length) as keyof TranscriptionRow;
   if (clause.kind === 'isNull') return row[key] === null;
-  return clause.kind === 'eq' && row[key] === clause.value;
+  if (clause.kind === 'isNotNull') return row[key] !== null;
+  if (clause.kind === 'eq') return row[key] === clause.value;
+  const actual = row[key];
+  const expected = sqlValue(clause.value);
+  if (!(actual instanceof Date) || !(expected instanceof Date)) return false;
+  if (clause.kind === 'gt') return actual > expected;
+  return clause.kind === 'lte' && actual <= expected;
+}
+
+function evaluatedUpdates(updates: Partial<TranscriptionRow>): Partial<TranscriptionRow> {
+  return Object.fromEntries(Object.entries(updates).map(([key, value]) => {
+    const expression = value as { kind?: string; text?: string };
+    if (expression?.kind === 'sql' && expression.text?.includes("interval '5 minutes'")) {
+      return [key, new Date(databaseNow.getTime() + 5 * 60_000)];
+    }
+    if (expression?.kind === 'sql' && expression.text?.includes('CASE')) {
+      return [key, row.transcriptionClaimKind === 'REQUESTED' ? row.workflow : 'UPLOADED'];
+    }
+    return [key, value];
+  })) as Partial<TranscriptionRow>;
 }
 
 function installStatefulDatabase() {
@@ -87,9 +147,15 @@ function installStatefulDatabase() {
   updateSetMock.mockImplementation((updates: Partial<TranscriptionRow>) => ({
     where: (condition: unknown) => ({
       returning: async () => {
+        if (returningBarrier) await returningBarrier;
+        if (returningError) {
+          const error = returningError;
+          returningError = null;
+          throw error;
+        }
         if (!matches(condition)) return [];
-        Object.assign(row, updates);
-        return [{ id: row.id }];
+        Object.assign(row, evaluatedUpdates(updates));
+        return [{ id: row.id, dateRaw: row.dateRaw }];
       },
     }),
   }));
@@ -106,13 +172,21 @@ describe('transcription job lifecycle', () => {
       transcriptionError: null,
       transcriptionAttemptCount: 0,
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
+      metadataStatus: 'PENDING',
+      entityExtractionStatus: 'PENDING',
       transcribedAt: null,
       deadLetter: false,
       transcriptStatus: 'EMPTY',
       transcriptVerifiedAt: null,
       transcriptVerifiedBy: null,
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
+      dateRaw: '1944-01-01',
     };
+    databaseNow = new Date('2026-07-17T12:00:00.000Z');
+    returningError = null;
+    returningBarrier = null;
     randomUUIDMock.mockReturnValue('run-a');
     installStatefulDatabase();
   });
@@ -124,13 +198,21 @@ describe('transcription job lifecycle', () => {
       workflow: 'TRANSCRIBING',
       transcriptionStatus: 'RUNNING',
       transcriptionRunId: 'run-a',
+      transcriptionLeaseExpiresAt: new Date('2026-07-17T12:05:00.000Z'),
+      transcriptionClaimKind: 'QUEUED',
     });
     expect(updateSetMock).toHaveBeenCalledTimes(1);
   });
 
-  it('does not claim stale, dead-lettered, or non-upload queued state', async () => {
+  it('does not claim stale, malformed, dead-lettered, or non-upload queued state', async () => {
     await expect(claimQueuedTranscription(row.id, observed({
       transcriptionText: 'Stale snapshot',
+    }))).resolves.toBeNull();
+    await expect(claimQueuedTranscription(row.id, observed({
+      transcriptionLeaseExpiresAt: new Date('2026-07-17T12:05:00.000Z'),
+    }))).resolves.toBeNull();
+    await expect(claimRequestedTranscription(row.id, observed({
+      transcriptionClaimKind: 'REQUESTED',
     }))).resolves.toBeNull();
 
     row.deadLetter = true;
@@ -142,6 +224,23 @@ describe('transcription job lifecycle', () => {
 
     expect(row.transcriptionStatus).toBe('PENDING');
     expect(row.transcriptionRunId).toBeNull();
+    expect(row.transcriptionLeaseExpiresAt).toBeNull();
+    expect(row.transcriptionClaimKind).toBeNull();
+  });
+
+  it('overwrites paired stale lease metadata when claiming queued work', async () => {
+    row.transcriptionLeaseExpiresAt = new Date('2026-07-17T11:00:00.000Z');
+    row.transcriptionClaimKind = 'REQUESTED';
+
+    await expect(claimQueuedTranscription(row.id, observed())).resolves.toEqual({ runId: 'run-a' });
+
+    expect(row).toMatchObject({
+      workflow: 'TRANSCRIBING',
+      transcriptionStatus: 'RUNNING',
+      transcriptionRunId: 'run-a',
+      transcriptionLeaseExpiresAt: new Date('2026-07-17T12:05:00.000Z'),
+      transcriptionClaimKind: 'QUEUED',
+    });
   });
 
   it('claims exact requested job state without invalidating existing reviewed content', async () => {
@@ -154,15 +253,19 @@ describe('transcription job lifecycle', () => {
     row.transcriptStatus = 'VERIFIED';
     row.transcriptVerifiedAt = new Date('2026-07-16T12:00:00.000Z');
     row.transcriptVerifiedBy = 'admin';
+    row.transcriptionLeaseExpiresAt = new Date('2026-07-17T11:00:00.000Z');
+    row.transcriptionClaimKind = 'QUEUED';
 
     await expect(claimRequestedTranscription(row.id, observed())).resolves.toEqual({
       runId: 'run-a',
     });
 
     expect(row).toMatchObject({
-      workflow: 'TRANSCRIBING',
+      workflow: 'TRANSCRIBED',
       transcriptionStatus: 'RUNNING',
       transcriptionRunId: 'run-a',
+      transcriptionLeaseExpiresAt: new Date('2026-07-17T12:05:00.000Z'),
+      transcriptionClaimKind: 'REQUESTED',
       transcriptionText: 'Existing transcript',
       transcriptionError: null,
       transcriptionAttemptCount: 0,
@@ -173,15 +276,43 @@ describe('transcription job lifecycle', () => {
     });
   });
 
+  it('blocks transcription claims while downstream stages run and fences requested races', async () => {
+    row.metadataStatus = 'RUNNING';
+    await expect(claimQueuedTranscription(row.id, observed())).resolves.toBeNull();
+    await expect(claimRequestedTranscription(row.id, observed())).resolves.toBeNull();
+
+    row.metadataStatus = 'PENDING';
+    row.entityExtractionStatus = 'RUNNING';
+    await expect(claimQueuedTranscription(row.id, observed())).resolves.toBeNull();
+    await expect(claimRequestedTranscription(row.id, observed())).resolves.toBeNull();
+
+    row.entityExtractionStatus = 'PENDING';
+    const beforeMetadataRace = observed();
+    row.metadataStatus = 'RUNNING';
+    await expect(claimRequestedTranscription(row.id, beforeMetadataRace)).resolves.toBeNull();
+
+    row.metadataStatus = 'PENDING';
+    const beforeEntityRace = observed();
+    row.entityExtractionStatus = 'RUNNING';
+    await expect(claimRequestedTranscription(row.id, beforeEntityRace)).resolves.toBeNull();
+
+    expect(row.transcriptionStatus).toBe('PENDING');
+    expect(row.transcriptionRunId).toBeNull();
+  });
+
   it('publishes success or failure only for the owning run ID', async () => {
     row.transcriptionStatus = 'RUNNING';
     row.transcriptionRunId = 'run-a';
+    row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:05:00.000Z');
+    row.transcriptionClaimKind = 'QUEUED';
 
     await expect(completeTranscription(row.id, 'run-a', 'Dear family')).resolves.toBe(true);
     expect(row).toMatchObject({
       workflow: 'TRANSCRIBED',
       transcriptionStatus: 'SUCCESS',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       transcriptionText: 'Dear family',
       transcriptStatus: 'AI_DRAFT',
       transcriptVerifiedAt: null,
@@ -190,6 +321,8 @@ describe('transcription job lifecycle', () => {
 
     row.transcriptionStatus = 'RUNNING';
     row.transcriptionRunId = 'run-b';
+    row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:05:00.000Z');
+    row.transcriptionClaimKind = 'QUEUED';
     await expect(failTranscription(row.id, 'run-a', 'late failure')).resolves.toBe(false);
     expect(row.transcriptionStatus).toBe('RUNNING');
     expect(row.transcriptionRunId).toBe('run-b');
@@ -202,6 +335,8 @@ describe('transcription job lifecycle', () => {
 
     row.transcriptionStatus = 'FAILED';
     row.transcriptionRunId = null;
+    row.transcriptionLeaseExpiresAt = null;
+    row.transcriptionClaimKind = null;
     row.workflow = 'UPLOADED';
     row.transcriptionStatus = 'PENDING';
 
@@ -219,8 +354,224 @@ describe('transcription job lifecycle', () => {
     expect(row).toMatchObject({
       transcriptionStatus: 'SUCCESS',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       transcriptionText: null,
       transcriptStatus: 'EMPTY',
+    });
+  });
+
+  it('requires a live lease for terminal writes but lets exact-run cancellation revoke expiry', async () => {
+    row.workflow = 'TRANSCRIBING';
+    row.transcriptionStatus = 'RUNNING';
+    row.transcriptionRunId = 'run-a';
+    row.transcriptionLeaseExpiresAt = new Date('2026-07-17T11:59:59.000Z');
+    row.transcriptionClaimKind = 'QUEUED';
+
+    await expect(completeTranscription(row.id, 'run-a', 'Too late')).resolves.toBe(false);
+    await expect(failTranscription(row.id, 'run-a', 'Too late')).resolves.toBe(false);
+    await expect(cancelTranscriptionAttempt(row.id, 'run-a')).resolves.toBe(true);
+
+    expect(row).toMatchObject({
+      workflow: 'UPLOADED',
+      transcriptionStatus: 'FAILED',
+      transcriptionError: 'Cancelled by admin',
+      transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
+    });
+  });
+
+  it('never auto-recovers a legacy unleased run but lets an exact admin cancellation revoke it', async () => {
+    row.workflow = 'TRANSCRIBING';
+    row.transcriptionStatus = 'RUNNING';
+    row.transcriptionRunId = 'legacy-run';
+
+    await expect(recoverExpiredTranscriptions()).resolves.toEqual({ requeued: [], failed: [] });
+    expect(row).toMatchObject({
+      workflow: 'TRANSCRIBING',
+      transcriptionStatus: 'RUNNING',
+      transcriptionRunId: 'legacy-run',
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
+    });
+
+    await expect(cancelTranscriptionAttempt(row.id, 'different-run')).resolves.toBe(false);
+    expect(row.transcriptionStatus).toBe('RUNNING');
+
+    await expect(cancelTranscriptionAttempt(row.id, 'legacy-run')).resolves.toBe(true);
+    expect(row).toMatchObject({
+      workflow: 'UPLOADED',
+      transcriptionStatus: 'FAILED',
+      transcriptionError: 'Cancelled by admin',
+      transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
+    });
+  });
+
+  it('preserves requested workflow and content when failure revokes its live lease', async () => {
+    row.workflow = 'TRANSCRIBED';
+    row.transcriptionStatus = 'RUNNING';
+    row.transcriptionRunId = 'run-a';
+    row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:05:00.000Z');
+    row.transcriptionClaimKind = 'REQUESTED';
+    row.transcriptionText = 'Reviewed text';
+    row.transcriptStatus = 'VERIFIED';
+
+    await expect(failTranscription(row.id, 'run-a', 'Provider failed')).resolves.toBe(true);
+
+    expect(row).toMatchObject({
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'FAILED',
+      transcriptionError: 'Provider failed',
+      transcriptionText: 'Reviewed text',
+      transcriptStatus: 'VERIFIED',
+      transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
+    });
+  });
+
+  it('renews from the PostgreSQL clock without changing updatedAt', async () => {
+    row.transcriptionStatus = 'RUNNING';
+    row.transcriptionRunId = 'run-a';
+    row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:01:00.000Z');
+    row.transcriptionClaimKind = 'QUEUED';
+    const visibleUpdatedAt = row.updatedAt;
+
+    databaseNow = new Date('2026-07-17T12:00:30.000Z');
+    await expect(renewTranscriptionLease(row.id, 'run-a')).resolves.toBe(true);
+
+    expect(row.transcriptionLeaseExpiresAt).toEqual(new Date('2026-07-17T12:05:30.000Z'));
+    expect(row.updatedAt).toBe(visibleUpdatedAt);
+
+    databaseNow = new Date('2026-07-17T12:06:00.000Z');
+    await expect(renewTranscriptionLease(row.id, 'run-a')).resolves.toBe(false);
+  });
+
+  it('heartbeats immediately, retries database errors, and reports authoritative ownership loss', async () => {
+    vi.useFakeTimers();
+    try {
+      row.transcriptionStatus = 'RUNNING';
+      row.transcriptionRunId = 'run-a';
+      row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:05:00.000Z');
+      row.transcriptionClaimKind = 'QUEUED';
+      returningError = new Error('database unavailable');
+
+      let finishOperation!: () => void;
+      const operationDone = new Promise<void>((resolve) => {
+        finishOperation = resolve;
+      });
+      let heartbeat: { hasOwnership(): boolean } | undefined;
+
+      const running = withTranscriptionHeartbeat(row.id, 'run-a', async (activeHeartbeat) => {
+        heartbeat = activeHeartbeat;
+        await operationDone;
+        return 'done';
+      });
+
+      await vi.advanceTimersByTimeAsync(0);
+      expect(loggerWarnMock).toHaveBeenCalledWith(
+        expect.objectContaining({ letterId: row.id, runId: 'run-a' }),
+        'Failed to renew transcription lease; will retry',
+      );
+      expect(heartbeat?.hasOwnership()).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(row.transcriptionLeaseExpiresAt).toEqual(new Date('2026-07-17T12:05:00.000Z'));
+
+      row.transcriptionRunId = 'replacement-run';
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(heartbeat?.hasOwnership()).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+
+      finishOperation();
+      await expect(running).resolves.toBe('done');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('serializes slow renewals and clears the timer after normal completion', async () => {
+    vi.useFakeTimers();
+    try {
+      row.transcriptionStatus = 'RUNNING';
+      row.transcriptionRunId = 'run-a';
+      row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:05:00.000Z');
+      row.transcriptionClaimKind = 'QUEUED';
+
+      let releaseRenewal!: () => void;
+      returningBarrier = new Promise<void>((resolve) => {
+        releaseRenewal = resolve;
+      });
+      let finishOperation!: () => void;
+      const operationDone = new Promise<void>((resolve) => {
+        finishOperation = resolve;
+      });
+
+      const running = withTranscriptionHeartbeat(row.id, 'run-a', async () => {
+        await operationDone;
+      });
+
+      await vi.advanceTimersByTimeAsync(90_000);
+      expect(dbUpdateMock).toHaveBeenCalledTimes(1);
+
+      releaseRenewal();
+      await vi.advanceTimersByTimeAsync(0);
+      finishOperation();
+      await running;
+
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('recovers only expired lease tuples with claim-kind-specific policy', async () => {
+    row.workflow = 'TRANSCRIBING';
+    row.transcriptionStatus = 'RUNNING';
+    row.transcriptionRunId = 'run-a';
+    row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:01:00.000Z');
+    row.transcriptionClaimKind = 'QUEUED';
+
+    await expect(recoverExpiredTranscriptions()).resolves.toEqual({
+      requeued: [],
+      failed: [],
+    });
+
+    databaseNow = new Date('2026-07-17T12:01:00.000Z');
+    await expect(recoverExpiredTranscriptions()).resolves.toEqual({
+      requeued: [{ id: row.id, dateRaw: row.dateRaw }],
+      failed: [],
+    });
+    expect(row).toMatchObject({
+      workflow: 'UPLOADED',
+      transcriptionStatus: 'PENDING',
+      transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
+    });
+
+    row.workflow = 'TRANSCRIBED';
+    row.transcriptionStatus = 'RUNNING';
+    row.transcriptionRunId = 'run-b';
+    row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:00:00.000Z');
+    row.transcriptionClaimKind = 'REQUESTED';
+    row.transcriptionText = 'Reviewed text';
+
+    await expect(recoverExpiredTranscriptions()).resolves.toEqual({
+      requeued: [],
+      failed: [{ id: row.id, dateRaw: row.dateRaw }],
+    });
+    expect(row).toMatchObject({
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'FAILED',
+      transcriptionError: 'Transcription lease expired before the attempt completed',
+      transcriptionText: 'Reviewed text',
+      transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
     });
   });
 });

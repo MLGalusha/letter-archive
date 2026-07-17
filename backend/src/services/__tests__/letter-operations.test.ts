@@ -86,6 +86,7 @@ vi.mock('../../db/index.js', () => {
       dateRaw: 'letters.dateRaw',
       typeSequence: 'letters.typeSequence',
       type: 'letters.type',
+      transcriptionText: 'letters.transcriptionText',
       transcriptionStatus: 'letters.transcriptionStatus',
       metadataStatus: 'letters.metadataStatus',
       entityExtractionStatus: 'letters.entityExtractionStatus',
@@ -197,11 +198,13 @@ describe('letter operations service', () => {
   });
 
   it('clears stored metadata JSON when metadata is bulk-cleared', async () => {
+    updateReturningMock.mockResolvedValueOnce([{ id: 'letter-1' }]);
+
     const result = await bulkClearMetadata(['letter-1', 'letter-2']);
 
     expect(result).toEqual({
       message: 'Metadata cleared',
-      updated: 2,
+      updated: 1,
     });
     expect(updateSetMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -214,10 +217,39 @@ describe('letter operations service', () => {
         entityExtractionJson: null,
         entityExtractionStatus: 'FAILED',
         entityExtractionError: 'Cleared by admin',
-        workflow: 'TRANSCRIBED',
+        workflow: expect.objectContaining({ kind: 'sql' }),
         updatedAt: expect.any(Date),
       }),
     );
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        {
+          kind: 'inArray',
+          field: 'letters.id',
+          values: ['letter-1', 'letter-2'],
+        },
+        { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
+        { kind: 'ne', field: 'letters.metadataStatus', value: 'RUNNING' },
+        { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
+      ],
+    });
+    expect(deleteWhereMock).toHaveBeenCalledTimes(3);
+    expect(deleteWhereMock).toHaveBeenCalledWith({
+      kind: 'inArray',
+      field: 'letterPersons.letterId',
+      values: ['letter-1'],
+    });
+  });
+
+  it('does not delete entity links for metadata rows that lose the idle-state claim', async () => {
+    const result = await bulkClearMetadata(['letter-active']);
+
+    expect(result).toEqual({
+      message: 'Metadata cleared',
+      updated: 0,
+    });
+    expect(deleteWhereMock).not.toHaveBeenCalled();
   });
 
   it('bulk-clears only idle letters and clears extra-content ownership state', async () => {
@@ -232,6 +264,8 @@ describe('letter operations service', () => {
     expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
       transcriptionStatus: 'FAILED',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       extraContentJobStatus: 'FAILED',
       extraContentJobRunId: null,
       extraContentJobDirty: false,
@@ -369,6 +403,8 @@ describe('letter operations service', () => {
       transcriptionText: 'Corrected transcript text',
       transcriptionStatus: 'SUCCESS',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       transcriptionError: null,
       transcriptStatus: 'EDITED',
       transcriptVerifiedAt: null,
@@ -397,6 +433,8 @@ describe('letter operations service', () => {
       transcriptionText: 'Typed by an admin',
       transcriptionStatus: 'SUCCESS',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       transcriptionError: null,
       transcriptStatus: 'EDITED',
       transcriptVerifiedAt: null,
@@ -426,6 +464,8 @@ describe('letter operations service', () => {
       transcriptionText: '   ',
       transcriptionStatus: 'SUCCESS',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       transcriptionError: null,
       transcriptStatus: 'EMPTY',
       transcriptVerifiedAt: null,

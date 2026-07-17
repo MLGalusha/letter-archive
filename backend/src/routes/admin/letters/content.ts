@@ -1,6 +1,6 @@
 import { unlink } from 'node:fs/promises';
 import { Router } from 'express';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db, canonicalPersons, letterPages, letterPersons, letters } from '../../../db/index.js';
 import type { StructuredNote, NoteCategory, NotePriority } from '../../../ai/schemas/metadataV2.js';
 import { savePageLineSegments } from '../../../services/line-segments.js';
@@ -26,7 +26,7 @@ import { addAliasToCanonicalPerson } from '../../../services/entities/persons.js
 import { syncLetterParticipantsFromMetadata } from '../../../services/entities/participant-sync.js';
 import { getAbsoluteStoragePath } from '../../../services/storage.js';
 import { runEntityExtractionOnly, runMetadataExtractionV2, type ExtractionOptions } from '../../../pipeline/metadataV2.js';
-import { BadRequestError, NotFoundError } from '../../../utils/response-helpers.js';
+import { AppError, BadRequestError, NotFoundError } from '../../../utils/response-helpers.js';
 import { isPlaceholderValue } from '../../../utils/placeholders.js';
 import {
   addNoteSchema,
@@ -49,6 +49,22 @@ import {
 } from './helpers.js';
 
 const router = Router();
+
+type ObservedTranscript = Pick<
+  Awaited<ReturnType<typeof requireLetter>>,
+  'workflow' | 'transcriptionStatus' | 'transcriptionText'
+>;
+
+function observedTranscriptConditions(letterId: string, letter: ObservedTranscript) {
+  return [
+    eq(letters.id, letterId),
+    eq(letters.workflow, letter.workflow),
+    eq(letters.transcriptionStatus, letter.transcriptionStatus),
+    letter.transcriptionText === null
+      ? isNull(letters.transcriptionText)
+      : eq(letters.transcriptionText, letter.transcriptionText),
+  ];
+}
 
 router.patch('/:letterId/flag', async (req, res, next) => {
   try {
@@ -73,7 +89,9 @@ router.post('/:letterId/process', async (req, res, next) => {
   try {
     const { letterId } = req.params;
     await requireLetter(letterId);
-    await resetLetterForProcessing(letterId);
+    if (!await resetLetterForProcessing(letterId)) {
+      throw new AppError(409, 'Cannot reprocess a letter while another job is running');
+    }
     await requestBackgroundWorkerRun('letter:process');
     res.json({ message: 'Letter enqueued for processing', letterId });
   } catch (error) {
@@ -117,10 +135,30 @@ router.post('/:letterId/confirm-transcript', async (req, res, next) => {
     if (letter.workflow !== 'TRANSCRIBED') {
       throw new BadRequestError('Letter must be in TRANSCRIBED state', { currentState: letter.workflow });
     }
+    if (letter.transcriptionStatus === 'RUNNING') {
+      throw new BadRequestError('Transcription is already in progress');
+    }
+
+    const confirmWhileTranscriptionIsIdle = async () => {
+      const confirmationResult = await db.update(letters).set({
+        transcriptConfirmedAt: new Date(),
+        transcriptConfirmedBy: getUserId(req),
+        updatedAt: new Date(),
+      }).where(and(
+        ...observedTranscriptConditions(letterId, letter),
+      )).returning({ id: letters.id });
+
+      if (confirmationResult.length === 0) {
+        throw new AppError(409, 'Transcript changed before confirmation; reload and try again');
+      }
+    };
 
     // Trigger extraction if status is PENDING or FAILED (e.g. cleared by admin).
     // Skip only if already RUNNING or SUCCESS to avoid double-processing.
     const shouldExtract = letter.metadataStatus === 'PENDING' || letter.metadataStatus === 'FAILED';
+    if (shouldExtract && letter.entityExtractionStatus === 'RUNNING') {
+      throw new BadRequestError('Entity extraction is already in progress');
+    }
 
     if (shouldExtract) {
       // Atomically confirm transcript AND claim the metadata job in one update
@@ -134,8 +172,9 @@ router.post('/:letterId/confirm-transcript', async (req, res, next) => {
         entityExtractionError: null,
         updatedAt: new Date(),
       }).where(and(
-        eq(letters.id, letterId),
+        ...observedTranscriptConditions(letterId, letter),
         inArray(letters.metadataStatus, ['PENDING', 'FAILED']),
+        eq(letters.entityExtractionStatus, letter.entityExtractionStatus),
       )).returning({ id: letters.id });
 
       if (claimResult.length > 0) {
@@ -145,20 +184,13 @@ router.post('/:letterId/confirm-transcript', async (req, res, next) => {
         if (confirmedRecipient) extractionOptions.confirmedRecipient = confirmedRecipient;
         await runMetadataExtractionV2(letterId, Object.keys(extractionOptions).length > 0 ? extractionOptions : undefined, true);
       } else {
-        // Worker already claimed it — just confirm the transcript
-        await db.update(letters).set({
-          transcriptConfirmedAt: new Date(),
-          transcriptConfirmedBy: getUserId(req),
-          updatedAt: new Date(),
-        }).where(eq(letters.id, letterId));
+        // A metadata worker may have won the claim. Confirm only if a
+        // transcription attempt did not win the same race.
+        await confirmWhileTranscriptionIsIdle();
         req.log.info({ letterId }, 'Metadata job already claimed by worker — skipping extraction');
       }
     } else {
-      await db.update(letters).set({
-        transcriptConfirmedAt: new Date(),
-        transcriptConfirmedBy: getUserId(req),
-        updatedAt: new Date(),
-      }).where(eq(letters.id, letterId));
+      await confirmWhileTranscriptionIsIdle();
       req.log.info(
         { letterId, metadataStatus: letter.metadataStatus },
         'Skipping metadata extraction — status is not PENDING or FAILED',
@@ -178,13 +210,19 @@ router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
     if (!letter.transcriptConfirmedAt) {
       throw new BadRequestError('Transcript must be confirmed before regenerating metadata');
     }
+    if (letter.transcriptionStatus === 'RUNNING') {
+      throw new BadRequestError('Transcription is already in progress');
+    }
     if (letter.metadataStatus === 'RUNNING') {
       throw new BadRequestError('Metadata extraction is already in progress');
+    }
+    if (letter.entityExtractionStatus === 'RUNNING') {
+      throw new BadRequestError('Entity extraction is already in progress');
     }
 
     // Set metadataStatus directly to RUNNING to claim the job and prevent the
     // background worker from racing to pick it up between reset and extraction.
-    await db.update(letters).set({
+    const claimResult = await db.update(letters).set({
       metadataStatus: 'RUNNING',
       metadataAttemptCount: 0,
       deadLetter: false,
@@ -192,7 +230,15 @@ router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
       entityExtractionStatus: 'PENDING',
       entityExtractionError: null,
       updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
+    }).where(and(
+      ...observedTranscriptConditions(letterId, letter),
+      eq(letters.metadataStatus, letter.metadataStatus),
+      eq(letters.entityExtractionStatus, letter.entityExtractionStatus),
+    )).returning({ id: letters.id });
+
+    if (claimResult.length === 0) {
+      throw new BadRequestError('Letter processing state changed; try again');
+    }
 
     const extractionOptions: ExtractionOptions = {
       previousAiSender: letter.sender ?? undefined,
@@ -214,16 +260,33 @@ router.post('/:letterId/regenerate-entities', async (req, res, next) => {
     if (!letter.transcriptionText) {
       throw new BadRequestError('Letter must have a transcription before extracting entities');
     }
+    if (letter.transcriptionStatus === 'RUNNING') {
+      throw new BadRequestError('Transcription is already in progress');
+    }
     if (letter.entityExtractionStatus === 'RUNNING') {
       throw new BadRequestError('Entity extraction is already in progress');
     }
+    if (letter.metadataStatus === 'RUNNING') {
+      throw new BadRequestError('Metadata extraction is already in progress');
+    }
+    if (letter.metadataStatus !== 'SUCCESS') {
+      throw new BadRequestError('Metadata extraction must complete before extracting entities');
+    }
 
     // Reset to PENDING so the atomic claim in runEntityExtractionOnly succeeds
-    await db.update(letters).set({
+    const resetResult = await db.update(letters).set({
       entityExtractionStatus: 'PENDING',
       entityExtractionError: null,
       updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
+    }).where(and(
+      ...observedTranscriptConditions(letterId, letter),
+      eq(letters.entityExtractionStatus, letter.entityExtractionStatus),
+      eq(letters.metadataStatus, letter.metadataStatus),
+    )).returning({ id: letters.id });
+
+    if (resetResult.length === 0) {
+      throw new BadRequestError('Letter processing state changed; try again');
+    }
 
     await runEntityExtractionOnly(letterId);
     res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
@@ -257,6 +320,9 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
     if (!letter.transcriptionText) {
       throw new BadRequestError('Letter must have a transcription before re-extraction');
     }
+    if (letter.transcriptionStatus === 'RUNNING') {
+      throw new BadRequestError('Transcription is already in progress');
+    }
 
     const metadataV2 = letter.metadataV2Json as Record<string, unknown> | null;
     const senderObj = metadataV2?.sender as { name?: string | null } | undefined;
@@ -275,8 +341,14 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
     );
 
     if (mode === 'full' || mode === 'metadata_only') {
+      if (letter.metadataStatus === 'RUNNING') {
+        throw new BadRequestError('Metadata extraction is already in progress');
+      }
+      if (letter.entityExtractionStatus === 'RUNNING') {
+        throw new BadRequestError('Entity extraction is already in progress');
+      }
       // Set directly to RUNNING to claim the job atomically (prevents worker race)
-      await db.update(letters).set({
+      const claimResult = await db.update(letters).set({
         metadataStatus: 'RUNNING',
         metadataAttemptCount: 0,
         deadLetter: false,
@@ -284,15 +356,40 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
         entityExtractionStatus: 'PENDING',
         entityExtractionError: null,
         updatedAt: new Date(),
-      }).where(eq(letters.id, letterId));
+      }).where(and(
+        ...observedTranscriptConditions(letterId, letter),
+        eq(letters.metadataStatus, letter.metadataStatus),
+        eq(letters.entityExtractionStatus, letter.entityExtractionStatus),
+      )).returning({ id: letters.id });
+
+      if (claimResult.length === 0) {
+        throw new BadRequestError('Letter processing state changed; try again');
+      }
 
       await runMetadataExtractionV2(letterId, extractionOptions, true);
     } else if (mode === 'entities_only') {
-      await db.update(letters).set({
+      if (letter.entityExtractionStatus === 'RUNNING') {
+        throw new BadRequestError('Entity extraction is already in progress');
+      }
+      if (letter.metadataStatus === 'RUNNING') {
+        throw new BadRequestError('Metadata extraction is already in progress');
+      }
+      if (letter.metadataStatus !== 'SUCCESS') {
+        throw new BadRequestError('Metadata extraction must complete before extracting entities');
+      }
+      const resetResult = await db.update(letters).set({
         entityExtractionStatus: 'PENDING',
         entityExtractionError: null,
         updatedAt: new Date(),
-      }).where(eq(letters.id, letterId));
+      }).where(and(
+        ...observedTranscriptConditions(letterId, letter),
+        eq(letters.entityExtractionStatus, letter.entityExtractionStatus),
+        eq(letters.metadataStatus, letter.metadataStatus),
+      )).returning({ id: letters.id });
+
+      if (resetResult.length === 0) {
+        throw new BadRequestError('Letter processing state changed; try again');
+      }
 
       await runEntityExtractionOnly(letterId, extractionOptions);
     }

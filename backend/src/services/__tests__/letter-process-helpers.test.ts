@@ -13,6 +13,7 @@ const {
   recordJobCompletedMock,
   recordJobFailedMock,
   recordJobSkippedMock,
+  cancelTranscriptionAttemptMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   findManyMock: vi.fn(),
@@ -26,6 +27,7 @@ const {
   recordJobCompletedMock: vi.fn(),
   recordJobFailedMock: vi.fn(),
   recordJobSkippedMock: vi.fn(),
+  cancelTranscriptionAttemptMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -71,6 +73,10 @@ vi.mock('../../pipeline/metadataV2.js', () => ({
 
 vi.mock('../letter/extra-content.js', () => ({
   tryTranscribeExtras: vi.fn(),
+}));
+
+vi.mock('../letter/transcription-job.js', () => ({
+  cancelTranscriptionAttempt: cancelTranscriptionAttemptMock,
 }));
 
 vi.mock('../notifications.js', () => ({ notify: notifyMock }));
@@ -127,6 +133,7 @@ const context = {
 describe('letter process helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    cancelTranscriptionAttemptMock.mockResolvedValue(true);
     findManyMock.mockResolvedValue([]);
     updateReturningMock.mockResolvedValue([{ id: 'letter-1' }]);
   });
@@ -201,6 +208,8 @@ describe('letter process helpers', () => {
       transcriptionStatus: 'FAILED',
       transcriptionError: 'Removed from queue by admin',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       updatedAt: expect.any(Date),
     });
   });
@@ -282,6 +291,8 @@ describe('letter process helpers', () => {
       workflow: 'UPLOADED',
       transcriptionAttemptCount: 0,
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       deadLetter: false,
       updatedAt: expect.any(Date),
     });
@@ -296,21 +307,7 @@ describe('letter process helpers', () => {
 
     await cancelActive(transcriptionSpec, 'letter-1');
 
-    expect(updateSetMock).toHaveBeenCalledWith({
-      transcriptionStatus: 'FAILED',
-      transcriptionError: 'Cancelled by admin',
-      transcriptionRunId: null,
-      workflow: 'UPLOADED',
-      updatedAt: expect.any(Date),
-    });
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
-        { kind: 'eq', field: 'letters.transcriptionStatus', value: 'RUNNING' },
-        { kind: 'eq', field: 'letters.transcriptionRunId', value: 'run-a' },
-      ],
-    });
+    expect(cancelTranscriptionAttemptMock).toHaveBeenCalledWith('letter-1', 'run-a');
   });
 
   it('refuses to cancel an invalid running transcription without an owner', async () => {

@@ -12,6 +12,8 @@ const {
   processMetadataMock,
   runEntityExtractionOnlyMock,
   notifyMock,
+  recoverExpiredTranscriptionsMock,
+  cancelTranscriptionAttemptMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   findManyLettersMock: vi.fn(),
@@ -24,10 +26,13 @@ const {
   processMetadataMock: vi.fn(),
   runEntityExtractionOnlyMock: vi.fn(),
   notifyMock: vi.fn(),
+  recoverExpiredTranscriptionsMock: vi.fn(),
+  cancelTranscriptionAttemptMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((field: unknown, value: unknown) => ({ kind: 'eq', field, value })),
+  ne: vi.fn((field: unknown, value: unknown) => ({ kind: 'ne', field, value })),
   and: vi.fn((...clauses: unknown[]) => ({ kind: 'and', clauses })),
   isNotNull: vi.fn((field: unknown) => ({ kind: 'isNotNull', field })),
   inArray: vi.fn((field: unknown, values: unknown[]) => ({
@@ -80,6 +85,8 @@ vi.mock('../../db/index.js', () => {
       updatedAt: 'letters.updatedAt',
       transcriptionStatus: 'letters.transcriptionStatus',
       transcriptionRunId: 'letters.transcriptionRunId',
+      transcriptionLeaseExpiresAt: 'letters.transcriptionLeaseExpiresAt',
+      transcriptionClaimKind: 'letters.transcriptionClaimKind',
       metadataStatus: 'letters.metadataStatus',
       entityExtractionStatus: 'letters.entityExtractionStatus',
       transcriptConfirmedAt: 'letters.transcriptConfirmedAt',
@@ -103,6 +110,11 @@ vi.mock('../notifications.js', () => ({
   notify: notifyMock,
 }));
 
+vi.mock('../letter/transcription-job.js', () => ({
+  recoverExpiredTranscriptions: recoverExpiredTranscriptionsMock,
+  cancelTranscriptionAttempt: cancelTranscriptionAttemptMock,
+}));
+
 vi.mock('../../utils/logger.js', () => ({
   createLogger: vi.fn(() => ({
     info: vi.fn(),
@@ -117,13 +129,16 @@ import {
   buildProcessingConditions,
   cancelActiveJob,
   clearQueue,
+  getQueueStatus,
   getJobProgress,
   getProcessingStatus,
   removeFromQueue,
   resetProcessingState,
   processLettersAsync,
-  recoverOrphanedJobs,
+  recoverExpiredTranscriptionJobs,
   retryJob,
+  startEntityExtractionProcessing,
+  startMetadataProcessing,
   updateJobProgress,
 } from '../processing-queue.js';
 
@@ -136,6 +151,8 @@ describe('processing queue service', () => {
     updateWhereMock.mockReturnValue({ returning: updateReturningMock });
     updateReturningMock.mockResolvedValue([{ id: 'letter-3' }]);
     processLetterMock.mockResolvedValue(undefined);
+    recoverExpiredTranscriptionsMock.mockResolvedValue({ requeued: [], failed: [] });
+    cancelTranscriptionAttemptMock.mockResolvedValue(true);
   });
 
   it('returns collectionNotFound when the collection code does not match any records', async () => {
@@ -177,6 +194,59 @@ describe('processing queue service', () => {
     ]);
   });
 
+  it('hides retranscribing letters from legacy downstream queue snapshots', async () => {
+    await getQueueStatus();
+
+    expect(findManyLettersMock.mock.calls[2]?.[0]).toMatchObject({
+      where: {
+        kind: 'and',
+        clauses: expect.arrayContaining([
+          { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
+        ]),
+      },
+    });
+    expect(findManyLettersMock.mock.calls[3]?.[0]).toMatchObject({
+      where: {
+        kind: 'and',
+        clauses: expect.arrayContaining([
+          { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
+        ]),
+      },
+    });
+  });
+
+  it('excludes retranscribing letters from legacy metadata batches', async () => {
+    await expect(startMetadataProcessing({})).resolves.toEqual({
+      message: 'No letters to process',
+      total: 0,
+    });
+
+    expect(findManyLettersMock).toHaveBeenCalledWith({
+      where: {
+        kind: 'and',
+        clauses: expect.arrayContaining([
+          { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
+        ]),
+      },
+    });
+  });
+
+  it('excludes retranscribing letters from legacy entity batches', async () => {
+    await expect(startEntityExtractionProcessing({})).resolves.toEqual({
+      message: 'No letters to process',
+      total: 0,
+    });
+
+    expect(findManyLettersMock).toHaveBeenCalledWith({
+      where: {
+        kind: 'and',
+        clauses: expect.arrayContaining([
+          { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
+        ]),
+      },
+    });
+  });
+
   it('marks removed transcription jobs so they no longer stay queued', async () => {
     findFirstMock.mockResolvedValue({
       id: 'letter-1',
@@ -201,6 +271,8 @@ describe('processing queue service', () => {
       updatedAt: 'letters.updatedAt',
       transcriptionStatus: 'letters.transcriptionStatus',
       transcriptionRunId: 'letters.transcriptionRunId',
+      transcriptionLeaseExpiresAt: 'letters.transcriptionLeaseExpiresAt',
+      transcriptionClaimKind: 'letters.transcriptionClaimKind',
       metadataStatus: 'letters.metadataStatus',
       entityExtractionStatus: 'letters.entityExtractionStatus',
       transcriptConfirmedAt: 'letters.transcriptConfirmedAt',
@@ -208,6 +280,8 @@ describe('processing queue service', () => {
     expect(updateSetMock).toHaveBeenCalledWith({
       transcriptionStatus: 'FAILED',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       transcriptionError: 'Removed from queue by admin',
       updatedAt: expect.any(Date),
     });
@@ -244,6 +318,8 @@ describe('processing queue service', () => {
     expect(updateSetMock).toHaveBeenCalledWith({
       transcriptionStatus: 'FAILED',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       transcriptionError: 'Cleared from queue by admin',
       updatedAt: expect.any(Date),
     });
@@ -260,6 +336,42 @@ describe('processing queue service', () => {
     });
   });
 
+  it('clears only metadata rows that remain queued outside retranscription', async () => {
+    findManyLettersMock.mockResolvedValue([{ id: 'letter-1' }, { id: 'letter-2' }]);
+    updateReturningMock.mockResolvedValue([{ id: 'letter-2' }]);
+
+    await expect(clearQueue('metadata')).resolves.toEqual({
+      message: 'Cleared 1 items from metadata queue',
+      cleared: 1,
+    });
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        { kind: 'inArray', field: 'letters.id', values: ['letter-1', 'letter-2'] },
+        { kind: 'eq', field: 'letters.metadataStatus', value: 'PENDING' },
+        { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
+      ],
+    });
+  });
+
+  it('clears only entity rows that remain queued outside retranscription', async () => {
+    findManyLettersMock.mockResolvedValue([{ id: 'letter-1' }, { id: 'letter-2' }]);
+    updateReturningMock.mockResolvedValue([{ id: 'letter-1' }]);
+
+    await expect(clearQueue('entity_extraction')).resolves.toEqual({
+      message: 'Cleared 1 items from entity_extraction queue',
+      cleared: 1,
+    });
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        { kind: 'inArray', field: 'letters.id', values: ['letter-1', 'letter-2'] },
+        { kind: 'eq', field: 'letters.entityExtractionStatus', value: 'PENDING' },
+        { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
+      ],
+    });
+  });
+
   it('retries a transcription only while it remains failed', async () => {
     findFirstMock.mockResolvedValue({
       id: 'letter-1',
@@ -272,6 +384,8 @@ describe('processing queue service', () => {
     expect(updateSetMock).toHaveBeenCalledWith({
       transcriptionStatus: 'PENDING',
       transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionClaimKind: null,
       transcriptionError: null,
       transcriptionAttemptCount: 0,
       deadLetter: false,
@@ -330,21 +444,7 @@ describe('processing queue service', () => {
     const result = await cancelActiveJob('letter-3', 'transcription');
 
     expect(result).toEqual({ message: 'Job cancelled' });
-    expect(updateSetMock).toHaveBeenCalledWith({
-      transcriptionStatus: 'FAILED',
-      transcriptionRunId: null,
-      transcriptionError: 'Cancelled by admin',
-      workflow: 'UPLOADED',
-      updatedAt: expect.any(Date),
-    });
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-3' },
-        { kind: 'eq', field: 'letters.transcriptionStatus', value: 'RUNNING' },
-        { kind: 'eq', field: 'letters.transcriptionRunId', value: 'run-a' },
-      ],
-    });
+    expect(cancelTranscriptionAttemptMock).toHaveBeenCalledWith('letter-3', 'run-a');
     expect(getJobProgress('letter-3', 'transcription')).toBeUndefined();
   });
 
@@ -377,56 +477,35 @@ describe('processing queue service', () => {
     }));
   });
 
-  it('recovers only the transcription run ID observed during startup scanning', async () => {
-    findManyLettersMock.mockResolvedValue([{
-      id: 'letter-orphan',
-      dateRaw: '19470813',
-      transcriptionStatus: 'RUNNING',
-      transcriptionRunId: 'run-a',
-      metadataStatus: 'SUCCESS',
-      entityExtractionStatus: 'SUCCESS',
-      workflow: 'TRANSCRIBING',
-    }]);
-    updateReturningMock.mockResolvedValue([{ id: 'letter-orphan' }]);
-
-    await recoverOrphanedJobs();
-
-    expect(updateSetMock).toHaveBeenCalledWith({
-      transcriptionStatus: 'PENDING',
-      transcriptionRunId: null,
-      workflow: 'UPLOADED',
-      updatedAt: expect.any(Date),
+  it('reports only expired transcriptions returned by the lifecycle owner', async () => {
+    recoverExpiredTranscriptionsMock.mockResolvedValue({
+      requeued: [{ id: 'letter-orphan', dateRaw: '19470813' }],
+      failed: [],
     });
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-orphan' },
-        { kind: 'eq', field: 'letters.transcriptionStatus', value: 'RUNNING' },
-        { kind: 'eq', field: 'letters.transcriptionRunId', value: 'run-a' },
-      ],
+
+    await expect(recoverExpiredTranscriptionJobs()).resolves.toEqual({
+      requeued: [{ id: 'letter-orphan', dateRaw: '19470813' }],
+      failed: [],
     });
+
+    expect(findManyLettersMock).not.toHaveBeenCalled();
+    expect(updateSetMock).not.toHaveBeenCalled();
     expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({
       type: 'job_orphan_recovered',
       metadata: expect.objectContaining({
         count: 1,
         letterIds: ['letter-orphan'],
+        transcriptionRequeued: 1,
+        transcriptionFailed: 0,
       }),
     }));
   });
 
-  it('does not report recovery when the observed transcription run loses ownership', async () => {
-    findManyLettersMock.mockResolvedValue([{
-      id: 'letter-orphan',
-      dateRaw: '19470813',
-      transcriptionStatus: 'RUNNING',
-      transcriptionRunId: 'run-a',
-      metadataStatus: 'SUCCESS',
-      entityExtractionStatus: 'SUCCESS',
-      workflow: 'TRANSCRIBING',
-    }]);
-    updateReturningMock.mockResolvedValue([]);
-
-    await recoverOrphanedJobs();
+  it('does not report live or unknown transcription leases that were not recovered', async () => {
+    await expect(recoverExpiredTranscriptionJobs()).resolves.toEqual({
+      requeued: [],
+      failed: [],
+    });
 
     expect(notifyMock).not.toHaveBeenCalled();
   });
@@ -437,7 +516,7 @@ describe('processing queue service', () => {
       transcriptionStatus: 'RUNNING',
       transcriptionRunId: 'run-a',
     });
-    updateReturningMock.mockResolvedValue([]);
+    cancelTranscriptionAttemptMock.mockResolvedValue(false);
 
     await expect(cancelActiveJob('letter-3', 'transcription')).rejects.toMatchObject({
       statusCode: 409,

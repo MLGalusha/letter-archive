@@ -39,6 +39,11 @@ const allowedRecoveryCallers = new Set([
   'worker.ts',
 ]);
 
+const allowedExpiredTranscriptionRecoveryCallers = new Set([
+  'services/processing-queue.ts',
+  'worker.ts',
+]);
+
 const allowedTranscribeImageCallers = new Set([
   'ai/openai/transcription.ts',
   'pipeline/transcription.ts',
@@ -167,7 +172,47 @@ describe('processing execution ownership', () => {
     expect(unexpectedWriters.sort()).toEqual([]);
   });
 
-  it('allows startup recovery callers to be removed but not silently multiplied', async () => {
+  it('keeps non-null transcription lease writes inside the claim owner', async () => {
+    const files = await productionTypeScriptFiles(sourceRoot);
+    const unexpectedWriters: string[] = [];
+
+    for (const absolutePath of files) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      if (relativePath === 'db/schema.ts' || relativePath === canonicalTranscriptionClaimOwner) {
+        continue;
+      }
+      const source = await readFile(absolutePath, 'utf8');
+      const writesLease = [...source.matchAll(
+        /\btranscriptionLeaseExpiresAt\s*:\s*([^,\n}]+)/g,
+      )].some(match => match[1].trim() !== 'null');
+      const writesClaimKind = [...source.matchAll(
+        /\btranscriptionClaimKind\s*:\s*([^,\n}]+)/g,
+      )].some(match => match[1].trim() !== 'null');
+      if (writesLease || writesClaimKind) unexpectedWriters.push(relativePath);
+    }
+
+    expect(unexpectedWriters.sort()).toEqual([]);
+  });
+
+  it('allows expired transcription recovery callers to be removed but not multiplied', async () => {
+    const files = await productionTypeScriptFiles(sourceRoot);
+    const unexpectedCallers: string[] = [];
+
+    for (const absolutePath of files) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      if (relativePath === canonicalTranscriptionClaimOwner) continue;
+      if (
+        /\brecoverExpiredTranscriptions\s*\(\)/.test(await readFile(absolutePath, 'utf8'))
+        && !allowedExpiredTranscriptionRecoveryCallers.has(relativePath)
+      ) {
+        unexpectedCallers.push(relativePath);
+      }
+    }
+
+    expect(unexpectedCallers.sort()).toEqual([]);
+  });
+
+  it('allows startup lease-recovery callers to be removed but not silently multiplied', async () => {
     const files = await productionTypeScriptFiles(sourceRoot);
     const unexpectedCallers: string[] = [];
 
@@ -175,7 +220,9 @@ describe('processing execution ownership', () => {
       const relativePath = path.relative(sourceRoot, absolutePath);
       if (relativePath === 'services/processing-queue.ts') continue;
       if (
-        /\brecoverOrphanedJobs\s*\(\)/.test(await readFile(absolutePath, 'utf8')) &&
+        /\brecoverExpiredTranscriptionJobs\s*\(\)/.test(
+          await readFile(absolutePath, 'utf8'),
+        ) &&
         !allowedRecoveryCallers.has(relativePath)
       ) {
         unexpectedCallers.push(relativePath);
@@ -183,5 +230,18 @@ describe('processing execution ownership', () => {
     }
 
     expect(unexpectedCallers.sort()).toEqual([]);
+  });
+
+  it('keeps rolling-deploy cross-stage exclusion in schema and migration', async () => {
+    const schema = await readFile(path.join(sourceRoot, 'db/schema.ts'), 'utf8');
+    const migration = await readFile(
+      path.join(sourceRoot, 'db/migrations/0047_add_transcription_leases.sql'),
+      'utf8',
+    );
+
+    expect(schema).toContain('transcription_excludes_downstream_running');
+    expect(migration).toMatch(
+      /ADD CONSTRAINT "transcription_excludes_downstream_running"[\s\S]*NOT VALID/,
+    );
   });
 });

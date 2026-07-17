@@ -69,7 +69,8 @@ export async function processMetadata(letterId: string): Promise<void> {
   // which may allow bypassing confirmation with user approval
   if (
     letter.workflow === 'TRANSCRIBED' &&
-    letter.metadataStatus === 'PENDING'
+    letter.metadataStatus === 'PENDING' &&
+    letter.transcriptionStatus !== 'RUNNING'
   ) {
     log.info({ letterId }, 'Processing metadata');
     // Pass existing sender/recipient as corrections so the AI uses pre-filled names

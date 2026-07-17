@@ -6,6 +6,13 @@ const log = createLogger({ module: 'worker-state' });
 
 const SINGLETON_ID = 'singleton';
 
+export interface WorkerStateUpdate {
+  lastTickAt?: Date | null;
+  isPolling?: boolean;
+  lastError?: string | null;
+  currentBatchSize?: number | null;
+}
+
 export interface WorkerStateSnapshot {
   lastTickAt: string | null;
   isPolling: boolean;
@@ -14,40 +21,90 @@ export interface WorkerStateSnapshot {
   updatedAt: string | null;
 }
 
+async function writeWorkerState(partial: WorkerStateUpdate): Promise<void> {
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (partial.lastTickAt !== undefined) updates.lastTickAt = partial.lastTickAt;
+  if (partial.isPolling !== undefined) updates.isPolling = partial.isPolling;
+  if (partial.lastError !== undefined) updates.lastError = partial.lastError;
+  if (partial.currentBatchSize !== undefined) updates.currentBatchSize = partial.currentBatchSize;
+
+  // Upsert-style: update; if no row exists, insert it.
+  const result = await db
+    .update(workerState)
+    .set(updates)
+    .where(eq(workerState.id, SINGLETON_ID))
+    .returning({ id: workerState.id });
+
+  if (result.length === 0) {
+    await db.insert(workerState).values({
+      id: SINGLETON_ID,
+      ...updates,
+    });
+  }
+}
+
 /**
- * Write a partial update to the worker_state singleton. Failures are logged
- * but swallowed — the worker should never crash because we couldn't write
- * its heartbeat.
+ * Write a best-effort worker-state update. Heartbeat visibility must not make
+ * ordinary processing fail when the state row is temporarily unavailable.
  */
-export async function setWorkerState(partial: {
-  lastTickAt?: Date | null;
-  isPolling?: boolean;
-  lastError?: string | null;
-  currentBatchSize?: number | null;
-}): Promise<void> {
+export async function setWorkerState(partial: WorkerStateUpdate): Promise<void> {
   try {
-    const updates: Record<string, unknown> = { updatedAt: new Date() };
-    if (partial.lastTickAt !== undefined) updates.lastTickAt = partial.lastTickAt;
-    if (partial.isPolling !== undefined) updates.isPolling = partial.isPolling;
-    if (partial.lastError !== undefined) updates.lastError = partial.lastError;
-    if (partial.currentBatchSize !== undefined) updates.currentBatchSize = partial.currentBatchSize;
-
-    // Upsert-style: update; if no row exists, insert it.
-    const result = await db
-      .update(workerState)
-      .set(updates)
-      .where(eq(workerState.id, SINGLETON_ID))
-      .returning({ id: workerState.id });
-
-    if (result.length === 0) {
-      await db.insert(workerState).values({
-        id: SINGLETON_ID,
-        ...updates,
-      });
-    }
+    await writeWorkerState(partial);
   } catch (err) {
     log.warn({ err }, 'Failed to write worker state');
   }
+}
+
+/**
+ * Write worker state without containing the failure. Exit handoff relies on
+ * this variant so a failed idle-state publication makes the worker job fail.
+ */
+export async function setWorkerStateOrThrow(partial: WorkerStateUpdate): Promise<void> {
+  await writeWorkerState(partial);
+}
+
+/**
+ * Serializes heartbeat writes with the exit handoff. Once relinquishment
+ * begins, new heartbeats are ignored and every accepted heartbeat settles
+ * before the required idle-state write runs.
+ */
+export function createWorkerStatePublisher({
+  writeBestEffort = setWorkerState,
+  writeRequired = setWorkerStateOrThrow,
+}: {
+  writeBestEffort?: (partial: WorkerStateUpdate) => Promise<void>;
+  writeRequired?: (partial: WorkerStateUpdate) => Promise<void>;
+} = {}) {
+  let writesEnabled = true;
+  let tail: Promise<void> = Promise.resolve();
+
+  const enqueue = (
+    write: (partial: WorkerStateUpdate) => Promise<void>,
+    partial: WorkerStateUpdate,
+  ): Promise<void> => {
+    const queued = tail.then(() => write(partial));
+    // A required write still rejects to its caller, but must not permanently
+    // poison the queue used by fatal cleanup.
+    tail = queued.catch(() => undefined);
+    return queued;
+  };
+
+  return {
+    publishHeartbeat(partial: WorkerStateUpdate): void {
+      if (!writesEnabled) return;
+      void enqueue(writeBestEffort, partial);
+    },
+
+    async relinquish(partial: WorkerStateUpdate): Promise<void> {
+      writesEnabled = false;
+      await enqueue(writeRequired, partial);
+    },
+
+    async resume(partial: WorkerStateUpdate): Promise<void> {
+      await enqueue(writeBestEffort, partial);
+      writesEnabled = true;
+    },
+  };
 }
 
 /**

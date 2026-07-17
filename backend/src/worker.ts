@@ -1,21 +1,62 @@
 import 'dotenv/config';
-import { eq, and, isNotNull, inArray } from 'drizzle-orm';
+import { eq, and, isNotNull, inArray, ne } from 'drizzle-orm';
 import { db, letters } from './db/index.js';
 import { processLetter, processMetadata } from './pipeline/processor.js';
 import { runEntityExtractionOnly } from './pipeline/metadataV2.js';
 import { createLogger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { TRANSCRIBABLE_TYPES } from './services/letter/shared.js';
 import { notify } from './services/notifications.js';
-import { recoverOrphanedJobs } from './services/processing-queue.js';
-import { setWorkerState } from './services/worker-state.js';
+import { recoverExpiredTranscriptionJobs } from './services/processing-queue.js';
+import {
+  createWorkerStatePublisher,
+  setWorkerState,
+} from './services/worker-state.js';
+import {
+  createWorkerTranscriptionRecovery,
+  decideEmptyWorkerJob,
+} from './services/worker-transcription-recovery.js';
 
 const log = createLogger({ module: 'worker' });
 
 const POLL_INTERVAL = 5000; // 5 seconds
 const BATCH_SIZE = 5;
+const TRANSCRIPTION_RECOVERY_INTERVAL_MS = 60_000;
+const workerStatePublisher = createWorkerStatePublisher();
+
+const transcriptionRecovery = createWorkerTranscriptionRecovery({
+  intervalMs: TRANSCRIPTION_RECOVERY_INTERVAL_MS,
+  recover: recoverExpiredTranscriptionJobs,
+  onError: (error: unknown) => {
+    log.error({ err: error }, 'Expired transcription lease recovery failed');
+  },
+});
+
+async function getQueuedTranscriptionWorkState(): Promise<'pending' | 'leased' | 'none'> {
+  const pending = await db.query.letters.findFirst({
+    where: and(
+      inArray(letters.type, [...TRANSCRIBABLE_TYPES]),
+      eq(letters.transcriptionStatus, 'PENDING'),
+      eq(letters.workflow, 'UPLOADED'),
+      eq(letters.deadLetter, false),
+    ),
+    columns: { id: true },
+  });
+  if (pending) return 'pending';
+
+  const leased = await db.query.letters.findFirst({
+    where: and(
+      eq(letters.transcriptionStatus, 'RUNNING'),
+      eq(letters.transcriptionClaimKind, 'QUEUED'),
+      isNotNull(letters.transcriptionRunId),
+      isNotNull(letters.transcriptionLeaseExpiresAt),
+    ),
+    columns: { id: true },
+  });
+  return leased ? 'leased' : 'none';
+}
 
 function publishHeartbeat(currentBatchSize: number, lastError: string | null = null): void {
-  void setWorkerState({
+  workerStatePublisher.publishHeartbeat({
     lastTickAt: new Date(),
     isPolling: true,
     lastError,
@@ -56,6 +97,7 @@ async function findLettersNeedingMetadata() {
     where: and(
       eq(letters.type, 'L'),
       eq(letters.workflow, 'TRANSCRIBED'),
+      ne(letters.transcriptionStatus, 'RUNNING'),
       eq(letters.metadataStatus, 'PENDING'),
       isNotNull(letters.transcriptConfirmedAt),
       eq(letters.deadLetter, false),
@@ -72,6 +114,7 @@ async function findLettersNeedingEntityExtraction() {
   return db.query.letters.findMany({
     where: and(
       eq(letters.type, 'L'),
+      ne(letters.transcriptionStatus, 'RUNNING'),
       eq(letters.metadataStatus, 'SUCCESS'),
       eq(letters.entityExtractionStatus, 'PENDING'),
       eq(letters.deadLetter, false),
@@ -271,13 +314,10 @@ async function main() {
     'Background worker starting'
   );
 
-  // Legacy startup recovery is deliberately broad and not lease-aware. It can
-  // reset work owned by another live process; Slice 005 tracks the durable fix.
-  try {
-    await recoverOrphanedJobs();
-  } catch (error) {
-    log.error({ err: error }, 'Orphan recovery failed; continuing anyway');
-  }
+  // Only leased transcription attempts are safe to recover automatically.
+  // Ownerless metadata/entity RUNNING rows remain visible for explicit action.
+  await transcriptionRecovery.reconcile();
+  transcriptionRecovery.start();
 
   if (!EXIT_WHEN_EMPTY) {
     // Only announce in long-running polling mode — a short-lived Job
@@ -310,8 +350,9 @@ async function main() {
       });
       if (EXIT_WHEN_EMPTY) {
         // In Job mode, surface the failure as a non-zero exit so the
-        // Cloud Run Job execution is marked failed and visible.
-        process.exit(1);
+        // Cloud Run Job execution is marked failed and retried. Throwing lets
+        // the top-level handler settle any active lease recovery before exit.
+        throw error;
       }
     }
 
@@ -319,8 +360,45 @@ async function main() {
 
     if (EXIT_WHEN_EMPTY) {
       if (!processedAny) {
-        log.info('Queues empty, exiting (EXIT_WHEN_EMPTY mode)');
-        break;
+        // Quiesce the interval before the exit decision so a recovery cannot
+        // requeue work between the empty scan and process exit.
+        await transcriptionRecovery.stopAndWait();
+        let decision = await decideEmptyWorkerJob({
+          reconcile: transcriptionRecovery.reconcile,
+          getQueuedWorkState: getQueuedTranscriptionWorkState,
+        });
+
+        if (decision === 'exit') {
+          // Relinquish the persisted heartbeat before the final queue check.
+          // An enqueue that still observed the old heartbeat committed first
+          // and is visible to this recheck; a later enqueue sees idle state and
+          // triggers a replacement Cloud Run Job.
+          await workerStatePublisher.relinquish({
+            lastTickAt: new Date(),
+            isPolling: false,
+            currentBatchSize: 0,
+          });
+          decision = await decideEmptyWorkerJob({
+            reconcile: transcriptionRecovery.reconcile,
+            getQueuedWorkState: getQueuedTranscriptionWorkState,
+          });
+        }
+
+        if (decision === 'exit') {
+          log.info('Queues empty with no queued transcription lease, exiting (EXIT_WHEN_EMPTY mode)');
+          break;
+        }
+        if (shuttingDown) break;
+        await workerStatePublisher.resume({
+          lastTickAt: new Date(),
+          isPolling: true,
+          currentBatchSize: 0,
+        });
+        transcriptionRecovery.start();
+        if (decision === 'wait') {
+          log.info('Queues empty but a queued transcription lease remains; waiting for recovery');
+          await sleep(POLL_INTERVAL);
+        }
       }
       // Drain as fast as we can — no poll sleep in Job mode.
       continue;
@@ -329,7 +407,8 @@ async function main() {
     await sleep(POLL_INTERVAL);
   }
 
-  void setWorkerState({ isPolling: false });
+  await transcriptionRecovery.stopAndWait();
+  await workerStatePublisher.relinquish({ isPolling: false });
   log.info({ mode: EXIT_WHEN_EMPTY ? 'job' : 'poll' }, 'Worker loop exited cleanly');
   process.exit(0);
 }
@@ -338,8 +417,11 @@ async function main() {
 function gracefulShutdown(signal: string) {
   if (shuttingDown) return;
   shuttingDown = true;
+  void transcriptionRecovery.stopAndWait();
   log.info({ signal }, 'Shutdown signal received, finishing current job');
-  void setWorkerState({ isPolling: false });
+  void workerStatePublisher.relinquish({ isPolling: false }).catch((error: unknown) => {
+    log.warn({ err: error }, 'Failed to publish worker shutdown state');
+  });
 
   // Force exit after 25s if a job is stuck (Cloud Run default termination is 30s)
   setTimeout(() => {
@@ -351,7 +433,13 @@ function gracefulShutdown(signal: string) {
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
-main().catch((error) => {
+main().catch(async (error) => {
+  await transcriptionRecovery.stopAndWait();
+  try {
+    await workerStatePublisher.relinquish({ isPolling: false });
+  } catch (stateError) {
+    log.error({ err: stateError }, 'Failed to publish worker idle state during fatal exit');
+  }
   log.fatal({ err: error }, 'Fatal error in worker');
   process.exit(1);
 });

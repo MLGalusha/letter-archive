@@ -1,4 +1,4 @@
-import { eq, and, isNotNull, inArray, sql, or, ilike } from 'drizzle-orm';
+import { eq, and, isNotNull, inArray, sql, or, ilike, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { PAGINATION } from '../constants/pagination.js';
 import { TIMING } from '../constants/timing.js';
@@ -8,6 +8,11 @@ import { runEntityExtractionOnly } from '../pipeline/metadataV2.js';
 import { createLogger } from '../utils/logger.js';
 import { notify } from './notifications.js';
 import { TRANSCRIBABLE_TYPES } from './letter/shared.js';
+import {
+  cancelTranscriptionAttempt,
+  recoverExpiredTranscriptions,
+  type TranscriptionRecoveryResult,
+} from './letter/transcription-job.js';
 import { shouldUseCloudRunWorkerJob, triggerWorkerJob } from './cloud-run-job.js';
 import {
   shouldAbortProcessing as runnerShouldAbort,
@@ -377,123 +382,43 @@ export function getProcessingStatus(): ProcessingState {
 }
 
 /**
- * Attempts startup recovery for rows observed in RUNNING state. A matching run
- * ID prevents stale transcription snapshots from resetting a newer attempt,
- * but without leases this cannot prove that the observed owner is no longer live.
+ * Reconciles only expired, leased transcription attempts. Metadata and entity
+ * attempts have no durable owner token yet, so resetting them at process startup
+ * can displace a producer that is still alive. They remain RUNNING until their
+ * lifecycle is fenced or an administrator explicitly intervenes.
  */
-export async function recoverOrphanedJobs(): Promise<void> {
-  const recoveryCandidates = await db.query.letters.findMany({
-    where: or(
-      eq(letters.transcriptionStatus, 'RUNNING'),
-      eq(letters.metadataStatus, 'RUNNING'),
-      eq(letters.entityExtractionStatus, 'RUNNING')
-    ),
-    columns: {
-      id: true,
-      dateRaw: true,
-      transcriptionStatus: true,
-      transcriptionRunId: true,
-      metadataStatus: true,
-      entityExtractionStatus: true,
-    },
-  });
+export async function recoverExpiredTranscriptionJobs(): Promise<TranscriptionRecoveryResult> {
+  const transcription = await recoverExpiredTranscriptions();
+  const recoveredLetterIds = [
+    ...transcription.requeued.map(row => row.id),
+    ...transcription.failed.map(row => row.id),
+  ];
 
-  if (recoveryCandidates.length === 0) return;
-
-  log.warn({ count: recoveryCandidates.length }, 'Found jobs in RUNNING status — attempting startup recovery');
-
-  const recoveredLetterIds = new Set<string>();
-
-  for (const letter of recoveryCandidates) {
-    if (letter.transcriptionStatus === 'RUNNING') {
-      if (!letter.transcriptionRunId) {
-        log.warn(
-          { letterId: letter.id, dateRaw: letter.dateRaw },
-          'Skipping invalid RUNNING transcription without a run ID',
-        );
-      } else {
-        const recovered = await db
-          .update(letters)
-          .set({
-            transcriptionStatus: 'PENDING',
-            transcriptionRunId: null,
-            workflow: 'UPLOADED',
-            updatedAt: new Date(),
-          })
-          .where(and(
-            eq(letters.id, letter.id),
-            eq(letters.transcriptionStatus, 'RUNNING'),
-            eq(letters.transcriptionRunId, letter.transcriptionRunId),
-          ))
-          .returning({ id: letters.id });
-
-        if (recovered.length > 0) {
-          recoveredLetterIds.add(letter.id);
-          log.info({ letterId: letter.id, dateRaw: letter.dateRaw }, 'Reset startup transcription candidate');
-        } else {
-          log.info(
-            { letterId: letter.id, runId: letter.transcriptionRunId },
-            'Skipped transcription recovery because ownership changed',
-          );
-        }
-      }
-    }
-    if (letter.metadataStatus === 'RUNNING') {
-      const recovered = await db
-        .update(letters)
-        .set({
-          metadataStatus: 'PENDING',
-          workflow: 'TRANSCRIBED',
-          updatedAt: new Date(),
-        })
-        .where(and(
-          eq(letters.id, letter.id),
-          eq(letters.metadataStatus, 'RUNNING'),
-        ))
-        .returning({ id: letters.id });
-      if (recovered.length > 0) {
-        recoveredLetterIds.add(letter.id);
-        log.info({ letterId: letter.id, dateRaw: letter.dateRaw }, 'Reset startup metadata candidate');
-      }
-    }
-    if (letter.entityExtractionStatus === 'RUNNING') {
-      const recovered = await db
-        .update(letters)
-        .set({
-          entityExtractionStatus: 'PENDING',
-          updatedAt: new Date(),
-        })
-        .where(and(
-          eq(letters.id, letter.id),
-          eq(letters.entityExtractionStatus, 'RUNNING'),
-        ))
-        .returning({ id: letters.id });
-      if (recovered.length > 0) {
-        recoveredLetterIds.add(letter.id);
-        log.info({ letterId: letter.id, dateRaw: letter.dateRaw }, 'Reset startup entity candidate');
-      }
-    }
+  if (recoveredLetterIds.length === 0) {
+    log.info('Recovery found no expired leased transcription attempts');
+    return transcription;
   }
 
-  if (recoveredLetterIds.size === 0) {
-    log.info('Startup recovery found no attempts that were still owned');
-    return;
-  }
-
-  const recoveredIds = [...recoveredLetterIds];
-  log.info({ count: recoveredIds.length }, 'Startup job recovery complete');
+  log.info(
+    { count: recoveredLetterIds.length },
+    'Reconciled expired leased transcription attempts',
+  );
 
   void notify({
     type: 'job_orphan_recovered',
-    title: `Reset ${recoveredIds.length} startup job${recoveredIds.length === 1 ? '' : 's'}`,
-    message: 'Reset RUNNING attempts that still matched the startup snapshot.',
+    title: `Reconciled ${recoveredLetterIds.length} expired transcription attempt${recoveredLetterIds.length === 1 ? '' : 's'}`,
+    message: 'Reconciled only attempts whose persisted lease had expired.',
     metadata: {
-      count: recoveredIds.length,
-      letterIds: recoveredIds,
+      count: recoveredLetterIds.length,
+      letterIds: recoveredLetterIds,
+      transcriptionRequeued: transcription.requeued.length,
+      transcriptionFailed: transcription.failed.length,
     },
-    dedupeKey: 'job_orphan_recovered',
+    dedupeKey: 'job_orphan_recovered:transcription-lease',
     dedupeWindowMinutes: 5,
   });
+
+  return transcription;
 }
 
 /**
@@ -586,6 +511,7 @@ export async function getQueueStatus() {
       eq(letters.type, 'L'),
       eq(letters.workflow, 'TRANSCRIBED'),
       eq(letters.metadataStatus, 'PENDING'),
+      ne(letters.transcriptionStatus, 'RUNNING'),
       isNotNull(letters.transcriptConfirmedAt)
     ),
     with: { collection: true },
@@ -598,7 +524,8 @@ export async function getQueueStatus() {
     where: and(
       eq(letters.type, 'L'),
       eq(letters.metadataStatus, 'SUCCESS'),
-      eq(letters.entityExtractionStatus, 'PENDING')
+      eq(letters.entityExtractionStatus, 'PENDING'),
+      ne(letters.transcriptionStatus, 'RUNNING')
     ),
     with: { collection: true },
     orderBy: (l, { asc }) => [asc(l.createdAt)],
@@ -780,7 +707,8 @@ export async function startMetadataProcessing(options: ProcessingFilterOptions):
     eq(letters.type, 'L'),
     eq(letters.workflow, 'TRANSCRIBED'),
     isNotNull(letters.transcriptConfirmedAt),
-    eq(letters.metadataStatus, 'PENDING')
+    eq(letters.metadataStatus, 'PENDING'),
+    ne(letters.transcriptionStatus, 'RUNNING')
   ];
 
   const { conditions, collectionNotFound } = await buildProcessingConditions(options, baseConditions);
@@ -814,7 +742,8 @@ export async function startEntityExtractionProcessing(options: ProcessingFilterO
   const baseConditions: ReturnType<typeof eq>[] = [
     eq(letters.type, 'L'),
     eq(letters.metadataStatus, 'SUCCESS'),
-    eq(letters.entityExtractionStatus, 'PENDING')
+    eq(letters.entityExtractionStatus, 'PENDING'),
+    ne(letters.transcriptionStatus, 'RUNNING')
   ];
 
   const { conditions, collectionNotFound } = await buildProcessingConditions(options, baseConditions);
@@ -952,6 +881,8 @@ export async function removeFromQueue(letterId: string, type: QueueJobType): Pro
       .set({
         transcriptionStatus: 'FAILED',
         transcriptionRunId: null,
+        transcriptionLeaseExpiresAt: null,
+        transcriptionClaimKind: null,
         transcriptionError: 'Removed from queue by admin',
         updatedAt: new Date(),
       })
@@ -1007,6 +938,8 @@ export async function clearQueue(type: QueueJobType): Promise<{ message: string;
         .set({
           transcriptionStatus: 'FAILED',
           transcriptionRunId: null,
+          transcriptionLeaseExpiresAt: null,
+          transcriptionClaimKind: null,
           transcriptionError: 'Cleared from queue by admin',
           updatedAt: new Date(),
         })
@@ -1023,34 +956,52 @@ export async function clearQueue(type: QueueJobType): Promise<{ message: string;
         eq(letters.type, 'L'),
         eq(letters.workflow, 'TRANSCRIBED'),
         eq(letters.metadataStatus, 'PENDING'),
+        ne(letters.transcriptionStatus, 'RUNNING'),
         isNotNull(letters.transcriptConfirmedAt)
       ),
       columns: { id: true },
     });
     if (queued.length > 0) {
-      await db.update(letters).set({
-        metadataStatus: 'FAILED',
-        metadataError: 'Cleared from queue by admin',
-        updatedAt: new Date(),
-      }).where(inArray(letters.id, queued.map(l => l.id)));
-      cleared = queued.length;
+      const clearedRows = await db
+        .update(letters)
+        .set({
+          metadataStatus: 'FAILED',
+          metadataError: 'Cleared from queue by admin',
+          updatedAt: new Date(),
+        })
+        .where(and(
+          inArray(letters.id, queued.map(l => l.id)),
+          eq(letters.metadataStatus, 'PENDING'),
+          ne(letters.transcriptionStatus, 'RUNNING'),
+        ))
+        .returning({ id: letters.id });
+      cleared = clearedRows.length;
     }
   } else if (type === 'entity_extraction') {
     const queued = await db.query.letters.findMany({
       where: and(
         eq(letters.type, 'L'),
         eq(letters.metadataStatus, 'SUCCESS'),
-        eq(letters.entityExtractionStatus, 'PENDING')
+        eq(letters.entityExtractionStatus, 'PENDING'),
+        ne(letters.transcriptionStatus, 'RUNNING')
       ),
       columns: { id: true },
     });
     if (queued.length > 0) {
-      await db.update(letters).set({
-        entityExtractionStatus: 'FAILED',
-        entityExtractionError: 'Cleared from queue by admin',
-        updatedAt: new Date(),
-      }).where(inArray(letters.id, queued.map(l => l.id)));
-      cleared = queued.length;
+      const clearedRows = await db
+        .update(letters)
+        .set({
+          entityExtractionStatus: 'FAILED',
+          entityExtractionError: 'Cleared from queue by admin',
+          updatedAt: new Date(),
+        })
+        .where(and(
+          inArray(letters.id, queued.map(l => l.id)),
+          eq(letters.entityExtractionStatus, 'PENDING'),
+          ne(letters.transcriptionStatus, 'RUNNING'),
+        ))
+        .returning({ id: letters.id });
+      cleared = clearedRows.length;
     }
   }
 
@@ -1078,6 +1029,8 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
       .set({
         transcriptionStatus: 'PENDING',
         transcriptionRunId: null,
+        transcriptionLeaseExpiresAt: null,
+        transcriptionClaimKind: null,
         transcriptionError: null,
         transcriptionAttemptCount: 0,
         deadLetter: false,
@@ -1139,22 +1092,7 @@ export async function cancelActiveJob(letterId: string, type: QueueJobType): Pro
     if (!letter.transcriptionRunId) {
       throw new ProcessingError('Cannot cancel: transcription job has no active run ID', 409);
     }
-    const cancelled = await db
-      .update(letters)
-      .set({
-        transcriptionStatus: 'FAILED',
-        transcriptionRunId: null,
-        transcriptionError: 'Cancelled by admin',
-        workflow: 'UPLOADED',
-        updatedAt: new Date(),
-      })
-      .where(and(
-        eq(letters.id, letterId),
-        eq(letters.transcriptionStatus, 'RUNNING'),
-        eq(letters.transcriptionRunId, letter.transcriptionRunId),
-      ))
-      .returning({ id: letters.id });
-    if (cancelled.length === 0) {
+    if (!await cancelTranscriptionAttempt(letterId, letter.transcriptionRunId)) {
       throw new ProcessingError('Cannot cancel: transcription attempt changed since it was loaded', 409);
     }
   } else if (type === 'metadata') {

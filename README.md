@@ -351,7 +351,13 @@ For local AI-pipeline work, the worker runs in its own terminal: `cd backend && 
 | Typecheck backend  | `cd backend && npm run typecheck`        |
 | Generate migration | `cd backend && npm run drizzle:generate` |
 | Apply migration    | `cd backend && npm run drizzle:migrate`  |
-| Full verification  | `./scripts/verify-all.sh`                |
+| Verify unit tests, typecheck/build, and mocked E2E | `./scripts/verify-all.sh` |
+| Audit frontend lint debt | `cd frontend && npm run lint`       |
+
+The aggregate verifier requires the `e2e` package dependencies and Playwright's
+Chromium binary (`cd e2e && npm ci && npx playwright install chromium`). For a focused
+local run, `VERIFY_SKIP_E2E=1 ./scripts/verify-all.sh` skips that gate and reports the
+skip explicitly.
 
 Without an `OPENAI_API_KEY`, the AI pipeline runs in stub mode with mock responses.
 

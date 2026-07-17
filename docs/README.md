@@ -6,6 +6,7 @@
 |-----|---------|
 | [about-this-project.md](about-this-project.md) | Project vision, "wise guide" AI concept |
 | [collaboration-style.md](collaboration-style.md) | Proactive questioning, planning before implementing |
+| [architecture-cleanup/](architecture-cleanup/) | Active cleanup loop, baseline, and resumable checkpoint |
 
 ## Technical Reference
 
@@ -24,6 +25,6 @@ When modifying documented code, update the relevant doc. Keep docs concise—Cla
 
 ## Creating New Docs
 
-1. Create `.claude/docs/{feature-name}.md`
+1. Create `docs/{feature-name}.md` or a focused folder under `docs/`
 2. Add to this README
-3. Add to CLAUDE.md reference table
+3. Link it from the closest architecture or feature index

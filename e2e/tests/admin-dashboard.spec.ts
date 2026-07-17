@@ -18,8 +18,8 @@ test.describe('Admin Dashboard', () => {
   });
 
   test.describe('Dashboard Display', () => {
-    test('shows admin panel header', async ({ page }) => {
-      await expect(page.locator(SELECTORS.dashboard.shell)).toBeVisible();
+    test('shows admin content shell', async ({ page }) => {
+      await expect(page.getByRole('main', { name: 'Admin content' })).toBeVisible();
     });
 
     test('shows letters table', async ({ page }) => {
@@ -97,6 +97,7 @@ test.describe('Admin Dashboard', () => {
 
   test.describe('Filtering', () => {
     test('can filter by visibility - published', async ({ page }) => {
+      await page.getByRole('button', { name: 'Filters' }).click();
       const publishedBtn = page.locator(SELECTORS.dashboard.visibilityPublished);
       await publishedBtn.click();
 
@@ -108,6 +109,7 @@ test.describe('Admin Dashboard', () => {
     });
 
     test('can filter by visibility - hidden', async ({ page }) => {
+      await page.getByRole('button', { name: 'Filters' }).click();
       const hiddenBtn = page.locator(SELECTORS.dashboard.visibilityHidden);
       await hiddenBtn.click();
 
@@ -116,6 +118,7 @@ test.describe('Admin Dashboard', () => {
     });
 
     test('can filter by collection number', async ({ page }) => {
+      await page.getByRole('button', { name: 'Filters' }).click();
       const collectionInput = page.locator(SELECTORS.dashboard.collectionInput);
       await collectionInput.fill('001');
 
@@ -137,24 +140,20 @@ test.describe('Admin Dashboard', () => {
 
     test('can clear all filters', async ({ page }) => {
       // Apply some filters first
+      await page.getByRole('button', { name: 'Filters' }).click();
       const publishedBtn = page.locator(SELECTORS.dashboard.visibilityPublished);
       await publishedBtn.click();
       await page.waitForLoadState('networkidle');
 
-      // Clear all button should appear
-      const clearAllBtn = page.locator(SELECTORS.dashboard.clearAllBtn);
+      await page.getByRole('button', { name: 'Clear', exact: true }).click();
+      await page.waitForLoadState('networkidle');
 
-      if (await clearAllBtn.isVisible()) {
-        await clearAllBtn.click();
-        await page.waitForLoadState('networkidle');
-
-        // Visibility filter should be cleared
-        await expect(publishedBtn).not.toHaveClass(/active/);
-      }
+      await expect(publishedBtn).toHaveAttribute('aria-pressed', 'false');
     });
 
     test('can filter by transcript status', async ({ page }) => {
       // Find and click Draft filter for transcript
+      await page.getByRole('button', { name: 'Filters' }).click();
       const draftFilter = page.locator('.filter-content-draft').first();
       await draftFilter.click();
       await page.waitForLoadState('networkidle');

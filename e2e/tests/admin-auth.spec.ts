@@ -6,6 +6,7 @@ import {
   ADMIN_EMAIL,
   ADMIN_PASSWORD,
   SELECTORS,
+  waitForAdminDashboardReady,
 } from './utils/test-helpers';
 
 /**
@@ -40,7 +41,7 @@ test.describe('Admin Authentication', () => {
 
       // Should redirect to admin dashboard
       await page.waitForURL(/\/admin$/);
-      await expect(page.locator(SELECTORS.dashboard.ready)).toBeVisible({ timeout: 30000 });
+      await waitForAdminDashboardReady(page);
     });
 
     test('shows error with invalid credentials', async ({ page }) => {
@@ -149,7 +150,7 @@ test.describe('Admin Authentication', () => {
     test('allows access to admin dashboard with valid session', async ({ page }) => {
       await loginAsAdmin(page);
 
-      await expect(page.locator(SELECTORS.dashboard.ready)).toBeVisible({ timeout: 30000 });
+      await waitForAdminDashboardReady(page);
     });
   });
 
@@ -160,7 +161,7 @@ test.describe('Admin Authentication', () => {
       // Reload the page
       await page.reload();
 
-      await expect(page.locator(SELECTORS.dashboard.ready)).toBeVisible({ timeout: 30000 });
+      await waitForAdminDashboardReady(page);
     });
 
     test('maintains session when navigating between admin pages', async ({ page }) => {
@@ -172,7 +173,7 @@ test.describe('Admin Authentication', () => {
 
       // Navigate back to dashboard
       await page.goto('/admin');
-      await expect(page.locator(SELECTORS.dashboard.ready)).toBeVisible({ timeout: 30000 });
+      await waitForAdminDashboardReady(page);
     });
   });
 

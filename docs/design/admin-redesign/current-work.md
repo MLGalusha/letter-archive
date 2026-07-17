@@ -1,5 +1,11 @@
 # Admin Redesign Current Work
 
+> Historical checkpoint: implementation continued beyond the stale "Current Slice"
+> heading below and reached the May 18, 2026 checkpoint recorded later in this file.
+> Active architecture cleanup now lives in
+> [`docs/architecture-cleanup/current-work.md`](../../architecture-cleanup/current-work.md).
+> Keep this document as redesign history rather than using it as the active queue.
+
 This file tracks autonomous implementation slices for the admin dashboard redesign. It is intentionally tactical: the roadmap remains the source for phase direction, while this file records the current slice, why it is next, completion criteria, verification, and handoff notes.
 
 ## Operating Rules

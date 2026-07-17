@@ -3,22 +3,30 @@ import {
   installMockAdminDashboardApi,
   waitForAdminLettersRequest,
 } from './utils/mock-api';
-import { API_BASE_URL, SELECTORS } from './utils/test-helpers';
+import {
+  API_BASE_URL,
+  SELECTORS,
+  waitForAdminDashboardReady,
+} from './utils/test-helpers';
 
 test.describe('@mocked Admin Dashboard', () => {
   test('renders deterministic mocked letters and stats', async ({ page }) => {
     await installMockAdminDashboardApi(page);
 
     await page.goto('/admin');
-    await page.locator('.admin-header').waitFor({ state: 'visible' });
+    await waitForAdminDashboardReady(page);
 
     await expect(page.locator(SELECTORS.dashboard.table)).toBeVisible();
     await expect(page.locator(SELECTORS.dashboard.tableRow)).toHaveCount(2);
     await expect(page.locator(SELECTORS.dashboard.table)).toContainText('Alice Smith');
     await expect(page.locator(SELECTORS.dashboard.table)).toContainText('Clara Jones');
     await expect(page.locator('.letter-count')).toHaveText('1–2 of 2');
-    await expect(page.locator('.filter-published')).toContainText('1 Public');
-    await expect(page.locator('.filter-hidden')).toContainText('1 Hidden');
+
+    await page.getByRole('button', { name: 'Filters' }).click();
+    await expect(page.locator('.filter-published .filter-option-label')).toHaveText('Public');
+    await expect(page.locator('.filter-published .filter-option-count')).toHaveText('1');
+    await expect(page.locator('.filter-hidden .filter-option-label')).toHaveText('Hidden');
+    await expect(page.locator('.filter-hidden .filter-option-count')).toHaveText('1');
   });
 
   test('shows the request id when the dashboard letter list fails to load', async ({
@@ -42,13 +50,15 @@ test.describe('@mocked Admin Dashboard', () => {
     await installMockAdminDashboardApi(page);
 
     await page.goto('/admin');
-    await page.locator('.admin-header').waitFor({ state: 'visible' });
+    await waitForAdminDashboardReady(page);
 
     const requestPromise = waitForAdminLettersRequest(
       page,
       (url) => url.searchParams.get('search') === 'alice',
     );
-    const searchInput = page.locator(SELECTORS.dashboard.searchInput);
+    const searchInput = page.getByRole('searchbox', {
+      name: 'Search letters, senders, recipients...',
+    });
     await searchInput.fill('alice');
 
     const requestUrl = await requestPromise;
@@ -62,18 +72,20 @@ test.describe('@mocked Admin Dashboard', () => {
     await installMockAdminDashboardApi(page);
 
     await page.goto('/admin');
-    await page.locator('.admin-header').waitFor({ state: 'visible' });
+    await waitForAdminDashboardReady(page);
+    await page.getByRole('button', { name: 'Filters' }).click();
 
     const requestPromise = waitForAdminLettersRequest(
       page,
       (url) => url.searchParams.get('visibility') === 'PUBLISHED',
     );
-    await page.locator('.filter-published').click();
+    const publishedFilter = page.locator('.filter-published');
+    await publishedFilter.click();
 
     const requestUrl = await requestPromise;
 
     expect(requestUrl.searchParams.get('visibility')).toBe('PUBLISHED');
-    await expect(page.locator('.filter-published')).toHaveClass(/active/);
+    await expect(publishedFilter).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator(SELECTORS.dashboard.tableRow)).toHaveCount(1);
     await expect(page.locator(SELECTORS.dashboard.table)).toContainText('Alice Smith');
   });
@@ -82,7 +94,7 @@ test.describe('@mocked Admin Dashboard', () => {
     const mockedApi = await installMockAdminDashboardApi(page);
 
     await page.goto('/admin');
-    await page.locator('.admin-header').waitFor({ state: 'visible' });
+    await waitForAdminDashboardReady(page);
 
     const flagButton = page.getByRole('button', { name: 'Flag letter' }).first();
     await flagButton.click();
@@ -105,7 +117,7 @@ test.describe('@mocked Admin Dashboard', () => {
     });
 
     await page.goto('/admin');
-    await page.locator('.admin-header').waitFor({ state: 'visible' });
+    await waitForAdminDashboardReady(page);
 
     const flagButton = page.getByRole('button', { name: 'Flag letter' }).first();
     await flagButton.click();

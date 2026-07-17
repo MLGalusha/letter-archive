@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(scriptDir, '..');
+const skippedSteps = [];
 
 function runStep(label, cwd, command, args) {
   process.stdout.write(`\n==> ${label}\n`);
@@ -37,6 +38,8 @@ if (process.env.VERIFY_SKIP_TYPECHECK !== '1') {
     'run',
     'typecheck',
   ]);
+} else {
+  skippedSteps.push('Backend typecheck');
 }
 
 runStep('Frontend tests', path.join(rootDir, 'frontend'), 'npm', ['test']);
@@ -46,11 +49,22 @@ if (process.env.VERIFY_SKIP_BUILD !== '1') {
     'run',
     'build',
   ]);
+} else {
+  skippedSteps.push('Frontend build');
 }
 
-process.stdout.write('\n==> Mocked e2e\n');
-process.stdout.write(
-  'Run "cd e2e && npm run test:mocked" separately to include the mocked Playwright suite.\n',
-);
+if (process.env.VERIFY_SKIP_E2E !== '1') {
+  runStep('Mocked e2e', path.join(rootDir, 'e2e'), 'npm', [
+    'run',
+    'test:mocked',
+  ]);
+} else {
+  skippedSteps.push('Mocked e2e');
+}
 
-process.stdout.write('\nVerification complete.\n');
+if (skippedSteps.length > 0) {
+  process.stdout.write(`\nSkipped by environment: ${skippedSteps.join(', ')}.\n`);
+  process.stdout.write('Verification complete for executed steps.\n');
+} else {
+  process.stdout.write('\nVerification complete.\n');
+}

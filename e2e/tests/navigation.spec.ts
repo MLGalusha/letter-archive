@@ -83,9 +83,8 @@ test.describe('Navigation', () => {
       await loginAsAdmin(page);
     });
 
-    test('shows admin header', async ({ page }) => {
-      const header = page.locator('.admin-header, header');
-      await expect(header.first()).toBeVisible();
+    test('shows admin navigation', async ({ page }) => {
+      await expect(page.getByRole('navigation')).toBeVisible();
     });
 
     test('can navigate to upload page from dashboard', async ({ page }) => {

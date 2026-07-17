@@ -8,12 +8,11 @@ import { Page, expect } from '@playwright/test';
 export const ADMIN_EMAIL = 'dev@localhost.test';
 export const ADMIN_PASSWORD = 'dev';
 export const API_BASE_URL = process.env.E2E_API_BASE_URL || 'http://localhost:3002';
-const DASHBOARD_SHELL_SELECTOR = '.admin-header';
-const DASHBOARD_READY_SELECTOR = 'table.letters-table';
 
 export async function waitForAdminDashboardReady(page: Page): Promise<void> {
-  await page.locator(DASHBOARD_SHELL_SELECTOR).waitFor({ state: 'visible', timeout: 30000 });
-  await page.locator(DASHBOARD_READY_SELECTOR).waitFor({ state: 'visible', timeout: 30000 });
+  await expect(page.getByRole('region', { name: 'Dashboard controls' })).toBeVisible({
+    timeout: 30000,
+  });
 }
 
 /**
@@ -23,8 +22,8 @@ export async function waitForAdminDashboardReady(page: Page): Promise<void> {
  * triggers React's useEffect auth redirect, but waitForLoadState('networkidle')
  * can resolve before the redirect fires, causing the helper to exit without logging in.
  *
- * After login, waits for the dashboard shell and table to confirm the initial
- * data load completed.
+ * After login, waits for the successful dashboard controls region. Tests that need
+ * letter rows should assert the letters table separately.
  */
 export async function loginAsAdmin(page: Page): Promise<void> {
   // Use domcontentloaded — networkidle can hang on CI when Vite HMR websocket stays open
@@ -194,13 +193,11 @@ export const SELECTORS = {
   dashboard: {
     table: 'table.letters-table',
     tableRow: 'table tbody tr',
-    shell: DASHBOARD_SHELL_SELECTOR,
-    ready: DASHBOARD_READY_SELECTOR,
     uploadBtn: 'a.nav-item:has-text("Upload")',
     editBtn: '.toolbar-buttons button:has-text("Edit")',
     processBtn: 'button:has-text("Process")',
     logoutBtn: '.settings-logout-section button:has-text("Logout")',
-    searchInput: '.search-group input',
+    searchInput: 'input[type="search"]',
     collectionInput: '.collection-input',
     paginationPrev: '.pagination-btn:has-text("Previous")',
     paginationNext: '.pagination-btn:has-text("Next")',
@@ -209,7 +206,6 @@ export const SELECTORS = {
     visibilityPublished: '.filter-published',
     visibilityHidden: '.filter-hidden',
     columnToggle: 'button:has-text("Columns")',
-    clearAllBtn: '.clear-all-btn',
     editToolbar: '.edit-toolbar',
     copyModeBtn: '.toolbar-copy-btn',
     saveChangesBtn: '.toolbar-btn-save',

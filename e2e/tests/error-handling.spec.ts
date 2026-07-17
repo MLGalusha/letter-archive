@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin, SELECTORS } from './utils/test-helpers';
+import {
+  loginAsAdmin,
+  SELECTORS,
+  waitForAdminDashboardReady,
+} from './utils/test-helpers';
 
 /**
  * E2E tests for Error Handling
@@ -33,8 +37,7 @@ test.describe('Error Handling', () => {
       await loginAsAdmin(page);
 
       // Dashboard should load even with potential API issues
-      const dashboard = page.locator(SELECTORS.dashboard.ready);
-      await expect(dashboard).toBeVisible();
+      await waitForAdminDashboardReady(page);
     });
   });
 
@@ -177,8 +180,7 @@ test.describe('Error Handling', () => {
       await page.reload();
       await page.waitForLoadState('networkidle');
 
-      const dashboard = page.locator(SELECTORS.dashboard.ready);
-      await expect(dashboard).toBeVisible();
+      await waitForAdminDashboardReady(page);
     });
 
     test('page remains functional after error', async ({ page }) => {

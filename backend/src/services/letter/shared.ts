@@ -1,6 +1,12 @@
+import { sql, type AnyColumn } from 'drizzle-orm';
 import { createLogger } from '../../utils/logger.js';
 
 export const log = createLogger({ module: 'letter-operations' });
+
+/** Compare a database timestamp with a JavaScript Date at representable precision. */
+export function observedTimestampMatches(column: AnyColumn, observed: Date) {
+  return sql`date_trunc('milliseconds', ${column}) = ${observed.toISOString()}::timestamptz`;
+}
 
 export const contentStatusValues = ['EMPTY', 'AI_DRAFT', 'EDITED', 'VERIFIED'] as const;
 

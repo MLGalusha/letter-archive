@@ -2,12 +2,18 @@ import { extractMetadataV2, extractEntities } from '../ai/openai.js';
 import type { ExtractionCorrections } from '../ai/openai.js';
 import {
   getLetterWithPages,
-  updateMetadataV2,
   updateEntityExtraction,
-  updateLetterWorkflow,
-  incrementMetadataAttempts,
-  claimJob,
+  claimEntityExtraction,
 } from '../services/letters.js';
+import {
+  claimQueuedMetadata,
+  completeMetadata,
+  failMetadata,
+  observeMetadataState,
+  withMetadataHeartbeat,
+  type MetadataClaim,
+  type MetadataHeartbeat,
+} from '../services/letter/metadata-job.js';
 import { processEntityExtraction } from '../services/entities.js';
 import { updateJobProgress, clearJobProgress } from '../services/processing-queue.js';
 import { createLogger } from '../utils/logger.js';
@@ -23,6 +29,12 @@ export interface ExtractionOptions {
   previousAiRecipient?: string;
 }
 
+export type MetadataRunOutcome =
+  | { kind: 'completed' }
+  | { kind: 'claim_lost' }
+  | { kind: 'superseded' }
+  | { kind: 'ineligible' };
+
 /**
  * Runs the two-phase metadata + entity extraction pipeline for a letter.
  *
@@ -32,17 +44,101 @@ export interface ExtractionOptions {
  * Phase 2 failure is non-fatal — metadata from Phase 1 is always preserved.
  * Only processes type='L' letters that have been transcribed.
  */
-export async function runMetadataExtractionV2(letterId: string, options?: ExtractionOptions, preClaimed = false): Promise<void> {
+export async function runMetadataExtractionV2(
+  letterId: string,
+  options?: ExtractionOptions,
+  existingClaim?: MetadataClaim,
+): Promise<MetadataRunOutcome> {
   const start = Date.now();
   const letterLog = log.child({ letterId });
 
   letterLog.debug('Starting two-phase metadata extraction pipeline');
 
-  const letter = await getLetterWithPages(letterId);
+  let claim = existingClaim;
+  if (!claim) {
+    const observedLetter = await getLetterWithPages(letterId);
 
-  if (!letter) {
-    letterLog.error('Letter not found');
-    throw new Error(`Letter not found: ${letterId}`);
+    if (!observedLetter) {
+      letterLog.error('Letter not found');
+      throw new Error(`Letter not found: ${letterId}`);
+    }
+
+    if (observedLetter.type !== 'L' || !observedLetter.transcriptionText?.trim()) {
+      letterLog.debug(
+        { type: observedLetter.type },
+        'Skipping metadata extraction for an ineligible source',
+      );
+      return { kind: 'ineligible' };
+    }
+
+    const queuedClaim = await claimQueuedMetadata(
+      letterId,
+      observeMetadataState(observedLetter),
+    );
+    if (!queuedClaim) {
+      letterLog.info('Metadata source changed or another process won the claim');
+      return { kind: 'claim_lost' };
+    }
+    claim = queuedClaim;
+  }
+
+  return withMetadataHeartbeat(letterId, claim, async (heartbeat) =>
+    executeClaimedMetadataExtractionV2(
+      letterId,
+      options,
+      claim,
+      heartbeat,
+      start,
+    ));
+}
+
+async function executeClaimedMetadataExtractionV2(
+  letterId: string,
+  options: ExtractionOptions | undefined,
+  claim: MetadataClaim,
+  heartbeat: MetadataHeartbeat,
+  start: number,
+): Promise<MetadataRunOutcome> {
+  const letterLog = log.child({ letterId });
+  if (!heartbeat.hasOwnership()) return { kind: 'superseded' };
+
+  // Every producer reloads its source after ownership is established. This
+  // keeps AI input aligned with the exact revision that the claim fenced.
+  let letter;
+  try {
+    letter = await getLetterWithPages(letterId);
+    if (
+      !letter
+      || letter.metadataStatus !== 'RUNNING'
+      || letter.metadataRunId !== claim.runId
+      || letter.metadataRunRevision !== claim.revision
+      || letter.metadataRevision !== claim.revision
+      || letter.metadataLeaseRunId !== claim.runId
+      || letter.metadataLeaseExpiresAt === null
+      || letter.metadataClaimKind === null
+    ) {
+      // If only this run's fenced state drifted, revoke the exact token so a
+      // producer cannot leave its own row permanently RUNNING. This is a no-op
+      // when another writer already replaced or cleared ownership.
+      await failMetadata(
+        letterId,
+        claim,
+        'Metadata source changed immediately after claim',
+      );
+      clearJobProgress(letterId, 'metadata');
+      return { kind: 'superseded' };
+    }
+    if (letter.type !== 'L') {
+      throw new Error(`Letter ${letterId} is not eligible for metadata extraction`);
+    }
+    if (!letter.transcriptionText?.trim()) {
+      throw new Error(`Letter ${letterId} has no transcription text`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const failed = await failMetadata(letterId, claim, message);
+    if (!failed) return { kind: 'superseded' };
+    throw error;
   }
 
   const context = {
@@ -52,32 +148,10 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
     type: letter.type,
   };
 
-  // Only extract metadata for type='L' letters
-  if (letter.type !== 'L') {
-    letterLog.debug({ type: letter.type }, 'Skipping metadata extraction for non-letter type');
-    return;
-  }
-
-  // Must have transcription
-  if (!letter.transcriptionText) {
-    letterLog.error('Letter has no transcription text');
-    throw new Error(`Letter ${letterId} has no transcription text`);
-  }
-
   letterLog.info(
     { transcriptLength: letter.transcriptionText.length },
     'Starting metadata extraction'
   );
-
-  // Atomically claim the job — prevents worker and on-demand processing from double-running
-  if (!preClaimed) {
-    const claimed = await claimJob(letterId, 'metadataStatus', 'PENDING');
-    if (!claimed) {
-      letterLog.info('Metadata job already claimed by another process — skipping');
-      return;
-    }
-  }
-  await updateLetterWorkflow(letterId, 'METADATA_EXTRACTING');
 
   const extractionContext = {
     collectionCode: letter.collection.collectionCode,
@@ -85,6 +159,18 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
     dateFromFilename: letter.letterDate,
     extraContentTranscript: letter.extraContentTranscript,
   };
+
+  // Queue preflight data is intentionally not passed into this function. When
+  // no explicit admin corrections were bound to the claim, derive prefills
+  // from the authoritative post-claim reload instead of an earlier snapshot.
+  const effectiveOptions: ExtractionOptions | undefined = options ?? (
+    letter.sender || letter.recipient
+      ? {
+          confirmedSender: letter.sender ?? undefined,
+          confirmedRecipient: letter.recipient ?? undefined,
+        }
+      : undefined
+  );
 
   // ========================================================================
   // PHASE 1: Basic Metadata Extraction
@@ -94,12 +180,12 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
 
   let metadataResult;
   try {
-    const corrections: ExtractionCorrections | undefined = options
+    const corrections: ExtractionCorrections | undefined = effectiveOptions
       ? {
-          confirmedSender: options.confirmedSender,
-          confirmedRecipient: options.confirmedRecipient,
-          previousAiSender: options.previousAiSender,
-          previousAiRecipient: options.previousAiRecipient,
+          confirmedSender: effectiveOptions.confirmedSender,
+          confirmedRecipient: effectiveOptions.confirmedRecipient,
+          previousAiSender: effectiveOptions.previousAiSender,
+          previousAiRecipient: effectiveOptions.previousAiRecipient,
         }
       : undefined;
 
@@ -110,19 +196,22 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
       corrections,
     });
 
-    // Check if the job was cancelled while we were processing
-    const currentState = await db.query.letters.findFirst({
-      where: eq(letters.id, letterId),
-      columns: { metadataStatus: true },
-    });
-    if (currentState?.metadataStatus === 'FAILED') {
-      letterLog.info('Metadata extraction was cancelled during processing — discarding result');
+    if (!heartbeat.hasOwnership()) {
+      letterLog.info('Metadata lease was lost; discarding unfinished result');
       clearJobProgress(letterId, 'metadata');
-      return;
+      return { kind: 'superseded' };
     }
 
-    // Store basic metadata
-    await updateMetadataV2(letterId, 'SUCCESS', metadataResult.metadata, null);
+    const published = await completeMetadata(
+      letterId,
+      claim,
+      metadataResult.metadata,
+    );
+    if (!published) {
+      letterLog.info('Metadata ownership changed during processing — discarding result');
+      clearJobProgress(letterId, 'metadata');
+      return { kind: 'superseded' };
+    }
 
     const phase1Duration = Date.now() - start;
     letterLog.info(
@@ -154,6 +243,22 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
       sourceId: letterId,
       metadata: { sender: senderName, recipient: recipientName },
     });
+
+    const highPriorityNotes = Array.isArray(metadataResult.metadata.ai_notes)
+      ? metadataResult.metadata.ai_notes.filter(note => note.priority === 'high')
+      : [];
+    if (highPriorityNotes.length > 0) {
+      void notify({
+        type: 'ai_notes_high_priority',
+        title: `${highPriorityNotes.length} note${highPriorityNotes.length > 1 ? 's' : ''} need attention`,
+        message: highPriorityNotes.map(note => note.content).join('; '),
+        link: `/admin/letters/${letterId}`,
+        sourceType: 'letter',
+        sourceId: letterId,
+        metadata: { noteCount: highPriorityNotes.length },
+        dedupeKey: `ai_notes_high_priority:${letterId}`,
+      });
+    }
   } catch (error) {
     clearJobProgress(letterId, 'metadata');
 
@@ -170,7 +275,8 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
       'Phase 1 (basic metadata) failed'
     );
 
-    await updateMetadataV2(letterId, 'FAILED', undefined, message);
+    const failed = await failMetadata(letterId, claim, message);
+    if (!failed) return { kind: 'superseded' };
     throw error;
   }
 
@@ -182,19 +288,19 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
 
   try {
     // Claim entity extraction atomically (within same pipeline, but still safe)
-    const entityClaimed = await claimJob(letterId, 'entityExtractionStatus', 'PENDING');
+    const entityClaimed = await claimEntityExtraction(letterId, 'PENDING');
     if (!entityClaimed) {
       letterLog.info('Entity extraction already claimed — skipping Phase 2');
       clearJobProgress(letterId, 'metadata');
-      return;
+      return { kind: 'completed' };
     }
 
-    const entityCorrections: ExtractionCorrections | undefined = options
+    const entityCorrections: ExtractionCorrections | undefined = effectiveOptions
       ? {
-          confirmedSender: options.confirmedSender,
-          confirmedRecipient: options.confirmedRecipient,
-          previousAiSender: options.previousAiSender,
-          previousAiRecipient: options.previousAiRecipient,
+          confirmedSender: effectiveOptions.confirmedSender,
+          confirmedRecipient: effectiveOptions.confirmedRecipient,
+          previousAiSender: effectiveOptions.previousAiSender,
+          previousAiRecipient: effectiveOptions.previousAiRecipient,
         }
       : undefined;
 
@@ -283,6 +389,8 @@ export async function runMetadataExtractionV2(letterId: string, options?: Extrac
     });
     // Do NOT throw — Phase 1 metadata is already saved
   }
+
+  return { kind: 'completed' };
 }
 
 /**
@@ -314,7 +422,7 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
   };
 
   // Atomically claim the entity extraction job
-  const claimed = await claimJob(letterId, 'entityExtractionStatus', 'PENDING');
+  const claimed = await claimEntityExtraction(letterId, 'PENDING');
   if (!claimed) {
     letterLog.info('Entity extraction job already claimed by another process — skipping');
     return;

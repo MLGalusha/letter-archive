@@ -15,6 +15,7 @@ const {
   recordJobSkippedMock,
   cancelTranscriptionAttemptMock,
   cancelExtraContentAttemptMock,
+  cancelMetadataAttemptMock,
   tryTranscribeExtrasMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
@@ -31,6 +32,7 @@ const {
   recordJobSkippedMock: vi.fn(),
   cancelTranscriptionAttemptMock: vi.fn(),
   cancelExtraContentAttemptMock: vi.fn(),
+  cancelMetadataAttemptMock: vi.fn(),
   tryTranscribeExtrasMock: vi.fn(),
 }));
 
@@ -39,7 +41,11 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn((field: unknown, value: unknown) => ({ kind: 'eq', field, value })),
   inArray: vi.fn((field: unknown, values: unknown[]) => ({ kind: 'inArray', field, values })),
   isNull: vi.fn((field: unknown) => ({ kind: 'isNull', field })),
-  sql: vi.fn(),
+  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
+    kind: 'sql',
+    strings: Array.from(strings),
+    values,
+  })),
 }));
 
 vi.mock('../../db/index.js', () => {
@@ -60,6 +66,8 @@ vi.mock('../../db/index.js', () => {
       transcriptionLeaseRunId: 'letters.transcriptionLeaseRunId',
       transcriptionClaimKind: 'letters.transcriptionClaimKind',
       metadataStatus: 'letters.metadataStatus',
+      metadataRunId: 'letters.metadataRunId',
+      metadataRevision: 'letters.metadataRevision',
       entityExtractionStatus: 'letters.entityExtractionStatus',
       extraContentJobStatus: 'letters.extraContentJobStatus',
       extraContentJobRunId: 'letters.extraContentJobRunId',
@@ -88,6 +96,10 @@ vi.mock('../letter/transcription-job.js', () => ({
 
 vi.mock('../letter/extra-content-job.js', () => ({
   cancelExtraContentAttempt: cancelExtraContentAttemptMock,
+}));
+
+vi.mock('../letter/metadata-job.js', () => ({
+  cancelMetadataAttempt: cancelMetadataAttemptMock,
 }));
 
 vi.mock('../notifications.js', () => ({ notify: notifyMock }));
@@ -135,6 +147,8 @@ const transcriptionSpec: LetterProcessSpec = {
   failedNotificationType: 'transcription_failed',
 };
 
+const metadataSpec = letterProcessSpecs.metadata;
+
 const context = {
   onProgress: vi.fn(),
   shouldAbort: vi.fn(() => false),
@@ -147,6 +161,7 @@ describe('letter process helpers', () => {
     vi.clearAllMocks();
     cancelTranscriptionAttemptMock.mockResolvedValue(true);
     cancelExtraContentAttemptMock.mockResolvedValue(true);
+    cancelMetadataAttemptMock.mockResolvedValue(true);
     findManyMock.mockResolvedValue([]);
     updateReturningMock.mockResolvedValue([{ id: 'letter-1' }]);
   });
@@ -242,6 +257,31 @@ describe('letter process helpers', () => {
     });
   });
 
+  it('advances and compares the metadata revision when removing a pending job', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-1',
+      metadataStatus: 'PENDING',
+      metadataRevision: 4,
+    });
+
+    await removeFromQueue(metadataSpec, 'letter-1');
+
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      metadataStatus: 'FAILED',
+      metadataRunId: null,
+      metadataRunRevision: null,
+      metadataLeaseExpiresAt: null,
+      metadataLeaseRunId: null,
+      metadataClaimKind: null,
+      metadataRevision: expect.objectContaining({ kind: 'sql' }),
+    }));
+    expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
+      clauses: expect.arrayContaining([
+        { kind: 'eq', field: 'letters.metadataRevision', value: 4 },
+      ]),
+    }));
+  });
+
   it('clears only rows that remain pending and reports the actual count', async () => {
     findManyMock.mockResolvedValue([{ id: 'letter-1' }, { id: 'letter-2' }]);
     updateReturningMock.mockResolvedValue([{ id: 'letter-2' }]);
@@ -289,6 +329,22 @@ describe('letter process helpers', () => {
     });
   });
 
+  it('advances the metadata revision when clearing pending queue rows', async () => {
+    findManyMock.mockResolvedValue([{ id: 'letter-1' }]);
+
+    await expect(clearQueue(metadataSpec, [])).resolves.toEqual({ cleared: 1 });
+
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      metadataStatus: 'FAILED',
+      metadataRunId: null,
+      metadataRunRevision: null,
+      metadataLeaseExpiresAt: null,
+      metadataLeaseRunId: null,
+      metadataClaimKind: null,
+      metadataRevision: expect.objectContaining({ kind: 'sql' }),
+    }));
+  });
+
   it('retries only the failed version that was observed', async () => {
     const observedAt = new Date('2026-07-17T12:00:00Z');
     findFirstMock.mockResolvedValue({
@@ -314,7 +370,11 @@ describe('letter process helpers', () => {
       clauses: [
         { kind: 'eq', field: 'letters.id', value: 'letter-1' },
         { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'FAILED' },
-        { kind: 'eq', field: 'letters.updatedAt', value: observedAt },
+        {
+          kind: 'sql',
+          strings: ["date_trunc('milliseconds', ", ') = ', '::timestamptz'],
+          values: ['letters.updatedAt', observedAt.toISOString()],
+        },
       ],
     });
   });
@@ -357,6 +417,33 @@ describe('letter process helpers', () => {
     });
   });
 
+  it('advances and compares the metadata revision when retrying a failed job', async () => {
+    const observedAt = new Date('2026-07-17T12:00:00Z');
+    findFirstMock.mockResolvedValue({
+      id: 'letter-1',
+      metadataStatus: 'FAILED',
+      metadataRevision: 6,
+      updatedAt: observedAt,
+    });
+
+    await retryJob(metadataSpec, 'letter-1');
+
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      metadataStatus: 'PENDING',
+      metadataRunId: null,
+      metadataRunRevision: null,
+      metadataLeaseExpiresAt: null,
+      metadataLeaseRunId: null,
+      metadataClaimKind: null,
+      metadataRevision: expect.objectContaining({ kind: 'sql' }),
+    }));
+    expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
+      clauses: expect.arrayContaining([
+        { kind: 'eq', field: 'letters.metadataRevision', value: 6 },
+      ]),
+    }));
+  });
+
   it('cancels only the observed transcription run and clears its fence', async () => {
     findFirstMock.mockResolvedValue({
       id: 'letter-1',
@@ -394,6 +481,33 @@ describe('letter process helpers', () => {
 
     expect(cancelExtraContentAttemptMock).toHaveBeenCalledWith('letter-1', 'run-a');
     expect(dbUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('delegates metadata cancellation to the canonical exact-run lifecycle owner', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-1',
+      metadataStatus: 'RUNNING',
+      metadataRunId: 'run-a',
+    });
+
+    await cancelActive(metadataSpec, 'letter-1');
+
+    expect(cancelMetadataAttemptMock).toHaveBeenCalledWith('letter-1', 'run-a');
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses to cancel tokenless legacy metadata as if it were currently owned', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-1',
+      metadataStatus: 'RUNNING',
+      metadataRunId: null,
+    });
+
+    await expect(cancelActive(metadataSpec, 'letter-1')).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'Cannot cancel: metadata job has no active run ID',
+    });
+    expect(cancelMetadataAttemptMock).not.toHaveBeenCalled();
   });
 
   it('refuses to cancel invalid running extra content without an owner', async () => {

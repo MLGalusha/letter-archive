@@ -8,8 +8,10 @@ DB_USER="test"
 DB_PASS="test"
 
 cleanup() {
+  local exit_code=$?
   echo "Cleaning up..."
   docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+  exit "$exit_code"
 }
 trap cleanup EXIT
 

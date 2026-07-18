@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   findManyMock,
+  findFirstMock,
   dbUpdateMock,
   updateSetMock,
   updateWhereMock,
@@ -10,8 +11,14 @@ const {
   processLettersAsyncMock,
   resetProcessingStateMock,
   shouldUseCloudRunWorkerJobMock,
+  propagateNameMock,
+  propagatePlaceholderReplacementMock,
+  commitDirectIdentityFieldMock,
+  syncLetterParticipantsFromMetadataMock,
+  isPlaceholderValueMock,
 } = vi.hoisted(() => ({
   findManyMock: vi.fn(),
+  findFirstMock: vi.fn(),
   dbUpdateMock: vi.fn(),
   updateSetMock: vi.fn(),
   updateWhereMock: vi.fn(),
@@ -20,6 +27,11 @@ const {
   processLettersAsyncMock: vi.fn(),
   resetProcessingStateMock: vi.fn(),
   shouldUseCloudRunWorkerJobMock: vi.fn(),
+  propagateNameMock: vi.fn(),
+  propagatePlaceholderReplacementMock: vi.fn(),
+  commitDirectIdentityFieldMock: vi.fn(),
+  syncLetterParticipantsFromMetadataMock: vi.fn(),
+  isPlaceholderValueMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -30,6 +42,11 @@ vi.mock('drizzle-orm', () => ({
   isNotNull: vi.fn((field: unknown) => ({ kind: 'isNotNull', field })),
   ne: vi.fn((field: unknown, value: unknown) => ({ kind: 'ne', field, value })),
   or: vi.fn((...clauses: unknown[]) => ({ kind: 'or', clauses })),
+  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
+    kind: 'sql',
+    strings: Array.from(strings),
+    values,
+  })),
 }));
 
 vi.mock('../../db/index.js', () => {
@@ -38,7 +55,7 @@ vi.mock('../../db/index.js', () => {
   updateWhereMock.mockImplementation(() => ({ returning: updateReturningMock }));
   return {
     db: {
-      query: { letters: { findMany: findManyMock } },
+      query: { letters: { findMany: findManyMock, findFirst: findFirstMock } },
       update: dbUpdateMock,
     },
     letters: {
@@ -56,6 +73,17 @@ vi.mock('../../db/index.js', () => {
       entityExtractionStatus: 'letters.entityExtractionStatus',
       deadLetter: 'letters.deadLetter',
       transcriptStatus: 'letters.transcriptStatus',
+      sender: 'letters.sender',
+      recipient: 'letters.recipient',
+      metadataRunId: 'letters.metadataRunId',
+      metadataRevision: 'letters.metadataRevision',
+      metadataContentStatus: 'letters.metadataContentStatus',
+      metadataError: 'letters.metadataError',
+      metadataVerifiedAt: 'letters.metadataVerifiedAt',
+      metadataVerifiedBy: 'letters.metadataVerifiedBy',
+      metadataPublished: 'letters.metadataPublished',
+      entityExtractionError: 'letters.entityExtractionError',
+      updatedAt: 'letters.updatedAt',
     },
     letterPersons: {},
     letterPlaces: {},
@@ -75,24 +103,39 @@ vi.mock('../cloud-run-job.js', () => ({
 }));
 
 vi.mock('../entities/participant-sync.js', () => ({
-  syncLetterParticipantsFromMetadata: vi.fn(),
+  syncLetterParticipantsFromMetadata: syncLetterParticipantsFromMetadataMock,
 }));
 
 vi.mock('../name-propagation.js', () => ({
-  propagateName: vi.fn(),
-  propagatePlaceholderReplacement: vi.fn(),
+  propagateName: propagateNameMock,
+  propagatePlaceholderReplacement: propagatePlaceholderReplacementMock,
+  commitDirectIdentityField: commitDirectIdentityFieldMock,
+  isIdentityRevisionConflict: (error: unknown) => {
+    if (!error || typeof error !== 'object') return false;
+    const status = 'status' in error ? error.status : undefined;
+    const statusCode = 'statusCode' in error ? error.statusCode : undefined;
+    return status === 409 || statusCode === 409;
+  },
+  observeIdentityField: (
+    source: { sender: string | null; recipient: string | null; metadataRevision: number; updatedAt: Date },
+    field: 'sender' | 'recipient',
+  ) => ({
+    value: source[field],
+    metadataRevision: source.metadataRevision,
+    updatedAt: source.updatedAt,
+  }),
 }));
 
 vi.mock('../../utils/placeholders.js', () => ({
-  isPlaceholderValue: vi.fn(),
+  isPlaceholderValue: isPlaceholderValueMock,
 }));
 
 vi.mock('../letter/shared.js', () => ({
   isTranscribableType: vi.fn(() => true),
-  log: { info: vi.fn() },
+  log: { info: vi.fn(), warn: vi.fn() },
 }));
 
-import { bulkExtractMetadata, bulkTranscribe } from '../letter/bulk-operations.js';
+import { bulkExtractMetadata, bulkTranscribe, bulkUpdateFields } from '../letter/bulk-operations.js';
 
 const uploadedLetter = {
   id: 'letter-1',
@@ -279,6 +322,7 @@ describe('bulk metadata downstream exclusion', () => {
     transcriptionStatus: 'SUCCESS',
     transcriptConfirmedAt: new Date('2026-01-01T00:00:00Z'),
     metadataStatus: 'SUCCESS',
+    metadataRevision: 0,
   };
 
   beforeEach(() => {
@@ -318,6 +362,7 @@ describe('bulk metadata downstream exclusion', () => {
         kind: 'and',
         clauses: [
           { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+          { kind: 'eq', field: 'letters.metadataRevision', value: 0 },
           { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
           { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
         ],
@@ -340,5 +385,135 @@ describe('bulk metadata downstream exclusion', () => {
     });
     expect(processLettersAsyncMock).not.toHaveBeenCalled();
     expect(resetProcessingStateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('bulk identity update ownership', () => {
+  const observedAt = new Date('2026-07-17T12:00:00.000Z');
+  const identityLetter = {
+    id: 'letter-1',
+    sender: 'Jimmie',
+    recipient: 'Molly',
+    metadataRevision: 4,
+    updatedAt: observedAt,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    findFirstMock.mockResolvedValue(identityLetter);
+    updateWhereMock.mockReturnValue({ returning: updateReturningMock });
+    isPlaceholderValueMock.mockReturnValue(false);
+    syncLetterParticipantsFromMetadataMock.mockResolvedValue(undefined);
+  });
+
+  it('does not mutate lifecycle state or participant links for same-value fields', async () => {
+    await expect(bulkUpdateFields([{
+      letterId: identityLetter.id,
+      sender: identityLetter.sender,
+      recipient: identityLetter.recipient,
+    }])).resolves.toEqual({ message: 'Fields updated', updated: 0 });
+
+    expect(propagateNameMock).not.toHaveBeenCalled();
+    expect(propagatePlaceholderReplacementMock).not.toHaveBeenCalled();
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+    expect(syncLetterParticipantsFromMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it('chains the recipient write from the committed sender revision', async () => {
+    const senderCommittedAt = new Date('2026-07-17T12:01:00.000Z');
+    const senderCommitted = {
+      ...identityLetter,
+      sender: 'Jimmy',
+      metadataRevision: 5,
+      updatedAt: senderCommittedAt,
+    };
+    propagateNameMock
+      .mockResolvedValueOnce({ letter: senderCommitted, fieldsUpdated: ['sender'] })
+      .mockRejectedValueOnce(Object.assign(new Error('Recipient changed'), { status: 409 }));
+
+    await expect(bulkUpdateFields([{
+      letterId: identityLetter.id,
+      sender: 'Jimmy',
+      recipient: 'Mary',
+    }])).rejects.toMatchObject({ status: 409 });
+
+    expect(propagateNameMock).toHaveBeenNthCalledWith(2, {
+      letterId: identityLetter.id,
+      field: 'recipient',
+      oldName: 'Molly',
+      newName: 'Mary',
+      observed: {
+        value: 'Molly',
+        metadataRevision: 5,
+        updatedAt: senderCommittedAt,
+      },
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenCalledTimes(1);
+    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenCalledWith({
+      letterId: identityLetter.id,
+      sender: 'Jimmy',
+    });
+  });
+
+  it('uses a revision-and-value CAS for a non-conflict fallback and then syncs only that role', async () => {
+    const senderCommittedAt = new Date('2026-07-17T12:01:00.000Z');
+    const recipientCommittedAt = new Date('2026-07-17T12:02:00.000Z');
+    const senderCommitted = {
+      ...identityLetter,
+      sender: 'Jimmy',
+      metadataRevision: 5,
+      updatedAt: senderCommittedAt,
+    };
+    const recipientCommitted = {
+      ...senderCommitted,
+      recipient: 'Mary',
+      metadataRevision: 6,
+      updatedAt: recipientCommittedAt,
+    };
+    propagateNameMock
+      .mockResolvedValueOnce({ letter: senderCommitted, fieldsUpdated: ['sender'] })
+      .mockRejectedValueOnce(new Error('Unexpected propagation failure'));
+    commitDirectIdentityFieldMock.mockResolvedValueOnce(recipientCommitted);
+
+    await expect(bulkUpdateFields([{
+      letterId: identityLetter.id,
+      sender: 'Jimmy',
+      recipient: 'Mary',
+    }])).resolves.toEqual({ message: 'Fields updated', updated: 1 });
+
+    expect(commitDirectIdentityFieldMock).toHaveBeenCalledWith({
+      letter: senderCommitted,
+      field: 'recipient',
+      value: 'Mary',
+    });
+    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenNthCalledWith(1, {
+      letterId: identityLetter.id,
+      sender: 'Jimmy',
+    });
+    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenNthCalledWith(2, {
+      letterId: identityLetter.id,
+      recipient: 'Mary',
+    });
+  });
+
+  it('returns a conflict and skips participant sync when the guarded fallback loses', async () => {
+    propagateNameMock.mockRejectedValueOnce(new Error('Unexpected propagation failure'));
+    commitDirectIdentityFieldMock.mockRejectedValueOnce(Object.assign(
+      new Error('Metadata changed during identity update'),
+      { status: 409 },
+    ));
+
+    await expect(bulkUpdateFields([{
+      letterId: identityLetter.id,
+      sender: 'Jimmy',
+    }])).rejects.toMatchObject({ status: 409 });
+
+    expect(commitDirectIdentityFieldMock).toHaveBeenCalledWith({
+      letter: identityLetter,
+      field: 'sender',
+      value: 'Jimmy',
+    });
+    expect(syncLetterParticipantsFromMetadataMock).not.toHaveBeenCalled();
   });
 });

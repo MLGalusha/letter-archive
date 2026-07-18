@@ -1,6 +1,6 @@
 # Processing Ownership Map
 
-Last verified: July 17, 2026
+Last verified: July 18, 2026
 
 This is a map of the queue-backed processing stages that exist today, not every API
 action that happens to call AI and not the intended end state. The lightweight boundary
@@ -13,49 +13,52 @@ existing owner remains frictionless, while behavior tests remain the authority.
 
 | Entry point | Runtime owner | Stages | Execution model | Control and recovery |
 | --- | --- | --- | --- | --- |
-| `worker.ts` polling loop | Worker process | Transcription, metadata, entity extraction | Queries `PENDING` rows and invokes the pipeline directly | Worker availability is persisted. Main transcription has a run-bound database-clock lease and heartbeat; the worker runs stage-contained main/extra reconciliation at startup and every 60 seconds. Exit decisions project only authoritative main-transcription work, wait for an in-flight queued lease, recheck before relinquishing availability, and fail if that strict handoff fails. |
-| `POST /admin/letters/processing/processes/:key/start` | API process | Transcription, metadata, entity extraction, extra content | `processes/runner.ts` starts a fire-and-forget in-memory batch through `letter-process-helpers.ts` | Pause, abort, progress, and the batch mutex live only in API memory. Extra-content attempts have a persisted, run-ID-bound database-clock lease and explicit queued/requested intent. |
-| Legacy processing endpoints and post-upload auto-start | Worker in configured production, otherwise API process | Transcription, metadata, entity extraction | `processing-queue.ts` triggers a Cloud Run Job when configured and otherwise falls back to `processLettersAsync()` | Legacy pause, abort, and progress live only in API memory. API and worker safely reconcile leased main/extra attempts; blind metadata/entity startup resets have been removed. The API re-derives configured-worker wakeups from durable eligible `PENDING` transcription state. |
+| `worker.ts` polling loop | Worker process | Transcription, metadata, entity extraction | Queries `PENDING` rows and invokes the pipeline directly | Worker availability is persisted. Transcription and metadata have run-bound database-clock leases and heartbeats; the worker runs stage-contained transcription/metadata/extra reconciliation at startup and every 60 seconds. Exit decisions project authoritative queued transcription and metadata work, wait for in-flight queued leases, recheck before relinquishing availability, and fail if that strict handoff fails. |
+| `POST /admin/letters/processing/processes/:key/start` | API process | Transcription, metadata, entity extraction, extra content | `processes/runner.ts` starts a fire-and-forget in-memory batch through `letter-process-helpers.ts` | Pause, abort, progress, and the batch mutex live only in API memory. Transcription, metadata, and extra-content attempts have persisted, run-ID-bound database-clock leases and explicit queued/requested intent. |
+| Legacy processing endpoints and post-upload auto-start | Worker in configured production, otherwise API process | Transcription, metadata, entity extraction | `processing-queue.ts` triggers a Cloud Run Job when configured and otherwise falls back to `processLettersAsync()` | Legacy pause, abort, and progress live only in API memory. API and worker safely reconcile leased transcription/metadata/extra attempts; blind entity startup resets remain removed. The API re-derives configured-worker wakeups from durable eligible `PENDING` transcription or metadata state. |
 | Bulk transcription and metadata operations | Worker in configured production, otherwise API process | Transcription, metadata | `bulk-operations.ts` repeats the Cloud Run versus `processLettersAsync()` choice | Uses the same legacy in-memory state but bypasses `startQueuedProcessing()` |
-| Letter content actions | API request process | Letter-only transcription, metadata, entity extraction, extra content | The route awaits pipeline or regeneration functions directly | Main transcription and extra content share their respective canonical persisted ownership/lease boundaries with batch and automatic work. |
+| Letter content actions | API request process | Letter-only transcription, metadata, entity extraction, extra content | The route awaits pipeline or regeneration functions directly | Transcription, metadata, and extra content share their respective canonical persisted ownership/lease boundaries with batch and automatic work. |
 
-The transcription and extra-content lifecycle helpers own their compare-and-swap claims
+The transcription, metadata, and extra-content lifecycle helpers own their compare-and-swap claims
 and terminal publication. The process registry's shared runner adds UI lifecycle state
 around those functions; it is not a durable job runner.
 
 ## Recovery Coverage
 
-Main transcription and extra content now have durable, stage-specific liveness
-contracts. Both claims store a run ID, a PostgreSQL-clock lease expiry, explicit
+Main transcription, metadata, and extra content now have durable, stage-specific
+liveness contracts. Every claim stores a run ID, a PostgreSQL-clock lease expiry, explicit
 `QUEUED` or `REQUESTED` intent, and a lease-run binding to the run that created that
-metadata. Both canonical producers use the same immediate,
+metadata. All three canonical producers use the same immediate,
 non-overlapping heartbeat scheduler, but their claims, terminal writes, and recovery
 policies remain separate.
 
 Only an exact clean run with a live lease may publish. Main queued expiry returns to
-`PENDING`/`UPLOADED`; main requested expiry becomes visibly `FAILED` in place. Extra
+`PENDING`/`UPLOADED`; main requested expiry becomes visibly `FAILED` in place. Metadata
+queued expiry returns to `PENDING`/`TRANSCRIBED`; requested expiry fails while preserving
+committed metadata and restores its prior content-stage workflow. Extra
 dirty expiry always requeues, clean queued expiry requeues, and clean requested expiry
 fails without replacing previously committed content or verification. Unknown legacy
-unleased attempts—and either stage's attempts whose lease binding does not match the
+unleased attempts—and any stage's attempts whose lease binding does not match the
 current run—remain visible for exact-run administrative cancellation.
 
 A serialized composite coordinator runs at API and worker startup and every 60
-seconds. It invokes main and extra reconciliation sequentially with independent error
+seconds. It invokes transcription, metadata, and extra reconciliation sequentially with independent error
 containment, so failure in one stage does not suppress the other and same-table recovery
 does not create avoidable lock ordering. Conditional `UPDATE ... RETURNING` operations
 make overlapping API/worker reconcilers report and transition each expiry once.
 
 After API reconciliation, configured-worker wakeup is level-triggered: the API asks the
-database whether eligible main transcription remains `PENDING`, awaits the Cloud Run
+database whether eligible transcription or metadata remains `PENDING`, awaits the Cloud Run
 trigger, and retries on a later tick if the trigger fails. A Cloud Run exit-when-empty
-worker projects only main-transcription recovery/leases into its exit decision; extra
-recovery alone cannot keep it alive. It waits for a queued lease it can observe,
+worker projects queued transcription and metadata recovery/leases into its exit
+decision; extra recovery alone cannot keep it alive. It waits for a queued lease it can observe,
 rechecks before relinquishing worker availability, and propagates a failed relinquish
 so the job exits nonzero.
 
-The old startup reset of `RUNNING` metadata and entity rows remains deleted. Those
-stages do not yet have a run token or lease, so an orphan stays visible for deliberate
-intervention instead of being silently made claimable again.
+The old startup reset remains deleted. Entity extraction does not yet have a run token
+or lease, so an entity orphan stays visible for deliberate intervention instead of
+being silently made claimable again. Rollout-era tokenless metadata attempts are also
+kept manual until old executables have drained.
 
 | Failure | Current result |
 | --- | --- |
@@ -63,9 +66,10 @@ intervention instead of being silently made claimable again.
 | API crashes during queued transcription | Expiry returns the attempt to durable `PENDING`; periodic API reconciliation re-derives and retries configured-worker wakeup |
 | API crashes during requested transcription | Expiry makes the attempt visibly `FAILED` in place rather than silently converting it to queued work |
 | API crashes during extra-content work | Dirty or queued expiry requeues; clean requested expiry fails in place. Legacy or lease-mismatched attempts remain manual |
-| API or worker crashes during metadata/entity work | The row remains `RUNNING` and visible; automatic recovery is deferred until these stages have fenced lifecycle owners |
+| API or worker crashes during metadata work | Queued expiry requeues; requested expiry fails without replacing committed metadata. Legacy tokenless attempts remain manual |
+| API or worker crashes during entity work | The row remains `RUNNING` and visible; automatic recovery is deferred until the stage has a fenced lifecycle owner |
 | Two reconcilers overlap | Exact expired-lease compare-and-swap lets only one report and transition an attempt; one stage failure does not suppress the other |
-| Legacy unleased or lease-mismatched main/extra attempt is encountered | It remains visible for exact-run cancellation; automatic recovery does not invent or misattribute liveness evidence |
+| Legacy unleased or lease-mismatched transcription/metadata/extra attempt is encountered | It remains visible for deliberate reconciliation or exact-run cancellation; automatic recovery does not invent or misattribute liveness evidence |
 
 API startup still calls the safe processing reconciler because API-owned execution has
 not yet been removed. Recovery can become worker-only after batch execution becomes
@@ -159,8 +163,10 @@ bulk reset paths use conditional updates rather than briefly reopening all stage
 5. **Completed in Slice 007:** bind main-transcription lease metadata to the run that
    created it, ignore inherited metadata automatically, and keep safe exact-run manual
    cancellation during mixed-version overlap.
-6. **Slice 008:** give metadata one fenced claim/terminal publication owner before
-   considering a lease. Follow with a separate retry-safe entity lifecycle boundary.
+6. **Completed in Slice 008:** give metadata one revision-bound claim/publication
+   owner, database-clock lease and shared heartbeat, queued/requested expiry policy,
+   exact administrative cancellation, and rolling-deploy tokenless compatibility.
+   Follow with a separate retry-safe entity lifecycle boundary.
 7. Move batch entry points to enqueue/trigger only, then delete the API registry runner
    and legacy in-process batch loop once no caller executes through them.
 8. With the worker as the sole batch owner, make recovery worker-owned, consolidate

@@ -29,6 +29,11 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn((field: unknown, value: unknown) => ({ kind: 'eq', field, value })),
   inArray: vi.fn((field: unknown, values: unknown[]) => ({ kind: 'inArray', field, values })),
   ne: vi.fn((field: unknown, value: unknown) => ({ kind: 'ne', field, value })),
+  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
+    kind: 'sql',
+    strings: Array.from(strings),
+    values,
+  })),
 }));
 
 vi.mock('../../db/index.js', () => {
@@ -52,6 +57,15 @@ vi.mock('../../db/index.js', () => {
       typeSequence: 'letters.typeSequence',
       type: 'letters.type',
       extraContentJobStatus: 'letters.extraContentJobStatus',
+      metadataStatus: 'letters.metadataStatus',
+      metadataRunId: 'letters.metadataRunId',
+      metadataRevision: 'letters.metadataRevision',
+      metadataContentStatus: 'letters.metadataContentStatus',
+      metadataError: 'letters.metadataError',
+      transcriptionText: 'letters.transcriptionText',
+      workflow: 'letters.workflow',
+      entityExtractionStatus: 'letters.entityExtractionStatus',
+      entityExtractionError: 'letters.entityExtractionError',
       updatedAt: 'letters.updatedAt',
     },
   };
@@ -244,13 +258,20 @@ describe('extra-content producers', () => {
       message: 'No extra content found to transcribe',
     });
     expect(runExtraContentJobMock).not.toHaveBeenCalled();
-    expect(updateSetMock).toHaveBeenCalledWith({
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
       extraContentStatus: 'EMPTY',
       extraContentTranscript: null,
       extraContentVerifiedAt: null,
       extraContentVerifiedBy: null,
+      metadataRunId: null,
+      metadataRunRevision: null,
+      metadataLeaseExpiresAt: null,
+      metadataLeaseRunId: null,
+      metadataClaimKind: null,
+      metadataPublished: false,
+      transcriptPublished: false,
       updatedAt: expect.any(Date),
-    });
+    }));
   });
 
   it('does not clear empty content when the preflight revision lost ownership', async () => {

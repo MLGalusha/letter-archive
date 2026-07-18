@@ -10,7 +10,14 @@ import { transformLettersWithRelatedToDTO, type LetterWithRelations } from '../.
 import { getRows } from '../../services/letter-queries.js';
 import { analyzeCollection } from '../../ai/analyze-collection.js';
 import { resolveRepresentativeLetterId } from '../../services/letters.js';
-import { propagateName } from '../../services/name-propagation.js';
+import {
+  commitDirectIdentityField,
+  isIdentityRevisionConflict,
+  observeIdentityField,
+  propagateName,
+  type IdentityField,
+  type IdentityStateSource,
+} from '../../services/name-propagation.js';
 import { syncLetterParticipantsFromMetadata } from '../../services/entities/participant-sync.js';
 import {
   assessCollectionCompleteness,
@@ -302,6 +309,9 @@ router.patch('/:code/correspondents', async (req, res, next) => {
         id: true,
         sender: true,
         recipient: true,
+        metadataRevision: true,
+        updatedAt: true,
+        metadataV2Json: true,
       },
     });
 
@@ -315,49 +325,58 @@ router.patch('/:code/correspondents', async (req, res, next) => {
 
       if (!senderMatches && !recipientMatches) continue;
 
-      if (senderMatches && letter.sender && letter.sender !== normalizedNewName) {
+      let current: IdentityStateSource & { id: string } = letter;
+      const renameField = async (field: IdentityField) => {
+        const oldName = current[field];
+        if (!oldName || oldName === normalizedNewName) return false;
+
         try {
-          await propagateName({
-            letterId: letter.id,
-            field: 'sender',
-            oldName: letter.sender,
+          const result = await propagateName({
+            letterId: current.id,
+            field,
+            oldName,
             newName: normalizedNewName,
+            observed: observeIdentityField(current, field),
           });
+          current = result.letter;
         } catch (error) {
-          req.log.warn({ error, letterId: letter.id }, 'Bulk sender propagation failed, falling back to direct update');
-          await db.update(letters).set({
-            sender: normalizedNewName,
-            updatedAt: new Date(),
-          }).where(eq(letters.id, letter.id));
+          if (isIdentityRevisionConflict(error)) throw error;
+
+          req.log.warn(
+            { error, letterId: current.id, field },
+            'Collection correspondent propagation failed, using guarded direct update',
+          );
+          current = await commitDirectIdentityField({
+            letter: current,
+            field,
+            value: normalizedNewName,
+          });
         }
+
+        await syncLetterParticipantsFromMetadata({
+          letterId: current.id,
+          [field]: normalizedNewName,
+        }).catch((error) => {
+          req.log.warn(
+            { error, letterId: current.id, field },
+            'Participant sync failed after collection correspondent rename',
+          );
+        });
+        return true;
+      };
+
+      let changed = false;
+
+      if (senderMatches) {
+        const senderChanged = await renameField('sender');
+        changed ||= senderChanged;
+      }
+      if (recipientMatches) {
+        const recipientChanged = await renameField('recipient');
+        changed ||= recipientChanged;
       }
 
-      if (recipientMatches && letter.recipient && letter.recipient !== normalizedNewName) {
-        try {
-          await propagateName({
-            letterId: letter.id,
-            field: 'recipient',
-            oldName: letter.recipient,
-            newName: normalizedNewName,
-          });
-        } catch (error) {
-          req.log.warn({ error, letterId: letter.id }, 'Bulk recipient propagation failed, falling back to direct update');
-          await db.update(letters).set({
-            recipient: normalizedNewName,
-            updatedAt: new Date(),
-          }).where(eq(letters.id, letter.id));
-        }
-      }
-
-      await syncLetterParticipantsFromMetadata({
-        letterId: letter.id,
-        sender: senderMatches ? normalizedNewName : undefined,
-        recipient: recipientMatches ? normalizedNewName : undefined,
-      }).catch((error) => {
-        req.log.warn({ error, letterId: letter.id }, 'Participant sync failed after collection correspondent rename');
-      });
-
-      updatedCount += 1;
+      if (changed) updatedCount += 1;
     }
 
     res.json({

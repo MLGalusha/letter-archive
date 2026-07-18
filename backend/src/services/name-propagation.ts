@@ -9,23 +9,121 @@
  * No AI calls — purely deterministic string replacement.
  */
 
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db, letters, type Letter } from '../db/index.js';
 import { createLogger } from '../utils/logger.js';
 import { PLACEHOLDERS, replacePlaceholder, findOrphanedPlaceholders, isPlaceholderValue } from '../utils/placeholders.js';
+import {
+  buildHumanMetadataJobPatch,
+  observedMetadataRevisionConditions,
+} from './letter/metadata-job.js';
+import { buildMetadataDocumentProjectionPatch } from './letter/metadata-projection.js';
 
 const log = createLogger({ module: 'name-propagation' });
+
+export function identityRevisionConflict(message: string): Error & { status: number } {
+  return Object.assign(new Error(message), { status: 409 });
+}
+
+export function isIdentityRevisionConflict(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const status = 'status' in error ? error.status : undefined;
+  const statusCode = 'statusCode' in error ? error.statusCode : undefined;
+  return status === 409 || statusCode === 409;
+}
 
 export interface PropagateNameParams {
   letterId: string;
   field: 'sender' | 'recipient';
   oldName: string;
   newName: string;
+  observed: ObservedIdentityField;
 }
 
 export interface PropagateNameResult {
   letter: Letter;
   fieldsUpdated: string[];
+}
+
+export type IdentityField = 'sender' | 'recipient';
+
+export interface IdentityStateSource {
+  sender: string | null;
+  recipient: string | null;
+  metadataRevision: number;
+  updatedAt: Date;
+  metadataV2Json?: unknown;
+  metadataJson?: unknown;
+}
+
+export type IdentityState = IdentityStateSource & { id: string };
+
+/** The exact identity value and metadata revision a caller based its edit on. */
+export interface ObservedIdentityField {
+  value: string | null;
+  metadataRevision: number;
+  updatedAt: Date;
+}
+
+export function observeIdentityField(
+  source: IdentityStateSource,
+  field: IdentityField,
+): ObservedIdentityField {
+  return {
+    value: source[field],
+    metadataRevision: source.metadataRevision,
+    updatedAt: source.updatedAt,
+  };
+}
+
+/** Guard both the lifecycle revision and the specific identity value being changed. */
+export function observedIdentityFieldConditions(
+  letterId: string,
+  field: IdentityField,
+  observed: ObservedIdentityField,
+) {
+  return [
+    ...observedMetadataRevisionConditions(letterId, observed),
+    observed.value === null
+      ? isNull(letters[field])
+      : eq(letters[field], observed.value),
+  ];
+}
+
+/** Commit the non-propagating identity path through the same exact CAS contract. */
+export async function commitDirectIdentityField(input: {
+  letter: IdentityState;
+  field: IdentityField;
+  value: string | null;
+}): Promise<IdentityState> {
+  const observed = observeIdentityField(input.letter, input.field);
+  const committed = await db
+    .update(letters)
+    .set({
+      [input.field]: input.value,
+      ...buildMetadataDocumentProjectionPatch(input.letter, {
+        [input.field]: input.value,
+      }),
+      ...buildHumanMetadataJobPatch(),
+      updatedAt: new Date(),
+    })
+    .where(and(...observedIdentityFieldConditions(input.letter.id, input.field, observed)))
+    .returning({
+      id: letters.id,
+      sender: letters.sender,
+      recipient: letters.recipient,
+      metadataRevision: letters.metadataRevision,
+      updatedAt: letters.updatedAt,
+      metadataV2Json: letters.metadataV2Json,
+      metadataJson: letters.metadataJson,
+    });
+
+  if (committed.length === 0) {
+    throw identityRevisionConflict(
+      'Metadata changed during the identity update; reload and try again',
+    );
+  }
+  return committed[0];
 }
 
 /**
@@ -600,17 +698,29 @@ export function propagateInEntityExtraction(
  * Skips single-word variants that collide with other people's first names.
  */
 export async function propagateName(params: PropagateNameParams): Promise<PropagateNameResult> {
-  const { letterId, field, oldName, newName } = params;
+  const { letterId, field, oldName, newName, observed } = params;
   const letterLog = log.child({ letterId, field, oldName, newName });
 
   letterLog.info('Starting name propagation');
 
+  if (observed.value !== oldName) {
+    throw identityRevisionConflict(
+      'The expected identity no longer matches the observed value; reload and try again',
+    );
+  }
+
   const letter = await db.query.letters.findFirst({
-    where: eq(letters.id, letterId),
+    where: and(...observedIdentityFieldConditions(letterId, field, observed)),
   });
 
   if (!letter) {
-    throw new Error(`Letter not found: ${letterId}`);
+    throw identityRevisionConflict(
+      'Metadata changed before name propagation began; reload and try again',
+    );
+  }
+
+  if (oldName === newName) {
+    return { letter, fieldsUpdated: [] };
   }
 
   // Parse old name and generate variants
@@ -622,7 +732,10 @@ export async function propagateName(params: PropagateNameParams): Promise<Propag
   letterLog.info({ variants: variants.map(v => v.pattern), collisionNames: [...collisionNames] }, 'Generated name variants');
 
   const fieldsUpdated: string[] = [];
-  const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
+  const dbUpdates: Record<string, unknown> = {
+    ...buildHumanMetadataJobPatch(),
+    updatedAt: new Date(),
+  };
 
   // 1. Update top-level sender/recipient field
   dbUpdates[field] = newName;
@@ -673,6 +786,16 @@ export async function propagateName(params: PropagateNameParams): Promise<Propag
     dbUpdates.metadataV2Json = updatedMetadata;
     dbUpdates.metadataJson = updatedMetadata;
     fieldsUpdated.push('metadataV2Json');
+  } else if (letter.metadataJson && typeof letter.metadataJson === 'object') {
+    const updatedMetadata = propagateInMetadataV2(
+      letter.metadataJson as Record<string, unknown>,
+      field,
+      variants,
+      newName,
+      collisionNames,
+    );
+    dbUpdates.metadataJson = updatedMetadata;
+    fieldsUpdated.push('metadataJson');
   }
 
   // 5. Update entityExtractionJson (with scoped replacement + alias preservation)
@@ -698,17 +821,21 @@ export async function propagateName(params: PropagateNameParams): Promise<Propag
     }
   }
 
-  await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
+  const propagated = await db
+    .update(letters)
+    .set(dbUpdates)
+    .where(and(...observedIdentityFieldConditions(letterId, field, observed)))
+    .returning();
+  if (propagated.length === 0) {
+    throw identityRevisionConflict(
+      'Metadata changed during name propagation; reload and try again',
+    );
+  }
 
   letterLog.info({ fieldsUpdated }, 'Name propagation completed');
 
-  // Re-fetch to return the updated letter
-  const updatedLetter = await db.query.letters.findFirst({
-    where: eq(letters.id, letterId),
-  });
-
   return {
-    letter: updatedLetter!,
+    letter: propagated[0],
     fieldsUpdated,
   };
 }
@@ -721,6 +848,7 @@ export interface PlaceholderReplacementParams {
   letterId: string;
   field: 'sender' | 'recipient';
   newName: string;
+  observed: ObservedIdentityField;
 }
 
 export interface PlaceholderReplacementResult {
@@ -783,22 +911,31 @@ function clearPlaceholderFlag(
 export async function propagatePlaceholderReplacement(
   params: PlaceholderReplacementParams,
 ): Promise<PlaceholderReplacementResult> {
-  const { letterId, field, newName } = params;
+  const { letterId, field, newName, observed } = params;
   const placeholder = field === 'sender' ? PLACEHOLDERS.SENDER : PLACEHOLDERS.RECIPIENT;
   const letterLog = log.child({ letterId, field, newName, placeholder });
 
   letterLog.info('Starting placeholder replacement');
 
   const letter = await db.query.letters.findFirst({
-    where: eq(letters.id, letterId),
+    where: and(...observedIdentityFieldConditions(letterId, field, observed)),
   });
 
   if (!letter) {
-    throw new Error(`Letter not found: ${letterId}`);
+    throw identityRevisionConflict(
+      'Metadata changed before placeholder replacement began; reload and try again',
+    );
+  }
+
+  if (observed.value === newName) {
+    return { letter, fieldsUpdated: [] };
   }
 
   const fieldsUpdated: string[] = [];
-  const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
+  const dbUpdates: Record<string, unknown> = {
+    ...buildHumanMetadataJobPatch(),
+    updatedAt: new Date(),
+  };
 
   // 1. Update top-level sender/recipient field
   dbUpdates[field] = newName;
@@ -849,6 +986,22 @@ export async function propagatePlaceholderReplacement(
     dbUpdates.metadataV2Json = updatedMetadata;
     dbUpdates.metadataJson = updatedMetadata;
     fieldsUpdated.push('metadataV2Json');
+  } else if (letter.metadataJson && typeof letter.metadataJson === 'object') {
+    const firstName = getFirstName(newName);
+    const updatedMetadata = transformMetadataTextFields(
+      {
+        ...(letter.metadataJson as Record<string, unknown>),
+        [field]: newName,
+      },
+      (text, path) => {
+        const replacement = isHookPath(path) ? firstName : newName;
+        const updatedText = replacePlaceholder(text, placeholder, replacement);
+        return replaceRolePhrases(updatedText, field, replacement);
+      },
+    ) as Record<string, unknown>;
+
+    dbUpdates.metadataJson = updatedMetadata;
+    fieldsUpdated.push('metadataJson');
   }
 
   // 5. Update entityExtractionJson (deep traverse + clear isPlaceholder flag)
@@ -874,7 +1027,16 @@ export async function propagatePlaceholderReplacement(
     }
   }
 
-  await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
+  const propagated = await db
+    .update(letters)
+    .set(dbUpdates)
+    .where(and(...observedIdentityFieldConditions(letterId, field, observed)))
+    .returning();
+  if (propagated.length === 0) {
+    throw identityRevisionConflict(
+      'Metadata changed during placeholder replacement; reload and try again',
+    );
+  }
 
   // Check for orphaned placeholders
   const allText = [
@@ -894,12 +1056,8 @@ export async function propagatePlaceholderReplacement(
 
   letterLog.info({ fieldsUpdated }, 'Placeholder replacement completed');
 
-  const updatedLetter = await db.query.letters.findFirst({
-    where: eq(letters.id, letterId),
-  });
-
   return {
-    letter: updatedLetter!,
+    letter: propagated[0],
     fieldsUpdated,
   };
 }

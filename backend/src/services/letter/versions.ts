@@ -4,6 +4,12 @@ import { db, letters, letterVersions } from '../../db/index.js';
 import { getLetterById } from '../letters.js';
 import { syncLetterParticipantsFromMetadata } from '../entities/participant-sync.js';
 import { log, type VersionInput, type VersionResult } from './shared.js';
+import {
+  buildHumanMetadataJobPatch,
+  buildMetadataSourceInvalidationPatch,
+  observedMetadataRevisionConditions,
+} from './metadata-job.js';
+import { buildMetadataDocumentProjectionPatch } from './metadata-projection.js';
 
 export async function getVersions(
   letterId: string,
@@ -102,30 +108,47 @@ export async function restoreVersion(
     const transcriptionText = (content.text as string) || '';
     const hasTranscription = transcriptionText.trim().length > 0;
 
-    await db.update(letters).set({
-      transcriptionText,
-      transcriptionStatus: 'SUCCESS',
-      transcriptionRunId: null,
-      transcriptionLeaseExpiresAt: null,
-      transcriptionLeaseRunId: null,
-      transcriptionClaimKind: null,
-      transcriptionError: null,
-      transcriptStatus: hasTranscription ? 'EDITED' : 'EMPTY',
-      transcriptVerifiedAt: null,
-      transcriptVerifiedBy: null,
-      workflow: hasTranscription ? 'TRANSCRIBED' : 'UPLOADED',
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
+    const restored = await db
+      .update(letters)
+      .set({
+        transcriptionText,
+        transcriptionStatus: 'SUCCESS',
+        transcriptionRunId: null,
+        transcriptionLeaseExpiresAt: null,
+        transcriptionLeaseRunId: null,
+        transcriptionClaimKind: null,
+        transcriptionError: null,
+        transcriptStatus: hasTranscription ? 'EDITED' : 'EMPTY',
+        transcriptVerifiedAt: null,
+        transcriptVerifiedBy: null,
+        transcriptConfirmedAt: null,
+        transcriptConfirmedBy: null,
+        ...buildMetadataSourceInvalidationPatch(),
+        workflow: hasTranscription ? 'TRANSCRIBED' : 'UPLOADED',
+        updatedAt: new Date(),
+      })
+      .where(and(...observedMetadataRevisionConditions(letterId, letter)))
+      .returning({ id: letters.id });
+    if (restored.length === 0) return false;
   } else {
-    await db.update(letters).set({
+    const metadataValues = {
       sender: (content.sender as string) || null,
       recipient: (content.recipient as string) || null,
       locationWritten: (content.locationWritten as string) || null,
       hook: (content.hook as string) || null,
       summary: (content.summary as string) || null,
-      metadataContentStatus: 'EDITED',
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
+    };
+    const restored = await db
+      .update(letters)
+      .set({
+        ...metadataValues,
+        ...buildMetadataDocumentProjectionPatch(letter, metadataValues),
+        ...buildHumanMetadataJobPatch(),
+        updatedAt: new Date(),
+      })
+      .where(and(...observedMetadataRevisionConditions(letterId, letter)))
+      .returning({ id: letters.id });
+    if (restored.length === 0) return false;
 
     await syncLetterParticipantsFromMetadata({
       letterId,

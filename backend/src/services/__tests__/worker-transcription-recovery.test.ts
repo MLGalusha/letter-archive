@@ -2,15 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createLeaseRecoveryCoordinator,
   decideEmptyWorkerJob,
-  projectTranscriptionRecoveryForWorker,
+  projectQueuedRecoveryForWorker,
 } from '../lease-recovery-coordinator.js';
 
-describe('worker transcription recovery coordination', () => {
-  it('does not treat recovered extra-content work as a queue this worker can drain', () => {
-    expect(projectTranscriptionRecoveryForWorker({
+describe('worker queue recovery coordination', () => {
+  it('drains recovered metadata but not recovered extra-content work', () => {
+    expect(projectQueuedRecoveryForWorker({
       transcription: { requeued: [], failed: [] },
+      metadata: { requeued: [{ id: 'metadata-1' }], failed: [] },
       extraContent: { requeued: [{ id: 'extra-1' }], failed: [] },
-    })).toEqual({ requeued: [], failed: [] });
+    })).toEqual({ requeued: [{ id: 'metadata-1' }], failed: [] });
   });
 
   it('waits for a queued lease, drains it after recovery, then exits', async () => {
@@ -110,6 +111,7 @@ describe('worker transcription recovery coordination', () => {
     try {
       const recover = vi.fn().mockResolvedValue({
         transcription: { requeued: [], failed: [] },
+        metadata: { requeued: [], failed: [] },
         extraContent: { requeued: [], failed: [] },
       });
       const coordinator = createLeaseRecoveryCoordinator({

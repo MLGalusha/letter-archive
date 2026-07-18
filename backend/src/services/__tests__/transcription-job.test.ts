@@ -75,8 +75,11 @@ interface TranscriptionRow {
   transcribedAt: Date | null;
   deadLetter: boolean;
   transcriptStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+  transcriptConfirmedAt: Date | null;
+  transcriptConfirmedBy: string | null;
   transcriptVerifiedAt: Date | null;
   transcriptVerifiedBy: string | null;
+  transcriptPublished: boolean;
   updatedAt: Date;
   dateRaw: string;
 }
@@ -195,8 +198,11 @@ describe('transcription job lifecycle', () => {
       transcribedAt: null,
       deadLetter: false,
       transcriptStatus: 'EMPTY',
+      transcriptConfirmedAt: null,
+      transcriptConfirmedBy: null,
       transcriptVerifiedAt: null,
       transcriptVerifiedBy: null,
+      transcriptPublished: false,
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
       dateRaw: '1944-01-01',
     };
@@ -345,6 +351,9 @@ describe('transcription job lifecycle', () => {
     row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:05:00.000Z');
     row.transcriptionLeaseRunId = 'run-a';
     row.transcriptionClaimKind = 'QUEUED';
+    row.transcriptConfirmedAt = new Date('2026-07-16T12:00:00.000Z');
+    row.transcriptConfirmedBy = 'reviewer-1';
+    row.transcriptPublished = true;
 
     await expect(completeTranscription(row.id, 'run-a', 'Dear family')).resolves.toBe(true);
     expect(row).toMatchObject({
@@ -356,8 +365,11 @@ describe('transcription job lifecycle', () => {
       transcriptionClaimKind: null,
       transcriptionText: 'Dear family',
       transcriptStatus: 'AI_DRAFT',
+      transcriptConfirmedAt: null,
+      transcriptConfirmedBy: null,
       transcriptVerifiedAt: null,
       transcriptVerifiedBy: null,
+      transcriptPublished: false,
     });
 
     row.transcriptionStatus = 'RUNNING';

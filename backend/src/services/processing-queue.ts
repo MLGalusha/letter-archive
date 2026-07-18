@@ -7,12 +7,17 @@ import { processLetter, processMetadata } from '../pipeline/processor.js';
 import { runEntityExtractionOnly } from '../pipeline/metadataV2.js';
 import { createLogger } from '../utils/logger.js';
 import { notify } from './notifications.js';
-import { TRANSCRIBABLE_TYPES } from './letter/shared.js';
+import { observedTimestampMatches, TRANSCRIBABLE_TYPES } from './letter/shared.js';
 import {
   cancelTranscriptionAttempt,
   recoverExpiredTranscriptions,
   type TranscriptionRecoveryResult,
 } from './letter/transcription-job.js';
+import {
+  cancelMetadataAttempt,
+  recoverExpiredMetadataJobs,
+  type MetadataRecoveryResult,
+} from './letter/metadata-job.js';
 import {
   recoverExpiredExtraContentJobs,
   type ExtraContentRecoveryResult,
@@ -253,7 +258,8 @@ export async function processLettersAsync(letterIds: string[], type: 'transcript
         const outcome = await processLetter(letterId);
         skippedReason = outcome?.reason ?? null;
       } else if (type === 'metadata') {
-        await processMetadata(letterId);
+        const outcome = await processMetadata(letterId);
+        skippedReason = outcome?.reason ?? null;
       } else if (type === 'entity_extraction') {
         await runEntityExtractionOnly(letterId);
       }
@@ -376,6 +382,33 @@ export async function hasQueuedTranscriptionWork(): Promise<boolean> {
   return Boolean(pending);
 }
 
+/** One durable definition of queued metadata work for worker handoff. */
+export async function hasQueuedMetadataWork(): Promise<boolean> {
+  const pending = await db.query.letters.findFirst({
+    where: and(
+      eq(letters.type, 'L'),
+      eq(letters.workflow, 'TRANSCRIBED'),
+      ne(letters.transcriptionStatus, 'RUNNING'),
+      eq(letters.metadataStatus, 'PENDING'),
+      ne(letters.entityExtractionStatus, 'RUNNING'),
+      ne(letters.extraContentJobStatus, 'RUNNING'),
+      isNotNull(letters.transcriptConfirmedAt),
+      eq(letters.deadLetter, false),
+    ),
+    columns: { id: true },
+  });
+
+  return Boolean(pending);
+}
+
+export async function hasQueuedProcessingWork(): Promise<boolean> {
+  const [transcription, metadata] = await Promise.all([
+    hasQueuedTranscriptionWork(),
+    hasQueuedMetadataWork(),
+  ]);
+  return transcription || metadata;
+}
+
 /**
  * Ensures durable queued transcription work has a Cloud Run worker wake.
  * Unlike request-triggered enqueueing, errors propagate so the periodic lease
@@ -385,6 +418,18 @@ export async function ensureBackgroundWorkerForQueuedTranscription(
   reason: string,
 ): Promise<boolean> {
   if (!shouldUseCloudRunWorkerJob() || !await hasQueuedTranscriptionWork()) {
+    return false;
+  }
+
+  await triggerWorkerJob(reason);
+  return true;
+}
+
+/** Ensures any durable queued main-stage work has a Cloud Run worker wake. */
+export async function ensureBackgroundWorkerForQueuedProcessing(
+  reason: string,
+): Promise<boolean> {
+  if (!shouldUseCloudRunWorkerJob() || !await hasQueuedProcessingWork()) {
     return false;
   }
 
@@ -417,18 +462,18 @@ export function getProcessingStatus(): ProcessingState {
 }
 
 /**
- * Reconciles only expired, leased transcription and extra-content attempts.
- * Metadata and entity attempts have no durable owner token yet, so resetting
- * them at process startup can displace a producer that is still alive. They
- * remain RUNNING until their lifecycle is fenced or an administrator acts.
+ * Reconciles only expired, fully-owned processing attempts. Entity extraction
+ * remains the sole tokenless stage and is never reset automatically.
  */
 export interface ProcessingLeaseRecoveryResult {
   transcription: TranscriptionRecoveryResult;
+  metadata: MetadataRecoveryResult;
   extraContent: ExtraContentRecoveryResult;
 }
 
 export async function recoverExpiredProcessingJobs(): Promise<ProcessingLeaseRecoveryResult> {
   let transcription: TranscriptionRecoveryResult = { requeued: [], failed: [] };
+  let metadata: MetadataRecoveryResult = { requeued: [], failed: [] };
   let extraContent: ExtraContentRecoveryResult = { requeued: [], failed: [] };
 
   // Keep the two stages as separate failure domains. They update the same table,
@@ -441,6 +486,12 @@ export async function recoverExpiredProcessingJobs(): Promise<ProcessingLeaseRec
   }
 
   try {
+    metadata = await recoverExpiredMetadataJobs();
+  } catch (error) {
+    log.error({ err: error }, 'Expired metadata lease recovery failed');
+  }
+
+  try {
     extraContent = await recoverExpiredExtraContentJobs();
   } catch (error) {
     log.error({ err: error }, 'Expired extra-content lease recovery failed');
@@ -449,13 +500,15 @@ export async function recoverExpiredProcessingJobs(): Promise<ProcessingLeaseRec
   const recoveredLetterIds = [
     ...transcription.requeued.map(row => row.id),
     ...transcription.failed.map(row => row.id),
+    ...metadata.requeued.map(row => row.id),
+    ...metadata.failed.map(row => row.id),
     ...extraContent.requeued.map(row => row.id),
     ...extraContent.failed.map(row => row.id),
   ];
 
   if (recoveredLetterIds.length === 0) {
     log.info('Recovery found no expired leased processing attempts');
-    return { transcription, extraContent };
+    return { transcription, metadata, extraContent };
   }
 
   log.info(
@@ -472,6 +525,8 @@ export async function recoverExpiredProcessingJobs(): Promise<ProcessingLeaseRec
       letterIds: recoveredLetterIds,
       transcriptionRequeued: transcription.requeued.length,
       transcriptionFailed: transcription.failed.length,
+      metadataRequeued: metadata.requeued.length,
+      metadataFailed: metadata.failed.length,
       extraContentRequeued: extraContent.requeued.length,
       extraContentFailed: extraContent.failed.length,
     },
@@ -479,7 +534,7 @@ export async function recoverExpiredProcessingJobs(): Promise<ProcessingLeaseRec
     dedupeWindowMinutes: 5,
   });
 
-  return { transcription, extraContent };
+  return { transcription, metadata, extraContent };
 }
 
 /**
@@ -960,11 +1015,29 @@ export async function removeFromQueue(letterId: string, type: QueueJobType): Pro
     if (letter.metadataStatus !== 'PENDING') {
       throw new ProcessingError(`Cannot remove: metadata status is ${letter.metadataStatus}`, 400);
     }
-    await db.update(letters).set({
-      metadataStatus: 'FAILED',
-      metadataError: 'Removed from queue by admin',
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
+    const removed = await db
+      .update(letters)
+      .set({
+        metadataStatus: 'FAILED',
+        metadataRunId: null,
+        metadataRunRevision: null,
+        metadataLeaseExpiresAt: null,
+        metadataLeaseRunId: null,
+        metadataClaimKind: null,
+        metadataRevision: sql`${letters.metadataRevision} + 1`,
+        metadataError: 'Removed from queue by admin',
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(letters.id, letterId),
+        eq(letters.metadataStatus, 'PENDING'),
+        eq(letters.metadataRevision, letter.metadataRevision),
+        observedTimestampMatches(letters.updatedAt, letter.updatedAt),
+      ))
+      .returning({ id: letters.id });
+    if (removed.length === 0) {
+      throw new ProcessingError('Cannot remove: metadata changed since it was loaded', 409);
+    }
   } else if (type === 'entity_extraction') {
     if (letter.entityExtractionStatus !== 'PENDING') {
       throw new ProcessingError(`Cannot remove: entity extraction status is ${letter.entityExtractionStatus}`, 400);
@@ -1029,6 +1102,12 @@ export async function clearQueue(type: QueueJobType): Promise<{ message: string;
         .update(letters)
         .set({
           metadataStatus: 'FAILED',
+          metadataRunId: null,
+          metadataRunRevision: null,
+          metadataLeaseExpiresAt: null,
+          metadataLeaseRunId: null,
+          metadataClaimKind: null,
+          metadataRevision: sql`${letters.metadataRevision} + 1`,
           metadataError: 'Cleared from queue by admin',
           updatedAt: new Date(),
         })
@@ -1113,14 +1192,32 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
     if (letter.metadataStatus !== 'FAILED') {
       throw new ProcessingError(`Cannot retry: metadata status is ${letter.metadataStatus}`, 400);
     }
-    await db.update(letters).set({
-      metadataStatus: 'PENDING',
-      metadataError: null,
-      metadataAttemptCount: 0,
-      deadLetter: false,
-      workflow: 'TRANSCRIBED',
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
+    const retried = await db
+      .update(letters)
+      .set({
+        metadataStatus: 'PENDING',
+        metadataRunId: null,
+        metadataRunRevision: null,
+        metadataLeaseExpiresAt: null,
+        metadataLeaseRunId: null,
+        metadataClaimKind: null,
+        metadataRevision: sql`${letters.metadataRevision} + 1`,
+        metadataError: null,
+        metadataAttemptCount: 0,
+        deadLetter: false,
+        workflow: 'TRANSCRIBED',
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(letters.id, letterId),
+        eq(letters.metadataStatus, 'FAILED'),
+        eq(letters.metadataRevision, letter.metadataRevision),
+        observedTimestampMatches(letters.updatedAt, letter.updatedAt),
+      ))
+      .returning({ id: letters.id });
+    if (retried.length === 0) {
+      throw new ProcessingError('Cannot retry: metadata changed since it was loaded', 409);
+    }
   } else if (type === 'entity_extraction') {
     if (letter.entityExtractionStatus !== 'FAILED') {
       throw new ProcessingError(`Cannot retry: entity extraction status is ${letter.entityExtractionStatus}`, 400);
@@ -1163,12 +1260,12 @@ export async function cancelActiveJob(letterId: string, type: QueueJobType): Pro
     if (letter.metadataStatus !== 'RUNNING') {
       throw new ProcessingError(`Cannot cancel: metadata status is ${letter.metadataStatus}`, 400);
     }
-    await db.update(letters).set({
-      metadataStatus: 'FAILED',
-      metadataError: 'Cancelled by admin',
-      workflow: 'TRANSCRIBED',
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
+    if (!letter.metadataRunId) {
+      throw new ProcessingError('Cannot cancel: metadata job has no active run ID', 409);
+    }
+    if (!await cancelMetadataAttempt(letterId, letter.metadataRunId)) {
+      throw new ProcessingError('Cannot cancel: metadata attempt changed since it was loaded', 409);
+    }
   } else if (type === 'entity_extraction') {
     if (letter.entityExtractionStatus !== 'RUNNING') {
       throw new ProcessingError(`Cannot cancel: entity extraction status is ${letter.entityExtractionStatus}`, 400);

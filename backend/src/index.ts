@@ -16,7 +16,7 @@ import { env, hasOpenAI } from './config/env.js';
 import { logger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { securityHeaders } from './middleware/security.js';
 import {
-  ensureBackgroundWorkerForQueuedTranscription,
+  ensureBackgroundWorkerForQueuedProcessing,
   recoverExpiredProcessingJobs,
 } from './services/processing-queue.js';
 import { createLeaseRecoveryCoordinator } from './services/lease-recovery-coordinator.js';
@@ -42,7 +42,7 @@ const apiLeaseRecovery = createLeaseRecoveryCoordinator({
   intervalMs: LEASE_RECOVERY_INTERVAL_MS,
   recover: async () => {
     const result = await recoverExpiredProcessingJobs();
-    await ensureBackgroundWorkerForQueuedTranscription('api-lease-recovery');
+    await ensureBackgroundWorkerForQueuedProcessing('api-lease-recovery');
     return result;
   },
   onError: (error: unknown) => {

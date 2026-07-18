@@ -51,6 +51,11 @@ export const extraContentClaimKindEnum = pgEnum('extra_content_claim_kind', [
   'REQUESTED',
 ]);
 
+export const metadataClaimKindEnum = pgEnum('metadata_claim_kind', [
+  'QUEUED',
+  'REQUESTED',
+]);
+
 export const dateConfidenceEnum = pgEnum('date_confidence', [
   'exact',
   'unknown',
@@ -230,6 +235,20 @@ export const letters = pgTable(
     tags: text('tags').array(),
     metadataJson: jsonb('metadata_json'),
     metadataStatus: jobStatusEnum('metadata_status').notNull().default('PENDING'),
+    // Monotonic source/output revision. Claims bind to the exact revision they
+    // observed so human and upstream changes can supersede stale AI work.
+    metadataRevision: integer('metadata_revision').notNull().default(0),
+    // Expand/contract rollout fence: current claims populate this ownership
+    // tuple, while tokenless RUNNING rows from older revisions remain visible
+    // for deliberate reconciliation after those executors have drained.
+    metadataRunId: uuid('metadata_run_id'),
+    metadataRunRevision: integer('metadata_run_revision'),
+    metadataLeaseExpiresAt: timestamp('metadata_lease_expires_at', {
+      withTimezone: true,
+      precision: 3,
+    }),
+    metadataLeaseRunId: uuid('metadata_lease_run_id'),
+    metadataClaimKind: metadataClaimKindEnum('metadata_claim_kind'),
     metadataError: text('metadata_error'),
     metadataAttemptCount: integer('metadata_attempt_count').notNull().default(0),
 
@@ -313,6 +332,9 @@ export const letters = pgTable(
     index('idx_letters_extra_content_job_lease_expires_at')
       .on(table.extraContentJobLeaseExpiresAt)
       .where(sql`${table.extraContentJobStatus} = 'RUNNING' AND ${table.extraContentJobLeaseExpiresAt} IS NOT NULL`),
+    index('idx_letters_metadata_lease_expires_at')
+      .on(table.metadataLeaseExpiresAt)
+      .where(sql`${table.metadataStatus} = 'RUNNING' AND ${table.metadataLeaseExpiresAt} IS NOT NULL`),
     // Flag index (partial: only flagged=true rows)
     index('idx_letters_flagged').on(table.flagged),
     // V2 indexes
@@ -323,6 +345,25 @@ export const letters = pgTable(
     // Check constraint: attempt counts >= 0
     check('transcription_attempt_count_positive', sql`transcription_attempt_count >= 0`),
     check('metadata_attempt_count_positive', sql`metadata_attempt_count >= 0`),
+    check('metadata_revision_nonnegative', sql`metadata_revision >= 0`),
+    check(
+      'metadata_owner_shape',
+      sql`(
+        ${table.metadataRunId} IS NULL
+        AND ${table.metadataRunRevision} IS NULL
+        AND ${table.metadataLeaseExpiresAt} IS NULL
+        AND ${table.metadataLeaseRunId} IS NULL
+        AND ${table.metadataClaimKind} IS NULL
+      ) OR (
+        ${table.metadataStatus} = 'RUNNING'
+        AND ${table.metadataRunId} IS NOT NULL
+        AND ${table.metadataRunRevision} IS NOT NULL
+        AND ${table.metadataRunRevision} = ${table.metadataRevision}
+        AND ${table.metadataLeaseExpiresAt} IS NOT NULL
+        AND ${table.metadataLeaseRunId} = ${table.metadataRunId}
+        AND ${table.metadataClaimKind} IS NOT NULL
+      )`,
+    ),
     check(
       'transcription_run_id_matches_running',
       sql`(${table.transcriptionStatus} = 'RUNNING') = (${table.transcriptionRunId} IS NOT NULL)`,
@@ -933,6 +974,7 @@ export type VisibilityState = 'PUBLISHED' | 'HIDDEN';
 export type JobStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
 export type TranscriptionClaimKind = (typeof transcriptionClaimKindEnum.enumValues)[number];
 export type ExtraContentClaimKind = (typeof extraContentClaimKindEnum.enumValues)[number];
+export type MetadataClaimKind = (typeof metadataClaimKindEnum.enumValues)[number];
 export type DateConfidence = 'exact' | 'unknown' | 'inferred';
 export type ContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
 

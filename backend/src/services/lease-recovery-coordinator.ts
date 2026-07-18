@@ -1,17 +1,24 @@
-export interface WorkerTranscriptionRecoveryResult {
+export interface WorkerQueueRecoveryResult {
   requeued: readonly unknown[];
   failed: readonly unknown[];
 }
 
 export type EmptyWorkerJobDecision = 'drain' | 'wait' | 'exit';
-export type QueuedTranscriptionWorkState = 'pending' | 'leased' | 'none';
+export type QueuedProcessingWorkState = 'pending' | 'leased' | 'none';
 
-export function projectTranscriptionRecoveryForWorker<
-  T extends { transcription: WorkerTranscriptionRecoveryResult },
+export function projectQueuedRecoveryForWorker<
+  T extends {
+    transcription: WorkerQueueRecoveryResult;
+    metadata: WorkerQueueRecoveryResult;
+  },
 >(
   result: T | null,
-): WorkerTranscriptionRecoveryResult | null {
-  return result?.transcription ?? null;
+): WorkerQueueRecoveryResult | null {
+  if (!result) return null;
+  return {
+    requeued: [...result.transcription.requeued, ...result.metadata.requeued],
+    failed: [...result.transcription.failed, ...result.metadata.failed],
+  };
 }
 
 interface RecoveryCoordinatorOptions<T> {
@@ -68,12 +75,12 @@ export function createLeaseRecoveryCoordinator<T>(
 
 /**
  * Requested and extra-content leases deliberately do not keep an
- * EXIT_WHEN_EMPTY worker alive. Only pending or leased queued main transcription
- * is work this worker can drain.
+ * EXIT_WHEN_EMPTY worker alive. Pending or leased queued transcription and
+ * metadata are work this worker can drain.
  */
 export async function decideEmptyWorkerJob(options: {
-  reconcile(): Promise<WorkerTranscriptionRecoveryResult | null>;
-  getQueuedWorkState(): Promise<QueuedTranscriptionWorkState>;
+  reconcile(): Promise<WorkerQueueRecoveryResult | null>;
+  getQueuedWorkState(): Promise<QueuedProcessingWorkState>;
 }): Promise<EmptyWorkerJobDecision> {
   const recovered = await options.reconcile();
   if ((recovered?.requeued.length ?? 0) > 0) return 'drain';

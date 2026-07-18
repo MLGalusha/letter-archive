@@ -26,12 +26,9 @@ const allowedExecutionOwners = new Set([
 const allowedDirectRunningWriters = new Set([
   'routes/admin/letters/content.ts',
   'services/letter/extra-content-job.ts',
+  'services/letter/metadata-job.ts',
   'services/letter/transcription-job.ts',
   'services/letters.ts',
-]);
-
-const allowedClaimJobCallers = new Set([
-  'pipeline/metadataV2.ts',
 ]);
 
 const allowedRecoveryCallers = new Set([
@@ -44,6 +41,10 @@ const allowedExpiredTranscriptionRecoveryCallers = new Set([
 ]);
 
 const allowedExpiredExtraContentRecoveryCallers = new Set([
+  'services/processing-queue.ts',
+]);
+
+const allowedExpiredMetadataRecoveryCallers = new Set([
   'services/processing-queue.ts',
 ]);
 
@@ -60,6 +61,7 @@ const allowedTranscribeExtraContentCallers = new Set([
 
 const canonicalTranscriptionClaimOwner = 'services/letter/transcription-job.ts';
 const canonicalExtraContentClaimOwner = 'services/letter/extra-content-job.ts';
+const canonicalMetadataClaimOwner = 'services/letter/metadata-job.ts';
 
 const executionCall = /\b(?:processLetter|processMetadata|runTranscription|runRequestedTranscription|runMetadataExtractionV2|runEntityExtractionOnly|regenerateTranscription|transcribeLetterOnly|transcribeExtras|processLettersAsync|startBatch)\s*\(|\.runBatch\s*\(/;
 
@@ -113,22 +115,18 @@ describe('processing execution ownership', () => {
     expect(unexpectedWriters.sort()).toEqual([]);
   });
 
-  it('allows canonical claim callers to be removed but not silently multiplied', async () => {
+  it('keeps the ambiguous generic claimJob boundary deleted', async () => {
     const files = await productionTypeScriptFiles(sourceRoot);
-    const unexpectedCallers: string[] = [];
+    const genericClaimOwners: string[] = [];
 
     for (const absolutePath of files) {
       const relativePath = path.relative(sourceRoot, absolutePath);
-      if (relativePath === 'services/letters.ts') continue;
-      if (
-        /\bclaimJob\s*\(/.test(await readFile(absolutePath, 'utf8')) &&
-        !allowedClaimJobCallers.has(relativePath)
-      ) {
-        unexpectedCallers.push(relativePath);
+      if (/\bclaimJob\s*\(/.test(await readFile(absolutePath, 'utf8'))) {
+        genericClaimOwners.push(relativePath);
       }
     }
 
-    expect(unexpectedCallers.sort()).toEqual([]);
+    expect(genericClaimOwners.sort()).toEqual([]);
   });
 
   it('keeps raw transcription AI calls inside canonical producers', async () => {
@@ -169,6 +167,55 @@ describe('processing execution ownership', () => {
         )
         && relativePath !== canonicalTranscriptionClaimOwner
       ) {
+        unexpectedWriters.push(relativePath);
+      }
+    }
+
+    expect(unexpectedWriters.sort()).toEqual([]);
+  });
+
+  it('keeps metadata RUNNING transitions inside the claim owner', async () => {
+    const files = await productionTypeScriptFiles(sourceRoot);
+    const unexpectedWriters: string[] = [];
+
+    for (const absolutePath of files) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      if (
+        /\bmetadataStatus\s*:\s*['"]RUNNING['"]/.test(
+          await readFile(absolutePath, 'utf8'),
+        )
+        && relativePath !== canonicalMetadataClaimOwner
+      ) {
+        unexpectedWriters.push(relativePath);
+      }
+    }
+
+    expect(unexpectedWriters.sort()).toEqual([]);
+  });
+
+  it('keeps non-null metadata run-token writes inside the claim owner', async () => {
+    const files = await productionTypeScriptFiles(sourceRoot);
+    const unexpectedWriters: string[] = [];
+
+    for (const absolutePath of files) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      if (relativePath === 'db/schema.ts' || relativePath === canonicalMetadataClaimOwner) {
+        continue;
+      }
+      const source = await readFile(absolutePath, 'utf8');
+      const writesRunId = [...source.matchAll(
+        /\bmetadataRunId\s*:\s*([^,\n}]+)/g,
+      )].some(match => match[1].trim() !== 'null');
+      const writesLease = [...source.matchAll(
+        /\bmetadataLeaseExpiresAt\s*:\s*([^,\n}]+)/g,
+      )].some(match => match[1].trim() !== 'null');
+      const writesLeaseRunId = [...source.matchAll(
+        /\bmetadataLeaseRunId\s*:\s*([^,\n}]+)/g,
+      )].some(match => match[1].trim() !== 'null');
+      const writesClaimKind = [...source.matchAll(
+        /\bmetadataClaimKind\s*:\s*([^,\n}]+)/g,
+      )].some(match => match[1].trim() !== 'null');
+      if (writesRunId || writesLease || writesLeaseRunId || writesClaimKind) {
         unexpectedWriters.push(relativePath);
       }
     }
@@ -240,6 +287,25 @@ describe('processing execution ownership', () => {
     expect(unexpectedCallers.sort()).toEqual([]);
   });
 
+  it('allows expired metadata recovery callers to be removed but not multiplied', async () => {
+    const files = await productionTypeScriptFiles(sourceRoot);
+    const unexpectedCallers: string[] = [];
+
+    for (const absolutePath of files) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      if (relativePath === canonicalMetadataClaimOwner) continue;
+      if (
+        /\brecoverExpiredMetadataJobs\s*\(\)/.test(
+          await readFile(absolutePath, 'utf8'),
+        ) && !allowedExpiredMetadataRecoveryCallers.has(relativePath)
+      ) {
+        unexpectedCallers.push(relativePath);
+      }
+    }
+
+    expect(unexpectedCallers.sort()).toEqual([]);
+  });
+
   it('allows startup lease-recovery callers to be removed but not silently multiplied', async () => {
     const files = await productionTypeScriptFiles(sourceRoot);
     const unexpectedCallers: string[] = [];
@@ -290,6 +356,76 @@ describe('processing execution ownership', () => {
     expect(worker).toMatch(
       /isNotNull\(letters\.transcriptionLeaseRunId\)[\s\S]*eq\(letters\.transcriptionLeaseRunId, letters\.transcriptionRunId\)/,
     );
+  });
+
+  it('keeps metadata ownership revision-bound and rolling-deploy compatible', async () => {
+    const schema = await readFile(path.join(sourceRoot, 'db/schema.ts'), 'utf8');
+    const migration = await readFile(
+      path.join(sourceRoot, 'db/migrations/0050_add_metadata_job_ownership.sql'),
+      'utf8',
+    );
+
+    expect(schema).toContain("metadataRevision: integer('metadata_revision')");
+    expect(schema).toContain("metadataRunId: uuid('metadata_run_id')");
+    expect(schema).toContain("metadataRunRevision: integer('metadata_run_revision')");
+    expect(schema).toMatch(
+      /metadataLeaseExpiresAt: timestamp\('metadata_lease_expires_at', \{[\s\S]*?precision: 3,[\s\S]*?\}\)/,
+    );
+    expect(schema).toContain("metadataLeaseRunId: uuid('metadata_lease_run_id')");
+    expect(schema).toContain("metadataClaimKind: metadataClaimKindEnum('metadata_claim_kind')");
+    expect(schema).toContain('metadata_revision_nonnegative');
+    expect(schema).toContain('metadata_owner_shape');
+    expect(schema).toMatch(
+      /\$\{table\.metadataRunRevision\} = \$\{table\.metadataRevision\}/,
+    );
+
+    expect(migration).toContain(
+      'ALTER TABLE "letters" ADD COLUMN "metadata_revision" integer DEFAULT 0 NOT NULL',
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "letters" ADD COLUMN "metadata_run_id" uuid',
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "letters" ADD COLUMN "metadata_run_revision" integer',
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "letters" ADD COLUMN "metadata_lease_expires_at" timestamp(3) with time zone',
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "letters" ADD COLUMN "metadata_lease_run_id" uuid',
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "letters" ADD COLUMN "metadata_claim_kind" "metadata_claim_kind"',
+    );
+    expect(migration).toMatch(
+      /ADD CONSTRAINT "metadata_revision_nonnegative"\s+CHECK \("metadata_revision" >= 0\) NOT VALID/,
+    );
+    expect(migration).toMatch(
+      /ADD CONSTRAINT "metadata_owner_shape"[\s\S]*?"metadata_run_id" IS NULL[\s\S]*?"metadata_run_revision" IS NULL[\s\S]*?"metadata_lease_expires_at" IS NULL[\s\S]*?"metadata_lease_run_id" IS NULL[\s\S]*?"metadata_claim_kind" IS NULL[\s\S]*?OR \([\s\S]*?"metadata_status" = 'RUNNING'[\s\S]*?"metadata_run_id" IS NOT NULL[\s\S]*?"metadata_run_revision" IS NOT NULL[\s\S]*?"metadata_run_revision" = "metadata_revision"[\s\S]*?"metadata_lease_expires_at" IS NOT NULL[\s\S]*?"metadata_lease_run_id" = "metadata_run_id"[\s\S]*?"metadata_claim_kind" IS NOT NULL[\s\S]*?\) NOT VALID/,
+    );
+    expect(migration).toMatch(
+      /IF NEW\.metadata_status = 'RUNNING'[\s\S]*TG_OP = 'INSERT' OR OLD\.metadata_status <> 'RUNNING'[\s\S]*NEW\.metadata_run_id IS NULL THEN/,
+    );
+    expect(migration).toMatch(
+      /OLD\.metadata_status = 'RUNNING'[\s\S]*OLD\.metadata_run_id IS NOT NULL[\s\S]*NEW\.metadata_status <> 'RUNNING'[\s\S]*NEW\.metadata_revision = OLD\.metadata_revision \+ 1/,
+    );
+    expect(migration).toMatch(
+      /OLD\.metadata_status <> 'RUNNING'[\s\S]*NEW\.metadata_status <> 'RUNNING'[\s\S]*NEW\.metadata_status <> OLD\.metadata_status[\s\S]*NEW\.metadata_revision = OLD\.metadata_revision \+ 1/,
+    );
+    expect(migration).toMatch(
+      /OLD\.metadata_status = 'SUCCESS'[\s\S]*NEW\.metadata_status = 'SUCCESS'[\s\S]*NEW\.metadata_revision <> OLD\.metadata_revision \+ 1/,
+    );
+    expect(migration).toMatch(
+      /CREATE TRIGGER metadata_status_transition_guard[\s\S]*BEFORE INSERT OR UPDATE OF[\s\S]*metadata_status,[\s\S]*metadata_lease_expires_at,[\s\S]*metadata_claim_kind[\s\S]*ON "letters"/,
+    );
+    expect(migration).toMatch(
+      /OLD\.metadata_status = 'RUNNING'[\s\S]*OLD\.metadata_run_id IS NOT NULL[\s\S]*NEW\.metadata_status = 'RUNNING'[\s\S]*metadata_running_owner_cannot_be_stripped/,
+    );
+    expect(migration).toMatch(
+      /ROW\([\s\S]*NEW\.transcription_text[\s\S]*NEW\.metadata_v2_json[\s\S]*\) IS DISTINCT FROM ROW\([\s\S]*OLD\.transcription_text[\s\S]*OLD\.metadata_v2_json[\s\S]*CREATE TRIGGER metadata_owned_attempt_input_guard[\s\S]*BEFORE UPDATE OF[\s\S]*"transcription_text"[\s\S]*"metadata_v2_json"[\s\S]*ON "letters"/,
+    );
+    expect(migration).not.toMatch(/\bUPDATE\s+"letters"/i);
+    expect(migration).not.toMatch(/VALIDATE CONSTRAINT/i);
   });
 
   it('keeps extra-content lease metadata stage-specific and rollout-compatible', async () => {

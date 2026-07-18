@@ -12,6 +12,8 @@ import {
   type NewCanonicalPerson,
   type PersonRelationshipType,
 } from '../../db/index.js';
+import { buildHumanMetadataJobPatch } from '../letter/metadata-job.js';
+import { buildStructuredMetadataSqlPatch } from '../letter/metadata-projection.js';
 
 export async function createCanonicalPerson(
   data: Omit<NewCanonicalPerson, 'id' | 'createdAt' | 'updatedAt'>,
@@ -54,44 +56,6 @@ function uniqueStrings(values: Array<string | null | undefined>): string[] {
     out.push(normalized);
   }
   return out;
-}
-
-async function rewritePersonNameReferences(personId: string, canonicalName: string): Promise<void> {
-  await db.update(letterPersons).set({ nameAsWritten: canonicalName }).where(eq(letterPersons.personId, personId));
-
-  const senderLetterRows = await db
-    .select({ letterId: letterPersons.letterId })
-    .from(letterPersons)
-    .where(and(eq(letterPersons.personId, personId), eq(letterPersons.role, 'sender')));
-
-  if (senderLetterRows.length > 0) {
-    await db.update(letters).set({
-      sender: canonicalName,
-      updatedAt: new Date(),
-    }).where(
-      inArray(
-        letters.id,
-        [...new Set(senderLetterRows.map((row) => row.letterId))],
-      ),
-    );
-  }
-
-  const recipientLetterRows = await db
-    .select({ letterId: letterPersons.letterId })
-    .from(letterPersons)
-    .where(and(eq(letterPersons.personId, personId), eq(letterPersons.role, 'recipient')));
-
-  if (recipientLetterRows.length > 0) {
-    await db.update(letters).set({
-      recipient: canonicalName,
-      updatedAt: new Date(),
-    }).where(
-      inArray(
-        letters.id,
-        [...new Set(recipientLetterRows.map((row) => row.letterId))],
-      ),
-    );
-  }
 }
 
 async function createPersonAuditEntry(input: {
@@ -220,6 +184,8 @@ export async function updateCanonicalPersonWithUndo(
       if (senderLetterRows.length > 0) {
         await tx.update(letters).set({
           sender: data.canonicalName,
+          ...buildStructuredMetadataSqlPatch('sender', data.canonicalName),
+          ...buildHumanMetadataJobPatch(),
           updatedAt: new Date(),
         }).where(
           inArray(letters.id, [...new Set(senderLetterRows.map((row) => row.letterId))]),
@@ -234,6 +200,8 @@ export async function updateCanonicalPersonWithUndo(
       if (recipientLetterRows.length > 0) {
         await tx.update(letters).set({
           recipient: data.canonicalName,
+          ...buildStructuredMetadataSqlPatch('recipient', data.canonicalName),
+          ...buildHumanMetadataJobPatch(),
           updatedAt: new Date(),
         }).where(
           inArray(letters.id, [...new Set(recipientLetterRows.map((row) => row.letterId))]),
@@ -527,6 +495,8 @@ export async function undoPersonRename(actionId: string, actor: string = 'admin'
     if (senderLetterRows.length > 0) {
       await tx.update(letters).set({
         sender: beforeData.canonicalName!,
+        ...buildStructuredMetadataSqlPatch('sender', beforeData.canonicalName!),
+        ...buildHumanMetadataJobPatch(),
         updatedAt: new Date(),
       }).where(
         inArray(letters.id, [...new Set(senderLetterRows.map((row) => row.letterId))]),
@@ -541,6 +511,8 @@ export async function undoPersonRename(actionId: string, actor: string = 'admin'
     if (recipientLetterRows.length > 0) {
       await tx.update(letters).set({
         recipient: beforeData.canonicalName!,
+        ...buildStructuredMetadataSqlPatch('recipient', beforeData.canonicalName!),
+        ...buildHumanMetadataJobPatch(),
         updatedAt: new Date(),
       }).where(
         inArray(letters.id, [...new Set(recipientLetterRows.map((row) => row.letterId))]),

@@ -89,12 +89,21 @@ function sqlValue(value: unknown): Date | unknown {
 
 function matches(condition: unknown): boolean {
   const clause = condition as {
-    kind: 'and' | 'eq' | 'gt' | 'isNotNull' | 'lte';
+    kind: 'and' | 'eq' | 'gt' | 'isNotNull' | 'lte' | 'sql';
     clauses?: unknown[];
     field?: string;
     value?: unknown;
+    text?: string;
+    values?: unknown[];
   };
   if (clause.kind === 'and') return clause.clauses?.every(matches) ?? false;
+  if (clause.kind === 'sql' && clause.text?.includes("date_trunc('milliseconds'")) {
+    const field = clause.values?.[0];
+    const expected = clause.values?.[1];
+    if (typeof field !== 'string' || typeof expected !== 'string') return false;
+    const actual = row[field.slice('letters.'.length) as keyof JobRow];
+    return actual instanceof Date && actual.getTime() === new Date(expected).getTime();
+  }
   if (!clause.field) return false;
   const key = clause.field.slice('letters.'.length) as keyof JobRow;
   if (clause.kind === 'isNotNull') return row[key] !== null;

@@ -85,12 +85,10 @@ vi.mock('../../db/index.js', () => {
 
 import {
   findOrCreateLetter,
-  claimJob,
+  claimEntityExtraction,
   invalidateExtraContentJobForSourceChange,
   resolveRepresentativeLetterId,
   resetLetterForProcessing,
-  updateMetadataV2,
-  updateMetadataStatus,
 } from '../letters.js';
 
 describe('letters service', () => {
@@ -229,51 +227,10 @@ describe('letters service', () => {
     expect(dirtySql).toContain("WHEN ? = 'RUNNING' THEN true ELSE false");
   });
 
-  it('marks successful metadata results as AI drafts', async () => {
-    await updateMetadataStatus(
-      'letter-2',
-      'SUCCESS',
-      {
-        sender: 'Alice',
-        recipient: 'Bob',
-        hook: 'Quick hello',
-        tags: ['family'],
-      },
-      null,
-    );
-
-    expect(updateSetMock).toHaveBeenCalledWith({
-      metadataStatus: 'SUCCESS',
-      updatedAt: expect.any(Date),
-      sender: 'Alice',
-      recipient: 'Bob',
-      hook: 'Quick hello',
-      tags: ['family'],
-      metadataError: null,
-      metadataContentStatus: 'AI_DRAFT',
-    });
-  });
-
-  it('claims downstream work only while transcription is not running', async () => {
+  it('claims entity work only after metadata succeeds and transcription is idle', async () => {
     updateReturningMock.mockResolvedValueOnce([{ id: 'letter-claim' }]);
 
-    await expect(claimJob('letter-claim', 'metadataStatus')).resolves.toBe(true);
-
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-claim' },
-        { kind: 'eq', field: 'letters.metadataStatus', value: 'PENDING' },
-        { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
-        { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
-      ],
-    });
-  });
-
-  it('reports a lost downstream claim without starting work', async () => {
-    updateReturningMock.mockResolvedValueOnce([]);
-
-    await expect(claimJob('letter-claim', 'entityExtractionStatus')).resolves.toBe(false);
+    await expect(claimEntityExtraction('letter-claim')).resolves.toBe(true);
 
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
@@ -286,16 +243,20 @@ describe('letters service', () => {
     });
   });
 
-  it('publishes metadata success and its workflow transition together', async () => {
-    await updateMetadataV2('letter-claim', 'SUCCESS', undefined, null);
+  it('reports a lost downstream claim without starting work', async () => {
+    updateReturningMock.mockResolvedValueOnce([]);
 
-    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
-      metadataStatus: 'SUCCESS',
-      metadataContentStatus: 'AI_DRAFT',
-      workflow: 'METADATA_DRAFTED',
-      metadataError: null,
-      updatedAt: expect.any(Date),
-    }));
+    await expect(claimEntityExtraction('letter-claim')).resolves.toBe(false);
+
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        { kind: 'eq', field: 'letters.id', value: 'letter-claim' },
+        { kind: 'eq', field: 'letters.entityExtractionStatus', value: 'PENDING' },
+        { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
+        { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
+      ],
+    });
   });
 
   it('resets entity extraction state when re-enqueuing a letter for processing', async () => {
@@ -312,11 +273,16 @@ describe('letters service', () => {
         transcriptionLeaseRunId: null,
         transcriptionClaimKind: null,
         metadataStatus: 'PENDING',
+        metadataRunId: null,
         entityExtractionStatus: 'PENDING',
         entityExtractionError: null,
         entityExtractionJson: null,
         transcriptStatus: 'EMPTY',
         metadataContentStatus: 'EMPTY',
+        transcriptConfirmedAt: null,
+        transcriptConfirmedBy: null,
+        transcriptPublished: false,
+        metadataPublished: false,
         updatedAt: expect.any(Date),
       }),
     );

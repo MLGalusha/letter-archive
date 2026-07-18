@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { eq, and, isNotNull, inArray, ne } from 'drizzle-orm';
+import { eq, and, isNotNull, inArray, ne, or } from 'drizzle-orm';
 import { db, letters } from './db/index.js';
 import { processLetter, processMetadata } from './pipeline/processor.js';
 import { runEntityExtractionOnly } from './pipeline/metadataV2.js';
@@ -7,7 +7,7 @@ import { createLogger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { TRANSCRIBABLE_TYPES } from './services/letter/shared.js';
 import { notify } from './services/notifications.js';
 import {
-  hasQueuedTranscriptionWork,
+  hasQueuedProcessingWork,
   recoverExpiredProcessingJobs,
 } from './services/processing-queue.js';
 import {
@@ -17,7 +17,7 @@ import {
 import {
   createLeaseRecoveryCoordinator,
   decideEmptyWorkerJob,
-  projectTranscriptionRecoveryForWorker,
+  projectQueuedRecoveryForWorker,
 } from './services/lease-recovery-coordinator.js';
 
 const log = createLogger({ module: 'worker' });
@@ -35,22 +35,34 @@ const leaseRecovery = createLeaseRecoveryCoordinator({
   },
 });
 
-async function reconcileTranscriptionForExit() {
+async function reconcileQueuedProcessingForExit() {
   const result = await leaseRecovery.reconcile();
-  return projectTranscriptionRecoveryForWorker(result);
+  return projectQueuedRecoveryForWorker(result);
 }
 
-async function getQueuedTranscriptionWorkState(): Promise<'pending' | 'leased' | 'none'> {
-  if (await hasQueuedTranscriptionWork()) return 'pending';
+async function getQueuedProcessingWorkState(): Promise<'pending' | 'leased' | 'none'> {
+  if (await hasQueuedProcessingWork()) return 'pending';
 
   const leased = await db.query.letters.findFirst({
-    where: and(
-      eq(letters.transcriptionStatus, 'RUNNING'),
-      eq(letters.transcriptionClaimKind, 'QUEUED'),
-      isNotNull(letters.transcriptionRunId),
-      isNotNull(letters.transcriptionLeaseExpiresAt),
-      isNotNull(letters.transcriptionLeaseRunId),
-      eq(letters.transcriptionLeaseRunId, letters.transcriptionRunId),
+    where: or(
+      and(
+        eq(letters.transcriptionStatus, 'RUNNING'),
+        eq(letters.transcriptionClaimKind, 'QUEUED'),
+        isNotNull(letters.transcriptionRunId),
+        isNotNull(letters.transcriptionLeaseExpiresAt),
+        isNotNull(letters.transcriptionLeaseRunId),
+        eq(letters.transcriptionLeaseRunId, letters.transcriptionRunId),
+      ),
+      and(
+        eq(letters.metadataStatus, 'RUNNING'),
+        eq(letters.metadataClaimKind, 'QUEUED'),
+        isNotNull(letters.metadataRunId),
+        isNotNull(letters.metadataRunRevision),
+        eq(letters.metadataRunRevision, letters.metadataRevision),
+        isNotNull(letters.metadataLeaseExpiresAt),
+        isNotNull(letters.metadataLeaseRunId),
+        eq(letters.metadataLeaseRunId, letters.metadataRunId),
+      ),
     ),
     columns: { id: true },
   });
@@ -101,6 +113,8 @@ async function findLettersNeedingMetadata() {
       eq(letters.workflow, 'TRANSCRIBED'),
       ne(letters.transcriptionStatus, 'RUNNING'),
       eq(letters.metadataStatus, 'PENDING'),
+      ne(letters.entityExtractionStatus, 'RUNNING'),
+      ne(letters.extraContentJobStatus, 'RUNNING'),
       isNotNull(letters.transcriptConfirmedAt),
       eq(letters.deadLetter, false),
     ),
@@ -209,9 +223,16 @@ async function processPendingJobs(): Promise<boolean> {
       'Starting metadata extraction job'
     );
     try {
-      await processMetadata(letter.id);
+      const outcome = await processMetadata(letter.id);
       publishHeartbeat(totalPendingThisCycle);
       const duration = Date.now() - jobStart;
+      if (outcome?.kind === 'skipped') {
+        log.info(
+          { letterId: letter.id, duration, reason: outcome.reason },
+          'Metadata extraction job skipped',
+        );
+        continue;
+      }
       log.info({ letterId: letter.id, duration }, 'Metadata extraction job completed');
       // Phase 1 success notification fires from inside metadataV2 — no duplicate here.
     } catch (error) {
@@ -316,8 +337,8 @@ async function main() {
     'Background worker starting'
   );
 
-  // Only leased transcription/extra-content attempts are safe to recover automatically.
-  // Ownerless metadata/entity RUNNING rows remain visible for explicit action.
+  // Only fully-owned leased attempts are safe to recover automatically.
+  // Ownerless legacy metadata and entity RUNNING rows remain explicit actions.
   await leaseRecovery.reconcile();
   leaseRecovery.start();
 
@@ -366,8 +387,8 @@ async function main() {
         // requeue work between the empty scan and process exit.
         await leaseRecovery.stopAndWait();
         let decision = await decideEmptyWorkerJob({
-          reconcile: reconcileTranscriptionForExit,
-          getQueuedWorkState: getQueuedTranscriptionWorkState,
+          reconcile: reconcileQueuedProcessingForExit,
+          getQueuedWorkState: getQueuedProcessingWorkState,
         });
 
         if (decision === 'exit') {
@@ -381,13 +402,13 @@ async function main() {
             currentBatchSize: 0,
           });
           decision = await decideEmptyWorkerJob({
-            reconcile: reconcileTranscriptionForExit,
-            getQueuedWorkState: getQueuedTranscriptionWorkState,
+            reconcile: reconcileQueuedProcessingForExit,
+            getQueuedWorkState: getQueuedProcessingWorkState,
           });
         }
 
         if (decision === 'exit') {
-          log.info('Queues empty with no queued transcription lease, exiting (EXIT_WHEN_EMPTY mode)');
+          log.info('Queues empty with no queued processing lease, exiting (EXIT_WHEN_EMPTY mode)');
           break;
         }
         if (shuttingDown) break;
@@ -398,7 +419,7 @@ async function main() {
         });
         leaseRecovery.start();
         if (decision === 'wait') {
-          log.info('Queues empty but a queued transcription lease remains; waiting for recovery');
+          log.info('Queues empty but a queued processing lease remains; waiting for recovery');
           await sleep(POLL_INTERVAL);
         }
       }

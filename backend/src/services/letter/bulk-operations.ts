@@ -14,12 +14,23 @@ import {
 } from '../processing-queue.js';
 import { shouldUseCloudRunWorkerJob } from '../cloud-run-job.js';
 import { syncLetterParticipantsFromMetadata } from '../entities/participant-sync.js';
-import { propagateName, propagatePlaceholderReplacement } from '../name-propagation.js';
+import {
+  commitDirectIdentityField,
+  isIdentityRevisionConflict,
+  observeIdentityField,
+  propagateName,
+  propagatePlaceholderReplacement,
+  type IdentityField,
+  type IdentityState,
+} from '../name-propagation.js';
 import { isPlaceholderValue } from '../../utils/placeholders.js';
 import {
   observeTranscriptionState,
   observedTranscriptionStateConditions,
 } from './transcription-job.js';
+import {
+  observedMetadataRevisionConditions,
+} from './metadata-job.js';
 import {
   isTranscribableType,
   log,
@@ -206,10 +217,16 @@ export async function bulkExtractMetadata(
 
   const queuedRows = await db.update(letters).set({
     metadataStatus: 'PENDING',
+    metadataRunId: null,
+    metadataRunRevision: null,
+    metadataLeaseExpiresAt: null,
+    metadataLeaseRunId: null,
+    metadataClaimKind: null,
+    metadataRevision: sql`${letters.metadataRevision} + 1`,
     metadataError: null,
     updatedAt: new Date(),
   }).where(or(...eligible.map(letter => and(
-    eq(letters.id, letter.id),
+    ...observedMetadataRevisionConditions(letter.id, letter),
     eq(letters.metadataStatus, letter.metadataStatus),
     ne(letters.transcriptionStatus, 'RUNNING'),
   )))).returning({ id: letters.id });
@@ -290,6 +307,12 @@ export async function bulkClearTranscriptions(letterIds: string[]): Promise<Bulk
       extraContentJobClaimKind: null,
       extraContentJobDirty: false,
       metadataStatus: 'FAILED',
+      metadataRunId: null,
+      metadataRunRevision: null,
+      metadataLeaseExpiresAt: null,
+      metadataLeaseRunId: null,
+      metadataClaimKind: null,
+      metadataRevision: sql`${letters.metadataRevision} + 1`,
       metadataError: 'Cleared by admin',
       metadataAttemptCount: 0,
       sender: null,
@@ -311,9 +334,11 @@ export async function bulkClearTranscriptions(letterIds: string[]): Promise<Bulk
       transcriptStatus: 'EMPTY',
       transcriptVerifiedAt: null,
       transcriptVerifiedBy: null,
+      transcriptPublished: false,
       metadataContentStatus: 'EMPTY',
       metadataVerifiedAt: null,
       metadataVerifiedBy: null,
+      metadataPublished: false,
       updatedAt: new Date(),
     }).where(
       and(
@@ -345,6 +370,54 @@ export async function bulkClearTranscriptions(letterIds: string[]): Promise<Bulk
   };
 }
 
+async function updateBulkIdentityField(
+  letter: IdentityState,
+  field: IdentityField,
+  value: string | null,
+): Promise<{ letter: IdentityState; changed: boolean }> {
+  if (letter[field] === value) return { letter, changed: false };
+
+  const observed = observeIdentityField(letter, field);
+  let committed: IdentityState;
+
+  if (value === null) {
+    committed = await commitDirectIdentityField({ letter, field, value });
+  } else {
+    try {
+      const result = isPlaceholderValue(letter[field]) || !letter[field]
+        ? await propagatePlaceholderReplacement({
+            letterId: letter.id,
+            field,
+            newName: value,
+            observed,
+          })
+        : await propagateName({
+            letterId: letter.id,
+            field,
+            oldName: letter[field],
+            newName: value,
+            observed,
+          });
+      committed = result.letter;
+    } catch (error) {
+      if (isIdentityRevisionConflict(error)) throw error;
+
+      log.warn(
+        { letterId: letter.id, field, error },
+        'Bulk identity propagation failed, using guarded direct update',
+      );
+      committed = await commitDirectIdentityField({ letter, field, value });
+    }
+  }
+
+  await syncLetterParticipantsFromMetadata({
+    letterId: letter.id,
+    [field]: value,
+  });
+
+  return { letter: committed, changed: true };
+}
+
 export async function bulkUpdateFields(updates: BulkUpdateFieldEntry[]): Promise<BulkUpdateFieldsResult> {
   log.info({ updateCount: updates.length }, 'Bulk update fields request received');
 
@@ -360,73 +433,21 @@ export async function bulkUpdateFields(updates: BulkUpdateFieldEntry[]): Promise
     });
     if (!letter) continue;
 
-    let didPropagate = false;
+    let current: IdentityState = letter;
+    let changed = false;
 
-    // Mirror the individual identity update logic (PATCH /:letterId/identity):
-    // Path 1: placeholder/null → real name: use propagatePlaceholderReplacement
-    // Path 2: real name → different real name: use propagateName
-    // Path 3: real name → null: simple clear
-
-    if (sender !== undefined && sender !== null) {
-      if (isPlaceholderValue(letter.sender) || !letter.sender) {
-        try {
-          await propagatePlaceholderReplacement({ letterId: update.letterId, field: 'sender', newName: sender });
-          didPropagate = true;
-        } catch (err) {
-          log.warn({ letterId: update.letterId, err }, 'Bulk placeholder replacement failed for sender, using simple update');
-        }
-      } else if (letter.sender !== sender) {
-        try {
-          await propagateName({ letterId: update.letterId, field: 'sender', oldName: letter.sender, newName: sender });
-          didPropagate = true;
-        } catch (err) {
-          log.warn({ letterId: update.letterId, err }, 'Bulk propagation failed for sender, using simple update');
-        }
-      }
+    if (sender !== undefined) {
+      const result = await updateBulkIdentityField(current, 'sender', sender);
+      current = result.letter;
+      changed ||= result.changed;
+    }
+    if (recipient !== undefined) {
+      const result = await updateBulkIdentityField(current, 'recipient', recipient);
+      current = result.letter;
+      changed ||= result.changed;
     }
 
-    if (recipient !== undefined && recipient !== null) {
-      if (isPlaceholderValue(letter.recipient) || !letter.recipient) {
-        try {
-          await propagatePlaceholderReplacement({ letterId: update.letterId, field: 'recipient', newName: recipient });
-          didPropagate = true;
-        } catch (err) {
-          log.warn({ letterId: update.letterId, err }, 'Bulk placeholder replacement failed for recipient, using simple update');
-        }
-      } else if (letter.recipient !== recipient) {
-        try {
-          await propagateName({ letterId: update.letterId, field: 'recipient', oldName: letter.recipient, newName: recipient });
-          didPropagate = true;
-        } catch (err) {
-          log.warn({ letterId: update.letterId, err }, 'Bulk propagation failed for recipient, using simple update');
-        }
-      }
-    }
-
-    if (!didPropagate) {
-      const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
-
-      if (sender !== undefined) {
-        dbUpdates.sender = sender;
-      }
-      if (recipient !== undefined) {
-        dbUpdates.recipient = recipient;
-      }
-
-      if (Object.keys(dbUpdates).length > 1) {
-        await db.update(letters).set(dbUpdates).where(eq(letters.id, update.letterId));
-      }
-    }
-
-    if (sender !== undefined || recipient !== undefined) {
-      await syncLetterParticipantsFromMetadata({
-        letterId: update.letterId,
-        sender: sender !== undefined ? sender : undefined,
-        recipient: recipient !== undefined ? recipient : undefined,
-      });
-    }
-
-    successCount++;
+    if (changed) successCount++;
   }
 
   log.info({ updated: successCount }, 'Bulk update fields completed');
@@ -447,6 +468,12 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearR
     extractedDate: null,
     tags: null,
     metadataStatus: 'FAILED' as const,
+    metadataRunId: null,
+    metadataRunRevision: null,
+    metadataLeaseExpiresAt: null,
+    metadataLeaseRunId: null,
+    metadataClaimKind: null,
+    metadataRevision: sql`${letters.metadataRevision} + 1`,
     metadataError: 'Cleared by admin',
     metadataAttemptCount: 0,
     deadLetter: false,
@@ -462,6 +489,7 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearR
     metadataContentStatus: 'EMPTY' as const,
     metadataVerifiedAt: null,
     metadataVerifiedBy: null,
+    metadataPublished: false,
     updatedAt: new Date(),
   };
 

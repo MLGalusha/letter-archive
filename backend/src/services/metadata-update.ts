@@ -6,7 +6,7 @@
  * fields using the corrected names.
  */
 
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db, letters, type Letter } from '../db/index.js';
 import { env, hasOpenAI } from '../config/env.js';
 import { openai } from '../ai/openai/client.js';
@@ -26,6 +26,10 @@ import {
   propagateInEntityExtraction,
   propagateInMetadataV2,
 } from './name-propagation.js';
+import {
+  buildHumanMetadataJobPatch,
+  observedMetadataRevisionConditions,
+} from './letter/metadata-job.js';
 
 const log = createLogger({ module: 'metadata-update' });
 
@@ -238,6 +242,7 @@ export async function executeRetagForLetter(
       text.replace(/«(?:SENDER|RECIPIENT):([^»]*)»/g, '$1');
 
     const dbUpdates: Record<string, unknown> = {
+      ...buildHumanMetadataJobPatch(),
       updatedAt: new Date(),
       hook: finalMetadata.hook ? stripTags(finalMetadata.hook) : finalMetadata.hook,
       summary: finalMetadata.summary ? stripTags(finalMetadata.summary) : finalMetadata.summary,
@@ -279,7 +284,15 @@ export async function executeRetagForLetter(
       propagateForRole('recipient', change.oldRecipient, latestLetter.recipient);
     }
 
-    await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
+    const saved = await db
+      .update(letters)
+      .set(dbUpdates)
+      .where(and(...observedMetadataRevisionConditions(letterId, latestLetter)))
+      .returning({ id: letters.id });
+    if (saved.length === 0) {
+      letterLog.info({ duration }, 'Skipping metadata re-tag because its revision changed');
+      return { status: 'skipped', reason: 'revision_changed_before_save' };
+    }
 
     letterLog.info(
       {
@@ -303,64 +316,4 @@ export async function executeRetagForLetter(
     letterLog.error({ err: error }, 'AI metadata re-tag failed');
     return { status: 'skipped', reason: 'request_failed' };
   }
-}
-
-// ============================================================================
-// LEGACY EXPORTS (used by identity endpoint for immediate field updates)
-// ============================================================================
-
-export interface AiUpdateResult {
-  letter: Letter;
-  method: 'ai' | 'simple';
-  fieldsUpdated: string[];
-}
-
-/**
- * Simple field update — no AI. Sets sender/recipient fields immediately
- * and updates the metadataV2Json name fields.
- */
-export async function simpleFieldUpdate(
-  letter: Letter,
-  newSender: string | undefined,
-  newRecipient: string | undefined,
-): Promise<AiUpdateResult> {
-  const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
-  const fieldsUpdated: string[] = [];
-
-  if (newSender !== undefined) {
-    dbUpdates.sender = newSender;
-    fieldsUpdated.push('sender');
-  }
-  if (newRecipient !== undefined) {
-    dbUpdates.recipient = newRecipient;
-    fieldsUpdated.push('recipient');
-  }
-
-  // Update metadataV2Json sender/recipient fields
-  if (letter.metadataV2Json && typeof letter.metadataV2Json === 'object') {
-    const metadata = { ...(letter.metadataV2Json as Record<string, unknown>) };
-
-    if (newSender !== undefined) {
-      metadata.sender = newSender;
-    }
-    if (newRecipient !== undefined) {
-      metadata.recipient = newRecipient;
-    }
-
-    dbUpdates.metadataV2Json = metadata;
-    dbUpdates.metadataJson = metadata;
-    fieldsUpdated.push('metadataV2Json');
-  }
-
-  await db.update(letters).set(dbUpdates).where(eq(letters.id, letter.id));
-
-  const updatedLetter = await db.query.letters.findFirst({
-    where: eq(letters.id, letter.id),
-  });
-
-  return {
-    letter: updatedLetter!,
-    method: 'simple',
-    fieldsUpdated,
-  };
 }

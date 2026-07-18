@@ -5,10 +5,14 @@
  * matching notes as resolved when the relevant field changes.
  */
 
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { db, letters } from '../db/index.js';
 import { createLogger } from '../utils/logger.js';
 import type { StructuredNote } from '../ai/schemas/metadataV2.js';
+import {
+  buildHumanMetadataNotesPatch,
+  observedMetadataRevisionConditions,
+} from './letter/metadata-job.js';
 
 const log = createLogger({ module: 'note-resolution' });
 
@@ -39,7 +43,7 @@ export async function checkNoteAutoResolutions(
     where: eq(letters.id, letterId),
   });
 
-  if (!letter) return;
+  if (!letter || letter.metadataStatus === 'RUNNING') return;
 
   const aiNotes = letter.aiNotes as StructuredNote[] | null;
   if (!Array.isArray(aiNotes) || aiNotes.length === 0) return;
@@ -70,10 +74,20 @@ export async function checkNoteAutoResolutions(
   });
 
   if (resolved) {
-    await db
+    const updated = await db
       .update(letters)
-      .set({ aiNotes: updatedNotes, updatedAt: new Date() })
-      .where(eq(letters.id, letterId));
+      .set({
+        aiNotes: updatedNotes,
+        ...buildHumanMetadataNotesPatch(),
+        updatedAt: new Date(),
+      })
+      .where(and(
+        ...observedMetadataRevisionConditions(letterId, letter),
+        ne(letters.metadataStatus, 'RUNNING'),
+      ))
+      .returning({ id: letters.id });
+
+    if (updated.length === 0) return;
 
     const resolvedCount = updatedNotes.filter(
       (n) => n.resolved_by === 'auto' && n.resolved_at !== null,

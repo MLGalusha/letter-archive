@@ -11,13 +11,18 @@ import {
 } from '../../db/index.js';
 import { getAbsoluteStoragePath } from '../storage.js';
 import { createLogger } from '../../utils/logger.js';
-import { getDocumentTypeFromCode, type TranscribeExtrasResult } from './shared.js';
+import {
+  getDocumentTypeFromCode,
+  observedTimestampMatches,
+  type TranscribeExtrasResult,
+} from './shared.js';
 import {
   runExtraContentJob,
   type ExtraContentHeartbeat,
   type ExtraContentJobResult,
   type ExtraContentPatch,
 } from './extra-content-job.js';
+import { buildMetadataSourceInvalidationPatch } from './metadata-job.js';
 
 const log = createLogger({ module: 'extra-content' });
 
@@ -350,12 +355,13 @@ export async function tryTranscribeExtras(
         extraContentTranscript: null,
         extraContentVerifiedAt: null,
         extraContentVerifiedBy: null,
+        ...buildMetadataSourceInvalidationPatch(),
         updatedAt: new Date(),
       })
       .where(and(
         eq(letters.id, letterId),
         eq(letters.extraContentJobStatus, expectedStatus),
-        eq(letters.updatedAt, source.letter.updatedAt),
+        observedTimestampMatches(letters.updatedAt, source.letter.updatedAt),
       ))
       .returning({ id: letters.id });
 

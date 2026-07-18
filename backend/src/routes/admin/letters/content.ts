@@ -1,6 +1,6 @@
 import { unlink } from 'node:fs/promises';
 import { Router } from 'express';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db, canonicalPersons, letterPages, letterPersons, letters } from '../../../db/index.js';
 import type { StructuredNote, NoteCategory, NotePriority } from '../../../ai/schemas/metadataV2.js';
 import { savePageLineSegments } from '../../../services/line-segments.js';
@@ -25,7 +25,21 @@ import { requestBackgroundWorkerRun } from '../../../services/processing-queue.j
 import { addAliasToCanonicalPerson } from '../../../services/entities/persons.js';
 import { syncLetterParticipantsFromMetadata } from '../../../services/entities/participant-sync.js';
 import { getAbsoluteStoragePath } from '../../../services/storage.js';
-import { runEntityExtractionOnly, runMetadataExtractionV2, type ExtractionOptions } from '../../../pipeline/metadataV2.js';
+import {
+  runEntityExtractionOnly,
+  runMetadataExtractionV2,
+  type ExtractionOptions,
+  type MetadataRunOutcome,
+} from '../../../pipeline/metadataV2.js';
+import {
+  buildHumanMetadataJobPatch,
+  buildHumanMetadataNotesPatch,
+  claimMetadataAfterTranscriptConfirmation,
+  claimRequestedMetadata,
+  observeMetadataState,
+  observedMetadataRevisionConditions,
+} from '../../../services/letter/metadata-job.js';
+import { buildMetadataDocumentProjectionPatch } from '../../../services/letter/metadata-projection.js';
 import { AppError, BadRequestError, NotFoundError } from '../../../utils/response-helpers.js';
 import { isPlaceholderValue } from '../../../utils/placeholders.js';
 import {
@@ -64,6 +78,15 @@ function observedTranscriptConditions(letterId: string, letter: ObservedTranscri
       ? isNull(letters.transcriptionText)
       : eq(letters.transcriptionText, letter.transcriptionText),
   ];
+}
+
+function requireCompletedMetadataRun(outcome: MetadataRunOutcome): void {
+  if (outcome.kind === 'completed') return;
+
+  throw new AppError(
+    409,
+    `Metadata extraction did not complete because the run was ${outcome.kind.replace('_', ' ')}`,
+  );
 }
 
 router.patch('/:letterId/flag', async (req, res, next) => {
@@ -155,34 +178,33 @@ router.post('/:letterId/confirm-transcript', async (req, res, next) => {
 
     // Trigger extraction if status is PENDING or FAILED (e.g. cleared by admin).
     // Skip only if already RUNNING or SUCCESS to avoid double-processing.
-    const shouldExtract = letter.metadataStatus === 'PENDING' || letter.metadataStatus === 'FAILED';
+    const shouldExtract = letter.type === 'L'
+      && (letter.metadataStatus === 'PENDING' || letter.metadataStatus === 'FAILED');
+    if (shouldExtract && !letter.transcriptionText?.trim()) {
+      throw new BadRequestError('Letter must have a transcription before extracting metadata');
+    }
     if (shouldExtract && letter.entityExtractionStatus === 'RUNNING') {
       throw new BadRequestError('Entity extraction is already in progress');
     }
 
     if (shouldExtract) {
-      // Atomically confirm transcript AND claim the metadata job in one update
-      // to prevent the background worker from racing to claim it.
-      const claimResult = await db.update(letters).set({
-        transcriptConfirmedAt: new Date(),
-        transcriptConfirmedBy: getUserId(req),
-        metadataStatus: 'RUNNING',
-        metadataError: null,
-        entityExtractionStatus: 'PENDING',
-        entityExtractionError: null,
-        updatedAt: new Date(),
-      }).where(and(
-        ...observedTranscriptConditions(letterId, letter),
-        inArray(letters.metadataStatus, ['PENDING', 'FAILED']),
-        eq(letters.entityExtractionStatus, letter.entityExtractionStatus),
-      )).returning({ id: letters.id });
+      const claim = await claimMetadataAfterTranscriptConfirmation(
+        letterId,
+        observeMetadataState(letter),
+        getUserId(req),
+      );
 
-      if (claimResult.length > 0) {
-        // We claimed the job — run extraction (skipping the internal claimJob since we already claimed)
+      if (claim) {
         const extractionOptions: ExtractionOptions = {};
         if (confirmedSender) extractionOptions.confirmedSender = confirmedSender;
         if (confirmedRecipient) extractionOptions.confirmedRecipient = confirmedRecipient;
-        await runMetadataExtractionV2(letterId, Object.keys(extractionOptions).length > 0 ? extractionOptions : undefined, true);
+        requireCompletedMetadataRun(
+          await runMetadataExtractionV2(
+            letterId,
+            Object.keys(extractionOptions).length > 0 ? extractionOptions : undefined,
+            claim,
+          ),
+        );
       } else {
         // A metadata worker may have won the claim. Confirm only if a
         // transcription attempt did not win the same race.
@@ -219,24 +241,18 @@ router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
     if (letter.entityExtractionStatus === 'RUNNING') {
       throw new BadRequestError('Entity extraction is already in progress');
     }
+    if (letter.type !== 'L') {
+      throw new BadRequestError('Metadata extraction is only available for letters');
+    }
+    if (!letter.transcriptionText?.trim()) {
+      throw new BadRequestError('Letter must have a transcription before extracting metadata');
+    }
 
-    // Set metadataStatus directly to RUNNING to claim the job and prevent the
-    // background worker from racing to pick it up between reset and extraction.
-    const claimResult = await db.update(letters).set({
-      metadataStatus: 'RUNNING',
-      metadataAttemptCount: 0,
-      deadLetter: false,
-      metadataError: null,
-      entityExtractionStatus: 'PENDING',
-      entityExtractionError: null,
-      updatedAt: new Date(),
-    }).where(and(
-      ...observedTranscriptConditions(letterId, letter),
-      eq(letters.metadataStatus, letter.metadataStatus),
-      eq(letters.entityExtractionStatus, letter.entityExtractionStatus),
-    )).returning({ id: letters.id });
-
-    if (claimResult.length === 0) {
+    const claim = await claimRequestedMetadata(
+      letterId,
+      observeMetadataState(letter),
+    );
+    if (!claim) {
       throw new BadRequestError('Letter processing state changed; try again');
     }
 
@@ -246,7 +262,9 @@ router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
     };
     if (confirmedSender) extractionOptions.confirmedSender = confirmedSender;
     if (confirmedRecipient) extractionOptions.confirmedRecipient = confirmedRecipient;
-    await runMetadataExtractionV2(letterId, extractionOptions, true);
+    requireCompletedMetadataRun(
+      await runMetadataExtractionV2(letterId, extractionOptions, claim),
+    );
     res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
   } catch (error) {
     next(error);
@@ -347,26 +365,20 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
       if (letter.entityExtractionStatus === 'RUNNING') {
         throw new BadRequestError('Entity extraction is already in progress');
       }
-      // Set directly to RUNNING to claim the job atomically (prevents worker race)
-      const claimResult = await db.update(letters).set({
-        metadataStatus: 'RUNNING',
-        metadataAttemptCount: 0,
-        deadLetter: false,
-        metadataError: null,
-        entityExtractionStatus: 'PENDING',
-        entityExtractionError: null,
-        updatedAt: new Date(),
-      }).where(and(
-        ...observedTranscriptConditions(letterId, letter),
-        eq(letters.metadataStatus, letter.metadataStatus),
-        eq(letters.entityExtractionStatus, letter.entityExtractionStatus),
-      )).returning({ id: letters.id });
-
-      if (claimResult.length === 0) {
+      if (letter.type !== 'L') {
+        throw new BadRequestError('Metadata extraction is only available for letters');
+      }
+      const claim = await claimRequestedMetadata(
+        letterId,
+        observeMetadataState(letter),
+      );
+      if (!claim) {
         throw new BadRequestError('Letter processing state changed; try again');
       }
 
-      await runMetadataExtractionV2(letterId, extractionOptions, true);
+      requireCompletedMetadataRun(
+        await runMetadataExtractionV2(letterId, extractionOptions, claim),
+      );
     } else if (mode === 'entities_only') {
       if (letter.entityExtractionStatus === 'RUNNING') {
         throw new BadRequestError('Entity extraction is already in progress');
@@ -410,35 +422,47 @@ router.patch('/:letterId/identity', async (req, res, next) => {
     }
 
     const letter = await requireLetter(letterId);
+    const senderValue = newSender === undefined ? undefined : newSender || null;
+    const recipientValue = newRecipient === undefined ? undefined : newRecipient || null;
+    const senderChanged = senderValue !== undefined && senderValue !== letter.sender;
+    const recipientChanged = recipientValue !== undefined && recipientValue !== letter.recipient;
 
-    // Save name fields immediately
-    const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
-    if (newSender !== undefined) dbUpdates.sender = newSender || null;
-    if (newRecipient !== undefined) dbUpdates.recipient = newRecipient || null;
-
-    // Also update metadataV2Json name fields
-    if (letter.metadataV2Json && typeof letter.metadataV2Json === 'object') {
-      const metadata = { ...(letter.metadataV2Json as Record<string, unknown>) };
-      if (newSender !== undefined) metadata.sender = newSender || null;
-      if (newRecipient !== undefined) metadata.recipient = newRecipient || null;
-      dbUpdates.metadataV2Json = metadata;
-      dbUpdates.metadataJson = metadata;
+    // Autosave and repeated form submissions commonly send the value already
+    // on screen. A no-op must not revoke an AI owner or demote reviewed data.
+    if (!senderChanged && !recipientChanged) {
+      res.json(await requireLetterDto(letterId));
+      return;
     }
 
-    await db.update(letters).set(dbUpdates).where(eq(letters.id, letterId));
+    // Save name fields immediately
+    const dbUpdates: Record<string, unknown> = {
+      ...buildHumanMetadataJobPatch(),
+      updatedAt: new Date(),
+    };
+    if (senderChanged) dbUpdates.sender = senderValue;
+    if (recipientChanged) dbUpdates.recipient = recipientValue;
 
-    const oldSender = letter.sender;
-    const oldRecipient = letter.recipient;
-    const senderChanged = newSender !== undefined && newSender !== oldSender;
-    const recipientChanged = newRecipient !== undefined && newRecipient !== oldRecipient;
+    Object.assign(dbUpdates, buildMetadataDocumentProjectionPatch(letter, {
+      ...(senderChanged ? { sender: senderValue } : {}),
+      ...(recipientChanged ? { recipient: recipientValue } : {}),
+    }));
 
-    req.log.info({ letterId, newSender, newRecipient, senderChanged, recipientChanged }, 'Identity update completed');
+    const identityUpdated = await db
+      .update(letters)
+      .set(dbUpdates)
+      .where(and(...observedMetadataRevisionConditions(letterId, letter)))
+      .returning({ id: letters.id });
+    if (identityUpdated.length === 0) {
+      throw new AppError(409, 'Metadata changed before identity could be saved; reload and try again');
+    }
 
-    if (newSender !== undefined && newSender) {
+    req.log.info({ letterId, senderValue, recipientValue, senderChanged, recipientChanged }, 'Identity update completed');
+
+    if (senderChanged && senderValue) {
       checkNoteAutoResolutions(letterId, 'sender').catch(err =>
         req.log.warn({ letterId, err }, 'Note auto-resolution failed for sender'));
     }
-    if (newRecipient !== undefined && newRecipient) {
+    if (recipientChanged && recipientValue) {
       checkNoteAutoResolutions(letterId, 'recipient').catch(err =>
         req.log.warn({ letterId, err }, 'Note auto-resolution failed for recipient'));
     }
@@ -460,15 +484,15 @@ router.patch('/:letterId/identity', async (req, res, next) => {
         await addAliasToCanonicalPerson(linked.personId, person.canonicalName);
       }
     }
-    if (newSender !== undefined && newSender && letter.sender && letter.sender !== newSender && !isPlaceholderValue(letter.sender)) {
+    if (senderChanged && senderValue && letter.sender && !isPlaceholderValue(letter.sender)) {
       aliasPromises.push(
-        preserveOldNameAsAlias('sender', newSender).catch(err =>
+        preserveOldNameAsAlias('sender', senderValue).catch(err =>
           req.log.warn({ letterId, err }, 'Failed to add old sender as alias')),
       );
     }
-    if (newRecipient !== undefined && newRecipient && letter.recipient && letter.recipient !== newRecipient && !isPlaceholderValue(letter.recipient)) {
+    if (recipientChanged && recipientValue && letter.recipient && !isPlaceholderValue(letter.recipient)) {
       aliasPromises.push(
-        preserveOldNameAsAlias('recipient', newRecipient).catch(err =>
+        preserveOldNameAsAlias('recipient', recipientValue).catch(err =>
           req.log.warn({ letterId, err }, 'Failed to add old recipient as alias')),
       );
     }
@@ -477,8 +501,8 @@ router.patch('/:letterId/identity', async (req, res, next) => {
     // Sync participant links with the new names
     syncLetterParticipantsFromMetadata({
       letterId,
-      sender: newSender ?? undefined,
-      recipient: newRecipient ?? undefined,
+      sender: senderChanged ? senderValue : undefined,
+      recipient: recipientChanged ? recipientValue : undefined,
     }).catch(err => req.log.warn({ letterId, err }, 'Participant sync failed after identity update'));
 
     res.json(await requireLetterDto(letterId));
@@ -690,10 +714,18 @@ router.post('/:letterId/notes', async (req, res, next) => {
       source: 'admin',
     };
 
-    await db.update(letters).set({
-      aiNotes: [...existingNotes, newNote],
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
+    const noteAdded = await db
+      .update(letters)
+      .set({
+        aiNotes: [...existingNotes, newNote],
+        ...buildHumanMetadataNotesPatch(),
+        updatedAt: new Date(),
+      })
+      .where(and(...observedMetadataRevisionConditions(letterId, letter)))
+      .returning({ id: letters.id });
+    if (noteAdded.length === 0) {
+      throw new AppError(409, 'Metadata changed before the note could be added; reload and try again');
+    }
 
     res.json(await requireLetterDto(letterId));
   } catch (error) {
@@ -721,7 +753,18 @@ router.patch('/:letterId/notes/:noteId', async (req, res, next) => {
       resolved_by: getUserId(req),
     };
 
-    await db.update(letters).set({ aiNotes: existingNotes, updatedAt: new Date() }).where(eq(letters.id, letterId));
+    const noteUpdated = await db
+      .update(letters)
+      .set({
+        aiNotes: existingNotes,
+        ...buildHumanMetadataNotesPatch(),
+        updatedAt: new Date(),
+      })
+      .where(and(...observedMetadataRevisionConditions(letterId, letter)))
+      .returning({ id: letters.id });
+    if (noteUpdated.length === 0) {
+      throw new AppError(409, 'Metadata changed before the note could be updated; reload and try again');
+    }
     res.json(await requireLetterDto(letterId));
   } catch (error) {
     next(error);

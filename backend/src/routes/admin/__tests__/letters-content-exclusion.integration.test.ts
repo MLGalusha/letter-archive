@@ -1,7 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invokeRouter } from '../../../test/express-test-utils.js';
 
-const { getLetterByIdMock, fetchLetterWithRelatedAndTransformMock, dbUpdateMock, updateSetMock, updateWhereMock, updateReturningMock, runMetadataExtractionV2Mock, runEntityExtractionOnlyMock } = vi.hoisted(() => ({
+const {
+  getLetterByIdMock,
+  fetchLetterWithRelatedAndTransformMock,
+  dbUpdateMock,
+  updateSetMock,
+  updateWhereMock,
+  updateReturningMock,
+  runMetadataExtractionV2Mock,
+  runEntityExtractionOnlyMock,
+  observeMetadataStateMock,
+  claimRequestedMetadataMock,
+  claimMetadataAfterTranscriptConfirmationMock,
+} = vi.hoisted(() => ({
   getLetterByIdMock: vi.fn(),
   fetchLetterWithRelatedAndTransformMock: vi.fn(),
   dbUpdateMock: vi.fn(),
@@ -10,6 +22,9 @@ const { getLetterByIdMock, fetchLetterWithRelatedAndTransformMock, dbUpdateMock,
   updateReturningMock: vi.fn(),
   runMetadataExtractionV2Mock: vi.fn(),
   runEntityExtractionOnlyMock: vi.fn(),
+  observeMetadataStateMock: vi.fn(),
+  claimRequestedMetadataMock: vi.fn(),
+  claimMetadataAfterTranscriptConfirmationMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -66,6 +81,22 @@ vi.mock('../../../pipeline/metadataV2.js', () => ({
   runEntityExtractionOnly: runEntityExtractionOnlyMock,
 }));
 
+vi.mock('../../../services/letter/metadata-job.js', () => ({
+  buildHumanMetadataJobPatch: vi.fn(() => ({
+    metadataStatus: 'SUCCESS',
+    metadataRunId: null,
+    metadataError: null,
+    metadataContentStatus: 'EDITED',
+    metadataVerifiedAt: null,
+    metadataVerifiedBy: null,
+    workflow: 'METADATA_DRAFTED',
+  })),
+  observeMetadataState: observeMetadataStateMock,
+  claimRequestedMetadata: claimRequestedMetadataMock,
+  claimMetadataAfterTranscriptConfirmation:
+    claimMetadataAfterTranscriptConfirmationMock,
+}));
+
 vi.mock('../../../services/letter-operations.js', () => ({
   createVersion: vi.fn(),
   describePhoto: vi.fn(),
@@ -109,6 +140,10 @@ describe('admin downstream extraction exclusion', () => {
     vi.clearAllMocks();
     updateWhereMock.mockReturnValue({ returning: updateReturningMock });
     updateReturningMock.mockResolvedValue([]);
+    runMetadataExtractionV2Mock.mockResolvedValue({ kind: 'completed' });
+    observeMetadataStateMock.mockImplementation(letter => ({ letter }));
+    claimRequestedMetadataMock.mockResolvedValue(null);
+    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValue(null);
     fetchLetterWithRelatedAndTransformMock.mockResolvedValue({
       id: 'letter-1',
     });
@@ -231,6 +266,7 @@ describe('admin downstream extraction exclusion', () => {
 
   it('does not preclaim metadata when transcription wins the atomic race', async () => {
     getLetterByIdMock.mockResolvedValue({
+      type: 'L',
       transcriptConfirmedAt: new Date(),
       workflow: 'TRANSCRIBED',
       transcriptionStatus: 'SUCCESS',
@@ -250,26 +286,17 @@ describe('admin downstream extraction exclusion', () => {
     });
 
     expect(response.statusCode).toBe(400);
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
-        { kind: 'eq', field: 'letters.workflow', value: 'TRANSCRIBED' },
-        { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
-        { kind: 'eq', field: 'letters.transcriptionText', value: 'transcript' },
-        { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
-        {
-          kind: 'eq',
-          field: 'letters.entityExtractionStatus',
-          value: 'SUCCESS',
-        },
-      ],
-    });
+    expect(claimRequestedMetadataMock).toHaveBeenCalledWith(
+      'letter-1',
+      { letter: expect.objectContaining({ transcriptionText: 'transcript' }) },
+    );
+    expect(dbUpdateMock).not.toHaveBeenCalled();
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
   });
 
   it('does not reset entity work when transcription wins the atomic race', async () => {
     getLetterByIdMock.mockResolvedValue({
+      type: 'L',
       workflow: 'TRANSCRIBED',
       transcriptionText: 'transcript',
       transcriptionStatus: 'SUCCESS',
@@ -306,6 +333,7 @@ describe('admin downstream extraction exclusion', () => {
 
   it('does not reset entity work when entity extraction wins a metadata re-extraction race', async () => {
     getLetterByIdMock.mockResolvedValue({
+      type: 'L',
       workflow: 'TRANSCRIBED',
       transcriptionText: 'transcript',
       transcriptionStatus: 'SUCCESS',
@@ -325,26 +353,17 @@ describe('admin downstream extraction exclusion', () => {
     });
 
     expect(response.statusCode).toBe(400);
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
-        { kind: 'eq', field: 'letters.workflow', value: 'TRANSCRIBED' },
-        { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
-        { kind: 'eq', field: 'letters.transcriptionText', value: 'transcript' },
-        { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
-        {
-          kind: 'eq',
-          field: 'letters.entityExtractionStatus',
-          value: 'PENDING',
-        },
-      ],
-    });
+    expect(claimRequestedMetadataMock).toHaveBeenCalledWith(
+      'letter-1',
+      { letter: expect.objectContaining({ entityExtractionStatus: 'PENDING' }) },
+    );
+    expect(dbUpdateMock).not.toHaveBeenCalled();
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
   });
 
   it('does not reset entity work when metadata extraction wins an entity re-extraction race', async () => {
     getLetterByIdMock.mockResolvedValue({
+      type: 'L',
       workflow: 'TRANSCRIBED',
       transcriptionText: 'transcript',
       transcriptionStatus: 'SUCCESS',
@@ -406,6 +425,74 @@ describe('admin downstream extraction exclusion', () => {
 
   it('binds the validated transcript snapshot when confirmation claims metadata', async () => {
     getLetterByIdMock.mockResolvedValue({
+      type: 'L',
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'transcript',
+      metadataStatus: 'PENDING',
+      entityExtractionStatus: 'PENDING',
+    });
+    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValueOnce({
+      runId: 'run-a',
+      revision: 0,
+    });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/confirm-transcript',
+      path: '/letter-1/confirm-transcript',
+      body: {},
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(claimMetadataAfterTranscriptConfirmationMock).toHaveBeenCalledWith(
+      'letter-1',
+      { letter: expect.objectContaining({ transcriptionText: 'transcript' }) },
+      'admin',
+    );
+    expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith(
+      'letter-1',
+      undefined,
+      { runId: 'run-a', revision: 0 },
+    );
+  });
+
+  it('returns a conflict when a request-owned metadata run is superseded', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      type: 'L',
+      transcriptConfirmedAt: new Date(),
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'transcript',
+      metadataStatus: 'SUCCESS',
+      entityExtractionStatus: 'SUCCESS',
+      sender: null,
+      recipient: null,
+    });
+    claimRequestedMetadataMock.mockResolvedValueOnce({
+      runId: 'run-a',
+      revision: 1,
+    });
+    runMetadataExtractionV2Mock.mockResolvedValueOnce({ kind: 'superseded' });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/regenerate-metadata',
+      path: '/letter-1/regenerate-metadata',
+      body: {},
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('superseded'),
+    });
+  });
+
+  it('binds the validated transcript snapshot when a worker wins the metadata claim', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      type: 'L',
       workflow: 'TRANSCRIBED',
       transcriptionStatus: 'SUCCESS',
       transcriptionText: 'transcript',
@@ -430,47 +517,6 @@ describe('admin downstream extraction exclusion', () => {
         { kind: 'eq', field: 'letters.workflow', value: 'TRANSCRIBED' },
         { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
         { kind: 'eq', field: 'letters.transcriptionText', value: 'transcript' },
-        {
-          kind: 'inArray',
-          field: 'letters.metadataStatus',
-          values: ['PENDING', 'FAILED'],
-        },
-        {
-          kind: 'eq',
-          field: 'letters.entityExtractionStatus',
-          value: 'PENDING',
-        },
-      ],
-    });
-    expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith('letter-1', undefined, true);
-  });
-
-  it('binds the validated transcript snapshot when a worker wins the metadata claim', async () => {
-    getLetterByIdMock.mockResolvedValue({
-      workflow: 'TRANSCRIBED',
-      transcriptionStatus: 'SUCCESS',
-      transcriptionText: 'transcript',
-      metadataStatus: 'PENDING',
-      entityExtractionStatus: 'PENDING',
-    });
-    updateReturningMock.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'letter-1' }]);
-
-    const response = await invokeRouter(contentRouter, {
-      method: 'POST',
-      url: '/letter-1/confirm-transcript',
-      path: '/letter-1/confirm-transcript',
-      body: {},
-      headers: { accept: 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(updateWhereMock).toHaveBeenNthCalledWith(2, {
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
-        { kind: 'eq', field: 'letters.workflow', value: 'TRANSCRIBED' },
-        { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
-        { kind: 'eq', field: 'letters.transcriptionText', value: 'transcript' },
       ],
     });
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
@@ -478,13 +524,14 @@ describe('admin downstream extraction exclusion', () => {
 
   it('returns a conflict when transcription wins the confirmation race', async () => {
     getLetterByIdMock.mockResolvedValue({
+      type: 'L',
       workflow: 'TRANSCRIBED',
       transcriptionStatus: 'SUCCESS',
       transcriptionText: 'transcript',
       metadataStatus: 'PENDING',
       entityExtractionStatus: 'PENDING',
     });
-    updateReturningMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    updateReturningMock.mockResolvedValueOnce([]);
 
     const response = await invokeRouter(contentRouter, {
       method: 'POST',

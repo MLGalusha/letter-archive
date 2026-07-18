@@ -351,6 +351,13 @@
       "when": 1776854400000,
       "tag": "0049_bind_transcription_leases_to_runs",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1776940800000,
+      "tag": "0050_add_metadata_job_ownership",
+      "breakpoints": true
     }
   ]
 }

@@ -13,6 +13,7 @@ import {
   withLeaseHeartbeat,
   type LeaseHeartbeat,
 } from './lease-heartbeat.js';
+import { buildMetadataSourceInvalidationPatch } from './metadata-job.js';
 
 const log = createLogger({ module: 'transcription-job' });
 const LEASE_EXPIRED_ERROR = 'Transcription lease expired before the attempt completed';
@@ -287,10 +288,15 @@ export async function completeTranscription(
       transcriptionStatus: 'SUCCESS',
       transcriptionError: null,
       transcribedAt: new Date(),
-      workflow: 'TRANSCRIBED',
       transcriptStatus: transcriptionText === null ? 'EMPTY' : 'AI_DRAFT',
+      transcriptConfirmedAt: null,
+      transcriptConfirmedBy: null,
       transcriptVerifiedAt: null,
       transcriptVerifiedBy: null,
+      ...buildMetadataSourceInvalidationPatch(),
+      // The completed transcription is the new primary source, so its stage
+      // transition wins over the generic metadata-source workflow fallback.
+      workflow: 'TRANSCRIBED',
       ...clearedOwnershipTuple(),
       updatedAt: new Date(),
     })

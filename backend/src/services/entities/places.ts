@@ -11,6 +11,8 @@ import {
   type PlaceType,
 } from '../../db/index.js';
 import type { DuplicateSuggestion } from './persons.js';
+import { buildHumanMetadataJobPatch } from '../letter/metadata-job.js';
+import { buildStructuredMetadataSqlPatch } from '../letter/metadata-projection.js';
 
 export async function createCanonicalPlace(
   data: Omit<NewCanonicalPlace, 'id' | 'createdAt' | 'updatedAt'>,
@@ -71,6 +73,8 @@ async function rewritePlaceNameReferences(placeId: string, canonicalName: string
   if (writtenFromLetterRows.length > 0) {
     await db.update(letters).set({
       locationWritten: canonicalName,
+      ...buildStructuredMetadataSqlPatch('locationWritten', canonicalName),
+      ...buildHumanMetadataJobPatch(),
       updatedAt: new Date(),
     }).where(
       inArray(

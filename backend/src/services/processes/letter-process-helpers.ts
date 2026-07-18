@@ -5,9 +5,11 @@ import { runEntityExtractionOnly } from '../../pipeline/metadataV2.js';
 import { tryTranscribeExtras } from '../letter/extra-content.js';
 import { cancelExtraContentAttempt } from '../letter/extra-content-job.js';
 import { cancelTranscriptionAttempt } from '../letter/transcription-job.js';
+import { cancelMetadataAttempt } from '../letter/metadata-job.js';
 import { createLogger } from '../../utils/logger.js';
 import { notify } from '../notifications.js';
 import { allOf } from './filter-helpers.js';
+import { observedTimestampMatches } from '../letter/shared.js';
 import {
   clearJobProgress,
   recordJobCompleted,
@@ -247,6 +249,13 @@ export async function removeFromQueue(
     updates.transcriptionLeaseExpiresAt = null;
     updates.transcriptionLeaseRunId = null;
     updates.transcriptionClaimKind = null;
+  } else if (spec.processKey === 'metadata') {
+    updates.metadataRunId = null;
+    updates.metadataRunRevision = null;
+    updates.metadataLeaseExpiresAt = null;
+    updates.metadataLeaseRunId = null;
+    updates.metadataClaimKind = null;
+    updates.metadataRevision = sql`${letters.metadataRevision} + 1`;
   }
 
   const removed = await db
@@ -255,6 +264,9 @@ export async function removeFromQueue(
     .where(and(
       eq(letters.id, letterId),
       eq(letters[spec.statusColumn], 'PENDING'),
+      ...(spec.processKey === 'metadata'
+        ? [eq(letters.metadataRevision, letter.metadataRevision)]
+        : []),
     ))
     .returning({ id: letters.id });
   if (removed.length === 0) {
@@ -287,6 +299,13 @@ export async function clearQueue(
     updates.transcriptionLeaseExpiresAt = null;
     updates.transcriptionLeaseRunId = null;
     updates.transcriptionClaimKind = null;
+  } else if (spec.processKey === 'metadata') {
+    updates.metadataRunId = null;
+    updates.metadataRunRevision = null;
+    updates.metadataLeaseExpiresAt = null;
+    updates.metadataLeaseRunId = null;
+    updates.metadataClaimKind = null;
+    updates.metadataRevision = sql`${letters.metadataRevision} + 1`;
   }
 
   const cleared = await db
@@ -327,7 +346,13 @@ export async function retryJob(
     updates.deadLetter = false;
   } else if (spec.processKey === 'metadata') {
     updates.metadataAttemptCount = 0;
+    updates.metadataRunId = null;
+    updates.metadataRunRevision = null;
+    updates.metadataLeaseExpiresAt = null;
+    updates.metadataLeaseRunId = null;
+    updates.metadataClaimKind = null;
     updates.deadLetter = false;
+    updates.metadataRevision = sql`${letters.metadataRevision} + 1`;
   } else if (spec.processKey === 'extra_content') {
     updates.extraContentJobRunId = null;
     updates.extraContentJobLeaseExpiresAt = null;
@@ -341,7 +366,10 @@ export async function retryJob(
     .where(and(
       eq(letters.id, letterId),
       eq(letters[spec.statusColumn], 'FAILED'),
-      eq(letters.updatedAt, letter.updatedAt),
+      observedTimestampMatches(letters.updatedAt, letter.updatedAt),
+      ...(spec.processKey === 'metadata'
+        ? [eq(letters.metadataRevision, letter.metadataRevision)]
+        : []),
     ))
     .returning({ id: letters.id });
   if (retried.length === 0) {
@@ -374,6 +402,14 @@ export async function cancelActive(
       throw new ProcessingError('Cannot cancel: extra-content job has no active run ID', 409);
     }
     cancelled = await cancelExtraContentAttempt(letterId, observedRunId)
+      ? [{ id: letterId }]
+      : [];
+  } else if (spec.processKey === 'metadata') {
+    const observedRunId = letter.metadataRunId;
+    if (!observedRunId) {
+      throw new ProcessingError('Cannot cancel: metadata job has no active run ID', 409);
+    }
+    cancelled = await cancelMetadataAttempt(letterId, observedRunId)
       ? [{ id: letterId }]
       : [];
   } else {

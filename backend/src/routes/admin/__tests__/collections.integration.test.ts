@@ -8,6 +8,7 @@ const {
   getRowsMock,
   analyzeCollectionMock,
   propagateNameMock,
+  commitDirectIdentityFieldMock,
   syncLetterParticipantsFromMetadataMock,
   queryCollectionsFindManyMock,
   queryLettersFindManyMock,
@@ -20,6 +21,7 @@ const {
   updateSetMock,
   updateWhereMock,
   returningMock,
+  andMock,
   eqMock,
   ascMock,
   sqlMock,
@@ -30,6 +32,7 @@ const {
   getRowsMock: vi.fn(),
   analyzeCollectionMock: vi.fn(),
   propagateNameMock: vi.fn(),
+  commitDirectIdentityFieldMock: vi.fn(),
   syncLetterParticipantsFromMetadataMock: vi.fn(),
   queryCollectionsFindManyMock: vi.fn(),
   queryLettersFindManyMock: vi.fn(),
@@ -42,12 +45,14 @@ const {
   updateSetMock: vi.fn(),
   updateWhereMock: vi.fn(),
   returningMock: vi.fn(),
+  andMock: vi.fn(),
   eqMock: vi.fn(),
   ascMock: vi.fn(),
   sqlMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
+  and: andMock,
   eq: eqMock,
   asc: ascMock,
   sql: sqlMock,
@@ -72,6 +77,21 @@ vi.mock('../../../ai/analyze-collection.js', () => ({
 
 vi.mock('../../../services/name-propagation.js', () => ({
   propagateName: propagateNameMock,
+  commitDirectIdentityField: commitDirectIdentityFieldMock,
+  isIdentityRevisionConflict: (error: unknown) => {
+    if (!error || typeof error !== 'object') return false;
+    const status = 'status' in error ? error.status : undefined;
+    const statusCode = 'statusCode' in error ? error.statusCode : undefined;
+    return status === 409 || statusCode === 409;
+  },
+  observeIdentityField: (
+    source: { sender: string | null; recipient: string | null; metadataRevision: number; updatedAt: Date },
+    field: 'sender' | 'recipient',
+  ) => ({
+    value: source[field],
+    metadataRevision: source.metadataRevision,
+    updatedAt: source.updatedAt,
+  }),
 }));
 
 vi.mock('../../../services/entities/participant-sync.js', () => ({
@@ -97,6 +117,10 @@ vi.mock('../../../db/index.js', () => ({
     type: 'letters.type',
     collectionId: 'letters.collectionId',
     letterDate: 'letters.letterDate',
+    sender: 'letters.sender',
+    recipient: 'letters.recipient',
+    metadataRevision: 'letters.metadataRevision',
+    updatedAt: 'letters.updatedAt',
   },
   collections: {
     id: 'collections.id',
@@ -113,6 +137,7 @@ describe('admin collections route integration', () => {
     vi.clearAllMocks();
 
     eqMock.mockImplementation((left, right) => ({ op: 'eq', left, right }));
+    andMock.mockImplementation((...conditions) => ({ op: 'and', conditions }));
     ascMock.mockImplementation((value) => ({ direction: 'asc', value }));
     sqlMock.mockImplementation((strings, ...values) => ({ strings, values }));
 
@@ -356,6 +381,7 @@ describe('admin collections route integration', () => {
   });
 
   it('renames a correspondent across matching letters in a collection only', async () => {
+    const observedAt = new Date('2026-07-17T12:00:00.000Z');
     getCollectionByCodeMock.mockResolvedValueOnce({
       id: 'collection-9',
       collectionCode: '009',
@@ -363,10 +389,31 @@ describe('admin collections route integration', () => {
       description: 'Ninth set',
     });
     queryLettersFindManyMock.mockResolvedValueOnce([
-      { id: 'letter-1', sender: 'Jimmie', recipient: 'Molly' },
-      { id: 'letter-2', sender: 'Jimmie', recipient: 'Molly' },
-      { id: 'letter-3', sender: 'Someone Else', recipient: 'Molly' },
+      { id: 'letter-1', sender: 'Jimmie', recipient: 'Molly', metadataRevision: 1, updatedAt: observedAt },
+      { id: 'letter-2', sender: 'Jimmie', recipient: 'Molly', metadataRevision: 2, updatedAt: observedAt },
+      { id: 'letter-3', sender: 'Someone Else', recipient: 'Molly', metadataRevision: 3, updatedAt: observedAt },
     ]);
+    propagateNameMock
+      .mockResolvedValueOnce({
+        letter: {
+          id: 'letter-1',
+          sender: 'Jimmy',
+          recipient: 'Molly',
+          metadataRevision: 2,
+          updatedAt: new Date('2026-07-17T12:01:00.000Z'),
+        },
+        fieldsUpdated: ['sender'],
+      })
+      .mockResolvedValueOnce({
+        letter: {
+          id: 'letter-2',
+          sender: 'Jimmy',
+          recipient: 'Molly',
+          metadataRevision: 3,
+          updatedAt: new Date('2026-07-17T12:01:00.000Z'),
+        },
+        fieldsUpdated: ['sender'],
+      });
 
     const response = await invokeRouter(adminCollectionsRouter, {
       method: 'PATCH',
@@ -391,14 +438,177 @@ describe('admin collections route integration', () => {
       field: 'sender',
       oldName: 'Jimmie',
       newName: 'Jimmy',
+      observed: {
+        value: 'Jimmie',
+        metadataRevision: 1,
+        updatedAt: observedAt,
+      },
     });
     expect(propagateNameMock).toHaveBeenNthCalledWith(2, {
       letterId: 'letter-2',
       field: 'sender',
       oldName: 'Jimmie',
       newName: 'Jimmy',
+      observed: {
+        value: 'Jimmie',
+        metadataRevision: 2,
+        updatedAt: observedAt,
+      },
     });
-    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenCalledTimes(2);
+    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenNthCalledWith(1, {
+      letterId: 'letter-1',
+      sender: 'Jimmy',
+    });
+    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenNthCalledWith(2, {
+      letterId: 'letter-2',
+      sender: 'Jimmy',
+    });
+  });
+
+  it('does not turn a name-propagation revision conflict into a stale fallback update', async () => {
+    const updatedAt = new Date('2026-07-17T12:00:00.000Z');
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      description: 'Ninth set',
+    });
+    queryLettersFindManyMock.mockResolvedValueOnce([{
+      id: 'letter-1',
+      sender: 'Jimmie',
+      recipient: 'Molly',
+      metadataRevision: 4,
+      updatedAt,
+    }]);
+    propagateNameMock.mockRejectedValueOnce(Object.assign(
+      new Error('Metadata changed during name propagation'),
+      { status: 409 },
+    ));
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PATCH',
+      url: '/009/correspondents',
+      path: '/009/correspondents',
+      body: {
+        oldName: 'Jimmie',
+        newName: 'Jimmy',
+        roles: ['sender'],
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(syncLetterParticipantsFromMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it('guards the non-conflict fallback with the observed metadata revision', async () => {
+    const updatedAt = new Date('2026-07-17T12:00:00.000Z');
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      description: 'Ninth set',
+    });
+    queryLettersFindManyMock.mockResolvedValueOnce([{
+      id: 'letter-1',
+      sender: 'Jimmie',
+      recipient: 'Molly',
+      metadataRevision: 4,
+      updatedAt,
+    }]);
+    propagateNameMock.mockRejectedValueOnce(new Error('Unexpected propagation failure'));
+    commitDirectIdentityFieldMock.mockRejectedValueOnce(Object.assign(
+      new Error('Metadata changed during identity update'),
+      { status: 409 },
+    ));
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PATCH',
+      url: '/009/correspondents',
+      path: '/009/correspondents',
+      body: {
+        oldName: 'Jimmie',
+        newName: 'Jimmy',
+        roles: ['sender'],
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(commitDirectIdentityFieldMock).toHaveBeenCalledWith({
+      letter: {
+        id: 'letter-1',
+        sender: 'Jimmie',
+        recipient: 'Molly',
+        metadataRevision: 4,
+        updatedAt,
+      },
+      field: 'sender',
+      value: 'Jimmy',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(syncLetterParticipantsFromMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it('chains a second role from the first committed revision and never syncs a failed role', async () => {
+    const initialAt = new Date('2026-07-17T12:00:00.000Z');
+    const senderCommittedAt = new Date('2026-07-17T12:01:00.000Z');
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      description: 'Ninth set',
+    });
+    queryLettersFindManyMock.mockResolvedValueOnce([{
+      id: 'letter-1',
+      sender: 'Jimmie',
+      recipient: 'Jimmie',
+      metadataRevision: 4,
+      updatedAt: initialAt,
+    }]);
+    propagateNameMock
+      .mockResolvedValueOnce({
+        letter: {
+          id: 'letter-1',
+          sender: 'Jimmy',
+          recipient: 'Jimmie',
+          metadataRevision: 5,
+          updatedAt: senderCommittedAt,
+        },
+        fieldsUpdated: ['sender'],
+      })
+      .mockRejectedValueOnce(Object.assign(new Error('Recipient changed'), { status: 409 }));
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PATCH',
+      url: '/009/correspondents',
+      path: '/009/correspondents',
+      body: {
+        oldName: 'Jimmie',
+        newName: 'Jimmy',
+        roles: ['sender', 'recipient'],
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(propagateNameMock).toHaveBeenNthCalledWith(2, {
+      letterId: 'letter-1',
+      field: 'recipient',
+      oldName: 'Jimmie',
+      newName: 'Jimmy',
+      observed: {
+        value: 'Jimmie',
+        metadataRevision: 5,
+        updatedAt: senderCommittedAt,
+      },
+    });
+    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenCalledTimes(1);
+    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenCalledWith({
+      letterId: 'letter-1',
+      sender: 'Jimmy',
+    });
   });
 
   it('injects request ids into invalid update payload responses', async () => {

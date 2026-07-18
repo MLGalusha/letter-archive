@@ -102,12 +102,13 @@ describe('processMetadata', () => {
       sender: null,
       recipient: null,
     });
+    runMetadataExtractionV2Mock.mockResolvedValue({ kind: 'completed' });
   });
 
   it('starts metadata when the transcript is idle and the letter is eligible', async () => {
-    await processMetadata('letter-1');
+    await expect(processMetadata('letter-1')).resolves.toBeUndefined();
 
-    expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith('letter-1', undefined);
+    expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith('letter-1');
   });
 
   it('does not start metadata while retranscription is running', async () => {
@@ -121,8 +122,23 @@ describe('processMetadata', () => {
       recipient: null,
     });
 
-    await processMetadata('letter-1');
+    await expect(processMetadata('letter-1')).resolves.toEqual({
+      kind: 'skipped',
+      reason: 'ineligible',
+    });
 
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
   });
+
+  it.each(['claim_lost', 'superseded', 'ineligible'] as const)(
+    'preserves neutral metadata %s as skipped',
+    async (reason) => {
+      runMetadataExtractionV2Mock.mockResolvedValue({ kind: reason });
+
+      await expect(processMetadata('letter-1')).resolves.toEqual({
+        kind: 'skipped',
+        reason,
+      });
+    },
+  );
 });

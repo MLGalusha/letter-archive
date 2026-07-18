@@ -1,5 +1,8 @@
 import { runTranscription, type TranscriptionRunOutcome } from './transcription.js';
-import { runMetadataExtractionV2 } from './metadataV2.js';
+import {
+  runMetadataExtractionV2,
+  type MetadataRunOutcome,
+} from './metadataV2.js';
 import { getLetterById } from '../services/letters.js';
 import { isTranscribableType } from '../services/letter/shared.js';
 import { createLogger } from '../utils/logger.js';
@@ -13,6 +16,13 @@ export type SkippedTranscriptionReason = Exclude<
 export type ProcessLetterOutcome =
   | void
   | { kind: 'skipped'; reason: SkippedTranscriptionReason };
+export type SkippedMetadataReason = Exclude<
+  MetadataRunOutcome,
+  { kind: 'completed' }
+>['kind'];
+export type ProcessMetadataOutcome =
+  | void
+  | { kind: 'skipped'; reason: SkippedMetadataReason };
 
 /**
  * Processes a letter through the transcription phase only.
@@ -52,7 +62,7 @@ export async function processLetter(letterId: string): Promise<ProcessLetterOutc
  * Processes metadata extraction for a letter that has confirmed transcript.
  * Called by worker after transcript is confirmed.
  */
-export async function processMetadata(letterId: string): Promise<void> {
+export async function processMetadata(letterId: string): Promise<ProcessMetadataOutcome> {
   const letter = await getLetterById(letterId);
 
   if (!letter) {
@@ -61,7 +71,7 @@ export async function processMetadata(letterId: string): Promise<void> {
 
   if (!isTranscribableType(letter.type)) {
     log.debug({ letterId, letterType: letter.type }, 'Skipping metadata for non-transcribable type');
-    return;
+    return { kind: 'skipped', reason: 'ineligible' };
   }
 
   // Only process if workflow is TRANSCRIBED and metadata is pending
@@ -73,13 +83,16 @@ export async function processMetadata(letterId: string): Promise<void> {
     letter.transcriptionStatus !== 'RUNNING'
   ) {
     log.info({ letterId }, 'Processing metadata');
-    // Pass existing sender/recipient as corrections so the AI uses pre-filled names
-    const options = (letter.sender || letter.recipient) ? {
-      confirmedSender: letter.sender ?? undefined,
-      confirmedRecipient: letter.recipient ?? undefined,
-    } : undefined;
-    await runMetadataExtractionV2(letterId, options);
+    // The producer derives any pre-filled names from its post-claim reload so
+    // this preflight snapshot cannot become stale before ownership is won.
+    const outcome = await runMetadataExtractionV2(letterId);
+    if (outcome.kind !== 'completed') {
+      return { kind: 'skipped', reason: outcome.kind };
+    }
+    return;
   }
+
+  return { kind: 'skipped', reason: 'ineligible' };
 }
 
 export { runTranscription } from './transcription.js';

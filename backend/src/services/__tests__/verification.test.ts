@@ -21,6 +21,11 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn((field: unknown, value: unknown) => ({ kind: 'eq', field, value })),
   isNull: vi.fn((field: unknown) => ({ kind: 'isNull', field })),
   ne: vi.fn((field: unknown, value: unknown) => ({ kind: 'ne', field, value })),
+  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
+    kind: 'sql',
+    strings: Array.from(strings),
+    values,
+  })),
 }));
 
 vi.mock('../../db/index.js', () => {
@@ -36,6 +41,9 @@ vi.mock('../../db/index.js', () => {
       transcriptionStatus: 'letters.transcriptionStatus',
       transcriptionText: 'letters.transcriptionText',
       transcriptStatus: 'letters.transcriptStatus',
+      metadataStatus: 'letters.metadataStatus',
+      metadataRevision: 'letters.metadataRevision',
+      metadataContentStatus: 'letters.metadataContentStatus',
       extraContentStatus: 'letters.extraContentStatus',
     },
   };
@@ -58,8 +66,10 @@ vi.mock('../../utils/logger.js', () => ({
 
 import {
   unverifyExtraContent,
+  unverifyMetadata,
   unverifyTranscript,
   verifyExtraContent,
+  verifyMetadata,
   verifyTranscript,
 } from '../letter/verification.js';
 
@@ -94,7 +104,6 @@ describe('transcript verification ownership', () => {
       clauses: [
         { kind: 'eq', field: 'letters.id', value: 'letter-1' },
         { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
-        { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
         { kind: 'eq', field: 'letters.transcriptStatus', value: 'EDITED' },
         { kind: 'eq', field: 'letters.transcriptionText', value: 'Reviewed text' },
       ],
@@ -110,12 +119,11 @@ describe('transcript verification ownership', () => {
       transcriptStatus: 'EDITED',
       readingText: null,
     });
-    updateReturningMock.mockResolvedValue([]);
-
     await expect(verifyTranscript('letter-2', 'reviewer-1')).rejects.toMatchObject({
-      status: 409,
-      message: expect.stringContaining('changed before it could be verified'),
+      status: 400,
+      message: expect.stringContaining('must be complete'),
     });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
     expect(generateAndSaveReadingViewMock).not.toHaveBeenCalled();
   });
 
@@ -148,6 +156,13 @@ describe('transcript verification ownership', () => {
 
     await expect(unverifyTranscript('letter-4')).resolves.toBe(true);
 
+    expect(updateSetMock).toHaveBeenCalledWith({
+      transcriptStatus: 'EDITED',
+      transcriptVerifiedAt: null,
+      transcriptVerifiedBy: null,
+      transcriptPublished: false,
+      updatedAt: expect.any(Date),
+    });
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
       clauses: [
@@ -173,6 +188,113 @@ describe('transcript verification ownership', () => {
       status: 409,
       message: expect.stringContaining('changed before verification could be removed'),
     });
+  });
+});
+
+describe('metadata verification ownership', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    updateReturningMock.mockResolvedValue([{ id: 'updated-letter' }]);
+  });
+
+  it('verifies only the exact idle metadata revision the reviewer loaded', async () => {
+    const updatedAt = new Date('2026-07-17T12:00:00.000Z');
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-1',
+      metadataStatus: 'SUCCESS',
+      metadataRevision: 4,
+      metadataContentStatus: 'EDITED',
+      updatedAt,
+    });
+
+    await expect(verifyMetadata('letter-1', 'reviewer-1')).resolves.toEqual({
+      previousStatus: 'EDITED',
+    });
+
+    expect(updateSetMock).toHaveBeenCalledWith({
+      metadataContentStatus: 'VERIFIED',
+      metadataVerifiedAt: expect.any(Date),
+      metadataVerifiedBy: 'reviewer-1',
+      reviewedAt: expect.any(Date),
+      reviewedBy: 'reviewer-1',
+      metadataRevision: {
+        kind: 'sql',
+        strings: ['', ' + 1'],
+        values: ['letters.metadataRevision'],
+      },
+      updatedAt: expect.any(Date),
+    });
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+        { kind: 'eq', field: 'letters.metadataRevision', value: 4 },
+        { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
+        { kind: 'eq', field: 'letters.metadataContentStatus', value: 'EDITED' },
+      ],
+    });
+  });
+
+  it('refuses to verify metadata before extraction has completed', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-2',
+      metadataStatus: 'RUNNING',
+      metadataRevision: 0,
+      metadataContentStatus: 'EDITED',
+      updatedAt: new Date('2026-07-17T12:00:00.000Z'),
+    });
+    await expect(verifyMetadata('letter-2', 'reviewer-1')).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringContaining('must be complete'),
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses to verify successful metadata with no content', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-empty',
+      metadataStatus: 'SUCCESS',
+      metadataRevision: 0,
+      metadataContentStatus: 'EMPTY',
+      updatedAt: new Date('2026-07-17T12:00:00.000Z'),
+    });
+
+    await expect(verifyMetadata('letter-empty', 'reviewer-1')).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringContaining('contain content'),
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('unverifies only an exact idle metadata revision', async () => {
+    const updatedAt = new Date('2026-07-17T12:00:00.000Z');
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-3',
+      metadataStatus: 'SUCCESS',
+      metadataRevision: 9,
+      metadataContentStatus: 'VERIFIED',
+      updatedAt,
+    });
+
+    await expect(unverifyMetadata('letter-3')).resolves.toBe(true);
+    expect(updateSetMock).toHaveBeenCalledWith({
+      metadataContentStatus: 'EDITED',
+      metadataVerifiedAt: null,
+      metadataVerifiedBy: null,
+      metadataPublished: false,
+      metadataRevision: {
+        kind: 'sql',
+        strings: ['', ' + 1'],
+        values: ['letters.metadataRevision'],
+      },
+      updatedAt: expect.any(Date),
+    });
+    expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
+      clauses: expect.arrayContaining([
+        { kind: 'ne', field: 'letters.metadataStatus', value: 'RUNNING' },
+        { kind: 'eq', field: 'letters.metadataRevision', value: 9 },
+      ]),
+    }));
   });
 });
 

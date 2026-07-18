@@ -13,8 +13,10 @@ const {
   runEntityExtractionOnlyMock,
   notifyMock,
   recoverExpiredTranscriptionsMock,
+  recoverExpiredMetadataJobsMock,
   recoverExpiredExtraContentJobsMock,
   cancelTranscriptionAttemptMock,
+  cancelMetadataAttemptMock,
   shouldUseCloudRunWorkerJobMock,
   triggerWorkerJobMock,
 } = vi.hoisted(() => ({
@@ -30,8 +32,10 @@ const {
   runEntityExtractionOnlyMock: vi.fn(),
   notifyMock: vi.fn(),
   recoverExpiredTranscriptionsMock: vi.fn(),
+  recoverExpiredMetadataJobsMock: vi.fn(),
   recoverExpiredExtraContentJobsMock: vi.fn(),
   cancelTranscriptionAttemptMock: vi.fn(),
+  cancelMetadataAttemptMock: vi.fn(),
   shouldUseCloudRunWorkerJobMock: vi.fn(),
   triggerWorkerJobMock: vi.fn(),
 }));
@@ -95,7 +99,14 @@ vi.mock('../../db/index.js', () => {
       transcriptionLeaseRunId: 'letters.transcriptionLeaseRunId',
       transcriptionClaimKind: 'letters.transcriptionClaimKind',
       metadataStatus: 'letters.metadataStatus',
+      metadataRevision: 'letters.metadataRevision',
+      metadataRunId: 'letters.metadataRunId',
+      metadataRunRevision: 'letters.metadataRunRevision',
+      metadataLeaseExpiresAt: 'letters.metadataLeaseExpiresAt',
+      metadataLeaseRunId: 'letters.metadataLeaseRunId',
+      metadataClaimKind: 'letters.metadataClaimKind',
       entityExtractionStatus: 'letters.entityExtractionStatus',
+      extraContentJobStatus: 'letters.extraContentJobStatus',
       transcriptConfirmedAt: 'letters.transcriptConfirmedAt',
     },
     collections: {
@@ -126,6 +137,11 @@ vi.mock('../letter/extra-content-job.js', () => ({
   recoverExpiredExtraContentJobs: recoverExpiredExtraContentJobsMock,
 }));
 
+vi.mock('../letter/metadata-job.js', () => ({
+  cancelMetadataAttempt: cancelMetadataAttemptMock,
+  recoverExpiredMetadataJobs: recoverExpiredMetadataJobsMock,
+}));
+
 vi.mock('../cloud-run-job.js', () => ({
   shouldUseCloudRunWorkerJob: shouldUseCloudRunWorkerJobMock,
   triggerWorkerJob: triggerWorkerJobMock,
@@ -145,6 +161,7 @@ import {
   buildProcessingConditions,
   cancelActiveJob,
   clearQueue,
+  ensureBackgroundWorkerForQueuedProcessing,
   ensureBackgroundWorkerForQueuedTranscription,
   getQueueStatus,
   getJobProgress,
@@ -169,8 +186,10 @@ describe('processing queue service', () => {
     updateReturningMock.mockResolvedValue([{ id: 'letter-3' }]);
     processLetterMock.mockResolvedValue(undefined);
     recoverExpiredTranscriptionsMock.mockResolvedValue({ requeued: [], failed: [] });
+    recoverExpiredMetadataJobsMock.mockResolvedValue({ requeued: [], failed: [] });
     recoverExpiredExtraContentJobsMock.mockResolvedValue({ requeued: [], failed: [] });
     cancelTranscriptionAttemptMock.mockResolvedValue(true);
+    cancelMetadataAttemptMock.mockResolvedValue(true);
     shouldUseCloudRunWorkerJobMock.mockReturnValue(false);
     triggerWorkerJobMock.mockResolvedValue(true);
   });
@@ -295,7 +314,14 @@ describe('processing queue service', () => {
       transcriptionLeaseRunId: 'letters.transcriptionLeaseRunId',
       transcriptionClaimKind: 'letters.transcriptionClaimKind',
       metadataStatus: 'letters.metadataStatus',
+      metadataRevision: 'letters.metadataRevision',
+      metadataRunId: 'letters.metadataRunId',
+      metadataRunRevision: 'letters.metadataRunRevision',
+      metadataLeaseExpiresAt: 'letters.metadataLeaseExpiresAt',
+      metadataLeaseRunId: 'letters.metadataLeaseRunId',
+      metadataClaimKind: 'letters.metadataClaimKind',
       entityExtractionStatus: 'letters.entityExtractionStatus',
+      extraContentJobStatus: 'letters.extraContentJobStatus',
       transcriptConfirmedAt: 'letters.transcriptConfirmedAt',
     });
     expect(updateSetMock).toHaveBeenCalledWith({
@@ -442,6 +468,8 @@ describe('processing queue service', () => {
     findFirstMock.mockResolvedValue({
       id: 'letter-2',
       metadataStatus: 'FAILED',
+      metadataRevision: 3,
+      updatedAt: new Date('2026-07-17T12:00:00.000Z'),
     });
 
     const result = await retryJob('letter-2', 'metadata');
@@ -450,6 +478,7 @@ describe('processing queue service', () => {
     expect(updateSetMock).toHaveBeenCalledWith(
       expect.objectContaining({
         metadataStatus: 'PENDING',
+        metadataRunId: null,
         metadataError: null,
         metadataAttemptCount: 0,
         updatedAt: expect.any(Date),
@@ -470,6 +499,46 @@ describe('processing queue service', () => {
     expect(result).toEqual({ message: 'Job cancelled' });
     expect(cancelTranscriptionAttemptMock).toHaveBeenCalledWith('letter-3', 'run-a');
     expect(getJobProgress('letter-3', 'transcription')).toBeUndefined();
+  });
+
+  it('delegates metadata cancellation to the canonical exact-run lifecycle owner', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-4',
+      metadataStatus: 'RUNNING',
+      metadataRunId: 'metadata-run-a',
+    });
+    updateJobProgress('letter-4', 'metadata', 1, 2, 'Extracting metadata');
+
+    await expect(cancelActiveJob('letter-4', 'metadata')).resolves.toEqual({
+      message: 'Job cancelled',
+    });
+
+    expect(cancelMetadataAttemptMock).toHaveBeenCalledWith(
+      'letter-4',
+      'metadata-run-a',
+    );
+    expect(getJobProgress('letter-4', 'metadata')).toBeUndefined();
+  });
+
+  it('counts neutral metadata outcomes as skipped instead of completed or failed', async () => {
+    resetProcessingState(2);
+    processMetadataMock
+      .mockResolvedValueOnce({ kind: 'skipped', reason: 'superseded' })
+      .mockResolvedValueOnce(undefined);
+
+    await processLettersAsync(['letter-stale', 'letter-owned'], 'metadata');
+
+    expect(getProcessingStatus()).toMatchObject({
+      isRunning: false,
+      completed: 1,
+      failed: 0,
+      skipped: 1,
+      total: 2,
+    });
+    expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'batch_complete',
+      message: '1 succeeded, 0 failed, 1 skipped (metadata)',
+    }));
   });
 
   it('counts neutral transcription outcomes as skipped instead of completed or failed', async () => {
@@ -517,6 +586,7 @@ describe('processing queue service', () => {
         requeued: [{ id: 'letter-orphan', dateRaw: '19470813' }],
         failed: [],
       },
+      metadata: { requeued: [], failed: [] },
       extraContent: {
         requeued: [],
         failed: [{ id: 'extra-orphan', dateRaw: '19470814' }],
@@ -541,6 +611,7 @@ describe('processing queue service', () => {
   it('does not report live or unknown leases that were not recovered', async () => {
     await expect(recoverExpiredProcessingJobs()).resolves.toEqual({
       transcription: { requeued: [], failed: [] },
+      metadata: { requeued: [], failed: [] },
       extraContent: { requeued: [], failed: [] },
     });
 
@@ -559,6 +630,7 @@ describe('processing queue service', () => {
         requeued: [{ id: 'letter-orphan', dateRaw: '19470813' }],
         failed: [],
       },
+      metadata: { requeued: [], failed: [] },
       extraContent: { requeued: [], failed: [] },
     });
 
@@ -576,6 +648,7 @@ describe('processing queue service', () => {
 
     await expect(recoverExpiredProcessingJobs()).resolves.toEqual({
       transcription: { requeued: [], failed: [] },
+      metadata: { requeued: [], failed: [] },
       extraContent: {
         requeued: [{ id: 'extra-orphan', dateRaw: '19470814' }],
         failed: [],
@@ -594,6 +667,19 @@ describe('processing queue service', () => {
     ).resolves.toBe(true);
 
     expect(triggerWorkerJobMock).toHaveBeenCalledWith('lease-recovery');
+  });
+
+  it('awaits a worker wake when durable queued metadata exists', async () => {
+    shouldUseCloudRunWorkerJobMock.mockReturnValue(true);
+    findFirstMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'queued-metadata' });
+
+    await expect(
+      ensureBackgroundWorkerForQueuedProcessing('metadata-lease-recovery'),
+    ).resolves.toBe(true);
+
+    expect(triggerWorkerJobMock).toHaveBeenCalledWith('metadata-lease-recovery');
   });
 
   it('propagates a failed worker wake so periodic recovery can retry it', async () => {

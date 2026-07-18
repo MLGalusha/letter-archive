@@ -1,9 +1,10 @@
-import { and, eq, isNull, ne } from 'drizzle-orm';
+import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import { db, letters } from '../../db/index.js';
 import { getLetterById } from '../letters.js';
 import { buildHumanExtraContentJobPatch } from './extra-content-job.js';
 import { generateAndSaveReadingView } from './readingView.js';
-import { log } from './shared.js';
+import { observedMetadataRevisionConditions } from './metadata-job.js';
+import { log, observedTimestampMatches } from './shared.js';
 
 function transcriptionTextCondition(transcriptionText: string | null) {
   return transcriptionText === null
@@ -17,11 +18,25 @@ function transcriptionVerificationConflict(message: string): Error & { status: n
   return error;
 }
 
+function metadataVerificationConflict(message: string): Error & { status: number } {
+  const error = new Error(message) as Error & { status: number };
+  error.status = 409;
+  return error;
+}
+
 export async function verifyTranscript(letterId: string, userId: string = 'admin'): Promise<{ previousStatus: string } | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
 
   const previousStatus = existingLetter.transcriptStatus;
+
+  if (existingLetter.transcriptionStatus !== 'SUCCESS') {
+    const error = new Error(
+      'Transcription must be complete before its content can be verified',
+    ) as Error & { status: number };
+    error.status = 400;
+    throw error;
+  }
 
   const verified = await db
     .update(letters)
@@ -33,8 +48,7 @@ export async function verifyTranscript(letterId: string, userId: string = 'admin
     })
     .where(and(
       eq(letters.id, letterId),
-      eq(letters.transcriptionStatus, existingLetter.transcriptionStatus),
-      ne(letters.transcriptionStatus, 'RUNNING'),
+      eq(letters.transcriptionStatus, 'SUCCESS'),
       eq(letters.transcriptStatus, previousStatus),
       transcriptionTextCondition(existingLetter.transcriptionText),
     ))
@@ -82,6 +96,7 @@ export async function unverifyTranscript(letterId: string): Promise<true | null>
       transcriptStatus: 'EDITED',
       transcriptVerifiedAt: null,
       transcriptVerifiedBy: null,
+      transcriptPublished: false,
       updatedAt: new Date(),
     })
     .where(and(
@@ -107,14 +122,40 @@ export async function verifyMetadata(letterId: string, userId: string = 'admin')
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
 
-  await db.update(letters).set({
-    metadataContentStatus: 'VERIFIED',
-    metadataVerifiedAt: new Date(),
-    metadataVerifiedBy: userId,
-    reviewedAt: new Date(),
-    reviewedBy: userId,
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
+  if (
+    existingLetter.metadataStatus !== 'SUCCESS'
+    || existingLetter.metadataContentStatus === 'EMPTY'
+  ) {
+    const error = new Error(
+      'Metadata extraction must be complete and contain content before verification',
+    ) as Error & { status: number };
+    error.status = 400;
+    throw error;
+  }
+
+  const verified = await db
+    .update(letters)
+    .set({
+      metadataContentStatus: 'VERIFIED',
+      metadataVerifiedAt: new Date(),
+      metadataVerifiedBy: userId,
+      reviewedAt: new Date(),
+      reviewedBy: userId,
+      metadataRevision: sql`${letters.metadataRevision} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      ...observedMetadataRevisionConditions(letterId, existingLetter),
+      eq(letters.metadataStatus, 'SUCCESS'),
+      eq(letters.metadataContentStatus, existingLetter.metadataContentStatus),
+    ))
+    .returning({ id: letters.id });
+
+  if (verified.length === 0) {
+    throw metadataVerificationConflict(
+      'Metadata changed before it could be verified; review the latest metadata and try again',
+    );
+  }
 
   log.info({ letterId, previousStatus: existingLetter.metadataContentStatus }, 'Metadata verified');
   return { previousStatus: existingLetter.metadataContentStatus };
@@ -131,12 +172,29 @@ export async function unverifyMetadata(letterId: string): Promise<true | null> {
     throw err;
   }
 
-  await db.update(letters).set({
-    metadataContentStatus: 'EDITED',
-    metadataVerifiedAt: null,
-    metadataVerifiedBy: null,
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
+  const unverified = await db
+    .update(letters)
+    .set({
+      metadataContentStatus: 'EDITED',
+      metadataVerifiedAt: null,
+      metadataVerifiedBy: null,
+      metadataPublished: false,
+      metadataRevision: sql`${letters.metadataRevision} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      ...observedMetadataRevisionConditions(letterId, existingLetter),
+      eq(letters.metadataStatus, existingLetter.metadataStatus),
+      ne(letters.metadataStatus, 'RUNNING'),
+      eq(letters.metadataContentStatus, 'VERIFIED'),
+    ))
+    .returning({ id: letters.id });
+
+  if (unverified.length === 0) {
+    throw metadataVerificationConflict(
+      'Metadata changed before verification could be removed; refresh and try again',
+    );
+  }
 
   log.info({ letterId }, 'Metadata verification removed');
   return true;
@@ -157,7 +215,7 @@ export async function verifyExtraContent(letterId: string, userId: string = 'adm
     })
     .where(and(
       eq(letters.id, letterId),
-      eq(letters.updatedAt, existingLetter.updatedAt),
+      observedTimestampMatches(letters.updatedAt, existingLetter.updatedAt),
       eq(letters.extraContentStatus, existingLetter.extraContentStatus),
     ))
     .returning({ id: letters.id });
@@ -196,7 +254,7 @@ export async function unverifyExtraContent(letterId: string): Promise<true | nul
     })
     .where(and(
       eq(letters.id, letterId),
-      eq(letters.updatedAt, existingLetter.updatedAt),
+      observedTimestampMatches(letters.updatedAt, existingLetter.updatedAt),
       eq(letters.extraContentStatus, 'VERIFIED'),
     ))
     .returning({ id: letters.id });

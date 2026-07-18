@@ -12,6 +12,8 @@ import {
   withLeaseHeartbeat,
   type LeaseHeartbeat,
 } from './lease-heartbeat.js';
+import { buildMetadataSourceInvalidationPatch } from './metadata-job.js';
+import { observedTimestampMatches } from './shared.js';
 
 const log = createLogger({ module: 'extra-content-job' });
 const LEASE_EXPIRED_ERROR = 'Extra-content lease expired before the attempt completed';
@@ -250,7 +252,7 @@ export async function runExtraContentJob<T>({
     .where(and(
       eq(letters.id, letterId),
       eq(letters.extraContentJobStatus, expectedStatus),
-      eq(letters.updatedAt, expectedUpdatedAt),
+      observedTimestampMatches(letters.updatedAt, expectedUpdatedAt),
     ))
     .returning({ id: letters.id });
 
@@ -268,6 +270,7 @@ export async function runExtraContentJob<T>({
         .update(letters)
         .set({
           ...patch,
+          ...buildMetadataSourceInvalidationPatch(),
           extraContentJobStatus: 'SUCCESS',
           extraContentJobError: null,
           ...clearedExtraContentOwnership(),

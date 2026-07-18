@@ -1,16 +1,17 @@
 # Architecture Cleanup Current Work
 
-Last updated: July 17, 2026
+Last updated: July 18, 2026
 
 ## Resume Here
 
 - Working branch: `architecture-cleanup`
 - Recovery point: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 007 — complete
-- Last green implementation checkpoint: Slice 007 at `a2989756`
-- Current slice: 008 — canonical metadata lifecycle boundary
-- Next queued slice: retry-safe entity-extraction lifecycle boundary
+- Current checkpoint: 008 — complete
+- Last green implementation checkpoint: Slice 008 in this checkpoint (hash recorded
+  by the following checkpoint note)
+- Current slice: 008B — explicit public read-boundary correction
+- Next queued slice: 009 — retry-safe entity-extraction lifecycle boundary
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -62,6 +63,8 @@ Architecture indicators:
 - [x] Require letter-only transcription to claim the job before AI execution.
 - [x] Add persisted owner/lease/heartbeat semantics and expiry-aware reconciliation to
   the canonical main-transcription lifecycle.
+- [x] Add a revision-bound canonical metadata owner, lease, terminal publication, and
+  expiry-aware reconciliation path.
 - [ ] Make recovery worker-owned so API startup cannot reset active work.
 - [ ] Establish one eligibility definition per processing stage.
 - [ ] Make the worker the sole executor; APIs enqueue, cancel, retry, and report.
@@ -871,32 +874,62 @@ Residuals carried forward:
 
 ## Slice 008 — Canonical Metadata Lifecycle Boundary
 
-Status: next slice; investigation and framing in progress
+Status: complete in this checkpoint
 
-Problem:
+Delivered invariant:
 
-Metadata work is claimed through more than one helper and publishes status, extracted
-content, workflow advancement, and downstream eligibility across separate code paths.
-It has no run token, so cancellation or a future recovery policy cannot distinguish a
-late producer from the current attempt. Entity extraction depends on exact metadata
-success, making metadata's terminal boundary the next prerequisite before executor
-topology can be simplified safely.
+Every metadata producer enters one canonical exact-state owner and receives a unique
+run ID bound to the metadata revision, a PostgreSQL-clock lease, a matching lease-run
+ID, and explicit `QUEUED` or `REQUESTED` intent. The shared heartbeat renews only a
+still-live exact owner. Content, terminal status, revision advancement, and workflow
+publish atomically only for that owner and a live lease. Human/source supersession,
+administrative cancellation, and expiry all fence late results without using the
+letter's unrelated `updated_at` field.
 
-Target invariant:
+Recovery policy:
 
-Every metadata execution enters one exact-state lifecycle owner and receives a unique
-persisted run token. Content, terminal status, and `METADATA_DRAFTED` workflow publish
-atomically only for that token. Cancellation/human supersession fence late results,
-and ownership loss is reported neutrally. Lease/recovery policy is added only after the
-canonical boundary proves every producer and terminal writer.
+- Expired queued/confirmation work returns to `PENDING`/`TRANSCRIBED` so the worker can
+  drain it; expired requested replacement work becomes `FAILED` while preserving
+  committed metadata and restoring the content-stage workflow.
+- API and worker reuse the serialized recovery coordinator. Configured API wakeup and
+  exit-when-empty worker handoff now include eligible queued metadata.
+- Concurrent reconcilers use conditional `UPDATE ... RETURNING`, so only one reports
+  and transitions an expiry. Administrative cancellation may revoke an exact owner
+  even after expiry.
+- Expansion migration 0050 deliberately leaves pre-migration tokenless `RUNNING` rows
+  manual. New tokenless transitions are rejected, and an owned `RUNNING` row cannot be
+  stripped back to the legacy shape.
 
-Initial scope to validate before editing:
+Evidence:
 
-- Inventory every metadata claim, producer, terminal, cancellation, reset, bulk, and
-  route path plus the entity stage's exact dependency.
-- Characterize current queued versus synchronous behavior and content/workflow failure
-  semantics in tests before consolidating them.
-- Move claim and terminal compare-and-set writes behind one metadata lifecycle owner;
-  preserve prompts, structured output, API responses, and human review behavior.
-- Keep entity persistence and executor migration out of this slice unless the evidence
-  shows they are inseparable from metadata's atomic publication boundary.
+- Focused lifecycle/pipeline/recovery/architecture suite: 71 tests passed before final
+  integration; the final ownership, projection, route-outcome, queue, publication, and
+  legacy-document regression surfaces also passed after adversarial review fixes.
+- Full backend suite: 61 files and 556 tests passed; backend typecheck passed.
+- Full frontend suite: 86 files and 593 tests passed; frontend typecheck passed.
+- Migration journal validation: 5/5 passed. `drizzle-kit check` and `git diff --check`
+  passed.
+- A disposable PostgreSQL 17 proof applied the full journal through 0050 over a legacy
+  tokenless `RUNNING` row; it rejected new tokenless ownership, real input mutation,
+  and owner stripping, allowed same-value input writes and heartbeat renewal, fenced
+  expired publication, recovered queued intent, and preserved legacy drain behavior.
+- The PostgreSQL proof also exercised current completion, queued/requested expiry,
+  plain terminal-write rejection, and human `EDITED` publication. Independent final
+  review remapped every production metadata-status writer against the database trigger
+  and found no remaining P0/P1 lifecycle blocker.
+- Request-owned routes now report a conflict when a run is superseded instead of
+  returning a false success. Direct, bulk, and auto-publication share the same
+  completed-and-verified eligibility rule.
+- Historical camelCase `metadata_json` and snake_case V2 documents are projected
+  independently; legacy rows are never silently promoted into an invalid V2 shape.
+- `db:test-migrations` was found to swallow Docker startup failures in its EXIT trap.
+  The trap now preserves the real exit code. Docker was offline for the final standard
+  fresh-container run, so that command is recorded as unavailable rather than green;
+  the independent PostgreSQL 17 full-journal proof above remains the runtime evidence.
+
+Entity extraction remains the intentionally separate next lifecycle slice.
+
+Separate UI contract residual: Date, Emotional Tone, Relationship, and Primary Topics
+look editable in admin Letter Review but are not part of its save contract. Navigation
+can silently discard those local edits. Fix or make those controls read-only in a
+dedicated vertical slice; do not hide the issue inside entity ownership work.

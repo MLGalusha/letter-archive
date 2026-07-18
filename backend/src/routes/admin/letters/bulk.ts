@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { inArray } from 'drizzle-orm';
+import { and, eq, inArray, type SQL } from 'drizzle-orm';
 import { db, letters } from '../../../db/index.js';
 import {
   bulkClearMetadata,
@@ -9,6 +9,10 @@ import {
   bulkTranscribe,
   bulkUpdateFields,
 } from '../../../services/letter-operations.js';
+import {
+  metadataPublicationConditions,
+  transcriptPublicationConditions,
+} from '../../../services/letter/publication.js';
 import {
   bulkLetterIdsSchema,
   bulkMetadataSchema,
@@ -88,13 +92,47 @@ router.patch('/content-visibility', async (req, res, next) => {
     const { letterIds, visibility, transcriptPublished, metadataPublished } = parseOrThrow(
       bulkContentVisibilitySchema, req.body, 'Invalid request',
     );
-    const updates: Record<string, unknown> = { updatedAt: new Date() };
-    if (visibility !== undefined) updates.visibility = visibility;
-    if (transcriptPublished !== undefined) updates.transcriptPublished = transcriptPublished;
-    if (metadataPublished !== undefined) updates.metadataPublished = metadataPublished;
+    const updatedLetterIds = new Set<string>();
+    const updateMatchingLetters = async (
+      updates: {
+        visibility?: 'PUBLISHED' | 'HIDDEN';
+        transcriptPublished?: boolean;
+        metadataPublished?: boolean;
+      },
+      eligibility: SQL[] = [],
+    ) => {
+      const selectedLetters = inArray(letters.id, letterIds);
+      const condition = eligibility.length > 0
+        ? and(selectedLetters, ...eligibility)
+        : selectedLetters;
+      const updated = await db
+        .update(letters)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(condition)
+        .returning({ id: letters.id });
 
-    await db.update(letters).set(updates).where(inArray(letters.id, letterIds));
-    res.json({ updated: letterIds.length });
+      for (const { id } of updated) updatedLetterIds.add(id);
+    };
+
+    if (visibility !== undefined) {
+      await updateMatchingLetters({ visibility });
+    }
+    if (transcriptPublished !== undefined) {
+      await updateMatchingLetters(
+        { transcriptPublished },
+        transcriptPublished ? transcriptPublicationConditions() : [],
+      );
+    }
+    if (metadataPublished !== undefined) {
+      await updateMatchingLetters(
+        { metadataPublished },
+        metadataPublished
+          ? metadataPublicationConditions()
+          : [],
+      );
+    }
+
+    res.json({ updated: updatedLetterIds.size });
   } catch (error) {
     next(error);
   }

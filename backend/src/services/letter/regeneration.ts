@@ -13,6 +13,10 @@ import {
 import { getLetterById } from '../letters.js';
 import { runRegeneratedExtraContent } from './extra-content.js';
 import { buildHumanExtraContentJobPatch } from './extra-content-job.js';
+import {
+  buildMetadataSourceInvalidationPatch,
+  observedMetadataRevisionConditions,
+} from './metadata-job.js';
 
 export { transcribeExtras } from './extra-content.js';
 
@@ -153,10 +157,21 @@ export async function updateExtraContent(
     extraContentVerifiedAt: null,
     extraContentVerifiedBy: null,
     ...buildHumanExtraContentJobPatch(),
+    ...buildMetadataSourceInvalidationPatch(),
     updatedAt: new Date(),
   };
 
-  await db.update(letters).set(updates).where(eq(letters.id, letterId));
+  const updated = await db
+    .update(letters)
+    .set(updates)
+    .where(and(...observedMetadataRevisionConditions(letterId, existingLetter)))
+    .returning({ id: letters.id });
+  if (updated.length === 0) {
+    throw statusError(
+      'Letter content changed before extra content could be saved; reload and try again',
+      409,
+    );
+  }
 
   log.debug(
     {

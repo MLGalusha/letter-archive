@@ -7,9 +7,9 @@ Last updated: July 17, 2026
 - Working branch: `architecture-cleanup`
 - Recovery point: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 006 — framed; implementation in progress
-- Last green implementation checkpoint: Slice 005 at `985b8172`
-- Current slice: 006 — lease and reconcile fenced extra-content attempts
+- Current checkpoint: 006 — complete
+- Last green implementation checkpoint: Slice 006 at `b0f98db6`
+- Current slice: 007 — bind main-transcription lease metadata to its run ID
 - Next queued slice: canonical metadata/entity lifecycle boundaries
 
 Before editing, run `git status --short --branch` and confirm the current slice still
@@ -225,6 +225,13 @@ Acceptance evidence:
   must fail the Cloud Run attempt so configured retries can reconcile it.
 - Metadata `SUCCESS` and its workflow advance are one publication boundary; exposing a
   terminal status before the workflow write creates a claim window for the next stage.
+- Worker wakeups are level-triggered from durable eligible `PENDING` transcription
+  state. A one-shot recovery result is not a durable handoff and cannot be the only
+  reason the API asks a configured worker to run.
+- Lease metadata introduced during a rolling deployment must be bound to the current
+  run ID when an older revision can replace the run ID without touching the new lease
+  fields. Run-ID fencing prevents stale publication but does not make inherited lease
+  metadata authoritative for the replacement attempt.
 
 ## Checkpoint Log
 
@@ -292,6 +299,22 @@ Acceptance evidence:
   now publish atomically, and entity claims require exact metadata success.
 - Final adversarial concurrency and simplicity reviews found no remaining P1/P2 issue.
 - Green implementation checkpoint: `985b8172`.
+
+### Slice 006
+
+- Added explicit queued/requested intent, a PostgreSQL-clock lease, and a run-ID-bound
+  lease owner to every canonical extra-content claim.
+- Shared only the immediate, serialized heartbeat scheduler and the serialized
+  reconciliation coordinator; stage claims, terminal publication, dirty-source rules,
+  and recovery policies remain separate.
+- Replaced isolated recovery calls with stage-contained composite reconciliation at
+  API and worker startup and every 60 seconds. Failure in one stage no longer suppresses
+  another stage's recovery.
+- Made configured worker wakeups re-derive from durable eligible `PENDING`
+  transcription state, await the trigger, and retry on later reconciliation ticks.
+- Adversarial audits caught and drove fixes for partial composite recovery, optional
+  claim intent, a lost recovery-to-worker wake, and mixed-version lease inheritance.
+- Green implementation checkpoint: `b0f98db6`.
 
 ## Slice 003 — Extra-Content Job Lifecycle
 
@@ -620,7 +643,7 @@ Residuals carried forward:
 
 ## Slice 006 — Durable Extra-Content Lease
 
-Status: framed; implementation in progress
+Status: complete in this checkpoint
 
 Problem:
 
@@ -645,8 +668,9 @@ concurrently.
 
 Scope:
 
-- Add stage-named extra-content lease and claim-kind columns, a partial expiry index,
-  and a rollout-safe paired-metadata check. Do not backfill existing `RUNNING` rows.
+- Add stage-named extra-content lease, lease-run binding, and claim-kind columns, a
+  partial expiry index, and a rollout-safe complete-tuple check. Do not backfill
+  existing `RUNNING` rows.
 - Map automatic post-transcription and Processing-page batches to `QUEUED`; map direct
   `/transcribe-extras` and regeneration extras to `REQUESTED` even when they claim a
   `PENDING` row.
@@ -695,3 +719,90 @@ Acceptance:
   paired-metadata rejection, expiry index, and recovery race proof on PostgreSQL 17.
 - Focused lifecycle/recovery/route tests, backend typecheck/full suite, and the aggregate
   repository verifier pass before checkpointing.
+
+Evidence:
+
+- Full backend suite: 56 files and 469 tests passed; backend typecheck passed.
+- Full frontend suite: 86 files and 593 tests passed. The production build passed with
+  the pre-existing large-chunk warning.
+- Mocked browser suite: 35/35 passed in CI mode inside the definitive aggregate
+  verifier.
+- Aggregate `CI=1 ./scripts/verify-all.sh`: backend tests/typecheck, frontend
+  tests/build, and mocked browser tests completed successfully.
+- PostgreSQL 17 migration proof applied migrations through 0047, preserved a legacy
+  unleased extra-content `RUNNING` row while applying 0048, rejected partial ownership
+  metadata, accepted a terminal row retaining a complete stale tuple, and proved that
+  an old-style replacement run inheriting a prior run's lease metadata is not selected
+  by recovery. The partial expiry index was present.
+- Focused race coverage includes queued/requested/dirty expiry, renewal loss,
+  concurrent reconcilers, composite partial failure, graceful shutdown, exact-run
+  cancellation, source invalidation, and durable API worker wake retry.
+- `git diff --check`: passed.
+- Independent final concurrency, migration/orchestration, and simplicity audits found
+  no remaining P1/P2 issue.
+- Green implementation checkpoint: `b0f98db6`.
+
+Residuals carried forward:
+
+- Standalone extra-content queue execution remains owned by the Processing page/API;
+  this slice deliberately did not add another worker polling path.
+- Legacy unleased or mixed-version lease-mismatched extra-content attempts remain
+  visible for exact-run administrative cancellation rather than automatic recovery.
+- The existing no-related-items status contract remains unchanged.
+- The global `updatedAt` source guard and forced filesystem replacement compensation
+  gap remain ingestion/domain-state work.
+- Main transcription's lease pair is not yet bound to its run ID and therefore has the
+  analogous mixed-version inheritance hazard. Slice 007 closes that narrow gap before
+  downstream lifecycle work.
+- Metadata and entity extraction still lack fenced lifecycle owners and durable
+  liveness evidence.
+
+## Slice 007 — Bind Main-Transcription Leases to Their Runs
+
+Status: framed; implementation in progress
+
+Problem:
+
+Slice 005 added a main-transcription lease and claim kind, but the pair is not bound to
+the run ID that created it. During rolling overlap, an older revision can finish run A
+without clearing fields it does not know about, then claim run B by changing only the
+run ID. A newer reconciler can mistake B for an expired attempt under A's inherited
+lease. The run-ID fence still blocks A's late publication, but recovery can revoke a
+live B attempt and apply the wrong queued/requested recovery policy.
+
+Invariant:
+
+Automatic renewal, terminal publication, and recovery may treat lease metadata as
+authoritative only when its persisted lease-owner run ID equals the current
+transcription run ID. New claims always bind all ownership metadata to one run. Legacy
+unleased or mismatched attempts remain visible and exact-run cancellable rather than
+being guessed dead.
+
+Scope:
+
+- Add a nullable main-transcription lease-run binding in migration 0049 with a
+  rolling-compatible constraint strategy that accepts pre-binding legacy rows but
+  rejects invalid new bound metadata.
+- Bind every canonical new main-transcription claim to its run ID and require exact
+  binding for active ownership, renewal, terminal publication, and automatic recovery.
+- Audit every human, cancellation, reset, retry, queue, and terminal path so it either
+  preserves one complete live ownership tuple or clears it together.
+- Add the old-style mixed-version replacement scenario to behavior tests and the real
+  PostgreSQL migration/recovery proof.
+
+Non-goals:
+
+- Do not lease or otherwise refactor metadata/entity extraction in this slice.
+- Do not change prompts, output, API response contracts, or user-facing behavior.
+- Do not introduce a generic jobs or lease framework.
+
+Acceptance:
+
+- Every current claim stores a matching lease-run binding, and only that exact bound
+  run may renew or publish.
+- Recovery ignores an old-style replacement run that inherited another run's metadata;
+  explicit cancellation can still close it safely.
+- All ownership-clear paths manage the binding with the existing run ID, expiry, and
+  claim kind.
+- Focused concurrency and migration tests, a PostgreSQL 17 proof, backend full suite
+  and typecheck, and the aggregate repository verifier pass before checkpointing.

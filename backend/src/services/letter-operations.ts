@@ -31,6 +31,7 @@ export async function updateLetter(
     dbUpdates.transcriptionStatus = 'SUCCESS';
     dbUpdates.transcriptionRunId = null;
     dbUpdates.transcriptionLeaseExpiresAt = null;
+    dbUpdates.transcriptionLeaseRunId = null;
     dbUpdates.transcriptionClaimKind = null;
     dbUpdates.transcriptionError = null;
     dbUpdates.transcriptStatus = hasTranscription ? 'EDITED' : 'EMPTY';

@@ -24,6 +24,7 @@ export interface ObservedTranscriptionState {
   transcriptionError: string | null;
   transcriptionAttemptCount: number;
   transcriptionLeaseExpiresAt: Date | null;
+  transcriptionLeaseRunId: string | null;
   transcriptionClaimKind: TranscriptionClaimKind | null;
   metadataStatus: JobStatus;
   entityExtractionStatus: JobStatus;
@@ -38,6 +39,7 @@ export interface TranscriptionStateSource {
   transcriptionError: string | null;
   transcriptionAttemptCount: number;
   transcriptionLeaseExpiresAt: Date | null;
+  transcriptionLeaseRunId: string | null;
   transcriptionClaimKind: TranscriptionClaimKind | null;
   metadataStatus: JobStatus;
   entityExtractionStatus: JobStatus;
@@ -79,6 +81,7 @@ export function observeTranscriptionState(
     transcriptionError: source.transcriptionError,
     transcriptionAttemptCount: source.transcriptionAttemptCount,
     transcriptionLeaseExpiresAt: source.transcriptionLeaseExpiresAt,
+    transcriptionLeaseRunId: source.transcriptionLeaseRunId,
     transcriptionClaimKind: source.transcriptionClaimKind,
     metadataStatus: source.metadataStatus,
     entityExtractionStatus: source.entityExtractionStatus,
@@ -102,6 +105,9 @@ export function observedTranscriptionStateConditions(observed: ObservedTranscrip
     observed.transcriptionLeaseExpiresAt === null
       ? isNull(letters.transcriptionLeaseExpiresAt)
       : eq(letters.transcriptionLeaseExpiresAt, observed.transcriptionLeaseExpiresAt),
+    observed.transcriptionLeaseRunId === null
+      ? isNull(letters.transcriptionLeaseRunId)
+      : eq(letters.transcriptionLeaseRunId, observed.transcriptionLeaseRunId),
     observed.transcriptionClaimKind === null
       ? isNull(letters.transcriptionClaimKind)
       : eq(letters.transcriptionClaimKind, observed.transcriptionClaimKind),
@@ -122,6 +128,7 @@ function activeOwnedTranscriptionConditions(letterId: string, runId: string) {
     eq(letters.id, letterId),
     eq(letters.transcriptionStatus, 'RUNNING'),
     eq(letters.transcriptionRunId, runId),
+    eq(letters.transcriptionLeaseRunId, runId),
     isNotNull(letters.transcriptionLeaseExpiresAt),
     gt(letters.transcriptionLeaseExpiresAt, databaseNow()),
   ];
@@ -131,8 +138,22 @@ function clearedOwnershipTuple() {
   return {
     transcriptionRunId: null,
     transcriptionLeaseExpiresAt: null,
+    transcriptionLeaseRunId: null,
     transcriptionClaimKind: null,
   };
+}
+
+function revokedTranscriptionWorkflow(runId: string) {
+  return sql<WorkflowState>`CASE
+    WHEN ${letters.transcriptionLeaseRunId} = ${runId}
+      AND ${letters.transcriptionClaimKind} = 'REQUESTED'
+      THEN ${letters.workflow}
+    WHEN ${letters.transcriptionLeaseRunId} = ${runId}
+      AND ${letters.transcriptionClaimKind} = 'QUEUED'
+      THEN 'UPLOADED'
+    WHEN ${letters.workflow} = 'TRANSCRIBING' THEN 'UPLOADED'
+    ELSE ${letters.workflow}
+  END`;
 }
 
 /**
@@ -161,6 +182,7 @@ export async function claimQueuedTranscription(
       transcriptionStatus: 'RUNNING',
       transcriptionRunId: runId,
       transcriptionLeaseExpiresAt: newLeaseDeadline(),
+      transcriptionLeaseRunId: runId,
       transcriptionClaimKind: 'QUEUED',
       workflow: 'TRANSCRIBING',
       updatedAt: new Date(),
@@ -198,6 +220,7 @@ export async function claimRequestedTranscription(
       transcriptionStatus: 'RUNNING',
       transcriptionRunId: runId,
       transcriptionLeaseExpiresAt: newLeaseDeadline(),
+      transcriptionLeaseRunId: runId,
       transcriptionClaimKind: 'REQUESTED',
       transcriptionError: null,
       transcriptionAttemptCount: 0,
@@ -296,10 +319,7 @@ async function revokeTranscription(
     .set({
       transcriptionStatus: 'FAILED',
       transcriptionError: error,
-      workflow: sql<WorkflowState>`CASE
-        WHEN ${letters.transcriptionClaimKind} = 'REQUESTED' THEN ${letters.workflow}
-        ELSE 'UPLOADED'
-      END`,
+      workflow: revokedTranscriptionWorkflow(runId),
       ...clearedOwnershipTuple(),
       updatedAt: new Date(),
     })
@@ -319,9 +339,10 @@ export async function failTranscription(
 }
 
 /**
- * Administratively revokes an exact run even after its lease expires. Requested
- * work preserves its prior workflow; queued and pre-lease legacy work return to
- * UPLOADED. Legacy work remains deliberately ineligible for automatic recovery.
+ * Administratively revokes an exact run even after its lease expires. Bound
+ * requested/queued intent remains authoritative. For rollout-era unbound or
+ * mismatched work, current TRANSCRIBING returns to UPLOADED and other workflows
+ * are preserved rather than trusting inherited intent metadata.
  */
 export async function cancelTranscriptionAttempt(
   letterId: string,
@@ -350,6 +371,8 @@ export async function recoverExpiredTranscriptions(): Promise<TranscriptionRecov
       eq(letters.transcriptionClaimKind, 'QUEUED'),
       isNotNull(letters.transcriptionRunId),
       isNotNull(letters.transcriptionLeaseExpiresAt),
+      isNotNull(letters.transcriptionLeaseRunId),
+      eq(letters.transcriptionLeaseRunId, letters.transcriptionRunId),
       lte(letters.transcriptionLeaseExpiresAt, databaseNow()),
     ))
     .returning({ id: letters.id, dateRaw: letters.dateRaw });
@@ -367,6 +390,8 @@ export async function recoverExpiredTranscriptions(): Promise<TranscriptionRecov
       eq(letters.transcriptionClaimKind, 'REQUESTED'),
       isNotNull(letters.transcriptionRunId),
       isNotNull(letters.transcriptionLeaseExpiresAt),
+      isNotNull(letters.transcriptionLeaseRunId),
+      eq(letters.transcriptionLeaseRunId, letters.transcriptionRunId),
       lte(letters.transcriptionLeaseExpiresAt, databaseNow()),
     ))
     .returning({ id: letters.id, dateRaw: letters.dateRaw });

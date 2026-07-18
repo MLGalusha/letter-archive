@@ -56,6 +56,9 @@ vi.mock('../../db/index.js', () => {
       id: 'letters.id',
       transcriptionStatus: 'letters.transcriptionStatus',
       transcriptionRunId: 'letters.transcriptionRunId',
+      transcriptionLeaseExpiresAt: 'letters.transcriptionLeaseExpiresAt',
+      transcriptionLeaseRunId: 'letters.transcriptionLeaseRunId',
+      transcriptionClaimKind: 'letters.transcriptionClaimKind',
       metadataStatus: 'letters.metadataStatus',
       entityExtractionStatus: 'letters.entityExtractionStatus',
       extraContentJobStatus: 'letters.extraContentJobStatus',
@@ -233,6 +236,7 @@ describe('letter process helpers', () => {
       transcriptionError: 'Removed from queue by admin',
       transcriptionRunId: null,
       transcriptionLeaseExpiresAt: null,
+      transcriptionLeaseRunId: null,
       transcriptionClaimKind: null,
       updatedAt: expect.any(Date),
     });
@@ -265,6 +269,23 @@ describe('letter process helpers', () => {
         },
         { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'PENDING' },
       ],
+    });
+  });
+
+  it('clears the complete transcription ownership tuple for pending queue rows', async () => {
+    findManyMock.mockResolvedValue([{ id: 'letter-1' }]);
+    updateReturningMock.mockResolvedValue([{ id: 'letter-1' }]);
+
+    await expect(clearQueue(transcriptionSpec, [])).resolves.toEqual({ cleared: 1 });
+
+    expect(updateSetMock).toHaveBeenCalledWith({
+      transcriptionStatus: 'FAILED',
+      transcriptionError: 'Cleared from queue by admin',
+      transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionLeaseRunId: null,
+      transcriptionClaimKind: null,
+      updatedAt: expect.any(Date),
     });
   });
 
@@ -329,6 +350,7 @@ describe('letter process helpers', () => {
       transcriptionAttemptCount: 0,
       transcriptionRunId: null,
       transcriptionLeaseExpiresAt: null,
+      transcriptionLeaseRunId: null,
       transcriptionClaimKind: null,
       deadLetter: false,
       updatedAt: expect.any(Date),

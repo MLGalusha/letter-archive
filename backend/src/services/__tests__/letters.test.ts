@@ -309,6 +309,7 @@ describe('letters service', () => {
         transcriptionStatus: 'PENDING',
         transcriptionRunId: null,
         transcriptionLeaseExpiresAt: null,
+        transcriptionLeaseRunId: null,
         transcriptionClaimKind: null,
         metadataStatus: 'PENDING',
         entityExtractionStatus: 'PENDING',

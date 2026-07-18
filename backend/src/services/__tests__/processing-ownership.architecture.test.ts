@@ -192,7 +192,12 @@ describe('processing execution ownership', () => {
       const writesClaimKind = [...source.matchAll(
         /\btranscriptionClaimKind\s*:\s*([^,\n}]+)/g,
       )].some(match => match[1].trim() !== 'null');
-      if (writesLease || writesClaimKind) unexpectedWriters.push(relativePath);
+      const writesLeaseRunId = [...source.matchAll(
+        /\btranscriptionLeaseRunId\s*:\s*([^,\n}]+)/g,
+      )].some(match => match[1].trim() !== 'null');
+      if (writesLease || writesLeaseRunId || writesClaimKind) {
+        unexpectedWriters.push(relativePath);
+      }
     }
 
     expect(unexpectedWriters.sort()).toEqual([]);
@@ -265,6 +270,25 @@ describe('processing execution ownership', () => {
     expect(schema).toContain('transcription_excludes_downstream_running');
     expect(migration).toMatch(
       /ADD CONSTRAINT "transcription_excludes_downstream_running"[\s\S]*NOT VALID/,
+    );
+  });
+
+  it('keeps main-transcription lease binding nullable, unbackfilled, and canonical', async () => {
+    const schema = await readFile(path.join(sourceRoot, 'db/schema.ts'), 'utf8');
+    const migration = await readFile(
+      path.join(sourceRoot, 'db/migrations/0049_bind_transcription_leases_to_runs.sql'),
+      'utf8',
+    );
+    const worker = await readFile(path.join(sourceRoot, 'worker.ts'), 'utf8');
+
+    expect(schema).toContain("transcriptionLeaseRunId: uuid('transcription_lease_run_id')");
+    expect(migration).toContain(
+      'ALTER TABLE "letters" ADD COLUMN "transcription_lease_run_id" uuid',
+    );
+    expect(migration).not.toMatch(/\bUPDATE\s+"letters"/i);
+    expect(migration).not.toMatch(/ADD CONSTRAINT/i);
+    expect(worker).toMatch(
+      /isNotNull\(letters\.transcriptionLeaseRunId\)[\s\S]*eq\(letters\.transcriptionLeaseRunId, letters\.transcriptionRunId\)/,
     );
   });
 

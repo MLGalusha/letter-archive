@@ -318,6 +318,7 @@ export async function resetLetterForProcessing(letterId: string): Promise<boolea
       transcriptionStatus: 'PENDING',
       transcriptionRunId: null,
       transcriptionLeaseExpiresAt: null,
+      transcriptionLeaseRunId: null,
       transcriptionClaimKind: null,
       transcriptionError: null,
       transcriptionAttemptCount: 0,

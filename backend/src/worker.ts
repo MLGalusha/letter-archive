@@ -49,6 +49,8 @@ async function getQueuedTranscriptionWorkState(): Promise<'pending' | 'leased' |
       eq(letters.transcriptionClaimKind, 'QUEUED'),
       isNotNull(letters.transcriptionRunId),
       isNotNull(letters.transcriptionLeaseExpiresAt),
+      isNotNull(letters.transcriptionLeaseRunId),
+      eq(letters.transcriptionLeaseRunId, letters.transcriptionRunId),
     ),
     columns: { id: true },
   });

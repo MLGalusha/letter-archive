@@ -245,6 +245,7 @@ export async function removeFromQueue(
   } else if (spec.processKey === 'transcription') {
     updates.transcriptionRunId = null;
     updates.transcriptionLeaseExpiresAt = null;
+    updates.transcriptionLeaseRunId = null;
     updates.transcriptionClaimKind = null;
   }
 
@@ -284,6 +285,7 @@ export async function clearQueue(
   } else if (spec.processKey === 'transcription') {
     updates.transcriptionRunId = null;
     updates.transcriptionLeaseExpiresAt = null;
+    updates.transcriptionLeaseRunId = null;
     updates.transcriptionClaimKind = null;
   }
 
@@ -320,6 +322,7 @@ export async function retryJob(
     updates.transcriptionAttemptCount = 0;
     updates.transcriptionRunId = null;
     updates.transcriptionLeaseExpiresAt = null;
+    updates.transcriptionLeaseRunId = null;
     updates.transcriptionClaimKind = null;
     updates.deadLetter = false;
   } else if (spec.processKey === 'metadata') {

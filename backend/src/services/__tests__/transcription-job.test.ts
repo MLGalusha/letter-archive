@@ -37,6 +37,7 @@ vi.mock('../../db/index.js', () => ({
     transcriptionAttemptCount: 'letters.transcriptionAttemptCount',
     transcriptionRunId: 'letters.transcriptionRunId',
     transcriptionLeaseExpiresAt: 'letters.transcriptionLeaseExpiresAt',
+    transcriptionLeaseRunId: 'letters.transcriptionLeaseRunId',
     transcriptionClaimKind: 'letters.transcriptionClaimKind',
     metadataStatus: 'letters.metadataStatus',
     entityExtractionStatus: 'letters.entityExtractionStatus',
@@ -67,6 +68,7 @@ interface TranscriptionRow {
   transcriptionAttemptCount: number;
   transcriptionRunId: string | null;
   transcriptionLeaseExpiresAt: Date | null;
+  transcriptionLeaseRunId: string | null;
   transcriptionClaimKind: 'QUEUED' | 'REQUESTED' | null;
   metadataStatus: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
   entityExtractionStatus: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
@@ -92,6 +94,7 @@ function observed(overrides: Partial<ObservedTranscriptionState> = {}): Observed
     transcriptionError: row.transcriptionError,
     transcriptionAttemptCount: row.transcriptionAttemptCount,
     transcriptionLeaseExpiresAt: row.transcriptionLeaseExpiresAt,
+    transcriptionLeaseRunId: row.transcriptionLeaseRunId,
     transcriptionClaimKind: row.transcriptionClaimKind,
     metadataStatus: row.metadataStatus,
     entityExtractionStatus: row.entityExtractionStatus,
@@ -121,7 +124,13 @@ function matches(condition: unknown): boolean {
   const key = clause.field.slice('letters.'.length) as keyof TranscriptionRow;
   if (clause.kind === 'isNull') return row[key] === null;
   if (clause.kind === 'isNotNull') return row[key] !== null;
-  if (clause.kind === 'eq') return row[key] === clause.value;
+  if (clause.kind === 'eq') {
+    if (typeof clause.value === 'string' && clause.value.startsWith('letters.')) {
+      const valueKey = clause.value.slice('letters.'.length) as keyof TranscriptionRow;
+      return row[key] === row[valueKey];
+    }
+    return row[key] === clause.value;
+  }
   const actual = row[key];
   const expected = sqlValue(clause.value);
   if (!(actual instanceof Date) || !(expected instanceof Date)) return false;
@@ -136,6 +145,12 @@ function evaluatedUpdates(updates: Partial<TranscriptionRow>): Partial<Transcrip
       return [key, new Date(databaseNow.getTime() + 5 * 60_000)];
     }
     if (expression?.kind === 'sql' && expression.text?.includes('CASE')) {
+      if (expression.text.includes("'TRANSCRIBING'")) {
+        if (row.transcriptionLeaseRunId === row.transcriptionRunId) {
+          return [key, row.transcriptionClaimKind === 'REQUESTED' ? row.workflow : 'UPLOADED'];
+        }
+        return [key, row.workflow === 'TRANSCRIBING' ? 'UPLOADED' : row.workflow];
+      }
       return [key, row.transcriptionClaimKind === 'REQUESTED' ? row.workflow : 'UPLOADED'];
     }
     return [key, value];
@@ -173,6 +188,7 @@ describe('transcription job lifecycle', () => {
       transcriptionAttemptCount: 0,
       transcriptionRunId: null,
       transcriptionLeaseExpiresAt: null,
+      transcriptionLeaseRunId: null,
       transcriptionClaimKind: null,
       metadataStatus: 'PENDING',
       entityExtractionStatus: 'PENDING',
@@ -199,6 +215,7 @@ describe('transcription job lifecycle', () => {
       transcriptionStatus: 'RUNNING',
       transcriptionRunId: 'run-a',
       transcriptionLeaseExpiresAt: new Date('2026-07-17T12:05:00.000Z'),
+      transcriptionLeaseRunId: 'run-a',
       transcriptionClaimKind: 'QUEUED',
     });
     expect(updateSetMock).toHaveBeenCalledTimes(1);
@@ -215,6 +232,11 @@ describe('transcription job lifecycle', () => {
       transcriptionClaimKind: 'REQUESTED',
     }))).resolves.toBeNull();
 
+    const beforeBindingChange = observed();
+    row.transcriptionLeaseRunId = 'old-run';
+    await expect(claimQueuedTranscription(row.id, beforeBindingChange)).resolves.toBeNull();
+    row.transcriptionLeaseRunId = null;
+
     row.deadLetter = true;
     await expect(claimQueuedTranscription(row.id, observed())).resolves.toBeNull();
 
@@ -228,8 +250,9 @@ describe('transcription job lifecycle', () => {
     expect(row.transcriptionClaimKind).toBeNull();
   });
 
-  it('overwrites paired stale lease metadata when claiming queued work', async () => {
+  it('overwrites a fully bound stale lease tuple when claiming queued work', async () => {
     row.transcriptionLeaseExpiresAt = new Date('2026-07-17T11:00:00.000Z');
+    row.transcriptionLeaseRunId = 'old-run';
     row.transcriptionClaimKind = 'REQUESTED';
 
     await expect(claimQueuedTranscription(row.id, observed())).resolves.toEqual({ runId: 'run-a' });
@@ -239,6 +262,21 @@ describe('transcription job lifecycle', () => {
       transcriptionStatus: 'RUNNING',
       transcriptionRunId: 'run-a',
       transcriptionLeaseExpiresAt: new Date('2026-07-17T12:05:00.000Z'),
+      transcriptionLeaseRunId: 'run-a',
+      transcriptionClaimKind: 'QUEUED',
+    });
+  });
+
+  it('overwrites binding-only residue left by an older terminal writer', async () => {
+    row.transcriptionLeaseRunId = 'old-run';
+
+    await expect(claimQueuedTranscription(row.id, observed())).resolves.toEqual({ runId: 'run-a' });
+
+    expect(row).toMatchObject({
+      transcriptionStatus: 'RUNNING',
+      transcriptionRunId: 'run-a',
+      transcriptionLeaseExpiresAt: new Date('2026-07-17T12:05:00.000Z'),
+      transcriptionLeaseRunId: 'run-a',
       transcriptionClaimKind: 'QUEUED',
     });
   });
@@ -265,6 +303,7 @@ describe('transcription job lifecycle', () => {
       transcriptionStatus: 'RUNNING',
       transcriptionRunId: 'run-a',
       transcriptionLeaseExpiresAt: new Date('2026-07-17T12:05:00.000Z'),
+      transcriptionLeaseRunId: 'run-a',
       transcriptionClaimKind: 'REQUESTED',
       transcriptionText: 'Existing transcript',
       transcriptionError: null,
@@ -304,6 +343,7 @@ describe('transcription job lifecycle', () => {
     row.transcriptionStatus = 'RUNNING';
     row.transcriptionRunId = 'run-a';
     row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:05:00.000Z');
+    row.transcriptionLeaseRunId = 'run-a';
     row.transcriptionClaimKind = 'QUEUED';
 
     await expect(completeTranscription(row.id, 'run-a', 'Dear family')).resolves.toBe(true);
@@ -312,6 +352,7 @@ describe('transcription job lifecycle', () => {
       transcriptionStatus: 'SUCCESS',
       transcriptionRunId: null,
       transcriptionLeaseExpiresAt: null,
+      transcriptionLeaseRunId: null,
       transcriptionClaimKind: null,
       transcriptionText: 'Dear family',
       transcriptStatus: 'AI_DRAFT',
@@ -322,6 +363,7 @@ describe('transcription job lifecycle', () => {
     row.transcriptionStatus = 'RUNNING';
     row.transcriptionRunId = 'run-b';
     row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:05:00.000Z');
+    row.transcriptionLeaseRunId = 'run-b';
     row.transcriptionClaimKind = 'QUEUED';
     await expect(failTranscription(row.id, 'run-a', 'late failure')).resolves.toBe(false);
     expect(row.transcriptionStatus).toBe('RUNNING');
@@ -355,6 +397,7 @@ describe('transcription job lifecycle', () => {
       transcriptionStatus: 'SUCCESS',
       transcriptionRunId: null,
       transcriptionLeaseExpiresAt: null,
+      transcriptionLeaseRunId: null,
       transcriptionClaimKind: null,
       transcriptionText: null,
       transcriptStatus: 'EMPTY',
@@ -366,6 +409,7 @@ describe('transcription job lifecycle', () => {
     row.transcriptionStatus = 'RUNNING';
     row.transcriptionRunId = 'run-a';
     row.transcriptionLeaseExpiresAt = new Date('2026-07-17T11:59:59.000Z');
+    row.transcriptionLeaseRunId = 'run-a';
     row.transcriptionClaimKind = 'QUEUED';
 
     await expect(completeTranscription(row.id, 'run-a', 'Too late')).resolves.toBe(false);
@@ -378,6 +422,7 @@ describe('transcription job lifecycle', () => {
       transcriptionError: 'Cancelled by admin',
       transcriptionRunId: null,
       transcriptionLeaseExpiresAt: null,
+      transcriptionLeaseRunId: null,
       transcriptionClaimKind: null,
     });
   });
@@ -393,6 +438,7 @@ describe('transcription job lifecycle', () => {
       transcriptionStatus: 'RUNNING',
       transcriptionRunId: 'legacy-run',
       transcriptionLeaseExpiresAt: null,
+      transcriptionLeaseRunId: null,
       transcriptionClaimKind: null,
     });
 
@@ -406,15 +452,110 @@ describe('transcription job lifecycle', () => {
       transcriptionError: 'Cancelled by admin',
       transcriptionRunId: null,
       transcriptionLeaseExpiresAt: null,
+      transcriptionLeaseRunId: null,
       transcriptionClaimKind: null,
     });
   });
+
+  it('does not renew or publish a replacement run that inherited another run lease', async () => {
+    row.workflow = 'TRANSCRIBING';
+    row.transcriptionStatus = 'RUNNING';
+    row.transcriptionRunId = 'replacement-run';
+    row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:05:00.000Z');
+    row.transcriptionLeaseRunId = 'original-run';
+    row.transcriptionClaimKind = 'QUEUED';
+
+    await expect(renewTranscriptionLease(row.id, 'replacement-run')).resolves.toBe(false);
+    await expect(
+      completeTranscription(row.id, 'replacement-run', 'Inherited lease publication'),
+    ).resolves.toBe(false);
+    await expect(
+      failTranscription(row.id, 'replacement-run', 'Inherited lease failure'),
+    ).resolves.toBe(false);
+
+    expect(row).toMatchObject({
+      transcriptionStatus: 'RUNNING',
+      transcriptionRunId: 'replacement-run',
+      transcriptionLeaseRunId: 'original-run',
+      transcriptionText: null,
+    });
+  });
+
+  it('does not recover a replacement run under inherited metadata but allows exact cancellation', async () => {
+    row.workflow = 'TRANSCRIBING';
+    row.transcriptionStatus = 'RUNNING';
+    row.transcriptionRunId = 'replacement-run';
+    row.transcriptionLeaseExpiresAt = new Date('2026-07-17T11:00:00.000Z');
+    row.transcriptionLeaseRunId = 'original-run';
+    row.transcriptionClaimKind = 'QUEUED';
+
+    await expect(recoverExpiredTranscriptions()).resolves.toEqual({
+      requeued: [],
+      failed: [],
+    });
+    expect(row.transcriptionStatus).toBe('RUNNING');
+
+    row.workflow = 'TRANSCRIBED';
+    row.transcriptionClaimKind = 'REQUESTED';
+    await expect(recoverExpiredTranscriptions()).resolves.toEqual({
+      requeued: [],
+      failed: [],
+    });
+    expect(row.transcriptionStatus).toBe('RUNNING');
+
+    await expect(cancelTranscriptionAttempt(row.id, 'replacement-run')).resolves.toBe(true);
+    expect(row).toMatchObject({
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'FAILED',
+      transcriptionRunId: null,
+      transcriptionLeaseExpiresAt: null,
+      transcriptionLeaseRunId: null,
+      transcriptionClaimKind: null,
+    });
+  });
+
+  it.each([
+    {
+      actualIntent: 'requested',
+      workflow: 'TRANSCRIBED',
+      inheritedClaimKind: 'QUEUED',
+      expectedWorkflow: 'TRANSCRIBED',
+    },
+    {
+      actualIntent: 'queued',
+      workflow: 'TRANSCRIBING',
+      inheritedClaimKind: 'REQUESTED',
+      expectedWorkflow: 'UPLOADED',
+    },
+  ] as const)(
+    'cancels a mismatched $actualIntent replacement without trusting inherited intent',
+    async ({ workflow, inheritedClaimKind, expectedWorkflow }) => {
+      row.workflow = workflow;
+      row.transcriptionStatus = 'RUNNING';
+      row.transcriptionRunId = 'replacement-run';
+      row.transcriptionLeaseExpiresAt = new Date('2026-07-17T11:00:00.000Z');
+      row.transcriptionLeaseRunId = 'original-run';
+      row.transcriptionClaimKind = inheritedClaimKind;
+
+      await expect(cancelTranscriptionAttempt(row.id, 'replacement-run')).resolves.toBe(true);
+
+      expect(row).toMatchObject({
+        workflow: expectedWorkflow,
+        transcriptionStatus: 'FAILED',
+        transcriptionRunId: null,
+        transcriptionLeaseExpiresAt: null,
+        transcriptionLeaseRunId: null,
+        transcriptionClaimKind: null,
+      });
+    },
+  );
 
   it('preserves requested workflow and content when failure revokes its live lease', async () => {
     row.workflow = 'TRANSCRIBED';
     row.transcriptionStatus = 'RUNNING';
     row.transcriptionRunId = 'run-a';
     row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:05:00.000Z');
+    row.transcriptionLeaseRunId = 'run-a';
     row.transcriptionClaimKind = 'REQUESTED';
     row.transcriptionText = 'Reviewed text';
     row.transcriptStatus = 'VERIFIED';
@@ -429,6 +570,7 @@ describe('transcription job lifecycle', () => {
       transcriptStatus: 'VERIFIED',
       transcriptionRunId: null,
       transcriptionLeaseExpiresAt: null,
+      transcriptionLeaseRunId: null,
       transcriptionClaimKind: null,
     });
   });
@@ -437,6 +579,7 @@ describe('transcription job lifecycle', () => {
     row.transcriptionStatus = 'RUNNING';
     row.transcriptionRunId = 'run-a';
     row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:01:00.000Z');
+    row.transcriptionLeaseRunId = 'run-a';
     row.transcriptionClaimKind = 'QUEUED';
     const visibleUpdatedAt = row.updatedAt;
 
@@ -456,6 +599,7 @@ describe('transcription job lifecycle', () => {
       row.transcriptionStatus = 'RUNNING';
       row.transcriptionRunId = 'run-a';
       row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:05:00.000Z');
+      row.transcriptionLeaseRunId = 'run-a';
       row.transcriptionClaimKind = 'QUEUED';
       returningError = new Error('database unavailable');
 
@@ -499,6 +643,7 @@ describe('transcription job lifecycle', () => {
       row.transcriptionStatus = 'RUNNING';
       row.transcriptionRunId = 'run-a';
       row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:05:00.000Z');
+      row.transcriptionLeaseRunId = 'run-a';
       row.transcriptionClaimKind = 'QUEUED';
 
       let releaseRenewal!: () => void;
@@ -533,6 +678,7 @@ describe('transcription job lifecycle', () => {
     row.transcriptionStatus = 'RUNNING';
     row.transcriptionRunId = 'run-a';
     row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:01:00.000Z');
+    row.transcriptionLeaseRunId = 'run-a';
     row.transcriptionClaimKind = 'QUEUED';
 
     await expect(recoverExpiredTranscriptions()).resolves.toEqual({
@@ -550,6 +696,7 @@ describe('transcription job lifecycle', () => {
       transcriptionStatus: 'PENDING',
       transcriptionRunId: null,
       transcriptionLeaseExpiresAt: null,
+      transcriptionLeaseRunId: null,
       transcriptionClaimKind: null,
     });
 
@@ -557,6 +704,7 @@ describe('transcription job lifecycle', () => {
     row.transcriptionStatus = 'RUNNING';
     row.transcriptionRunId = 'run-b';
     row.transcriptionLeaseExpiresAt = new Date('2026-07-17T12:00:00.000Z');
+    row.transcriptionLeaseRunId = 'run-b';
     row.transcriptionClaimKind = 'REQUESTED';
     row.transcriptionText = 'Reviewed text';
 
@@ -571,6 +719,7 @@ describe('transcription job lifecycle', () => {
       transcriptionText: 'Reviewed text',
       transcriptionRunId: null,
       transcriptionLeaseExpiresAt: null,
+      transcriptionLeaseRunId: null,
       transcriptionClaimKind: null,
     });
   });

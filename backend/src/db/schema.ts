@@ -211,6 +211,8 @@ export const letters = pgTable(
       withTimezone: true,
       precision: 3,
     }),
+    // Rollout fence: nullable because older revisions neither write nor clear it.
+    transcriptionLeaseRunId: uuid('transcription_lease_run_id'),
     transcriptionClaimKind: transcriptionClaimKindEnum('transcription_claim_kind'),
     transcribedAt: timestamp('transcribed_at', { withTimezone: true }),
 

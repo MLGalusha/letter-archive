@@ -7,10 +7,10 @@ Last updated: July 17, 2026
 - Working branch: `architecture-cleanup`
 - Recovery point: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 006 — complete
-- Last green implementation checkpoint: Slice 006 at `b0f98db6`
-- Current slice: 007 — bind main-transcription lease metadata to its run ID
-- Next queued slice: canonical metadata/entity lifecycle boundaries
+- Current checkpoint: 007 — complete
+- Last green implementation checkpoint: Slice 007 at `a2989756`
+- Current slice: 008 — canonical metadata lifecycle boundary
+- Next queued slice: retry-safe entity-extraction lifecycle boundary
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -232,6 +232,11 @@ Acceptance evidence:
   run ID when an older revision can replace the run ID without touching the new lease
   fields. Run-ID fencing prevents stale publication but does not make inherited lease
   metadata authoritative for the replacement attempt.
+- A lease-run binding added after its lease pair must remain nullable, unbackfilled,
+  and temporarily unconstrained. The immediately previous revision can clear the
+  expiry/kind fields but cannot clear the new binding; even `NOT VALID` checks would
+  reject that legitimate rolling-deployment write. New claims overwrite residue and
+  automatic ownership requires exact equality instead.
 
 ## Checkpoint Log
 
@@ -315,6 +320,21 @@ Acceptance evidence:
 - Adversarial audits caught and drove fixes for partial composite recovery, optional
   claim intent, a lost recovery-to-worker wake, and mixed-version lease inheritance.
 - Green implementation checkpoint: `b0f98db6`.
+
+### Slice 007
+
+- Added a nullable, unbackfilled main-transcription lease-run binding and made every
+  current claim bind its lease metadata to the run that created it.
+- Required exact binding for renewal, terminal publication, automatic recovery, and
+  worker leased-work projection while keeping exact-run administrative cancellation
+  available for rollout-era mismatches.
+- Updated every queue, retry, reset, human-edit, version-restore, bulk, and terminal
+  path to clear the complete ownership tuple.
+- Made cancellation trust queued/requested intent only when it belongs to the current
+  run; mismatched attempts derive the safe workflow from current observable state.
+- Kept migration 0049 free of a backfill or binding-shape constraint so the immediately
+  previous revision can still complete/cancel new-bound work during rolling overlap.
+- Green implementation checkpoint: `a2989756`.
 
 ## Slice 003 — Extra-Content Job Lifecycle
 
@@ -759,7 +779,7 @@ Residuals carried forward:
 
 ## Slice 007 — Bind Main-Transcription Leases to Their Runs
 
-Status: framed; implementation in progress
+Status: complete in this checkpoint
 
 Problem:
 
@@ -780,9 +800,10 @@ being guessed dead.
 
 Scope:
 
-- Add a nullable main-transcription lease-run binding in migration 0049 with a
-  rolling-compatible constraint strategy that accepts pre-binding legacy rows but
-  rejects invalid new bound metadata.
+- Add a nullable, unbackfilled main-transcription lease-run binding in migration 0049.
+  Keep the existing expiry/kind pair check, but add no binding-shape constraint until
+  older revisions are drained; old terminal writers must be allowed to leave binding-
+  only residue that a new claim can overwrite.
 - Bind every canonical new main-transcription claim to its run ID and require exact
   binding for active ownership, renewal, terminal publication, and automatic recovery.
 - Audit every human, cancellation, reset, retry, queue, and terminal path so it either
@@ -806,3 +827,76 @@ Acceptance:
   claim kind.
 - Focused concurrency and migration tests, a PostgreSQL 17 proof, backend full suite
   and typecheck, and the aggregate repository verifier pass before checkpointing.
+
+Evidence:
+
+- Full backend suite: 56 files and 476 tests passed; backend typecheck passed.
+- Full frontend suite: 86 files and 593 tests passed. The production build passed with
+  the pre-existing large-chunk warning.
+- Mocked browser suite: 35/35 passed in CI mode inside the final aggregate verifier.
+- Aggregate `CI=1 ./scripts/verify-all.sh`: backend tests/typecheck, frontend
+  tests/build, and mocked browser tests completed successfully after the final
+  cancellation-policy fix.
+- Focused ownership surface: 9 files and 126 tests passed, covering claims, observed
+  CAS, heartbeat/terminal fencing, both recovery policies, every clear/reset/human
+  path, worker exit projection, and architecture boundaries.
+- Migration registration: 5/5 tests passed; `drizzle-kit check` reported no drift.
+- PostgreSQL 17 upgrade proof applied through 0048, preserved a legacy unbound running
+  attempt under 0049, allowed the previous revision's binding-only terminal residue,
+  ignored an expired replacement run inheriting another run's binding, allowed exact
+  cancellation, and selected a newly bound expired run. The existing pair constraint
+  and partial index remained present.
+- The PostgreSQL proof also exercised both cross-kind cancellation hazards: actual
+  requested work with inherited `QUEUED` preserved `TRANSCRIBED`, while actual queued
+  work with inherited `REQUESTED` left `TRANSCRIBING` for `UPLOADED`.
+- `git diff --check`: passed.
+- Independent final migration, ownership-path, and adversarial concurrency/simplicity
+  audits found no remaining P1/P2 issue.
+- Green implementation checkpoint: `a2989756`.
+
+Residuals carried forward:
+
+- Legacy unbound or mismatched main-transcription attempts remain intentionally
+  ineligible for automatic recovery and exact-run cancellable by an administrator.
+- The binding remains temporarily unconstrained while older revisions can write. A
+  later operational cleanup may add a stronger constraint only after those revisions
+  are drained and transitional residue is reconciled.
+- Main-page source revisions and the broader invalidation contract for derived
+  transcript/metadata/publication data remain unowned.
+- Metadata and entity extraction still lack run IDs, leases, canonical terminal
+  publication, and safe automatic recovery. Metadata becomes Slice 008; entity
+  persistence remains a separate retry-safe slice.
+- API batch execution and its in-memory registry/legacy loop remain active, so recovery
+  cannot yet become exclusively worker-owned.
+
+## Slice 008 — Canonical Metadata Lifecycle Boundary
+
+Status: next slice; investigation and framing in progress
+
+Problem:
+
+Metadata work is claimed through more than one helper and publishes status, extracted
+content, workflow advancement, and downstream eligibility across separate code paths.
+It has no run token, so cancellation or a future recovery policy cannot distinguish a
+late producer from the current attempt. Entity extraction depends on exact metadata
+success, making metadata's terminal boundary the next prerequisite before executor
+topology can be simplified safely.
+
+Target invariant:
+
+Every metadata execution enters one exact-state lifecycle owner and receives a unique
+persisted run token. Content, terminal status, and `METADATA_DRAFTED` workflow publish
+atomically only for that token. Cancellation/human supersession fence late results,
+and ownership loss is reported neutrally. Lease/recovery policy is added only after the
+canonical boundary proves every producer and terminal writer.
+
+Initial scope to validate before editing:
+
+- Inventory every metadata claim, producer, terminal, cancellation, reset, bulk, and
+  route path plus the entity stage's exact dependency.
+- Characterize current queued versus synchronous behavior and content/workflow failure
+  semantics in tests before consolidating them.
+- Move claim and terminal compare-and-set writes behind one metadata lifecycle owner;
+  preserve prompts, structured output, API responses, and human review behavior.
+- Keep entity persistence and executor migration out of this slice unless the evidence
+  shows they are inseparable from metadata's atomic publication boundary.

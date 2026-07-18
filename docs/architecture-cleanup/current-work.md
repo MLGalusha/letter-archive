@@ -7,7 +7,7 @@ Last updated: July 17, 2026
 - Working branch: `architecture-cleanup`
 - Recovery point: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 005 — complete
+- Current checkpoint: 006 — framed; implementation in progress
 - Last green implementation checkpoint: Slice 005 at `985b8172`
 - Current slice: 006 — lease and reconcile fenced extra-content attempts
 - Next queued slice: canonical metadata/entity lifecycle boundaries
@@ -617,3 +617,81 @@ Residuals carried forward:
   transcript/metadata/publication data remain unowned.
 - API batch execution and its in-memory registry/legacy loop remain active, so recovery
   cannot yet become exclusively worker-owned.
+
+## Slice 006 — Durable Extra-Content Lease
+
+Status: framed; implementation in progress
+
+Problem:
+
+Extra-content attempts already have one canonical run-ID fence, but a crashed process
+can leave that attempt `RUNNING` forever. Status alone cannot determine how to recover
+it: automatic and Processing-page work is queued intent, while direct transcription
+and regeneration are synchronous requested intent, and either kind can begin from a
+`PENDING` row. A fast API restart can also observe an unexpired abandoned lease and
+skip it; startup-only reconciliation would then provide no eventual recovery when no
+long-lived worker is active.
+
+Invariant:
+
+Every newly claimed extra-content attempt has one run ID, a database-clock lease, and
+an explicit `QUEUED` or `REQUESTED` claim kind. Only the exact clean run with a live
+lease may renew or publish content. A committed source change marks the exact attempt
+dirty and takes precedence over claim kind. Expiry requeues queued or dirty work, but
+fails a clean requested attempt in place without changing the last committed content.
+Legacy unleased attempts remain visible and manually cancellable rather than being
+guessed dead. API and worker reconciliation are serialized, periodic, and safe to run
+concurrently.
+
+Scope:
+
+- Add stage-named extra-content lease and claim-kind columns, a partial expiry index,
+  and a rollout-safe paired-metadata check. Do not backfill existing `RUNNING` rows.
+- Map automatic post-transcription and Processing-page batches to `QUEUED`; map direct
+  `/transcribe-extras` and regeneration extras to `REQUESTED` even when they claim a
+  `PENDING` row.
+- Extract only the identical immediate/non-overlapping heartbeat scheduler shared by
+  main and extra transcription. Keep claim SQL, dirty handling, cancellation, terminal
+  publication, and recovery stage-specific.
+- Use PostgreSQL time for lease creation, renewal, terminal fencing, and expiry.
+  Heartbeats do not mutate user-visible `updatedAt`; producers stop between external
+  AI calls after authoritative ownership loss.
+- Move extra-content cancellation behind its lifecycle owner. Every terminal, dirty
+  requeue, human supersession, source invalidation, queue control, and bulk clear
+  either preserves the complete live tuple or clears it together.
+- Recover expired dirty attempts first to `PENDING`, then clean queued attempts to
+  `PENDING`, and clean requested attempts to visible `FAILED`. Conditional
+  `UPDATE ... RETURNING` makes concurrent reconcilers report each row once.
+- Generalize the serialized recovery timer, not the stage lifecycle. Run one composite
+  main/extra reconciliation loop at API and worker startup and periodically, and stop
+  it during graceful shutdown.
+- Keep worker exit decisions projected only onto main-transcription requeues/leases.
+  Standalone extra-content remains the Processing-page queue; adding a new worker
+  executor is outside this slice.
+
+Non-goals:
+
+- Do not introduce a generic jobs table, generic lifecycle framework, or shared claim
+  and terminal SQL.
+- Do not add standalone extra-content polling to `worker.ts` or change synchronous API
+  response behavior.
+- Do not normalize the existing no-related-items status contract or make requested
+  main-plus-extra regeneration transactional; both require separate behavior framing.
+- Do not lease metadata or entity extraction in this slice.
+- Do not replace the global `updatedAt` claim guard with a source-specific revision yet.
+
+Acceptance:
+
+- All four producers persist the correct claim kind and receive a database-clock lease.
+- Immediate heartbeats serialize slow renewals, tolerate transient database errors,
+  stop on authoritative ownership loss, and leave `updatedAt` unchanged.
+- Expired, cancelled, replaced, or dirty attempts cannot publish. Dirty expiry always
+  requeues; clean queued expiry requeues; clean requested expiry fails without changing
+  prior content or verification.
+- Legacy unleased attempts are ignored by recovery but remain exact-run cancellable.
+- API and worker periodic reconciliation cannot overlap itself, worker shutdown drains
+  it, and extra-only recovery cannot keep an exit-when-empty worker alive.
+- Migration validation includes a legacy unleased row, rolling-deploy stale metadata,
+  paired-metadata rejection, expiry index, and recovery race proof on PostgreSQL 17.
+- Focused lifecycle/recovery/route tests, backend typecheck/full suite, and the aggregate
+  repository verifier pass before checkpointing.

@@ -829,9 +829,35 @@ describe('letter operations service', () => {
       transcriptPublished: true,
     })).rejects.toMatchObject({
       status: 400,
-      message: expect.stringContaining('verified content'),
+      message: expect.stringContaining('verified transcript'),
     });
     expect(dbUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('can republish verified committed content after a replacement attempt fails', async () => {
+    updateReturningMock.mockResolvedValueOnce([{ id: 'letter-failed-replacement' }]);
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-failed-replacement',
+      workflow: 'REVIEWED',
+      transcriptionStatus: 'FAILED',
+      transcriptStatus: 'VERIFIED',
+      transcriptPublished: false,
+      metadataStatus: 'FAILED',
+      metadataContentStatus: 'VERIFIED',
+      metadataPublished: false,
+      metadataRevision: 4,
+      updatedAt: new Date('2026-07-17T12:00:00.000Z'),
+    });
+
+    await expect(updateLetter('letter-failed-replacement', {
+      transcriptPublished: true,
+      metadataPublished: true,
+    })).resolves.toBe(true);
+
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      transcriptPublished: true,
+      metadataPublished: true,
+    }));
   });
 
   it('atomically applies a manual extra-content edit and revokes the active AI attempt', async () => {

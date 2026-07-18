@@ -2,31 +2,26 @@ import { eq, type SQL } from 'drizzle-orm';
 import { letters } from '../../db/index.js';
 
 interface TranscriptPublicationState {
-  transcriptionStatus: string;
   transcriptStatus: string;
 }
 
 interface MetadataPublicationState {
-  metadataStatus: string;
   metadataContentStatus: string;
 }
 
-/** The single application-level rule for exposing transcript content. */
+/** A replacement attempt does not invalidate the last committed review. */
 export function canPublishTranscript(state: TranscriptPublicationState): boolean {
-  return state.transcriptionStatus === 'SUCCESS'
-    && state.transcriptStatus === 'VERIFIED';
+  return state.transcriptStatus === 'VERIFIED';
 }
 
-/** The single application-level rule for exposing extracted metadata. */
+/** A replacement attempt does not invalidate the last committed review. */
 export function canPublishMetadata(state: MetadataPublicationState): boolean {
-  return state.metadataStatus === 'SUCCESS'
-    && state.metadataContentStatus === 'VERIFIED';
+  return state.metadataContentStatus === 'VERIFIED';
 }
 
 /** SQL counterpart used by set-based publication writers. */
 export function transcriptPublicationConditions(): SQL[] {
   return [
-    eq(letters.transcriptionStatus, 'SUCCESS'),
     eq(letters.transcriptStatus, 'VERIFIED'),
   ];
 }
@@ -34,7 +29,6 @@ export function transcriptPublicationConditions(): SQL[] {
 /** SQL counterpart used by set-based publication writers. */
 export function metadataPublicationConditions(): SQL[] {
   return [
-    eq(letters.metadataStatus, 'SUCCESS'),
     eq(letters.metadataContentStatus, 'VERIFIED'),
   ];
 }

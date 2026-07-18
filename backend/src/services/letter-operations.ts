@@ -147,7 +147,7 @@ export async function updateLetter(
       )
     ) {
       const error = new Error(
-        'Only successfully transcribed, verified content can be published',
+        'Only verified transcript content can be published',
       ) as Error & { status: number };
       error.status = 400;
       throw error;
@@ -166,7 +166,7 @@ export async function updateLetter(
       )
     ) {
       const error = new Error(
-        'Only successfully extracted, verified metadata can be published',
+        'Only verified metadata content can be published',
       ) as Error & { status: number };
       error.status = 400;
       throw error;

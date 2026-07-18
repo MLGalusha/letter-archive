@@ -104,7 +104,6 @@ describe('admin bulk content visibility', () => {
         kind: 'and',
         clauses: [
           { kind: 'inArray', field: 'letters.id', values: letterIds },
-          { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
           { kind: 'eq', field: 'letters.metadataContentStatus', value: 'VERIFIED' },
         ],
       },
@@ -144,14 +143,13 @@ describe('admin bulk content visibility', () => {
         kind: 'and',
         clauses: [
           { kind: 'inArray', field: 'letters.id', values: letterIds },
-          { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
           { kind: 'eq', field: 'letters.metadataContentStatus', value: 'VERIFIED' },
         ],
       },
     });
   });
 
-  it('publishes transcripts only after both job completion and content verification', async () => {
+  it('publishes only committed verified transcript content', async () => {
     returningMock.mockResolvedValueOnce([{ id: eligibleId }]);
 
     const response = await invokeRouter(bulkRouter, {
@@ -169,7 +167,6 @@ describe('admin bulk content visibility', () => {
         kind: 'and',
         clauses: [
           { kind: 'inArray', field: 'letters.id', values: letterIds },
-          { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
           { kind: 'eq', field: 'letters.transcriptStatus', value: 'VERIFIED' },
         ],
       },

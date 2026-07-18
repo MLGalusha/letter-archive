@@ -9,9 +9,12 @@ import {
   type WorkflowState,
 } from '../../db/index.js';
 import { createLogger } from '../../utils/logger.js';
+import {
+  withLeaseHeartbeat,
+  type LeaseHeartbeat,
+} from './lease-heartbeat.js';
 
 const log = createLogger({ module: 'transcription-job' });
-const HEARTBEAT_INTERVAL_MS = 30_000;
 const LEASE_EXPIRED_ERROR = 'Transcription lease expired before the attempt completed';
 
 export interface ObservedTranscriptionState {
@@ -46,10 +49,7 @@ export interface TranscriptionClaim {
   runId: string;
 }
 
-export interface TranscriptionHeartbeat {
-  /** False once the database says this run no longer owns a live lease. */
-  hasOwnership(): boolean;
-}
+export type TranscriptionHeartbeat = LeaseHeartbeat;
 
 export interface RecoveredTranscriptionRow {
   id: string;
@@ -237,53 +237,18 @@ export async function withTranscriptionHeartbeat<T>(
   runId: string,
   operation: (heartbeat: TranscriptionHeartbeat) => Promise<T>,
 ): Promise<T> {
-  let stopped = false;
-  let ownershipLost = false;
-  let inFlight: Promise<void> | null = null;
-
-  const timer = setInterval(() => {
-    startRenewal();
-  }, HEARTBEAT_INTERVAL_MS);
-  timer.unref();
-
-  function stop(): void {
-    stopped = true;
-    clearInterval(timer);
-  }
-
-  function startRenewal(): void {
-    if (stopped || inFlight !== null) return;
-
-    const renewal = renewTranscriptionLease(letterId, runId)
-      .then((renewed) => {
-        if (!renewed) {
-          ownershipLost = true;
-          stop();
-        }
-      })
-      .catch((error: unknown) => {
+  return withLeaseHeartbeat(
+    {
+      renew: () => renewTranscriptionLease(letterId, runId),
+      onRenewalError: (error: unknown) => {
         log.warn(
           { letterId, runId, err: error },
           'Failed to renew transcription lease; will retry',
         );
-      })
-      .finally(() => {
-        if (inFlight === renewal) inFlight = null;
-      });
-
-    inFlight = renewal;
-  }
-
-  // Do not spend the first heartbeat interval without confirming ownership.
-  startRenewal();
-
-  try {
-    return await operation({ hasOwnership: () => !ownershipLost });
-  } finally {
-    stop();
-    const pendingRenewal = inFlight;
-    if (pendingRenewal !== null) await pendingRenewal;
-  }
+      },
+    },
+    operation,
+  );
 }
 
 /** Publishes a completed result only for the exact run's still-live lease. */

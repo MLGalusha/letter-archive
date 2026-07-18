@@ -46,6 +46,11 @@ export const transcriptionClaimKindEnum = pgEnum('transcription_claim_kind', [
   'REQUESTED',
 ]);
 
+export const extraContentClaimKindEnum = pgEnum('extra_content_claim_kind', [
+  'QUEUED',
+  'REQUESTED',
+]);
+
 export const dateConfidenceEnum = pgEnum('date_confidence', [
   'exact',
   'unknown',
@@ -250,6 +255,13 @@ export const letters = pgTable(
     extraContentJobStatus: jobStatusEnum('extra_content_job_status').notNull().default('PENDING'),
     extraContentJobError: text('extra_content_job_error'),
     extraContentJobRunId: uuid('extra_content_job_run_id'),
+    // Millisecond precision round-trips losslessly through JavaScript Date for CAS claims.
+    extraContentJobLeaseExpiresAt: timestamp('extra_content_job_lease_expires_at', {
+      withTimezone: true,
+      precision: 3,
+    }),
+    extraContentJobLeaseRunId: uuid('extra_content_job_lease_run_id'),
+    extraContentJobClaimKind: extraContentClaimKindEnum('extra_content_job_claim_kind'),
     extraContentJobDirty: boolean('extra_content_job_dirty').notNull().default(false),
 
     // Photo description workflow
@@ -296,6 +308,9 @@ export const letters = pgTable(
     index('idx_letters_transcription_lease_expires_at')
       .on(table.transcriptionLeaseExpiresAt)
       .where(sql`${table.transcriptionStatus} = 'RUNNING' AND ${table.transcriptionLeaseExpiresAt} IS NOT NULL`),
+    index('idx_letters_extra_content_job_lease_expires_at')
+      .on(table.extraContentJobLeaseExpiresAt)
+      .where(sql`${table.extraContentJobStatus} = 'RUNNING' AND ${table.extraContentJobLeaseExpiresAt} IS NOT NULL`),
     // Flag index (partial: only flagged=true rows)
     index('idx_letters_flagged').on(table.flagged),
     // V2 indexes
@@ -326,6 +341,13 @@ export const letters = pgTable(
     check(
       'extra_content_job_run_id_matches_running',
       sql`(${table.extraContentJobStatus} = 'RUNNING') = (${table.extraContentJobRunId} IS NOT NULL)`,
+    ),
+    check(
+      'extra_content_job_lease_metadata_valid',
+      sql`(${table.extraContentJobLeaseExpiresAt} IS NULL)
+        = (${table.extraContentJobLeaseRunId} IS NULL)
+        AND (${table.extraContentJobLeaseExpiresAt} IS NULL)
+        = (${table.extraContentJobClaimKind} IS NULL)`,
     ),
     check(
       'extra_content_job_dirty_requires_running',
@@ -908,6 +930,7 @@ export type WorkflowState = 'UPLOADED' | 'TRANSCRIBING' | 'TRANSCRIBED' | 'METAD
 export type VisibilityState = 'PUBLISHED' | 'HIDDEN';
 export type JobStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
 export type TranscriptionClaimKind = (typeof transcriptionClaimKindEnum.enumValues)[number];
+export type ExtraContentClaimKind = (typeof extraContentClaimKindEnum.enumValues)[number];
 export type DateConfidence = 'exact' | 'unknown' | 'inferred';
 export type ContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
 

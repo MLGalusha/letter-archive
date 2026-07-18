@@ -41,7 +41,10 @@ const allowedRecoveryCallers = new Set([
 
 const allowedExpiredTranscriptionRecoveryCallers = new Set([
   'services/processing-queue.ts',
-  'worker.ts',
+]);
+
+const allowedExpiredExtraContentRecoveryCallers = new Set([
+  'services/processing-queue.ts',
 ]);
 
 const allowedTranscribeImageCallers = new Set([
@@ -56,6 +59,7 @@ const allowedTranscribeExtraContentCallers = new Set([
 ]);
 
 const canonicalTranscriptionClaimOwner = 'services/letter/transcription-job.ts';
+const canonicalExtraContentClaimOwner = 'services/letter/extra-content-job.ts';
 
 const executionCall = /\b(?:processLetter|processMetadata|runTranscription|runRequestedTranscription|runMetadataExtractionV2|runEntityExtractionOnly|regenerateTranscription|transcribeLetterOnly|transcribeExtras|processLettersAsync|startBatch)\s*\(|\.runBatch\s*\(/;
 
@@ -212,6 +216,25 @@ describe('processing execution ownership', () => {
     expect(unexpectedCallers.sort()).toEqual([]);
   });
 
+  it('allows expired extra-content recovery callers to be removed but not multiplied', async () => {
+    const files = await productionTypeScriptFiles(sourceRoot);
+    const unexpectedCallers: string[] = [];
+
+    for (const absolutePath of files) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      if (relativePath === canonicalExtraContentClaimOwner) continue;
+      if (
+        /\brecoverExpiredExtraContentJobs\s*\(\)/.test(
+          await readFile(absolutePath, 'utf8'),
+        ) && !allowedExpiredExtraContentRecoveryCallers.has(relativePath)
+      ) {
+        unexpectedCallers.push(relativePath);
+      }
+    }
+
+    expect(unexpectedCallers.sort()).toEqual([]);
+  });
+
   it('allows startup lease-recovery callers to be removed but not silently multiplied', async () => {
     const files = await productionTypeScriptFiles(sourceRoot);
     const unexpectedCallers: string[] = [];
@@ -220,7 +243,7 @@ describe('processing execution ownership', () => {
       const relativePath = path.relative(sourceRoot, absolutePath);
       if (relativePath === 'services/processing-queue.ts') continue;
       if (
-        /\brecoverExpiredTranscriptionJobs\s*\(\)/.test(
+        /\brecoverExpiredProcessingJobs\s*\(\)/.test(
           await readFile(absolutePath, 'utf8'),
         ) &&
         !allowedRecoveryCallers.has(relativePath)
@@ -243,5 +266,69 @@ describe('processing execution ownership', () => {
     expect(migration).toMatch(
       /ADD CONSTRAINT "transcription_excludes_downstream_running"[\s\S]*NOT VALID/,
     );
+  });
+
+  it('keeps extra-content lease metadata stage-specific and rollout-compatible', async () => {
+    const schema = await readFile(path.join(sourceRoot, 'db/schema.ts'), 'utf8');
+    const migration = await readFile(
+      path.join(sourceRoot, 'db/migrations/0048_add_extra_content_leases.sql'),
+      'utf8',
+    );
+
+    expect(schema).toContain("pgEnum('extra_content_claim_kind'");
+    expect(schema).toMatch(
+      /extraContentJobLeaseExpiresAt: timestamp\('extra_content_job_lease_expires_at', \{[\s\S]*?precision: 3,[\s\S]*?\}\)/,
+    );
+    expect(schema).toContain("extraContentJobLeaseRunId: uuid('extra_content_job_lease_run_id')");
+    expect(schema).toContain("extraContentJobClaimKind: extraContentClaimKindEnum('extra_content_job_claim_kind')");
+    expect(schema).toContain('extra_content_job_lease_metadata_valid');
+    expect(schema).toContain('idx_letters_extra_content_job_lease_expires_at');
+
+    expect(migration).toContain(
+      'CREATE TYPE "public"."extra_content_claim_kind" AS ENUM (\'QUEUED\', \'REQUESTED\')',
+    );
+    expect(migration).toContain(
+      'ADD COLUMN "extra_content_job_lease_expires_at" timestamp(3) with time zone',
+    );
+    expect(migration).toContain(
+      'ADD COLUMN "extra_content_job_lease_run_id" uuid',
+    );
+    expect(migration).toContain(
+      'ADD COLUMN "extra_content_job_claim_kind" "extra_content_claim_kind"',
+    );
+    expect(migration).toMatch(
+      /ADD CONSTRAINT "extra_content_job_lease_metadata_valid"[\s\S]*\("extra_content_job_lease_expires_at" IS NULL\)\s*=\s*\("extra_content_job_lease_run_id" IS NULL\)[\s\S]*\("extra_content_job_lease_expires_at" IS NULL\)\s*=\s*\("extra_content_job_claim_kind" IS NULL\)/,
+    );
+    expect(migration).toMatch(
+      /CREATE INDEX "idx_letters_extra_content_job_lease_expires_at"[\s\S]*WHERE "extra_content_job_status" = 'RUNNING'[\s\S]*"extra_content_job_lease_expires_at" IS NOT NULL/,
+    );
+    expect(migration).not.toMatch(/\bUPDATE\s+"letters"\b/i);
+  });
+
+  it('keeps non-null extra-content lease writes in the lifecycle owner', async () => {
+    const files = await productionTypeScriptFiles(sourceRoot);
+    const unexpectedWriters: string[] = [];
+
+    for (const absolutePath of files) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      if (relativePath === 'db/schema.ts' || relativePath === canonicalExtraContentClaimOwner) {
+        continue;
+      }
+      const source = await readFile(absolutePath, 'utf8');
+      const writesLease = [...source.matchAll(
+        /\bextraContentJobLeaseExpiresAt\s*:\s*([^,\n}]+)/g,
+      )].some(match => match[1].trim() !== 'null');
+      const writesLeaseRunId = [...source.matchAll(
+        /\bextraContentJobLeaseRunId\s*:\s*([^,\n}]+)/g,
+      )].some(match => match[1].trim() !== 'null');
+      const writesClaimKind = [...source.matchAll(
+        /\bextraContentJobClaimKind\s*:\s*([^,\n}]+)/g,
+      )].some(match => match[1].trim() !== 'null');
+      if (writesLease || writesLeaseRunId || writesClaimKind) {
+        unexpectedWriters.push(relativePath);
+      }
+    }
+
+    expect(unexpectedWriters.sort()).toEqual([]);
   });
 });

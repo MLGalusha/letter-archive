@@ -13,7 +13,10 @@ const {
   runEntityExtractionOnlyMock,
   notifyMock,
   recoverExpiredTranscriptionsMock,
+  recoverExpiredExtraContentJobsMock,
   cancelTranscriptionAttemptMock,
+  shouldUseCloudRunWorkerJobMock,
+  triggerWorkerJobMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   findManyLettersMock: vi.fn(),
@@ -27,7 +30,10 @@ const {
   runEntityExtractionOnlyMock: vi.fn(),
   notifyMock: vi.fn(),
   recoverExpiredTranscriptionsMock: vi.fn(),
+  recoverExpiredExtraContentJobsMock: vi.fn(),
   cancelTranscriptionAttemptMock: vi.fn(),
+  shouldUseCloudRunWorkerJobMock: vi.fn(),
+  triggerWorkerJobMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -115,6 +121,15 @@ vi.mock('../letter/transcription-job.js', () => ({
   cancelTranscriptionAttempt: cancelTranscriptionAttemptMock,
 }));
 
+vi.mock('../letter/extra-content-job.js', () => ({
+  recoverExpiredExtraContentJobs: recoverExpiredExtraContentJobsMock,
+}));
+
+vi.mock('../cloud-run-job.js', () => ({
+  shouldUseCloudRunWorkerJob: shouldUseCloudRunWorkerJobMock,
+  triggerWorkerJob: triggerWorkerJobMock,
+}));
+
 vi.mock('../../utils/logger.js', () => ({
   createLogger: vi.fn(() => ({
     info: vi.fn(),
@@ -129,13 +144,14 @@ import {
   buildProcessingConditions,
   cancelActiveJob,
   clearQueue,
+  ensureBackgroundWorkerForQueuedTranscription,
   getQueueStatus,
   getJobProgress,
   getProcessingStatus,
   removeFromQueue,
   resetProcessingState,
   processLettersAsync,
-  recoverExpiredTranscriptionJobs,
+  recoverExpiredProcessingJobs,
   retryJob,
   startEntityExtractionProcessing,
   startMetadataProcessing,
@@ -152,7 +168,10 @@ describe('processing queue service', () => {
     updateReturningMock.mockResolvedValue([{ id: 'letter-3' }]);
     processLetterMock.mockResolvedValue(undefined);
     recoverExpiredTranscriptionsMock.mockResolvedValue({ requeued: [], failed: [] });
+    recoverExpiredExtraContentJobsMock.mockResolvedValue({ requeued: [], failed: [] });
     cancelTranscriptionAttemptMock.mockResolvedValue(true);
+    shouldUseCloudRunWorkerJobMock.mockReturnValue(false);
+    triggerWorkerJobMock.mockResolvedValue(true);
   });
 
   it('returns collectionNotFound when the collection code does not match any records', async () => {
@@ -477,15 +496,26 @@ describe('processing queue service', () => {
     }));
   });
 
-  it('reports only expired transcriptions returned by the lifecycle owner', async () => {
+  it('reports only expired attempts returned by the leased lifecycle owners', async () => {
     recoverExpiredTranscriptionsMock.mockResolvedValue({
       requeued: [{ id: 'letter-orphan', dateRaw: '19470813' }],
       failed: [],
     });
 
-    await expect(recoverExpiredTranscriptionJobs()).resolves.toEqual({
-      requeued: [{ id: 'letter-orphan', dateRaw: '19470813' }],
-      failed: [],
+    recoverExpiredExtraContentJobsMock.mockResolvedValue({
+      requeued: [],
+      failed: [{ id: 'extra-orphan', dateRaw: '19470814' }],
+    });
+
+    await expect(recoverExpiredProcessingJobs()).resolves.toEqual({
+      transcription: {
+        requeued: [{ id: 'letter-orphan', dateRaw: '19470813' }],
+        failed: [],
+      },
+      extraContent: {
+        requeued: [],
+        failed: [{ id: 'extra-orphan', dateRaw: '19470814' }],
+      },
     });
 
     expect(findManyLettersMock).not.toHaveBeenCalled();
@@ -493,21 +523,83 @@ describe('processing queue service', () => {
     expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({
       type: 'job_orphan_recovered',
       metadata: expect.objectContaining({
-        count: 1,
-        letterIds: ['letter-orphan'],
+        count: 2,
+        letterIds: ['letter-orphan', 'extra-orphan'],
         transcriptionRequeued: 1,
         transcriptionFailed: 0,
+        extraContentRequeued: 0,
+        extraContentFailed: 1,
       }),
     }));
   });
 
-  it('does not report live or unknown transcription leases that were not recovered', async () => {
-    await expect(recoverExpiredTranscriptionJobs()).resolves.toEqual({
-      requeued: [],
-      failed: [],
+  it('does not report live or unknown leases that were not recovered', async () => {
+    await expect(recoverExpiredProcessingJobs()).resolves.toEqual({
+      transcription: { requeued: [], failed: [] },
+      extraContent: { requeued: [], failed: [] },
     });
 
     expect(notifyMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves recovered transcription work when extra-content recovery fails', async () => {
+    recoverExpiredTranscriptionsMock.mockResolvedValue({
+      requeued: [{ id: 'letter-orphan', dateRaw: '19470813' }],
+      failed: [],
+    });
+    recoverExpiredExtraContentJobsMock.mockRejectedValue(new Error('extra recovery failed'));
+
+    await expect(recoverExpiredProcessingJobs()).resolves.toEqual({
+      transcription: {
+        requeued: [{ id: 'letter-orphan', dateRaw: '19470813' }],
+        failed: [],
+      },
+      extraContent: { requeued: [], failed: [] },
+    });
+
+    expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({ transcriptionRequeued: 1 }),
+    }));
+  });
+
+  it('still recovers extra content when transcription recovery fails', async () => {
+    recoverExpiredTranscriptionsMock.mockRejectedValue(new Error('main recovery failed'));
+    recoverExpiredExtraContentJobsMock.mockResolvedValue({
+      requeued: [{ id: 'extra-orphan', dateRaw: '19470814' }],
+      failed: [],
+    });
+
+    await expect(recoverExpiredProcessingJobs()).resolves.toEqual({
+      transcription: { requeued: [], failed: [] },
+      extraContent: {
+        requeued: [{ id: 'extra-orphan', dateRaw: '19470814' }],
+        failed: [],
+      },
+    });
+
+    expect(recoverExpiredExtraContentJobsMock).toHaveBeenCalledOnce();
+  });
+
+  it('awaits a worker wake whenever durable queued transcription exists', async () => {
+    shouldUseCloudRunWorkerJobMock.mockReturnValue(true);
+    findFirstMock.mockResolvedValue({ id: 'queued-letter' });
+
+    await expect(
+      ensureBackgroundWorkerForQueuedTranscription('lease-recovery'),
+    ).resolves.toBe(true);
+
+    expect(triggerWorkerJobMock).toHaveBeenCalledWith('lease-recovery');
+  });
+
+  it('propagates a failed worker wake so periodic recovery can retry it', async () => {
+    const failure = new Error('Cloud Run unavailable');
+    shouldUseCloudRunWorkerJobMock.mockReturnValue(true);
+    findFirstMock.mockResolvedValue({ id: 'queued-letter' });
+    triggerWorkerJobMock.mockRejectedValue(failure);
+
+    await expect(
+      ensureBackgroundWorkerForQueuedTranscription('lease-recovery'),
+    ).rejects.toBe(failure);
   });
 
   it('rejects cancellation when the observed transcription attempt loses ownership', async () => {

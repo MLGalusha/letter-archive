@@ -268,6 +268,9 @@ describe('letter operations service', () => {
       transcriptionClaimKind: null,
       extraContentJobStatus: 'FAILED',
       extraContentJobRunId: null,
+      extraContentJobLeaseExpiresAt: null,
+      extraContentJobLeaseRunId: null,
+      extraContentJobClaimKind: null,
       extraContentJobDirty: false,
     }));
     expect(updateWhereMock).toHaveBeenCalledWith({
@@ -517,6 +520,9 @@ describe('letter operations service', () => {
       extraContentJobStatus: 'SUCCESS',
       extraContentJobError: null,
       extraContentJobRunId: null,
+      extraContentJobLeaseExpiresAt: null,
+      extraContentJobLeaseRunId: null,
+      extraContentJobClaimKind: null,
       extraContentJobDirty: false,
       updatedAt: expect.any(Date),
     });
@@ -539,6 +545,9 @@ describe('letter operations service', () => {
       extraContentJobStatus: 'SUCCESS',
       extraContentJobError: null,
       extraContentJobRunId: null,
+      extraContentJobLeaseExpiresAt: null,
+      extraContentJobLeaseRunId: null,
+      extraContentJobClaimKind: null,
       extraContentJobDirty: false,
       updatedAt: expect.any(Date),
     });
@@ -561,6 +570,9 @@ describe('letter operations service', () => {
       extraContentJobStatus: 'SUCCESS',
       extraContentJobError: null,
       extraContentJobRunId: null,
+      extraContentJobLeaseExpiresAt: null,
+      extraContentJobLeaseRunId: null,
+      extraContentJobClaimKind: null,
       extraContentJobDirty: false,
       updatedAt: expect.any(Date),
     });

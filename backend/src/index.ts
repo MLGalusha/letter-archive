@@ -16,9 +16,10 @@ import { env, hasOpenAI } from './config/env.js';
 import { logger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { securityHeaders } from './middleware/security.js';
 import {
-  recoverExpiredTranscriptionJobs,
-  requestBackgroundWorkerRun,
+  ensureBackgroundWorkerForQueuedTranscription,
+  recoverExpiredProcessingJobs,
 } from './services/processing-queue.js';
+import { createLeaseRecoveryCoordinator } from './services/lease-recovery-coordinator.js';
 import { db, sql, adminUsers } from './db/index.js';
 import { hashPassword } from './auth/jwt.js';
 import { notify } from './services/notifications.js';
@@ -35,6 +36,19 @@ process.on('unhandledRejection', (reason) => {
 });
 
 const app = express();
+const LEASE_RECOVERY_INTERVAL_MS = 60_000;
+
+const apiLeaseRecovery = createLeaseRecoveryCoordinator({
+  intervalMs: LEASE_RECOVERY_INTERVAL_MS,
+  recover: async () => {
+    const result = await recoverExpiredProcessingJobs();
+    await ensureBackgroundWorkerForQueuedTranscription('api-lease-recovery');
+    return result;
+  },
+  onError: (error: unknown) => {
+    logger.error({ err: error }, 'Expired processing lease recovery failed');
+  },
+});
 
 /* ── Request flight tracking ────────────────────────────── */
 let totalRequests = 0;
@@ -155,17 +169,10 @@ const server = app.listen(env.PORT, () => {
     'Server started'
   );
 
-  // Only leased transcription attempts are safe to recover automatically.
+  // Only leased transcription/extra-content attempts are safe to recover automatically.
   // Ownerless metadata/entity RUNNING rows remain visible for explicit action.
-  recoverExpiredTranscriptionJobs()
-    .then(({ requeued }) => {
-      if (requeued.length > 0) {
-        void requestBackgroundWorkerRun('startup-recovery');
-      }
-    })
-    .catch(err => {
-      logger.error({ err }, 'Failed to run startup job recovery');
-    });
+  void apiLeaseRecovery.reconcile();
+  apiLeaseRecovery.start();
 
   // Wire the SSE broadcaster into notify() so every notification pushes to connected clients
   initNotificationStreamBroadcaster();
@@ -247,9 +254,11 @@ function gracefulShutdown(signal: string) {
   logger.info({ signal }, 'Graceful shutdown initiated');
 
   stopNotificationSweeper();
+  const recoveryStopped = apiLeaseRecovery.stopAndWait();
 
   // Stop accepting new connections and drain in-flight requests
-  server.close(() => {
+  server.close(async () => {
+    await recoveryStopped;
     logger.info('All connections drained, exiting');
     process.exit(0);
   });

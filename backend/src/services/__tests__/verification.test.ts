@@ -204,6 +204,9 @@ describe('extra-content verification ownership', () => {
       extraContentJobStatus: 'SUCCESS',
       extraContentJobError: null,
       extraContentJobRunId: null,
+      extraContentJobLeaseExpiresAt: null,
+      extraContentJobLeaseRunId: null,
+      extraContentJobClaimKind: null,
       extraContentJobDirty: false,
       updatedAt: expect.any(Date),
     });
@@ -232,6 +235,9 @@ describe('extra-content verification ownership', () => {
       extraContentJobStatus: 'SUCCESS',
       extraContentJobError: null,
       extraContentJobRunId: null,
+      extraContentJobLeaseExpiresAt: null,
+      extraContentJobLeaseRunId: null,
+      extraContentJobClaimKind: null,
       extraContentJobDirty: false,
       updatedAt: expect.any(Date),
     });

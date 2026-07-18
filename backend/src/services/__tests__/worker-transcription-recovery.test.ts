@@ -1,10 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  createWorkerTranscriptionRecovery,
+  createLeaseRecoveryCoordinator,
   decideEmptyWorkerJob,
-} from '../worker-transcription-recovery.js';
+  projectTranscriptionRecoveryForWorker,
+} from '../lease-recovery-coordinator.js';
 
 describe('worker transcription recovery coordination', () => {
+  it('does not treat recovered extra-content work as a queue this worker can drain', () => {
+    expect(projectTranscriptionRecoveryForWorker({
+      transcription: { requeued: [], failed: [] },
+      extraContent: { requeued: [{ id: 'extra-1' }], failed: [] },
+    })).toEqual({ requeued: [], failed: [] });
+  });
+
   it('waits for a queued lease, drains it after recovery, then exits', async () => {
     const reconcile = vi
       .fn()
@@ -51,7 +59,7 @@ describe('worker transcription recovery coordination', () => {
       return { requeued: [], failed: [] };
     });
     const onError = vi.fn();
-    const coordinator = createWorkerTranscriptionRecovery({
+    const coordinator = createLeaseRecoveryCoordinator({
       intervalMs: 60_000,
       recover,
       onError,
@@ -86,7 +94,7 @@ describe('worker transcription recovery coordination', () => {
       .mockRejectedValueOnce(failure)
       .mockResolvedValueOnce({ requeued: [], failed: [] });
     const onError = vi.fn();
-    const coordinator = createWorkerTranscriptionRecovery({
+    const coordinator = createLeaseRecoveryCoordinator({
       intervalMs: 60_000,
       recover,
       onError,
@@ -95,5 +103,32 @@ describe('worker transcription recovery coordination', () => {
     await expect(coordinator.reconcile()).resolves.toBeNull();
     await expect(coordinator.reconcile()).resolves.toEqual({ requeued: [], failed: [] });
     expect(onError).toHaveBeenCalledWith(failure);
+  });
+
+  it('runs one unref periodic loop and stops future reconciliation', async () => {
+    vi.useFakeTimers();
+    try {
+      const recover = vi.fn().mockResolvedValue({
+        transcription: { requeued: [], failed: [] },
+        extraContent: { requeued: [], failed: [] },
+      });
+      const coordinator = createLeaseRecoveryCoordinator({
+        intervalMs: 60_000,
+        recover,
+        onError: vi.fn(),
+      });
+
+      coordinator.start();
+      coordinator.start();
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(recover).toHaveBeenCalledTimes(3);
+
+      await coordinator.stopAndWait();
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(recover).toHaveBeenCalledTimes(3);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

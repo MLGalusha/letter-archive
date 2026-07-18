@@ -3,12 +3,18 @@ import {
   checkExtraContentForText,
   transcribeExtraContent,
 } from '../../ai/openai.js';
-import { db, letters, type JobStatus } from '../../db/index.js';
+import {
+  db,
+  letters,
+  type ExtraContentClaimKind,
+  type JobStatus,
+} from '../../db/index.js';
 import { getAbsoluteStoragePath } from '../storage.js';
 import { createLogger } from '../../utils/logger.js';
 import { getDocumentTypeFromCode, type TranscribeExtrasResult } from './shared.js';
 import {
   runExtraContentJob,
+  type ExtraContentHeartbeat,
   type ExtraContentJobResult,
   type ExtraContentPatch,
 } from './extra-content-job.js';
@@ -16,6 +22,12 @@ import {
 const log = createLogger({ module: 'extra-content' });
 
 type ClaimableJobStatus = Exclude<JobStatus, 'RUNNING'>;
+
+class ExtraContentOwnershipLostError extends Error {}
+
+function requireOwnership(heartbeat: ExtraContentHeartbeat): void {
+  if (!heartbeat.hasOwnership()) throw new ExtraContentOwnershipLostError();
+}
 
 type ExtraContentExecution<T> =
   | ExtraContentJobResult<T>
@@ -63,17 +75,22 @@ function orderedRelatedItems(source: ExtraContentSource) {
   ];
 }
 
-async function produceAutomaticExtras(source: ExtraContentSource) {
+async function produceAutomaticExtras(
+  source: ExtraContentSource,
+  heartbeat: ExtraContentHeartbeat,
+) {
   const { letter } = source;
   const typeCounters: Record<string, number> = {};
   const transcriptions: { type: string; index: number; text: string }[] = [];
 
   for (const item of orderedRelatedItems(source)) {
+    requireOwnership(heartbeat);
     const documentType = getDocumentTypeFromCode(item.type);
     typeCounters[item.type] = (typeCounters[item.type] || 0) + 1;
     const typeIndex = typeCounters[item.type];
 
     for (const page of item.pages) {
+      requireOwnership(heartbeat);
       const transcription = await transcribeExtraContent({
         filePath: getAbsoluteStoragePath(page.storagePath),
         letterId: letter.id,
@@ -83,6 +100,7 @@ async function produceAutomaticExtras(source: ExtraContentSource) {
           dateRaw: letter.dateRaw,
         },
       });
+      requireOwnership(heartbeat);
 
       if (transcription.text.trim()) {
         transcriptions.push({
@@ -107,23 +125,29 @@ async function produceAutomaticExtras(source: ExtraContentSource) {
   };
 }
 
-async function produceRegeneratedExtras(source: ExtraContentSource) {
+async function produceRegeneratedExtras(
+  source: ExtraContentSource,
+  heartbeat: ExtraContentHeartbeat,
+) {
   const { letter } = source;
   const typeCounters: Record<string, number> = {};
   const transcriptions: { type: string; index: number; text: string }[] = [];
 
   for (const item of orderedRelatedItems(source)) {
+    requireOwnership(heartbeat);
     const documentType = getDocumentTypeFromCode(item.type);
     typeCounters[item.type] = (typeCounters[item.type] || 0) + 1;
     const typeIndex = typeCounters[item.type];
 
     for (const page of item.pages) {
+      requireOwnership(heartbeat);
       const filePath = getAbsoluteStoragePath(page.storagePath);
       const check = await checkExtraContentForText({
         filePath,
         letterId: letter.id,
         documentType,
       });
+      requireOwnership(heartbeat);
       if (!check.hasTranscribableText) continue;
 
       const transcription = await transcribeExtraContent({
@@ -135,6 +159,7 @@ async function produceRegeneratedExtras(source: ExtraContentSource) {
           dateRaw: letter.dateRaw,
         },
       });
+      requireOwnership(heartbeat);
 
       if (transcription.text.trim()) {
         transcriptions.push({
@@ -159,7 +184,10 @@ async function produceRegeneratedExtras(source: ExtraContentSource) {
   };
 }
 
-async function produceStandaloneExtras(source: ExtraContentSource) {
+async function produceStandaloneExtras(
+  source: ExtraContentSource,
+  heartbeat: ExtraContentHeartbeat,
+) {
   const { letter, relatedItems } = source;
   const typeCounters: Record<string, number> = {};
   const typeTotals: Record<string, number> = {};
@@ -170,17 +198,20 @@ async function produceStandaloneExtras(source: ExtraContentSource) {
   }
 
   for (const item of orderedRelatedItems(source)) {
+    requireOwnership(heartbeat);
     const documentType = getDocumentTypeFromCode(item.type);
     typeCounters[item.type] = (typeCounters[item.type] || 0) + 1;
     const typeIndex = typeCounters[item.type];
 
     for (const page of item.pages) {
+      requireOwnership(heartbeat);
       const filePath = getAbsoluteStoragePath(page.storagePath);
       const check = await checkExtraContentForText({
         filePath,
         letterId: letter.id,
         documentType,
       });
+      requireOwnership(heartbeat);
 
       if (!check.hasTranscribableText) {
         log.debug(
@@ -199,6 +230,7 @@ async function produceStandaloneExtras(source: ExtraContentSource) {
           dateRaw: letter.dateRaw,
         },
       });
+      requireOwnership(heartbeat);
 
       if (transcription.text?.trim()) {
         transcriptions.push({
@@ -235,18 +267,24 @@ async function executeEligibleExtraContent<T>(
   letterId: string,
   expectedStatus: ClaimableJobStatus,
   expectedUpdatedAt: Date,
-  produce: (source: ExtraContentSource) => Promise<{ value: T; patch: ExtraContentPatch }>,
+  claimKind: ExtraContentClaimKind,
+  produce: (
+    source: ExtraContentSource,
+    heartbeat: ExtraContentHeartbeat,
+  ) => Promise<{ value: T; patch: ExtraContentPatch }>,
 ): Promise<ExtraContentJobResult<T>> {
   return runExtraContentJob({
     letterId,
     expectedStatus,
     expectedUpdatedAt,
-    produce: async () => {
+    claimKind,
+    produce: async (heartbeat) => {
       const claimedSource = await loadExtraContentSource(letterId);
       if (!claimedSource) {
         throw new Error('Extra content source disappeared after the job was claimed');
       }
-      return produce(claimedSource);
+      requireOwnership(heartbeat);
+      return produce(claimedSource, heartbeat);
     },
   });
 }
@@ -268,6 +306,7 @@ export async function runAutomaticExtraContent(
     letterId,
     'PENDING',
     source.letter.updatedAt,
+    'QUEUED',
     produceAutomaticExtras,
   );
 }
@@ -285,13 +324,17 @@ export async function runRegeneratedExtraContent(
     letterId,
     expectedStatus,
     source.letter.updatedAt,
+    'REQUESTED',
     produceRegeneratedExtras,
   );
 }
 
 export async function tryTranscribeExtras(
   letterId: string,
-  options: { expectedStatus?: ClaimableJobStatus } = {},
+  options: {
+    expectedStatus?: ClaimableJobStatus;
+    claimKind: ExtraContentClaimKind;
+  },
 ): Promise<ExtraContentExecution<TranscribeExtrasResult>> {
   const source = await loadExtraContentSource(letterId);
   if (!source) return { kind: 'missing' };
@@ -332,6 +375,7 @@ export async function tryTranscribeExtras(
     letterId,
     expectedStatus,
     source.letter.updatedAt,
+    options.claimKind,
     produceStandaloneExtras,
   );
 }
@@ -345,7 +389,7 @@ function conflictError(message: string) {
 export async function transcribeExtras(
   letterId: string,
 ): Promise<TranscribeExtrasResult | null> {
-  const result = await tryTranscribeExtras(letterId);
+  const result = await tryTranscribeExtras(letterId, { claimKind: 'REQUESTED' });
   if (result.kind === 'missing') return null;
   if (result.kind === 'completed' || result.kind === 'ineligible') return result.value;
   if (result.kind === 'claim_lost') {

@@ -16,6 +16,7 @@ import type { EntityExtraction } from '../ai/schemas/entityExtraction.js';
 import { notify } from './notifications.js';
 import { MAX_JOB_ATTEMPTS } from '../config/constants.js';
 import { isPlaceholderValue } from '../utils/placeholders.js';
+import { buildExtraContentSourceInvalidationPatch } from './letter/extra-content-job.js';
 
 export interface LetterIdentity {
   collectionId: string;
@@ -154,25 +155,7 @@ export async function invalidateExtraContentJobForSourceChange(
   await database
     .update(letters)
     .set({
-      extraContentJobStatus: sql<JobStatus>`CASE
-        WHEN ${letters.extraContentJobStatus} = 'RUNNING'
-          THEN ${letters.extraContentJobStatus}
-        ELSE 'PENDING'::job_status
-      END`,
-      extraContentJobError: sql<string | null>`CASE
-        WHEN ${letters.extraContentJobStatus} = 'RUNNING'
-          THEN ${letters.extraContentJobError}
-        ELSE NULL
-      END`,
-      extraContentJobRunId: sql<string | null>`CASE
-        WHEN ${letters.extraContentJobStatus} = 'RUNNING'
-          THEN ${letters.extraContentJobRunId}
-        ELSE NULL
-      END`,
-      extraContentJobDirty: sql<boolean>`CASE
-        WHEN ${letters.extraContentJobStatus} = 'RUNNING' THEN true
-        ELSE false
-      END`,
+      ...buildExtraContentSourceInvalidationPatch(),
       updatedAt: new Date(),
     })
     .where(and(

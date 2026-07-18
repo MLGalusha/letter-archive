@@ -13,6 +13,10 @@ import {
   recoverExpiredTranscriptions,
   type TranscriptionRecoveryResult,
 } from './letter/transcription-job.js';
+import {
+  recoverExpiredExtraContentJobs,
+  type ExtraContentRecoveryResult,
+} from './letter/extra-content-job.js';
 import { shouldUseCloudRunWorkerJob, triggerWorkerJob } from './cloud-run-job.js';
 import {
   shouldAbortProcessing as runnerShouldAbort,
@@ -357,6 +361,37 @@ export async function requestBackgroundWorkerRun(reason: string): Promise<boolea
   return true;
 }
 
+/** One durable definition of queued main-transcription work for worker handoff. */
+export async function hasQueuedTranscriptionWork(): Promise<boolean> {
+  const pending = await db.query.letters.findFirst({
+    where: and(
+      inArray(letters.type, [...TRANSCRIBABLE_TYPES]),
+      eq(letters.transcriptionStatus, 'PENDING'),
+      eq(letters.workflow, 'UPLOADED'),
+      eq(letters.deadLetter, false),
+    ),
+    columns: { id: true },
+  });
+
+  return Boolean(pending);
+}
+
+/**
+ * Ensures durable queued transcription work has a Cloud Run worker wake.
+ * Unlike request-triggered enqueueing, errors propagate so the periodic lease
+ * coordinator retries from the still-PENDING database row on its next pass.
+ */
+export async function ensureBackgroundWorkerForQueuedTranscription(
+  reason: string,
+): Promise<boolean> {
+  if (!shouldUseCloudRunWorkerJob() || !await hasQueuedTranscriptionWork()) {
+    return false;
+  }
+
+  await triggerWorkerJob(reason);
+  return true;
+}
+
 async function startQueuedProcessing(
   letterIds: string[],
   type: 'transcription' | 'metadata' | 'entity_extraction',
@@ -382,43 +417,69 @@ export function getProcessingStatus(): ProcessingState {
 }
 
 /**
- * Reconciles only expired, leased transcription attempts. Metadata and entity
- * attempts have no durable owner token yet, so resetting them at process startup
- * can displace a producer that is still alive. They remain RUNNING until their
- * lifecycle is fenced or an administrator explicitly intervenes.
+ * Reconciles only expired, leased transcription and extra-content attempts.
+ * Metadata and entity attempts have no durable owner token yet, so resetting
+ * them at process startup can displace a producer that is still alive. They
+ * remain RUNNING until their lifecycle is fenced or an administrator acts.
  */
-export async function recoverExpiredTranscriptionJobs(): Promise<TranscriptionRecoveryResult> {
-  const transcription = await recoverExpiredTranscriptions();
+export interface ProcessingLeaseRecoveryResult {
+  transcription: TranscriptionRecoveryResult;
+  extraContent: ExtraContentRecoveryResult;
+}
+
+export async function recoverExpiredProcessingJobs(): Promise<ProcessingLeaseRecoveryResult> {
+  let transcription: TranscriptionRecoveryResult = { requeued: [], failed: [] };
+  let extraContent: ExtraContentRecoveryResult = { requeued: [], failed: [] };
+
+  // Keep the two stages as separate failure domains. They update the same table,
+  // and a successful main recovery must still reach the API's worker trigger if
+  // extra-content recovery fails (or vice versa).
+  try {
+    transcription = await recoverExpiredTranscriptions();
+  } catch (error) {
+    log.error({ err: error }, 'Expired transcription lease recovery failed');
+  }
+
+  try {
+    extraContent = await recoverExpiredExtraContentJobs();
+  } catch (error) {
+    log.error({ err: error }, 'Expired extra-content lease recovery failed');
+  }
+
   const recoveredLetterIds = [
     ...transcription.requeued.map(row => row.id),
     ...transcription.failed.map(row => row.id),
+    ...extraContent.requeued.map(row => row.id),
+    ...extraContent.failed.map(row => row.id),
   ];
 
   if (recoveredLetterIds.length === 0) {
-    log.info('Recovery found no expired leased transcription attempts');
-    return transcription;
+    log.info('Recovery found no expired leased processing attempts');
+    return { transcription, extraContent };
   }
 
   log.info(
     { count: recoveredLetterIds.length },
-    'Reconciled expired leased transcription attempts',
+    'Reconciled expired leased processing attempts',
   );
 
   void notify({
     type: 'job_orphan_recovered',
-    title: `Reconciled ${recoveredLetterIds.length} expired transcription attempt${recoveredLetterIds.length === 1 ? '' : 's'}`,
+    title: `Reconciled ${recoveredLetterIds.length} expired processing attempt${recoveredLetterIds.length === 1 ? '' : 's'}`,
     message: 'Reconciled only attempts whose persisted lease had expired.',
     metadata: {
       count: recoveredLetterIds.length,
       letterIds: recoveredLetterIds,
       transcriptionRequeued: transcription.requeued.length,
       transcriptionFailed: transcription.failed.length,
+      extraContentRequeued: extraContent.requeued.length,
+      extraContentFailed: extraContent.failed.length,
     },
-    dedupeKey: 'job_orphan_recovered:transcription-lease',
+    dedupeKey: 'job_orphan_recovered:processing-leases',
     dedupeWindowMinutes: 5,
   });
 
-  return transcription;
+  return { transcription, extraContent };
 }
 
 /**

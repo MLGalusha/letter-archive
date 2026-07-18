@@ -1,8 +1,9 @@
-import { and, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { db, letters } from '../../db/index.js';
 import { processLetter, processMetadata } from '../../pipeline/processor.js';
 import { runEntityExtractionOnly } from '../../pipeline/metadataV2.js';
 import { tryTranscribeExtras } from '../letter/extra-content.js';
+import { cancelExtraContentAttempt } from '../letter/extra-content-job.js';
 import { cancelTranscriptionAttempt } from '../letter/transcription-job.js';
 import { createLogger } from '../../utils/logger.js';
 import { notify } from '../notifications.js';
@@ -91,7 +92,10 @@ export const letterProcessSpecs: Record<PipelineKind, LetterProcessSpec> = {
     errorColumn: 'extraContentJobError',
     retryWorkflow: undefined,
     runOne: async (id) => {
-      const result = await tryTranscribeExtras(id, { expectedStatus: 'PENDING' });
+      const result = await tryTranscribeExtras(id, {
+        expectedStatus: 'PENDING',
+        claimKind: 'QUEUED',
+      });
       if (result.kind === 'completed') return;
       return { kind: 'skipped', reason: result.kind };
     },
@@ -234,6 +238,9 @@ export async function removeFromQueue(
   };
   if (spec.processKey === 'extra_content') {
     updates.extraContentJobRunId = null;
+    updates.extraContentJobLeaseExpiresAt = null;
+    updates.extraContentJobLeaseRunId = null;
+    updates.extraContentJobClaimKind = null;
     updates.extraContentJobDirty = false;
   } else if (spec.processKey === 'transcription') {
     updates.transcriptionRunId = null;
@@ -270,6 +277,9 @@ export async function clearQueue(
   };
   if (spec.processKey === 'extra_content') {
     updates.extraContentJobRunId = null;
+    updates.extraContentJobLeaseExpiresAt = null;
+    updates.extraContentJobLeaseRunId = null;
+    updates.extraContentJobClaimKind = null;
     updates.extraContentJobDirty = false;
   } else if (spec.processKey === 'transcription') {
     updates.transcriptionRunId = null;
@@ -317,6 +327,9 @@ export async function retryJob(
     updates.deadLetter = false;
   } else if (spec.processKey === 'extra_content') {
     updates.extraContentJobRunId = null;
+    updates.extraContentJobLeaseExpiresAt = null;
+    updates.extraContentJobLeaseRunId = null;
+    updates.extraContentJobClaimKind = null;
     updates.extraContentJobDirty = false;
   }
   const retried = await db
@@ -354,33 +367,12 @@ export async function cancelActive(
       : [];
   } else if (spec.processKey === 'extra_content') {
     const observedRunId = letter.extraContentJobRunId;
-    const observedDirty = letter.extraContentJobDirty;
-    const runIdCondition = observedRunId === null
-      ? isNull(letters.extraContentJobRunId)
-      : eq(letters.extraContentJobRunId, observedRunId);
-    const cancelAttempt = async (dirty: boolean) => db
-      .update(letters)
-      .set({
-        extraContentJobStatus: dirty ? 'PENDING' : 'FAILED',
-        extraContentJobError: dirty ? null : 'Cancelled by admin',
-        extraContentJobRunId: null,
-        extraContentJobDirty: false,
-        updatedAt: new Date(),
-      })
-      .where(and(
-        eq(letters.id, letterId),
-        eq(letters.extraContentJobStatus, 'RUNNING'),
-        runIdCondition,
-        eq(letters.extraContentJobDirty, dirty),
-      ))
-      .returning({ id: letters.id });
-
-    cancelled = await cancelAttempt(observedDirty);
-    // Source invalidation may race a clean cancellation. Preserve it by
-    // requeuing only the same observed attempt if it became dirty.
-    if (cancelled.length === 0 && !observedDirty) {
-      cancelled = await cancelAttempt(true);
+    if (!observedRunId) {
+      throw new ProcessingError('Cannot cancel: extra-content job has no active run ID', 409);
     }
+    cancelled = await cancelExtraContentAttempt(letterId, observedRunId)
+      ? [{ id: letterId }]
+      : [];
   } else {
     const updates: Record<string, unknown> = {
       [spec.statusColumn]: 'FAILED',

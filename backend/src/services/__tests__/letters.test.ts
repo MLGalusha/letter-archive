@@ -26,6 +26,9 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn((field: unknown, value: unknown) => ({ kind: 'eq', field, value })),
   ne: vi.fn((field: unknown, value: unknown) => ({ kind: 'ne', field, value })),
   and: vi.fn((...clauses: unknown[]) => ({ kind: 'and', clauses })),
+  gt: vi.fn((field: unknown, value: unknown) => ({ kind: 'gt', field, value })),
+  isNotNull: vi.fn((field: unknown) => ({ kind: 'isNotNull', field })),
+  lte: vi.fn((field: unknown, value: unknown) => ({ kind: 'lte', field, value })),
   sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
     kind: 'sql',
     strings: Array.from(strings),
@@ -74,6 +77,8 @@ vi.mock('../../db/index.js', () => {
       extraContentJobError: 'letters.extraContentJobError',
       extraContentJobRunId: 'letters.extraContentJobRunId',
       extraContentJobDirty: 'letters.extraContentJobDirty',
+      extraContentJobLeaseExpiresAt: 'letters.extraContentJobLeaseExpiresAt',
+      extraContentJobClaimKind: 'letters.extraContentJobClaimKind',
     },
   };
 });
@@ -195,6 +200,14 @@ describe('letters service', () => {
         kind: 'sql',
         values: ['letters.extraContentJobStatus', 'letters.extraContentJobRunId'],
       },
+      extraContentJobLeaseExpiresAt: {
+        kind: 'sql',
+        values: ['letters.extraContentJobStatus', 'letters.extraContentJobLeaseExpiresAt'],
+      },
+      extraContentJobClaimKind: {
+        kind: 'sql',
+        values: ['letters.extraContentJobStatus', 'letters.extraContentJobClaimKind'],
+      },
       extraContentJobDirty: {
         kind: 'sql',
         values: ['letters.extraContentJobStatus'],
@@ -205,10 +218,14 @@ describe('letters service', () => {
     const statusSql = updates.extraContentJobStatus.strings.join('?').replace(/\s+/g, ' ');
     const errorSql = updates.extraContentJobError.strings.join('?').replace(/\s+/g, ' ');
     const runIdSql = updates.extraContentJobRunId.strings.join('?').replace(/\s+/g, ' ');
+    const leaseSql = updates.extraContentJobLeaseExpiresAt.strings.join('?').replace(/\s+/g, ' ');
+    const claimKindSql = updates.extraContentJobClaimKind.strings.join('?').replace(/\s+/g, ' ');
     const dirtySql = updates.extraContentJobDirty.strings.join('?').replace(/\s+/g, ' ');
     expect(statusSql).toContain("WHEN ? = 'RUNNING' THEN ? ELSE 'PENDING'::job_status");
     expect(errorSql).toContain("WHEN ? = 'RUNNING' THEN ? ELSE NULL");
     expect(runIdSql).toContain("WHEN ? = 'RUNNING' THEN ? ELSE NULL");
+    expect(leaseSql).toContain("WHEN ? = 'RUNNING' THEN ? ELSE NULL");
+    expect(claimKindSql).toContain("WHEN ? = 'RUNNING' THEN ? ELSE NULL");
     expect(dirtySql).toContain("WHEN ? = 'RUNNING' THEN true ELSE false");
   });
 

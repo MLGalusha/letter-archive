@@ -14,6 +14,8 @@ const {
   recordJobFailedMock,
   recordJobSkippedMock,
   cancelTranscriptionAttemptMock,
+  cancelExtraContentAttemptMock,
+  tryTranscribeExtrasMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   findManyMock: vi.fn(),
@@ -28,6 +30,8 @@ const {
   recordJobFailedMock: vi.fn(),
   recordJobSkippedMock: vi.fn(),
   cancelTranscriptionAttemptMock: vi.fn(),
+  cancelExtraContentAttemptMock: vi.fn(),
+  tryTranscribeExtrasMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -72,11 +76,15 @@ vi.mock('../../pipeline/metadataV2.js', () => ({
 }));
 
 vi.mock('../letter/extra-content.js', () => ({
-  tryTranscribeExtras: vi.fn(),
+  tryTranscribeExtras: tryTranscribeExtrasMock,
 }));
 
 vi.mock('../letter/transcription-job.js', () => ({
   cancelTranscriptionAttempt: cancelTranscriptionAttemptMock,
+}));
+
+vi.mock('../letter/extra-content-job.js', () => ({
+  cancelExtraContentAttempt: cancelExtraContentAttemptMock,
 }));
 
 vi.mock('../notifications.js', () => ({ notify: notifyMock }));
@@ -98,6 +106,7 @@ vi.mock('../../utils/logger.js', () => ({
 import {
   cancelActive,
   clearQueue,
+  letterProcessSpecs,
   removeFromQueue,
   retryJob,
   runLetterBatch,
@@ -134,8 +143,20 @@ describe('letter process helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cancelTranscriptionAttemptMock.mockResolvedValue(true);
+    cancelExtraContentAttemptMock.mockResolvedValue(true);
     findManyMock.mockResolvedValue([]);
     updateReturningMock.mockResolvedValue([{ id: 'letter-1' }]);
+  });
+
+  it('marks Processing-page extra-content claims as queued intent', async () => {
+    tryTranscribeExtrasMock.mockResolvedValue({ kind: 'completed', value: {} });
+
+    await letterProcessSpecs.extra_content.runOne('letter-1');
+
+    expect(tryTranscribeExtrasMock).toHaveBeenCalledWith('letter-1', {
+      expectedStatus: 'PENDING',
+      claimKind: 'QUEUED',
+    });
   });
 
   it('counts neutral ownership loss as skipped without a failure notification', async () => {
@@ -177,6 +198,9 @@ describe('letter process helpers', () => {
       extraContentJobStatus: 'FAILED',
       extraContentJobError: 'Removed from queue by admin',
       extraContentJobRunId: null,
+      extraContentJobLeaseExpiresAt: null,
+      extraContentJobLeaseRunId: null,
+      extraContentJobClaimKind: null,
       extraContentJobDirty: false,
       updatedAt: expect.any(Date),
     });
@@ -221,6 +245,16 @@ describe('letter process helpers', () => {
     const result = await clearQueue(extraSpec, []);
 
     expect(result).toEqual({ cleared: 1 });
+    expect(updateSetMock).toHaveBeenCalledWith({
+      extraContentJobStatus: 'FAILED',
+      extraContentJobError: 'Cleared from queue by admin',
+      extraContentJobRunId: null,
+      extraContentJobLeaseExpiresAt: null,
+      extraContentJobLeaseRunId: null,
+      extraContentJobClaimKind: null,
+      extraContentJobDirty: false,
+      updatedAt: expect.any(Date),
+    });
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
       clauses: [
@@ -248,6 +282,9 @@ describe('letter process helpers', () => {
       extraContentJobStatus: 'PENDING',
       extraContentJobError: null,
       extraContentJobRunId: null,
+      extraContentJobLeaseExpiresAt: null,
+      extraContentJobLeaseRunId: null,
+      extraContentJobClaimKind: null,
       extraContentJobDirty: false,
       updatedAt: expect.any(Date),
     });
@@ -324,101 +361,40 @@ describe('letter process helpers', () => {
     expect(dbUpdateMock).not.toHaveBeenCalled();
   });
 
-  it('cancels extra work only for the observed run and clears its run fence', async () => {
+  it('delegates extra cancellation to the canonical exact-run lifecycle owner', async () => {
     findFirstMock.mockResolvedValue({
       id: 'letter-1',
       extraContentJobStatus: 'RUNNING',
       extraContentJobRunId: 'run-a',
-      extraContentJobDirty: false,
     });
 
     await cancelActive(extraSpec, 'letter-1');
 
-    expect(updateSetMock).toHaveBeenCalledWith({
-      extraContentJobStatus: 'FAILED',
-      extraContentJobError: 'Cancelled by admin',
-      extraContentJobRunId: null,
-      extraContentJobDirty: false,
-      updatedAt: expect.any(Date),
-    });
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
-        { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'RUNNING' },
-        { kind: 'eq', field: 'letters.extraContentJobRunId', value: 'run-a' },
-        { kind: 'eq', field: 'letters.extraContentJobDirty', value: false },
-      ],
-    });
+    expect(cancelExtraContentAttemptMock).toHaveBeenCalledWith('letter-1', 'run-a');
+    expect(dbUpdateMock).not.toHaveBeenCalled();
   });
 
-  it('requeues a dirty extra-content attempt instead of losing its invalidation', async () => {
+  it('refuses to cancel invalid running extra content without an owner', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-1',
+      extraContentJobStatus: 'RUNNING',
+      extraContentJobRunId: null,
+    });
+
+    await expect(cancelActive(extraSpec, 'letter-1')).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'Cannot cancel: extra-content job has no active run ID',
+    });
+    expect(cancelExtraContentAttemptMock).not.toHaveBeenCalled();
+  });
+
+  it('returns a conflict when extra completion wins the cancellation race', async () => {
     findFirstMock.mockResolvedValue({
       id: 'letter-1',
       extraContentJobStatus: 'RUNNING',
       extraContentJobRunId: 'run-a',
-      extraContentJobDirty: true,
     });
-
-    await cancelActive(extraSpec, 'letter-1');
-
-    expect(updateSetMock).toHaveBeenCalledWith({
-      extraContentJobStatus: 'PENDING',
-      extraContentJobError: null,
-      extraContentJobRunId: null,
-      extraContentJobDirty: false,
-      updatedAt: expect.any(Date),
-    });
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
-        { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'RUNNING' },
-        { kind: 'eq', field: 'letters.extraContentJobRunId', value: 'run-a' },
-        { kind: 'eq', field: 'letters.extraContentJobDirty', value: true },
-      ],
-    });
-  });
-
-  it('preserves invalidation that races a clean extra-content cancellation', async () => {
-    findFirstMock.mockResolvedValue({
-      id: 'letter-1',
-      extraContentJobStatus: 'RUNNING',
-      extraContentJobRunId: 'run-a',
-      extraContentJobDirty: false,
-    });
-    updateReturningMock
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ id: 'letter-1' }]);
-
-    await cancelActive(extraSpec, 'letter-1');
-
-    expect(updateSetMock).toHaveBeenNthCalledWith(2, {
-      extraContentJobStatus: 'PENDING',
-      extraContentJobError: null,
-      extraContentJobRunId: null,
-      extraContentJobDirty: false,
-      updatedAt: expect.any(Date),
-    });
-    expect(updateWhereMock).toHaveBeenNthCalledWith(2, {
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
-        { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'RUNNING' },
-        { kind: 'eq', field: 'letters.extraContentJobRunId', value: 'run-a' },
-        { kind: 'eq', field: 'letters.extraContentJobDirty', value: true },
-      ],
-    });
-  });
-
-  it('returns a conflict when completion wins the cancellation race', async () => {
-    findFirstMock.mockResolvedValue({
-      id: 'letter-1',
-      extraContentJobStatus: 'RUNNING',
-      extraContentJobRunId: 'run-a',
-      extraContentJobDirty: false,
-    });
-    updateReturningMock.mockResolvedValue([]);
+    cancelExtraContentAttemptMock.mockResolvedValue(false);
 
     await expect(cancelActive(extraSpec, 'letter-1')).rejects.toMatchObject({
       statusCode: 409,

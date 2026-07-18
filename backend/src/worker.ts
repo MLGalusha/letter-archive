@@ -6,42 +6,42 @@ import { runEntityExtractionOnly } from './pipeline/metadataV2.js';
 import { createLogger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { TRANSCRIBABLE_TYPES } from './services/letter/shared.js';
 import { notify } from './services/notifications.js';
-import { recoverExpiredTranscriptionJobs } from './services/processing-queue.js';
+import {
+  hasQueuedTranscriptionWork,
+  recoverExpiredProcessingJobs,
+} from './services/processing-queue.js';
 import {
   createWorkerStatePublisher,
   setWorkerState,
 } from './services/worker-state.js';
 import {
-  createWorkerTranscriptionRecovery,
+  createLeaseRecoveryCoordinator,
   decideEmptyWorkerJob,
-} from './services/worker-transcription-recovery.js';
+  projectTranscriptionRecoveryForWorker,
+} from './services/lease-recovery-coordinator.js';
 
 const log = createLogger({ module: 'worker' });
 
 const POLL_INTERVAL = 5000; // 5 seconds
 const BATCH_SIZE = 5;
-const TRANSCRIPTION_RECOVERY_INTERVAL_MS = 60_000;
+const LEASE_RECOVERY_INTERVAL_MS = 60_000;
 const workerStatePublisher = createWorkerStatePublisher();
 
-const transcriptionRecovery = createWorkerTranscriptionRecovery({
-  intervalMs: TRANSCRIPTION_RECOVERY_INTERVAL_MS,
-  recover: recoverExpiredTranscriptionJobs,
+const leaseRecovery = createLeaseRecoveryCoordinator({
+  intervalMs: LEASE_RECOVERY_INTERVAL_MS,
+  recover: recoverExpiredProcessingJobs,
   onError: (error: unknown) => {
-    log.error({ err: error }, 'Expired transcription lease recovery failed');
+    log.error({ err: error }, 'Expired processing lease recovery failed');
   },
 });
 
+async function reconcileTranscriptionForExit() {
+  const result = await leaseRecovery.reconcile();
+  return projectTranscriptionRecoveryForWorker(result);
+}
+
 async function getQueuedTranscriptionWorkState(): Promise<'pending' | 'leased' | 'none'> {
-  const pending = await db.query.letters.findFirst({
-    where: and(
-      inArray(letters.type, [...TRANSCRIBABLE_TYPES]),
-      eq(letters.transcriptionStatus, 'PENDING'),
-      eq(letters.workflow, 'UPLOADED'),
-      eq(letters.deadLetter, false),
-    ),
-    columns: { id: true },
-  });
-  if (pending) return 'pending';
+  if (await hasQueuedTranscriptionWork()) return 'pending';
 
   const leased = await db.query.letters.findFirst({
     where: and(
@@ -314,10 +314,10 @@ async function main() {
     'Background worker starting'
   );
 
-  // Only leased transcription attempts are safe to recover automatically.
+  // Only leased transcription/extra-content attempts are safe to recover automatically.
   // Ownerless metadata/entity RUNNING rows remain visible for explicit action.
-  await transcriptionRecovery.reconcile();
-  transcriptionRecovery.start();
+  await leaseRecovery.reconcile();
+  leaseRecovery.start();
 
   if (!EXIT_WHEN_EMPTY) {
     // Only announce in long-running polling mode — a short-lived Job
@@ -362,9 +362,9 @@ async function main() {
       if (!processedAny) {
         // Quiesce the interval before the exit decision so a recovery cannot
         // requeue work between the empty scan and process exit.
-        await transcriptionRecovery.stopAndWait();
+        await leaseRecovery.stopAndWait();
         let decision = await decideEmptyWorkerJob({
-          reconcile: transcriptionRecovery.reconcile,
+          reconcile: reconcileTranscriptionForExit,
           getQueuedWorkState: getQueuedTranscriptionWorkState,
         });
 
@@ -379,7 +379,7 @@ async function main() {
             currentBatchSize: 0,
           });
           decision = await decideEmptyWorkerJob({
-            reconcile: transcriptionRecovery.reconcile,
+            reconcile: reconcileTranscriptionForExit,
             getQueuedWorkState: getQueuedTranscriptionWorkState,
           });
         }
@@ -394,7 +394,7 @@ async function main() {
           isPolling: true,
           currentBatchSize: 0,
         });
-        transcriptionRecovery.start();
+        leaseRecovery.start();
         if (decision === 'wait') {
           log.info('Queues empty but a queued transcription lease remains; waiting for recovery');
           await sleep(POLL_INTERVAL);
@@ -407,7 +407,7 @@ async function main() {
     await sleep(POLL_INTERVAL);
   }
 
-  await transcriptionRecovery.stopAndWait();
+  await leaseRecovery.stopAndWait();
   await workerStatePublisher.relinquish({ isPolling: false });
   log.info({ mode: EXIT_WHEN_EMPTY ? 'job' : 'poll' }, 'Worker loop exited cleanly');
   process.exit(0);
@@ -417,7 +417,7 @@ async function main() {
 function gracefulShutdown(signal: string) {
   if (shuttingDown) return;
   shuttingDown = true;
-  void transcriptionRecovery.stopAndWait();
+  void leaseRecovery.stopAndWait();
   log.info({ signal }, 'Shutdown signal received, finishing current job');
   void workerStatePublisher.relinquish({ isPolling: false }).catch((error: unknown) => {
     log.warn({ err: error }, 'Failed to publish worker shutdown state');
@@ -434,7 +434,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 main().catch(async (error) => {
-  await transcriptionRecovery.stopAndWait();
+  await leaseRecovery.stopAndWait();
   try {
     await workerStatePublisher.relinquish({ isPolling: false });
   } catch (stateError) {

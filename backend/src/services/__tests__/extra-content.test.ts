@@ -110,10 +110,12 @@ const telegram = {
 
 describe('extra-content producers', () => {
   let producedPatch: Record<string, unknown> | null;
+  let ownsLease: boolean;
 
   beforeEach(() => {
     vi.clearAllMocks();
     producedPatch = null;
+    ownsLease = true;
     findFirstMock.mockResolvedValue(parent);
     findManyMock.mockResolvedValue([]);
     updateReturningMock.mockResolvedValue([{ id: parent.id }]);
@@ -122,7 +124,7 @@ describe('extra-content producers', () => {
       reason: null,
     });
     runExtraContentJobMock.mockImplementation(async ({ produce }) => {
-      const produced = await produce();
+      const produced = await produce({ hasOwnership: () => ownsLease });
       producedPatch = produced.patch;
       return { kind: 'completed', value: produced.value };
     });
@@ -189,6 +191,7 @@ describe('extra-content producers', () => {
     expect(runExtraContentJobMock).toHaveBeenCalledWith(expect.objectContaining({
       expectedStatus: 'PENDING',
       expectedUpdatedAt: parent.updatedAt,
+      claimKind: 'QUEUED',
     }));
   });
 
@@ -200,6 +203,9 @@ describe('extra-content producers', () => {
 
     expect(result).toEqual({ kind: 'completed', value: 1 });
     expect(checkExtraContentForTextMock).toHaveBeenCalledOnce();
+    expect(runExtraContentJobMock).toHaveBeenCalledWith(expect.objectContaining({
+      claimKind: 'REQUESTED',
+    }));
     expect(producedPatch).toEqual({
       extraContentTranscript: '--- Cover 1 ---\n\nEnvelope note',
       extraContentStatus: 'AI_DRAFT',
@@ -224,6 +230,9 @@ describe('extra-content producers', () => {
       extraContentVerifiedAt: null,
       extraContentVerifiedBy: null,
     });
+    expect(runExtraContentJobMock).toHaveBeenCalledWith(expect.objectContaining({
+      claimKind: 'REQUESTED',
+    }));
   });
 
   it('clears empty standalone content without claiming a nonexistent job', async () => {
@@ -267,11 +276,31 @@ describe('extra-content producers', () => {
     findManyMock.mockResolvedValue([cover]);
     transcribeExtraContentMock.mockResolvedValue({ text: 'Envelope note' });
 
-    await tryTranscribeExtras(parent.id, { expectedStatus: 'PENDING' });
+    await tryTranscribeExtras(parent.id, {
+      expectedStatus: 'PENDING',
+      claimKind: 'QUEUED',
+    });
 
     expect(runExtraContentJobMock).toHaveBeenCalledWith(expect.objectContaining({
       letterId: parent.id,
       expectedStatus: 'PENDING',
+      claimKind: 'QUEUED',
     }));
+  });
+
+  it('stops between AI calls after the heartbeat reports ownership loss', async () => {
+    const secondCover = {
+      ...cover,
+      id: 'cover-2',
+      pages: [{ id: 'cover-page-2', storagePath: 'cover-2.jpg' }],
+    };
+    findManyMock.mockResolvedValue([cover, secondCover]);
+    transcribeExtraContentMock.mockImplementation(async () => {
+      ownsLease = false;
+      return { text: 'Now stale' };
+    });
+
+    await expect(runAutomaticExtraContent(parent.id)).rejects.toBeInstanceOf(Error);
+    expect(transcribeExtraContentMock).toHaveBeenCalledTimes(1);
   });
 });

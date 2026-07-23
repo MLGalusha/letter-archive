@@ -4,11 +4,10 @@ import { z } from 'zod';
 import { db, letters, collections, letterPages } from '../../db/index.js';
 import {
   getCollectionByCode,
-  resolveCollectionFeaturedLetterId,
+  resolveCollectionStartHere,
 } from '../../services/collections.js';
 import { transformLettersWithRelatedToDTO, type LetterWithRelations } from '../../dto/index.js';
 import { getRows } from '../../services/letter-queries.js';
-import { analyzeCollection } from '../../ai/analyze-collection.js';
 import { resolveRepresentativeLetterId } from '../../services/letters.js';
 import {
   commitDirectIdentityField,
@@ -219,20 +218,18 @@ router.get('/:code', async (req, res, next) => {
     }
 
     const collectionLetters = transformLettersWithRelatedToDTO(groupedLetters);
-    const resolvedStartHereLetterId = await resolveCollectionFeaturedLetterId(
+    const resolvedStartHere = await resolveCollectionStartHere(
       collection.id,
-      collection.profileStartHereLetterId,
+      {
+        letterId: collection.profileStartHereLetterId,
+        reason: collection.profileStartHereReason,
+      },
     );
-
-    if (resolvedStartHereLetterId !== (collection.profileStartHereLetterId ?? null)) {
-      await db.update(collections).set({
-        profileStartHereLetterId: resolvedStartHereLetterId,
-      }).where(eq(collections.id, collection.id));
-    }
 
     res.json({
       ...collection,
-      profileStartHereLetterId: resolvedStartHereLetterId,
+      profileStartHereLetterId: resolvedStartHere.letterId,
+      profileStartHereReason: resolvedStartHere.reason,
       profileCorrespondents: normalizeProfileCorrespondents(collection.profileCorrespondents),
       letters: collectionLetters,
       letterCount: collectionLetters.length,
@@ -390,27 +387,6 @@ router.patch('/:code/correspondents', async (req, res, next) => {
   }
 });
 
-/**
- * POST /admin/collections/:code/analyze
- * Analyze a collection to discover entities, relationships, and potential duplicates
- */
-router.post('/:code/analyze', async (req, res, next) => {
-  try {
-    const { code } = req.params;
-    const collection = await getCollectionByCode(code);
-
-    if (!collection) {
-      res.status(404).json({ error: 'Collection not found' });
-      return;
-    }
-
-    const result = await analyzeCollection(collection.id);
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
-
 // ============================================================================
 // COLLECTION PROFILE ENDPOINTS
 // ============================================================================
@@ -547,7 +523,13 @@ router.put('/:code/profile', async (req, res, next) => {
       if (data.profileStartHereLetterId === null) {
         updates.profileStartHereLetterId = null;
       } else {
-        const resolvedStartHereLetterId = await resolveRepresentativeLetterId(data.profileStartHereLetterId, { publishedOnly: true });
+        const resolvedStartHereLetterId = await resolveRepresentativeLetterId(
+          data.profileStartHereLetterId,
+          {
+            publishedOnly: true,
+            collectionId: collection.id,
+          },
+        );
         if (!resolvedStartHereLetterId) {
           res.status(400).json({ error: 'Featured letter must be published' });
           return;

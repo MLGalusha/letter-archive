@@ -1,6 +1,8 @@
-import { apiGet, apiPost } from './client';
+import { ApiError, apiDelete, apiGet, apiPost } from './client';
 
 const TOKEN_KEY = 'adminToken';
+let imageSessionToken: string | null = null;
+let imageSessionPromise: Promise<void> | null = null;
 
 interface LoginResponse {
   token: string;
@@ -17,6 +19,7 @@ interface AuthStatusResponse {
 export async function login(email: string, password: string): Promise<LoginResponse> {
   const data = await apiPost<LoginResponse>('/auth/login', { email, password });
   localStorage.setItem(TOKEN_KEY, data.token);
+  markImageSessionReady(data.token);
   return data;
 }
 
@@ -27,6 +30,7 @@ export async function login(email: string, password: string): Promise<LoginRespo
 export async function setupAdmin(email: string, password: string): Promise<LoginResponse> {
   const data = await apiPost<LoginResponse>('/auth/setup', { email, password });
   localStorage.setItem(TOKEN_KEY, data.token);
+  markImageSessionReady(data.token);
   return data;
 }
 
@@ -38,10 +42,15 @@ export async function getAuthStatus(): Promise<AuthStatusResponse> {
 }
 
 /**
- * Log out by clearing the stored token.
+ * Clear both the server-managed image session and the stored API bearer.
+ * The bearer remains available if the server cannot complete logout, allowing
+ * the user to retry without leaving a live HttpOnly credential behind.
  */
-export function logout(): void {
+export async function logout(): Promise<void> {
+  await apiDelete<void>('/auth/image-session');
   localStorage.removeItem(TOKEN_KEY);
+  imageSessionToken = null;
+  imageSessionPromise = null;
 }
 
 /**
@@ -57,6 +66,39 @@ export function getToken(): string | null {
  */
 export function isAuthenticated(): boolean {
   return localStorage.getItem(TOKEN_KEY) !== null;
+}
+
+/**
+ * Establish the HttpOnly image credential for a bearer that predates the
+ * cookie boundary. AdminLayout awaits this before rendering private images.
+ */
+export function ensureImageSession(): Promise<void> {
+  const token = getToken();
+  if (!token) {
+    return Promise.reject(new ApiError(401, 'Authentication required'));
+  }
+
+  if (imageSessionToken === token && imageSessionPromise) {
+    return imageSessionPromise;
+  }
+
+  imageSessionToken = token;
+  imageSessionPromise = apiPost<void>('/auth/image-session')
+    .catch((error: unknown) => {
+      if (error instanceof ApiError && error.status === 401) {
+        localStorage.removeItem(TOKEN_KEY);
+      }
+      imageSessionToken = null;
+      imageSessionPromise = null;
+      throw error;
+    });
+
+  return imageSessionPromise;
+}
+
+function markImageSessionReady(token: string): void {
+  imageSessionToken = token;
+  imageSessionPromise = Promise.resolve();
 }
 
 // ── Invite system ──────────────────────────────────────
@@ -93,5 +135,6 @@ export async function validateInvite(token: string): Promise<InviteValidation> {
 export async function acceptInvite(token: string, email: string, password: string): Promise<LoginResponse> {
   const data = await apiPost<LoginResponse>('/auth/accept-invite', { token, email, password });
   localStorage.setItem(TOKEN_KEY, data.token);
+  markImageSessionReady(data.token);
   return data;
 }

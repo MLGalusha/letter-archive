@@ -119,7 +119,7 @@ function deriveExcerpt(markdown: string): string {
   return plain.slice(0, 180).trim();
 }
 
-/** Resolve image src for admin context — adds auth token for /images/ paths */
+/** Resolve local image paths against the configured API base URL. */
 function resolveAdminImageSrc(src: string): string {
   if (src.startsWith('/images/') || src.startsWith('/blog-images/')) {
     return getImageUrl(src);

@@ -10,9 +10,13 @@ import LineReviewMode, {
 import { getPageLineSegments } from '../../../api/admin/letters';
 import type { Letter } from '../../../types/Letter';
 
+const { getImageUrlMock } = vi.hoisted(() => ({
+  getImageUrlMock: vi.fn((url: string) => `http://test${url}`),
+}));
+
 // Mock the client module
 vi.mock('../../../api/client', () => ({
-  getImageUrl: (url: string) => `http://test${url}`,
+  getImageUrl: getImageUrlMock,
   getErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
 
@@ -147,6 +151,18 @@ describe('LineReviewMode', () => {
       cb(0);
       return 0;
     });
+  });
+
+  it('uses the cookie-authenticated image URL for a published orphan under review', async () => {
+    render(
+      <LineReviewMode
+        {...defaultProps}
+        letter={makeLetter({ visibility: 'PUBLISHED' })}
+      />,
+    );
+    await flushEffects();
+
+    expect(getImageUrlMock).toHaveBeenCalledWith('/images/page-1');
   });
 
   it('does not auto-detect when the page has no transcript yet', async () => {

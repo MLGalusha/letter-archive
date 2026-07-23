@@ -5,6 +5,8 @@ const {
   selectMock,
   eqMock,
   andMock,
+  orMock,
+  isNotNullMock,
   inArrayMock,
   ascMock,
   sqlMock,
@@ -14,6 +16,8 @@ const {
   selectMock: vi.fn(),
   eqMock: vi.fn(),
   andMock: vi.fn(),
+  orMock: vi.fn(),
+  isNotNullMock: vi.fn(),
   inArrayMock: vi.fn(),
   ascMock: vi.fn(),
   sqlMock: vi.fn(),
@@ -24,6 +28,8 @@ const {
 vi.mock('drizzle-orm', () => ({
   eq: eqMock,
   and: andMock,
+  or: orMock,
+  isNotNull: isNotNullMock,
   inArray: inArrayMock,
   asc: ascMock,
   sql: sqlMock,
@@ -39,6 +45,9 @@ vi.mock('../../db/index.js', () => ({
     personBId: 'personRelationships.personBId',
     relationshipType: 'personRelationships.relationshipType',
     confidence: 'personRelationships.confidence',
+    confirmedAt: 'personRelationships.confirmedAt',
+    discoveredInLetterId: 'personRelationships.discoveredInLetterId',
+    entityExtractionRevision: 'personRelationships.entityExtractionRevision',
   },
   canonicalPersons: {
     id: 'canonicalPersons.id',
@@ -47,11 +56,17 @@ vi.mock('../../db/index.js', () => ({
   letterPersons: {
     personId: 'letterPersons.personId',
     letterId: 'letterPersons.letterId',
+    confirmedAt: 'letterPersons.confirmedAt',
+    entityExtractionRevision: 'letterPersons.entityExtractionRevision',
   },
   letters: {
     id: 'letters.id',
     collectionId: 'letters.collectionId',
     visibility: 'letters.visibility',
+    metadataPublished: 'letters.metadataPublished',
+    type: 'letters.type',
+    entityExtractionRevision: 'letters.entityExtractionRevision',
+    entityExtractionJson: 'letters.entityExtractionJson',
   },
 }));
 
@@ -97,6 +112,8 @@ describe('public relationships route integration', () => {
 
     eqMock.mockImplementation((left, right) => ({ op: 'eq', left, right }));
     andMock.mockImplementation((...conditions) => ({ op: 'and', conditions }));
+    orMock.mockImplementation((...conditions) => ({ op: 'or', conditions }));
+    isNotNullMock.mockImplementation((value) => ({ op: 'isNotNull', value }));
     inArrayMock.mockImplementation((left, right) => ({ op: 'inArray', left, right }));
     ascMock.mockImplementation((value) => ({ direction: 'asc', value }));
     sqlMock.mockImplementation((strings, ...values) => ({ strings, values }));
@@ -112,7 +129,6 @@ describe('public relationships route integration', () => {
               personAId: '11111111-1111-4111-8111-111111111111',
               personBId: '22222222-2222-4222-8222-222222222222',
               relationshipType: 'friend',
-              confidence: 0.9,
               personAName: 'Alice Smith',
               personBName: 'Bob Baker',
             },
@@ -161,10 +177,14 @@ describe('public relationships route integration', () => {
           source: '11111111-1111-4111-8111-111111111111',
           target: '22222222-2222-4222-8222-222222222222',
           relationshipType: 'friend',
-          confidence: 0.9,
         },
       ],
     });
+    expect(eqMock).toHaveBeenCalledWith(
+      'letterPersons.entityExtractionRevision',
+      'letters.entityExtractionRevision',
+    );
+    expect(isNotNullMock).toHaveBeenCalledWith('letterPersons.confirmedAt');
   });
 
   it('injects request ids into invalid collection graph requests', async () => {
@@ -229,7 +249,6 @@ describe('public relationships route integration', () => {
               personAId: '11111111-1111-4111-8111-111111111111',
               personBId: '22222222-2222-4222-8222-222222222222',
               relationshipType: 'friend',
-              confidence: 0.95,
             },
           ],
         }),
@@ -262,7 +281,6 @@ describe('public relationships route integration', () => {
           source: '11111111-1111-4111-8111-111111111111',
           target: '22222222-2222-4222-8222-222222222222',
           relationshipType: 'friend',
-          confidence: 0.95,
         },
       ],
     });
@@ -290,11 +308,34 @@ describe('public relationships route integration', () => {
     });
   });
 
+  it('does not create a public path node for an entity without public metadata', async () => {
+    selectMock.mockReturnValueOnce(
+      buildSelectChain({
+        limitResult: [],
+      }),
+    );
+
+    const personId = '11111111-1111-4111-8111-111111111111';
+    const response = await invokeRouter(relationshipsRouter, {
+      method: 'GET',
+      url: `/relationships/path/${personId}/${personId}`,
+      path: `/relationships/path/${personId}/${personId}`,
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({
+      path: [],
+      edges: [],
+      message: 'No connection found between these people',
+    });
+  });
+
   it('returns the resolved shortest path with person names', async () => {
     selectMock
       .mockReturnValueOnce(
         buildSelectChain({
-          fromResult: [
+          whereResult: [
             {
               id: 'rel-1',
               personAId: '11111111-1111-4111-8111-111111111111',
@@ -347,7 +388,7 @@ describe('public relationships route integration', () => {
   it('returns a no-connection message when no path exists', async () => {
     selectMock.mockReturnValueOnce(
       buildSelectChain({
-        fromResult: [],
+        whereResult: [],
       }),
     );
     buildRelationshipAdjacencyMock.mockReturnValueOnce(new Map());

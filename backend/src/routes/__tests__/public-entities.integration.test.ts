@@ -7,16 +7,12 @@ const {
   getRelationshipsForPersonMock,
   getCanonicalPlaceByIdMock,
   getLettersForPlaceEnrichedMock,
-  stripPlaceThemesFromNotesMock,
-  extractPlaceThemesFromNotesMock,
 } = vi.hoisted(() => ({
   getCanonicalPersonByIdMock: vi.fn(),
   getLettersForPersonEnrichedMock: vi.fn(),
   getRelationshipsForPersonMock: vi.fn(),
   getCanonicalPlaceByIdMock: vi.fn(),
   getLettersForPlaceEnrichedMock: vi.fn(),
-  stripPlaceThemesFromNotesMock: vi.fn(),
-  extractPlaceThemesFromNotesMock: vi.fn(),
 }));
 
 vi.mock('../../services/entities.js', () => ({
@@ -25,8 +21,6 @@ vi.mock('../../services/entities.js', () => ({
   getRelationshipsForPerson: getRelationshipsForPersonMock,
   getCanonicalPlaceById: getCanonicalPlaceByIdMock,
   getLettersForPlaceEnriched: getLettersForPlaceEnrichedMock,
-  stripPlaceThemesFromNotes: stripPlaceThemesFromNotesMock,
-  extractPlaceThemesFromNotes: extractPlaceThemesFromNotesMock,
 }));
 
 import personsRouter from '../persons.js';
@@ -46,6 +40,9 @@ describe('public entity route integration', () => {
     getLettersForPersonEnrichedMock.mockResolvedValue([
       {
         letterId: 'letter-2',
+        collectionId: 'collection-1',
+        typeSequence: 2,
+        type: 'L',
         dateRaw: '19470811',
         letterDate: '1947-08-11',
         role: 'recipient',
@@ -54,9 +51,30 @@ describe('public entity route integration', () => {
         hook: 'Second letter',
         summary: 'Hidden summary',
         visibility: 'HIDDEN',
+        metadataPublished: true,
+        entityProjectionTrusted: true,
+      },
+      {
+        letterId: 'photo-alias-for-letter-1',
+        collectionId: 'collection-1',
+        typeSequence: 1,
+        type: 'P',
+        dateRaw: '19470810',
+        letterDate: '1947-08-10',
+        role: 'mentioned',
+        sender: 'Wrong Photo Sender',
+        recipient: 'Wrong Photo Recipient',
+        hook: 'Photo alias',
+        summary: 'Must collapse behind the letter',
+        visibility: 'PUBLISHED',
+        metadataPublished: true,
+        entityProjectionTrusted: true,
       },
       {
         letterId: 'letter-1',
+        collectionId: 'collection-1',
+        typeSequence: 1,
+        type: 'L',
         dateRaw: '19470810',
         letterDate: '1947-08-10',
         role: 'sender',
@@ -65,9 +83,14 @@ describe('public entity route integration', () => {
         hook: 'First letter',
         summary: 'First summary',
         visibility: 'PUBLISHED',
+        metadataPublished: true,
+        entityProjectionTrusted: true,
       },
       {
         letterId: 'letter-3',
+        collectionId: 'collection-1',
+        typeSequence: 3,
+        type: 'L',
         dateRaw: '19470812',
         letterDate: '1947-08-12',
         role: 'mentioned',
@@ -76,6 +99,56 @@ describe('public entity route integration', () => {
         hook: 'Third letter',
         summary: 'Third summary',
         visibility: 'PUBLISHED',
+        metadataPublished: true,
+        entityProjectionTrusted: true,
+      },
+      {
+        letterId: 'letter-unpublished-metadata',
+        collectionId: 'collection-1',
+        typeSequence: 4,
+        type: 'L',
+        dateRaw: '19470813',
+        letterDate: '1947-08-13',
+        role: 'sender',
+        sender: 'Private Sender',
+        recipient: 'Private Recipient',
+        hook: 'Private hook',
+        summary: 'Private summary',
+        visibility: 'PUBLISHED',
+        metadataPublished: false,
+        entityProjectionTrusted: true,
+      },
+      {
+        letterId: 'letter-uncommitted-projection',
+        collectionId: 'collection-1',
+        typeSequence: 5,
+        type: 'L',
+        dateRaw: '19470815',
+        letterDate: '1947-08-15',
+        role: 'recipient',
+        sender: 'Partial Sender',
+        recipient: 'Alice Smith',
+        hook: 'Partial extraction',
+        summary: 'Must not leak',
+        visibility: 'PUBLISHED',
+        metadataPublished: true,
+        entityProjectionTrusted: false,
+      },
+      {
+        letterId: 'standalone-cover',
+        collectionId: 'collection-1',
+        typeSequence: 6,
+        type: 'C',
+        dateRaw: '19470814',
+        letterDate: '1947-08-14',
+        role: 'mentioned',
+        sender: 'Private Cover Sender',
+        recipient: 'Private Cover Recipient',
+        hook: 'Supplementary-only hook',
+        summary: 'Supplementary-only summary',
+        visibility: 'PUBLISHED',
+        metadataPublished: true,
+        entityProjectionTrusted: true,
       },
     ]);
     getRelationshipsForPersonMock.mockResolvedValue([
@@ -86,6 +159,9 @@ describe('public entity route integration', () => {
         personAName: 'Alice Smith',
         personBName: 'Bob Baker',
         relationshipType: 'friend',
+        confirmedAt: new Date('2026-01-01T00:00:00.000Z'),
+        discoveredRelationshipTrusted: true,
+        relatedPersonHasPublicMetadata: true,
       },
       {
         id: 'rel-2',
@@ -94,6 +170,37 @@ describe('public entity route integration', () => {
         personAName: 'Clara Jones',
         personBName: 'Alice Smith',
         relationshipType: 'sibling',
+        confirmedAt: new Date('2026-01-01T00:00:00.000Z'),
+        discoveredRelationshipTrusted: true,
+        relatedPersonHasPublicMetadata: true,
+      },
+      {
+        id: 'rel-supplementary-discovery',
+        personAId: 'person-1',
+        personBId: 'person-4',
+        personAName: 'Alice Smith',
+        personBName: 'Supplement Person',
+        relationshipType: 'friend',
+        confirmedAt: null,
+        discoveredLetterVisibility: 'PUBLISHED',
+        discoveredLetterMetadataPublished: true,
+        discoveredLetterIsPublicCatalogueRoot: false,
+        discoveredRelationshipTrusted: true,
+        relatedPersonHasPublicMetadata: true,
+      },
+      {
+        id: 'rel-uncommitted-discovery',
+        personAId: 'person-1',
+        personBId: 'person-5',
+        personAName: 'Alice Smith',
+        personBName: 'Partial Person',
+        relationshipType: 'friend',
+        confirmedAt: null,
+        discoveredLetterVisibility: 'PUBLISHED',
+        discoveredLetterMetadataPublished: true,
+        discoveredLetterIsPublicCatalogueRoot: true,
+        discoveredRelationshipTrusted: false,
+        relatedPersonHasPublicMetadata: true,
       },
     ]);
 
@@ -107,6 +214,9 @@ describe('public entity route integration', () => {
     getLettersForPlaceEnrichedMock.mockResolvedValue([
       {
         letterId: 'place-letter-2',
+        collectionId: 'collection-1',
+        typeSequence: 2,
+        type: 'L',
         dateRaw: '19470811',
         letterDate: '1947-08-11',
         role: 'destination',
@@ -115,9 +225,30 @@ describe('public entity route integration', () => {
         hook: 'Trip planning',
         summary: 'Hidden destination',
         visibility: 'HIDDEN',
+        metadataPublished: true,
+        entityProjectionTrusted: true,
+      },
+      {
+        letterId: 'place-photo-alias-for-letter-1',
+        collectionId: 'collection-1',
+        typeSequence: 1,
+        type: 'P',
+        dateRaw: '19470810',
+        letterDate: '1947-08-10',
+        role: 'mentioned',
+        sender: 'Wrong Photo Sender',
+        recipient: 'Wrong Photo Recipient',
+        hook: 'Photo alias',
+        summary: 'Must collapse behind the letter',
+        visibility: 'PUBLISHED',
+        metadataPublished: true,
+        entityProjectionTrusted: true,
       },
       {
         letterId: 'place-letter-3',
+        collectionId: 'collection-1',
+        typeSequence: 3,
+        type: 'L',
         dateRaw: '19470812',
         letterDate: '1947-08-12',
         role: 'mentioned',
@@ -126,9 +257,14 @@ describe('public entity route integration', () => {
         hook: 'Mentioned city',
         summary: 'Mention summary',
         visibility: 'PUBLISHED',
+        metadataPublished: true,
+        entityProjectionTrusted: true,
       },
       {
         letterId: 'place-letter-1',
+        collectionId: 'collection-1',
+        typeSequence: 1,
+        type: 'L',
         dateRaw: '19470810',
         letterDate: '1947-08-10',
         role: 'written_from',
@@ -137,10 +273,58 @@ describe('public entity route integration', () => {
         hook: 'Written from Vienna',
         summary: 'Travel summary',
         visibility: 'PUBLISHED',
+        metadataPublished: true,
+        entityProjectionTrusted: true,
+      },
+      {
+        letterId: 'place-unpublished-metadata',
+        collectionId: 'collection-1',
+        typeSequence: 4,
+        type: 'L',
+        dateRaw: '19470813',
+        letterDate: '1947-08-13',
+        role: 'written_from',
+        sender: 'Private Sender',
+        recipient: 'Private Recipient',
+        hook: 'Private place hook',
+        summary: 'Private place summary',
+        visibility: 'PUBLISHED',
+        metadataPublished: false,
+        entityProjectionTrusted: true,
+      },
+      {
+        letterId: 'place-uncommitted-projection',
+        collectionId: 'collection-1',
+        typeSequence: 5,
+        type: 'L',
+        dateRaw: '19470815',
+        letterDate: '1947-08-15',
+        role: 'destination',
+        sender: 'Alice Smith',
+        recipient: 'Partial Recipient',
+        hook: 'Partial extraction',
+        summary: 'Must not leak',
+        visibility: 'PUBLISHED',
+        metadataPublished: true,
+        entityProjectionTrusted: false,
+      },
+      {
+        letterId: 'standalone-place-card',
+        collectionId: 'collection-1',
+        typeSequence: 6,
+        type: 'N',
+        dateRaw: '19470814',
+        letterDate: '1947-08-14',
+        role: 'mentioned',
+        sender: 'Private Card Sender',
+        recipient: 'Private Card Recipient',
+        hook: 'Supplementary-only place hook',
+        summary: 'Supplementary-only place summary',
+        visibility: 'PUBLISHED',
+        metadataPublished: true,
+        entityProjectionTrusted: true,
       },
     ]);
-    stripPlaceThemesFromNotesMock.mockReturnValue('Historic capital');
-    extractPlaceThemesFromNotesMock.mockReturnValue(['music', 'travel']);
   });
 
   it('returns public person detail with published letters, stats, and mapped relationships', async () => {
@@ -156,7 +340,7 @@ describe('public entity route integration', () => {
       person: {
         id: 'person-1',
         canonicalName: 'Alice Smith',
-        aliases: ['Al'],
+        aliases: [],
         biography: 'Alice biography',
         biographyStatus: 'VERIFIED',
       },
@@ -225,6 +409,31 @@ describe('public entity route integration', () => {
     );
   });
 
+  it('does not publish an unverified canonical-person biography', async () => {
+    getCanonicalPersonByIdMock.mockResolvedValueOnce({
+      id: 'person-1',
+      canonicalName: 'Alice Smith',
+      aliases: ['Al'],
+      biography: 'AI draft based on private sources',
+      biographyStatus: 'AI_DRAFT',
+    });
+
+    const response = await invokeRouter(personsRouter, {
+      method: 'GET',
+      url: '/persons/person-1',
+      path: '/persons/person-1',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      person: {
+        biography: null,
+        biographyStatus: 'EMPTY',
+      },
+    });
+  });
+
   it('returns public place detail with published letters, stats, and extracted themes', async () => {
     const response = await invokeRouter(placesRouter, {
       method: 'GET',
@@ -238,10 +447,9 @@ describe('public entity route integration', () => {
       place: {
         id: 'place-1',
         canonicalName: 'Vienna',
-        aliases: ['Wien'],
-        placeType: 'city',
-        notes: 'Historic capital',
-        themes: ['music', 'travel'],
+        aliases: [],
+        notes: null,
+        themes: [],
       },
       stats: {
         writtenFrom: 1,
@@ -272,8 +480,6 @@ describe('public entity route integration', () => {
         },
       ],
     });
-    expect(stripPlaceThemesFromNotesMock).toHaveBeenCalledWith('Historic capital [THEMES: music, travel]');
-    expect(extractPlaceThemesFromNotesMock).toHaveBeenCalledWith('Historic capital [THEMES: music, travel]');
   });
 
   it('injects request ids into public place 404 responses', async () => {

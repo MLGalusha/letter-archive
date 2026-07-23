@@ -1,5 +1,7 @@
 import { sql } from 'drizzle-orm';
-import { db } from '../../db/index.js';
+import { db, type Database } from '../../db/index.js';
+
+type MatchingDatabase = Pick<Database, 'execute'>;
 
 const MATCH_THRESHOLDS = {
   AUTO_LINK: 0.85,
@@ -23,8 +25,9 @@ function getRows<T>(results: unknown): T[] {
 export async function findMatchingPersons(
   name: string,
   limit: number = 5,
+  database: MatchingDatabase = db,
 ): Promise<MatchResult[]> {
-  const results = await db.execute<{
+  const results = await database.execute<{
     id: string;
     canonical_name: string;
     matched_on: string;
@@ -71,8 +74,9 @@ export async function findMatchingPersons(
 export async function findMatchingPlaces(
   name: string,
   limit: number = 5,
+  database: MatchingDatabase = db,
 ): Promise<MatchResult[]> {
-  const results = await db.execute<{
+  const results = await database.execute<{
     id: string;
     canonical_name: string;
     matched_on: string;

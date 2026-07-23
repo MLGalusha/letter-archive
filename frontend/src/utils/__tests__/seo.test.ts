@@ -16,7 +16,7 @@ import {
 } from '../seo';
 import type { BlogPost } from '../../api/client';
 import type { CollectionWithLetters } from '../../api/collections';
-import type { Letter } from '../../types/Letter';
+import type { PublicLetter } from '../../types/Letter';
 
 // ── absoluteUrl ──────────────────────────────────────────────────────────────
 
@@ -300,7 +300,7 @@ describe('buildCollectionSeo', () => {
 // ── buildLetterSeo ───────────────────────────────────────────────────────────
 
 describe('buildLetterSeo', () => {
-  const baseLetter: Letter = {
+  const baseLetter: PublicLetter = {
     id: 'letter-1',
     title: 'Untitled Letter',
     collectionCode: 'ABC',
@@ -322,7 +322,6 @@ describe('buildLetterSeo', () => {
       tags: ['spring', 'weather'],
     },
     status: 'published',
-    workflowState: 'REVIEWED',
     visibility: 'PUBLISHED',
     transcriptPublished: true,
     metadataPublished: true,
@@ -331,12 +330,11 @@ describe('buildLetterSeo', () => {
     extraContentStatus: 'EMPTY',
     createdAt: '2024-01-01',
     updatedAt: '2024-06-15',
-    flagged: false,
     linkedPersons: [
-      { id: 'lp-1', personId: 'p-1', canonicalName: 'Charlie', role: 'mentioned', confidence: 1 },
+      { personId: 'p-1', canonicalName: 'Charlie', role: 'mentioned' },
     ],
     linkedPlaces: [
-      { id: 'lpl-1', placeId: 'pl-1', canonicalName: 'Paris', role: 'mentioned', confidence: 1 },
+      { placeId: 'pl-1', canonicalName: 'Paris', role: 'mentioned' },
     ],
   };
 
@@ -353,7 +351,7 @@ describe('buildLetterSeo', () => {
   });
 
   it('falls back to transcript excerpt when no description', () => {
-    const letter: Letter = {
+    const letter: PublicLetter = {
       ...baseLetter,
       metadata: { ...baseLetter.metadata, description: undefined, hook: undefined },
       transcript: {
@@ -373,7 +371,7 @@ describe('buildLetterSeo', () => {
   });
 
   it('handles letter with no images', () => {
-    const letter: Letter = { ...baseLetter, images: [] };
+    const letter: PublicLetter = { ...baseLetter, images: [] };
     const seo = buildLetterSeo(letter);
     expect(seo.ogImage).toBeUndefined();
   });
@@ -404,7 +402,7 @@ describe('buildLetterSeo', () => {
   });
 
   it('omits collection from breadcrumb when no collectionCode', () => {
-    const letter: Letter = { ...baseLetter, collectionCode: undefined };
+    const letter: PublicLetter = { ...baseLetter, collectionCode: undefined };
     const seo = buildLetterSeo(letter);
     const breadcrumb = seo.jsonLd!.find((item) => item['@type'] === 'BreadcrumbList');
     const items = breadcrumb!.itemListElement as Array<{ name: string }>;
@@ -425,7 +423,7 @@ describe('buildLetterTitle', () => {
     const letter = {
       title: 'Fallback',
       metadata: { sender: 'Alice', recipient: 'Bob', date: 'Jan 1, 1940', verified: false },
-    } as Letter;
+    } as PublicLetter;
     expect(buildLetterTitle(letter)).toBe('Letter from Alice to Bob, Jan 1, 1940');
   });
 
@@ -433,7 +431,7 @@ describe('buildLetterTitle', () => {
     const letter = {
       title: 'Fallback',
       metadata: { sender: 'Alice', date: 'Jan 1, 1940', verified: false },
-    } as Letter;
+    } as PublicLetter;
     expect(buildLetterTitle(letter)).toBe('Letter from Alice, Jan 1, 1940');
   });
 
@@ -441,7 +439,7 @@ describe('buildLetterTitle', () => {
     const letter = {
       title: 'Fallback',
       metadata: { recipient: 'Bob', date: 'Jan 1, 1940', verified: false },
-    } as Letter;
+    } as PublicLetter;
     expect(buildLetterTitle(letter)).toBe('Letter to Bob, Jan 1, 1940');
   });
 
@@ -449,7 +447,7 @@ describe('buildLetterTitle', () => {
     const letter = {
       title: 'My Letter Title',
       metadata: { verified: false },
-    } as Letter;
+    } as PublicLetter;
     expect(buildLetterTitle(letter)).toBe('My Letter Title');
   });
 
@@ -457,7 +455,7 @@ describe('buildLetterTitle', () => {
     const letter = {
       title: 'Fallback',
       metadata: { sender: 'Alice', recipient: 'Bob', verified: false },
-    } as Letter;
+    } as PublicLetter;
     expect(buildLetterTitle(letter)).toBe('Letter from Alice to Bob');
   });
 });

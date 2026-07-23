@@ -133,9 +133,7 @@ describe("UpdateDetailPage", () => {
       expect(screen.getByText("Hello World")).toBeInTheDocument();
     });
 
-    expect(getImageUrlMock).toHaveBeenCalledWith("/blog-images/hero.jpg", {
-      publicOnly: true,
-    });
+    expect(getImageUrlMock).toHaveBeenCalledWith("/blog-images/hero.jpg", undefined);
 
     const img = screen.getByAltText("A hero image");
     expect(img).toHaveAttribute("src", "http://localhost:3002/blog-images/hero.jpg");

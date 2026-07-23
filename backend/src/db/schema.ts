@@ -262,6 +262,12 @@ export const letters = pgTable(
     // Entity extraction (Prompt 2 - separate from basic metadata)
     entityExtractionJson: jsonb('entity_extraction_json'),
     entityExtractionStatus: jobStatusEnum('entity_extraction_status').notNull().default('PENDING'),
+    // The committed revision remains authoritative while a replacement run is
+    // in flight. The run tuple identifies the only producer allowed to replace
+    // that committed projection.
+    entityExtractionRevision: integer('entity_extraction_revision').notNull().default(0),
+    entityExtractionRunId: uuid('entity_extraction_run_id'),
+    entityExtractionRunRevision: integer('entity_extraction_run_revision'),
     entityExtractionError: text('entity_extraction_error'),
 
     // Transcript confirmation (gates metadata extraction)
@@ -346,6 +352,22 @@ export const letters = pgTable(
     check('transcription_attempt_count_positive', sql`transcription_attempt_count >= 0`),
     check('metadata_attempt_count_positive', sql`metadata_attempt_count >= 0`),
     check('metadata_revision_nonnegative', sql`metadata_revision >= 0`),
+    check(
+      'entity_extraction_revision_nonnegative',
+      sql`${table.entityExtractionRevision} >= 0`,
+    ),
+    check(
+      'entity_extraction_owner_shape',
+      sql`(
+        ${table.entityExtractionRunId} IS NULL
+        AND ${table.entityExtractionRunRevision} IS NULL
+      ) OR (
+        ${table.entityExtractionStatus} = 'RUNNING'
+        AND ${table.entityExtractionRunId} IS NOT NULL
+        AND ${table.entityExtractionRunRevision} IS NOT NULL
+        AND ${table.entityExtractionRunRevision} = ${table.entityExtractionRevision} + 1
+      )`,
+    ),
     check(
       'metadata_owner_shape',
       sql`(
@@ -526,6 +548,9 @@ export const letterPersons = pgTable(
     relationshipToSender: text('relationship_to_sender'),
     context: text('context'),
     confidence: integer('confidence').notNull().default(100),
+    // NULL denotes a link owned outside the letter extraction pipeline.
+    // Extraction-owned links carry the committed revision and replace as one unit.
+    entityExtractionRevision: integer('entity_extraction_revision'),
     confirmedBy: text('confirmed_by'),
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -537,8 +562,16 @@ export const letterPersons = pgTable(
     index('idx_letter_persons_letter').on(table.letterId),
     index('idx_letter_persons_person').on(table.personId),
     index('idx_letter_persons_person_role').on(table.personId, table.role),
+    index('idx_letter_persons_extraction_revision').on(
+      table.letterId,
+      table.entityExtractionRevision,
+    ),
     // Check constraint for confidence range
     check('confidence_range', sql`confidence >= 0 AND confidence <= 100`),
+    check(
+      'letter_persons_extraction_revision_nonnegative',
+      sql`${table.entityExtractionRevision} IS NULL OR ${table.entityExtractionRevision} >= 0`,
+    ),
   ]
 );
 
@@ -559,6 +592,7 @@ export const letterPlaces = pgTable(
     nameAsWritten: text('name_as_written'),
     context: text('context'),
     confidence: integer('confidence').notNull().default(100),
+    entityExtractionRevision: integer('entity_extraction_revision'),
     confirmedBy: text('confirmed_by'),
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -570,8 +604,16 @@ export const letterPlaces = pgTable(
     index('idx_letter_places_letter').on(table.letterId),
     index('idx_letter_places_place').on(table.placeId),
     index('idx_letter_places_place_role').on(table.placeId, table.role),
+    index('idx_letter_places_extraction_revision').on(
+      table.letterId,
+      table.entityExtractionRevision,
+    ),
     // Check constraint for confidence range
     check('confidence_range_place', sql`confidence >= 0 AND confidence <= 100`),
+    check(
+      'letter_places_extraction_revision_nonnegative',
+      sql`${table.entityExtractionRevision} IS NULL OR ${table.entityExtractionRevision} >= 0`,
+    ),
   ]
 );
 
@@ -595,6 +637,9 @@ export const personRelationships = pgTable(
     // Track which letter this relationship was discovered in (optional)
     discoveredInLetterId: uuid('discovered_in_letter_id')
       .references(() => letters.id, { onDelete: 'set null' }),
+    // NULL denotes a human/system-owned relationship. A revision marks a
+    // relationship owned by one committed extraction of its discovery letter.
+    entityExtractionRevision: integer('entity_extraction_revision'),
     // AI-suggested vs manually confirmed
     confidence: integer('confidence').notNull().default(100),
     confirmedBy: text('confirmed_by'),
@@ -609,10 +654,18 @@ export const personRelationships = pgTable(
     index('idx_person_rel_a').on(table.personAId),
     index('idx_person_rel_b').on(table.personBId),
     index('idx_person_rel_discovered').on(table.discoveredInLetterId),
+    index('idx_person_rel_extraction_revision').on(
+      table.discoveredInLetterId,
+      table.entityExtractionRevision,
+    ),
     // Confidence check
     check('confidence_range_rel', sql`confidence >= 0 AND confidence <= 100`),
     // Ensure personAId != personBId
     check('no_self_relationship', sql`person_a_id <> person_b_id`),
+    check(
+      'person_relationships_extraction_revision_nonnegative',
+      sql`${table.entityExtractionRevision} IS NULL OR ${table.entityExtractionRevision} >= 0`,
+    ),
   ]
 );
 
@@ -662,6 +715,7 @@ export const entityReviewQueue = pgTable(
     suggestedEntityId: uuid('suggested_entity_id'),
     context: text('context'),
     confidence: integer('confidence').notNull().default(0),
+    entityExtractionRevision: integer('entity_extraction_revision'),
     status: entityReviewStatusEnum('status').notNull().default('pending'),
     reviewedBy: text('reviewed_by'),
     reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
@@ -671,6 +725,14 @@ export const entityReviewQueue = pgTable(
     index('idx_review_queue_status').on(table.status),
     index('idx_review_queue_letter').on(table.letterId),
     index('idx_review_queue_entity_type').on(table.entityType),
+    index('idx_review_queue_extraction_revision').on(
+      table.letterId,
+      table.entityExtractionRevision,
+    ),
+    check(
+      'review_queue_extraction_revision_nonnegative',
+      sql`${table.entityExtractionRevision} IS NULL OR ${table.entityExtractionRevision} >= 0`,
+    ),
   ]
 );
 

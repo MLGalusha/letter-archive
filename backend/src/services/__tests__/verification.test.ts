@@ -45,6 +45,8 @@ vi.mock('../../db/index.js', () => {
       metadataRevision: 'letters.metadataRevision',
       metadataContentStatus: 'letters.metadataContentStatus',
       extraContentStatus: 'letters.extraContentStatus',
+      photoDescription: 'letters.photoDescription',
+      photoDescriptionStatus: 'letters.photoDescriptionStatus',
     },
   };
 });
@@ -67,9 +69,11 @@ vi.mock('../../utils/logger.js', () => ({
 import {
   unverifyExtraContent,
   unverifyMetadata,
+  unverifyPhotoDescription,
   unverifyTranscript,
   verifyExtraContent,
   verifyMetadata,
+  verifyPhotoDescription,
   verifyTranscript,
 } from '../letter/verification.js';
 
@@ -379,6 +383,117 @@ describe('extra-content verification ownership', () => {
     await expect(verifyExtraContent('letter-3', 'reviewer-1')).rejects.toMatchObject({
       status: 409,
       message: expect.stringContaining('changed before it could be verified'),
+    });
+  });
+});
+
+describe('photo-description verification ownership', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    updateReturningMock.mockResolvedValue([{ id: 'updated-letter' }]);
+  });
+
+  it('verifies the exact description revision the reviewer loaded', async () => {
+    const updatedAt = new Date('2026-07-18T12:00:00.000Z');
+    getLetterByIdMock.mockResolvedValue({
+      id: 'photo-1',
+      photoDescription: 'Two children standing beside a porch railing.',
+      photoDescriptionStatus: 'EDITED',
+      updatedAt,
+    });
+
+    await expect(verifyPhotoDescription('photo-1', 'reviewer-1')).resolves.toEqual({
+      previousStatus: 'EDITED',
+    });
+
+    expect(updateSetMock).toHaveBeenCalledWith({
+      photoDescriptionStatus: 'VERIFIED',
+      photoDescriptionVerifiedAt: expect.any(Date),
+      photoDescriptionVerifiedBy: 'reviewer-1',
+      updatedAt: expect.any(Date),
+    });
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        { kind: 'eq', field: 'letters.id', value: 'photo-1' },
+        {
+          kind: 'sql',
+          strings: ["date_trunc('milliseconds', ", ') = ', '::timestamptz'],
+          values: ['letters.updatedAt', updatedAt.toISOString()],
+        },
+        { kind: 'eq', field: 'letters.photoDescriptionStatus', value: 'EDITED' },
+        {
+          kind: 'eq',
+          field: 'letters.photoDescription',
+          value: 'Two children standing beside a porch railing.',
+        },
+      ],
+    });
+  });
+
+  it('refuses to verify when an edit or regeneration changes the observed description first', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'photo-2',
+      photoDescription: 'The description the reviewer loaded.',
+      photoDescriptionStatus: 'AI_DRAFT',
+      updatedAt: new Date('2026-07-18T12:00:00.000Z'),
+    });
+    updateReturningMock.mockResolvedValue([]);
+
+    await expect(verifyPhotoDescription('photo-2', 'reviewer-1')).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining('changed before it could be verified'),
+    });
+  });
+
+  it('unverifies only the exact description revision the reviewer loaded', async () => {
+    const updatedAt = new Date('2026-07-18T12:00:00.000Z');
+    getLetterByIdMock.mockResolvedValue({
+      id: 'photo-3',
+      photoDescription: 'A verified porch scene.',
+      photoDescriptionStatus: 'VERIFIED',
+      updatedAt,
+    });
+
+    await expect(unverifyPhotoDescription('photo-3')).resolves.toBe(true);
+
+    expect(updateSetMock).toHaveBeenCalledWith({
+      photoDescriptionStatus: 'EDITED',
+      photoDescriptionVerifiedAt: null,
+      photoDescriptionVerifiedBy: null,
+      updatedAt: expect.any(Date),
+    });
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        { kind: 'eq', field: 'letters.id', value: 'photo-3' },
+        {
+          kind: 'sql',
+          strings: ["date_trunc('milliseconds', ", ') = ', '::timestamptz'],
+          values: ['letters.updatedAt', updatedAt.toISOString()],
+        },
+        { kind: 'eq', field: 'letters.photoDescriptionStatus', value: 'VERIFIED' },
+        {
+          kind: 'eq',
+          field: 'letters.photoDescription',
+          value: 'A verified porch scene.',
+        },
+      ],
+    });
+  });
+
+  it('refuses to remove verification from a newer photo-description revision', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'photo-4',
+      photoDescription: 'The description the reviewer loaded.',
+      photoDescriptionStatus: 'VERIFIED',
+      updatedAt: new Date('2026-07-18T12:00:00.000Z'),
+    });
+    updateReturningMock.mockResolvedValue([]);
+
+    await expect(unverifyPhotoDescription('photo-4')).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining('changed before verification could be removed'),
     });
   });
 });

@@ -12,6 +12,12 @@ function transcriptionTextCondition(transcriptionText: string | null) {
     : eq(letters.transcriptionText, transcriptionText);
 }
 
+function photoDescriptionCondition(photoDescription: string | null) {
+  return photoDescription === null
+    ? isNull(letters.photoDescription)
+    : eq(letters.photoDescription, photoDescription);
+}
+
 function transcriptionVerificationConflict(message: string): Error & { status: number } {
   const error = new Error(message) as Error & { status: number };
   error.status = 409;
@@ -275,12 +281,29 @@ export async function verifyPhotoDescription(letterId: string, userId: string = 
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
 
-  await db.update(letters).set({
-    photoDescriptionStatus: 'VERIFIED',
-    photoDescriptionVerifiedAt: new Date(),
-    photoDescriptionVerifiedBy: userId,
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
+  const verified = await db
+    .update(letters)
+    .set({
+      photoDescriptionStatus: 'VERIFIED',
+      photoDescriptionVerifiedAt: new Date(),
+      photoDescriptionVerifiedBy: userId,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(letters.id, letterId),
+      observedTimestampMatches(letters.updatedAt, existingLetter.updatedAt),
+      eq(letters.photoDescriptionStatus, existingLetter.photoDescriptionStatus),
+      photoDescriptionCondition(existingLetter.photoDescription),
+    ))
+    .returning({ id: letters.id });
+
+  if (verified.length === 0) {
+    const error = new Error(
+      'Photo description changed before it could be verified; review the latest description and try again',
+    ) as Error & { status: number };
+    error.status = 409;
+    throw error;
+  }
 
   log.info({ letterId, previousStatus: existingLetter.photoDescriptionStatus }, 'Photo description verified');
   return { previousStatus: existingLetter.photoDescriptionStatus };
@@ -297,12 +320,29 @@ export async function unverifyPhotoDescription(letterId: string): Promise<true |
     throw err;
   }
 
-  await db.update(letters).set({
-    photoDescriptionStatus: 'EDITED',
-    photoDescriptionVerifiedAt: null,
-    photoDescriptionVerifiedBy: null,
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
+  const unverified = await db
+    .update(letters)
+    .set({
+      photoDescriptionStatus: 'EDITED',
+      photoDescriptionVerifiedAt: null,
+      photoDescriptionVerifiedBy: null,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(letters.id, letterId),
+      observedTimestampMatches(letters.updatedAt, existingLetter.updatedAt),
+      eq(letters.photoDescriptionStatus, 'VERIFIED'),
+      photoDescriptionCondition(existingLetter.photoDescription),
+    ))
+    .returning({ id: letters.id });
+
+  if (unverified.length === 0) {
+    const error = new Error(
+      'Photo description changed before verification could be removed; refresh and try again',
+    ) as Error & { status: number };
+    error.status = 409;
+    throw error;
+  }
 
   log.info({ letterId }, 'Photo description verification removed');
   return true;

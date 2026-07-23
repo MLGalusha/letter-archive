@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db, siteSettings } from '../db/index.js';
 import healthRouter from './health.js';
 import lettersRouter from './letters.js';
+import imagePerformanceRouter from './image-performance.js';
 import imagesRouter from './images.js';
 import collectionsRouter from './collections.js';
 import sitemapRouter from './sitemap.js';
@@ -21,6 +22,7 @@ const router = Router();
 router.use(healthRouter);
 router.use(sitemapRouter);
 router.use(lettersRouter);
+router.use(imagePerformanceRouter);
 router.use(imagesRouter);
 router.use(collectionsRouter);
 router.use(authRouter);
@@ -46,7 +48,6 @@ const PUBLIC_SETTINGS_KEYS = [
   'contact_contribute_email',
   'contact_research_email',
   'contact_volunteer_email',
-  'featured_letter_id',
 ];
 
 router.get('/settings/public', async (_req, res) => {

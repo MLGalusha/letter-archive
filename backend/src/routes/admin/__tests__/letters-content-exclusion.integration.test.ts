@@ -13,6 +13,8 @@ const {
   observeMetadataStateMock,
   claimRequestedMetadataMock,
   claimMetadataAfterTranscriptConfirmationMock,
+  dbTransactionMock,
+  syncLetterParticipantsFromMetadataMock,
 } = vi.hoisted(() => ({
   getLetterByIdMock: vi.fn(),
   fetchLetterWithRelatedAndTransformMock: vi.fn(),
@@ -25,6 +27,8 @@ const {
   observeMetadataStateMock: vi.fn(),
   claimRequestedMetadataMock: vi.fn(),
   claimMetadataAfterTranscriptConfirmationMock: vi.fn(),
+  dbTransactionMock: vi.fn(),
+  syncLetterParticipantsFromMetadataMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -45,6 +49,7 @@ vi.mock('../../../db/index.js', () => {
   return {
     db: {
       update: dbUpdateMock,
+      transaction: dbTransactionMock,
       query: {
         letterPersons: { findFirst: vi.fn() },
         canonicalPersons: { findFirst: vi.fn() },
@@ -95,6 +100,9 @@ vi.mock('../../../services/letter/metadata-job.js', () => ({
   claimRequestedMetadata: claimRequestedMetadataMock,
   claimMetadataAfterTranscriptConfirmation:
     claimMetadataAfterTranscriptConfirmationMock,
+  observedMetadataRevisionConditions: vi.fn(() => [
+    { kind: 'observedMetadataRevision' },
+  ]),
 }));
 
 vi.mock('../../../services/letter-operations.js', () => ({
@@ -127,7 +135,7 @@ vi.mock('../../../services/entities/persons.js', () => ({
   addAliasToCanonicalPerson: vi.fn(),
 }));
 vi.mock('../../../services/entities/participant-sync.js', () => ({
-  syncLetterParticipantsFromMetadata: vi.fn(),
+  syncLetterParticipantsFromMetadata: syncLetterParticipantsFromMetadataMock,
 }));
 vi.mock('../../../services/storage.js', () => ({
   getAbsoluteStoragePath: vi.fn(),
@@ -552,5 +560,73 @@ describe('admin downstream extraction exclusion', () => {
       ],
     });
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
+  });
+
+  it('rolls back identity metadata and does not report success when participant projection fails', async () => {
+    let persistedSender: string | null = null;
+    let stagedSender: string | null = persistedSender;
+    const transactionExecutor = {
+      query: {
+        letterPersons: { findFirst: vi.fn() },
+        canonicalPersons: { findFirst: vi.fn() },
+      },
+      update: vi.fn(() => ({
+        set: vi.fn((patch: { sender?: string | null }) => ({
+          where: vi.fn(() => ({
+            returning: vi.fn(async () => {
+              stagedSender = patch.sender ?? null;
+              return [{ id: 'letter-1' }];
+            }),
+          })),
+        })),
+      })),
+    };
+
+    dbTransactionMock.mockImplementationOnce(async (
+      callback: (tx: typeof transactionExecutor) => Promise<unknown>,
+    ) => {
+      try {
+        const result = await callback(transactionExecutor);
+        persistedSender = stagedSender;
+        return result;
+      } catch (error) {
+        stagedSender = persistedSender;
+        throw error;
+      }
+    });
+    syncLetterParticipantsFromMetadataMock.mockRejectedValueOnce(
+      new Error('participant projection failed'),
+    );
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-1',
+      sender: null,
+      recipient: 'Existing Recipient',
+      metadataRevision: 4,
+      metadataV2Json: null,
+      metadataJson: null,
+    });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'PATCH',
+      url: '/letter-1/identity',
+      path: '/letter-1/identity',
+      body: { sender: 'Corrected Sender' },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).toMatchObject({
+      error: 'Internal server error',
+      requestId: expect.any(String),
+    });
+    expect(persistedSender).toBeNull();
+    expect(dbTransactionMock).toHaveBeenCalledTimes(1);
+    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenCalledWith({
+      letterId: 'letter-1',
+      sender: 'Corrected Sender',
+      recipient: undefined,
+      database: transactionExecutor,
+    });
+    expect(fetchLetterWithRelatedAndTransformMock).not.toHaveBeenCalled();
   });
 });

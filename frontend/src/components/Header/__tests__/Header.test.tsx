@@ -11,9 +11,7 @@ vi.mock("../../../hooks/useHeaderScroll", () => ({
 }));
 
 vi.mock("../../../api/collections", () => ({
-  getCachedCollections: () => null,
   listCollections: vi.fn(),
-  prefetchCollections: vi.fn(),
 }));
 
 function renderHeader(initialEntries: string[] = ["/"]) {

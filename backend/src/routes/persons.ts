@@ -4,6 +4,10 @@ import {
   getLettersForPersonEnriched,
   getRelationshipsForPerson,
 } from '../services/entities.js';
+import {
+  isPublicCatalogueLetterType,
+  retainPublicCatalogueRepresentatives,
+} from '../services/public-catalogue-unit.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger({ module: 'public-persons' });
@@ -31,7 +35,35 @@ router.get('/persons/:id', async (req, res, next) => {
 
     // Get letters (only published ones for public view)
     const allLetters = await getLettersForPersonEnriched(id);
-    const letters = allLetters.filter(l => l.visibility === 'PUBLISHED');
+    const letters = retainPublicCatalogueRepresentatives(
+      allLetters
+        .filter(
+          (letter) => letter.visibility === 'PUBLISHED'
+            && letter.metadataPublished
+            && letter.entityProjectionTrusted === true
+            && isPublicCatalogueLetterType(letter.type),
+        )
+        .map((letter) => ({ ...letter, id: letter.letterId })),
+    );
+
+    // Canonical entities have no independent publication flag. A person only
+    // becomes public through at least one metadata-published letter.
+    if (letters.length === 0) {
+      res.status(404).json({ error: 'Person not found' });
+      return;
+    }
+
+    const publicRelationships = relationships.filter((relationship) =>
+      relationship.relatedPersonHasPublicMetadata === true
+      && relationship.discoveredRelationshipTrusted === true
+      && (
+        Boolean(relationship.confirmedAt) || (
+          relationship.discoveredLetterVisibility === 'PUBLISHED'
+          && relationship.discoveredLetterMetadataPublished === true
+          && relationship.discoveredLetterIsPublicCatalogueRoot === true
+        )
+      )
+    );
 
     // Calculate stats
     const stats = {
@@ -52,11 +84,11 @@ router.get('/persons/:id', async (req, res, next) => {
       person: {
         id: person.id,
         canonicalName: person.canonicalName,
-        aliases: person.aliases || [],
-        biography: person.biography,
-        biographyStatus: person.biographyStatus,
+        aliases: [],
+        biography: person.biographyStatus === 'VERIFIED' ? person.biography : null,
+        biographyStatus: person.biographyStatus === 'VERIFIED' ? 'VERIFIED' : 'EMPTY',
       },
-      relationships: relationships.map(r => ({
+      relationships: publicRelationships.map(r => ({
         id: r.id,
         relatedPersonId: r.personAId === id ? r.personBId : r.personAId,
         relatedPersonName: r.personAId === id ? r.personBName : r.personAName,

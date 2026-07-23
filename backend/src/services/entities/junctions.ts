@@ -12,8 +12,10 @@ import {
   type CanonicalPlace,
   type PersonRole,
   type PlaceRole,
+  type LetterType,
   type VisibilityState,
 } from '../../db/index.js';
+import { publicEntityProjectionSql } from './public-projection.js';
 
 export async function createLetterPerson(
   data: Omit<NewLetterPerson, 'id' | 'createdAt'>,
@@ -83,6 +85,9 @@ export async function getLettersForPlace(
 
 export interface EnrichedLetterForPerson {
   letterId: string;
+  collectionId: string;
+  typeSequence: number;
+  type: LetterType;
   role: PersonRole;
   context: string | null;
   dateRaw: string;
@@ -92,6 +97,8 @@ export interface EnrichedLetterForPerson {
   hook: string | null;
   summary: string | null;
   visibility: VisibilityState;
+  metadataPublished: boolean;
+  entityProjectionTrusted: boolean;
 }
 
 export async function getLettersForPersonEnriched(
@@ -100,6 +107,9 @@ export async function getLettersForPersonEnriched(
   return db
     .select({
       letterId: letterPersons.letterId,
+      collectionId: letters.collectionId,
+      typeSequence: letters.typeSequence,
+      type: letters.type,
       role: letterPersons.role,
       context: letterPersons.context,
       dateRaw: letters.dateRaw,
@@ -109,6 +119,13 @@ export async function getLettersForPersonEnriched(
       hook: letters.hook,
       summary: letters.summary,
       visibility: letters.visibility,
+      metadataPublished: letters.metadataPublished,
+      entityProjectionTrusted: publicEntityProjectionSql(
+        letterPersons.confirmedAt,
+        letterPersons.entityExtractionRevision,
+        letters.entityExtractionRevision,
+        letters.entityExtractionJson,
+      ),
     })
     .from(letterPersons)
     .innerJoin(letters, eq(letterPersons.letterId, letters.id))
@@ -118,6 +135,9 @@ export async function getLettersForPersonEnriched(
 
 export interface EnrichedLetterForPlace {
   letterId: string;
+  collectionId: string;
+  typeSequence: number;
+  type: LetterType;
   role: PlaceRole;
   context: string | null;
   dateRaw: string;
@@ -127,6 +147,8 @@ export interface EnrichedLetterForPlace {
   hook: string | null;
   summary: string | null;
   visibility: VisibilityState;
+  metadataPublished: boolean;
+  entityProjectionTrusted: boolean;
 }
 
 export async function getLettersForPlaceEnriched(
@@ -135,6 +157,9 @@ export async function getLettersForPlaceEnriched(
   return db
     .select({
       letterId: letterPlaces.letterId,
+      collectionId: letters.collectionId,
+      typeSequence: letters.typeSequence,
+      type: letters.type,
       role: letterPlaces.role,
       context: letterPlaces.context,
       dateRaw: letters.dateRaw,
@@ -144,6 +169,13 @@ export async function getLettersForPlaceEnriched(
       hook: letters.hook,
       summary: letters.summary,
       visibility: letters.visibility,
+      metadataPublished: letters.metadataPublished,
+      entityProjectionTrusted: publicEntityProjectionSql(
+        letterPlaces.confirmedAt,
+        letterPlaces.entityExtractionRevision,
+        letters.entityExtractionRevision,
+        letters.entityExtractionJson,
+      ),
     })
     .from(letterPlaces)
     .innerJoin(letters, eq(letterPlaces.letterId, letters.id))

@@ -10,18 +10,27 @@ export interface ImageLoadEntry {
 }
 
 const buffer: ImageLoadEntry[] = [];
-let writeIndex = 0;
-let totalEntries = 0;
+const pendingEntries: ImageLoadEntry[] = [];
+
+function appendBounded(queue: ImageLoadEntry[], entry: ImageLoadEntry): void {
+  if (queue.length === BUFFER_SIZE) {
+    queue.shift();
+  }
+  queue.push(entry);
+}
+
+export function sanitizeImageTelemetryUrl(url: string): string {
+  return url.split(/[?#]/, 1)[0];
+}
 
 export function recordImageLoad(entry: Omit<ImageLoadEntry, 'timestamp'>): void {
-  const full: ImageLoadEntry = { ...entry, timestamp: Date.now() };
-  if (totalEntries < BUFFER_SIZE) {
-    buffer.push(full);
-  } else {
-    buffer[writeIndex % BUFFER_SIZE] = full;
-  }
-  writeIndex = (writeIndex + 1) % BUFFER_SIZE;
-  totalEntries++;
+  const full: ImageLoadEntry = {
+    ...entry,
+    url: sanitizeImageTelemetryUrl(entry.url),
+    timestamp: Date.now(),
+  };
+  appendBounded(buffer, full);
+  appendBounded(pendingEntries, full);
 }
 
 function getEntries(): ImageLoadEntry[] {
@@ -82,45 +91,60 @@ export function getRecentEntries(n = 20): ImageLoadEntry[] {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 const FLUSH_INTERVAL_MS = 60_000;
-let lastFlushIndex = 0;
+const SERVER_BATCH_LIMIT = 20;
+const SERVER_URL_LIMIT = 1024;
+const SERVER_CONTEXT_LIMIT = 64;
+const SERVER_MAX_DURATION_MS = 300_000;
 
-function getUnflushedEntries(): ImageLoadEntry[] {
-  const all = getEntries();
-  // Only send entries recorded since last flush
-  const unflushed = all.filter((e) => e.timestamp > lastFlushIndex);
-  return unflushed;
-}
+export function flushImagePerfTelemetry(): boolean {
+  const entries = pendingEntries.slice(0, SERVER_BATCH_LIMIT);
+  if (entries.length === 0) return false;
+  if (
+    typeof navigator === 'undefined'
+    || typeof navigator.sendBeacon !== 'function'
+  ) {
+    return false;
+  }
+  const payload = buildImagePerfPayload(entries);
 
-function flushToServer() {
-  const entries = getUnflushedEntries();
-  if (entries.length === 0) return;
-
-  lastFlushIndex = Date.now();
-
-  const payload = JSON.stringify(
-    entries.map(({ url, tier, context, durationMs, cached }) => ({
-      url, tier, context, durationMs, cached,
-    })),
-  );
-
-  // Use sendBeacon for reliability during page unload
-  if (navigator.sendBeacon) {
-    navigator.sendBeacon(
+  try {
+    const accepted = navigator.sendBeacon(
       `${API_BASE_URL}/images/perf`,
       new Blob([payload], { type: 'application/json' }),
     );
+    if (accepted) {
+      pendingEntries.splice(0, entries.length);
+    }
+    return accepted;
+  } catch {
+    // A rejected transport must remain retryable on the next flush.
+    return false;
   }
+}
+
+export function buildImagePerfPayload(entries: ImageLoadEntry[]): string {
+  return JSON.stringify(
+    entries.slice(0, SERVER_BATCH_LIMIT).map(({ url, tier, context, durationMs, cached }) => ({
+      url: sanitizeImageTelemetryUrl(url).slice(0, SERVER_URL_LIMIT),
+      tier,
+      context: context.trim().slice(0, SERVER_CONTEXT_LIMIT) || 'unknown',
+      durationMs: Number.isFinite(durationMs)
+        ? Math.max(0, Math.min(durationMs, SERVER_MAX_DURATION_MS))
+        : 0,
+      cached,
+    })),
+  );
 }
 
 // Flush on page hide (tab switch, navigation away)
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') flushToServer();
+    if (document.visibilityState === 'hidden') flushImagePerfTelemetry();
   });
 
   // Periodic flush while page is active
   setInterval(() => {
-    if (document.visibilityState === 'visible') flushToServer();
+    if (document.visibilityState === 'visible') flushImagePerfTelemetry();
   }, FLUSH_INTERVAL_MS);
 }
 
@@ -130,6 +154,6 @@ if (import.meta.env.DEV) {
     getSummary: getImagePerfSummary,
     getRecent: getRecentEntries,
     getAll: getEntries,
-    flush: flushToServer,
+    flush: flushImagePerfTelemetry,
   };
 }

@@ -1,4 +1,5 @@
 import { sql as rawSql } from '../db/index.js';
+import { PUBLIC_CATALOGUE_LETTER_TYPES } from './public-catalogue-unit.js';
 
 /**
  * Quality tiers for letter selection priority:
@@ -31,27 +32,45 @@ export async function pickFeaturedLetter(
   const collectionFilter = collectionId
     ? rawSql`AND l.collection_id = ${collectionId}`
     : rawSql``;
+  const publicCatalogueTypes = rawSql(PUBLIC_CATALOGUE_LETTER_TYPES);
 
   const rows = await rawSql<FeaturedLetterResult[]>`
     WITH ranked AS (
       SELECT
         l.id,
-        l.hook,
-        l.summary,
+        CASE
+          WHEN l.metadata_published THEN l.hook
+          WHEN l.type = 'P'
+            AND l.photo_description_status = 'VERIFIED'
+            AND NOT EXISTS (
+            SELECT 1
+            FROM letters peer
+            WHERE peer.collection_id = l.collection_id
+              AND peer.date_raw = l.date_raw
+              AND peer.type_sequence = l.type_sequence
+              AND peer.visibility = 'PUBLISHED'
+              AND peer.type <> 'P'
+          ) THEN l.photo_description
+          ELSE NULL
+        END AS hook,
+        CASE WHEN l.metadata_published THEN l.summary ELSE NULL END AS summary,
         l.letter_date   AS "letterDate",
         l.date_raw       AS "dateRaw",
-        l.sender,
-        l.recipient,
+        CASE WHEN l.metadata_published THEN l.sender ELSE NULL END AS sender,
+        CASE WHEN l.metadata_published THEN l.recipient ELSE NULL END AS recipient,
         l.collection_id  AS "collectionId",
         c.collection_code AS "collectionCode",
         c.title           AS "collectionTitle",
         l.type            AS "imageType",
         CASE
-          WHEN l.transcript_status = 'VERIFIED'
+          WHEN l.transcript_published
+           AND l.metadata_published
+           AND l.transcript_status = 'VERIFIED'
            AND l.metadata_content_status = 'VERIFIED' THEN 1
-          WHEN l.transcript_status = 'VERIFIED'
-            OR l.metadata_content_status = 'VERIFIED' THEN 2
-          WHEN l.metadata_content_status IN ('AI_DRAFT', 'EDITED') THEN 3
+          WHEN (l.transcript_published AND l.transcript_status = 'VERIFIED')
+            OR (l.metadata_published AND l.metadata_content_status = 'VERIFIED') THEN 2
+          WHEN l.metadata_published
+            AND l.metadata_content_status IN ('AI_DRAFT', 'EDITED') THEN 3
           ELSE 4
         END AS quality_tier,
         EXISTS (
@@ -60,6 +79,7 @@ export async function pickFeaturedLetter(
       FROM letters l
       JOIN collections c ON c.id = l.collection_id
       WHERE l.visibility = 'PUBLISHED'
+        AND l.type IN ${publicCatalogueTypes}
         ${collectionFilter}
     )
     SELECT

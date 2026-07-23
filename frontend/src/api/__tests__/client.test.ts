@@ -16,6 +16,7 @@ let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
+  localStorage.clear();
   consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
   consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => undefined);
   consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -101,6 +102,39 @@ describe('api client', () => {
   it('keeps absolute image urls unchanged and prefixes relative ones', () => {
     expect(getImageUrl('https://cdn.example.com/img.jpg')).toBe('https://cdn.example.com/img.jpg');
     expect(getImageUrl('/images/page-1')).toBe('http://localhost:3002/images/page-1');
+  });
+
+  it('does not put an admin token in public image URLs', () => {
+    localStorage.setItem('adminToken', 'reusable-admin-jwt');
+
+    expect(getImageUrl('/images/page-1?v=checksum', { width: 640 })).toBe(
+      'http://localhost:3002/images/page-1?v=checksum&w=640',
+    );
+    expect(getImageUrl('/images/page-1?token=stale-jwt&v=checksum')).toBe(
+      'http://localhost:3002/images/page-1?v=checksum',
+    );
+  });
+
+  it('keeps image URLs credential-free for HttpOnly cookie auth', () => {
+    localStorage.setItem('adminToken', 'reusable-admin-jwt');
+
+    expect(getImageUrl('/images/page-hidden', { width: 640 })).toBe(
+      'http://localhost:3002/images/page-hidden?w=640',
+    );
+    expect(getImageUrl('https://cdn.example.com/private.jpg')).toBe(
+      'https://cdn.example.com/private.jpg',
+    );
+    expect(getImageUrl('/blog-images/editor.jpg')).toBe(
+      'http://localhost:3002/blog-images/editor.jpg',
+    );
+  });
+
+  it('removes API image credential params case-insensitively', () => {
+    expect(
+      getImageUrl(
+        '/images/page-hidden?ToKeN=one&ADMINTOKEN=two&Access_Token=three&AUTHORIZATION=four&JWT=five&v=checksum',
+      ),
+    ).toBe('http://localhost:3002/images/page-hidden?v=checksum');
   });
 
   it('throws on fetch timeout (AbortError)', async () => {

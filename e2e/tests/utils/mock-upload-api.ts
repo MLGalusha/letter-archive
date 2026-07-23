@@ -1,5 +1,8 @@
 import type { Page } from '@playwright/test';
-import { API_BASE_URL } from './test-helpers';
+import {
+  API_BASE_URL,
+  installMockImageSessionApi,
+} from './test-helpers';
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -40,6 +43,8 @@ export async function installMockUploadApi(
     uploadError?: { message: string; requestId: string };
   } = {},
 ) {
+  await installMockImageSessionApi(page);
+
   await page.addInitScript(() => {
     localStorage.setItem('adminToken', 'mock-token');
   });

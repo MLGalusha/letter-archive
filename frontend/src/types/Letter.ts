@@ -23,6 +23,8 @@ export type VisibilityState = 'PUBLISHED' | 'HIDDEN';
 // Two-track content status system
 export type ContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
 
+export type DateConfidence = 'exact' | 'unknown' | 'inferred';
+
 // V2 Metadata types
 export type EmotionalTone = 'joyful' | 'hopeful' | 'neutral' | 'anxious' | 'sad' | 'angry' | 'desperate';
 
@@ -153,6 +155,22 @@ export interface LetterImage {
   segmentTrustState?: SegmentTrustState;
 }
 
+/**
+ * Image fields intentionally exposed by the public letter API.
+ *
+ * Keep this separate from LetterImage: filenames, OCR geometry, and review
+ * state belong to the admin contract even though both shapes render through
+ * the same image components.
+ */
+export interface PublicLetterImage {
+  id: string;
+  type: LetterImageType;
+  pageNumber?: number;
+  imageUrl: string;
+  width?: number;
+  height?: number;
+}
+
 export interface LetterCardData {
   id: string;
   title?: string;
@@ -226,6 +244,7 @@ export interface LetterMetadata {
   recipient?: string;
   date?: string;
   dateRaw?: string;
+  dateConfidence?: DateConfidence;
   location?: string;
   hook?: string;
   description?: string;
@@ -288,6 +307,80 @@ export interface LetterTranscript {
   fullText: string;
   verified: boolean;
   structuredPages?: StructuredPage[];
+}
+
+/** Public transcript projection. Raw structured OCR lines are admin-only. */
+export interface PublicLetterTranscript {
+  pages: LetterPageTranscript[];
+  fullText: string;
+  verified: boolean;
+}
+
+/** Metadata fields deliberately allowed across the public API boundary. */
+export interface PublicLetterMetadata {
+  sender?: string;
+  recipient?: string;
+  date?: string;
+  dateRaw?: string;
+  dateConfidence?: DateConfidence;
+  location?: string;
+  hook?: string;
+  description?: string;
+  tags?: string[];
+  verified: boolean;
+  emotionalTone?: EmotionalTone;
+  senderRecipientRelationship?: RelationshipType;
+  primaryTopics?: string[];
+  notableQuotes?: NotableQuote[];
+}
+
+export interface PublicLinkedPerson {
+  personId: string;
+  canonicalName: string;
+  role: string;
+}
+
+export interface PublicLinkedPlace {
+  placeId: string;
+  canonicalName: string;
+  role: string;
+}
+
+export interface PublicExtraContentItem {
+  type: LetterImageType;
+  label: string;
+  transcript: string;
+  imageIds: string[];
+}
+
+/**
+ * Positive public letter contract. Admin workflow, verification identities,
+ * extraction state, flags, raw OCR geometry, and filenames are absent by
+ * design rather than represented as optional fields.
+ */
+export interface PublicLetter {
+  id: string;
+  title: string;
+  collectionCode?: string;
+  images: PublicLetterImage[];
+  transcript: PublicLetterTranscript;
+  metadata: PublicLetterMetadata;
+  status: 'published';
+  visibility: 'PUBLISHED';
+  transcriptPublished: boolean;
+  metadataPublished: boolean;
+  transcriptStatus: ContentStatus;
+  metadataContentStatus: ContentStatus;
+  extraContentTranscript?: string;
+  extraContentItems?: PublicExtraContentItem[];
+  extraContentStatus: ContentStatus;
+  photoDescription?: string;
+  photoDescriptionStatus?: ContentStatus;
+  readingText?: string;
+  linkedPersons?: PublicLinkedPerson[];
+  linkedPlaces?: PublicLinkedPlace[];
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Letter {

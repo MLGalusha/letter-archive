@@ -27,6 +27,11 @@ vi.mock('../../../services/entities.js', () => ({
   deleteRelationship: deleteRelationshipMock,
   getCanonicalPersonById: getCanonicalPersonByIdMock,
   backfillRelationshipsFromLetters: backfillRelationshipsFromLettersMock,
+  buildHumanEntityProvenancePatch: (actor: string) => ({
+    entityExtractionRevision: null,
+    confirmedBy: actor,
+    confirmedAt: new Date(),
+  }),
 }));
 
 import relationshipsRouter from '../relationships.js';
@@ -136,6 +141,9 @@ describe('admin relationships route integration', () => {
       notes: undefined,
       discoveredInLetterId: undefined,
       confidence: 82,
+      entityExtractionRevision: null,
+      confirmedBy: 'admin',
+      confirmedAt: expect.any(Date),
     });
   });
 
@@ -160,6 +168,24 @@ describe('admin relationships route integration', () => {
     expect(response.body).toEqual({
       error: 'Relationship already exists between these people',
       requestId: expect.any(String),
+    });
+  });
+
+  it('promotes an edited extracted relationship to explicit admin confirmation', async () => {
+    const response = await invokeRouter(relationshipsRouter, {
+      method: 'PUT',
+      url: `/${RELATIONSHIP_ID}`,
+      path: `/${RELATIONSHIP_ID}`,
+      body: { notes: 'Corrected by a reviewer' },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(updateRelationshipMock).toHaveBeenCalledWith(RELATIONSHIP_ID, {
+      notes: 'Corrected by a reviewer',
+      entityExtractionRevision: null,
+      confirmedBy: 'admin',
+      confirmedAt: expect.any(Date),
     });
   });
 

@@ -108,4 +108,65 @@ describe('errorHandler', () => {
     );
     expect(log.error).toHaveBeenCalled();
   });
+
+  it('redacts query credentials from error logs', () => {
+    const req = createReq();
+    req.query = {
+      token: 'reusable-admin-jwt',
+      adminToken: 'legacy-admin-jwt',
+      q: 'alice',
+    };
+    const res = createRes();
+
+    errorHandler(new Error('boom'), req, res, vi.fn());
+
+    expect(log.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: {
+          token: '[REDACTED]',
+          adminToken: '[REDACTED]',
+          q: 'alice',
+        },
+      }),
+      'Request failed: boom',
+    );
+  });
+
+  it('does not log raw bodies or credential fragments from JSON parser errors', () => {
+    const req = createReq();
+    req.method = 'POST';
+    req.path = '/images/perf';
+    const res = createRes();
+    const err = Object.assign(
+      new SyntaxError('Unexpected token near reusable-admin-jwt'),
+      {
+        status: 400,
+        type: 'entity.parse.failed',
+        body: '{"token":"reusable-admin-jwt"',
+      },
+    );
+
+    errorHandler(err, req, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: 'Malformed JSON request body',
+      }),
+    );
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        err: {
+          name: 'SyntaxError',
+          type: 'entity.parse.failed',
+          statusCode: 400,
+          message: 'Malformed JSON request body',
+        },
+        errorType: 'malformed_json',
+      }),
+      'Request failed: Malformed JSON request body',
+    );
+    expect(JSON.stringify(log.warn.mock.calls)).not.toContain('reusable-admin-jwt');
+    expect(JSON.stringify(log.warn.mock.calls)).not.toContain('"body"');
+  });
 });

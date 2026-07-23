@@ -294,6 +294,8 @@ router.post('/:letterId/regenerate-entities', async (req, res, next) => {
     // Reset to PENDING so the atomic claim in runEntityExtractionOnly succeeds
     const resetResult = await db.update(letters).set({
       entityExtractionStatus: 'PENDING',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
       entityExtractionError: null,
       updatedAt: new Date(),
     }).where(and(
@@ -391,6 +393,8 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
       }
       const resetResult = await db.update(letters).set({
         entityExtractionStatus: 'PENDING',
+        entityExtractionRunId: null,
+        entityExtractionRunRevision: null,
         entityExtractionError: null,
         updatedAt: new Date(),
       }).where(and(
@@ -447,14 +451,63 @@ router.patch('/:letterId/identity', async (req, res, next) => {
       ...(recipientChanged ? { recipient: recipientValue } : {}),
     }));
 
-    const identityUpdated = await db
-      .update(letters)
-      .set(dbUpdates)
-      .where(and(...observedMetadataRevisionConditions(letterId, letter)))
-      .returning({ id: letters.id });
-    if (identityUpdated.length === 0) {
-      throw new AppError(409, 'Metadata changed before identity could be saved; reload and try again');
-    }
+    const aliasesToPreserve = await db.transaction(async (tx) => {
+      const identityUpdated = await tx
+        .update(letters)
+        .set(dbUpdates)
+        .where(and(...observedMetadataRevisionConditions(letterId, letter)))
+        .returning({ id: letters.id });
+      if (identityUpdated.length === 0) {
+        throw new AppError(409, 'Metadata changed before identity could be saved; reload and try again');
+      }
+
+      const candidates: Array<{
+        personId: string;
+        canonicalName: string;
+        role: 'sender' | 'recipient';
+      }> = [];
+      const captureAliasCandidate = async (
+        role: 'sender' | 'recipient',
+        newName: string,
+      ) => {
+        const linked = await tx.query.letterPersons.findFirst({
+          where: and(eq(letterPersons.letterId, letterId), eq(letterPersons.role, role)),
+        });
+        if (!linked) return;
+
+        const person = await tx.query.canonicalPersons.findFirst({
+          where: eq(canonicalPersons.id, linked.personId),
+        });
+        if (
+          person
+          && person.canonicalName.toLowerCase() !== newName.toLowerCase()
+        ) {
+          candidates.push({
+            personId: linked.personId,
+            canonicalName: person.canonicalName,
+            role,
+          });
+        }
+      };
+
+      // Capture the old linked people before participant synchronization can
+      // replace their role links. Alias writes remain a best-effort follow-up.
+      if (senderChanged && senderValue && letter.sender && !isPlaceholderValue(letter.sender)) {
+        await captureAliasCandidate('sender', senderValue);
+      }
+      if (recipientChanged && recipientValue && letter.recipient && !isPlaceholderValue(letter.recipient)) {
+        await captureAliasCandidate('recipient', recipientValue);
+      }
+
+      await syncLetterParticipantsFromMetadata({
+        letterId,
+        sender: senderChanged ? senderValue : undefined,
+        recipient: recipientChanged ? recipientValue : undefined,
+        database: tx,
+      });
+
+      return candidates;
+    });
 
     req.log.info({ letterId, senderValue, recipientValue, senderChanged, recipientChanged }, 'Identity update completed');
 
@@ -467,43 +520,12 @@ router.patch('/:letterId/identity', async (req, res, next) => {
         req.log.warn({ letterId, err }, 'Note auto-resolution failed for recipient'));
     }
 
-    // Preserve old canonical name as alias when renaming
-    // Uses the canonical person's name (not letter.sender which may be stale/intermediate)
-    const aliasPromises: Promise<void>[] = [];
-    async function preserveOldNameAsAlias(role: 'sender' | 'recipient', newName: string) {
-      const linked = await db.query.letterPersons.findFirst({
-        where: and(eq(letterPersons.letterId, letterId), eq(letterPersons.role, role)),
-      });
-      if (!linked) return;
-      const person = await db.query.canonicalPersons.findFirst({
-        where: eq(canonicalPersons.id, linked.personId),
-      });
-      if (!person) return;
-      // Only add if the canonical name differs from the new name (the real rename)
-      if (person.canonicalName.toLowerCase() !== newName.toLowerCase()) {
-        await addAliasToCanonicalPerson(linked.personId, person.canonicalName);
-      }
-    }
-    if (senderChanged && senderValue && letter.sender && !isPlaceholderValue(letter.sender)) {
-      aliasPromises.push(
-        preserveOldNameAsAlias('sender', senderValue).catch(err =>
-          req.log.warn({ letterId, err }, 'Failed to add old sender as alias')),
-      );
-    }
-    if (recipientChanged && recipientValue && letter.recipient && !isPlaceholderValue(letter.recipient)) {
-      aliasPromises.push(
-        preserveOldNameAsAlias('recipient', recipientValue).catch(err =>
-          req.log.warn({ letterId, err }, 'Failed to add old recipient as alias')),
-      );
-    }
-    await Promise.all(aliasPromises);
-
-    // Sync participant links with the new names
-    syncLetterParticipantsFromMetadata({
-      letterId,
-      sender: senderChanged ? senderValue : undefined,
-      recipient: recipientChanged ? recipientValue : undefined,
-    }).catch(err => req.log.warn({ letterId, err }, 'Participant sync failed after identity update'));
+    await Promise.all(
+      aliasesToPreserve.map(({ personId, canonicalName, role }) =>
+        addAliasToCanonicalPerson(personId, canonicalName).catch(err =>
+          req.log.warn({ letterId, role, err }, `Failed to add old ${role} as alias`)),
+      ),
+    );
 
     res.json(await requireLetterDto(letterId));
   } catch (error) {

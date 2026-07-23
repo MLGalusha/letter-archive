@@ -1,5 +1,12 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
-import { db, entityReviewQueue, type EntityReviewItem } from '../../db/index.js';
+import {
+  db,
+  entityReviewQueue,
+  type Database,
+  type EntityReviewItem,
+} from '../../db/index.js';
+
+type ReviewQueueDatabase = Pick<Database, 'insert'>;
 
 export async function addToReviewQueue(data: {
   entityType: 'person' | 'place';
@@ -8,8 +15,8 @@ export async function addToReviewQueue(data: {
   suggestedEntityId?: string;
   context?: string;
   confidence: number;
-}): Promise<void> {
-  await db.insert(entityReviewQueue).values({
+}, database: ReviewQueueDatabase = db): Promise<void> {
+  await database.insert(entityReviewQueue).values({
     entityType: data.entityType,
     extractedText: data.extractedText,
     letterId: data.letterId,

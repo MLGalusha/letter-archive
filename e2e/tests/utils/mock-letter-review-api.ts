@@ -1,7 +1,10 @@
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 import type { Page, Route } from '@playwright/test';
-import { API_BASE_URL } from './test-helpers';
+import {
+  API_BASE_URL,
+  installMockImageSessionApi,
+} from './test-helpers';
 
 interface MockLetterImage {
   id: string;
@@ -345,6 +348,8 @@ export async function installMockLetterReviewApi(
     >;
   } = {},
 ): Promise<MockLetterReviewContext> {
+  await installMockImageSessionApi(page);
+
   const letter = clone(options.initialLetter ?? baseLetter);
   const verifyTranscriptRequests: string[] = [];
   const unverifyTranscriptRequests: string[] = [];

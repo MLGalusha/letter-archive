@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { pickFeaturedLetter } from '../../services/pick-featured-letter.js';
 import { resolveRepresentativeLetterId } from '../../services/letters.js';
+import { resolveFeaturedSetting } from '../../services/featured-setting.js';
 import {
   db,
   updatePosts,
@@ -505,59 +506,29 @@ router.get('/content/featured-letter', async (req, res) => {
     };
 
     // 1. Check manual override
-    const [manualSetting] = await db
-      .select()
-      .from(siteSettings)
-      .where(eq(siteSettings.key, 'featured_letter_id'))
-      .limit(1);
-
-    if (manualSetting?.value) {
-      const resolvedId = await resolveRepresentativeLetterId(manualSetting.value, { publishedOnly: true });
-      const letter = resolvedId ? await fetchLetterDetails(resolvedId) : null;
-      if (letter?.id && letter.visibility === 'PUBLISHED') {
-        const normalizedId = resolvedId ?? letter.id;
-        if (normalizedId !== manualSetting.value) {
-          await db
-            .insert(siteSettings)
-            .values({ key: 'featured_letter_id', value: normalizedId })
-            .onConflictDoUpdate({
-              target: siteSettings.key,
-              set: { value: normalizedId, updatedAt: new Date() },
-            });
-        }
-        res.json({ letter_id: normalizedId, letter, source: 'manual' });
-        return;
-      }
-      // Stale — clear it
-      await db.delete(siteSettings).where(eq(siteSettings.key, 'featured_letter_id'));
+    const manual = await resolveFeaturedSetting(
+      'featured_letter_id',
+      fetchLetterDetails,
+      (letter) => letter.visibility === 'PUBLISHED',
+    );
+    if (manual) {
+      res.json({ letter_id: manual.letterId, letter: manual.letter, source: 'manual' });
+      return;
     }
 
     // 2. Check persisted auto-pick
-    const [autoSetting] = await db
-      .select()
-      .from(siteSettings)
-      .where(eq(siteSettings.key, 'auto_featured_letter_id'))
-      .limit(1);
-
-    if (autoSetting?.value) {
-      const resolvedId = await resolveRepresentativeLetterId(autoSetting.value, { publishedOnly: true });
-      const letter = resolvedId ? await fetchLetterDetails(resolvedId) : null;
-      if (letter?.id && letter.visibility === 'PUBLISHED') {
-        const normalizedId = resolvedId ?? letter.id;
-        if (normalizedId !== autoSetting.value) {
-          await db
-            .insert(siteSettings)
-            .values({ key: 'auto_featured_letter_id', value: normalizedId })
-            .onConflictDoUpdate({
-              target: siteSettings.key,
-              set: { value: normalizedId, updatedAt: new Date() },
-            });
-        }
-        res.json({ letter_id: normalizedId, letter, source: 'auto' });
-        return;
-      }
-      // Stale — clear it
-      await db.delete(siteSettings).where(eq(siteSettings.key, 'auto_featured_letter_id'));
+    const persistedAuto = await resolveFeaturedSetting(
+      'auto_featured_letter_id',
+      fetchLetterDetails,
+      (letter) => letter.visibility === 'PUBLISHED',
+    );
+    if (persistedAuto) {
+      res.json({
+        letter_id: persistedAuto.letterId,
+        letter: persistedAuto.letter,
+        source: 'auto',
+      });
+      return;
     }
 
     // 3. Auto-select and persist

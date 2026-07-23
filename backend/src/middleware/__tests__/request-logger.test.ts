@@ -78,4 +78,47 @@ describe('requestLogger', () => {
     );
     expect(mockLogIfSlow).not.toHaveBeenCalled();
   });
+
+  it('redacts reusable credentials from request query logs', () => {
+    const req = {
+      method: 'GET',
+      path: '/images/page-hidden',
+      query: {
+        token: 'reusable-admin-jwt',
+        adminToken: 'legacy-admin-jwt',
+        w: '640',
+        nested: {
+          token: 'nested-stream-token',
+          keep: 'visible',
+        },
+      },
+      get: vi.fn(() => undefined),
+    } as unknown as Request;
+
+    const res = {
+      statusCode: 200,
+      on: vi.fn(() => res),
+      get: vi.fn(() => undefined),
+      setHeader: vi.fn(),
+      json: vi.fn((body: unknown) => body),
+    } as unknown as Response;
+
+    requestLogger(req, res, vi.fn() as unknown as NextFunction);
+
+    expect(mockLog.debug).toHaveBeenCalledWith(
+      {
+        query: {
+          token: '[REDACTED]',
+          adminToken: '[REDACTED]',
+          w: '640',
+          nested: {
+            token: '[REDACTED]',
+            keep: 'visible',
+          },
+        },
+        contentLength: undefined,
+      },
+      'Request started',
+    );
+  });
 });

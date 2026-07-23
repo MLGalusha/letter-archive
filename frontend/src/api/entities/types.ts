@@ -98,12 +98,12 @@ export interface PersonRelationship {
 export interface PublicLetterForEntity {
   id: string;
   dateRaw: string;
-  letterDate?: string;
+  letterDate: string | null;
   role: PersonRole | PlaceRole;
-  sender?: string;
-  recipient?: string;
-  hook?: string;
-  summary?: string;
+  sender: string | null;
+  recipient: string | null;
+  hook: string | null;
+  summary: string | null;
 }
 
 export interface PublicPersonDetail {
@@ -111,8 +111,8 @@ export interface PublicPersonDetail {
     id: string;
     canonicalName: string;
     aliases: string[];
-    biography?: string;
-    biographyStatus?: ContentStatus;
+    biography: string | null;
+    biographyStatus: Extract<ContentStatus, "EMPTY" | "VERIFIED">;
   };
   relationships: Array<{
     id: string;
@@ -134,9 +134,8 @@ export interface PublicPlaceDetail {
     id: string;
     canonicalName: string;
     aliases: string[];
-    placeType?: PlaceType;
-    notes?: string;
-    themes?: string[];
+    notes: null;
+    themes: string[];
   };
   stats: {
     writtenFrom: number;
@@ -158,7 +157,6 @@ export interface GraphEdge {
   source: string;
   target: string;
   relationshipType: PersonRelationshipType;
-  confidence: number;
 }
 
 export interface RelationshipGraphData {

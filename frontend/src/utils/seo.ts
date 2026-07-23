@@ -1,7 +1,7 @@
 import { API_BASE_URL, type BlogPost } from '../api/client';
 import type { CollectionWithLetters } from '../api/collections';
 import type { PublicPersonDetail, PublicPlaceDetail } from '../api/entities';
-import type { Letter } from '../types/Letter';
+import type { PublicLetter } from '../types/Letter';
 
 export interface JsonLdObject {
   [key: string]: unknown;
@@ -256,7 +256,7 @@ export function buildBlogPostSeo(post: BlogPost): SeoPayload {
   };
 }
 
-export function buildLetterTitle(letter: Letter): string {
+export function buildLetterTitle(letter: PublicLetter): string {
   const people = [letter.metadata.sender, letter.metadata.recipient].filter(Boolean);
   const direction =
     people.length === 2
@@ -268,7 +268,7 @@ export function buildLetterTitle(letter: Letter): string {
   return letter.metadata.date ? `${direction}, ${letter.metadata.date}` : direction;
 }
 
-export function buildLetterDescription(letter: Letter): string {
+export function buildLetterDescription(letter: PublicLetter): string {
   const summary = collapseWhitespace(letter.metadata.description || '');
   if (summary) {
     return truncateText(summary, 160);
@@ -287,7 +287,7 @@ export function buildLetterDescription(letter: Letter): string {
   return 'Read this historical letter on Voices That Remain.';
 }
 
-export function buildLetterSeo(letter: Letter): SeoPayload {
+export function buildLetterSeo(letter: PublicLetter): SeoPayload {
   const title = buildLetterTitle(letter);
   const description = buildLetterDescription(letter);
   const canonicalPath = `/letter/${letter.id}`;

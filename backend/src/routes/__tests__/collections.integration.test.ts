@@ -4,7 +4,7 @@ import { invokeRouter } from '../../test/express-test-utils.js';
 const {
   listCollectionsMock,
   getCollectionByCodeMock,
-  resolveCollectionFeaturedLetterIdMock,
+  resolveCollectionStartHereMock,
   getCollectionAggregationsMock,
   transformLettersWithRelatedToDTOMock,
   selectMock,
@@ -23,7 +23,7 @@ const {
 } = vi.hoisted(() => ({
   listCollectionsMock: vi.fn(),
   getCollectionByCodeMock: vi.fn(),
-  resolveCollectionFeaturedLetterIdMock: vi.fn(),
+  resolveCollectionStartHereMock: vi.fn(),
   getCollectionAggregationsMock: vi.fn(),
   transformLettersWithRelatedToDTOMock: vi.fn(),
   selectMock: vi.fn(),
@@ -51,7 +51,7 @@ vi.mock('drizzle-orm', () => ({
 vi.mock('../../services/collections.js', () => ({
   listCollections: listCollectionsMock,
   getCollectionByCode: getCollectionByCodeMock,
-  resolveCollectionFeaturedLetterId: resolveCollectionFeaturedLetterIdMock,
+  resolveCollectionStartHere: resolveCollectionStartHereMock,
 }));
 
 vi.mock('../../dto/index.js', () => ({
@@ -61,6 +61,14 @@ vi.mock('../../dto/index.js', () => ({
 vi.mock('../../services/collection-profile.js', () => ({
   getCollectionAggregations: getCollectionAggregationsMock,
 }));
+
+vi.mock('../../services/public-read-model.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/public-read-model.js')>();
+  return {
+    ...actual,
+    toPublicLetter: (letter: unknown) => letter,
+  };
+});
 
 vi.mock('../../db/index.js', () => ({
   db: {
@@ -78,9 +86,12 @@ vi.mock('../../db/index.js', () => ({
     id: 'letters.id',
     hook: 'letters.hook',
     dateRaw: 'letters.dateRaw',
+    typeSequence: 'letters.typeSequence',
     collectionId: 'letters.collectionId',
     visibility: 'letters.visibility',
     letterDate: 'letters.letterDate',
+    type: 'letters.type',
+    metadataPublished: 'letters.metadataPublished',
   },
   collections: {
     id: 'collections.id',
@@ -128,6 +139,7 @@ describe('collections route integration', () => {
         description: 'Ninth set',
         createdAt: '2024-01-01T00:00:00Z',
         hook: null,
+        profileStatus: 'EMPTY',
       },
       {
         id: 'collection-10',
@@ -136,6 +148,7 @@ describe('collections route integration', () => {
         description: 'Tenth set',
         createdAt: '2024-02-01T00:00:00Z',
         hook: 'A brief hook',
+        profileStatus: 'VERIFIED',
       },
     ]);
 
@@ -143,13 +156,17 @@ describe('collections route integration', () => {
       (enriched: Array<{ letter: { id: string }; relatedItems: unknown[] }>) =>
         enriched.map((e) => e.letter),
     );
-    resolveCollectionFeaturedLetterIdMock.mockResolvedValue(null);
+    resolveCollectionStartHereMock.mockResolvedValue({
+      letterId: null,
+      reason: null,
+    });
     getCollectionAggregationsMock.mockResolvedValue({
       sentimentArc: [],
       topicEvolution: [],
       correspondents: [],
       formatBreakdown: [],
     });
+    lettersFindFirstMock.mockResolvedValue({ id: 'public-unit' });
   });
 
   it('returns public collections with published letter counts', async () => {
@@ -200,38 +217,46 @@ describe('collections route integration', () => {
         primarySender: null,
         primaryRecipient: null,
       },
-      {
-        id: 'collection-10',
-        collectionCode: '010',
-        title: 'Collection Ten',
-        description: 'Tenth set',
-        createdAt: '2024-02-01T00:00:00Z',
-        hook: 'A brief hook',
-        letterCount: 0,
-        dateRange: null,
-        primarySender: null,
-        primaryRecipient: null,
-      },
     ]);
     expect(response.headers['x-request-id']).toEqual(expect.any(String));
   });
 
-  it('returns the next collection number from the highest numeric code', async () => {
-    listCollectionsMock.mockResolvedValueOnce([
-      { id: 'collection-9', collectionCode: '009' },
-      { id: 'collection-10', collectionCode: '010' },
-      { id: 'collection-x', collectionCode: 'legacy' },
-    ]);
+  it('reflects collection revocation on the next list request', async () => {
+    let selectCallCount = 0;
+    selectMock.mockImplementation(() => {
+      selectCallCount++;
+      const isCountQuery = selectCallCount % 2 === 1;
+      const isFirstRequest = selectCallCount <= 2;
+      const rows = isCountQuery && isFirstRequest
+        ? [{ collectionId: 'collection-9', count: 1 }]
+        : [];
+      return {
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            groupBy: vi.fn().mockResolvedValue(rows),
+          }),
+        }),
+      };
+    });
 
-    const response = await invokeRouter(collectionsRouter, {
+    const firstResponse = await invokeRouter(collectionsRouter, {
       method: 'GET',
-      url: '/collections/next-number',
-      path: '/collections/next-number',
+      url: '/collections',
+      path: '/collections',
+      headers: { accept: 'application/json' },
+    });
+    const revokedResponse = await invokeRouter(collectionsRouter, {
+      method: 'GET',
+      url: '/collections',
+      path: '/collections',
       headers: { accept: 'application/json' },
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toEqual({ nextCollectionNumber: 11 });
+    expect(firstResponse.statusCode).toBe(200);
+    expect(firstResponse.body).toHaveLength(1);
+    expect(revokedResponse.statusCode).toBe(200);
+    expect(revokedResponse.body).toEqual([]);
+    expect(selectMock).toHaveBeenCalledTimes(4);
   });
 
   it('returns a collection detail payload with transformed letters', async () => {
@@ -240,6 +265,9 @@ describe('collections route integration', () => {
       collectionCode: '009',
       title: 'Collection Nine',
       description: 'Ninth set',
+      createdAt: '2024-01-01T00:00:00Z',
+      hook: 'Draft collection hook',
+      profileStatus: 'AI_DRAFT',
     });
     lettersFindManyMock.mockResolvedValueOnce([
       {
@@ -269,6 +297,8 @@ describe('collections route integration', () => {
       collectionCode: '009',
       title: 'Collection Nine',
       description: 'Ninth set',
+      createdAt: '2024-01-01T00:00:00Z',
+      hook: null,
       letters: [
         { id: 'letter-1', dateRaw: '19470810', typeSequence: '01', type: 'L' },
         { id: 'letter-2', dateRaw: '19470811', typeSequence: '01', type: 'L' },
@@ -286,6 +316,65 @@ describe('collections route integration', () => {
         relatedItems: [],
       },
     ]);
+  });
+
+  it('does not expose a collection whose only published records are supplementary', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      profileStatus: 'EMPTY',
+    });
+    lettersFindManyMock.mockResolvedValueOnce([
+      { id: 'cover-1', dateRaw: '19470810', typeSequence: '01', type: 'C' },
+      { id: 'note-1', dateRaw: '19470811', typeSequence: '01', type: 'N' },
+    ]);
+
+    const response = await invokeRouter(collectionsRouter, {
+      method: 'GET',
+      url: '/collections/009',
+      path: '/collections/009',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body).toEqual({
+      error: 'Collection not found',
+      requestId: expect.any(String),
+    });
+    expect(transformLettersWithRelatedToDTOMock).not.toHaveBeenCalled();
+  });
+
+  it('reflects collection detail revocation on the next request', async () => {
+    const collection = {
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      profileStatus: 'EMPTY',
+    };
+    getCollectionByCodeMock.mockResolvedValue(collection);
+    lettersFindManyMock
+      .mockResolvedValueOnce([
+        { id: 'letter-1', dateRaw: '19470810', typeSequence: '01', type: 'L' },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const firstResponse = await invokeRouter(collectionsRouter, {
+      method: 'GET',
+      url: '/collections/009',
+      path: '/collections/009',
+      headers: { accept: 'application/json' },
+    });
+    const revokedResponse = await invokeRouter(collectionsRouter, {
+      method: 'GET',
+      url: '/collections/009',
+      path: '/collections/009',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(firstResponse.statusCode).toBe(200);
+    expect(revokedResponse.statusCode).toBe(404);
+    expect(lettersFindManyMock).toHaveBeenCalledTimes(2);
   });
 
   it('injects request ids into collection 404 responses', async () => {
@@ -308,7 +397,21 @@ describe('collections route integration', () => {
     );
   });
 
-  it('auto-picks and persists a featured letter for the public collection profile when none is saved', async () => {
+  it('does not expose the admin collection-number sequence publicly', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce(null);
+
+    const response = await invokeRouter(collectionsRouter, {
+      method: 'GET',
+      url: '/collections/next-number',
+      path: '/collections/next-number',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body).not.toHaveProperty('nextCollectionNumber');
+  });
+
+  it('uses the collection service featured-letter winner for the public profile', async () => {
     getCollectionByCodeMock.mockResolvedValueOnce({
       id: 'collection-9',
       collectionCode: '009',
@@ -316,19 +419,149 @@ describe('collections route integration', () => {
       description: 'Ninth set',
       hook: null,
       profileNarrative: null,
-      profileStatus: 'EMPTY',
+      profileStatus: 'VERIFIED',
       profileStartHereLetterId: null,
-      profileStartHereReason: '',
-      profileReadingPaths: [],
+      profileStartHereReason: 'Originally loaded stale reason',
+      profileReadingPaths: [{
+        title: 'A verified path',
+        letterIds: ['letter-1', 'private-letter'],
+      }],
       profileGapAnalysis: [],
-      profileThemes: [],
+      profileThemes: [{
+        name: 'A verified theme',
+        letterIds: ['private-letter', 'letter-1'],
+      }],
     });
-    resolveCollectionFeaturedLetterIdMock.mockResolvedValueOnce('letter-1');
-    lettersFindFirstMock.mockResolvedValueOnce({
+    resolveCollectionStartHereMock.mockResolvedValueOnce({
+      letterId: 'letter-1',
+      reason: 'Resolved winner reason',
+    });
+    lettersFindManyMock.mockResolvedValueOnce([{
       id: 'letter-1',
-      hook: 'Start here',
-      letterDate: '1947-08-10',
+      collectionId: 'collection-9',
       dateRaw: '19470810',
+      typeSequence: '01',
+      type: 'L',
+      metadataPublished: true,
+    }]);
+    lettersFindFirstMock
+      .mockResolvedValueOnce({ id: 'public-unit' })
+      .mockResolvedValueOnce({
+        id: 'letter-1',
+        hook: 'Start here',
+        letterDate: '1947-08-10',
+        dateRaw: '19470810',
+        metadataPublished: true,
+      });
+
+    const response = await invokeRouter(collectionsRouter, {
+      method: 'GET',
+      url: '/collections/009/profile',
+      path: '/collections/009/profile',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      profileStatus: 'VERIFIED',
+      profileCorrespondents: [],
+      startHere: {
+        letterId: 'letter-1',
+        reason: 'Resolved winner reason',
+        hook: 'Start here',
+        date: '1947-08-10',
+      },
+      readingPaths: [{
+        title: 'A verified path',
+        letterIds: ['letter-1'],
+      }],
+      themes: [{
+        name: 'A verified theme',
+        letterIds: ['letter-1'],
+      }],
+    });
+    expect(resolveCollectionStartHereMock).toHaveBeenCalledWith(
+      'collection-9',
+      {
+        letterId: null,
+        reason: 'Originally loaded stale reason',
+      },
+    );
+    expect(updateSetMock).not.toHaveBeenCalled();
+  });
+
+  it('removes orphan supplementary records from verified profile references', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      profileStatus: 'VERIFIED',
+      profileStartHereLetterId: null,
+      profileReadingPaths: [{
+        title: 'A path',
+        letterIds: ['root', 'attached-cover', 'orphan-cover'],
+      }],
+      profileThemes: [{
+        name: 'A theme',
+        letterIds: ['orphan-cover', 'attached-cover'],
+      }],
+    });
+    lettersFindManyMock.mockResolvedValueOnce([
+      {
+        id: 'root',
+        collectionId: 'collection-9',
+        dateRaw: '19470810',
+        typeSequence: '01',
+        type: 'L',
+        metadataPublished: true,
+      },
+      {
+        id: 'attached-cover',
+        collectionId: 'collection-9',
+        dateRaw: '19470810',
+        typeSequence: '01',
+        type: 'C',
+        metadataPublished: true,
+      },
+      {
+        id: 'orphan-cover',
+        collectionId: 'collection-9',
+        dateRaw: '19470811',
+        typeSequence: '01',
+        type: 'C',
+        metadataPublished: true,
+      },
+    ]);
+
+    const response = await invokeRouter(collectionsRouter, {
+      method: 'GET',
+      url: '/collections/009/profile',
+      path: '/collections/009/profile',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      readingPaths: [{ title: 'A path', letterIds: ['root', 'attached-cover'] }],
+      themes: [{ name: 'A theme', letterIds: ['attached-cover'] }],
+    });
+  });
+
+  it('does not expose draft collection-profile content', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      description: 'Ninth set',
+      hook: 'Private generated hook',
+      profileNarrative: 'Private generated narrative',
+      profileStatus: 'AI_DRAFT',
+      profileStartHereLetterId: 'private-letter',
+      profileStartHereReason: 'Private reason',
+      profileReadingPaths: [{ title: 'Private path', letterIds: ['private-letter'] }],
+      profileGapAnalysis: [{ description: 'Private gap' }],
+      profileThemes: [{ name: 'Private theme', letterIds: ['private-letter'] }],
+      profileCorrespondents: [{ name: 'Private person', biography: 'Private bio' }],
     });
 
     const response = await invokeRouter(collectionsRouter, {
@@ -340,17 +573,40 @@ describe('collections route integration', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toMatchObject({
+      hook: null,
+      narrative: null,
       profileStatus: 'EMPTY',
+      startHere: null,
+      readingPaths: [],
+      gapAnalysis: [],
+      themes: [],
       profileCorrespondents: [],
-      startHere: {
-        letterId: 'letter-1',
-        reason: '',
-        hook: 'Start here',
-        date: '1947-08-10',
-      },
     });
-    expect(updateSetMock).toHaveBeenCalledWith({
-      profileStartHereLetterId: 'letter-1',
+    expect(resolveCollectionStartHereMock).not.toHaveBeenCalled();
+  });
+
+  it('does not expose a profile without a public primary catalogue unit', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      profileStatus: 'VERIFIED',
     });
+    lettersFindFirstMock.mockResolvedValueOnce(null);
+
+    const response = await invokeRouter(collectionsRouter, {
+      method: 'GET',
+      url: '/collections/009/profile',
+      path: '/collections/009/profile',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body).toEqual({
+      error: 'Collection not found',
+      requestId: expect.any(String),
+    });
+    expect(getCollectionAggregationsMock).not.toHaveBeenCalled();
+    expect(resolveCollectionStartHereMock).not.toHaveBeenCalled();
   });
 });

@@ -2,8 +2,9 @@ import { extractMetadataV2, extractEntities } from '../ai/openai.js';
 import type { ExtractionCorrections } from '../ai/openai.js';
 import {
   getLetterWithPages,
-  updateEntityExtraction,
   claimEntityExtraction,
+  failEntityExtraction,
+  type EntityExtractionClaim,
 } from '../services/letters.js';
 import {
   claimQueuedMetadata,
@@ -14,12 +15,13 @@ import {
   type MetadataClaim,
   type MetadataHeartbeat,
 } from '../services/letter/metadata-job.js';
-import { processEntityExtraction } from '../services/entities.js';
+import {
+  EntityExtractionClaimLostError,
+  processEntityExtraction,
+} from '../services/entities.js';
 import { updateJobProgress, clearJobProgress } from '../services/processing-queue.js';
 import { createLogger } from '../utils/logger.js';
 import { notify } from '../services/notifications.js';
-import { db, letters } from '../db/index.js';
-import { eq } from 'drizzle-orm';
 
 const log = createLogger({ module: 'metadata-v2-pipeline' });
 export interface ExtractionOptions {
@@ -286,10 +288,11 @@ async function executeClaimedMetadataExtractionV2(
 
   updateJobProgress(letterId, 'metadata', 1, 2, 'Extracting entities');
 
+  let entityClaim: EntityExtractionClaim | null = null;
   try {
     // Claim entity extraction atomically (within same pipeline, but still safe)
-    const entityClaimed = await claimEntityExtraction(letterId, 'PENDING');
-    if (!entityClaimed) {
+    entityClaim = await claimEntityExtraction(letterId, 'PENDING');
+    if (!entityClaim) {
       letterLog.info('Entity extraction already claimed — skipping Phase 2');
       clearJobProgress(letterId, 'metadata');
       return { kind: 'completed' };
@@ -317,12 +320,13 @@ async function executeClaimedMetadataExtractionV2(
       corrections: entityCorrections,
     });
 
-    // Process entities: auto-populate canonical entities, link to letter, create relationships
-    const processingResult = await processEntityExtraction(entityResult.entities, letterId);
-
-    // Keep the job RUNNING until entity persistence is complete so downstream
-    // exclusion remains in force for the entire write.
-    await updateEntityExtraction(letterId, 'SUCCESS', entityResult.entities, null);
+    // The service materializes and commits the complete replacement under the
+    // exact run token in one transaction.
+    const processingResult = await processEntityExtraction(
+      entityResult.entities,
+      letterId,
+      entityClaim,
+    );
 
     clearJobProgress(letterId, 'metadata');
 
@@ -363,6 +367,11 @@ async function executeClaimedMetadataExtractionV2(
   } catch (error) {
     clearJobProgress(letterId, 'metadata');
 
+    if (error instanceof EntityExtractionClaimLostError) {
+      letterLog.info('Entity extraction run was superseded before commit');
+      return { kind: 'completed' };
+    }
+
     const message = error instanceof Error ? error.message : 'Unknown error';
 
     letterLog.warn(
@@ -374,7 +383,13 @@ async function executeClaimedMetadataExtractionV2(
       'Phase 2 (entity extraction) failed — basic metadata preserved'
     );
 
-    await updateEntityExtraction(letterId, 'FAILED', undefined, message);
+    const failed = entityClaim
+      ? await failEntityExtraction(letterId, entityClaim, message)
+      : false;
+    if (entityClaim && !failed) {
+      letterLog.info('Entity extraction failure belonged to a superseded run');
+      return { kind: 'completed' };
+    }
 
     // Surface the failure to the admin — basic metadata still saved, but entity work is missing
     void notify({
@@ -403,27 +418,10 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
 
   letterLog.debug('Starting entity-only extraction');
 
-  const letter = await getLetterWithPages(letterId);
-
-  if (!letter) {
-    throw new Error(`Letter not found: ${letterId}`);
-  }
-
-  if (!letter.transcriptionText) {
-    throw new Error(`Letter ${letterId} has no transcription text`);
-  }
-
-  // Read existing basic metadata for context
-  const basicMetadata = {
-    sender: letter.sender,
-    recipient: letter.recipient,
-    senderRecipientRelationship: letter.senderRecipientRelationship,
-    summary: letter.summary,
-  };
-
-  // Atomically claim the entity extraction job
-  const claimed = await claimEntityExtraction(letterId, 'PENDING');
-  if (!claimed) {
+  // Claim before loading model input so the source bound to this run is an
+  // authoritative post-claim snapshot rather than a stale pre-claim read.
+  const claim = await claimEntityExtraction(letterId, 'PENDING');
+  if (!claim) {
     letterLog.info('Entity extraction job already claimed by another process — skipping');
     return;
   }
@@ -439,6 +437,23 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
     : undefined;
 
   try {
+    const letter = await getLetterWithPages(letterId);
+
+    if (!letter) {
+      throw new Error(`Letter not found: ${letterId}`);
+    }
+
+    if (!letter.transcriptionText) {
+      throw new Error(`Letter ${letterId} has no transcription text`);
+    }
+
+    const basicMetadata = {
+      sender: letter.sender,
+      recipient: letter.recipient,
+      senderRecipientRelationship: letter.senderRecipientRelationship,
+      summary: letter.summary,
+    };
+
     const entityResult = await extractEntities({
       transcriptionText: letter.transcriptionText,
       letterId,
@@ -452,22 +467,11 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
       corrections,
     });
 
-    // Check if the job was cancelled while we were processing
-    const entityState = await db.query.letters.findFirst({
-      where: eq(letters.id, letterId),
-      columns: { entityExtractionStatus: true },
-    });
-    if (entityState?.entityExtractionStatus === 'FAILED') {
-      letterLog.info('Entity extraction was cancelled during processing — discarding result');
-      clearJobProgress(letterId, 'entity_extraction');
-      return;
-    }
-
-    const processingResult = await processEntityExtraction(entityResult.entities, letterId);
-
-    // Keep the job RUNNING until entity persistence is complete so downstream
-    // exclusion remains in force for the entire write.
-    await updateEntityExtraction(letterId, 'SUCCESS', entityResult.entities, null);
+    const processingResult = await processEntityExtraction(
+      entityResult.entities,
+      letterId,
+      claim,
+    );
 
     clearJobProgress(letterId, 'entity_extraction');
 
@@ -505,9 +509,17 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
   } catch (error) {
     clearJobProgress(letterId, 'entity_extraction');
 
+    if (error instanceof EntityExtractionClaimLostError) {
+      letterLog.info('Entity extraction run was superseded before commit');
+      return;
+    }
+
     const message = error instanceof Error ? error.message : 'Unknown error';
     letterLog.error({ letterId, err: error }, 'Entity-only extraction failed');
-    await updateEntityExtraction(letterId, 'FAILED', undefined, message);
+    if (!await failEntityExtraction(letterId, claim, message)) {
+      letterLog.info('Entity extraction failure belonged to a superseded run');
+      return;
+    }
     throw error;
   }
 }

@@ -4,8 +4,8 @@ const {
   extractMetadataV2Mock,
   extractEntitiesMock,
   getLetterWithPagesMock,
-  updateEntityExtractionMock,
   claimEntityExtractionMock,
+  failEntityExtractionMock,
   observeMetadataStateMock,
   claimQueuedMetadataMock,
   completeMetadataMock,
@@ -18,8 +18,8 @@ const {
   extractMetadataV2Mock: vi.fn(),
   extractEntitiesMock: vi.fn(),
   getLetterWithPagesMock: vi.fn(),
-  updateEntityExtractionMock: vi.fn(),
   claimEntityExtractionMock: vi.fn(),
+  failEntityExtractionMock: vi.fn(),
   observeMetadataStateMock: vi.fn(),
   claimQueuedMetadataMock: vi.fn(),
   completeMetadataMock: vi.fn(),
@@ -37,8 +37,8 @@ vi.mock('../../ai/openai.js', () => ({
 
 vi.mock('../../services/letters.js', () => ({
   getLetterWithPages: getLetterWithPagesMock,
-  updateEntityExtraction: updateEntityExtractionMock,
   claimEntityExtraction: claimEntityExtractionMock,
+  failEntityExtraction: failEntityExtractionMock,
 }));
 
 vi.mock('../../services/letter/metadata-job.js', () => ({
@@ -50,6 +50,7 @@ vi.mock('../../services/letter/metadata-job.js', () => ({
 }));
 
 vi.mock('../../services/entities.js', () => ({
+  EntityExtractionClaimLostError: class EntityExtractionClaimLostError extends Error {},
   processEntityExtraction: processEntityExtractionMock,
 }));
 
@@ -94,6 +95,7 @@ const entities = {
   relationships: [],
   person_place_connections: [],
 };
+const entityClaim = { runId: 'entity-run-a', revision: 1 };
 
 function letter() {
   const leaseExpiresAt = new Date('2026-07-17T12:05:00.000Z');
@@ -129,7 +131,8 @@ describe('metadata entity persistence ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getLetterWithPagesMock.mockResolvedValue(letter());
-    claimEntityExtractionMock.mockResolvedValue(true);
+    claimEntityExtractionMock.mockResolvedValue(entityClaim);
+    failEntityExtractionMock.mockResolvedValue(true);
     findFirstMock.mockResolvedValue({
       metadataStatus: 'RUNNING',
       metadataRunId: 'run-a',
@@ -164,22 +167,43 @@ describe('metadata entity persistence ownership', () => {
     });
   });
 
-  it('keeps standalone entity extraction RUNNING until entity writes finish', async () => {
+  it('passes standalone ownership to the atomic entity commit boundary', async () => {
     await runEntityExtractionOnly('letter-1');
 
-    expect(processEntityExtractionMock).toHaveBeenCalledTimes(1);
-    expect(updateEntityExtractionMock).toHaveBeenCalledWith(
-      'letter-1',
-      'SUCCESS',
+    expect(claimEntityExtractionMock.mock.invocationCallOrder[0]).toBeLessThan(
+      getLetterWithPagesMock.mock.invocationCallOrder[0]!,
+    );
+    expect(processEntityExtractionMock).toHaveBeenCalledWith(
       entities,
-      null,
+      'letter-1',
+      entityClaim,
     );
-    expect(processEntityExtractionMock.mock.invocationCallOrder[0]).toBeLessThan(
-      updateEntityExtractionMock.mock.invocationCallOrder[0]!,
-    );
+    expect(failEntityExtractionMock).not.toHaveBeenCalled();
   });
 
-  it('keeps pipeline entity extraction RUNNING until entity writes finish', async () => {
+  it('binds standalone model input to the authoritative post-claim reload', async () => {
+    getLetterWithPagesMock.mockResolvedValueOnce({
+      ...letter(),
+      transcriptionText: 'Fresh post-claim transcript',
+      sender: 'Fresh Alice',
+      recipient: 'Fresh Bob',
+      summary: 'Fresh summary',
+    });
+
+    await runEntityExtractionOnly('letter-1');
+
+    expect(extractEntitiesMock).toHaveBeenCalledWith(expect.objectContaining({
+      transcriptionText: 'Fresh post-claim transcript',
+      basicMetadata: {
+        sender: 'Fresh Alice',
+        recipient: 'Fresh Bob',
+        senderRecipientRelationship: 'friend',
+        summary: 'Fresh summary',
+      },
+    }));
+  });
+
+  it('passes pipeline ownership to the atomic entity commit boundary', async () => {
     await runMetadataExtractionV2('letter-1', undefined, { runId: 'run-a', revision: 4 });
 
     expect(completeMetadataMock).toHaveBeenCalledWith(
@@ -187,12 +211,23 @@ describe('metadata entity persistence ownership', () => {
       { runId: 'run-a', revision: 4 },
       expect.any(Object),
     );
-    const successCallIndex = updateEntityExtractionMock.mock.calls.findIndex(
-      ([, status]) => status === 'SUCCESS',
+    expect(processEntityExtractionMock).toHaveBeenCalledWith(
+      entities,
+      'letter-1',
+      entityClaim,
     );
-    expect(successCallIndex).toBeGreaterThanOrEqual(0);
-    expect(processEntityExtractionMock.mock.invocationCallOrder[0]).toBeLessThan(
-      updateEntityExtractionMock.mock.invocationCallOrder[successCallIndex]!,
+    expect(failEntityExtractionMock).not.toHaveBeenCalled();
+  });
+
+  it('fails only the exact standalone run when extraction throws', async () => {
+    extractEntitiesMock.mockRejectedValueOnce(new Error('provider failed'));
+
+    await expect(runEntityExtractionOnly('letter-1')).rejects.toThrow('provider failed');
+
+    expect(failEntityExtractionMock).toHaveBeenCalledWith(
+      'letter-1',
+      entityClaim,
+      'provider failed',
     );
   });
 

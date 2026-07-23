@@ -1,10 +1,20 @@
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import { eq, count, and, isNull, gt } from 'drizzle-orm';
 import { db, adminUsers, adminInvites } from '../db/index.js';
 import { env } from '../config/env.js';
-import { hashPassword, verifyPassword, generateToken } from '../auth/jwt.js';
+import {
+  generateImageSessionToken,
+  generateToken,
+  hashPassword,
+  verifyPassword,
+  verifyToken,
+} from '../auth/jwt.js';
+import {
+  clearImageSessionCookie,
+  setImageSessionCookie,
+} from '../auth/image-session.js';
 import { validateBody } from '../middleware/validate.js';
 import { requireAuth } from '../middleware/auth.js';
 import { authRateLimit } from '../middleware/rate-limit.js';
@@ -18,6 +28,20 @@ import {
 import { isOwnerAdminEmail } from '../services/admin-ownership.js';
 
 const router = Router();
+
+function establishImageSession(
+  res: Response,
+  user: { id: string; email: string },
+  expiresAt?: number,
+): void {
+  const imageSessionToken = generateImageSessionToken(
+    user.id,
+    user.email,
+    expiresAt,
+  );
+  setImageSessionCookie(res, imageSessionToken);
+  res.setHeader('Cache-Control', 'private, no-store');
+}
 
 // ============================================================================
 // Schemas
@@ -98,6 +122,7 @@ router.post('/auth/login', authRateLimit, validateBody(loginSchema), async (req,
     }
 
     const token = generateToken(user.id, user.email);
+    establishImageSession(res, user, verifyToken(token)?.exp);
     req.log?.info({ userId: user.id, email: user.email }, 'Admin login successful');
 
     res.json({ token, email: user.email });
@@ -138,6 +163,7 @@ router.post('/auth/setup', authRateLimit, validateBody(setupSchema), async (req,
       .returning();
 
     const token = generateToken(user.id, user.email);
+    establishImageSession(res, user, verifyToken(token)?.exp);
     req.log?.info({ userId: user.id, email: user.email }, 'Admin account created via setup');
 
     res.status(201).json({ token, email: user.email });
@@ -159,6 +185,28 @@ router.get('/auth/status', async (req, res) => {
     req.log?.error({ error }, 'Auth status check error');
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// ============================================================================
+// /auth/image-session — Browser-only credential for image GETs
+// ============================================================================
+
+router.post('/auth/image-session', requireAuth, (req, res) => {
+  establishImageSession(
+    res,
+    {
+      id: req.user!.userId,
+      email: req.user!.email,
+    },
+    req.user!.exp,
+  );
+  res.status(204).end();
+});
+
+router.delete('/auth/image-session', (_req, res) => {
+  clearImageSessionCookie(res);
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.status(204).end();
 });
 
 // ============================================================================
@@ -288,6 +336,7 @@ router.post('/auth/accept-invite', authRateLimit, validateBody(acceptInviteSchem
     });
 
     const authToken = generateToken(user.id, user.email);
+    establishImageSession(res, user, verifyToken(authToken)?.exp);
     req.log?.info({ userId: user.id, email, inviteId: invite.id }, 'Admin account created via invite');
 
     // Notify existing admins about the new member

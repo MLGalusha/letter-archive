@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { eq, and, or, inArray, ilike, asc, desc, sql } from 'drizzle-orm';
+import { eq, and, or, inArray, ilike, asc, desc, sql, type SQLWrapper } from 'drizzle-orm';
 import { db, letters, collections, letterPages, type LetterType } from '../db/index.js';
-import { archiveSearchQuerySchema, letterQuerySchema, type ArchiveSearchQuery } from '../schemas/letter.js';
+import { archiveSearchQuerySchema, publicLetterQuerySchema, type ArchiveSearchQuery } from '../schemas/letter.js';
 import {
   formatLetterDate,
   formatPartialDate,
@@ -15,59 +15,20 @@ import {
 } from '../dto/index.js';
 import { getRows } from '../services/letter-queries.js';
 import { logIfSlow, TIMING_THRESHOLDS } from '../utils/logger.js';
-import type { FrontendLetter } from '../dto/letter.dto.js';
+import {
+  publicFieldSql,
+  toPublicLetter,
+} from '../services/public-read-model.js';
+import {
+  isPhotoOnlyCatalogueUnit,
+  publicCatalogueLetterTypeSql,
+  publicCatalogueRepresentativeOrderSql,
+  retainPublicCatalogueRepresentatives,
+  selectPublicCatalogueRepresentative,
+} from '../services/public-catalogue-unit.js';
+import { isPublicEntityProjection } from '../services/entities/public-projection.js';
 
 const router = Router();
-
-// Photo-only types where photoDescription is always visible (no content toggles)
-const PHOTO_ONLY_TYPES = new Set(['photo']);
-
-// Supplementary types that should not appear as standalone public entries.
-// These only make sense alongside a primary content type (L, P, A, D, V).
-const SUPPLEMENTARY_TYPES = new Set(['C', 'T', 'E', 'N']);
-
-/**
- * Strips unpublished transcript/metadata content from a letter DTO
- * for public-facing responses. Photo-only records are exempt.
- */
-function stripUnpublishedContent(dto: FrontendLetter): FrontendLetter {
-  // Guard: if publish flags aren't present, return as-is
-  if (dto.transcriptPublished === undefined && dto.metadataPublished === undefined) return dto;
-
-  const images = dto.images ?? [];
-  const primaryType = images[0]?.type;
-  const isPhotoOnly = primaryType && PHOTO_ONLY_TYPES.has(primaryType) &&
-    images.every((img) => img.type === 'photo');
-
-  if (isPhotoOnly) return dto;
-
-  const result = { ...dto };
-
-  if (!dto.transcriptPublished && dto.transcript) {
-    result.transcript = { pages: [], fullText: '', verified: dto.transcript.verified };
-    result.extraContentTranscript = undefined;
-    result.extraContentItems = undefined;
-    result.readingText = undefined;
-  }
-
-  if (!dto.metadataPublished && dto.metadata) {
-    result.metadata = {
-      ...dto.metadata,
-      sender: undefined,
-      recipient: undefined,
-      location: undefined,
-      hook: undefined,
-      description: undefined,
-      tags: undefined,
-      emotionalTone: undefined,
-      senderRecipientRelationship: undefined,
-      primaryTopics: undefined,
-      notableQuotes: undefined,
-    };
-  }
-
-  return result;
-}
 
 const MEDIA_COUNT_LABELS = {
   letter: ['page', 'pages'],
@@ -97,7 +58,9 @@ type SummaryLetterWithRelations = {
   summary: string | null;
   transcriptionText: string | null;
   extraContentTranscript: string | null;
+  extraContentStatus: LetterWithRelations['extraContentStatus'];
   photoDescription: string | null;
+  photoDescriptionStatus: LetterWithRelations['photoDescriptionStatus'];
   metadataContentStatus: LetterWithRelations['metadataContentStatus'];
   transcriptPublished: boolean;
   metadataPublished: boolean;
@@ -207,15 +170,16 @@ const ARCHIVE_FORMAT_LABELS = {
 router.get('/letters', async (req, res, next) => {
   const start = Date.now();
   try {
-    const query = letterQuerySchema.parse(req.query);
+    const query = publicLetterQuerySchema.parse(req.query);
 
     req.log.debug(
-      { collection: query.collection, visibility: query.visibility, workflow: query.workflow, page: query.page },
+      { collection: query.collection, page: query.page },
       'Letters list query'
     );
 
-    // Build conditions WITHOUT workflow filter (applied after grouping)
-    const conditions = [];
+    // Public reads always start from published rows. Publication is not a
+    // caller-selected filter on this route.
+    const conditions = [eq(letters.visibility, 'PUBLISHED')];
 
     // Filter by collection code - supports partial matching (e.g., "7" matches "007")
     if (query.collection) {
@@ -232,11 +196,6 @@ router.get('/letters', async (req, res, next) => {
       }
     }
 
-    // Filter by visibility (can apply directly since all types share visibility)
-    if (query.visibility) {
-      conditions.push(eq(letters.visibility, query.visibility));
-    }
-
     // NOTE: workflow filter NOT applied here - applied after grouping below
 
     // Determine sort column and order
@@ -250,11 +209,7 @@ router.get('/letters', async (req, res, next) => {
           // Replace X with 0 so unknown parts sort at the beginning of their range
           return sql`REPLACE(${letters.dateRaw}, 'X', '0')`;
         case 'sender':
-          return letters.sender;
-        case 'workflow':
-          return letters.workflow;
-        case 'visibility':
-          return letters.visibility;
+          return publicFieldSql(letters.metadataPublished, letters.sender);
         case 'createdAt':
         default:
           return letters.createdAt;
@@ -302,20 +257,11 @@ router.get('/letters', async (req, res, next) => {
       groupMap.set(key, group);
     }
 
-    // Select primaries: prefer L-type, then first by type alphabetically
+    // Select a public catalogue root; supplementary rows remain related media.
     const filteredResults: LetterWithRelations[] = [];
     for (const [_key, group] of groupMap) {
-      const primary = group.find((l) => l.type === 'L') || group[0];
-
-      // Skip groups that only contain supplementary types (no letter/photo/etc.)
-      if (query.visibility === 'PUBLISHED' && group.every((l) => SUPPLEMENTARY_TYPES.has(l.type))) {
-        continue;
-      }
-
-      // Apply workflow filter to PRIMARY's workflow state
-      if (query.workflow && primary.workflow !== query.workflow) {
-        continue; // Skip entire group if primary doesn't match workflow filter
-      }
+      const primary = selectPublicCatalogueRepresentative(group);
+      if (!primary) continue;
 
       filteredResults.push(primary);
     }
@@ -335,7 +281,13 @@ router.get('/letters', async (req, res, next) => {
     });
 
     // Transform to frontend-compatible format with related items
-    const transformedLetters = transformLettersWithRelatedToDTO(enrichedResults);
+    const transformedDtos = transformLettersWithRelatedToDTO(enrichedResults);
+    const transformedLetters = transformedDtos.map((dto, index) => {
+      const unit = enrichedResults[index];
+      return toPublicLetter(dto, {
+        photoOnly: isPhotoOnlyCatalogueUnit([unit.letter, ...unit.relatedItems]),
+      });
+    });
 
     const duration = Date.now() - start;
     req.log.info(
@@ -358,8 +310,8 @@ router.get('/letters', async (req, res, next) => {
 router.get('/letters/summaries', async (req, res, next) => {
   const start = Date.now();
   try {
-    const query = letterQuerySchema.parse(req.query);
-    const conditions = [];
+    const query = publicLetterQuerySchema.parse(req.query);
+    const conditions = [eq(letters.visibility, 'PUBLISHED')];
 
     if (query.collection) {
       const escapedCollection = query.collection.replace(/%/g, '\\%').replace(/_/g, '\\_');
@@ -374,21 +326,13 @@ router.get('/letters/summaries', async (req, res, next) => {
       }
     }
 
-    if (query.visibility) {
-      conditions.push(eq(letters.visibility, query.visibility));
-    }
-
     const sortFn = query.sortOrder === 'asc' ? asc : desc;
     const getSortExpression = () => {
       switch (query.sort) {
         case 'letterDate':
           return sql`REPLACE(${letters.dateRaw}, 'X', '0')`;
         case 'sender':
-          return letters.sender;
-        case 'workflow':
-          return letters.workflow;
-        case 'visibility':
-          return letters.visibility;
+          return publicFieldSql(letters.metadataPublished, letters.sender);
         case 'createdAt':
         default:
           return letters.createdAt;
@@ -413,7 +357,9 @@ router.get('/letters/summaries', async (req, res, next) => {
         summary: true,
         transcriptionText: true,
         extraContentTranscript: true,
+        extraContentStatus: true,
         photoDescription: true,
+        photoDescriptionStatus: true,
         metadataContentStatus: true,
         transcriptPublished: true,
         metadataPublished: true,
@@ -448,14 +394,11 @@ router.get('/letters/summaries', async (req, res, next) => {
       groupMap.set(key, group);
     }
 
-    // Select primaries: prefer L-type, then first alphabetically by type
+    // Select a public catalogue root; supplementary rows remain related media.
     const filteredResults: SummaryLetterWithRelations[] = [];
     for (const [, group] of groupMap) {
-      const primary = group.find((l) => l.type === 'L') || group[0];
-
-      if (query.workflow && primary.workflow !== query.workflow) {
-        continue;
-      }
+      const primary = selectPublicCatalogueRepresentative(group);
+      if (!primary) continue;
 
       filteredResults.push(primary);
     }
@@ -489,39 +432,13 @@ router.get('/letters/summaries', async (req, res, next) => {
   }
 });
 
-// Short TTL cache for search results (search queries are expensive and results change infrequently)
-const SEARCH_CACHE_TTL_MS = 10_000;
-const SEARCH_CACHE_MAX = 50;
-const searchCache = new Map<string, { data: unknown; timestamp: number }>();
-
-function getSearchCacheKey(query: Record<string, unknown>): string {
-  return JSON.stringify(query);
-}
-
 router.get('/letters/search', async (req, res, next) => {
   const start = Date.now();
   try {
     const query = archiveSearchQuerySchema.parse(req.query);
 
-    const cacheKey = getSearchCacheKey(query);
-    const cached = searchCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < SEARCH_CACHE_TTL_MS) {
-      // Move to end for LRU ordering
-      searchCache.delete(cacheKey);
-      searchCache.set(cacheKey, cached);
-      res.json(cached.data);
-      return;
-    }
-
     const response = await searchArchiveSummaries(query);
     const duration = Date.now() - start;
-
-    // Cache the result
-    if (searchCache.size >= SEARCH_CACHE_MAX) {
-      const oldest = searchCache.keys().next().value;
-      if (oldest !== undefined) searchCache.delete(oldest);
-    }
-    searchCache.set(cacheKey, { data: response, timestamp: Date.now() });
 
     req.log.info(
       {
@@ -550,11 +467,34 @@ router.get('/letters/:letterId', async (req, res, next) => {
     const { letterId } = req.params;
     req.log.debug({ letterId }, 'Fetching letter');
 
-    const letter = await db.query.letters.findFirst({
+    const requestedLetter = await db.query.letters.findFirst({
       where: and(
         eq(letters.id, letterId),
-
         eq(letters.visibility, 'PUBLISHED')
+      ),
+      columns: {
+        collectionId: true,
+        dateRaw: true,
+        typeSequence: true,
+      },
+    });
+
+    if (!requestedLetter) {
+      req.log.debug({ letterId }, 'Letter not found or not published');
+      res.status(404).json({ error: 'Letter not found' });
+      return;
+    }
+
+    // Every id in a public unit is an alias for the same stable representative.
+    // Resolve roots and companions through the same path so direct URLs cannot
+    // establish identities that list/search/navigation omit.
+    const letter = await db.query.letters.findFirst({
+      where: and(
+        eq(letters.collectionId, requestedLetter.collectionId),
+        eq(letters.dateRaw, requestedLetter.dateRaw),
+        eq(letters.typeSequence, requestedLetter.typeSequence),
+        eq(letters.visibility, 'PUBLISHED'),
+        publicCatalogueLetterTypeSql(letters.type),
       ),
       with: {
         collection: true,
@@ -564,10 +504,14 @@ router.get('/letters/:letterId', async (req, res, next) => {
         persons: { with: { person: true } },
         places: { with: { place: true } },
       },
+      orderBy: (candidate, { asc }) => [
+        publicCatalogueRepresentativeOrderSql(candidate.type),
+        asc(candidate.id),
+      ],
     });
 
     if (!letter) {
-      req.log.debug({ letterId }, 'Letter not found or not published');
+      req.log.debug({ letterId }, 'Supplementary letter has no public catalogue root');
       res.status(404).json({ error: 'Letter not found' });
       return;
     }
@@ -592,8 +536,28 @@ router.get('/letters/:letterId', async (req, res, next) => {
     const relatedItems = related as LetterWithRelations[];
 
     // Transform to frontend-compatible format, including related items
-    const dto = transformLetterWithRelatedToDTO(letter as LetterWithRelations, relatedItems);
-    res.json(stripUnpublishedContent(dto));
+    const publicLetter = {
+      ...letter,
+      persons: letter.persons?.filter((link) => isPublicEntityProjection({
+        confirmedAt: link.confirmedAt,
+        projectionRevision: link.entityExtractionRevision,
+        committedRevision: letter.entityExtractionRevision,
+        committedJson: letter.entityExtractionJson,
+      })),
+      places: letter.places?.filter((link) => isPublicEntityProjection({
+        confirmedAt: link.confirmedAt,
+        projectionRevision: link.entityExtractionRevision,
+        committedRevision: letter.entityExtractionRevision,
+        committedJson: letter.entityExtractionJson,
+      })),
+    };
+    const dto = transformLetterWithRelatedToDTO(
+      publicLetter as LetterWithRelations,
+      relatedItems,
+    );
+    res.json(toPublicLetter(dto, {
+      photoOnly: isPhotoOnlyCatalogueUnit([letter, ...relatedItems]),
+    }));
   } catch (error) {
     next(error);
   }
@@ -617,6 +581,7 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
         id: true,
         collectionId: true,
         dateRaw: true,
+        typeSequence: true,
         createdAt: true,
       },
       with: {
@@ -642,6 +607,7 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
       ),
       columns: {
         id: true,
+        collectionId: true,
         dateRaw: true,
         type: true,
         typeSequence: true,
@@ -650,6 +616,8 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
         recipient: true,
         hook: true,
         photoDescription: true,
+        photoDescriptionStatus: true,
+        metadataPublished: true,
       },
       with: {
         pages: {
@@ -660,25 +628,19 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
       orderBy: [asc(letters.dateRaw), asc(letters.createdAt)],
     });
 
-    // Deduplicate: group by (dateRaw, typeSequence), prefer L-type as the
-    // navigable entry so companion covers/telegrams don't appear separately
-    const seen = new Map<string, typeof allCollectionLetters[number]>();
-    for (const l of allCollectionLetters) {
-      const key = `${l.dateRaw}:${l.typeSequence}`;
-      const existing = seen.get(key);
-      if (!existing || (l.type === 'L' && existing.type !== 'L')) {
-        seen.set(key, l);
-      }
-    }
-    const collectionLetters = [...seen.values()];
+    // Deduplicate public catalogue roots by correspondence-unit identity using
+    // the same priority as detail, list, collection, search, and sitemap.
+    const collectionLetters = retainPublicCatalogueRepresentatives(allCollectionLetters);
 
     // Find current position — if the current letter is a companion type,
     // it resolves to the same slot as its L-type sibling
     let currentIndex = collectionLetters.findIndex(l => l.id === letterId);
     if (currentIndex === -1) {
-      // Current letter is a companion type — find by date instead
-      const dateKey = `${letter.dateRaw}`;
-      currentIndex = collectionLetters.findIndex(l => l.dateRaw === dateKey);
+      // Current letter is a companion type — resolve its exact catalogue unit.
+      currentIndex = collectionLetters.findIndex((candidate) =>
+        candidate.dateRaw === letter.dateRaw
+        && candidate.typeSequence === letter.typeSequence
+      );
     }
 
     // Group all letters by dateRaw:typeSequence for content labels
@@ -715,28 +677,33 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
         ? `/images/${firstPage.id}${firstPage.checksumSha256 ? `?v=${firstPage.checksumSha256.slice(0, 8)}` : ''}`
         : undefined;
 
+      const photoOnly = companions.length > 0 && companions.every((item) => item.type === 'P');
+      const showMetadata = l.metadataPublished;
+
       return {
         id: l.id,
         dateRaw: l.dateRaw,
         date: l.dateRaw ? formatPartialDate(l.dateRaw) : undefined,
-        sender: l.sender || undefined,
-        recipient: l.recipient || undefined,
-        hook: l.hook || l.photoDescription || undefined,
+        sender: showMetadata ? (l.sender || undefined) : undefined,
+        recipient: showMetadata ? (l.recipient || undefined) : undefined,
+        hook: showMetadata
+          ? (l.hook || (
+              photoOnly && l.photoDescriptionStatus === 'VERIFIED'
+                ? l.photoDescription
+                : null
+            ) || undefined)
+          : (
+              photoOnly && l.photoDescriptionStatus === 'VERIFIED'
+                ? (l.photoDescription || undefined)
+                : undefined
+            ),
         contentLabels: contentLabels.length > 0 ? contentLabels : undefined,
         imageUrl,
       };
     }
 
     if (currentIndex === -1) {
-      // Letter exists but not found in collection list (edge case)
-      res.json({
-        prev: null,
-        next: null,
-        position: null,
-        total: collectionLetters.length,
-        collectionCode: letter.collection.collectionCode,
-        collectionTitle: letter.collection.title || null,
-      });
+      res.status(404).json({ error: 'Letter not found' });
       return;
     }
 
@@ -773,13 +740,15 @@ function transformLetterSummary(
   const primaryCount = letter.pages.length;
   const primaryPage = letter.pages[0];
 
-  // Photo-only records always show all content
-  const isPhotoOnly = primaryType === 'photo';
-  const showMetadata = isPhotoOnly || letter.metadataPublished;
+  const group = [letter, ...relatedItems];
+  const isPhotoOnly = isPhotoOnlyCatalogueUnit(group);
+  const showMetadata = letter.metadataPublished;
 
   return {
     id: letter.id,
-    title: generateTitle(letter as never, letter.collection as never),
+    title: showMetadata
+      ? generateTitle(letter as never, letter.collection as never)
+      : primaryType.charAt(0).toUpperCase() + primaryType.slice(1),
     imageUrl: primaryPage
       ? `/images/${primaryPage.id}${primaryPage.checksumSha256 ? `?v=${primaryPage.checksumSha256.slice(0, 8)}` : ''}`
       : undefined,
@@ -793,14 +762,24 @@ function transformLetterSummary(
     createdAt: toIsoDateString(letter.createdAt),
     date: formatLetterDate(letter as never),
     dateRaw: letter.dateRaw,
-    hook: showMetadata ? (letter.hook || letter.photoDescription || undefined) : (isPhotoOnly ? (letter.photoDescription || undefined) : undefined),
+    hook: showMetadata
+      ? (letter.hook || (
+          isPhotoOnly && letter.photoDescriptionStatus === 'VERIFIED'
+            ? letter.photoDescription
+            : null
+        ) || undefined)
+      : (
+          isPhotoOnly && letter.photoDescriptionStatus === 'VERIFIED'
+            ? (letter.photoDescription || undefined)
+            : undefined
+        ),
     location: showMetadata ? (letter.locationWritten || undefined) : undefined,
-    verified: letter.metadataContentStatus === 'VERIFIED',
+    verified: showMetadata && letter.metadataContentStatus === 'VERIFIED',
     searchText: buildShelfSearchText(letter, relatedItems),
   };
 }
 
-function buildShelfSearchText(
+export function buildShelfSearchText(
   letter: SummaryLetterWithRelations,
   relatedItems: SummaryLetterWithRelations[],
 ): string {
@@ -809,26 +788,21 @@ function buildShelfSearchText(
   const truncate = (s: string | null, maxLen = 500) =>
     s && s.length > maxLen ? s.slice(0, maxLen) : s;
 
-  return [
-    letter.sender,
-    letter.recipient,
-    letter.locationWritten,
-    letter.hook,
-    letter.summary,
-    letter.photoDescription,
-    truncate(letter.extraContentTranscript),
-    truncate(letter.transcriptionText),
-    ...relatedItems.flatMap((item) => [
-      item.sender,
-      item.recipient,
-      item.locationWritten,
-      item.hook,
-      item.summary,
-      item.photoDescription,
-      truncate(item.extraContentTranscript),
-      truncate(item.transcriptionText),
-    ]),
-  ]
+  const group = [letter, ...relatedItems];
+  const photoOnly = group.length > 0 && group.every((item) => item.type === 'P');
+
+  return group.flatMap((item) => [
+    ...(item.metadataPublished
+      ? [item.sender, item.recipient, item.locationWritten, item.hook, item.summary]
+      : []),
+    ...(photoOnly && item.photoDescriptionStatus === 'VERIFIED'
+      ? [item.photoDescription]
+      : []),
+    ...(item.transcriptPublished ? [truncate(item.transcriptionText)] : []),
+    ...(item.transcriptPublished && item.extraContentStatus === 'VERIFIED'
+      ? [truncate(item.extraContentTranscript)]
+      : []),
+  ])
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
     .join(' ');
 }
@@ -1069,8 +1043,50 @@ function emptyArchiveSearchResponse(page: number, limit: number) {
   };
 }
 
+function buildArchivePublicMetadataSql(value: SQLWrapper) {
+  return publicFieldSql(sql`l.metadata_published`, value);
+}
+
+function buildArchivePublicTranscriptSql(value: SQLWrapper) {
+  return publicFieldSql(sql`l.transcript_published`, value);
+}
+
+function buildArchivePublicExtraContentSql(value: SQLWrapper) {
+  return publicFieldSql(sql`(
+    l.transcript_published
+    AND l.extra_content_status = 'VERIFIED'
+  )`, value);
+}
+
+function buildArchivePhotoOnlySql(value: SQLWrapper) {
+  return publicFieldSql(sql`(
+    l.type = 'P'
+    AND l.photo_description_status = 'VERIFIED'
+    AND NOT EXISTS (
+      SELECT 1
+      FROM letters public_peer
+      WHERE public_peer.collection_id = l.collection_id
+        AND public_peer.date_raw = l.date_raw
+        AND public_peer.type_sequence = l.type_sequence
+        AND public_peer.visibility = 'PUBLISHED'
+        AND public_peer.type <> 'P'
+    )
+  )`, value);
+}
+
 function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string[]) {
-  const rowFilters = [sql`l.visibility = 'PUBLISHED'`];
+  const rowFilters = [
+    sql`l.visibility = 'PUBLISHED'`,
+    sql`EXISTS (
+      SELECT 1
+      FROM letters public_root
+      WHERE public_root.collection_id = l.collection_id
+        AND public_root.date_raw = l.date_raw
+        AND public_root.type_sequence = l.type_sequence
+        AND public_root.visibility = 'PUBLISHED'
+        AND ${publicCatalogueLetterTypeSql(sql`public_root.type`)}
+    )`,
+  ];
 
   if (collectionIds.length > 0) {
     rowFilters.push(
@@ -1241,26 +1257,32 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         mg."dateRaw",
         mg."typeSequence",
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${buildArchiveMediaTypeSql()}), NULL) AS formats,
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.sender), '')), NULL) AS senders,
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.recipient), '')), NULL) AS recipients,
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.location_written), '')), NULL) AS places,
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.hook), '')), NULL) AS hooks,
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.summary), '')), NULL) AS summaries,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(${buildArchivePublicMetadataSql(sql`l.sender`)}), '')), NULL) AS senders,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(${buildArchivePublicMetadataSql(sql`l.recipient`)}), '')), NULL) AS recipients,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(${buildArchivePublicMetadataSql(sql`l.location_written`)}), '')), NULL) AS places,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(${buildArchivePublicMetadataSql(sql`l.hook`)}), '')), NULL) AS hooks,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(${buildArchivePublicMetadataSql(sql`l.summary`)}), '')), NULL) AS summaries,
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(tag_name), '')), NULL) AS tags,
         ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(topic_name), '')), NULL) AS topics,
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.emotional_tone::text), '')), NULL) AS tones,
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.sender_recipient_relationship::text), '')), NULL) AS relationships,
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.photo_description), '')), NULL) AS "photoDescriptions",
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.extra_content_transcript), '')), NULL) AS "extraContentTranscripts",
-        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(l.transcription_text), '')), NULL) AS "transcriptionTexts"
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(${buildArchivePublicMetadataSql(sql`l.emotional_tone::text`)}), '')), NULL) AS tones,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(${buildArchivePublicMetadataSql(sql`l.sender_recipient_relationship::text`)}), '')), NULL) AS relationships,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(${buildArchivePhotoOnlySql(sql`l.photo_description`)}), '')), NULL) AS "photoDescriptions",
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(${buildArchivePublicExtraContentSql(sql`l.extra_content_transcript`)}), '')), NULL) AS "extraContentTranscripts",
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(BTRIM(${buildArchivePublicTranscriptSql(sql`l.transcription_text`)}), '')), NULL) AS "transcriptionTexts"
       FROM matching_groups mg
       INNER JOIN letters l
         ON l.collection_id = mg."collectionId"
         AND l.date_raw = mg."dateRaw"
         AND l.type_sequence = mg."typeSequence"
         AND l.visibility = 'PUBLISHED'
-      LEFT JOIN LATERAL UNNEST(COALESCE(l.primary_topics, ARRAY[]::text[])) AS topic_name ON TRUE
-      LEFT JOIN LATERAL UNNEST(COALESCE(l.tags, ARRAY[]::text[])) AS tag_name ON TRUE
+      LEFT JOIN LATERAL UNNEST(COALESCE(
+        ${buildArchivePublicMetadataSql(sql`l.primary_topics`)},
+        ARRAY[]::text[]
+      )) AS topic_name ON TRUE
+      LEFT JOIN LATERAL UNNEST(COALESCE(
+        ${buildArchivePublicMetadataSql(sql`l.tags`)},
+        ARRAY[]::text[]
+      )) AS tag_name ON TRUE
       GROUP BY mg."collectionId", mg."dateRaw", mg."typeSequence"
     ),
     primary_rows AS (
@@ -1270,13 +1292,16 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         l.date_raw AS "dateRaw",
         l.type_sequence AS "typeSequence",
         l.type AS "primaryType",
-        l.sender,
-        l.recipient,
-        l.location_written AS location,
-        l.hook,
-        (l.metadata_content_status = 'VERIFIED') AS "metadataVerified",
-        (l.transcript_status != 'EMPTY') AS "hasTranscript",
-        (l.transcript_status = 'VERIFIED' OR (l.transcript_status = 'EMPTY' AND l.extra_content_status = 'VERIFIED')) AS "transcriptVerified",
+        ${buildArchivePublicMetadataSql(sql`l.sender`)} AS sender,
+        ${buildArchivePublicMetadataSql(sql`l.recipient`)} AS recipient,
+        ${buildArchivePublicMetadataSql(sql`l.location_written`)} AS location,
+        ${buildArchivePublicMetadataSql(sql`l.hook`)} AS hook,
+        (l.metadata_published AND l.metadata_content_status = 'VERIFIED') AS "metadataVerified",
+        (l.transcript_published AND l.transcript_status != 'EMPTY') AS "hasTranscript",
+        (l.transcript_published AND (
+          l.transcript_status = 'VERIFIED'
+          OR (l.transcript_status = 'EMPTY' AND l.extra_content_status = 'VERIFIED')
+        )) AS "transcriptVerified",
         c.collection_code AS "collectionCode",
         c.title AS "collectionTitle",
         l.created_at AS "createdAt"
@@ -1287,12 +1312,13 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         AND mg."dateRaw" = l.date_raw
         AND mg."typeSequence" = l.type_sequence
       WHERE l.visibility = 'PUBLISHED'
+        AND ${publicCatalogueLetterTypeSql(sql`l.type`)}
       ORDER BY
         l.collection_id,
         l.date_raw,
         l.type_sequence,
-        CASE WHEN l.type = 'L' THEN 0 ELSE 1 END,
-        l.type ASC
+        ${publicCatalogueRepresentativeOrderSql(sql`l.type`)},
+        l.id ASC
     ),
     base_scoped_groups AS (
       SELECT
@@ -1351,8 +1377,8 @@ function buildArchiveSearchVectorSql() {
         'simple',
         TRIM(CONCAT_WS(
           ' ',
-          COALESCE(l.sender, ''),
-          COALESCE(l.recipient, ''),
+          COALESCE(${buildArchivePublicMetadataSql(sql`l.sender`)}, ''),
+          COALESCE(${buildArchivePublicMetadataSql(sql`l.recipient`)}, ''),
           c.collection_code,
           COALESCE(c.title, '')
         ))
@@ -1367,13 +1393,13 @@ function buildArchiveSearchVectorSql() {
           ' ',
           l.date_raw,
           ${buildArchiveMediaTypeSql()},
-          COALESCE(l.location_written, ''),
-          COALESCE(l.hook, ''),
-          COALESCE(l.summary, ''),
-          ARRAY_TO_STRING(COALESCE(l.tags, ARRAY[]::text[]), ' '),
-          ARRAY_TO_STRING(COALESCE(l.primary_topics, ARRAY[]::text[]), ' '),
-          COALESCE(l.emotional_tone::text, ''),
-          COALESCE(l.sender_recipient_relationship::text, '')
+          COALESCE(${buildArchivePublicMetadataSql(sql`l.location_written`)}, ''),
+          COALESCE(${buildArchivePublicMetadataSql(sql`l.hook`)}, ''),
+          COALESCE(${buildArchivePublicMetadataSql(sql`l.summary`)}, ''),
+          ARRAY_TO_STRING(COALESCE(${buildArchivePublicMetadataSql(sql`l.tags`)}, ARRAY[]::text[]), ' '),
+          ARRAY_TO_STRING(COALESCE(${buildArchivePublicMetadataSql(sql`l.primary_topics`)}, ARRAY[]::text[]), ' '),
+          COALESCE(${buildArchivePublicMetadataSql(sql`l.emotional_tone::text`)}, ''),
+          COALESCE(${buildArchivePublicMetadataSql(sql`l.sender_recipient_relationship::text`)}, '')
         ))
       ),
       'B'
@@ -1384,15 +1410,15 @@ function buildArchiveSearchVectorSql() {
         'simple',
         TRIM(CONCAT_WS(
           ' ',
-          COALESCE(l.photo_description, ''),
-          COALESCE(l.extra_content_transcript, '')
+          COALESCE(${buildArchivePhotoOnlySql(sql`l.photo_description`)}, ''),
+          COALESCE(${buildArchivePublicExtraContentSql(sql`l.extra_content_transcript`)}, '')
         ))
       ),
       'C'
     )
     ||
     setweight(
-      to_tsvector('simple', TRIM(COALESCE(l.transcription_text, ''))),
+      to_tsvector('simple', TRIM(COALESCE(${buildArchivePublicTranscriptSql(sql`l.transcription_text`)}, ''))),
       'D'
     )
   )`;
@@ -1405,18 +1431,18 @@ function buildArchiveSearchTextSql() {
     COALESCE(c.title, ''),
     l.date_raw,
     ${buildArchiveMediaTypeSql()},
-    COALESCE(l.sender, ''),
-    COALESCE(l.recipient, ''),
-    COALESCE(l.location_written, ''),
-    COALESCE(l.hook, ''),
-    COALESCE(l.summary, ''),
-    ARRAY_TO_STRING(COALESCE(l.tags, ARRAY[]::text[]), ' '),
-    ARRAY_TO_STRING(COALESCE(l.primary_topics, ARRAY[]::text[]), ' '),
-    COALESCE(l.emotional_tone::text, ''),
-    COALESCE(l.sender_recipient_relationship::text, ''),
-    COALESCE(l.photo_description, ''),
-    COALESCE(l.extra_content_transcript, ''),
-    COALESCE(l.transcription_text, '')
+    COALESCE(${buildArchivePublicMetadataSql(sql`l.sender`)}, ''),
+    COALESCE(${buildArchivePublicMetadataSql(sql`l.recipient`)}, ''),
+    COALESCE(${buildArchivePublicMetadataSql(sql`l.location_written`)}, ''),
+    COALESCE(${buildArchivePublicMetadataSql(sql`l.hook`)}, ''),
+    COALESCE(${buildArchivePublicMetadataSql(sql`l.summary`)}, ''),
+    ARRAY_TO_STRING(COALESCE(${buildArchivePublicMetadataSql(sql`l.tags`)}, ARRAY[]::text[]), ' '),
+    ARRAY_TO_STRING(COALESCE(${buildArchivePublicMetadataSql(sql`l.primary_topics`)}, ARRAY[]::text[]), ' '),
+    COALESCE(${buildArchivePublicMetadataSql(sql`l.emotional_tone::text`)}, ''),
+    COALESCE(${buildArchivePublicMetadataSql(sql`l.sender_recipient_relationship::text`)}, ''),
+    COALESCE(${buildArchivePhotoOnlySql(sql`l.photo_description`)}, ''),
+    COALESCE(${buildArchivePublicExtraContentSql(sql`l.extra_content_transcript`)}, ''),
+    COALESCE(${buildArchivePublicTranscriptSql(sql`l.transcription_text`)}, '')
   ))`;
 }
 
@@ -1426,28 +1452,28 @@ function buildArchiveFuzzyTextSql() {
     c.collection_code,
     COALESCE(c.title, ''),
     ${buildArchiveMediaTypeSql()},
-    COALESCE(l.sender, ''),
-    COALESCE(l.recipient, ''),
-    COALESCE(l.location_written, ''),
-    COALESCE(l.hook, ''),
-    COALESCE(l.summary, ''),
-    COALESCE(l.emotional_tone::text, ''),
-    COALESCE(l.sender_recipient_relationship::text, '')
+    COALESCE(${buildArchivePublicMetadataSql(sql`l.sender`)}, ''),
+    COALESCE(${buildArchivePublicMetadataSql(sql`l.recipient`)}, ''),
+    COALESCE(${buildArchivePublicMetadataSql(sql`l.location_written`)}, ''),
+    COALESCE(${buildArchivePublicMetadataSql(sql`l.hook`)}, ''),
+    COALESCE(${buildArchivePublicMetadataSql(sql`l.summary`)}, ''),
+    COALESCE(${buildArchivePublicMetadataSql(sql`l.emotional_tone::text`)}, ''),
+    COALESCE(${buildArchivePublicMetadataSql(sql`l.sender_recipient_relationship::text`)}, '')
   ))`;
 }
 
 function buildArchiveFieldSimilaritySql(searchTerm: string) {
   return sql`GREATEST(
-    word_similarity(lower(COALESCE(l.sender, '')), lower(${searchTerm})),
-    word_similarity(lower(COALESCE(l.recipient, '')), lower(${searchTerm})),
-    word_similarity(lower(COALESCE(l.location_written, '')), lower(${searchTerm})),
+    word_similarity(lower(COALESCE(${buildArchivePublicMetadataSql(sql`l.sender`)}, '')), lower(${searchTerm})),
+    word_similarity(lower(COALESCE(${buildArchivePublicMetadataSql(sql`l.recipient`)}, '')), lower(${searchTerm})),
+    word_similarity(lower(COALESCE(${buildArchivePublicMetadataSql(sql`l.location_written`)}, '')), lower(${searchTerm})),
     word_similarity(lower(c.collection_code), lower(${searchTerm})),
     word_similarity(lower(COALESCE(c.title, '')), lower(${searchTerm})),
     word_similarity(lower(COALESCE(${buildArchiveMediaTypeSql()}, '')), lower(${searchTerm})),
-    word_similarity(lower(ARRAY_TO_STRING(COALESCE(l.tags, ARRAY[]::text[]), ' ')), lower(${searchTerm})),
-    word_similarity(lower(ARRAY_TO_STRING(COALESCE(l.primary_topics, ARRAY[]::text[]), ' ')), lower(${searchTerm})),
-    word_similarity(lower(COALESCE(l.emotional_tone::text, '')), lower(${searchTerm})),
-    word_similarity(lower(COALESCE(l.sender_recipient_relationship::text, '')), lower(${searchTerm}))
+    word_similarity(lower(ARRAY_TO_STRING(COALESCE(${buildArchivePublicMetadataSql(sql`l.tags`)}, ARRAY[]::text[]), ' ')), lower(${searchTerm})),
+    word_similarity(lower(ARRAY_TO_STRING(COALESCE(${buildArchivePublicMetadataSql(sql`l.primary_topics`)}, ARRAY[]::text[]), ' ')), lower(${searchTerm})),
+    word_similarity(lower(COALESCE(${buildArchivePublicMetadataSql(sql`l.emotional_tone::text`)}, '')), lower(${searchTerm})),
+    word_similarity(lower(COALESCE(${buildArchivePublicMetadataSql(sql`l.sender_recipient_relationship::text`)}, '')), lower(${searchTerm}))
   )`;
 }
 

@@ -107,6 +107,8 @@ describe("PersonPage", () => {
         id: "person-1",
         canonicalName: "Alice Smith",
         aliases: [],
+        biography: null,
+        biographyStatus: "EMPTY",
       },
       relationships: [],
       stats: {

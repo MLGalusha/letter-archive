@@ -2,12 +2,18 @@ import { Router } from 'express';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { extname } from 'node:path';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import sharp from 'sharp';
-import { db, letterPages } from '../db/index.js';
-import { verifyToken } from '../auth/jwt.js';
+import { adminUsers, db, letterPages, letters } from '../db/index.js';
+import { readImageSessionCookie } from '../auth/image-session.js';
+import { verifyImageSessionToken } from '../auth/jwt.js';
+import {
+  isPublicCatalogueLetterType,
+  publicCatalogueLetterTypeSql,
+} from '../services/public-catalogue-unit.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
 import { logIfSlow, TIMING_THRESHOLDS } from '../utils/logger.js';
+import { isSensitiveQueryKey } from '../utils/log-redaction.js';
 
 const router = Router();
 
@@ -52,6 +58,18 @@ router.get('/images/:pageId', async (req, res, next) => {
   try {
     const { pageId } = req.params;
     const requestedWidth = parseRequestedWidth(req.query.w);
+    // Fail closed for every early return. Anonymous, authorized public images
+    // override this only after publication and storage checks succeed.
+    res.setHeader('Cache-Control', 'private, no-store');
+    const imageSessionToken = readImageSessionCookie(req.headers.cookie);
+    const hasSensitiveImageQuery = Object.keys(req.query).some((key) => (
+      isSensitiveQueryKey(key)
+    ));
+    const hasImageCredentials = Boolean(
+      imageSessionToken
+      || req.headers.authorization
+      || hasSensitiveImageQuery,
+    );
 
     // Find the page record
     const page = await db.query.letterPages.findFirst({
@@ -60,6 +78,10 @@ router.get('/images/:pageId', async (req, res, next) => {
         letter: {
           columns: {
             visibility: true,
+            collectionId: true,
+            dateRaw: true,
+            typeSequence: true,
+            type: true,
           },
         },
       },
@@ -71,15 +93,35 @@ router.get('/images/:pageId', async (req, res, next) => {
       return;
     }
 
-    // Public requests can only see published images; admins can see all
-    if (page.letter.visibility !== 'PUBLISHED') {
-      const authHeader = req.headers.authorization;
-      const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-      const queryToken = typeof req.query.token === 'string' ? req.query.token : null;
-      const token = headerToken || queryToken;
-      const isAdmin = token ? !!verifyToken(token) : false;
+    const isPublicCatalogueImage = page.letter.visibility === 'PUBLISHED' && (
+      isPublicCatalogueLetterType(page.letter.type)
+      || Boolean(await db.query.letters.findFirst({
+        where: and(
+          eq(letters.collectionId, page.letter.collectionId),
+          eq(letters.dateRaw, page.letter.dateRaw),
+          eq(letters.typeSequence, page.letter.typeSequence),
+          eq(letters.visibility, 'PUBLISHED'),
+          publicCatalogueLetterTypeSql(letters.type),
+        ),
+        columns: { id: true },
+      }))
+    );
+
+    // Public requests can only see images belonging to a public catalogue
+    // unit. Admins may inspect hidden rows and orphan supplementary media.
+    if (!isPublicCatalogueImage) {
+      const imageSession = imageSessionToken
+        ? verifyImageSessionToken(imageSessionToken)
+        : null;
+      const existingAdmin = imageSession
+        ? await db.query.adminUsers.findFirst({
+          where: eq(adminUsers.id, imageSession.userId),
+          columns: { id: true },
+        })
+        : null;
+      const isAdmin = Boolean(existingAdmin);
       if (!isAdmin) {
-        req.log.debug({ pageId }, 'Image not published and requester is not admin');
+        req.log.debug({ pageId }, 'Image is not in a public catalogue unit and requester is not admin');
         res.status(404).json({ error: 'Image not found' });
         return;
       }
@@ -102,8 +144,12 @@ router.get('/images/:pageId', async (req, res, next) => {
     const ext = extname(page.originalFilename).toLowerCase();
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
-    // Set headers
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    // Public images must be revalidated so revoking publication takes effect on
+    // the next request. Hidden images are authorization-bound and must never be
+    // retained by browsers or shared caches.
+    if (isPublicCatalogueImage && !hasImageCredentials) {
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    }
     res.setHeader('Timing-Allow-Origin', '*');
     res.setHeader('X-Content-Type-Options', 'nosniff');
 
@@ -112,9 +158,19 @@ router.get('/images/:pageId', async (req, res, next) => {
       const format = acceptHeader.includes('image/avif') ? 'avif'
         : acceptHeader.includes('image/webp') ? 'webp'
         : 'jpeg';
-      const cacheKey = `${pageId}:${requestedWidth}:${format}`;
+      const cacheVersion = [
+        page.checksumSha256 ?? 'no-checksum',
+        page.storagePath,
+        fileStats.mtimeMs ?? 'no-mtime',
+        fileStats.size,
+      ].join(':');
+      const cacheKey = `${pageId}:${cacheVersion}:${requestedWidth}:${format}`;
+      // Authorization affects whether a row is public, not the bytes produced
+      // for an already-public image. Reuse that transform even when a request
+      // carries stale credentials; response cache headers remain private.
+      const canUseSharedCache = isPublicCatalogueImage;
 
-      const cached = getCachedImage(cacheKey);
+      const cached = canUseSharedCache ? getCachedImage(cacheKey) : null;
       if (cached) {
         res.setHeader('Content-Type', cached.contentType);
         res.setHeader('Vary', 'Accept');
@@ -138,7 +194,9 @@ router.get('/images/:pageId', async (req, res, next) => {
 
       const outputBuffer = await transformed.toBuffer();
       const contentType = `image/${format}`;
-      setCachedImage(cacheKey, outputBuffer, contentType);
+      if (canUseSharedCache) {
+        setCachedImage(cacheKey, outputBuffer, contentType);
+      }
 
       res.setHeader('Content-Type', contentType);
       res.setHeader('Vary', 'Accept');
@@ -177,34 +235,6 @@ router.get('/images/:pageId', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
-
-/**
- * POST /images/perf - Receive frontend image load telemetry
- */
-router.post('/images/perf', (req, res) => {
-  const entries = req.body;
-  if (!Array.isArray(entries) || entries.length === 0) {
-    res.status(400).json({ error: 'Expected non-empty array' });
-    return;
-  }
-
-  // Cap at 50 entries per request
-  const batch = entries.slice(0, 50);
-  for (const entry of batch) {
-    req.log.info(
-      {
-        imgUrl: entry.url,
-        tier: entry.tier,
-        context: entry.context,
-        durationMs: entry.durationMs,
-        cached: entry.cached,
-      },
-      'client image load',
-    );
-  }
-
-  res.status(204).end();
 });
 
 export default router;

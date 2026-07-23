@@ -17,6 +17,8 @@ const {
   recoverExpiredExtraContentJobsMock,
   cancelTranscriptionAttemptMock,
   cancelMetadataAttemptMock,
+  cancelLegacyEntityExtractionMock,
+  failEntityExtractionMock,
   shouldUseCloudRunWorkerJobMock,
   triggerWorkerJobMock,
 } = vi.hoisted(() => ({
@@ -36,6 +38,8 @@ const {
   recoverExpiredExtraContentJobsMock: vi.fn(),
   cancelTranscriptionAttemptMock: vi.fn(),
   cancelMetadataAttemptMock: vi.fn(),
+  cancelLegacyEntityExtractionMock: vi.fn(),
+  failEntityExtractionMock: vi.fn(),
   shouldUseCloudRunWorkerJobMock: vi.fn(),
   triggerWorkerJobMock: vi.fn(),
 }));
@@ -106,6 +110,8 @@ vi.mock('../../db/index.js', () => {
       metadataLeaseRunId: 'letters.metadataLeaseRunId',
       metadataClaimKind: 'letters.metadataClaimKind',
       entityExtractionStatus: 'letters.entityExtractionStatus',
+      entityExtractionRunId: 'letters.entityExtractionRunId',
+      entityExtractionRunRevision: 'letters.entityExtractionRunRevision',
       extraContentJobStatus: 'letters.extraContentJobStatus',
       transcriptConfirmedAt: 'letters.transcriptConfirmedAt',
     },
@@ -140,6 +146,11 @@ vi.mock('../letter/extra-content-job.js', () => ({
 vi.mock('../letter/metadata-job.js', () => ({
   cancelMetadataAttempt: cancelMetadataAttemptMock,
   recoverExpiredMetadataJobs: recoverExpiredMetadataJobsMock,
+}));
+
+vi.mock('../letters.js', () => ({
+  cancelLegacyEntityExtraction: cancelLegacyEntityExtractionMock,
+  failEntityExtraction: failEntityExtractionMock,
 }));
 
 vi.mock('../cloud-run-job.js', () => ({
@@ -190,6 +201,8 @@ describe('processing queue service', () => {
     recoverExpiredExtraContentJobsMock.mockResolvedValue({ requeued: [], failed: [] });
     cancelTranscriptionAttemptMock.mockResolvedValue(true);
     cancelMetadataAttemptMock.mockResolvedValue(true);
+    cancelLegacyEntityExtractionMock.mockResolvedValue(true);
+    failEntityExtractionMock.mockResolvedValue(true);
     shouldUseCloudRunWorkerJobMock.mockReturnValue(false);
     triggerWorkerJobMock.mockResolvedValue(true);
   });
@@ -321,6 +334,8 @@ describe('processing queue service', () => {
       metadataLeaseRunId: 'letters.metadataLeaseRunId',
       metadataClaimKind: 'letters.metadataClaimKind',
       entityExtractionStatus: 'letters.entityExtractionStatus',
+      entityExtractionRunId: 'letters.entityExtractionRunId',
+      entityExtractionRunRevision: 'letters.entityExtractionRunRevision',
       extraContentJobStatus: 'letters.extraContentJobStatus',
       transcriptConfirmedAt: 'letters.transcriptConfirmedAt',
     });
@@ -518,6 +533,66 @@ describe('processing queue service', () => {
       'metadata-run-a',
     );
     expect(getJobProgress('letter-4', 'metadata')).toBeUndefined();
+  });
+
+  it('cancels only the exact observed entity-extraction run', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-5',
+      entityExtractionStatus: 'RUNNING',
+      entityExtractionRunId: 'entity-run-a',
+      entityExtractionRunRevision: 4,
+    });
+
+    await expect(cancelActiveJob('letter-5', 'entity_extraction')).resolves.toEqual({
+      message: 'Job cancelled',
+    });
+
+    expect(failEntityExtractionMock).toHaveBeenCalledWith(
+      'letter-5',
+      { runId: 'entity-run-a', revision: 4 },
+      'Cancelled by admin',
+    );
+  });
+
+  it('cancels an observed tokenless legacy entity run after rollout drain', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-legacy',
+      entityExtractionStatus: 'RUNNING',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
+    });
+
+    await expect(cancelActiveJob(
+      'letter-legacy',
+      'entity_extraction',
+    )).resolves.toEqual({ message: 'Job cancelled' });
+
+    expect(cancelLegacyEntityExtractionMock).toHaveBeenCalledWith(
+      'letter-legacy',
+      'Cancelled by admin',
+    );
+    expect(failEntityExtractionMock).not.toHaveBeenCalled();
+  });
+
+  it('cannot let a cancellation waiting behind commit overwrite SUCCESS', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-5',
+      entityExtractionStatus: 'RUNNING',
+      entityExtractionRunId: 'entity-run-a',
+      entityExtractionRunRevision: 4,
+    });
+    // False characterizes the interleaving where the materialization
+    // transaction held the letter lock first and cleared the token on SUCCESS.
+    failEntityExtractionMock.mockResolvedValue(false);
+
+    await expect(
+      cancelActiveJob('letter-5', 'entity_extraction'),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'Cannot cancel: entity extraction attempt changed since it was loaded',
+    });
+
+    expect(dbUpdateMock).not.toHaveBeenCalled();
   });
 
   it('counts neutral metadata outcomes as skipped instead of completed or failed', async () => {

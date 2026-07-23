@@ -21,6 +21,21 @@ export const letterQuerySchema = z.object({
 
 export type LetterQuery = z.infer<typeof letterQuerySchema>;
 
+/**
+ * Public archive routes may only query the published catalogue. Internal
+ * workflow is intentionally absent, and public sorting cannot use workflow or
+ * visibility as an oracle for unpublished state.
+ */
+export const publicLetterQuerySchema = letterQuerySchema
+  .omit({ visibility: true, workflow: true, sort: true })
+  .extend({
+    visibility: z.literal('PUBLISHED').default('PUBLISHED'),
+    sort: z.enum(['createdAt', 'letterDate', 'sender']).default('createdAt'),
+  })
+  .strict();
+
+export type PublicLetterQuery = z.infer<typeof publicLetterQuerySchema>;
+
 const archiveMediaTypes = [
   'letter',
   'photo',

@@ -14,12 +14,14 @@ const {
   eqMock,
   andMock,
   orMock,
+  isNotNullMock,
   inArrayMock,
   ilikeMock,
   ascMock,
   descMock,
   sqlMock,
   sqlJoinMock,
+  publicProjectionState,
 } = vi.hoisted(() => ({
   findCollectionsMock: vi.fn(),
   findLettersMock: vi.fn(),
@@ -33,18 +35,21 @@ const {
   eqMock: vi.fn(),
   andMock: vi.fn(),
   orMock: vi.fn(),
+  isNotNullMock: vi.fn(),
   inArrayMock: vi.fn(),
   ilikeMock: vi.fn(),
   ascMock: vi.fn(),
   descMock: vi.fn(),
   sqlMock: vi.fn(),
   sqlJoinMock: vi.fn(),
+  publicProjectionState: { enabled: false },
 }));
 
 vi.mock('drizzle-orm', () => ({
   eq: eqMock,
   and: andMock,
   or: orMock,
+  isNotNull: isNotNullMock,
   inArray: inArrayMock,
   ilike: ilikeMock,
   asc: ascMock,
@@ -75,6 +80,21 @@ vi.mock('../../utils/logger.js', async (importOriginal) => {
   };
 });
 
+vi.mock('../../services/public-read-model.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/public-read-model.js')>();
+  return {
+    ...actual,
+    toPublicLetter: (
+      letter: Parameters<typeof actual.toPublicLetter>[0],
+      context: Parameters<typeof actual.toPublicLetter>[1],
+    ) => (
+      publicProjectionState.enabled
+        ? actual.toPublicLetter(letter, context)
+        : letter
+    ),
+  };
+});
+
 vi.mock('../../db/index.js', () => ({
   db: {
     execute: executeMock,
@@ -93,6 +113,7 @@ vi.mock('../../db/index.js', () => ({
     collectionId: 'letters.collectionId',
     dateRaw: 'letters.dateRaw',
     sender: 'letters.sender',
+    metadataPublished: 'letters.metadataPublished',
     workflow: 'letters.workflow',
     visibility: 'letters.visibility',
     createdAt: 'letters.createdAt',
@@ -107,15 +128,20 @@ vi.mock('../../db/index.js', () => ({
   },
 }));
 
-import lettersRouter, { getArchiveContiguousSearchPhrases } from '../letters.js';
+import lettersRouter, {
+  buildShelfSearchText,
+  getArchiveContiguousSearchPhrases,
+} from '../letters.js';
 
 describe('letters route integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    publicProjectionState.enabled = false;
 
     eqMock.mockImplementation((left, right) => ({ op: 'eq', left, right }));
     andMock.mockImplementation((...conditions) => ({ op: 'and', conditions }));
     orMock.mockImplementation((...conditions) => ({ op: 'or', conditions }));
+    isNotNullMock.mockImplementation((value) => ({ op: 'isNotNull', value }));
     inArrayMock.mockImplementation((left, right) => ({ op: 'inArray', left, right }));
     ilikeMock.mockImplementation((left, right) => ({ op: 'ilike', left, right }));
     ascMock.mockImplementation((value) => ({ direction: 'asc', value }));
@@ -148,7 +174,7 @@ describe('letters route integration', () => {
     );
   });
 
-  it('groups letters by date and type sequence, then filters by the primary workflow', async () => {
+  it('groups published letters by date and type sequence', async () => {
     findCollectionsMock.mockResolvedValueOnce([
       {
         id: 'collection-9',
@@ -189,7 +215,6 @@ describe('letters route integration', () => {
       path: '/letters',
       query: {
         collection: '9',
-        workflow: 'UPLOADED',
         page: '1',
         limit: '20',
         sort: 'createdAt',
@@ -206,10 +231,14 @@ describe('letters route integration', () => {
           id: 'letter-primary',
           relatedIds: ['letter-cover'],
         },
+        {
+          id: 'letter-reviewed',
+          relatedIds: [],
+        },
       ],
       page: 1,
       limit: 20,
-      total: 1,
+      total: 2,
     });
     expect(findCollectionsMock).toHaveBeenCalledTimes(1);
     expect(transformLettersWithRelatedToDTOMock).toHaveBeenCalledWith([
@@ -234,7 +263,59 @@ describe('letters route integration', () => {
           },
         ],
       },
+      {
+        letter: {
+          id: 'letter-reviewed',
+          collectionId: 'collection-9',
+          dateRaw: '19470811',
+          typeSequence: 1,
+          type: 'L',
+          workflow: 'REVIEWED',
+        },
+        relatedItems: [],
+      },
     ]);
+  });
+
+  it('never selects a supplementary row as the public root when a primary type exists', async () => {
+    findLettersMock.mockResolvedValueOnce([
+      {
+        id: 'cover-companion',
+        collectionId: 'collection-9',
+        dateRaw: '19470810',
+        typeSequence: 1,
+        type: 'C',
+      },
+      {
+        id: 'photo-primary',
+        collectionId: 'collection-9',
+        dateRaw: '19470810',
+        typeSequence: 1,
+        type: 'P',
+      },
+      {
+        id: 'standalone-telegram',
+        collectionId: 'collection-9',
+        dateRaw: '19470811',
+        typeSequence: 1,
+        type: 'T',
+      },
+    ]);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters',
+      path: '/letters',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({
+      letters: [{ id: 'photo-primary', relatedIds: ['cover-companion'] }],
+      page: 1,
+      limit: 20,
+      total: 1,
+    });
   });
 
   it('returns an empty paginated response when the collection filter matches nothing', async () => {
@@ -260,6 +341,59 @@ describe('letters route integration', () => {
     expect(findLettersMock).not.toHaveBeenCalled();
   });
 
+  it('rejects attempts to query hidden rows through the public letters route', async () => {
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters',
+      path: '/letters',
+      query: { visibility: 'HIDDEN' },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(findLettersMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects internal workflow filters and workflow-based sorting on public reads', async () => {
+    const workflowFilter = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters',
+      path: '/letters',
+      query: { workflow: 'REVIEWED' },
+      headers: { accept: 'application/json' },
+    });
+    const workflowSort = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters/summaries',
+      path: '/letters/summaries',
+      query: { sort: 'workflow' },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(workflowFilter.statusCode).toBe(400);
+    expect(workflowSort.statusCode).toBe(400);
+    expect(findLettersMock).not.toHaveBeenCalled();
+  });
+
+  it('sorts public sender views through the metadata publication predicate', async () => {
+    findLettersMock.mockResolvedValueOnce([]);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters',
+      path: '/letters',
+      query: { sort: 'sender' },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(sqlMock.mock.calls.some(([strings, ...values]) =>
+      Array.from(strings as TemplateStringsArray).join('').includes('CASE WHEN')
+      && values.includes('letters.metadataPublished')
+      && values.includes('letters.sender')
+    )).toBe(true);
+  });
+
   it('returns lightweight shelf summaries for public archive browsing', async () => {
     findLettersMock.mockResolvedValueOnce([
       {
@@ -279,8 +413,10 @@ describe('letters route integration', () => {
         hook: 'A short note about future plans.',
         summary: 'Summary text',
         transcriptionText: 'Full transcription text',
-        extraContentTranscript: null,
+        extraContentTranscript: 'private draft supplement',
+        extraContentStatus: 'AI_DRAFT',
         photoDescription: null,
+        photoDescriptionStatus: 'EMPTY',
         metadataContentStatus: 'VERIFIED',
         collection: {
           title: 'Collection Nine',
@@ -317,7 +453,9 @@ describe('letters route integration', () => {
         summary: null,
         transcriptionText: null,
         extraContentTranscript: null,
+        extraContentStatus: 'EMPTY',
         photoDescription: 'Jimmy and Molly on a porch.',
+        photoDescriptionStatus: 'AI_DRAFT',
         metadataContentStatus: 'EMPTY',
         collection: {
           title: 'Collection Nine',
@@ -365,7 +503,7 @@ describe('letters route integration', () => {
           hook: 'A short note about future plans.',
           location: 'New York',
           verified: true,
-          searchText: 'Jimmie Molly New York A short note about future plans. Summary text Full transcription text Jimmy and Molly on a porch.',
+          searchText: 'Jimmie Molly New York A short note about future plans. Summary text Full transcription text',
         },
       ],
       page: 1,
@@ -380,6 +518,13 @@ describe('letters route integration', () => {
       collectionId: 'collection-9',
       type: 'L',
       dateRaw: '19470810',
+      typeSequence: 1,
+    }).mockResolvedValueOnce({
+      id: 'letter-primary',
+      collectionId: 'collection-9',
+      type: 'L',
+      dateRaw: '19470810',
+      typeSequence: 1,
     });
     findLettersMock.mockResolvedValueOnce([
       {
@@ -404,6 +549,236 @@ describe('letters route integration', () => {
       id: 'letter-primary',
       relatedIds: ['letter-cover', 'letter-extra'],
     });
+  });
+
+  it('filters uncommitted entity links before building a public letter DTO', async () => {
+    findFirstLetterMock
+      .mockResolvedValueOnce({
+        id: 'letter-primary',
+        collectionId: 'collection-9',
+        dateRaw: '19470810',
+        typeSequence: 1,
+      })
+      .mockResolvedValueOnce({
+        id: 'letter-primary',
+        collectionId: 'collection-9',
+        type: 'L',
+        dateRaw: '19470810',
+        typeSequence: 1,
+        entityExtractionRevision: 2,
+        entityExtractionJson: { people: [], places: [], relationships: [] },
+        persons: [
+          { id: 'person-confirmed', confirmedAt: new Date(), entityExtractionRevision: null },
+          { id: 'person-committed', confirmedAt: null, entityExtractionRevision: 2 },
+          { id: 'person-stale', confirmedAt: null, entityExtractionRevision: 1 },
+          { id: 'person-ambiguous', confirmedAt: null, entityExtractionRevision: null },
+        ],
+        places: [
+          { id: 'place-confirmed', confirmedAt: new Date(), entityExtractionRevision: null },
+          { id: 'place-committed', confirmedAt: null, entityExtractionRevision: 2 },
+          { id: 'place-stale', confirmedAt: null, entityExtractionRevision: 1 },
+          { id: 'place-ambiguous', confirmedAt: null, entityExtractionRevision: null },
+        ],
+      });
+    findLettersMock.mockResolvedValueOnce([]);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters/letter-primary',
+      path: '/letters/letter-primary',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const transformedLetter = transformLetterWithRelatedToDTOMock.mock.calls[0]?.[0] as {
+      persons: Array<{ id: string }>;
+      places: Array<{ id: string }>;
+    };
+    expect(transformedLetter.persons.map(({ id }) => id)).toEqual([
+      'person-confirmed',
+      'person-committed',
+    ]);
+    expect(transformedLetter.places.map(({ id }) => id)).toEqual([
+      'place-confirmed',
+      'place-committed',
+    ]);
+  });
+
+  it('composes detail routing with the real positive public projection', async () => {
+    publicProjectionState.enabled = true;
+    findFirstLetterMock
+      .mockResolvedValueOnce({
+        id: 'letter-primary',
+        collectionId: 'collection-9',
+        dateRaw: '19470810',
+        typeSequence: 1,
+      })
+      .mockResolvedValueOnce({
+        id: 'letter-primary',
+        collectionId: 'collection-9',
+        type: 'L',
+        dateRaw: '19470810',
+        typeSequence: 1,
+      });
+    findLettersMock.mockResolvedValueOnce([]);
+    transformLetterWithRelatedToDTOMock.mockReturnValueOnce({
+      id: 'letter-primary',
+      title: 'Private draft title',
+      images: [{
+        id: 'page-1',
+        type: 'letter',
+        imageUrl: '/images/page-1',
+        originalFilename: 'private-scan.jpg',
+        lineSegments: [{ ocrText: 'private OCR' }],
+      }],
+      transcript: {
+        pages: [{ pageNumber: 1, text: 'private transcript' }],
+        fullText: 'private transcript',
+        verified: true,
+      },
+      metadata: {
+        dateRaw: '19470810',
+        sender: 'Private Sender',
+        notes: 'private reviewer note',
+        verified: true,
+      },
+      visibility: 'PUBLISHED',
+      transcriptPublished: false,
+      metadataPublished: false,
+      transcriptStatus: 'VERIFIED',
+      metadataContentStatus: 'VERIFIED',
+      extraContentStatus: 'EMPTY',
+      photoDescriptionStatus: 'EMPTY',
+      workflowState: 'REVIEWED',
+      status: 'published',
+      flagged: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters/letter-primary',
+      path: '/letters/letter-primary',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.body as {
+      images: unknown[];
+      metadata: Record<string, unknown>;
+    };
+    expect(body).toMatchObject({
+      id: 'letter-primary',
+      title: 'Letter',
+      visibility: 'PUBLISHED',
+      transcript: { pages: [], fullText: '', verified: false },
+      metadata: { dateRaw: '19470810', verified: false },
+    });
+    expect(body).not.toHaveProperty('workflowState');
+    expect(body).not.toHaveProperty('flagged');
+    expect(body.images[0]).not.toHaveProperty('originalFilename');
+    expect(body.images[0]).not.toHaveProperty('lineSegments');
+    expect(body.metadata).not.toHaveProperty('notes');
+  });
+
+  it('resolves a published supplementary detail id to its public catalogue root', async () => {
+    findFirstLetterMock
+      .mockResolvedValueOnce({
+        id: 'letter-cover',
+        collectionId: 'collection-9',
+        type: 'C',
+        dateRaw: '19470810',
+        typeSequence: 1,
+      })
+      .mockResolvedValueOnce({
+        id: 'letter-primary',
+        collectionId: 'collection-9',
+        type: 'L',
+        dateRaw: '19470810',
+        typeSequence: 1,
+      });
+    findLettersMock.mockResolvedValueOnce([{ id: 'letter-cover', type: 'C' }]);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters/letter-cover',
+      path: '/letters/letter-cover',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({
+      id: 'letter-primary',
+      relatedIds: ['letter-cover'],
+    });
+  });
+
+  it('resolves an alternate public root id to the unit representative', async () => {
+    findFirstLetterMock
+      .mockResolvedValueOnce({
+        id: 'photo-alias',
+        collectionId: 'collection-9',
+        type: 'P',
+        dateRaw: '19470810',
+        typeSequence: 1,
+      })
+      .mockResolvedValueOnce({
+        id: 'letter-primary',
+        collectionId: 'collection-9',
+        type: 'L',
+        dateRaw: '19470810',
+        typeSequence: 1,
+      });
+    findLettersMock.mockResolvedValueOnce([{ id: 'photo-alias', type: 'P' }]);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters/photo-alias',
+      path: '/letters/photo-alias',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({
+      id: 'letter-primary',
+      relatedIds: ['photo-alias'],
+    });
+  });
+
+  it('returns not found for a published supplementary detail without a public catalogue root', async () => {
+    findFirstLetterMock
+      .mockResolvedValueOnce({
+        id: 'standalone-cover',
+        collectionId: 'collection-9',
+        type: 'C',
+        dateRaw: '19470810',
+        typeSequence: 1,
+      })
+      .mockResolvedValueOnce(null);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters/standalone-cover',
+      path: '/letters/standalone-cover',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body).toMatchObject({ error: 'Letter not found' });
+    expect(findLettersMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps draft photo descriptions out of public shelf search text', () => {
+    const photo = {
+      type: 'P',
+      metadataPublished: false,
+      transcriptPublished: false,
+      extraContentStatus: 'EMPTY',
+      photoDescription: 'private generated description',
+      photoDescriptionStatus: 'AI_DRAFT',
+    };
+
+    expect(buildShelfSearchText(photo as never, [])).toBe('');
   });
 
   it('injects request ids into missing-letter responses', async () => {
@@ -431,6 +806,7 @@ describe('letters route integration', () => {
       id: 'letter-cover',
       collectionId: 'collection-9',
       dateRaw: '19470810',
+      typeSequence: 1,
       createdAt: '2026-03-09T12:00:00.000Z',
       collection: {
         collectionCode: '009',
@@ -485,6 +861,43 @@ describe('letters route integration', () => {
       collectionCode: '009',
       collectionTitle: 'Collection Nine',
     });
+  });
+
+  it('returns not found for supplementary-only adjacent navigation units', async () => {
+    findFirstLetterMock.mockResolvedValueOnce({
+      id: 'standalone-cover',
+      collectionId: 'collection-9',
+      dateRaw: '19470810',
+      typeSequence: 2,
+      collection: {
+        collectionCode: '009',
+        title: 'Collection Nine',
+      },
+    });
+    findLettersMock.mockResolvedValueOnce([
+      {
+        id: 'other-primary',
+        dateRaw: '19470810',
+        type: 'L',
+        typeSequence: 1,
+      },
+      {
+        id: 'standalone-cover',
+        dateRaw: '19470810',
+        type: 'C',
+        typeSequence: 2,
+      },
+    ]);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: '/letters/standalone-cover/adjacent',
+      path: '/letters/standalone-cover/adjacent',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body).toMatchObject({ error: 'Letter not found' });
   });
 
   it('returns archive search results from the dedicated search route', async () => {
@@ -662,6 +1075,25 @@ describe('letters route integration', () => {
     expect(executeMock).toHaveBeenCalledTimes(2);
   });
 
+  it('does not cache public search payloads across identical requests', async () => {
+    executeMock.mockResolvedValue([]);
+
+    const request = {
+      method: 'GET' as const,
+      url: '/letters/search',
+      path: '/letters/search',
+      query: { search: 'Molly', limit: '5' },
+      headers: { accept: 'application/json' },
+    };
+
+    const first = await invokeRouter(lettersRouter, request);
+    const second = await invokeRouter(lettersRouter, request);
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    expect(executeMock).toHaveBeenCalledTimes(4);
+  });
+
   it('builds contiguous query phrases from longest to shortest', () => {
     expect(getArchiveContiguousSearchPhrases('hello how are you')).toEqual([
       'hello how are',
@@ -716,6 +1148,13 @@ describe('letters route integration', () => {
     expect(firstQueryPayload).toContain('%hello how%');
     expect(firstQueryPayload).toContain('%how are%');
     expect(firstQueryPayload).toContain('%are you%');
+    expect(firstQueryPayload).toContain('extra_content_status');
+    expect(firstQueryPayload).toContain('photo_description_status');
+    expect(firstQueryPayload).toContain('public_root');
+    expect(firstQueryPayload).toContain('letter_type[]');
+    expect(firstQueryPayload).toContain('"L"');
+    expect(firstQueryPayload).toContain('"P"');
+    expect(firstQueryPayload).toContain('VERIFIED');
   });
 
   it('prefers the closest exact preview match even when a lower-priority field also matches', async () => {

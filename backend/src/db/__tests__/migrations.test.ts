@@ -132,4 +132,47 @@ describe("migration validation", () => {
       ).toBeLessThanOrEqual(idx.idx);
     }
   });
+
+  it("guards legacy entity JSON array expansion against malformed shapes", () => {
+    const sql = readMigrationSql("0051_add_entity_extraction_commit_boundary");
+    const expansions = sql.match(/jsonb_array_elements\s*\(/g) ?? [];
+    const guardedExpansions = sql.match(
+      /jsonb_array_elements\s*\(\s*CASE\s+WHEN\s+jsonb_typeof\(/g,
+    ) ?? [];
+    const unsafeCoalescedExpansions = sql.match(
+      /jsonb_array_elements\s*\(\s*COALESCE/g,
+    ) ?? [];
+
+    expect(expansions.length).toBeGreaterThanOrEqual(5);
+    expect(guardedExpansions).toHaveLength(expansions.length);
+    expect(unsafeCoalescedExpansions).toHaveLength(0);
+  });
+
+  it("makes entity extraction ownership an expand-and-drain boundary", () => {
+    const sql = readMigrationSql("0051_add_entity_extraction_commit_boundary");
+
+    expect(sql).toContain('ADD CONSTRAINT "entity_extraction_owner_shape"');
+    expect(sql).toContain('CREATE TRIGGER entity_extraction_status_transition_guard');
+    expect(sql).toContain('entity_extraction_running_requires_owner');
+    expect(sql).toContain('entity_extraction_running_owner_cannot_be_stripped');
+    expect(sql).toContain('entity_extraction_terminal_requires_owner_reconciliation');
+
+    for (const trigger of [
+      "legacy_letter_person_extraction_revision",
+      "legacy_letter_place_extraction_revision",
+      "legacy_person_relationship_extraction_revision",
+      "legacy_review_queue_extraction_revision",
+    ]) {
+      expect(sql).toContain(`CREATE TRIGGER ${trigger}`);
+    }
+
+    expect(sql).toContain("commit_legacy_entity_extraction_projection");
+    expect(sql).toContain("discard_legacy_entity_extraction_projection");
+    expect(sql).toMatch(
+      /OLD\.entity_extraction_status = 'RUNNING'[\s\S]*?OLD\.entity_extraction_run_id IS NULL[\s\S]*?NEW\.entity_extraction_status = 'SUCCESS'[\s\S]*?commit_legacy_entity_extraction_projection/,
+    );
+    expect(sql).toMatch(
+      /NEW\.entity_extraction_status <> 'RUNNING'[\s\S]*?NEW\.entity_extraction_status <> 'SUCCESS'[\s\S]*?discard_legacy_entity_extraction_projection/,
+    );
+  });
 });

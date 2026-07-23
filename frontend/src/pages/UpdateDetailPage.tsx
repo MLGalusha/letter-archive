@@ -14,7 +14,7 @@ const MARKDOWN_COMPONENTS: import('react-markdown').Components = {
   img({ alt, src, title }) {
     if (!src) return null;
     const resolvedSrc = (src.startsWith('/images/') || src.startsWith('/blog-images/'))
-      ? getImageUrl(src, { publicOnly: true })
+      ? getImageUrl(src)
       : src;
     return (
       <img
@@ -129,7 +129,7 @@ export default function BlogDetailPage() {
         {post.heroImageUrl && (
           <div className="update-hero-image">
             <img
-              src={getImageUrl(post.heroImageUrl, { publicOnly: true })}
+              src={getImageUrl(post.heroImageUrl)}
               alt={post.heroImageAlt || post.title}
             />
           </div>

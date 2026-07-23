@@ -1,6 +1,17 @@
 import type { CollectionProfileCorrespondent, KeyPerson } from "../api/collections";
-import type { Letter, LetterImageType } from "../types/Letter";
+import type { LetterImageType, PublicLetter } from "../types/Letter";
 import { getMediaLabel, getPrimaryMediaType } from "../utils/letterPreview";
+
+/** Fields shared by public projections and full admin letters in collection UI. */
+type CollectionLetter = Pick<
+  PublicLetter,
+  | "id"
+  | "images"
+  | "metadata"
+  | "transcriptStatus"
+  | "metadataContentStatus"
+  | "photoDescription"
+>;
 
 /* ------------------------------------------------------------------ */
 /*  Stats                                                              */
@@ -50,10 +61,10 @@ const FORMAT_DISPLAY_ORDER: LetterImageType[] = [
   "letter", "telegram", "cover", "card", "ephemera", "article", "diary", "voice", "photo",
 ];
 
-export function computeCollectionStats(letters: Letter[]): CollectionStats {
+export function computeCollectionStats(letters: CollectionLetter[]): CollectionStats {
   const dated = letters
     .map((l) => ({ letter: l, date: parseDateRaw(l.metadata.dateRaw) }))
-    .filter((entry): entry is { letter: Letter; date: Date } => entry.date !== null)
+    .filter((entry): entry is { letter: CollectionLetter; date: Date } => entry.date !== null)
     .sort((a, b) => a.date.getTime() - b.date.getTime());
 
   // Date span
@@ -105,7 +116,7 @@ export function computeCollectionStats(letters: Letter[]): CollectionStats {
 /* ------------------------------------------------------------------ */
 
 export interface LetterHighlight {
-  letter: Letter;
+  letter: CollectionLetter;
   label: string;
 }
 
@@ -116,7 +127,7 @@ export interface LetterHighlight {
  *   3 = Has metadata  (metadata is AI_DRAFT or EDITED)
  *   4 = Any
  */
-function qualityTier(letter: Letter): number {
+function qualityTier(letter: CollectionLetter): number {
   const tv = letter.transcriptStatus === "VERIFIED";
   const mv = letter.metadataContentStatus === "VERIFIED";
   if (tv && mv) return 1;
@@ -133,7 +144,7 @@ function qualityTier(letter: Letter): number {
  *      preferring letters with images, random within the top tier
  */
 export function pickLetterHighlights(
-  letters: Letter[],
+  letters: CollectionLetter[],
   startHereLetterId?: string | null,
 ): LetterHighlight[] {
   if (letters.length === 0) return [];
@@ -141,7 +152,7 @@ export function pickLetterHighlights(
   const highlights: LetterHighlight[] = [];
   const used = new Set<string>();
 
-  const add = (letter: Letter, label: string) => {
+  const add = (letter: CollectionLetter, label: string) => {
     if (used.has(letter.id)) return;
     used.add(letter.id);
     highlights.push({ letter, label });
@@ -198,7 +209,7 @@ export interface GalleryItem {
  * If the letter is primarily a "letter" with extra content attached,
  * omit the hook since it describes the letter, not the extra content.
  */
-export function buildExtraContentGallery(letters: Letter[]): GalleryItem[] {
+export function buildExtraContentGallery(letters: CollectionLetter[]): GalleryItem[] {
   const GALLERY_TYPES: LetterImageType[] = [
     "photo", "cover", "card", "telegram", "ephemera", "article", "diary",
   ];
@@ -273,7 +284,7 @@ export interface Correspondent {
 }
 
 export function buildCorrespondents(
-  letters: Letter[],
+  letters: CollectionLetter[],
   keyPeople?: KeyPerson[] | null,
   profileCorrespondents?: CollectionProfileCorrespondent[] | null,
 ): Correspondent[] {

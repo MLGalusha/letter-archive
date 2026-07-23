@@ -4,10 +4,21 @@ import { db, letters, collections } from '../db/index.js';
 import {
   listCollections,
   getCollectionByCode,
-  resolveCollectionFeaturedLetterId,
+  resolveCollectionStartHere,
 } from '../services/collections.js';
 import { transformLettersWithRelatedToDTO, type LetterWithRelations } from '../dto/index.js';
 import { getCollectionAggregations } from '../services/collection-profile.js';
+import {
+  isVerifiedPublicContent,
+  toPublicCollection,
+  toPublicLetter,
+} from '../services/public-read-model.js';
+import {
+  isPhotoOnlyCatalogueUnit,
+  publicCatalogueLetterTypeSql,
+  retainRowsWithPublicCatalogueRoot,
+  selectPublicCatalogueRepresentative,
+} from '../services/public-catalogue-unit.js';
 
 const router = Router();
 
@@ -61,12 +72,24 @@ function applyProfileCorrespondentOverrides<
   });
 }
 
-// Note: Request logging is handled by the request-logger middleware
+function filterProfileLetterReferences(input: unknown, publicLetterIds: Set<string>): unknown[] {
+  if (!Array.isArray(input)) return [];
 
-// Simple TTL caches — collections change rarely (only on publish/unpublish)
-let collectionsCache: { data: unknown; timestamp: number } | null = null;
-const collectionDetailCache = new Map<string, { data: unknown; timestamp: number }>();
-const COLLECTIONS_CACHE_TTL_MS = 30_000;
+  return input.map((item) => {
+    if (!item || typeof item !== 'object' || !('letterIds' in item) || !Array.isArray(item.letterIds)) {
+      return item;
+    }
+    return {
+      ...item,
+      letterIds: item.letterIds.filter(
+        (letterId: unknown): letterId is string =>
+          typeof letterId === 'string' && publicLetterIds.has(letterId),
+      ),
+    };
+  });
+}
+
+// Note: Request logging is handled by the request-logger middleware
 
 /**
  * GET /collections
@@ -74,11 +97,6 @@ const COLLECTIONS_CACHE_TTL_MS = 30_000;
  */
 router.get('/collections', async (req, res, next) => {
   try {
-    if (collectionsCache && Date.now() - collectionsCache.timestamp < COLLECTIONS_CACHE_TTL_MS) {
-      res.json(collectionsCache.data);
-      return;
-    }
-
     const allCollections = await listCollections();
 
     // Run all aggregation queries in parallel
@@ -90,7 +108,10 @@ router.get('/collections', async (req, res, next) => {
           count: sql<number>`count(DISTINCT (date_raw, type_sequence))::int`,
         })
         .from(letters)
-        .where(eq(letters.visibility, 'PUBLISHED'))
+        .where(and(
+          eq(letters.visibility, 'PUBLISHED'),
+          publicCatalogueLetterTypeSql(letters.type),
+        ))
         .groupBy(letters.collectionId),
 
       // Date ranges per collection
@@ -101,7 +122,10 @@ router.get('/collections', async (req, res, next) => {
           maxDate: sql<string>`MAX(COALESCE(letter_date::text, date_raw))`,
         })
         .from(letters)
-        .where(eq(letters.visibility, 'PUBLISHED'))
+        .where(and(
+          eq(letters.visibility, 'PUBLISHED'),
+          publicCatalogueLetterTypeSql(letters.type),
+        ))
         .groupBy(letters.collectionId),
 
       // Most frequent sender per collection
@@ -109,7 +133,10 @@ router.get('/collections', async (req, res, next) => {
         SELECT DISTINCT ON (collection_id)
           collection_id, sender as name
         FROM letters
-        WHERE visibility = 'PUBLISHED' AND type = 'L' AND sender IS NOT NULL
+        WHERE visibility = 'PUBLISHED'
+          AND metadata_published = TRUE
+          AND type = 'L'
+          AND sender IS NOT NULL
         GROUP BY collection_id, sender
         ORDER BY collection_id, count(*) DESC
       `),
@@ -119,7 +146,10 @@ router.get('/collections', async (req, res, next) => {
         SELECT DISTINCT ON (collection_id)
           collection_id, recipient as name
         FROM letters
-        WHERE visibility = 'PUBLISHED' AND type = 'L' AND recipient IS NOT NULL
+        WHERE visibility = 'PUBLISHED'
+          AND metadata_published = TRUE
+          AND type = 'L'
+          AND recipient IS NOT NULL
         GROUP BY collection_id, recipient
         ORDER BY collection_id, count(*) DESC
       `),
@@ -130,40 +160,18 @@ router.get('/collections', async (req, res, next) => {
     const senderMap = new Map((topSenders as unknown as Array<{ collection_id: string; name: string }>).map(r => [r.collection_id, r.name]));
     const recipientMap = new Map((topRecipients as unknown as Array<{ collection_id: string; name: string }>).map(r => [r.collection_id, r.name]));
 
-    const collectionsWithDetails = allCollections.map(collection => ({
-      id: collection.id,
-      collectionCode: collection.collectionCode,
-      title: collection.title,
-      description: collection.description,
-      createdAt: collection.createdAt,
-      hook: collection.hook || null,
-      letterCount: countMap.get(collection.id) || 0,
-      dateRange: dateMap.get(collection.id) || null,
-      primarySender: senderMap.get(collection.id) || null,
-      primaryRecipient: recipientMap.get(collection.id) || null,
-    }));
+    const collectionsWithDetails = allCollections
+      .map((collection) => ({
+        ...toPublicCollection(collection),
+        letterCount: countMap.get(collection.id) || 0,
+        dateRange: dateMap.get(collection.id) || null,
+        primarySender: senderMap.get(collection.id) || null,
+        primaryRecipient: recipientMap.get(collection.id) || null,
+      }))
+      .filter((collection) => collection.letterCount > 0);
 
-    collectionsCache = { data: collectionsWithDetails, timestamp: Date.now() };
     req.log.debug({ collectionCount: collectionsWithDetails.length }, 'Collections list fetched');
     res.json(collectionsWithDetails);
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * GET /collections/next-number
- * Get the next available collection number
- */
-router.get('/collections/next-number', async (_req, res, next) => {
-  try {
-    const allCollections = await listCollections();
-    const maxCode = allCollections.reduce((max, c) => {
-      const num = parseInt(c.collectionCode, 10);
-      return isNaN(num) ? max : Math.max(max, num);
-    }, 0);
-
-    res.json({ nextCollectionNumber: maxCode + 1 });
   } catch (error) {
     next(error);
   }
@@ -176,12 +184,6 @@ router.get('/collections/next-number', async (_req, res, next) => {
 router.get('/collections/:code', async (req, res, next) => {
   try {
     const { code } = req.params;
-
-    const cached = collectionDetailCache.get(code);
-    if (cached && Date.now() - cached.timestamp < COLLECTIONS_CACHE_TTL_MS) {
-      res.json(cached.data);
-      return;
-    }
 
     const collection = await getCollectionByCode(code);
 
@@ -209,8 +211,9 @@ router.get('/collections/:code', async (req, res, next) => {
     // Group by (dateRaw, typeSequence) to merge companions into primaries.
     // Primary = L-type (or first in group if no L-type).
     // Related items (covers, photos, etc.) get their images appended.
-    const groupMap = new Map<string, (typeof allLetters)[number][]>();
-    for (const letter of allLetters) {
+    const catalogueLetters = retainRowsWithPublicCatalogueRoot(allLetters);
+    const groupMap = new Map<string, (typeof catalogueLetters)[number][]>();
+    for (const letter of catalogueLetters) {
       const key = `${letter.dateRaw}|${letter.typeSequence}`;
       const group = groupMap.get(key);
       if (group) {
@@ -222,7 +225,9 @@ router.get('/collections/:code', async (req, res, next) => {
 
     const enrichedResults: Array<{ letter: LetterWithRelations; relatedItems: LetterWithRelations[] }> = [];
     for (const [, group] of groupMap) {
-      const primary = group.find((l) => l.type === 'L') || group[0];
+      const primary = selectPublicCatalogueRepresentative(group);
+      if (!primary) continue;
+
       const relatedItems = group.filter((l) => l.id !== primary.id);
       enrichedResults.push({
         letter: primary as LetterWithRelations,
@@ -230,7 +235,19 @@ router.get('/collections/:code', async (req, res, next) => {
       });
     }
 
-    const collectionLetters = transformLettersWithRelatedToDTO(enrichedResults);
+    if (enrichedResults.length === 0) {
+      req.log.debug({ collectionCode: code }, 'Collection has no public catalogue units');
+      res.status(404).json({ error: 'Collection not found' });
+      return;
+    }
+
+    const collectionDtos = transformLettersWithRelatedToDTO(enrichedResults);
+    const collectionLetters = collectionDtos.map((dto, index) => {
+      const unit = enrichedResults[index];
+      return toPublicLetter(dto, {
+        photoOnly: isPhotoOnlyCatalogueUnit([unit.letter, ...unit.relatedItems]),
+      });
+    });
 
     req.log.debug(
       { collectionCode: code, letterCount: collectionLetters.length, rawCount: allLetters.length },
@@ -238,11 +255,10 @@ router.get('/collections/:code', async (req, res, next) => {
     );
 
     const result = {
-      ...collection,
+      ...toPublicCollection(collection),
       letters: collectionLetters,
       letterCount: collectionLetters.length,
     };
-    collectionDetailCache.set(code, { data: result, timestamp: Date.now() });
     res.json(result);
   } catch (error) {
     next(error);
@@ -263,54 +279,100 @@ router.get('/collections/:code/profile', async (req, res, next) => {
       return;
     }
 
-    const aggregations = await getCollectionAggregations(collection.id);
-    const profileCorrespondents = normalizeProfileCorrespondents(collection.profileCorrespondents);
-    const featuredLetterId = await resolveCollectionFeaturedLetterId(
-      collection.id,
-      collection.profileStartHereLetterId,
-    );
-
-    if (featuredLetterId !== (collection.profileStartHereLetterId ?? null)) {
-      await db.update(collections).set({
-        profileStartHereLetterId: featuredLetterId,
-      }).where(eq(collections.id, collection.id));
+    const publicCatalogueUnit = await db.query.letters.findFirst({
+      where: and(
+        eq(letters.collectionId, collection.id),
+        eq(letters.visibility, 'PUBLISHED'),
+        publicCatalogueLetterTypeSql(letters.type),
+      ),
+      columns: { id: true },
+    });
+    if (!publicCatalogueUnit) {
+      req.log.debug({ collectionCode: code }, 'Collection has no public catalogue units');
+      res.status(404).json({ error: 'Collection not found' });
+      return;
     }
+
+    const profilePublished = isVerifiedPublicContent(collection.profileStatus);
+    const [aggregations, publishedProfileRows] = await Promise.all([
+      getCollectionAggregations(collection.id),
+      profilePublished
+        ? db.query.letters.findMany({
+            where: and(
+              eq(letters.collectionId, collection.id),
+              eq(letters.visibility, 'PUBLISHED'),
+            ),
+            columns: {
+              id: true,
+              collectionId: true,
+              dateRaw: true,
+              typeSequence: true,
+              type: true,
+              metadataPublished: true,
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+    const publicMetadataLetterIds = new Set(
+      retainRowsWithPublicCatalogueRoot(publishedProfileRows)
+        .filter((letter) => letter.metadataPublished)
+        .map((letter) => letter.id),
+    );
+    const profileCorrespondents = profilePublished
+      ? normalizeProfileCorrespondents(collection.profileCorrespondents)
+      : [];
+    const resolvedStartHere = profilePublished
+      ? await resolveCollectionStartHere(
+          collection.id,
+          {
+            letterId: collection.profileStartHereLetterId,
+            reason: collection.profileStartHereReason,
+          },
+        )
+      : { letterId: null, reason: null };
 
     // Build start-here with letter context if available
     let startHere: { letterId: string; reason: string; hook: string | null; date: string | null } | null = null;
-    if (featuredLetterId) {
+    if (resolvedStartHere.letterId) {
       const startLetter = await db.query.letters.findFirst({
         where: and(
-          eq(letters.id, featuredLetterId),
+          eq(letters.id, resolvedStartHere.letterId),
+          eq(letters.collectionId, collection.id),
           eq(letters.visibility, 'PUBLISHED'),
+          eq(letters.metadataPublished, true),
+          publicCatalogueLetterTypeSql(letters.type),
         ),
-        columns: { id: true, hook: true, letterDate: true, dateRaw: true },
+        columns: {
+          id: true,
+          hook: true,
+          letterDate: true,
+          dateRaw: true,
+          metadataPublished: true,
+        },
       });
       if (startLetter) {
         startHere = {
-          letterId: featuredLetterId,
-          reason: collection.profileStartHereReason || '',
-          hook: startLetter.hook,
+          letterId: resolvedStartHere.letterId,
+          reason: resolvedStartHere.reason || '',
+          hook: startLetter.metadataPublished ? startLetter.hook : null,
           date: startLetter.letterDate || startLetter.dateRaw,
         };
       }
     }
 
-    // Filter reading path / theme letter IDs to only published letters
-    const publishedIds = new Set(aggregations.sentimentArc.map(s => s.letterId)
-      .concat(aggregations.topicEvolution.map(t => t.letterId)));
-    // Actually, let's use a broader set from the letters query already done
-    // For now, trust the data and let the frontend handle missing links gracefully
-
     res.json({
       // AI-generated content
-      hook: collection.hook,
-      narrative: collection.profileNarrative,
-      profileStatus: collection.profileStatus,
+      hook: profilePublished ? collection.hook : null,
+      narrative: profilePublished ? collection.profileNarrative : null,
+      profileStatus: profilePublished ? 'VERIFIED' : 'EMPTY',
       startHere,
-      readingPaths: collection.profileReadingPaths || [],
-      gapAnalysis: collection.profileGapAnalysis || [],
-      themes: collection.profileThemes || [],
+      readingPaths: profilePublished
+        ? filterProfileLetterReferences(collection.profileReadingPaths, publicMetadataLetterIds)
+        : [],
+      gapAnalysis: profilePublished ? (collection.profileGapAnalysis || []) : [],
+      themes: profilePublished
+        ? filterProfileLetterReferences(collection.profileThemes, publicMetadataLetterIds)
+        : [],
       profileCorrespondents,
       // Computed aggregations
       ...aggregations,

@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
 import { createLogger, logIfSlow, TIMING_THRESHOLDS, type Logger } from '../utils/logger.js';
+import { redactSensitiveQuery } from '../utils/log-redaction.js';
 
 // Extend Express Request to include logger and requestId
 declare global {
@@ -83,7 +84,9 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
   if (!isQuietPath) {
     log.debug(
       {
-        query: Object.keys(req.query).length > 0 ? req.query : undefined,
+        query: Object.keys(req.query).length > 0
+          ? redactSensitiveQuery(req.query)
+          : undefined,
         contentLength: req.get('content-length'),
       },
       'Request started'

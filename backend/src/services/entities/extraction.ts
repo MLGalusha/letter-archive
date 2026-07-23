@@ -1,379 +1,565 @@
-import { and, eq } from 'drizzle-orm';
-import {
-  db,
-  personRelationships,
-  type PersonRelationshipType,
-  type PersonRole,
-  type PlaceRole,
-  type PlaceType,
-} from '../../db/index.js';
+import { and, eq, gt, gte, isNotNull, isNull } from 'drizzle-orm';
 import type {
+  DiscoveredRelationship,
   EntityExtraction,
   ExtractedPerson,
   ExtractedPlace,
-  DiscoveredRelationship,
 } from '../../ai/schemas/entityExtraction.js';
+import {
+  canonicalPersons,
+  canonicalPlaces,
+  db,
+  entityReviewQueue,
+  letterPersons,
+  letterPlaces,
+  letters,
+  personRelationships,
+  type Database,
+} from '../../db/index.js';
 import { createLogger } from '../../utils/logger.js';
+import type { EntityExtractionClaim } from '../letters.js';
 import { findMatchingPersons, findMatchingPlaces } from './matching.js';
-import { createLetterPerson, createLetterPlace } from './junctions.js';
-import {
-  createCanonicalPerson,
-  getCanonicalPersonById,
-  updateCanonicalPerson,
-} from './persons.js';
-import {
-  createCanonicalPlace,
-  getCanonicalPlaceById,
-  updateCanonicalPlace,
-} from './places.js';
-import { addToReviewQueue } from './review-queue.js';
-import { createRelationship } from './relationships.js';
+import { SYSTEM_BACKFILL_RELATIONSHIP_OWNER } from './relationship-provenance.js';
 
 const log = createLogger({ module: 'entity-processing' });
 
-export interface ExtractedEntity {
-  type: 'person' | 'place';
-  name: string;
-  role: string;
-  context: string | null;
-  relationship_to_sender: string | null;
-  confidence: number;
-}
+type EntityWriteDatabase = Pick<
+  Database,
+  'execute' | 'select' | 'insert' | 'update' | 'delete'
+>;
 
-function inferPlaceType(name: string): PlaceType {
-  const lowerName = name.toLowerCase();
-  if (/\b(street|road|avenue|lane|drive|blvd|boulevard)\b/.test(lowerName)) return 'street';
-  if (/\b(england|america|france|germany|usa|uk|united states|united kingdom)\b/.test(lowerName)) {
-    return 'country';
-  }
-  if (/\b(county|state|province|region)\b/.test(lowerName)) return 'region';
-  if (/,/.test(name)) return 'city';
-  return 'other';
-}
-
-export async function processExtractedEntity(
-  entity: ExtractedEntity,
-  letterId: string,
-): Promise<void> {
-  const isPersonEntity = entity.type === 'person';
-
-  const matches = isPersonEntity
-    ? await findMatchingPersons(entity.name)
-    : await findMatchingPlaces(entity.name);
-
-  const bestMatch = matches[0];
-  const aiConfidence = Math.round(entity.confidence * 100);
-
-  if (bestMatch && bestMatch.similarity >= 85) {
-    if (isPersonEntity) {
-      await createLetterPerson({
-        letterId,
-        personId: bestMatch.entityId,
-        role: entity.role as PersonRole,
-        nameAsWritten: entity.name,
-        relationshipToSender: entity.relationship_to_sender,
-        context: entity.context,
-        confidence: Math.min(aiConfidence, bestMatch.similarity),
-      });
-    } else {
-      await createLetterPlace({
-        letterId,
-        placeId: bestMatch.entityId,
-        role: entity.role as PlaceRole,
-        nameAsWritten: entity.name,
-        context: entity.context,
-        confidence: Math.min(aiConfidence, bestMatch.similarity),
-      });
-    }
-  } else if (bestMatch && bestMatch.similarity >= 50) {
-    await addToReviewQueue({
-      entityType: entity.type,
-      extractedText: entity.name,
-      letterId,
-      suggestedEntityId: bestMatch.entityId,
-      context: entity.context ?? undefined,
-      confidence: bestMatch.similarity,
-    });
-  } else {
-    const newEntityId = isPersonEntity
-      ? await createCanonicalPerson({ canonicalName: entity.name })
-      : await createCanonicalPlace({
-          canonicalName: entity.name,
-          placeType: inferPlaceType(entity.name),
-        });
-
-    if (isPersonEntity) {
-      await createLetterPerson({
-        letterId,
-        personId: newEntityId,
-        role: entity.role as PersonRole,
-        nameAsWritten: entity.name,
-        relationshipToSender: entity.relationship_to_sender,
-        context: entity.context,
-        confidence: aiConfidence,
-      });
-    } else {
-      await createLetterPlace({
-        letterId,
-        placeId: newEntityId,
-        role: entity.role as PlaceRole,
-        nameAsWritten: entity.name,
-        context: entity.context,
-        confidence: aiConfidence,
-      });
-    }
-  }
-}
-
-export async function processEntityExtraction(
-  extraction: EntityExtraction,
-  letterId: string,
-): Promise<{
+export interface EntityExtractionCommitResult {
   peopleProcessed: number;
   placesProcessed: number;
   relationshipsCreated: number;
   errors: string[];
-}> {
-  const errors: string[] = [];
-  let peopleProcessed = 0;
-  let placesProcessed = 0;
-  let relationshipsCreated = 0;
+}
 
-  const resolvedPersonIds = new Map<string, string>();
+/**
+ * Signals that a cancelled, retried, or otherwise superseded producer reached
+ * the commit boundary after its ownership token stopped being authoritative.
+ */
+export class EntityExtractionClaimLostError extends Error {
+  constructor() {
+    super('Entity extraction claim is no longer authoritative');
+    this.name = 'EntityExtractionClaimLostError';
+  }
+}
 
-  for (const person of extraction.people) {
-    try {
-      const personId = await processExtractedPerson(person, letterId);
-      if (personId) {
-        resolvedPersonIds.set(person.name.toLowerCase(), personId);
-        for (const alias of person.aliases) {
-          resolvedPersonIds.set(alias.toLowerCase(), personId);
-        }
+/**
+ * Signals that the exact extraction cannot materialize without overwriting an
+ * untrusted row whose provenance is not owned by this run.
+ */
+export class EntityExtractionProjectionConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'EntityExtractionProjectionConflictError';
+  }
+}
+
+/**
+ * Atomically replace the AI-owned entity projection for one letter.
+ *
+ * PostgreSQL keeps the previous committed rows visible while this transaction
+ * runs. If any resolution or write fails, every delete/insert is rolled back
+ * and the caller records failure against the exact run token.
+ */
+export async function processEntityExtraction(
+  extraction: EntityExtraction,
+  letterId: string,
+  claim: EntityExtractionClaim,
+): Promise<EntityExtractionCommitResult> {
+  const result = await db.transaction(async (tx) => {
+    // This idempotent owned update both verifies the token and locks the letter
+    // row. Cancellation/retry cannot cross the materialization boundary.
+    const owned = await tx
+      .update(letters)
+      .set({ entityExtractionRunId: claim.runId })
+      .where(and(
+        eq(letters.id, letterId),
+        eq(letters.entityExtractionStatus, 'RUNNING'),
+        eq(letters.entityExtractionRunId, claim.runId),
+        eq(letters.entityExtractionRunRevision, claim.revision),
+      ))
+      .returning({ id: letters.id });
+
+    if (owned.length === 0) {
+      throw new EntityExtractionClaimLostError();
+    }
+
+    // Confirmed and NULL-revision rows are human-owned. Only the prior
+    // extraction projection for this letter is replaced.
+    await tx.delete(letterPersons).where(and(
+      eq(letterPersons.letterId, letterId),
+      gt(letterPersons.entityExtractionRevision, 0),
+      isNull(letterPersons.confirmedAt),
+    ));
+    await tx.delete(letterPlaces).where(and(
+      eq(letterPlaces.letterId, letterId),
+      gt(letterPlaces.entityExtractionRevision, 0),
+      isNull(letterPlaces.confirmedAt),
+    ));
+    await tx.delete(personRelationships).where(and(
+      eq(personRelationships.discoveredInLetterId, letterId),
+      gt(personRelationships.entityExtractionRevision, 0),
+      isNull(personRelationships.confirmedAt),
+    ));
+    // Unresolved suggestions are another replaceable output of the run.
+    // Matched legacy revision-0 suggestions are known AI output and are
+    // replaced too; ambiguous NULL rows and resolved history remain intact.
+    await tx.delete(entityReviewQueue).where(and(
+      eq(entityReviewQueue.letterId, letterId),
+      gte(entityReviewQueue.entityExtractionRevision, 0),
+      eq(entityReviewQueue.status, 'pending'),
+    ));
+
+    const resolvedPersonIds = new Map<string, string>();
+    for (const person of extraction.people) {
+      const personId = await processExtractedPerson(
+        tx,
+        person,
+        letterId,
+        claim.revision,
+      );
+      if (!personId) continue;
+
+      resolvedPersonIds.set(person.name.toLowerCase(), personId);
+      for (const alias of person.aliases) {
+        resolvedPersonIds.set(alias.toLowerCase(), personId);
       }
-      peopleProcessed++;
-    } catch (err) {
-      const msg = `Failed to process person "${person.name}": ${err instanceof Error ? err.message : String(err)}`;
-      log.error({ letterId, personName: person.name, err }, msg);
-      errors.push(msg);
     }
-  }
 
-  for (const place of extraction.places) {
-    try {
-      await processExtractedPlace(place, letterId);
-      placesProcessed++;
-    } catch (err) {
-      const msg = `Failed to process place "${place.name}": ${err instanceof Error ? err.message : String(err)}`;
-      log.error({ letterId, placeName: place.name, err }, msg);
-      errors.push(msg);
+    for (const place of extraction.places) {
+      await processExtractedPlace(tx, place, letterId, claim.revision);
     }
-  }
 
-  for (const rel of extraction.relationships) {
-    try {
-      const created = await autoCreateRelationship(rel, letterId, resolvedPersonIds);
-      if (created) relationshipsCreated++;
-    } catch (err) {
-      const msg = `Failed to create relationship "${rel.person_a}" <-> "${rel.person_b}": ${err instanceof Error ? err.message : String(err)}`;
-      log.error({ letterId, personA: rel.person_a, personB: rel.person_b, err }, msg);
-      errors.push(msg);
+    let relationshipsCreated = 0;
+    for (const relationship of extraction.relationships) {
+      if (await processExtractedRelationship(
+        tx,
+        relationship,
+        letterId,
+        claim.revision,
+        resolvedPersonIds,
+      )) {
+        relationshipsCreated += 1;
+      }
     }
-  }
+
+    const committed = await tx
+      .update(letters)
+      .set({
+        entityExtractionJson: extraction,
+        entityExtractionStatus: 'SUCCESS',
+        entityExtractionRevision: claim.revision,
+        entityExtractionRunId: null,
+        entityExtractionRunRevision: null,
+        entityExtractionError: null,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(letters.id, letterId),
+        eq(letters.entityExtractionStatus, 'RUNNING'),
+        eq(letters.entityExtractionRunId, claim.runId),
+        eq(letters.entityExtractionRunRevision, claim.revision),
+      ))
+      .returning({ id: letters.id });
+
+    if (committed.length === 0) {
+      throw new EntityExtractionClaimLostError();
+    }
+
+    return {
+      peopleProcessed: extraction.people.length,
+      placesProcessed: extraction.places.length,
+      relationshipsCreated,
+      errors: [],
+    };
+  });
 
   log.info(
-    { letterId, peopleProcessed, placesProcessed, relationshipsCreated, errorCount: errors.length },
-    'Entity extraction processing completed',
+    { letterId, ...result },
+    'Entity extraction projection committed',
   );
-
-  return { peopleProcessed, placesProcessed, relationshipsCreated, errors };
+  return result;
 }
 
 async function processExtractedPerson(
+  database: EntityWriteDatabase,
   person: ExtractedPerson,
   letterId: string,
+  revision: number,
 ): Promise<string | null> {
-  const matches = await findMatchingPersons(person.name);
-  const bestMatch = matches[0];
-  const aiConfidence = Math.round(person.confidence * 100);
-
-  const contextParts: string[] = [];
-  if (person.emotional_significance) contextParts.push(person.emotional_significance);
-  for (const detail of person.details.slice(0, 3)) {
-    contextParts.push(detail.detail);
-  }
-  const richContext = contextParts.join('; ') || null;
+  const bestMatch = (await findMatchingPersons(person.name, 5, database))[0];
+  const confidence = Math.round(person.confidence * 100);
+  const context = [
+    person.emotional_significance,
+    ...person.details.slice(0, 3).map((detail) => detail.detail),
+  ].filter((value): value is string => Boolean(value)).join('; ') || null;
 
   if (bestMatch && bestMatch.similarity >= 85) {
-    await createLetterPerson({
+    await insertLetterPerson(database, {
       letterId,
       personId: bestMatch.entityId,
-      role: person.role as PersonRole,
+      role: person.role,
       nameAsWritten: person.name,
       relationshipToSender: person.relationship_to_sender,
-      context: richContext,
-      confidence: Math.min(aiConfidence, bestMatch.similarity),
+      context,
+      confidence: Math.min(confidence, bestMatch.similarity),
+      entityExtractionRevision: revision,
     });
-
-    if (person.aliases.length > 0) {
-      const existing = await getCanonicalPersonById(bestMatch.entityId);
-      if (existing) {
-        const existingAliases = new Set((existing.aliases || []).map((a) => a.toLowerCase()));
-        const newAliases = person.aliases.filter((a) => !existingAliases.has(a.toLowerCase()));
-        if (newAliases.length > 0) {
-          await updateCanonicalPerson(bestMatch.entityId, {
-            aliases: [...(existing.aliases || []), ...newAliases],
-          });
-        }
-      }
-    }
-
+    // Extraction never mutates aliases on an existing shared canonical row.
     return bestMatch.entityId;
   }
 
   if (bestMatch && bestMatch.similarity >= 50) {
-    await addToReviewQueue({
+    await insertReviewItem(database, {
       entityType: 'person',
       extractedText: person.name,
       letterId,
       suggestedEntityId: bestMatch.entityId,
-      context: richContext ?? undefined,
+      context: context ?? undefined,
       confidence: bestMatch.similarity,
+      entityExtractionRevision: revision,
     });
     return null;
   }
 
-  const newPersonId = await createCanonicalPerson({
-    canonicalName: person.name,
-    aliases: person.aliases.length > 0 ? person.aliases : undefined,
-  });
+  const [created] = await database
+    .insert(canonicalPersons)
+    .values({
+      canonicalName: person.name,
+      aliases: person.aliases.length > 0 ? person.aliases : undefined,
+    })
+    .returning({ id: canonicalPersons.id });
 
-  await createLetterPerson({
+  await insertLetterPerson(database, {
     letterId,
-    personId: newPersonId,
-    role: person.role as PersonRole,
+    personId: created.id,
+    role: person.role,
     nameAsWritten: person.name,
     relationshipToSender: person.relationship_to_sender,
-    context: richContext,
-    confidence: aiConfidence,
+    context,
+    confidence,
+    entityExtractionRevision: revision,
   });
-
-  return newPersonId;
+  return created.id;
 }
 
 async function processExtractedPlace(
+  database: EntityWriteDatabase,
   place: ExtractedPlace,
   letterId: string,
+  revision: number,
 ): Promise<void> {
-  const matches = await findMatchingPlaces(place.name);
-  const bestMatch = matches[0];
-  const aiConfidence = Math.round(place.confidence * 100);
-
-  const contextParts: string[] = [];
-  if (place.why_mentioned) contextParts.push(place.why_mentioned);
-  if (place.descriptive_details) contextParts.push(place.descriptive_details);
-  const richContext = contextParts.join('; ') || undefined;
+  const bestMatch = (await findMatchingPlaces(place.name, 5, database))[0];
+  const confidence = Math.round(place.confidence * 100);
+  const context = [
+    place.why_mentioned,
+    place.descriptive_details,
+  ].filter((value): value is string => Boolean(value)).join('; ') || null;
 
   if (bestMatch && bestMatch.similarity >= 85) {
-    await createLetterPlace({
+    await insertLetterPlace(database, {
       letterId,
       placeId: bestMatch.entityId,
-      role: place.role as PlaceRole,
+      role: place.role,
       nameAsWritten: place.name,
-      context: richContext,
-      confidence: Math.min(aiConfidence, bestMatch.similarity),
+      context,
+      confidence: Math.min(confidence, bestMatch.similarity),
+      entityExtractionRevision: revision,
     });
-
-    const existing = await getCanonicalPlaceById(bestMatch.entityId);
-    if (existing && !existing.placeType && place.type !== 'other') {
-      await updateCanonicalPlace(bestMatch.entityId, {
-        placeType: place.type as PlaceType,
-      });
-    }
+    // Extraction never mutates placeType on an existing shared canonical row.
     return;
   }
 
   if (bestMatch && bestMatch.similarity >= 50) {
-    await addToReviewQueue({
+    await insertReviewItem(database, {
       entityType: 'place',
       extractedText: place.name,
       letterId,
       suggestedEntityId: bestMatch.entityId,
-      context: richContext,
+      context: context ?? undefined,
       confidence: bestMatch.similarity,
+      entityExtractionRevision: revision,
     });
     return;
   }
 
-  const newPlaceId = await createCanonicalPlace({
-    canonicalName: place.name,
-    placeType: place.type as PlaceType,
-  });
+  const [created] = await database
+    .insert(canonicalPlaces)
+    .values({
+      canonicalName: place.name,
+      placeType: place.type,
+    })
+    .returning({ id: canonicalPlaces.id });
 
-  await createLetterPlace({
+  await insertLetterPlace(database, {
     letterId,
-    placeId: newPlaceId,
-    role: place.role as PlaceRole,
+    placeId: created.id,
+    role: place.role,
     nameAsWritten: place.name,
-    context: richContext,
-    confidence: aiConfidence,
+    context,
+    confidence,
+    entityExtractionRevision: revision,
   });
 }
 
-async function autoCreateRelationship(
-  rel: DiscoveredRelationship,
+async function processExtractedRelationship(
+  database: EntityWriteDatabase,
+  relationship: DiscoveredRelationship,
   letterId: string,
+  revision: number,
   resolvedPersonIds: Map<string, string>,
 ): Promise<boolean> {
-  let personAId = resolvedPersonIds.get(rel.person_a.toLowerCase());
-  let personBId = resolvedPersonIds.get(rel.person_b.toLowerCase());
+  let personAId = resolvedPersonIds.get(relationship.person_a.toLowerCase());
+  let personBId = resolvedPersonIds.get(relationship.person_b.toLowerCase());
 
   if (!personAId) {
-    const matches = await findMatchingPersons(rel.person_a, 1);
-    if (matches[0] && matches[0].similarity >= 85) {
-      personAId = matches[0].entityId;
-    }
+    const match = (await findMatchingPersons(relationship.person_a, 1, database))[0];
+    if (match?.similarity >= 85) personAId = match.entityId;
   }
-
   if (!personBId) {
-    const matches = await findMatchingPersons(rel.person_b, 1);
-    if (matches[0] && matches[0].similarity >= 85) {
-      personBId = matches[0].entityId;
-    }
+    const match = (await findMatchingPersons(relationship.person_b, 1, database))[0];
+    if (match?.similarity >= 85) personBId = match.entityId;
   }
+  if (!personAId || !personBId || personAId === personBId) return false;
 
-  if (!personAId || !personBId) {
-    log.debug(
-      { personA: rel.person_a, personB: rel.person_b, resolvedA: !!personAId, resolvedB: !!personBId },
-      'Skipping relationship: one or both persons unresolved',
-    );
-    return false;
-  }
+  const [personA, personB] = [personAId, personBId].sort();
+  const relationshipPatch = {
+    relationshipType: relationship.relationship_type,
+    notes: relationship.evidence,
+    discoveredInLetterId: letterId,
+    entityExtractionRevision: revision,
+    confidence: Math.round(relationship.confidence * 100),
+    confirmedBy: null,
+    confirmedAt: null,
+    updatedAt: new Date(),
+  };
+  const promoted = await database
+    .update(personRelationships)
+    .set(relationshipPatch)
+    .where(and(
+      eq(personRelationships.personAId, personA),
+      eq(personRelationships.personBId, personB),
+      eq(personRelationships.discoveredInLetterId, letterId),
+      eq(personRelationships.entityExtractionRevision, 0),
+      isNull(personRelationships.confirmedAt),
+    ))
+    .returning({ id: personRelationships.id });
 
-  if (personAId === personBId) {
-    return false;
-  }
+  if (promoted.length > 0) return true;
 
-  const [first, second] = [personAId, personBId].sort();
-  const existing = await db
-    .select({ id: personRelationships.id })
+  // Backfill rows are explicitly marked system-owned but remain unconfirmed.
+  // An exact extraction may supersede one only by rewriting the entire content
+  // and provenance tuple to this run.
+  const adoptedBackfill = await database
+    .update(personRelationships)
+    .set(relationshipPatch)
+    .where(and(
+      eq(personRelationships.personAId, personA),
+      eq(personRelationships.personBId, personB),
+      eq(
+        personRelationships.confirmedBy,
+        SYSTEM_BACKFILL_RELATIONSHIP_OWNER,
+      ),
+      isNull(personRelationships.confirmedAt),
+      isNull(personRelationships.entityExtractionRevision),
+    ))
+    .returning({ id: personRelationships.id });
+
+  if (adoptedBackfill.length > 0) return true;
+
+  const inserted = await database
+    .insert(personRelationships)
+    .values({
+      personAId: personA,
+      personBId: personB,
+      ...relationshipPatch,
+    })
+    .onConflictDoNothing()
+    .returning({ id: personRelationships.id });
+
+  if (inserted.length > 0) return true;
+
+  const existing = await database
+    .select({
+      id: personRelationships.id,
+      discoveredInLetterId: personRelationships.discoveredInLetterId,
+      entityExtractionRevision: personRelationships.entityExtractionRevision,
+      confirmedAt: personRelationships.confirmedAt,
+    })
     .from(personRelationships)
-    .where(and(eq(personRelationships.personAId, first), eq(personRelationships.personBId, second)))
+    .where(and(
+      eq(personRelationships.personAId, personA),
+      eq(personRelationships.personBId, personB),
+    ))
     .limit(1);
 
-  if (existing.length > 0) {
-    log.debug({ personA: rel.person_a, personB: rel.person_b }, 'Relationship already exists, skipping');
+  const conflict = existing[0];
+  if (!conflict) {
+    throw new EntityExtractionProjectionConflictError(
+      `Relationship projection conflict disappeared for ${personA}/${personB}`,
+    );
+  }
+
+  // A human-confirmed relationship is an explicit override. A duplicate exact
+  // output from this transaction is already owned by the revision being
+  // committed. Neither row is rewritten.
+  if (
+    conflict.confirmedAt != null
+    || (
+      conflict.discoveredInLetterId === letterId
+      && conflict.entityExtractionRevision === revision
+    )
+  ) {
     return false;
   }
 
-  const aiConfidence = Math.round(rel.confidence * 100);
-  await createRelationship({
-    personAId,
-    personBId,
-    relationshipType: rel.relationship_type as PersonRelationshipType,
-    notes: rel.evidence,
-    discoveredInLetterId: letterId,
-    confidence: aiConfidence,
-  });
+  // The pair is globally unique, so a relationship committed by another
+  // letter may satisfy this discovery. Prove it against that letter's current
+  // committed JSON before leaving its content and provenance untouched.
+  if (
+    conflict.discoveredInLetterId != null
+    && conflict.entityExtractionRevision != null
+  ) {
+    const trusted = await database
+      .select({ id: letters.id })
+      .from(letters)
+      .where(and(
+        eq(letters.id, conflict.discoveredInLetterId),
+        eq(
+          letters.entityExtractionRevision,
+          conflict.entityExtractionRevision,
+        ),
+        isNotNull(letters.entityExtractionJson),
+      ))
+      .limit(1);
 
-  return true;
+    if (trusted.length > 0) return false;
+  }
+
+  throw new EntityExtractionProjectionConflictError(
+    `Untrusted relationship projection blocks ${personA}/${personB}`,
+  );
+}
+
+async function insertLetterPerson(
+  database: EntityWriteDatabase,
+  data: typeof letterPersons.$inferInsert,
+): Promise<void> {
+  const promoted = await database
+    .update(letterPersons)
+    .set({
+      nameAsWritten: data.nameAsWritten,
+      relationshipToSender: data.relationshipToSender,
+      context: data.context,
+      confidence: data.confidence,
+      entityExtractionRevision: data.entityExtractionRevision,
+    })
+    .where(and(
+      eq(letterPersons.letterId, data.letterId),
+      eq(letterPersons.personId, data.personId),
+      eq(letterPersons.role, data.role),
+      eq(letterPersons.entityExtractionRevision, 0),
+      isNull(letterPersons.confirmedAt),
+    ))
+    .returning({ id: letterPersons.id });
+  if (promoted.length > 0) return;
+
+  const inserted = await database
+    .insert(letterPersons)
+    .values(data)
+    .onConflictDoNothing()
+    .returning({ id: letterPersons.id });
+  if (inserted.length > 0) return;
+
+  const existing = await database
+    .select({
+      id: letterPersons.id,
+      entityExtractionRevision: letterPersons.entityExtractionRevision,
+      confirmedAt: letterPersons.confirmedAt,
+    })
+    .from(letterPersons)
+    .where(and(
+      eq(letterPersons.letterId, data.letterId),
+      eq(letterPersons.personId, data.personId),
+      eq(letterPersons.role, data.role),
+    ))
+    .limit(1);
+
+  const conflict = existing[0];
+  if (
+    conflict?.confirmedAt != null
+    || conflict?.entityExtractionRevision === data.entityExtractionRevision
+  ) {
+    return;
+  }
+
+  throw new EntityExtractionProjectionConflictError(
+    `Untrusted person projection blocks ${data.letterId}/${data.personId}/${data.role}`,
+  );
+}
+
+async function insertLetterPlace(
+  database: EntityWriteDatabase,
+  data: typeof letterPlaces.$inferInsert,
+): Promise<void> {
+  const promoted = await database
+    .update(letterPlaces)
+    .set({
+      nameAsWritten: data.nameAsWritten,
+      context: data.context,
+      confidence: data.confidence,
+      entityExtractionRevision: data.entityExtractionRevision,
+    })
+    .where(and(
+      eq(letterPlaces.letterId, data.letterId),
+      eq(letterPlaces.placeId, data.placeId),
+      eq(letterPlaces.role, data.role),
+      eq(letterPlaces.entityExtractionRevision, 0),
+      isNull(letterPlaces.confirmedAt),
+    ))
+    .returning({ id: letterPlaces.id });
+  if (promoted.length > 0) return;
+
+  const inserted = await database
+    .insert(letterPlaces)
+    .values(data)
+    .onConflictDoNothing()
+    .returning({ id: letterPlaces.id });
+  if (inserted.length > 0) return;
+
+  const existing = await database
+    .select({
+      id: letterPlaces.id,
+      entityExtractionRevision: letterPlaces.entityExtractionRevision,
+      confirmedAt: letterPlaces.confirmedAt,
+    })
+    .from(letterPlaces)
+    .where(and(
+      eq(letterPlaces.letterId, data.letterId),
+      eq(letterPlaces.placeId, data.placeId),
+      eq(letterPlaces.role, data.role),
+    ))
+    .limit(1);
+
+  const conflict = existing[0];
+  if (
+    conflict?.confirmedAt != null
+    || conflict?.entityExtractionRevision === data.entityExtractionRevision
+  ) {
+    return;
+  }
+
+  throw new EntityExtractionProjectionConflictError(
+    `Untrusted place projection blocks ${data.letterId}/${data.placeId}/${data.role}`,
+  );
+}
+
+async function insertReviewItem(
+  database: EntityWriteDatabase,
+  data: typeof entityReviewQueue.$inferInsert,
+): Promise<void> {
+  await database.insert(entityReviewQueue).values(data);
 }

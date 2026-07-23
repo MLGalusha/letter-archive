@@ -1,5 +1,8 @@
 import type { Page, Request } from '@playwright/test';
-import { API_BASE_URL } from './test-helpers';
+import {
+  API_BASE_URL,
+  installMockImageSessionApi,
+} from './test-helpers';
 
 interface MockLetter {
   id: string;
@@ -214,6 +217,8 @@ export async function installMockAdminDashboardApi(
   page: Page,
   options: MockAdminDashboardOptions = {},
 ): Promise<MockAdminDashboardContext> {
+  await installMockImageSessionApi(page);
+
   const letters = cloneLetters(baseLetters);
   const adminLettersRequests: URL[] = [];
   const flagRequests: Array<{ url: string; body: unknown }> = [];

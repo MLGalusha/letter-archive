@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { isAuthenticated } from '../../api/auth';
+import { ensureImageSession, isAuthenticated } from '../../api/auth';
 import AdminSidebar from '../AdminSidebar';
 import Icon from '../common/Icon';
 import UploadStatusBanner from '../UploadStatusBanner';
@@ -15,6 +15,7 @@ interface AdminLayoutProps {
 
 export default function AdminLayout({ children, headerActions, fullHeight }: AdminLayoutProps) {
   const navigate = useNavigate();
+  const [imageSessionState, setImageSessionState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -55,8 +56,39 @@ export default function AdminLayout({ children, headerActions, fullHeight }: Adm
   useEffect(() => {
     if (!isAuthenticated()) {
       navigate('/admin-login');
+      return;
     }
+
+    let active = true;
+    ensureImageSession()
+      .then(() => {
+        if (active) setImageSessionState('ready');
+      })
+      .catch(() => {
+        if (!active) return;
+        if (!isAuthenticated()) {
+          navigate('/admin-login');
+          return;
+        }
+        setImageSessionState('error');
+      });
+
+    return () => {
+      active = false;
+    };
   }, [navigate]);
+
+  if (imageSessionState !== 'ready') {
+    return (
+      <div className="admin-layout">
+        <main className="admin-content" aria-live="polite">
+          {imageSessionState === 'loading'
+            ? 'Restoring admin session…'
+            : 'The admin image session could not be restored. Refresh to retry.'}
+        </main>
+      </div>
+    );
+  }
 
   const closeMobileNav = () => {
     setMobileNavOpen(false);

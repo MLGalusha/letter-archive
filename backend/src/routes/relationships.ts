@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, and, inArray, sql, asc } from 'drizzle-orm';
+import { eq, and, inArray, isNotNull, or, sql, asc, type SQLWrapper } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   db,
@@ -13,6 +13,8 @@ import {
   buildRelationshipAdjacency,
   findShortestRelationshipPath,
 } from './relationships-graph.js';
+import { publicCatalogueLetterTypeSql } from '../services/public-catalogue-unit.js';
+import { publicEntityProjectionSql } from '../services/entities/public-projection.js';
 
 const log = createLogger({ module: 'public-relationships' });
 const router = Router();
@@ -21,6 +23,52 @@ const pathParamsSchema = z.object({
   personAId: z.string().uuid(),
   personBId: z.string().uuid(),
 });
+
+function publicPersonExistsSql(personId: SQLWrapper) {
+  return sql`EXISTS (
+    SELECT 1
+    FROM letter_persons public_link
+    INNER JOIN letters public_letter ON public_letter.id = public_link.letter_id
+    WHERE public_link.person_id = ${personId}
+      AND public_letter.visibility = 'PUBLISHED'
+      AND public_letter.metadata_published = TRUE
+      AND ${publicCatalogueLetterTypeSql(sql`public_letter.type`)}
+      AND ${publicEntityProjectionSql(
+        sql`public_link.confirmed_at`,
+        sql`public_link.entity_extraction_revision`,
+        sql`public_letter.entity_extraction_revision`,
+        sql`public_letter.entity_extraction_json`,
+      )}
+  )`;
+}
+
+function publicRelationshipProvenanceSql() {
+  return or(
+    isNotNull(personRelationships.confirmedAt),
+    sql`EXISTS (
+      SELECT 1
+      FROM letters public_discovery
+      WHERE public_discovery.id = ${personRelationships.discoveredInLetterId}
+        AND public_discovery.visibility = 'PUBLISHED'
+        AND public_discovery.metadata_published = TRUE
+        AND ${publicCatalogueLetterTypeSql(sql`public_discovery.type`)}
+        AND ${publicEntityProjectionSql(
+          personRelationships.confirmedAt,
+          personRelationships.entityExtractionRevision,
+          sql`public_discovery.entity_extraction_revision`,
+          sql`public_discovery.entity_extraction_json`,
+        )}
+    )`,
+  );
+}
+
+function publicRelationshipSql() {
+  return and(
+    publicRelationshipProvenanceSql(),
+    publicPersonExistsSql(personRelationships.personAId),
+    publicPersonExistsSql(personRelationships.personBId),
+  );
+}
 
 /**
  * GET /relationships - Get all relationships for public view
@@ -38,7 +86,6 @@ router.get('/relationships', async (_req, res, next) => {
         personAId: personRelationships.personAId,
         personBId: personRelationships.personBId,
         relationshipType: personRelationships.relationshipType,
-        confidence: personRelationships.confidence,
         personAName: sql<string>`pa.canonical_name`,
         personBName: sql<string>`pb.canonical_name`,
       })
@@ -51,6 +98,7 @@ router.get('/relationships', async (_req, res, next) => {
         sql`canonical_persons pb`,
         sql`pb.id = ${personRelationships.personBId}`
       )
+      .where(publicRelationshipSql())
       .orderBy(asc(sql`pa.canonical_name`));
 
     // Get all people who have relationships
@@ -70,7 +118,15 @@ router.get('/relationships', async (_req, res, next) => {
       .innerJoin(letters, eq(letterPersons.letterId, letters.id))
       .where(
         and(
-          eq(letters.visibility, 'PUBLISHED')
+          eq(letters.visibility, 'PUBLISHED'),
+          eq(letters.metadataPublished, true),
+          publicCatalogueLetterTypeSql(letters.type),
+          publicEntityProjectionSql(
+            letterPersons.confirmedAt,
+            letterPersons.entityExtractionRevision,
+            letters.entityExtractionRevision,
+            letters.entityExtractionJson,
+          ),
         )
       )
       .groupBy(letterPersons.personId);
@@ -101,7 +157,6 @@ router.get('/relationships', async (_req, res, next) => {
       source: r.personAId,
       target: r.personBId,
       relationshipType: r.relationshipType,
-      confidence: r.confidence,
     }));
 
     res.json({ nodes, edges });
@@ -138,7 +193,15 @@ router.get('/relationships/collection/:collectionId', async (req, res, next) => 
       .where(
         and(
           eq(letters.collectionId, collectionId),
-          eq(letters.visibility, 'PUBLISHED')
+          eq(letters.visibility, 'PUBLISHED'),
+          eq(letters.metadataPublished, true),
+          publicCatalogueLetterTypeSql(letters.type),
+          publicEntityProjectionSql(
+            letterPersons.confirmedAt,
+            letterPersons.entityExtractionRevision,
+            letters.entityExtractionRevision,
+            letters.entityExtractionJson,
+          ),
         )
       )
       .groupBy(letterPersons.personId, canonicalPersons.canonicalName);
@@ -164,13 +227,13 @@ router.get('/relationships/collection/:collectionId', async (req, res, next) => 
         personAId: personRelationships.personAId,
         personBId: personRelationships.personBId,
         relationshipType: personRelationships.relationshipType,
-        confidence: personRelationships.confidence,
       })
       .from(personRelationships)
       .where(
         and(
           inArray(personRelationships.personAId, personIds),
           inArray(personRelationships.personBId, personIds),
+          publicRelationshipProvenanceSql(),
         )
       );
 
@@ -179,7 +242,6 @@ router.get('/relationships/collection/:collectionId', async (req, res, next) => 
       source: r.personAId,
       target: r.personBId,
       relationshipType: r.relationshipType,
-      confidence: r.confidence,
     }));
 
     res.json({ nodes, edges });
@@ -207,11 +269,23 @@ router.get('/relationships/path/:personAId/:personBId', async (req, res, next) =
       const [person] = await db
         .select({ name: canonicalPersons.canonicalName })
         .from(canonicalPersons)
-        .where(eq(canonicalPersons.id, personAId))
+        .where(and(
+          eq(canonicalPersons.id, personAId),
+          publicPersonExistsSql(canonicalPersons.id),
+        ))
         .limit(1);
 
+      if (!person) {
+        res.json({
+          path: [],
+          edges: [],
+          message: 'No connection found between these people',
+        });
+        return;
+      }
+
       res.json({
-        path: [{ id: personAId, name: person?.name ?? 'Unknown' }],
+        path: [{ id: personAId, name: person.name }],
         edges: [],
       });
       return;
@@ -225,7 +299,8 @@ router.get('/relationships/path/:personAId/:personBId', async (req, res, next) =
         personBId: personRelationships.personBId,
         relationshipType: personRelationships.relationshipType,
       })
-      .from(personRelationships);
+      .from(personRelationships)
+      .where(publicRelationshipSql());
 
     const adjacency = buildRelationshipAdjacency(allRelationships);
     const shortestPath = findShortestRelationshipPath(adjacency, personAId, personBId);

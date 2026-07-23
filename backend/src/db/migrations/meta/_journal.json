@@ -358,6 +358,13 @@
       "when": 1776940800000,
       "tag": "0050_add_metadata_job_ownership",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1777027200000,
+      "tag": "0051_add_entity_extraction_commit_boundary",
+      "breakpoints": true
     }
   ]
 }

@@ -3,7 +3,7 @@
  */
 
 import { apiGet, apiPut, apiPost, apiPatch } from './client';
-import type { Letter } from '../types/Letter';
+import type { Letter, PublicLetter } from '../types/Letter';
 
 export interface CollectionInfo {
   id: string;
@@ -19,6 +19,22 @@ export interface CollectionInfo {
 }
 
 export interface CollectionWithLetters extends CollectionInfo {
+  letters: PublicLetter[];
+  profileNarrative?: string | null;
+  profileStatus?: ContentStatus;
+  profileStartHereLetterId?: string | null;
+  profileCorrespondents?: CollectionProfileCorrespondent[];
+}
+
+/** Admin collection detail is independent from the public response contract. */
+export interface AdminCollectionWithLetters {
+  id: string;
+  collectionCode: string;
+  title: string | null;
+  description: string | null;
+  createdAt: string;
+  letterCount: number;
+  hook?: string | null;
   letters: Letter[];
   profileNarrative?: string | null;
   profileStatus?: ContentStatus;
@@ -26,7 +42,13 @@ export interface CollectionWithLetters extends CollectionInfo {
   profileCorrespondents?: CollectionProfileCorrespondent[];
 }
 
-export interface AdminCollectionInfo extends CollectionInfo {
+export interface AdminCollectionInfo {
+  id: string;
+  collectionCode: string;
+  title: string | null;
+  description: string | null;
+  createdAt: string;
+  letterCount?: number;
   publishedCount: number;
   hiddenCount: number;
   uploadedCount: number;
@@ -59,47 +81,11 @@ export interface AdminCollectionInfo extends CollectionInfo {
   };
 }
 
-let cachedPublicCollections: CollectionInfo[] | null = null;
-let pendingPublicCollections: Promise<CollectionInfo[]> | null = null;
-
-function storePublicCollections(data: CollectionInfo[]): CollectionInfo[] {
-  cachedPublicCollections = data;
-  pendingPublicCollections = null;
-  return data;
-}
-
-export function getCachedCollections(): CollectionInfo[] | null {
-  return cachedPublicCollections;
-}
-
 /**
  * Fetch all collections (public - only shows published letter counts)
  */
 export async function listCollections(): Promise<CollectionInfo[]> {
-  if (cachedPublicCollections) return Promise.resolve(cachedPublicCollections);
-  if (pendingPublicCollections) return pendingPublicCollections;
-
-  pendingPublicCollections = apiGet<CollectionInfo[]>('/collections')
-    .then(storePublicCollections)
-    .catch((error) => {
-      pendingPublicCollections = null;
-      throw error;
-    });
-
-  return pendingPublicCollections;
-}
-
-export function prefetchCollections(): void {
-  if (cachedPublicCollections || pendingPublicCollections) return;
-  void listCollections().catch(() => {});
-}
-
-/**
- * Get the next available collection number
- */
-export async function getNextCollectionNumber(): Promise<number> {
-  const response = await apiGet<{ nextCollectionNumber: number }>('/collections/next-number');
-  return response.nextCollectionNumber;
+  return apiGet<CollectionInfo[]>('/collections');
 }
 
 /**
@@ -119,8 +105,8 @@ export async function getAdminCollections(): Promise<AdminCollectionInfo[]> {
 /**
  * Fetch a single collection for admin (all letters regardless of visibility)
  */
-export async function getAdminCollectionByCode(code: string): Promise<CollectionWithLetters> {
-  return apiGet<CollectionWithLetters>(`/admin/collections/${code}`);
+export async function getAdminCollectionByCode(code: string): Promise<AdminCollectionWithLetters> {
+  return apiGet<AdminCollectionWithLetters>(`/admin/collections/${code}`);
 }
 
 /**
@@ -131,64 +117,6 @@ export async function updateCollection(
   data: { title?: string; description?: string | null }
 ): Promise<CollectionInfo> {
   return apiPut<CollectionInfo>(`/admin/collections/${code}`, data);
-}
-
-/**
- * Collection analysis result types
- */
-export interface CollectionAnalysisEntity {
-  name: string;
-  role: 'sender' | 'recipient' | 'mentioned';
-  letterCount: number;
-}
-
-export interface CollectionAnalysisPlace {
-  name: string;
-  type: string;
-  letterCount: number;
-}
-
-export interface CollectionAnalysisRelationship {
-  person1: string;
-  person2: string;
-  type: string;
-  evidence: string;
-}
-
-export interface CollectionAnalysisDuplicate {
-  name1: string;
-  name2: string;
-  confidence: number;
-  reason: string;
-}
-
-export interface CollectionAnalysisResult {
-  collectionId: string;
-  collectionCode: string;
-  letterCount: number;
-  analysis: {
-    people: CollectionAnalysisEntity[];
-    places: CollectionAnalysisPlace[];
-    relationships: CollectionAnalysisRelationship[];
-    potentialDuplicates: CollectionAnalysisDuplicate[];
-  };
-  stats: {
-    peopleFound: number;
-    placesFound: number;
-    relationshipsFound: number;
-    duplicatesFound: number;
-    entitiesCreated: number;
-    entitiesLinked: number;
-    itemsQueuedForReview: number;
-  };
-  isStub: boolean;
-}
-
-/**
- * Analyze a collection to discover entities, relationships, and potential duplicates
- */
-export async function analyzeCollection(code: string): Promise<CollectionAnalysisResult> {
-  return apiPost<CollectionAnalysisResult>(`/admin/collections/${code}/analyze`);
 }
 
 // ============================================================================

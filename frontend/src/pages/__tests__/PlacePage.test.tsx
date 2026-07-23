@@ -47,9 +47,8 @@ describe("PlacePage", () => {
         id: "place-1",
         canonicalName: "Vienna",
         aliases: ["Wien"],
-        placeType: "city",
-        notes: "Historic capital.\n\nCultural crossroads.",
-        themes: ["music", "travel"],
+        notes: null,
+        themes: [],
       },
       stats: {
         writtenFrom: 1,
@@ -74,16 +73,11 @@ describe("PlacePage", () => {
     getPlacePublicMock.mockResolvedValue(data);
   });
 
-  it("renders themes, description, stats, and letter links", async () => {
+  it("renders public place metadata, stats, and letter links", async () => {
     renderPlacePage();
 
     expect(await screen.findByRole("heading", { name: "Vienna" })).toBeInTheDocument();
-    expect(screen.getByText("city")).toBeInTheDocument();
     expect(screen.getByText("Also known as: Wien")).toBeInTheDocument();
-    expect(screen.getByText("music")).toBeInTheDocument();
-    expect(screen.getByText("travel")).toBeInTheDocument();
-    expect(screen.getByText("Historic capital.")).toBeInTheDocument();
-    expect(screen.getByText("Cultural crossroads.")).toBeInTheDocument();
     expect(screen.getByText("Letters (1)")).toBeInTheDocument();
 
     const letterLink = screen
@@ -98,6 +92,8 @@ describe("PlacePage", () => {
         id: "place-1",
         canonicalName: "Vienna",
         aliases: [],
+        notes: null,
+        themes: [],
       },
       stats: {
         writtenFrom: 0,

@@ -11,6 +11,15 @@ import {
   type PlaceType,
 } from '../../db/index.js';
 import type { DuplicateSuggestion } from './persons.js';
+import {
+  assertRestoredIds,
+  assertSnapshotsUnchanged,
+} from './merge-integrity.js';
+import {
+  chooseEntityMergeCollisionWinner,
+  isCurrentlyTrustedMergeExtraction,
+  type CommittedEntityExtraction,
+} from './relationship-provenance.js';
 import { buildHumanMetadataJobPatch } from '../letter/metadata-job.js';
 import { buildStructuredMetadataSqlPatch } from '../letter/metadata-projection.js';
 
@@ -55,6 +64,70 @@ function uniqueStrings(values: Array<string | null | undefined>): string[] {
     out.push(normalized);
   }
   return out;
+}
+
+interface MergePlaceSnapshot {
+  id: string;
+  canonicalName: string;
+  aliases: string[];
+  placeType: PlaceType | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function serializePlace(place: CanonicalPlace): MergePlaceSnapshot {
+  return {
+    id: place.id,
+    canonicalName: place.canonicalName,
+    aliases: place.aliases || [],
+    placeType: place.placeType,
+    notes: place.notes,
+    createdAt: place.createdAt.toISOString(),
+    updatedAt: place.updatedAt.toISOString(),
+  };
+}
+
+interface MergePlaceLinkSnapshot {
+  id: string;
+  letterId: string;
+  placeId: string;
+  role: 'written_from' | 'mentioned' | 'destination';
+  nameAsWritten: string | null;
+  context: string | null;
+  confidence: number;
+  entityExtractionRevision: number | null;
+  confirmedBy: string | null;
+  confirmedAt: string | null;
+  createdAt: string;
+}
+
+function serializePlaceLink(link: {
+  id: string;
+  letterId: string;
+  placeId: string;
+  role: 'written_from' | 'mentioned' | 'destination';
+  nameAsWritten: string | null;
+  context: string | null;
+  confidence: number;
+  entityExtractionRevision: number | null;
+  confirmedBy: string | null;
+  confirmedAt: Date | null;
+  createdAt: Date;
+}): MergePlaceLinkSnapshot {
+  return {
+    id: link.id,
+    letterId: link.letterId,
+    placeId: link.placeId,
+    role: link.role,
+    nameAsWritten: link.nameAsWritten,
+    context: link.context,
+    confidence: link.confidence,
+    entityExtractionRevision: link.entityExtractionRevision,
+    confirmedBy: link.confirmedBy,
+    confirmedAt: serializeDate(link.confirmedAt),
+    createdAt: link.createdAt.toISOString(),
+  };
 }
 
 async function rewritePlaceNameReferences(placeId: string, canonicalName: string): Promise<void> {
@@ -176,48 +249,98 @@ export async function mergePlacesWithUndo(
   actor: string = 'admin',
   trackUndo: boolean = true,
 ): Promise<{ undoActionId: string | null }> {
-  const keepPlace = await getCanonicalPlaceById(keepId);
-  const mergePlace = await getCanonicalPlaceById(mergeId);
-
-  if (!keepPlace || !mergePlace) {
-    throw new Error('Both places must exist');
-  }
   if (keepId === mergeId) {
     throw new Error('Cannot merge a place into itself');
   }
 
-  const keepBefore = {
-    canonicalName: keepPlace.canonicalName,
-    aliases: keepPlace.aliases || [],
-    placeType: keepPlace.placeType,
-    notes: keepPlace.notes,
-  };
-
-  const mergeBefore = {
-    id: mergePlace.id,
-    canonicalName: mergePlace.canonicalName,
-    aliases: mergePlace.aliases || [],
-    placeType: mergePlace.placeType,
-    notes: mergePlace.notes,
-    createdAt: mergePlace.createdAt.toISOString(),
-    updatedAt: mergePlace.updatedAt.toISOString(),
-  };
-
   return db.transaction(async (tx) => {
+    // Lock both canonical rows in stable order before snapshotting their links.
+    // This serializes the merge with extraction's foreign-key key-share locks.
+    await tx.execute(sql`
+      SELECT ${canonicalPlaces.id}
+      FROM ${canonicalPlaces}
+      WHERE ${canonicalPlaces.id} IN (${keepId}, ${mergeId})
+      ORDER BY ${canonicalPlaces.id}
+      FOR UPDATE
+    `);
+
+    const lockedPlaces = await tx.query.canonicalPlaces.findMany({
+      where: inArray(canonicalPlaces.id, [keepId, mergeId]),
+    });
+    const keepPlace = lockedPlaces.find((place) => place.id === keepId);
+    const mergePlace = lockedPlaces.find((place) => place.id === mergeId);
+
+    if (!keepPlace || !mergePlace) {
+      throw new Error('Both places must exist');
+    }
+
+    const keepBefore = serializePlace(keepPlace);
+    const mergeBefore = serializePlace(mergePlace);
+
+    await tx.execute(sql`
+      SELECT ${letterPlaces.id}
+      FROM ${letterPlaces}
+      WHERE ${letterPlaces.placeId} IN (${keepId}, ${mergeId})
+      ORDER BY ${letterPlaces.id}
+      FOR UPDATE
+    `);
+
     const mergeLinks = await tx.query.letterPlaces.findMany({
       where: eq(letterPlaces.placeId, mergeId),
     });
 
-    const combinedAliases = [
+    const combinedAliases = uniqueStrings([
       ...(keepPlace.aliases || []),
       mergePlace.canonicalName,
       ...(mergePlace.aliases || []),
-    ];
+    ]);
+    const mergeTimestamp = new Date();
 
-    await tx.update(canonicalPlaces).set({ aliases: uniqueStrings(combinedAliases), updatedAt: new Date() }).where(eq(canonicalPlaces.id, keepId));
+    await tx
+      .update(canonicalPlaces)
+      .set({
+        aliases: combinedAliases,
+        updatedAt: mergeTimestamp,
+      })
+      .where(eq(canonicalPlaces.id, keepId));
+    const keepPostMerge = serializePlace({
+      ...keepPlace,
+      aliases: combinedAliases,
+      updatedAt: mergeTimestamp,
+    });
 
-    const movedLinkIds: string[] = [];
-    const deletedDuplicateLinks = [];
+    const movedLinks: MergePlaceLinkSnapshot[] = [];
+    const retainedLinkIds = new Set<string>();
+    const deletedDuplicateLinks: MergePlaceLinkSnapshot[] = [];
+    const mutatedExistingLinks: Array<{
+      id: string;
+      before: MergePlaceLinkSnapshot;
+    }> = [];
+    const committedExtractionCache = new Map<
+      string,
+      CommittedEntityExtraction | null
+    >();
+    const getCommittedExtraction = async (letterId: string) => {
+      if (committedExtractionCache.has(letterId)) {
+        return committedExtractionCache.get(letterId) ?? null;
+      }
+
+      const committed = await tx.query.letters.findFirst({
+        where: eq(letters.id, letterId),
+        columns: {
+          entityExtractionRevision: true,
+          entityExtractionJson: true,
+        },
+      });
+      const state = committed
+        ? {
+            entityExtractionRevision: committed.entityExtractionRevision,
+            entityExtractionJson: committed.entityExtractionJson,
+          }
+        : null;
+      committedExtractionCache.set(letterId, state);
+      return state;
+    };
 
     for (const link of mergeLinks) {
       const existingTarget = await tx.query.letterPlaces.findFirst({
@@ -229,25 +352,61 @@ export async function mergePlacesWithUndo(
       });
 
       if (existingTarget) {
-        await tx.update(letterPlaces).set({
-          confidence: Math.max(existingTarget.confidence, link.confidence),
-          context: uniqueStrings([existingTarget.context, link.context]).join(' | ') || null,
-          nameAsWritten: existingTarget.nameAsWritten || link.nameAsWritten,
-        }).where(eq(letterPlaces.id, existingTarget.id));
+        retainedLinkIds.add(existingTarget.id);
+        const committed = await getCommittedExtraction(link.letterId);
+        const winner = chooseEntityMergeCollisionWinner(
+          existingTarget,
+          link,
+          {
+            existingIsCurrentExtraction: isCurrentlyTrustedMergeExtraction(
+              existingTarget,
+              committed,
+            ),
+            incomingIsCurrentExtraction: isCurrentlyTrustedMergeExtraction(
+              link,
+              committed,
+            ),
+          },
+        );
+
+        if (winner.id === link.id) {
+          mutatedExistingLinks.push({
+            id: existingTarget.id,
+            before: serializePlaceLink(existingTarget),
+          });
+          await tx.update(letterPlaces).set({
+            nameAsWritten: link.nameAsWritten,
+            context: link.context,
+            confidence: link.confidence,
+            entityExtractionRevision: link.entityExtractionRevision,
+            confirmedBy: link.confirmedBy,
+            confirmedAt: link.confirmedAt,
+          }).where(eq(letterPlaces.id, existingTarget.id));
+        }
 
         await tx.delete(letterPlaces).where(eq(letterPlaces.id, link.id));
-        deletedDuplicateLinks.push({
-          ...link,
-          createdAt: link.createdAt.toISOString(),
-        });
+        deletedDuplicateLinks.push(serializePlaceLink(link));
         continue;
       }
 
       await tx.update(letterPlaces).set({
         placeId: keepId,
       }).where(eq(letterPlaces.id, link.id));
-      movedLinkIds.push(link.id);
+      movedLinks.push(serializePlaceLink(link));
+      retainedLinkIds.add(link.id);
     }
+
+    const retainedLinks = retainedLinkIds.size > 0
+      ? await tx.query.letterPlaces.findMany({
+          where: inArray(letterPlaces.id, [...retainedLinkIds]),
+        })
+      : [];
+    assertRestoredIds(
+      'post-merge place links',
+      [...retainedLinkIds],
+      retainedLinks,
+    );
+    const retainedLinksPostMerge = retainedLinks.map(serializePlaceLink);
 
     await tx.delete(canonicalPlaces).where(eq(canonicalPlaces.id, mergeId));
 
@@ -264,9 +423,12 @@ export async function mergePlacesWithUndo(
         keepId,
         mergeId,
         keepBefore,
+        keepPostMerge,
         mergeBefore,
-        movedLinkIds,
+        movedLinks,
+        retainedLinksPostMerge,
         deletedDuplicateLinks,
+        mutatedExistingLinks,
       },
     }).returning({ id: auditLog.id });
 
@@ -349,100 +511,150 @@ export async function undoPlaceMerge(actionId: string, actor: string = 'admin'):
   const entry = await getPlaceAuditEntryForUndo(actionId, 'place.merge');
   const changes = (entry.changes || {}) as {
     keepId?: string;
-    keepBefore?: {
-      canonicalName?: string;
-      aliases?: string[];
-      placeType?: PlaceType | null;
-      notes?: string | null;
-    };
-    mergeBefore?: {
-      id?: string;
-      canonicalName?: string;
-      aliases?: string[];
-      placeType?: PlaceType | null;
-      notes?: string | null;
-      createdAt?: string;
-      updatedAt?: string;
-    };
-    movedLinkIds?: string[];
-    deletedDuplicateLinks?: Array<{
+    keepBefore?: MergePlaceSnapshot;
+    keepPostMerge?: MergePlaceSnapshot;
+    mergeBefore?: MergePlaceSnapshot;
+    movedLinks?: MergePlaceLinkSnapshot[];
+    retainedLinksPostMerge?: MergePlaceLinkSnapshot[];
+    deletedDuplicateLinks?: MergePlaceLinkSnapshot[];
+    mutatedExistingLinks?: Array<{
       id: string;
-      letterId: string;
-      placeId: string;
-      role: 'written_from' | 'mentioned' | 'destination';
-      nameAsWritten: string | null;
-      context: string | null;
-      confidence: number;
-      confirmedBy: string | null;
-      confirmedAt: string | null;
-      createdAt: string;
+      before: MergePlaceLinkSnapshot;
     }>;
   };
 
   if (
     !changes.keepId ||
     !changes.keepBefore ||
+    !changes.keepPostMerge ||
     !changes.mergeBefore?.id ||
-    !changes.mergeBefore.canonicalName
+    !changes.mergeBefore.canonicalName ||
+    !changes.movedLinks ||
+    !changes.retainedLinksPostMerge
   ) {
-    throw new Error('Undo payload is missing required merge data');
+    throw new Error('Undo payload is missing required merge integrity data');
   }
 
-  const mergePlaceExists = await getCanonicalPlaceById(changes.mergeBefore.id);
-  if (!mergePlaceExists) {
-    await db.insert(canonicalPlaces).values({
-      id: changes.mergeBefore.id,
-      canonicalName: changes.mergeBefore.canonicalName,
-      aliases: changes.mergeBefore.aliases || [],
-      placeType: changes.mergeBefore.placeType ?? null,
-      notes: changes.mergeBefore.notes ?? null,
-      createdAt: changes.mergeBefore.createdAt
-        ? new Date(changes.mergeBefore.createdAt)
-        : new Date(),
-      updatedAt: changes.mergeBefore.updatedAt
-        ? new Date(changes.mergeBefore.updatedAt)
-        : new Date(),
+  const keepId = changes.keepId;
+  const keepBefore = changes.keepBefore;
+  const keepPostMerge = changes.keepPostMerge;
+  const mergeBefore = changes.mergeBefore;
+  const movedLinks = changes.movedLinks;
+  const retainedLinksPostMerge = changes.retainedLinksPostMerge;
+
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`
+      SELECT ${canonicalPlaces.id}
+      FROM ${canonicalPlaces}
+      WHERE ${canonicalPlaces.id} = ${keepId}
+      FOR UPDATE
+    `);
+    for (
+      const linkId of retainedLinksPostMerge
+        .map((link) => link.id)
+        .sort()
+    ) {
+      await tx.execute(sql`
+        SELECT ${letterPlaces.id}
+        FROM ${letterPlaces}
+        WHERE ${letterPlaces.id} = ${linkId}
+        FOR UPDATE
+      `);
+    }
+
+    const currentKeep = await tx.query.canonicalPlaces.findMany({
+      where: eq(canonicalPlaces.id, keepId),
     });
-  }
+    assertSnapshotsUnchanged(
+      'Retained place',
+      [keepPostMerge],
+      currentKeep.map(serializePlace),
+    );
 
-  await db.update(canonicalPlaces).set({
-    canonicalName: changes.keepBefore.canonicalName,
-    aliases: changes.keepBefore.aliases || [],
-    placeType: changes.keepBefore.placeType ?? null,
-    notes: changes.keepBefore.notes ?? null,
-    updatedAt: new Date(),
-  }).where(eq(canonicalPlaces.id, changes.keepId));
+    const currentLinks = retainedLinksPostMerge.length > 0
+      ? await tx.query.letterPlaces.findMany({
+          where: inArray(
+            letterPlaces.id,
+            retainedLinksPostMerge.map((link) => link.id),
+          ),
+        })
+      : [];
+    assertSnapshotsUnchanged(
+      'Retained place links',
+      retainedLinksPostMerge,
+      currentLinks.map(serializePlaceLink),
+    );
 
-  const movedLinkIds = changes.movedLinkIds || [];
-  if (movedLinkIds.length > 0) {
-    await db.update(letterPlaces).set({
-      placeId: changes.mergeBefore.id,
-    }).where(inArray(letterPlaces.id, movedLinkIds));
-  }
+    const restoredMergePlace = await tx.insert(canonicalPlaces).values({
+      id: mergeBefore.id!,
+      canonicalName: mergeBefore.canonicalName!,
+      aliases: mergeBefore.aliases || [],
+      placeType: mergeBefore.placeType ?? null,
+      notes: mergeBefore.notes ?? null,
+      createdAt: mergeBefore.createdAt
+        ? new Date(mergeBefore.createdAt)
+        : new Date(),
+      updatedAt: mergeBefore.updatedAt
+        ? new Date(mergeBefore.updatedAt)
+        : new Date(),
+    }).returning({ id: canonicalPlaces.id });
+    assertRestoredIds('merged place', [mergeBefore.id!], restoredMergePlace);
 
-  for (const dupLink of changes.deletedDuplicateLinks || []) {
-    await db.insert(letterPlaces).values({
-      id: dupLink.id,
-      letterId: dupLink.letterId,
-      placeId: dupLink.placeId,
-      role: dupLink.role,
-      nameAsWritten: dupLink.nameAsWritten,
-      context: dupLink.context,
-      confidence: dupLink.confidence,
-      confirmedBy: dupLink.confirmedBy,
-      confirmedAt: dupLink.confirmedAt ? new Date(dupLink.confirmedAt) : null,
-      createdAt: new Date(dupLink.createdAt),
-    }).onConflictDoNothing();
-  }
+    const restoredKeepPlace = await tx.update(canonicalPlaces).set({
+      aliases: keepBefore.aliases || [],
+      updatedAt: new Date(),
+    }).where(eq(canonicalPlaces.id, keepId)).returning({ id: canonicalPlaces.id });
+    assertRestoredIds('retained place', [keepId], restoredKeepPlace);
 
-  await createPlaceAuditEntry({
-    action: 'undo',
-    entityId: changes.keepId,
-    actor,
-    changes: {
-      targetActionId: actionId,
-      targetAction: 'place.merge',
-    },
+    const movedLinkIds = movedLinks.map((link) => link.id);
+    if (movedLinkIds.length > 0) {
+      const restoredLinks = await tx.update(letterPlaces).set({
+        placeId: mergeBefore.id!,
+      }).where(inArray(letterPlaces.id, movedLinkIds)).returning({ id: letterPlaces.id });
+      assertRestoredIds('moved place links', movedLinkIds, restoredLinks);
+    }
+
+    for (const link of changes.mutatedExistingLinks || []) {
+      const restoredLink = await tx.update(letterPlaces).set({
+        nameAsWritten: link.before.nameAsWritten,
+        context: link.before.context,
+        confidence: link.before.confidence,
+        entityExtractionRevision: link.before.entityExtractionRevision ?? null,
+        confirmedBy: link.before.confirmedBy,
+        confirmedAt: link.before.confirmedAt
+          ? new Date(link.before.confirmedAt)
+          : null,
+      }).where(eq(letterPlaces.id, link.id)).returning({ id: letterPlaces.id });
+      assertRestoredIds('mutated place link', [link.id], restoredLink);
+    }
+
+    for (const dupLink of changes.deletedDuplicateLinks || []) {
+      const restoredLink = await tx.insert(letterPlaces).values({
+        id: dupLink.id,
+        letterId: dupLink.letterId,
+        placeId: dupLink.placeId,
+        role: dupLink.role,
+        nameAsWritten: dupLink.nameAsWritten,
+        context: dupLink.context,
+        confidence: dupLink.confidence,
+        entityExtractionRevision: dupLink.entityExtractionRevision ?? null,
+        confirmedBy: dupLink.confirmedBy,
+        confirmedAt: dupLink.confirmedAt ? new Date(dupLink.confirmedAt) : null,
+        createdAt: new Date(dupLink.createdAt),
+      }).returning({ id: letterPlaces.id });
+      assertRestoredIds('deleted place link', [dupLink.id], restoredLink);
+    }
+
+    await tx.insert(auditLog).values({
+      action: 'undo',
+      entityType: 'place',
+      entityId: keepId,
+      userId: actor,
+      changes: {
+        targetActionId: actionId,
+        targetAction: 'place.merge',
+      },
+    });
   });
 }
 

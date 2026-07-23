@@ -1,8 +1,11 @@
 import { Router } from 'express';
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db, collections, contentPages, letters, siteSettings } from '../db/index.js';
 import { pickFeaturedLetter } from '../services/pick-featured-letter.js';
 import { resolveRepresentativeLetterId } from '../services/letters.js';
+import { resolveFeaturedSetting } from '../services/featured-setting.js';
+import { publicFieldSql } from '../services/public-read-model.js';
+import { publicCatalogueLetterTypeSql } from '../services/public-catalogue-unit.js';
 
 const router = Router();
 
@@ -17,13 +20,26 @@ router.get('/content/featured-letter', async (req, res) => {
       const [letter] = await db
         .select({
           id: letters.id,
-          hook: letters.hook,
-          summary: letters.summary,
+          hook: sql`CASE
+            WHEN ${letters.metadataPublished} THEN ${letters.hook}
+            WHEN ${letters.type} = 'P'
+              AND ${letters.photoDescriptionStatus} = 'VERIFIED'
+              AND NOT EXISTS (
+              SELECT 1
+              FROM letters featured_peer
+              WHERE featured_peer.collection_id = ${letters.collectionId}
+                AND featured_peer.date_raw = ${letters.dateRaw}
+                AND featured_peer.type_sequence = ${letters.typeSequence}
+                AND featured_peer.visibility = 'PUBLISHED'
+                AND featured_peer.type <> 'P'
+            ) THEN ${letters.photoDescription}
+            ELSE NULL
+          END`,
+          summary: publicFieldSql(letters.metadataPublished, letters.summary),
           letterDate: letters.letterDate,
           dateRaw: letters.dateRaw,
-          sender: letters.sender,
-          recipient: letters.recipient,
-          visibility: letters.visibility,
+          sender: publicFieldSql(letters.metadataPublished, letters.sender),
+          recipient: publicFieldSql(letters.metadataPublished, letters.recipient),
           collectionId: letters.collectionId,
           collectionCode: collections.collectionCode,
           collectionTitle: collections.title,
@@ -31,71 +47,51 @@ router.get('/content/featured-letter', async (req, res) => {
         })
         .from(letters)
         .leftJoin(collections, eq(letters.collectionId, collections.id))
-        .where(eq(letters.id, letterId))
+        .where(and(
+          eq(letters.id, letterId),
+          eq(letters.visibility, 'PUBLISHED'),
+          publicCatalogueLetterTypeSql(letters.type),
+        ))
         .limit(1);
       return letter ?? null;
     };
 
     // 1. Check for manual override
-    const [manualSetting] = await db
-      .select()
-      .from(siteSettings)
-      .where(eq(siteSettings.key, 'featured_letter_id'))
-      .limit(1);
-
-    if (manualSetting?.value) {
-      const resolvedId = await resolveRepresentativeLetterId(manualSetting.value, { publishedOnly: true });
-      const letter = resolvedId ? await fetchLetterDetails(resolvedId) : null;
-      if (letter?.id && letter.visibility === 'PUBLISHED') {
-        const normalizedId = resolvedId ?? letter.id;
-        if (normalizedId !== manualSetting.value) {
-          await db
-            .insert(siteSettings)
-            .values({ key: 'featured_letter_id', value: normalizedId })
-            .onConflictDoUpdate({
-              target: siteSettings.key,
-              set: { value: normalizedId, updatedAt: new Date() },
-            });
-        }
-        res.json({ ...letter, imageType: letter.type, source: 'manual' as const });
-        return;
-      }
-      // Manual pick is stale (unpublished/deleted) — clear it
-      await db.delete(siteSettings).where(eq(siteSettings.key, 'featured_letter_id'));
+    const manual = await resolveFeaturedSetting('featured_letter_id', fetchLetterDetails);
+    if (manual) {
+      res.json({ ...manual.letter, imageType: manual.letter.type, source: 'manual' as const });
+      return;
     }
 
     // 2. Check for persisted auto-pick
-    const [autoSetting] = await db
-      .select()
-      .from(siteSettings)
-      .where(eq(siteSettings.key, 'auto_featured_letter_id'))
-      .limit(1);
-
-    if (autoSetting?.value) {
-      const resolvedId = await resolveRepresentativeLetterId(autoSetting.value, { publishedOnly: true });
-      const letter = resolvedId ? await fetchLetterDetails(resolvedId) : null;
-      if (letter?.id && letter.visibility === 'PUBLISHED') {
-        const normalizedId = resolvedId ?? letter.id;
-        if (normalizedId !== autoSetting.value) {
-          await db
-            .insert(siteSettings)
-            .values({ key: 'auto_featured_letter_id', value: normalizedId })
-            .onConflictDoUpdate({
-              target: siteSettings.key,
-              set: { value: normalizedId, updatedAt: new Date() },
-            });
-        }
-        res.json({ ...letter, imageType: letter.type, source: 'auto' as const });
-        return;
-      }
-      // Auto pick is stale — clear it so we re-pick below
-      await db.delete(siteSettings).where(eq(siteSettings.key, 'auto_featured_letter_id'));
+    const persistedAuto = await resolveFeaturedSetting(
+      'auto_featured_letter_id',
+      fetchLetterDetails,
+    );
+    if (persistedAuto) {
+      res.json({
+        ...persistedAuto.letter,
+        imageType: persistedAuto.letter.type,
+        source: 'auto' as const,
+      });
+      return;
     }
 
     // 3. Auto-select and persist
     const auto = await pickFeaturedLetter();
     if (auto) {
-      const resolvedId = await resolveRepresentativeLetterId(auto.id, { publishedOnly: true }) ?? auto.id;
+      const resolvedId = await resolveRepresentativeLetterId(auto.id, { publishedOnly: true });
+      if (!resolvedId) {
+        res.json(null);
+        return;
+      }
+
+      const resolvedLetter = await fetchLetterDetails(resolvedId);
+      if (!resolvedLetter?.id) {
+        res.json(null);
+        return;
+      }
+
       await db
         .insert(siteSettings)
         .values({ key: 'auto_featured_letter_id', value: resolvedId })
@@ -103,12 +99,7 @@ router.get('/content/featured-letter', async (req, res) => {
           target: siteSettings.key,
           set: { value: resolvedId, updatedAt: new Date() },
         });
-      const resolvedLetter = await fetchLetterDetails(resolvedId);
-      if (resolvedLetter?.id) {
-        res.json({ ...resolvedLetter, imageType: resolvedLetter.type, source: 'auto' as const });
-        return;
-      }
-      res.json({ ...auto, source: 'auto' as const });
+      res.json({ ...resolvedLetter, imageType: resolvedLetter.type, source: 'auto' as const });
       return;
     }
 
@@ -128,7 +119,12 @@ router.get('/content/pages/:slug', async (req, res) => {
     const slug = req.params.slug as string;
 
     const [page] = await db
-      .select()
+      .select({
+        slug: contentPages.slug,
+        title: contentPages.title,
+        contentJson: contentPages.contentJson,
+        updatedAt: contentPages.updatedAt,
+      })
       .from(contentPages)
       .where(eq(contentPages.slug, slug))
       .limit(1);

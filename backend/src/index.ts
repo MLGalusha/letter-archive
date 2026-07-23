@@ -15,6 +15,7 @@ import { requestLogger } from './middleware/request-logger.js';
 import { env, hasOpenAI } from './config/env.js';
 import { logger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { securityHeaders } from './middleware/security.js';
+import { createJsonBodyPipeline } from './middleware/json-body.js';
 import {
   ensureBackgroundWorkerForQueuedProcessing,
   recoverExpiredProcessingJobs,
@@ -141,14 +142,9 @@ app.use(
   })
 );
 
-// Parse JSON bodies, but skip for multipart/form-data (file uploads)
-app.use((req, res, next) => {
-  const contentType = req.headers['content-type'] || '';
-  if (contentType.includes('multipart/form-data')) {
-    return next();
-  }
-  return express.json({ limit: '5mb' })(req, res, next);
-});
+// Rate-limit and tightly parse anonymous image telemetry before applying the
+// normal JSON parser to the rest of the API.
+app.use(createJsonBodyPipeline());
 
 // Routes
 app.use(routes);

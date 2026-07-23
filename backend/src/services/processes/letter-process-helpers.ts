@@ -6,6 +6,10 @@ import { tryTranscribeExtras } from '../letter/extra-content.js';
 import { cancelExtraContentAttempt } from '../letter/extra-content-job.js';
 import { cancelTranscriptionAttempt } from '../letter/transcription-job.js';
 import { cancelMetadataAttempt } from '../letter/metadata-job.js';
+import {
+  cancelLegacyEntityExtraction,
+  failEntityExtraction,
+} from '../letters.js';
 import { createLogger } from '../../utils/logger.js';
 import { notify } from '../notifications.js';
 import { allOf } from './filter-helpers.js';
@@ -256,6 +260,9 @@ export async function removeFromQueue(
     updates.metadataLeaseRunId = null;
     updates.metadataClaimKind = null;
     updates.metadataRevision = sql`${letters.metadataRevision} + 1`;
+  } else if (spec.processKey === 'entity_extraction') {
+    updates.entityExtractionRunId = null;
+    updates.entityExtractionRunRevision = null;
   }
 
   const removed = await db
@@ -306,6 +313,9 @@ export async function clearQueue(
     updates.metadataLeaseRunId = null;
     updates.metadataClaimKind = null;
     updates.metadataRevision = sql`${letters.metadataRevision} + 1`;
+  } else if (spec.processKey === 'entity_extraction') {
+    updates.entityExtractionRunId = null;
+    updates.entityExtractionRunRevision = null;
   }
 
   const cleared = await db
@@ -359,6 +369,9 @@ export async function retryJob(
     updates.extraContentJobLeaseRunId = null;
     updates.extraContentJobClaimKind = null;
     updates.extraContentJobDirty = false;
+  } else if (spec.processKey === 'entity_extraction') {
+    updates.entityExtractionRunId = null;
+    updates.entityExtractionRunRevision = null;
   }
   const retried = await db
     .update(letters)
@@ -412,6 +425,31 @@ export async function cancelActive(
     cancelled = await cancelMetadataAttempt(letterId, observedRunId)
       ? [{ id: letterId }]
       : [];
+  } else if (spec.processKey === 'entity_extraction') {
+    const observedRunId = letter.entityExtractionRunId;
+    const observedRevision = letter.entityExtractionRunRevision;
+    if (!observedRunId && observedRevision == null) {
+      cancelled = await cancelLegacyEntityExtraction(
+        letterId,
+        'Cancelled by admin',
+      )
+        ? [{ id: letterId }]
+        : [];
+    } else {
+      if (!observedRunId || observedRevision == null) {
+        throw new ProcessingError(
+          'Cannot cancel: entity extraction job has no active run identity',
+          409,
+        );
+      }
+      cancelled = await failEntityExtraction(
+        letterId,
+        { runId: observedRunId, revision: observedRevision },
+        'Cancelled by admin',
+      )
+        ? [{ id: letterId }]
+        : [];
+    }
   } else {
     const updates: Record<string, unknown> = {
       [spec.statusColumn]: 'FAILED',

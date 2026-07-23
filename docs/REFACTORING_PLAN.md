@@ -98,7 +98,6 @@ backend/src/ai/prompts/
   metadata-v2.ts        — METADATA_V2_SYSTEM_PROMPT, buildMetadataV2Prompt
   entities.ts           — ENTITY_EXTRACTION_SYSTEM_PROMPT, buildEntityExtractionPrompt
   biography.ts          — BIOGRAPHY_SYSTEM_PROMPT, buildBiographyPrompt
-  collection.ts         — COLLECTION_ANALYSIS_SYSTEM_PROMPT
   metadata-update.ts    — METADATA_UPDATE_SYSTEM_PROMPT, buildMetadataUpdatePrompt
   entity-resolution.ts  — ENTITY_RESOLUTION_SYSTEM_PROMPT (if exists)
 ```

@@ -1,4 +1,5 @@
-import { eq, and, ne, sql } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { eq, and, isNull, ne, sql } from 'drizzle-orm';
 import {
   db,
   type Database,
@@ -8,9 +9,13 @@ import {
   type DateConfidence,
   type JobStatus,
 } from '../db/index.js';
-import type { EntityExtraction } from '../ai/schemas/entityExtraction.js';
 import { isPlaceholderValue } from '../utils/placeholders.js';
 import { buildExtraContentSourceInvalidationPatch } from './letter/extra-content-job.js';
+import {
+  isPublicCatalogueLetterType,
+  publicCatalogueLetterTypeSql,
+  selectPublicCatalogueRepresentative,
+} from './public-catalogue-unit.js';
 
 export interface LetterIdentity {
   collectionId: string;
@@ -30,6 +35,11 @@ export type ExtraContentGroupIdentity = Pick<
 >;
 
 export type LetterUpdateDatabase = Pick<Database, 'update'>;
+
+export interface EntityExtractionClaim {
+  runId: string;
+  revision: number;
+}
 
 /**
  * Finds an existing letter by its identity, or creates a new one.
@@ -89,11 +99,13 @@ export async function getLetterById(letterId: string): Promise<Letter | undefine
 
 /**
  * Resolve any letter id in a grouped correspondence unit to its representative
- * record, preferring the primary L-type row when present.
+ * record, preferring the primary L-type row when present. Public resolution
+ * only returns catalogue roots; C/T/E/N rows can resolve through a published
+ * primary sibling but can never represent a public unit themselves.
  */
 export async function resolveRepresentativeLetterId(
   letterId: string,
-  options: { publishedOnly?: boolean } = {},
+  options: { publishedOnly?: boolean; collectionId?: string } = {},
 ): Promise<string | null> {
   const target = await db.query.letters.findFirst({
     where: eq(letters.id, letterId),
@@ -106,6 +118,7 @@ export async function resolveRepresentativeLetterId(
   });
 
   if (!target) return null;
+  if (options.collectionId && target.collectionId !== options.collectionId) return null;
 
   const conditions = [
     eq(letters.collectionId, target.collectionId),
@@ -115,6 +128,7 @@ export async function resolveRepresentativeLetterId(
 
   if (options.publishedOnly) {
     conditions.push(eq(letters.visibility, 'PUBLISHED'));
+    conditions.push(publicCatalogueLetterTypeSql(letters.type));
   }
 
   const groupedLetters = await db.query.letters.findMany({
@@ -125,14 +139,20 @@ export async function resolveRepresentativeLetterId(
     },
   });
 
-  if (groupedLetters.length === 0) return null;
+  const eligibleLetters = options.publishedOnly
+    ? groupedLetters.filter((letter) => isPublicCatalogueLetterType(letter.type))
+    : groupedLetters;
 
-  const [representative] = [...groupedLetters].sort((a, b) => {
-    const aRank = a.type === 'L' ? 0 : 1;
-    const bRank = b.type === 'L' ? 0 : 1;
-    if (aRank !== bRank) return aRank - bRank;
-    return a.type.localeCompare(b.type);
-  });
+  if (eligibleLetters.length === 0) return null;
+
+  const representative = options.publishedOnly
+    ? selectPublicCatalogueRepresentative(eligibleLetters)
+    : [...eligibleLetters].sort((a, b) => {
+        const aRank = a.type === 'L' ? 0 : 1;
+        const bRank = b.type === 'L' ? 0 : 1;
+        if (aRank !== bRank) return aRank - bRank;
+        return a.type.localeCompare(b.type) || a.id.localeCompare(b.id);
+      })[0];
 
   return representative?.id ?? null;
 }
@@ -161,18 +181,22 @@ export async function invalidateExtraContentJobForSourceChange(
 }
 
 /**
- * Atomically claim a job by transitioning its status from expectedStatus to RUNNING.
- * Returns true if the claim succeeded (status was expectedStatus), false if someone else got it first.
- * This prevents the worker and on-demand processing from double-processing the same item.
+ * Claim the next replacement revision without changing the last committed
+ * entity projection. The run ID prevents a cancelled or retried producer from
+ * committing work it no longer owns.
  */
 export async function claimEntityExtraction(
   letterId: string,
   expectedStatus: JobStatus = 'PENDING',
-): Promise<boolean> {
+): Promise<EntityExtractionClaim | null> {
+  const runId = randomUUID();
   const result = await db
     .update(letters)
     .set({
       entityExtractionStatus: 'RUNNING',
+      entityExtractionRunId: runId,
+      entityExtractionRunRevision: sql`${letters.entityExtractionRevision} + 1`,
+      entityExtractionError: null,
       updatedAt: new Date(),
     })
     .where(and(
@@ -180,6 +204,67 @@ export async function claimEntityExtraction(
       eq(letters.entityExtractionStatus, expectedStatus),
       ne(letters.transcriptionStatus, 'RUNNING'),
       eq(letters.metadataStatus, 'SUCCESS'),
+    ))
+    .returning({ revision: letters.entityExtractionRunRevision });
+
+  const revision = result[0]?.revision;
+  return revision === null || revision === undefined ? null : { runId, revision };
+}
+
+/**
+ * Record failure only if the exact run still owns the replacement attempt.
+ * The committed revision and its materialized links remain untouched.
+ */
+export async function failEntityExtraction(
+  letterId: string,
+  claim: EntityExtractionClaim,
+  error: string,
+): Promise<boolean> {
+  const result = await db
+    .update(letters)
+    .set({
+      entityExtractionStatus: 'FAILED',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
+      entityExtractionError: error,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(letters.id, letterId),
+      eq(letters.entityExtractionStatus, 'RUNNING'),
+      eq(letters.entityExtractionRunId, claim.runId),
+      eq(letters.entityExtractionRunRevision, claim.revision),
+    ))
+    .returning({ id: letters.id });
+
+  return result.length > 0;
+}
+
+/**
+ * Close a tokenless entity attempt that predates migration 0051.
+ *
+ * The migration blocks every new tokenless RUNNING transition, so this exact
+ * shape cannot suffer an ABA back to another legacy attempt. Operators must
+ * drain or terminate old executors before using this rollout-only escape hatch.
+ */
+export async function cancelLegacyEntityExtraction(
+  letterId: string,
+  error: string,
+): Promise<boolean> {
+  const result = await db
+    .update(letters)
+    .set({
+      entityExtractionStatus: 'FAILED',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
+      entityExtractionError: error,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(letters.id, letterId),
+      eq(letters.entityExtractionStatus, 'RUNNING'),
+      isNull(letters.entityExtractionRunId),
+      isNull(letters.entityExtractionRunRevision),
     ))
     .returning({ id: letters.id });
 
@@ -212,6 +297,8 @@ export async function resetLetterForProcessing(letterId: string): Promise<boolea
       metadataAttemptCount: 0,
       entityExtractionJson: null,
       entityExtractionStatus: 'PENDING',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
       entityExtractionError: null,
       // Reset two-track content status to EMPTY
       transcriptStatus: 'EMPTY',
@@ -236,30 +323,4 @@ export async function resetLetterForProcessing(letterId: string): Promise<boolea
     .returning({ id: letters.id });
 
   return reset.length > 0;
-}
-
-/**
- * Updates entity extraction results (Prompt 2) for a letter.
- * Tracked separately from basic metadata to allow independent retry.
- */
-export async function updateEntityExtraction(
-  letterId: string,
-  status: JobStatus,
-  entityData?: EntityExtraction,
-  error?: string | null
-): Promise<void> {
-  const updates: Partial<Letter> = {
-    entityExtractionStatus: status,
-    updatedAt: new Date(),
-  };
-
-  if (entityData) {
-    updates.entityExtractionJson = entityData;
-  }
-
-  if (error !== undefined) {
-    updates.entityExtractionError = error;
-  }
-
-  await db.update(letters).set(updates).where(eq(letters.id, letterId));
 }

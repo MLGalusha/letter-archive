@@ -1,10 +1,9 @@
 import { Router } from 'express';
+import { getCanonicalPlaceById, getLettersForPlaceEnriched } from '../services/entities.js';
 import {
-  extractPlaceThemesFromNotes,
-  getCanonicalPlaceById,
-  getLettersForPlaceEnriched,
-  stripPlaceThemesFromNotes,
-} from '../services/entities.js';
+  isPublicCatalogueLetterType,
+  retainPublicCatalogueRepresentatives,
+} from '../services/public-catalogue-unit.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger({ module: 'public-places' });
@@ -29,7 +28,23 @@ router.get('/places/:id', async (req, res, next) => {
 
     // Get letters (only published ones for public view)
     const allLetters = await getLettersForPlaceEnriched(id);
-    const letters = allLetters.filter(l => l.visibility === 'PUBLISHED');
+    const letters = retainPublicCatalogueRepresentatives(
+      allLetters
+        .filter(
+          (letter) => letter.visibility === 'PUBLISHED'
+            && letter.metadataPublished
+            && letter.entityProjectionTrusted === true
+            && isPublicCatalogueLetterType(letter.type),
+        )
+        .map((letter) => ({ ...letter, id: letter.letterId })),
+    );
+
+    // Canonical places have no independent publication flag. A place only
+    // becomes public through at least one metadata-published letter.
+    if (letters.length === 0) {
+      res.status(404).json({ error: 'Place not found' });
+      return;
+    }
 
     // Calculate stats by role
     const stats = {
@@ -50,10 +65,9 @@ router.get('/places/:id', async (req, res, next) => {
       place: {
         id: place.id,
         canonicalName: place.canonicalName,
-        aliases: place.aliases || [],
-        placeType: place.placeType,
-        notes: stripPlaceThemesFromNotes(place.notes),
-        themes: extractPlaceThemesFromNotes(place.notes),
+        aliases: [],
+        notes: null,
+        themes: [],
       },
       stats,
       letters: sortedLetters.map(l => ({

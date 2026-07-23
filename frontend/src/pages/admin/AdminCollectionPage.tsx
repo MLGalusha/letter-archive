@@ -9,7 +9,7 @@ import {
   generateCollectionProfile,
   updateCollection,
   updateCollectionProfile,
-  type CollectionWithLetters,
+  type AdminCollectionWithLetters,
   type CollectionProfileCorrespondent,
   type ContentStatus,
   renameCollectionCorrespondent,
@@ -193,7 +193,7 @@ export default function AdminCollectionPage() {
   const { code } = useParams<{ code: string }>();
   const { showToast } = useToast();
 
-  const [collection, setCollection] = useState<CollectionWithLetters | null>(null);
+  const [collection, setCollection] = useState<AdminCollectionWithLetters | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);

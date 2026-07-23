@@ -181,7 +181,7 @@ export default function BlogPage() {
                 {post.heroImageUrl && (
                   <div className="update-card-image">
                     <img
-                      src={getImageUrl(post.heroImageUrl, { publicOnly: true })}
+                      src={getImageUrl(post.heroImageUrl)}
                       alt={post.heroImageAlt || post.title}
                       loading="lazy"
                     />

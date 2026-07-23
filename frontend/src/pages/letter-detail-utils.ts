@@ -1,4 +1,8 @@
-import type { Letter, LinkedPerson, LinkedPlace } from "../types/Letter";
+import type { PublicLetter } from "../types/Letter";
+
+type LinkedPersonSource = NonNullable<PublicLetter["linkedPersons"]>[number];
+type LinkedPlaceSource = NonNullable<PublicLetter["linkedPlaces"]>[number];
+type DiscoveryLetter = Pick<PublicLetter, "linkedPersons" | "linkedPlaces">;
 
 export interface PublicLinkedPerson {
   personId: string;
@@ -17,7 +21,7 @@ function mergeRoles(existing: string[], incomingRole?: string): string[] {
   return [...existing, incomingRole];
 }
 
-function dedupeLinkedPersons(linkedPersons: LinkedPerson[] | undefined): PublicLinkedPerson[] {
+function dedupeLinkedPersons(linkedPersons: LinkedPersonSource[] | undefined): PublicLinkedPerson[] {
   if (!linkedPersons || linkedPersons.length === 0) return [];
   const map = new Map<string, PublicLinkedPerson>();
 
@@ -40,7 +44,7 @@ function dedupeLinkedPersons(linkedPersons: LinkedPerson[] | undefined): PublicL
   );
 }
 
-function dedupeLinkedPlaces(linkedPlaces: LinkedPlace[] | undefined): PublicLinkedPlace[] {
+function dedupeLinkedPlaces(linkedPlaces: LinkedPlaceSource[] | undefined): PublicLinkedPlace[] {
   if (!linkedPlaces || linkedPlaces.length === 0) return [];
   const map = new Map<string, PublicLinkedPlace>();
 
@@ -63,7 +67,7 @@ function dedupeLinkedPlaces(linkedPlaces: LinkedPlace[] | undefined): PublicLink
   );
 }
 
-export function buildLetterDiscoveryLinks(letter: Letter): {
+export function buildLetterDiscoveryLinks(letter: DiscoveryLetter): {
   persons: PublicLinkedPerson[];
   places: PublicLinkedPlace[];
 } {

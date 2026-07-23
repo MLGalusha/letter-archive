@@ -11,6 +11,7 @@ import {
   getPersonsForCollection,
   getRelationshipsForCollection,
 } from './entities/collection-queries.js';
+import { retainRowsWithPublicCatalogueRoot } from './public-catalogue-unit.js';
 
 // ============================================================================
 // TYPES
@@ -88,7 +89,7 @@ export interface CollectionProfileAggregations {
 
 export async function getCollectionAggregations(collectionId: string): Promise<CollectionProfileAggregations> {
   // Fetch published letters in one query
-  const publishedLetters = await db.query.letters.findMany({
+  const publishedLetters = retainRowsWithPublicCatalogueRoot(await db.query.letters.findMany({
     where: and(
       eq(letters.collectionId, collectionId),
       eq(letters.visibility, 'PUBLISHED'),
@@ -104,8 +105,16 @@ export async function getCollectionAggregations(collectionId: string): Promise<C
       emotionalTone: true,
       primaryTopics: true,
       type: true,
+      collectionId: true,
+      typeSequence: true,
+      metadataPublished: true,
     },
-  });
+  }));
+
+  // Metadata-derived profile material is only built from rows whose metadata
+  // was explicitly published. Catalogue counts/dates/formats still include
+  // every published row.
+  const publicMetadataLetters = publishedLetters.filter((letter) => letter.metadataPublished);
 
   // Run independent aggregations in parallel
   const [persons, relationships] = await Promise.all([
@@ -114,7 +123,7 @@ export async function getCollectionAggregations(collectionId: string): Promise<C
   ]);
 
   // Sentiment arc
-  const sentimentArc: SentimentPoint[] = publishedLetters
+  const sentimentArc: SentimentPoint[] = publicMetadataLetters
     .filter(l => l.emotionalTone && l.type === 'L')
     .map(l => ({
       date: l.letterDate || l.dateRaw,
@@ -123,7 +132,7 @@ export async function getCollectionAggregations(collectionId: string): Promise<C
     }));
 
   // Topic evolution
-  const topicEvolution: TopicPoint[] = publishedLetters
+  const topicEvolution: TopicPoint[] = publicMetadataLetters
     .filter(l => l.primaryTopics && l.primaryTopics.length > 0 && l.type === 'L')
     .map(l => ({
       date: l.letterDate || l.dateRaw,
@@ -132,10 +141,10 @@ export async function getCollectionAggregations(collectionId: string): Promise<C
     }));
 
   // Correspondence network
-  const correspondenceNetwork = buildCorrespondenceNetwork(publishedLetters, persons, relationships);
+  const correspondenceNetwork = buildCorrespondenceNetwork(publicMetadataLetters, persons, relationships);
 
   // On this day
-  const onThisDay = computeOnThisDay(publishedLetters);
+  const onThisDay = computeOnThisDay(publicMetadataLetters);
 
   // Key people (top 10)
   const keyPeople: KeyPerson[] = persons.slice(0, 10).map(p => ({

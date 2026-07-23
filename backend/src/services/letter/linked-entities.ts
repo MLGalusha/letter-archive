@@ -103,6 +103,8 @@ export async function addLinkedPerson(
     role,
     nameAsWritten: name,
     confidence: 100,
+    confirmedBy: 'admin',
+    confirmedAt: new Date(),
   });
 
   log.info({ letterId, personId: person.id, name, role }, 'Linked person to letter');
@@ -156,6 +158,8 @@ export async function addLinkedPlace(
     role,
     nameAsWritten: name,
     confidence: 100,
+    confirmedBy: 'admin',
+    confirmedAt: new Date(),
   });
 
   log.info({ letterId, placeId: place.id, name, role }, 'Linked place to letter');

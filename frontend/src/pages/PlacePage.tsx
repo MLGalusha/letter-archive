@@ -72,9 +72,6 @@ export default function PlacePage() {
         <div className="place-header">
           <div className="place-title-row">
             <h1>{place.canonicalName}</h1>
-            {place.placeType && (
-              <span className="place-type-badge">{place.placeType}</span>
-            )}
           </div>
           {place.aliases.length > 0 && (
             <p className="aliases">Also known as: {place.aliases.join(', ')}</p>
@@ -89,17 +86,6 @@ export default function PlacePage() {
                 <li key={`${theme}-${index}`}>{theme}</li>
               ))}
             </ul>
-          </section>
-        )}
-
-        {place.notes && (
-          <section className="notes-section">
-            <h2>Description</h2>
-            <div className="notes-text">
-              {place.notes.split('\n\n').map((paragraph, i) => (
-                <p key={i}>{paragraph}</p>
-              ))}
-            </div>
           </section>
         )}
 

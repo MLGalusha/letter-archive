@@ -71,6 +71,8 @@ export default function SettingsPage() {
   const [autoTranscribe, setAutoTranscribe] = useState(false);
   const [autoTranscribeFeedback, setAutoTranscribeFeedback] = useState<FeedbackState>(null);
   const [autoTranscribeSaving, setAutoTranscribeSaving] = useState(false);
+  const [logoutFeedback, setLogoutFeedback] = useState<FeedbackState>(null);
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   // ── Load data ───────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -288,9 +290,23 @@ export default function SettingsPage() {
   };
 
   // ── Logout ──────────────────────────────────────────────
-  const handleLogout = () => {
-    logout();
-    navigate('/admin-login');
+  const handleLogout = async () => {
+    setLogoutFeedback(null);
+    setLogoutLoading(true);
+    try {
+      await logout();
+      navigate('/admin-login');
+    } catch (err) {
+      setLogoutFeedback({
+        type: 'error',
+        message: getErrorMessage(
+          err,
+          'Could not securely log out. Please try again.',
+        ),
+      });
+    } finally {
+      setLogoutLoading(false);
+    }
   };
 
   // ── Helpers ─────────────────────────────────────────────
@@ -790,7 +806,18 @@ export default function SettingsPage() {
             ═══════════════════════════════════════════════════ */}
         <div className="settings-logout-section">
           <p>Sign out of the admin panel on this device.</p>
-          <Button variant="danger" size="sm" icon="logout" onClick={handleLogout}>
+          {logoutFeedback && (
+            <div className={`settings-feedback ${logoutFeedback.type}`} role="alert">
+              {logoutFeedback.message}
+            </div>
+          )}
+          <Button
+            variant="danger"
+            size="sm"
+            icon="logout"
+            loading={logoutLoading}
+            onClick={handleLogout}
+          >
             Logout
           </Button>
         </div>

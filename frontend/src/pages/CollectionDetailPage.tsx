@@ -17,7 +17,7 @@ import {
   buildExtraContentGallery,
 } from './collection-detail-utils';
 import HeaderScrubber from '../components/HeaderScrubber/HeaderScrubber';
-import useCollectionScrubber from '../components/CollectionHeaderDock/useCollectionScrubber';
+import useCollectionNavigation from '../components/CollectionHeaderDock/useCollectionNavigation';
 import { buildCollectionSeo, buildNotFoundSeo } from '../utils/seo';
 import useArchiveSearch from '../hooks/useArchiveSearch';
 import useStickyDock from '../hooks/useStickyDock';
@@ -26,25 +26,25 @@ import InfiniteCarousel from '../components/InfiniteCarousel';
 import useIsMobile from '../hooks/useIsMobile';
 import useIsTouchDevice from '../hooks/useIsTouchDevice';
 import useSwipeNavigation from '../hooks/useSwipeNavigation';
-import useAdjacentCollections from '../hooks/useAdjacentCollections';
 import './CollectionDetailPage.css';
 
 export default function CollectionDetailPage() {
   const navigate = useNavigate();
   const { collectionCode } = useParams<{ collectionCode: string }>();
-  const collectionScrubberProps = useCollectionScrubber(collectionCode);
+  const { scrubberProps: collectionScrubberProps, adjacent } = useCollectionNavigation(collectionCode);
   const isMobile = useIsMobile(640);
   const isTouchDevice = useIsTouchDevice();
-  const adjacentCollections = useAdjacentCollections(collectionCode);
+  const previousCollectionCode = adjacent.prev?.collectionCode;
+  const nextCollectionCode = adjacent.next?.collectionCode;
 
   const { ref: swipeRef, offset: swipeOffset, isSwiping, isAnimating } = useSwipeNavigation({
-    onSwipeLeft: adjacentCollections.next
-      ? () => navigate(`/collections/${adjacentCollections.next!.collectionCode}`)
+    onSwipeLeft: nextCollectionCode
+      ? () => navigate(`/collections/${nextCollectionCode}`)
       : undefined,
-    onSwipeRight: adjacentCollections.prev
-      ? () => navigate(`/collections/${adjacentCollections.prev!.collectionCode}`)
+    onSwipeRight: previousCollectionCode
+      ? () => navigate(`/collections/${previousCollectionCode}`)
       : undefined,
-    enabled: isTouchDevice && !!(adjacentCollections.prev || adjacentCollections.next),
+    enabled: isTouchDevice && !!(previousCollectionCode || nextCollectionCode),
   });
 
   /* ---- Collection data ---- */
@@ -290,7 +290,9 @@ export default function CollectionDetailPage() {
   return (
     <>
       <HeaderDock collectionsLink={collectionsLinkOverride}>
-        {collectionScrubberProps && <HeaderScrubber {...collectionScrubberProps} />}
+        {collectionScrubberProps && (
+          <HeaderScrubber {...collectionScrubberProps} />
+        )}
       </HeaderDock>
     <div className="body-layout" ref={swipeRef} style={swipeStyle}>
       <SEO

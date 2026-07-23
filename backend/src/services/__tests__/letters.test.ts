@@ -28,6 +28,7 @@ vi.mock('drizzle-orm', () => ({
   and: vi.fn((...clauses: unknown[]) => ({ kind: 'and', clauses })),
   gt: vi.fn((field: unknown, value: unknown) => ({ kind: 'gt', field, value })),
   isNotNull: vi.fn((field: unknown) => ({ kind: 'isNotNull', field })),
+  isNull: vi.fn((field: unknown) => ({ kind: 'isNull', field })),
   lte: vi.fn((field: unknown, value: unknown) => ({ kind: 'lte', field, value })),
   sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
     kind: 'sql',
@@ -73,6 +74,10 @@ vi.mock('../../db/index.js', () => {
       transcriptionStatus: 'letters.transcriptionStatus',
       metadataStatus: 'letters.metadataStatus',
       entityExtractionStatus: 'letters.entityExtractionStatus',
+      entityExtractionRevision: 'letters.entityExtractionRevision',
+      entityExtractionRunId: 'letters.entityExtractionRunId',
+      entityExtractionRunRevision: 'letters.entityExtractionRunRevision',
+      entityExtractionError: 'letters.entityExtractionError',
       extraContentJobStatus: 'letters.extraContentJobStatus',
       extraContentJobError: 'letters.extraContentJobError',
       extraContentJobRunId: 'letters.extraContentJobRunId',
@@ -84,8 +89,10 @@ vi.mock('../../db/index.js', () => {
 });
 
 import {
+  cancelLegacyEntityExtraction,
   findOrCreateLetter,
   claimEntityExtraction,
+  failEntityExtraction,
   invalidateExtraContentJobForSourceChange,
   resolveRepresentativeLetterId,
   resetLetterForProcessing,
@@ -167,6 +174,42 @@ describe('letters service', () => {
     expect(result).toBe('published-letter-row');
   });
 
+  it('does not let a supplementary-only group establish a published representative', async () => {
+    findFirstMock.mockResolvedValueOnce({
+      id: 'cover-row',
+      collectionId: 'collection-1',
+      dateRaw: '19470810',
+      typeSequence: 1,
+    });
+    // The mock deliberately returns rows that the SQL predicate would reject,
+    // exercising the in-process boundary as a second line of defense.
+    findManyMock.mockResolvedValueOnce([
+      { id: 'cover-row', type: 'C' },
+      { id: 'telegram-row', type: 'T' },
+    ]);
+
+    const result = await resolveRepresentativeLetterId('cover-row', { publishedOnly: true });
+
+    expect(result).toBeNull();
+  });
+
+  it('rejects a representative target from outside the requested collection', async () => {
+    findFirstMock.mockResolvedValueOnce({
+      id: 'foreign-letter',
+      collectionId: 'collection-2',
+      dateRaw: '19470810',
+      typeSequence: 1,
+    });
+
+    const result = await resolveRepresentativeLetterId('foreign-letter', {
+      publishedOnly: true,
+      collectionId: 'collection-1',
+    });
+
+    expect(result).toBeNull();
+    expect(findManyMock).not.toHaveBeenCalled();
+  });
+
   it('invalidates only the matching L-type extra-content job identity', async () => {
     await invalidateExtraContentJobForSourceChange({
       collectionId: 'collection-1',
@@ -228,9 +271,18 @@ describe('letters service', () => {
   });
 
   it('claims entity work only after metadata succeeds and transcription is idle', async () => {
-    updateReturningMock.mockResolvedValueOnce([{ id: 'letter-claim' }]);
+    updateReturningMock.mockResolvedValueOnce([{ revision: 3 }]);
 
-    await expect(claimEntityExtraction('letter-claim')).resolves.toBe(true);
+    await expect(claimEntityExtraction('letter-claim')).resolves.toEqual({
+      runId: expect.any(String),
+      revision: 3,
+    });
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      entityExtractionStatus: 'RUNNING',
+      entityExtractionRunId: expect.any(String),
+      entityExtractionRunRevision: expect.any(Object),
+      entityExtractionError: null,
+    }));
 
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
@@ -246,7 +298,7 @@ describe('letters service', () => {
   it('reports a lost downstream claim without starting work', async () => {
     updateReturningMock.mockResolvedValueOnce([]);
 
-    await expect(claimEntityExtraction('letter-claim')).resolves.toBe(false);
+    await expect(claimEntityExtraction('letter-claim')).resolves.toBeNull();
 
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
@@ -255,6 +307,60 @@ describe('letters service', () => {
         { kind: 'eq', field: 'letters.entityExtractionStatus', value: 'PENDING' },
         { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
         { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
+      ],
+    });
+  });
+
+  it('fails only the exact owned entity run and preserves the committed revision', async () => {
+    updateReturningMock.mockResolvedValueOnce([{ id: 'letter-claim' }]);
+
+    await expect(failEntityExtraction(
+      'letter-claim',
+      { runId: 'run-a', revision: 3 },
+      'provider failed',
+    )).resolves.toBe(true);
+
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      entityExtractionStatus: 'FAILED',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
+      entityExtractionError: 'provider failed',
+    }));
+    expect(updateSetMock.mock.calls.at(-1)?.[0]).not.toHaveProperty(
+      'entityExtractionRevision',
+    );
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        { kind: 'eq', field: 'letters.id', value: 'letter-claim' },
+        { kind: 'eq', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
+        { kind: 'eq', field: 'letters.entityExtractionRunId', value: 'run-a' },
+        { kind: 'eq', field: 'letters.entityExtractionRunRevision', value: 3 },
+      ],
+    });
+  });
+
+  it('cancels only the exact tokenless legacy entity run shape', async () => {
+    updateReturningMock.mockResolvedValueOnce([{ id: 'letter-legacy' }]);
+
+    await expect(cancelLegacyEntityExtraction(
+      'letter-legacy',
+      'Cancelled by admin',
+    )).resolves.toBe(true);
+
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      entityExtractionStatus: 'FAILED',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
+      entityExtractionError: 'Cancelled by admin',
+    }));
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        { kind: 'eq', field: 'letters.id', value: 'letter-legacy' },
+        { kind: 'eq', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
+        { kind: 'isNull', field: 'letters.entityExtractionRunId' },
+        { kind: 'isNull', field: 'letters.entityExtractionRunRevision' },
       ],
     });
   });
@@ -275,6 +381,8 @@ describe('letters service', () => {
         metadataStatus: 'PENDING',
         metadataRunId: null,
         entityExtractionStatus: 'PENDING',
+        entityExtractionRunId: null,
+        entityExtractionRunRevision: null,
         entityExtractionError: null,
         entityExtractionJson: null,
         transcriptStatus: 'EMPTY',

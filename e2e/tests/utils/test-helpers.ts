@@ -9,6 +9,16 @@ export const ADMIN_EMAIL = 'dev@localhost.test';
 export const ADMIN_PASSWORD = 'dev';
 export const API_BASE_URL = process.env.E2E_API_BASE_URL || 'http://localhost:3002';
 
+/**
+ * Mock the browser-only image-session handshake used by every authenticated
+ * admin shell. Individual mocked suites still own their domain endpoints.
+ */
+export async function installMockImageSessionApi(page: Page): Promise<void> {
+  await page.route(`${API_BASE_URL}/auth/image-session`, async (route) => {
+    await route.fulfill({ status: 204 });
+  });
+}
+
 export async function waitForAdminDashboardReady(page: Page): Promise<void> {
   await expect(page.getByRole('region', { name: 'Dashboard controls' })).toBeVisible({
     timeout: 30000,

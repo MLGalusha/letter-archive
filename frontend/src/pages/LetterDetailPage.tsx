@@ -5,7 +5,7 @@ import SEO from "../components/SEO";
 
 import LetterViewer from "../components/LetterViewer/LetterViewer";
 import { getAdjacentLetters, getLetterById, type AdjacentLettersResponse } from "../api/letters";
-import type { Letter, LetterImage, LetterImageType } from "../types/Letter";
+import type { LetterImage, LetterImageType, PublicLetter } from "../types/Letter";
 import { getImageUrl } from "../api/client";
 import { ProgressiveImage } from "../components/common";
 import { imagePreloadService } from "../services/imagePreloadService";
@@ -28,7 +28,7 @@ import "./LetterDetailPage.css";
 
 /* ── helpers ─────────────────────────────────────────────── */
 
-function correspondentLine(m: Letter["metadata"]): string {
+function correspondentLine(m: PublicLetter["metadata"]): string {
   if (m.sender && m.recipient) return `Written by ${m.sender} to ${m.recipient}`;
   if (m.sender) return `Written by ${m.sender}`;
   if (m.recipient) return `Written to ${m.recipient}`;
@@ -86,7 +86,7 @@ export default function LetterDetailPage() {
   const { letterId } = useParams<{ letterId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [letter, setLetter] = useState<Letter | null>(null);
+  const [letter, setLetter] = useState<PublicLetter | null>(null);
   const [adjacent, setAdjacent] = useState<AdjacentLettersResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -158,4 +158,17 @@ describe('SettingsPage', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Invite link generated. It expires in 24 hours.')).toBeInTheDocument();
   });
+
+  it('shows a retryable error when the secure logout request fails', async () => {
+    const user = userEvent.setup();
+    logoutMock.mockRejectedValueOnce(new Error('Cookie clear failed.'));
+
+    renderPage();
+
+    await screen.findByText('Admin Profiles');
+    await user.click(screen.getByRole('button', { name: 'Logout' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Cookie clear failed.');
+    expect(logoutMock).toHaveBeenCalledOnce();
+  });
 });

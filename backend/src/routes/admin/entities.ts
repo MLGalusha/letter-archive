@@ -31,6 +31,7 @@ import {
   createRelationship,
   updateRelationship,
   deleteRelationship,
+  buildHumanEntityProvenancePatch,
   // Phase 5: Merge enhancements
   findPotentialDuplicatePersons,
   findPotentialDuplicatePlaces,
@@ -611,7 +612,10 @@ const createRelationshipSchema = z.object({
 router.post('/relationships', async (req, res, next) => {
   try {
     const data = createRelationshipSchema.parse(req.body);
-    const id = await createRelationship(data);
+    const id = await createRelationship({
+      ...data,
+      ...buildHumanEntityProvenancePatch('admin'),
+    });
     const relationship = await getRelationshipById(id);
     res.status(201).json({ relationship });
   } catch (error) {
@@ -631,7 +635,10 @@ const updateRelationshipSchema = z.object({
 router.put('/relationships/:id', async (req, res, next) => {
   try {
     const data = updateRelationshipSchema.parse(req.body);
-    await updateRelationship(req.params.id, data);
+    await updateRelationship(req.params.id, {
+      ...data,
+      ...buildHumanEntityProvenancePatch('admin'),
+    });
     const relationship = await getRelationshipById(req.params.id);
     res.json({ relationship });
   } catch (error) {

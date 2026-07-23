@@ -5,7 +5,7 @@
  * to a single collection.
  */
 
-import { and, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import {
   db,
   canonicalPersons,
@@ -13,6 +13,8 @@ import {
   letters,
   personRelationships,
 } from '../../db/index.js';
+import { publicCatalogueLetterTypeSql } from '../public-catalogue-unit.js';
+import { publicEntityProjectionSql } from './public-projection.js';
 
 // ============================================================================
 // Types
@@ -111,8 +113,14 @@ export async function getPersonsForCollection(
       id: canonicalPersons.id,
       canonicalName: canonicalPersons.canonicalName,
       aliases: canonicalPersons.aliases,
-      biography: canonicalPersons.biography,
-      hook: canonicalPersons.hook,
+      biography: sql<string | null>`CASE
+        WHEN ${canonicalPersons.biographyStatus} = 'VERIFIED' THEN ${canonicalPersons.biography}
+        ELSE NULL
+      END`,
+      hook: sql<string | null>`CASE
+        WHEN ${canonicalPersons.biographyStatus} = 'VERIFIED' THEN ${canonicalPersons.hook}
+        ELSE NULL
+      END`,
       letterCount: sql<number>`COUNT(DISTINCT ${letterPersons.letterId})::int`,
       senderCount: sql<number>`COUNT(DISTINCT CASE WHEN ${letterPersons.role} = 'sender' THEN ${letterPersons.letterId} END)::int`,
       recipientCount: sql<number>`COUNT(DISTINCT CASE WHEN ${letterPersons.role} = 'recipient' THEN ${letterPersons.letterId} END)::int`,
@@ -121,7 +129,18 @@ export async function getPersonsForCollection(
     .from(canonicalPersons)
     .innerJoin(letterPersons, eq(canonicalPersons.id, letterPersons.personId))
     .innerJoin(letters, eq(letterPersons.letterId, letters.id))
-    .where(eq(letters.collectionId, collectionId))
+    .where(and(
+      eq(letters.collectionId, collectionId),
+      eq(letters.visibility, 'PUBLISHED'),
+      eq(letters.metadataPublished, true),
+      publicCatalogueLetterTypeSql(letters.type),
+      publicEntityProjectionSql(
+        letterPersons.confirmedAt,
+        letterPersons.entityExtractionRevision,
+        letters.entityExtractionRevision,
+        letters.entityExtractionJson,
+      ),
+    ))
     .groupBy(canonicalPersons.id, canonicalPersons.canonicalName, canonicalPersons.aliases, canonicalPersons.biography, canonicalPersons.hook)
     .orderBy(sql`COUNT(DISTINCT ${letterPersons.letterId}) DESC`);
 
@@ -178,7 +197,18 @@ export async function getRelationshipsForCollection(
     .selectDistinct({ personId: letterPersons.personId })
     .from(letterPersons)
     .innerJoin(letters, eq(letterPersons.letterId, letters.id))
-    .where(eq(letters.collectionId, collectionId));
+    .where(and(
+      eq(letters.collectionId, collectionId),
+      eq(letters.visibility, 'PUBLISHED'),
+      eq(letters.metadataPublished, true),
+      publicCatalogueLetterTypeSql(letters.type),
+      publicEntityProjectionSql(
+        letterPersons.confirmedAt,
+        letterPersons.entityExtractionRevision,
+        letters.entityExtractionRevision,
+        letters.entityExtractionJson,
+      ),
+    ));
 
   return db
     .select({
@@ -194,10 +224,28 @@ export async function getRelationshipsForCollection(
     .from(personRelationships)
     .innerJoin(sql`canonical_persons pa`, sql`pa.id = ${personRelationships.personAId}`)
     .innerJoin(sql`canonical_persons pb`, sql`pb.id = ${personRelationships.personBId}`)
+    .leftJoin(
+      sql`letters discovered_letter`,
+      sql`discovered_letter.id = ${personRelationships.discoveredInLetterId}`,
+    )
     .where(
       and(
         sql`${personRelationships.personAId} IN (${personIds})`,
         sql`${personRelationships.personBId} IN (${personIds})`,
+        or(
+          isNotNull(personRelationships.confirmedAt),
+          sql`(
+            discovered_letter.visibility = 'PUBLISHED'
+            AND discovered_letter.metadata_published = TRUE
+            AND ${publicCatalogueLetterTypeSql(sql`discovered_letter.type`)}
+            AND ${publicEntityProjectionSql(
+              personRelationships.confirmedAt,
+              personRelationships.entityExtractionRevision,
+              sql`discovered_letter.entity_extraction_revision`,
+              sql`discovered_letter.entity_extraction_json`,
+            )}
+          )`,
+        ),
       ),
     )
     .orderBy(sql`pa.canonical_name`, sql`pb.canonical_name`);

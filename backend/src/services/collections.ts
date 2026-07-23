@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db, collections, type Collection } from '../db/index.js';
 import { resolveRepresentativeLetterId } from './letters.js';
 import { pickFeaturedLetter } from './pick-featured-letter.js';
@@ -55,24 +55,115 @@ export async function listCollections(): Promise<Collection[]> {
   });
 }
 
+export interface CollectionStartHereSnapshot {
+  letterId: string | null;
+  reason: string | null;
+}
+
 /**
- * Resolve a collection's saved featured/start-here letter to a published
- * representative row, or auto-pick a new published one when the saved value
- * is missing/stale.
+ * Resolve and repair a collection's start-here selection as one coherent
+ * snapshot. The letter ID and its explanation share the same CAS boundary, so
+ * a concurrent curator update can never return a winner ID with an old reason.
  */
-export async function resolveCollectionFeaturedLetterId(
+export async function resolveCollectionStartHere(
   collectionId: string,
-  currentLetterId: string | null | undefined,
-): Promise<string | null> {
-  if (currentLetterId) {
-    const resolvedCurrentId = await resolveRepresentativeLetterId(currentLetterId, { publishedOnly: true });
-    if (resolvedCurrentId) {
-      return resolvedCurrentId;
+  current: {
+    letterId: string | null | undefined;
+    reason: string | null | undefined;
+  },
+): Promise<CollectionStartHereSnapshot> {
+  const resolveCandidate = async (
+    observed: CollectionStartHereSnapshot,
+  ): Promise<CollectionStartHereSnapshot> => {
+    if (observed.letterId) {
+      const resolvedCurrentId = await resolveRepresentativeLetterId(observed.letterId, {
+        publishedOnly: true,
+        collectionId,
+      });
+      if (resolvedCurrentId) {
+        return {
+          letterId: resolvedCurrentId,
+          reason: observed.reason,
+        };
+      }
     }
+
+    const autoPick = await pickFeaturedLetter(collectionId);
+    if (!autoPick?.id) {
+      return {
+        letterId: null,
+        reason: null,
+      };
+    }
+
+    const autoLetterId = await resolveRepresentativeLetterId(autoPick.id, {
+      publishedOnly: true,
+      collectionId,
+    });
+    return {
+      letterId: autoLetterId,
+      // An explanation belongs to one selection. Auto-picking a different
+      // unit must not inherit the explanation for the stale saved unit.
+      reason: null,
+    };
+  };
+
+  let observed: CollectionStartHereSnapshot = {
+    letterId: current.letterId ?? null,
+    reason: current.reason ?? null,
+  };
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const resolved = await resolveCandidate(observed);
+    if (
+      resolved.letterId === observed.letterId
+      && resolved.reason === observed.reason
+    ) {
+      return resolved;
+    }
+
+    const observedIdCondition = observed.letterId === null
+      ? isNull(collections.profileStartHereLetterId)
+      : eq(collections.profileStartHereLetterId, observed.letterId);
+    const observedReasonCondition = observed.reason === null
+      ? isNull(collections.profileStartHereReason)
+      : eq(collections.profileStartHereReason, observed.reason);
+    const updated = await db
+      .update(collections)
+      .set({
+        profileStartHereLetterId: resolved.letterId,
+        profileStartHereReason: resolved.reason,
+      })
+      .where(and(
+        eq(collections.id, collectionId),
+        observedIdCondition,
+        observedReasonCondition,
+      ))
+      .returning({
+        profileStartHereLetterId: collections.profileStartHereLetterId,
+        profileStartHereReason: collections.profileStartHereReason,
+      });
+
+    if (updated.length > 0) return resolved;
+
+    const winner = await db.query.collections.findFirst({
+      where: eq(collections.id, collectionId),
+      columns: {
+        profileStartHereLetterId: true,
+        profileStartHereReason: true,
+      },
+    });
+    if (!winner) {
+      return {
+        letterId: null,
+        reason: null,
+      };
+    }
+    observed = {
+      letterId: winner.profileStartHereLetterId ?? null,
+      reason: winner.profileStartHereReason ?? null,
+    };
   }
 
-  const autoPick = await pickFeaturedLetter(collectionId);
-  if (!autoPick?.id) return null;
-
-  return await resolveRepresentativeLetterId(autoPick.id, { publishedOnly: true }) ?? autoPick.id;
+  return resolveCandidate(observed);
 }

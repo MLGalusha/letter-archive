@@ -8,5 +8,10 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     css: true,
+    // JSDOM-heavy component files become slower than their 5s behavioral
+    // timeout when every logical CPU hosts a worker. Keep the gate
+    // machine-relative so CI and local runs exercise real timing assertions
+    // without oversubscribing the host.
+    maxWorkers: "25%",
   },
 });

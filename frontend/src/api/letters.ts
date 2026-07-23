@@ -8,11 +8,12 @@ import type {
   ArchiveShelfItem,
   Letter,
   LetterImageType,
+  PublicLetter,
   VisibilityState,
 } from '../types/Letter';
 
 export interface LettersResponse {
-  letters: Letter[];
+  letters: PublicLetter[];
   page: number;
   limit: number;
 }
@@ -106,18 +107,20 @@ export interface AdminLettersResponse {
   };
 }
 
-export type SortField = 'createdAt' | 'updatedAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection' | 'lastOpenedAt' | 'flagged' | 'letters' | 'extras' | 'photos' | 'cover' | 'telegram' | 'card' | 'ephemera' | 'article' | 'diary' | 'voice';
 export type SortOrder = 'asc' | 'desc';
 
-export interface LetterQueryParams {
+export type PublicLetterSortField = 'createdAt' | 'letterDate' | 'sender';
+
+/** Query options accepted by the published catalogue endpoints. */
+export interface PublicLetterQueryParams {
   page?: number;
   limit?: number;
-  visibility?: 'PUBLISHED' | 'HIDDEN';
-  workflow?: string;
   collection?: string;
-  sort?: SortField;
+  sort?: PublicLetterSortField;
   sortOrder?: SortOrder;
 }
+
+export type AdminLetterSortField = 'createdAt' | 'updatedAt' | 'letterDate' | 'sender' | 'recipient' | 'workflow' | 'visibility' | 'collection' | 'lastOpenedAt' | 'flagged' | 'letters' | 'extras' | 'photos' | 'cover' | 'telegram' | 'card' | 'ephemera' | 'article' | 'diary' | 'voice';
 
 export interface AdminLetterQueryParams {
   page?: number;
@@ -126,7 +129,7 @@ export interface AdminLetterQueryParams {
   collection?: string;
   search?: string;
   workflow?: string;
-  sort?: SortField;
+  sort?: AdminLetterSortField;
   sortOrder?: SortOrder;
   sortRules?: string;
   // Date filters
@@ -147,32 +150,25 @@ export interface AdminLetterQueryParams {
 /**
  * Fetch list of letters with optional filtering
  */
-export async function getLetters(params: LetterQueryParams = {}): Promise<LettersResponse> {
+export async function getLetters(params: PublicLetterQueryParams = {}): Promise<LettersResponse> {
   return apiGet<LettersResponse>('/letters', {
     page: params.page,
     limit: params.limit,
-    visibility: params.visibility,
-    workflow: params.workflow,
     collection: params.collection,
+    sort: params.sort,
+    sortOrder: params.sortOrder,
   });
 }
 
 /**
  * Fetch a single letter by ID
  */
-export async function getLetterById(id: string, signal?: AbortSignal): Promise<Letter> {
-  return apiGet<Letter>(`/letters/${id}`, undefined, signal);
-}
-
-/**
- * Fetch letters for public display (published only)
- */
-export async function getPublishedLetters(params: Omit<LetterQueryParams, 'visibility'> = {}): Promise<LettersResponse> {
-  return getLetters({ ...params, visibility: 'PUBLISHED' });
+export async function getLetterById(id: string, signal?: AbortSignal): Promise<PublicLetter> {
+  return apiGet<PublicLetter>(`/letters/${id}`, undefined, signal);
 }
 
 export async function getArchiveShelfItems(
-  params: Omit<LetterQueryParams, 'visibility'> = {},
+  params: PublicLetterQueryParams = {},
 ): Promise<ArchiveShelfResponse> {
   return apiGet<ArchiveShelfResponse>('/letters/summaries', {
     page: params.page,

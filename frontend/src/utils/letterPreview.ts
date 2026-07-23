@@ -50,11 +50,16 @@ function truncateCopy(value: string, maxLength = 180): string {
   return `${snippet.slice(0, lastSpace)}...`;
 }
 
-export function getPrimaryImage(letter: Letter): LetterImage | undefined {
+type LetterMediaSource = {
+  images: LetterImage[];
+  photoDescription?: string;
+};
+
+export function getPrimaryImage(letter: LetterMediaSource): LetterImage | undefined {
   return letter.images[0];
 }
 
-export function getPrimaryMediaType(letter: Letter): LetterImageType {
+export function getPrimaryMediaType(letter: LetterMediaSource): LetterImageType {
   return getPrimaryImage(letter)?.type || (letter.photoDescription ? "photo" : "letter");
 }
 

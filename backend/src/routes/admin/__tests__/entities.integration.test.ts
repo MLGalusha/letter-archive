@@ -7,12 +7,16 @@ const {
   resolveReviewItemMock,
   findMatchingPersonsMock,
   findMatchingPlacesMock,
+  getRelationshipByIdMock,
+  updateRelationshipMock,
 } = vi.hoisted(() => ({
   getPendingReviewItemsMock: vi.fn(),
   getReviewQueueStatsMock: vi.fn(),
   resolveReviewItemMock: vi.fn(),
   findMatchingPersonsMock: vi.fn(),
   findMatchingPlacesMock: vi.fn(),
+  getRelationshipByIdMock: vi.fn(),
+  updateRelationshipMock: vi.fn(),
 }));
 
 vi.mock('../../../services/entities.js', () => {
@@ -43,10 +47,15 @@ vi.mock('../../../services/entities.js', () => {
     findMatchingPlaces: findMatchingPlacesMock,
     getAllRelationships: stub(),
     getRelationshipsForPerson: stub(),
-    getRelationshipById: stub(),
+    getRelationshipById: getRelationshipByIdMock,
     createRelationship: stub(),
-    updateRelationship: stub(),
+    updateRelationship: updateRelationshipMock,
     deleteRelationship: stub(),
+    buildHumanEntityProvenancePatch: (actor: string) => ({
+      entityExtractionRevision: null,
+      confirmedBy: actor,
+      confirmedAt: new Date(),
+    }),
     findPotentialDuplicatePersons: stub(),
     findPotentialDuplicatePlaces: stub(),
     bulkMergePersons: stub(),
@@ -103,6 +112,12 @@ describe('admin entities route integration', () => {
         similarity: 91,
       },
     ]);
+    getRelationshipByIdMock.mockResolvedValue({
+      id: 'relationship-1',
+      relationshipType: 'friend',
+      notes: 'Corrected by a reviewer',
+    });
+    updateRelationshipMock.mockResolvedValue(undefined);
   });
 
   it('returns the filtered review queue with stats', async () => {
@@ -217,6 +232,24 @@ describe('admin entities route integration', () => {
     expect(resolveReviewItemMock).toHaveBeenCalledWith('review-1', {
       status: 'confirmed',
       reviewedBy: 'admin',
+    });
+  });
+
+  it('promotes relationship edits from the combined admin route to confirmation', async () => {
+    const response = await invokeRouter(entitiesRouter, {
+      method: 'PUT',
+      url: '/relationships/relationship-1',
+      path: '/relationships/relationship-1',
+      body: { notes: 'Corrected by a reviewer' },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(updateRelationshipMock).toHaveBeenCalledWith('relationship-1', {
+      notes: 'Corrected by a reviewer',
+      entityExtractionRevision: null,
+      confirmedBy: 'admin',
+      confirmedAt: expect.any(Date),
     });
   });
 });

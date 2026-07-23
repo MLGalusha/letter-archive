@@ -11,6 +11,11 @@ import {
 } from '../db/schema.js';
 import { eq, sql, and, lte } from 'drizzle-orm';
 import { env } from '../config/env.js';
+import {
+  publicCatalogueLetterTypeSql,
+  retainPublicCatalogueRepresentatives,
+} from '../services/public-catalogue-unit.js';
+import { publicEntityProjectionSql } from '../services/entities/public-projection.js';
 
 const router = Router();
 
@@ -28,7 +33,7 @@ router.get('/sitemap.xml', async (_req, res) => {
     const baseUrl = env.SITE_URL.replace(/\/+$/, '');
 
     const [
-      publishedLetters,
+      publishedLetterRows,
       collectionsWithLetters,
       publishedBlogPosts,
       peopleWithLetters,
@@ -37,12 +42,19 @@ router.get('/sitemap.xml', async (_req, res) => {
       db
         .select({
           id: letters.id,
+          collectionId: letters.collectionId,
+          dateRaw: letters.dateRaw,
+          typeSequence: letters.typeSequence,
+          type: letters.type,
           updatedAt: letters.updatedAt,
           collectionCode: collections.collectionCode,
         })
         .from(letters)
         .innerJoin(collections, eq(letters.collectionId, collections.id))
-        .where(eq(letters.visibility, 'PUBLISHED')),
+        .where(and(
+          eq(letters.visibility, 'PUBLISHED'),
+          publicCatalogueLetterTypeSql(letters.type),
+        )),
       db
         .select({
           collectionCode: collections.collectionCode,
@@ -52,7 +64,10 @@ router.get('/sitemap.xml', async (_req, res) => {
         })
         .from(collections)
         .innerJoin(letters, eq(letters.collectionId, collections.id))
-        .where(eq(letters.visibility, 'PUBLISHED'))
+        .where(and(
+          eq(letters.visibility, 'PUBLISHED'),
+          publicCatalogueLetterTypeSql(letters.type),
+        ))
         .groupBy(collections.id, collections.collectionCode, collections.title, collections.createdAt),
       db
         .select({
@@ -75,7 +90,17 @@ router.get('/sitemap.xml', async (_req, res) => {
         .from(canonicalPersons)
         .innerJoin(letterPersons, eq(canonicalPersons.id, letterPersons.personId))
         .innerJoin(letters, eq(letterPersons.letterId, letters.id))
-        .where(eq(letters.visibility, 'PUBLISHED'))
+        .where(and(
+          eq(letters.visibility, 'PUBLISHED'),
+          eq(letters.metadataPublished, true),
+          publicCatalogueLetterTypeSql(letters.type),
+          publicEntityProjectionSql(
+            letterPersons.confirmedAt,
+            letterPersons.entityExtractionRevision,
+            letters.entityExtractionRevision,
+            letters.entityExtractionJson,
+          ),
+        ))
         .groupBy(canonicalPersons.id),
       db
         .select({
@@ -85,9 +110,20 @@ router.get('/sitemap.xml', async (_req, res) => {
         .from(canonicalPlaces)
         .innerJoin(letterPlaces, eq(canonicalPlaces.id, letterPlaces.placeId))
         .innerJoin(letters, eq(letterPlaces.letterId, letters.id))
-        .where(eq(letters.visibility, 'PUBLISHED'))
+        .where(and(
+          eq(letters.visibility, 'PUBLISHED'),
+          eq(letters.metadataPublished, true),
+          publicCatalogueLetterTypeSql(letters.type),
+          publicEntityProjectionSql(
+            letterPlaces.confirmedAt,
+            letterPlaces.entityExtractionRevision,
+            letters.entityExtractionRevision,
+            letters.entityExtractionJson,
+          ),
+        ))
         .groupBy(canonicalPlaces.id),
     ]);
+    const publishedLetters = retainPublicCatalogueRepresentatives(publishedLetterRows);
 
     // Build XML
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
@@ -166,7 +202,7 @@ router.get('/sitemap.xml', async (_req, res) => {
     xml += '</urlset>';
 
     res.set('Content-Type', 'application/xml');
-    res.set('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+    res.set('Cache-Control', 'no-store');
     res.send(xml);
   } catch (err) {
     console.error('Sitemap generation failed:', err);

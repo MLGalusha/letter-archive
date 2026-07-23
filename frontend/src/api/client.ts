@@ -50,6 +50,14 @@ function resolveApiBaseUrl(): string {
 }
 
 const API_BASE_URL = resolveApiBaseUrl();
+const SENSITIVE_IMAGE_QUERY_KEYS = new Set([
+  'token',
+  'admintoken',
+  'access_token',
+  'accesstoken',
+  'authorization',
+  'jwt',
+]);
 
 // Simple frontend logger
 const log = {
@@ -359,17 +367,19 @@ export function getImageUrl(
   imageUrl: string,
   options?: {
     width?: number;
-    publicOnly?: boolean;
   },
 ): string {
   const isAbsolute = imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
   const baseUrl = isAbsolute ? imageUrl : `${API_BASE_URL}${imageUrl}`;
   const url = new URL(baseUrl);
 
-  if (!options?.publicOnly) {
-    const token = localStorage.getItem('adminToken');
-    if (token) {
-      url.searchParams.set('token', token);
+  const apiOrigin = new URL(API_BASE_URL).origin;
+  const isApiImage = url.origin === apiOrigin && url.pathname.startsWith('/images/');
+  if (isApiImage) {
+    for (const key of Array.from(url.searchParams.keys())) {
+      if (SENSITIVE_IMAGE_QUERY_KEYS.has(key.toLowerCase())) {
+        url.searchParams.delete(key);
+      }
     }
   }
 

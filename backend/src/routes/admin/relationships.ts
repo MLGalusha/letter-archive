@@ -8,6 +8,7 @@ import {
   deleteRelationship,
   getCanonicalPersonById,
   backfillRelationshipsFromLetters,
+  buildHumanEntityProvenancePatch,
 } from '../../services/entities.js';
 import { createLogger } from '../../utils/logger.js';
 import type { PersonRelationshipType } from '../../db/schema.js';
@@ -141,6 +142,7 @@ router.post('/', async (req, res, next) => {
       notes,
       discoveredInLetterId,
       confidence,
+      ...buildHumanEntityProvenancePatch('admin'),
     });
 
     const created = await getRelationshipById(id);
@@ -182,6 +184,7 @@ router.put('/:id', async (req, res, next) => {
     await updateRelationship(id, {
       ...parseResult.data,
       relationshipType: parseResult.data.relationshipType as PersonRelationshipType | undefined,
+      ...buildHumanEntityProvenancePatch('admin'),
     });
 
     const updated = await getRelationshipById(id);

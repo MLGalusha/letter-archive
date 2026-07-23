@@ -16,6 +16,8 @@ const {
   cancelTranscriptionAttemptMock,
   cancelExtraContentAttemptMock,
   cancelMetadataAttemptMock,
+  cancelLegacyEntityExtractionMock,
+  failEntityExtractionMock,
   tryTranscribeExtrasMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
@@ -33,6 +35,8 @@ const {
   cancelTranscriptionAttemptMock: vi.fn(),
   cancelExtraContentAttemptMock: vi.fn(),
   cancelMetadataAttemptMock: vi.fn(),
+  cancelLegacyEntityExtractionMock: vi.fn(),
+  failEntityExtractionMock: vi.fn(),
   tryTranscribeExtrasMock: vi.fn(),
 }));
 
@@ -69,6 +73,8 @@ vi.mock('../../db/index.js', () => {
       metadataRunId: 'letters.metadataRunId',
       metadataRevision: 'letters.metadataRevision',
       entityExtractionStatus: 'letters.entityExtractionStatus',
+      entityExtractionRunId: 'letters.entityExtractionRunId',
+      entityExtractionRunRevision: 'letters.entityExtractionRunRevision',
       extraContentJobStatus: 'letters.extraContentJobStatus',
       extraContentJobRunId: 'letters.extraContentJobRunId',
       extraContentJobDirty: 'letters.extraContentJobDirty',
@@ -100,6 +106,11 @@ vi.mock('../letter/extra-content-job.js', () => ({
 
 vi.mock('../letter/metadata-job.js', () => ({
   cancelMetadataAttempt: cancelMetadataAttemptMock,
+}));
+
+vi.mock('../letters.js', () => ({
+  cancelLegacyEntityExtraction: cancelLegacyEntityExtractionMock,
+  failEntityExtraction: failEntityExtractionMock,
 }));
 
 vi.mock('../notifications.js', () => ({ notify: notifyMock }));
@@ -162,6 +173,8 @@ describe('letter process helpers', () => {
     cancelTranscriptionAttemptMock.mockResolvedValue(true);
     cancelExtraContentAttemptMock.mockResolvedValue(true);
     cancelMetadataAttemptMock.mockResolvedValue(true);
+    cancelLegacyEntityExtractionMock.mockResolvedValue(true);
+    failEntityExtractionMock.mockResolvedValue(true);
     findManyMock.mockResolvedValue([]);
     updateReturningMock.mockResolvedValue([{ id: 'letter-1' }]);
   });
@@ -345,6 +358,20 @@ describe('letter process helpers', () => {
     }));
   });
 
+  it('clears the entity ownership tuple for pending queue rows', async () => {
+    findManyMock.mockResolvedValue([{ id: 'letter-1' }]);
+
+    await expect(
+      clearQueue(letterProcessSpecs.entity_extraction, []),
+    ).resolves.toEqual({ cleared: 1 });
+
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      entityExtractionStatus: 'FAILED',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
+    }));
+  });
+
   it('retries only the failed version that was observed', async () => {
     const observedAt = new Date('2026-07-17T12:00:00Z');
     findFirstMock.mockResolvedValue({
@@ -444,6 +471,24 @@ describe('letter process helpers', () => {
     }));
   });
 
+  it('clears stale entity ownership before retrying a failed job', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-1',
+      entityExtractionStatus: 'FAILED',
+      entityExtractionRunId: 'stale-run',
+      entityExtractionRunRevision: 8,
+      updatedAt: new Date('2026-07-17T12:00:00Z'),
+    });
+
+    await retryJob(letterProcessSpecs.entity_extraction, 'letter-1');
+
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      entityExtractionStatus: 'PENDING',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
+    }));
+  });
+
   it('cancels only the observed transcription run and clears its fence', async () => {
     findFirstMock.mockResolvedValue({
       id: 'letter-1',
@@ -508,6 +553,75 @@ describe('letter process helpers', () => {
       message: 'Cannot cancel: metadata job has no active run ID',
     });
     expect(cancelMetadataAttemptMock).not.toHaveBeenCalled();
+  });
+
+  it('cancels only the exact observed entity-extraction run', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-1',
+      entityExtractionStatus: 'RUNNING',
+      entityExtractionRunId: 'run-a',
+      entityExtractionRunRevision: 4,
+    });
+
+    await cancelActive(letterProcessSpecs.entity_extraction, 'letter-1');
+
+    expect(failEntityExtractionMock).toHaveBeenCalledWith(
+      'letter-1',
+      { runId: 'run-a', revision: 4 },
+      'Cancelled by admin',
+    );
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('cancels an observed tokenless legacy entity run after rollout drain', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-legacy',
+      entityExtractionStatus: 'RUNNING',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
+    });
+
+    await cancelActive(letterProcessSpecs.entity_extraction, 'letter-legacy');
+
+    expect(cancelLegacyEntityExtractionMock).toHaveBeenCalledWith(
+      'letter-legacy',
+      'Cancelled by admin',
+    );
+    expect(failEntityExtractionMock).not.toHaveBeenCalled();
+  });
+
+  it('cannot let entity extraction completion lose to stale cancellation', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-1',
+      entityExtractionStatus: 'RUNNING',
+      entityExtractionRunId: 'run-a',
+      entityExtractionRunRevision: 4,
+    });
+    failEntityExtractionMock.mockResolvedValue(false);
+
+    await expect(
+      cancelActive(letterProcessSpecs.entity_extraction, 'letter-1'),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'Cannot cancel: entity_extraction is no longer running',
+    });
+  });
+
+  it('refuses to cancel entity extraction without its complete run identity', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-1',
+      entityExtractionStatus: 'RUNNING',
+      entityExtractionRunId: 'run-a',
+      entityExtractionRunRevision: null,
+    });
+
+    await expect(
+      cancelActive(letterProcessSpecs.entity_extraction, 'letter-1'),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'Cannot cancel: entity extraction job has no active run identity',
+    });
+    expect(failEntityExtractionMock).not.toHaveBeenCalled();
   });
 
   it('refuses to cancel invalid running extra content without an owner', async () => {

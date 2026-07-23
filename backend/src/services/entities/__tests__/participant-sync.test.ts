@@ -1,11 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildHumanEntityProvenancePatch,
   decideManualNameAutoLink,
   mapMetadataRelationshipToPersonRelationship,
   normalizeEntityName,
 } from '../participant-sync.js';
 
 describe('participant sync helpers', () => {
+  it('switches manually edited entity content to one human-owned provenance tuple', () => {
+    const confirmedAt = new Date('2026-07-23T12:00:00.000Z');
+
+    expect(buildHumanEntityProvenancePatch('reviewer@example.test', confirmedAt)).toEqual({
+      entityExtractionRevision: null,
+      confirmedBy: 'reviewer@example.test',
+      confirmedAt,
+    });
+  });
+
   describe('normalizeEntityName', () => {
     it('normalizes extra whitespace and trims boundaries', () => {
       expect(normalizeEntityName('  Mary   Jane  ')).toBe('Mary Jane');

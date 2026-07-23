@@ -428,6 +428,49 @@ describe('processing execution ownership', () => {
     expect(migration).not.toMatch(/VALIDATE CONSTRAINT/i);
   });
 
+  it('keeps entity extraction ownership revision-bound across the rollout drain', async () => {
+    const schema = await readFile(path.join(sourceRoot, 'db/schema.ts'), 'utf8');
+    const migration = await readFile(
+      path.join(
+        sourceRoot,
+        'db/migrations/0051_add_entity_extraction_commit_boundary.sql',
+      ),
+      'utf8',
+    );
+
+    expect(schema).toContain(
+      "entityExtractionRevision: integer('entity_extraction_revision')",
+    );
+    expect(schema).toContain(
+      "entityExtractionRunId: uuid('entity_extraction_run_id')",
+    );
+    expect(schema).toContain(
+      "entityExtractionRunRevision: integer('entity_extraction_run_revision')",
+    );
+    expect(schema).toContain('entity_extraction_revision_nonnegative');
+    expect(schema).toContain('entity_extraction_owner_shape');
+    expect(schema).toMatch(
+      /\$\{table\.entityExtractionRunRevision\} = \$\{table\.entityExtractionRevision\} \+ 1/,
+    );
+
+    expect(migration).toMatch(
+      /ADD CONSTRAINT "entity_extraction_owner_shape"[\s\S]*?"entity_extraction_run_id" IS NULL[\s\S]*?"entity_extraction_run_revision" IS NULL[\s\S]*?OR \([\s\S]*?"entity_extraction_status" = 'RUNNING'[\s\S]*?"entity_extraction_run_revision" = "entity_extraction_revision" \+ 1[\s\S]*?\) NOT VALID/,
+    );
+    expect(migration).toMatch(
+      /NEW\.entity_extraction_status = 'RUNNING'[\s\S]*?TG_OP = 'INSERT' OR OLD\.entity_extraction_status <> 'RUNNING'[\s\S]*?entity_extraction_running_requires_owner/,
+    );
+    expect(migration).toMatch(
+      /OLD\.entity_extraction_status = 'RUNNING'[\s\S]*?OLD\.entity_extraction_run_id IS NOT NULL[\s\S]*?NEW\.entity_extraction_status <> 'RUNNING'[\s\S]*?entity_extraction_terminal_requires_owner_reconciliation/,
+    );
+    expect(migration).toMatch(
+      /CREATE FUNCTION stamp_legacy_entity_extraction_output\(\)[\s\S]*?entity_extraction_status = 'RUNNING'[\s\S]*?entity_extraction_run_id IS NULL[\s\S]*?CREATE TRIGGER legacy_letter_person_extraction_revision[\s\S]*?CREATE TRIGGER legacy_letter_place_extraction_revision[\s\S]*?CREATE TRIGGER legacy_person_relationship_extraction_revision[\s\S]*?CREATE TRIGGER legacy_review_queue_extraction_revision/,
+    );
+    expect(migration).toMatch(
+      /CREATE FUNCTION discard_legacy_entity_extraction_projection\([\s\S]*?DELETE FROM "letter_persons"[\s\S]*?DELETE FROM "letter_places"[\s\S]*?DELETE FROM "person_relationships"[\s\S]*?DELETE FROM "entity_review_queue"/,
+    );
+    expect(migration).not.toMatch(/VALIDATE CONSTRAINT/i);
+  });
+
   it('keeps extra-content lease metadata stage-specific and rollout-compatible', async () => {
     const schema = await readFile(path.join(sourceRoot, 'db/schema.ts'), 'utf8');
     const migration = await readFile(

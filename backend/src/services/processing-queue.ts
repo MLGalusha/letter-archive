@@ -24,6 +24,10 @@ import {
 } from './letter/extra-content-job.js';
 import { shouldUseCloudRunWorkerJob, triggerWorkerJob } from './cloud-run-job.js';
 import {
+  cancelLegacyEntityExtraction,
+  failEntityExtraction,
+} from './letters.js';
+import {
   shouldAbortProcessing as runnerShouldAbort,
   updateJobProgress as runnerUpdateJobProgress,
   clearJobProgress as runnerClearJobProgress,
@@ -1042,11 +1046,19 @@ export async function removeFromQueue(letterId: string, type: QueueJobType): Pro
     if (letter.entityExtractionStatus !== 'PENDING') {
       throw new ProcessingError(`Cannot remove: entity extraction status is ${letter.entityExtractionStatus}`, 400);
     }
-    await db.update(letters).set({
+    const removed = await db.update(letters).set({
       entityExtractionStatus: 'FAILED',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
       entityExtractionError: 'Removed from queue by admin',
       updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
+    }).where(and(
+      eq(letters.id, letterId),
+      eq(letters.entityExtractionStatus, 'PENDING'),
+    )).returning({ id: letters.id });
+    if (removed.length === 0) {
+      throw new ProcessingError('Cannot remove: entity extraction is no longer pending', 409);
+    }
   }
 
   return { message: 'Removed from queue' };
@@ -1134,6 +1146,8 @@ export async function clearQueue(type: QueueJobType): Promise<{ message: string;
         .update(letters)
         .set({
           entityExtractionStatus: 'FAILED',
+          entityExtractionRunId: null,
+          entityExtractionRunRevision: null,
           entityExtractionError: 'Cleared from queue by admin',
           updatedAt: new Date(),
         })
@@ -1222,11 +1236,19 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
     if (letter.entityExtractionStatus !== 'FAILED') {
       throw new ProcessingError(`Cannot retry: entity extraction status is ${letter.entityExtractionStatus}`, 400);
     }
-    await db.update(letters).set({
+    const retried = await db.update(letters).set({
       entityExtractionStatus: 'PENDING',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
       entityExtractionError: null,
       updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
+    }).where(and(
+      eq(letters.id, letterId),
+      eq(letters.entityExtractionStatus, 'FAILED'),
+    )).returning({ id: letters.id });
+    if (retried.length === 0) {
+      throw new ProcessingError('Cannot retry: entity extraction changed since it was loaded', 409);
+    }
   }
 
   void requestBackgroundWorkerRun(`retry:${type}`);
@@ -1270,11 +1292,27 @@ export async function cancelActiveJob(letterId: string, type: QueueJobType): Pro
     if (letter.entityExtractionStatus !== 'RUNNING') {
       throw new ProcessingError(`Cannot cancel: entity extraction status is ${letter.entityExtractionStatus}`, 400);
     }
-    await db.update(letters).set({
-      entityExtractionStatus: 'FAILED',
-      entityExtractionError: 'Cancelled by admin',
-      updatedAt: new Date(),
-    }).where(eq(letters.id, letterId));
+    if (!letter.entityExtractionRunId && letter.entityExtractionRunRevision === null) {
+      if (!await cancelLegacyEntityExtraction(letterId, 'Cancelled by admin')) {
+        throw new ProcessingError(
+          'Cannot cancel: legacy entity extraction attempt changed since it was loaded',
+          409,
+        );
+      }
+    } else if (!letter.entityExtractionRunId || letter.entityExtractionRunRevision === null) {
+      throw new ProcessingError('Cannot cancel: entity extraction job has no active run identity', 409);
+    } else if (!await failEntityExtraction(
+      letterId,
+      {
+        runId: letter.entityExtractionRunId,
+        revision: letter.entityExtractionRunRevision,
+      },
+      'Cancelled by admin',
+    )) {
+      // If commit held the row lock first, its SUCCESS transition clears this
+      // token and the stale cancellation cannot overwrite the new projection.
+      throw new ProcessingError('Cannot cancel: entity extraction attempt changed since it was loaded', 409);
+    }
   }
 
   clearJobProgress(letterId, type);

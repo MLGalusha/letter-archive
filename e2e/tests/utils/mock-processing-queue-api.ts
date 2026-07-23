@@ -1,5 +1,8 @@
 import type { Page } from '@playwright/test';
-import { API_BASE_URL } from './test-helpers';
+import {
+  API_BASE_URL,
+  installMockImageSessionApi,
+} from './test-helpers';
 
 type ProcessKey =
   | 'transcription'
@@ -211,6 +214,8 @@ export async function installMockProcessingQueueApi(
     withoutActiveBatch?: boolean;
   } = {},
 ) {
+  await installMockImageSessionApi(page);
+
   await page.addInitScript(() => {
     localStorage.setItem('adminToken', 'mock-token');
   });

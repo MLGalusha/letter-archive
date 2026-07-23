@@ -5,6 +5,7 @@ import {
   letterPersons,
   letters,
   personRelationships,
+  type Database,
   type PersonRelationshipType,
   type RelationshipType as MetadataRelationshipType,
 } from '../../db/index.js';
@@ -14,6 +15,19 @@ import { addToReviewQueue } from './review-queue.js';
 
 const STRICT_AUTO_LINK_SIMILARITY = 95;
 const STRICT_AUTO_LINK_MIN_GAP = 8;
+
+export type ParticipantSyncDatabase = Pick<
+  Database,
+  'delete' | 'execute' | 'insert' | 'query' | 'select' | 'update'
+>;
+
+export function buildHumanEntityProvenancePatch(actor: string, now: Date = new Date()) {
+  return {
+    entityExtractionRevision: null,
+    confirmedBy: actor,
+    confirmedAt: now,
+  };
+}
 
 export function normalizeEntityName(name: string | null | undefined): string | null {
   if (name == null) return null;
@@ -74,8 +88,9 @@ function getRows<T>(results: unknown): T[] {
 
 async function findExactPersonMatchesByName(
   name: string,
+  database: ParticipantSyncDatabase,
 ): Promise<Array<{ id: string; canonicalName: string }>> {
-  const results = await db.execute<ExactMatchRow>(sql`
+  const results = await database.execute<ExactMatchRow>(sql`
     SELECT id, canonical_name
     FROM canonical_persons
     WHERE lower(canonical_name) = lower(${name})
@@ -104,8 +119,11 @@ interface ResolveParticipantResult {
     | 'ambiguous-exact-created';
 }
 
-async function createCanonicalPersonForManualEntry(name: string): Promise<string> {
-  const [person] = await db
+async function createCanonicalPersonForManualEntry(
+  name: string,
+  database: ParticipantSyncDatabase,
+): Promise<string> {
+  const [person] = await database
     .insert(canonicalPersons)
     .values({
       canonicalName: name,
@@ -119,8 +137,9 @@ async function resolveParticipantFromName(
   letterId: string,
   role: 'sender' | 'recipient',
   name: string,
+  database: ParticipantSyncDatabase,
 ): Promise<ResolveParticipantResult> {
-  const exactMatches = await findExactPersonMatchesByName(name);
+  const exactMatches = await findExactPersonMatchesByName(name, database);
 
   if (exactMatches.length === 1) {
     return {
@@ -132,7 +151,7 @@ async function resolveParticipantFromName(
   }
 
   if (exactMatches.length > 1) {
-    const personId = await createCanonicalPersonForManualEntry(name);
+    const personId = await createCanonicalPersonForManualEntry(name, database);
     await addToReviewQueue({
       entityType: 'person',
       extractedText: name,
@@ -140,7 +159,7 @@ async function resolveParticipantFromName(
       suggestedEntityId: exactMatches[0].id,
       context: `Manual ${role} edit matched multiple existing people with the same name`,
       confidence: 100,
-    });
+    }, database);
     return {
       personId,
       confidence: 100,
@@ -149,7 +168,7 @@ async function resolveParticipantFromName(
     };
   }
 
-  const fuzzyMatches = await findMatchingPersons(name, 3);
+  const fuzzyMatches = await findMatchingPersons(name, 3, database);
   const decision = decideManualNameAutoLink(fuzzyMatches);
   if (decision.mode === 'auto-link' && decision.selectedEntityId) {
     return {
@@ -160,7 +179,7 @@ async function resolveParticipantFromName(
     };
   }
 
-  const personId = await createCanonicalPersonForManualEntry(name);
+  const personId = await createCanonicalPersonForManualEntry(name, database);
   if (fuzzyMatches.length > 0 && fuzzyMatches[0].similarity >= 50) {
     await addToReviewQueue({
       entityType: 'person',
@@ -169,7 +188,7 @@ async function resolveParticipantFromName(
       suggestedEntityId: fuzzyMatches[0].entityId,
       context: `Manual ${role} edit created a new person due to ambiguous fuzzy match`,
       confidence: fuzzyMatches[0].similarity,
-    });
+    }, database);
   }
 
   return {
@@ -180,15 +199,19 @@ async function resolveParticipantFromName(
   };
 }
 
-async function clearRoleLinks(letterId: string, role: 'sender' | 'recipient'): Promise<number> {
-  const existing = await db
+async function clearRoleLinks(
+  letterId: string,
+  role: 'sender' | 'recipient',
+  database: ParticipantSyncDatabase,
+): Promise<number> {
+  const existing = await database
     .select({ id: letterPersons.id })
     .from(letterPersons)
     .where(and(eq(letterPersons.letterId, letterId), eq(letterPersons.role, role)));
 
   if (existing.length === 0) return 0;
 
-  await db
+  await database
     .delete(letterPersons)
     .where(
       inArray(
@@ -206,32 +229,40 @@ async function upsertRoleLink(input: {
   nameAsWritten: string;
   confidence: number;
   actor: string;
+  database: ParticipantSyncDatabase;
 }): Promise<void> {
-  const { letterId, role, personId, nameAsWritten, confidence, actor } = input;
+  const {
+    letterId,
+    role,
+    personId,
+    nameAsWritten,
+    confidence,
+    actor,
+    database,
+  } = input;
+  const humanProvenance = buildHumanEntityProvenancePatch(actor);
 
-  const roleLinks = await db.query.letterPersons.findMany({
+  const roleLinks = await database.query.letterPersons.findMany({
     where: and(eq(letterPersons.letterId, letterId), eq(letterPersons.role, role)),
   });
 
   const selected = roleLinks.find((link) => link.personId === personId);
 
   if (!selected) {
-    await db.insert(letterPersons).values({
+    await database.insert(letterPersons).values({
       letterId,
       role,
       personId,
       nameAsWritten,
       confidence,
-      confirmedBy: actor,
-      confirmedAt: new Date(),
+      ...humanProvenance,
     }).onConflictDoNothing();
   }
 
-  await db.update(letterPersons).set({
+  await database.update(letterPersons).set({
     nameAsWritten,
     confidence,
-    confirmedBy: actor,
-    confirmedAt: new Date(),
+    ...humanProvenance,
   }).where(
     and(
       eq(letterPersons.letterId, letterId),
@@ -245,7 +276,7 @@ async function upsertRoleLink(input: {
     .map((link) => link.id);
 
   if (linksToDelete.length > 0) {
-    await db.delete(letterPersons).where(inArray(letterPersons.id, linksToDelete));
+    await database.delete(letterPersons).where(inArray(letterPersons.id, linksToDelete));
   }
 }
 
@@ -292,8 +323,10 @@ export function mapMetadataRelationshipToPersonRelationship(
 export async function syncSenderRecipientRelationshipFromLetter(
   letterId: string,
   relationshipType: MetadataRelationshipType | null | undefined,
+  actor: string = 'admin',
+  database: ParticipantSyncDatabase = db,
 ): Promise<void> {
-  const roleLinks = await db
+  const roleLinks = await database
     .select({
       role: letterPersons.role,
       personId: letterPersons.personId,
@@ -313,8 +346,10 @@ export async function syncSenderRecipientRelationshipFromLetter(
 
   const [personAId, personBId] = [sender, recipient].sort();
   const mappedType = mapMetadataRelationshipToPersonRelationship(relationshipType);
+  const now = new Date();
+  const humanProvenance = buildHumanEntityProvenancePatch(actor, now);
 
-  const existing = await db.query.personRelationships.findFirst({
+  const existing = await database.query.personRelationships.findFirst({
     where: and(
       eq(personRelationships.personAId, personAId),
       eq(personRelationships.personBId, personBId),
@@ -322,14 +357,13 @@ export async function syncSenderRecipientRelationshipFromLetter(
   });
 
   if (!existing) {
-    await db.insert(personRelationships).values({
+    await database.insert(personRelationships).values({
       personAId,
       personBId,
       relationshipType: mappedType,
       discoveredInLetterId: letterId,
       confidence: 95,
-      confirmedBy: 'admin',
-      confirmedAt: new Date(),
+      ...humanProvenance,
     });
     return;
   }
@@ -337,11 +371,12 @@ export async function syncSenderRecipientRelationshipFromLetter(
   if (mappedType === 'unknown') return;
 
   if (existing.relationshipType === 'unknown' || existing.discoveredInLetterId === letterId) {
-    await db.update(personRelationships).set({
+    await database.update(personRelationships).set({
       relationshipType: mappedType,
       discoveredInLetterId: existing.discoveredInLetterId || letterId,
       confidence: Math.max(existing.confidence, 95),
-      updatedAt: new Date(),
+      ...humanProvenance,
+      updatedAt: now,
     }).where(eq(personRelationships.id, existing.id));
   }
 }
@@ -367,8 +402,9 @@ export async function syncLetterParticipantsFromMetadata(input: {
   recipient?: string | null;
   relationshipType?: MetadataRelationshipType | null;
   actor?: string;
+  database?: ParticipantSyncDatabase;
 }): Promise<ParticipantSyncResult> {
-  const { letterId, actor = 'admin' } = input;
+  const { letterId, actor = 'admin', database = db } = input;
   const result: ParticipantSyncResult = {
     sender: { action: 'unchanged' },
     recipient: { action: 'unchanged' },
@@ -377,13 +413,14 @@ export async function syncLetterParticipantsFromMetadata(input: {
   if (input.sender !== undefined) {
     const normalizedSender = normalizeEntityName(input.sender);
     if (!normalizedSender) {
-      await clearRoleLinks(letterId, 'sender');
+      await clearRoleLinks(letterId, 'sender', database);
       result.sender = { action: 'cleared' };
     } else {
       const senderResolution = await resolveParticipantFromName(
         letterId,
         'sender',
         normalizedSender,
+        database,
       );
       await upsertRoleLink({
         letterId,
@@ -392,6 +429,7 @@ export async function syncLetterParticipantsFromMetadata(input: {
         nameAsWritten: normalizedSender,
         confidence: senderResolution.confidence,
         actor,
+        database,
       });
       result.sender = {
         action: 'linked',
@@ -405,13 +443,14 @@ export async function syncLetterParticipantsFromMetadata(input: {
   if (input.recipient !== undefined) {
     const normalizedRecipient = normalizeEntityName(input.recipient);
     if (!normalizedRecipient) {
-      await clearRoleLinks(letterId, 'recipient');
+      await clearRoleLinks(letterId, 'recipient', database);
       result.recipient = { action: 'cleared' };
     } else {
       const recipientResolution = await resolveParticipantFromName(
         letterId,
         'recipient',
         normalizedRecipient,
+        database,
       );
       await upsertRoleLink({
         letterId,
@@ -420,6 +459,7 @@ export async function syncLetterParticipantsFromMetadata(input: {
         nameAsWritten: normalizedRecipient,
         confidence: recipientResolution.confidence,
         actor,
+        database,
       });
       result.recipient = {
         action: 'linked',
@@ -435,7 +475,7 @@ export async function syncLetterParticipantsFromMetadata(input: {
     input.recipient !== undefined ||
     input.relationshipType !== undefined
   ) {
-    const currentLetter = await db.query.letters.findFirst({
+    const currentLetter = await database.query.letters.findFirst({
       where: eq(letters.id, letterId),
       columns: {
         senderRecipientRelationship: true,
@@ -445,6 +485,8 @@ export async function syncLetterParticipantsFromMetadata(input: {
     await syncSenderRecipientRelationshipFromLetter(
       letterId,
       input.relationshipType ?? currentLetter?.senderRecipientRelationship,
+      actor,
+      database,
     );
   }
 

@@ -3,11 +3,9 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useHeaderDock } from "../../contexts/HeaderDockContext";
 import useHeaderScroll from "../../hooks/useHeaderScroll";
-import { prefetchCollections } from "../../api/collections";
 
 function preloadCollectionsRoute() {
   void import("../../pages/CollectionsPage");
-  prefetchCollections();
 }
 
 function preloadBlogRoute() {

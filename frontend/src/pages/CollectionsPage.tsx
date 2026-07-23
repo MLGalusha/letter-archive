@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
-import { getCachedCollections, listCollections, type CollectionInfo } from '../api/collections';
+import { listCollections, type CollectionInfo } from '../api/collections';
 import Footer from '../components/Footer/Footer';
 import BackToTop from '../components/BackToTop';
 import { saveCollectionsSort, loadCollectionsSort } from '../utils/searchPersistence';
@@ -73,16 +73,11 @@ export default function CollectionsPage() {
     saveCollectionsSort(sortField, sortOrder);
   }, [sortField, sortOrder]);
 
-  const [collectionsData, setCollectionsData] = useState<CollectionInfo[] | null>(() => {
-    const cachedCollections = getCachedCollections();
-    return cachedCollections ? cachedCollections.filter(hasPublishedLetters) : null;
-  });
-  const [loading, setLoading] = useState(collectionsData === null);
+  const [collectionsData, setCollectionsData] = useState<CollectionInfo[] | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (collectionsData !== null) return;
-
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -104,7 +99,7 @@ export default function CollectionsPage() {
     return () => {
       cancelled = true;
     };
-  }, [collectionsData]);
+  }, []);
 
   const collections: CollectionInfo[] = collectionsData ?? [];
   const showLoadingShell = loading && collections.length === 0 && !error;

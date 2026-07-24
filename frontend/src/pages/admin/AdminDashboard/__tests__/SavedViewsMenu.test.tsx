@@ -1,3 +1,4 @@
+import { useState, type ComponentProps } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -31,12 +32,29 @@ const savedView: SavedDashboardView = {
   },
 };
 
+type SavedViewsMenuHarnessProps = Omit<
+  ComponentProps<typeof SavedViewsMenu>,
+  "open" | "onOpenChange"
+>;
+
+function SavedViewsMenuHarness(props: SavedViewsMenuHarnessProps) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <SavedViewsMenu
+      {...props}
+      open={open}
+      onOpenChange={setOpen}
+    />
+  );
+}
+
 describe("SavedViewsMenu", () => {
   it("renders saved views inside the shared manager dialog", async () => {
     const user = userEvent.setup();
 
     render(
-      <SavedViewsMenu
+      <SavedViewsMenuHarness
         savedViews={[savedView]}
         onSaveView={vi.fn()}
         onApplyView={vi.fn()}
@@ -56,7 +74,7 @@ describe("SavedViewsMenu", () => {
     const onSaveView = vi.fn();
 
     render(
-      <SavedViewsMenu
+      <SavedViewsMenuHarness
         savedViews={[]}
         onSaveView={onSaveView}
         onApplyView={vi.fn()}
@@ -77,7 +95,7 @@ describe("SavedViewsMenu", () => {
     const onSaveView = vi.fn();
 
     render(
-      <SavedViewsMenu
+      <SavedViewsMenuHarness
         savedViews={[]}
         onSaveView={onSaveView}
         onApplyView={vi.fn()}
@@ -97,7 +115,7 @@ describe("SavedViewsMenu", () => {
     const onSaveView = vi.fn();
 
     render(
-      <SavedViewsMenu
+      <SavedViewsMenuHarness
         savedViews={[]}
         onSaveView={onSaveView}
         onApplyView={vi.fn()}
@@ -117,7 +135,7 @@ describe("SavedViewsMenu", () => {
     const onApplyView = vi.fn();
 
     render(
-      <SavedViewsMenu
+      <SavedViewsMenuHarness
         savedViews={[savedView]}
         onSaveView={vi.fn()}
         onApplyView={onApplyView}
@@ -137,7 +155,7 @@ describe("SavedViewsMenu", () => {
     const onDeleteView = vi.fn();
 
     render(
-      <SavedViewsMenu
+      <SavedViewsMenuHarness
         savedViews={[savedView]}
         onSaveView={vi.fn()}
         onApplyView={vi.fn()}
@@ -149,5 +167,6 @@ describe("SavedViewsMenu", () => {
     await user.click(screen.getByRole("button", { name: "Delete Needs review" }));
 
     expect(onDeleteView).toHaveBeenCalledWith("view-1");
+    expect(screen.getByRole("dialog", { name: "Saved views" })).toBeInTheDocument();
   });
 });

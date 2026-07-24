@@ -126,9 +126,15 @@ vi.mock("../../../components/common/Icon", () => ({
 vi.mock("../AdminDashboard/RecentActivityTable", () => ({
   default: ({
     filteredLetters,
+    columns,
     selection,
   }: {
     filteredLetters: Letter[];
+    columns: {
+      showColumnMenu: boolean;
+      onToggleColumnMenu: () => void;
+      onCloseColumnMenu: () => void;
+    };
     selection: {
       onCheckboxChange: (letterId: string, index: number, options?: { shiftKey?: boolean }) => void;
       selectedIds: Set<string>;
@@ -136,6 +142,20 @@ vi.mock("../AdminDashboard/RecentActivityTable", () => ({
   }) => (
     <div>
       <div>Recent activity table</div>
+      <button
+        type="button"
+        aria-expanded={columns.showColumnMenu}
+        onClick={columns.onToggleColumnMenu}
+      >
+        Configure columns
+      </button>
+      {columns.showColumnMenu && (
+        <div role="dialog" aria-label="Column settings">
+          <button type="button" onClick={columns.onCloseColumnMenu}>
+            Close columns
+          </button>
+        </div>
+      )}
       {filteredLetters.map((letter, index) => (
         <button
           key={letter.id}
@@ -147,6 +167,10 @@ vi.mock("../AdminDashboard/RecentActivityTable", () => ({
       ))}
     </div>
   ),
+}));
+
+vi.mock("../AdminCollectionsListPage", () => ({
+  default: () => <div>Collections dashboard</div>,
 }));
 
 vi.mock("../../../utils/recentEdits", () => ({
@@ -250,9 +274,10 @@ describe("AdminDashboard processing", () => {
 
   afterEach(() => {
     consoleErrorSpy.mockRestore();
+    vi.unstubAllGlobals();
   });
 
-  it("closes dashboard filters when the mobile admin nav opens", async () => {
+  it("closes every dashboard manager when the mobile admin nav opens", async () => {
     const user = userEvent.setup();
 
     render(
@@ -269,6 +294,128 @@ describe("AdminDashboard processing", () => {
     await waitFor(() => {
       expect(screen.queryByRole("heading", { name: "Filters" })).not.toBeInTheDocument();
     });
+
+    await user.click(screen.getByRole("button", { name: "Save view" }));
+    expect(screen.getByRole("dialog", { name: "Saved views" })).toBeInTheDocument();
+
+    window.dispatchEvent(new CustomEvent("admin-mobile-nav-open"));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Saved views" })).not.toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /Sort/i }));
+    expect(screen.getByRole("dialog", { name: "Sort rules" })).toBeInTheDocument();
+
+    window.dispatchEvent(new CustomEvent("admin-mobile-nav-open"));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Sort rules" })).not.toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Configure columns" }));
+    expect(screen.getByRole("dialog", { name: "Column settings" })).toBeInTheDocument();
+
+    window.dispatchEvent(new CustomEvent("admin-mobile-nav-open"));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Column settings" })).not.toBeInTheDocument();
+    });
+  });
+
+  it("keeps only one letter dashboard manager open at a time", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Configure columns" }));
+    expect(screen.getByRole("dialog", { name: "Column settings" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save view" }));
+
+    expect(screen.queryByRole("dialog", { name: "Column settings" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Saved views" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Sort/i }));
+
+    expect(screen.queryByRole("dialog", { name: "Saved views" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Sort rules" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Filters/i }));
+
+    expect(screen.queryByRole("dialog", { name: "Sort rules" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Filters" })).toBeInTheDocument();
+  });
+
+  it("does not reopen a letter manager after visiting Collections", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /Filters/i }));
+    expect(screen.getByRole("heading", { name: "Filters" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Collections" }));
+    expect(screen.getByText("Collections dashboard")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Letters" }));
+
+    expect(screen.queryByRole("heading", { name: "Filters" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Filters/i })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  it("keeps the active manager open when the selected view is clicked again", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    const filtersTrigger = await screen.findByRole("button", { name: /Filters/i });
+    await user.click(filtersTrigger);
+    expect(screen.getByRole("heading", { name: "Filters" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Letters" }));
+
+    expect(screen.getByRole("heading", { name: "Filters" })).toBeInTheDocument();
+    expect(filtersTrigger).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("preserves selection for Columns while toolbar managers retain mobile dismissal", async () => {
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Select Test Letter" }));
+    expect(screen.getByRole("button", { name: "Selected Test Letter" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Configure columns" }));
+    expect(screen.getByRole("button", { name: "Selected Test Letter" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Filters/i }));
+    expect(screen.getByRole("button", { name: "Select Test Letter" })).toBeInTheDocument();
   });
 
   it("opens the sender and recipient modal when exactly one letter is selected", async () => {

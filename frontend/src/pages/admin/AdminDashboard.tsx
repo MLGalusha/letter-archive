@@ -26,6 +26,7 @@ import { useDashboardFilteredSelection } from "./AdminDashboard/useDashboardFilt
 import { useDashboardFlagActions } from "./AdminDashboard/useDashboardFlagActions";
 import { useDashboardFilters } from "./AdminDashboard/useDashboardFilters";
 import { useDashboardLettersData } from "./AdminDashboard/useDashboardLettersData";
+import { useDashboardManagerState } from "./AdminDashboard/useDashboardManagerState";
 import { useDashboardPersistedState } from "./AdminDashboard/useDashboardPersistedState";
 import { useDashboardProcessingActions } from "./AdminDashboard/useDashboardProcessingActions";
 import { useDashboardRowSelection } from "./AdminDashboard/useDashboardRowSelection";
@@ -37,14 +38,30 @@ import { useDashboardViewState } from "./AdminDashboard/useDashboardViewState";
 import { createDashboardCommittedQuery } from "./AdminDashboard/dashboardQueryModel";
 import { getDashboardDateFilterValue } from "./AdminDashboard/dashboardFilterStateModel";
 import { createDashboardStoredState } from "./AdminDashboard/dashboardStoredStateModel";
+import type { DashboardView } from "./AdminDashboard/types";
 import CollectionsDashboard from "./AdminCollectionsListPage";
 import "./AdminDashboard.css";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const isMobile = useIsMobile(768);
-  const { dashboardView, handleDashboardViewChange } = useDashboardViewState();
+  const {
+    dashboardView,
+    handleDashboardViewChange: changeDashboardView,
+  } = useDashboardViewState();
+  const {
+    activeManager,
+    setManagerOpen,
+    toggleManager,
+    closeManager,
+    closeAllManagers,
+  } = useDashboardManagerState();
+  const handleDashboardViewChange = (view: DashboardView) => {
+    if (view === dashboardView) return;
+
+    closeAllManagers();
+    changeDashboardView(view);
+  };
 
   const [initialStoredState] = useState(loadPersistedState);
   const dashboardFilters = useDashboardFilters(initialStoredState);
@@ -75,14 +92,10 @@ export default function AdminDashboard() {
     columnOrder,
     replaceStoredColumns,
     orderedColumns,
-    showColumnMenu,
-    columnMenuRef,
     toggleColumnVisibility,
     moveColumn,
     reorderColumn,
     resetColumnOrder,
-    toggleColumnMenu,
-    closeColumnMenu,
   } = useDashboardColumns();
 
   useDashboardPersistedState(dashboardStoredState);
@@ -108,14 +121,9 @@ export default function AdminDashboard() {
   }, [navigate]);
 
   useEffect(() => {
-    const closeDashboardOverlays = () => {
-      setFiltersOpen(false);
-      closeColumnMenu();
-    };
-
-    window.addEventListener("admin-mobile-nav-open", closeDashboardOverlays);
-    return () => window.removeEventListener("admin-mobile-nav-open", closeDashboardOverlays);
-  }, [closeColumnMenu]);
+    window.addEventListener("admin-mobile-nav-open", closeAllManagers);
+    return () => window.removeEventListener("admin-mobile-nav-open", closeAllManagers);
+  }, [closeAllManagers]);
 
   const {
     selectedIds,
@@ -281,8 +289,8 @@ export default function AdminDashboard() {
         <DashboardToolbar
           dashboardView={dashboardView}
           onDashboardViewChange={handleDashboardViewChange}
-          filtersOpen={filtersOpen}
-          onFiltersOpenChange={setFiltersOpen}
+          activeManager={activeManager}
+          onManagerOpenChange={setManagerOpen}
           paginationTotal={pagination.total}
           stats={stats}
           sortColumns={sortColumns}
@@ -306,14 +314,13 @@ export default function AdminDashboard() {
           columns={{
             visibleColumns,
             orderedColumns,
-            showColumnMenu,
-            onToggleColumnMenu: toggleColumnMenu,
-            onCloseColumnMenu: closeColumnMenu,
+            showColumnMenu: activeManager === "columns",
+            onToggleColumnMenu: () => toggleManager("columns"),
+            onCloseColumnMenu: () => closeManager("columns"),
             onToggleColumn: toggleColumnVisibility,
             onMoveColumn: moveColumn,
             onReorderColumn: reorderColumn,
             onResetColumnOrder: resetColumnOrder,
-            columnMenuRef,
           }}
           selection={{
             selectedIds,

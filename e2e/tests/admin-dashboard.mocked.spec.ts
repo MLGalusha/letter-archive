@@ -29,6 +29,53 @@ test.describe('@mocked Admin Dashboard', () => {
     await expect(page.locator('.filter-hidden .filter-option-count')).toHaveText('1');
   });
 
+  test('keeps letter dashboard managers exclusive and dismisses them together', async ({
+    page,
+  }) => {
+    await installMockAdminDashboardApi(page);
+
+    await page.goto('/admin');
+    await waitForAdminDashboardReady(page);
+
+    const filtersTrigger = page.getByRole('button', { name: 'Filters' });
+    await filtersTrigger.click();
+    await expect(page.getByRole('heading', { name: 'Filters' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Save view' }).click();
+    await expect(page.getByRole('heading', { name: 'Filters' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Saved views' })).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+
+    await page.getByRole('button', { name: /Sort/i }).click();
+    await expect(page.getByRole('dialog', { name: 'Saved views' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Sort rules' })).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+
+    await page.getByRole('button', { name: 'Configure columns' }).click();
+    await expect(page.getByRole('dialog', { name: 'Sort rules' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Column settings' })).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+
+    await page.evaluate(() => {
+      window.dispatchEvent(new CustomEvent('admin-mobile-nav-open'));
+    });
+
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(filtersTrigger).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('button', { name: 'Save view' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    await expect(page.getByRole('button', { name: /Sort/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    await expect(page.getByRole('button', { name: 'Configure columns' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
   test('normalizes hostile stored state and safely applies a partial legacy view', async ({
     page,
   }) => {

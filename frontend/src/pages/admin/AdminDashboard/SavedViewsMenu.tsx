@@ -8,8 +8,8 @@ interface SavedViewsMenuProps {
   onSaveView: (name: string) => void;
   onApplyView: (view: SavedDashboardView) => void;
   onDeleteView: (viewId: string) => void;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 export default function SavedViewsMenu({
@@ -17,19 +17,14 @@ export default function SavedViewsMenu({
   onSaveView,
   onApplyView,
   onDeleteView,
-  open: controlledOpen,
+  open,
   onOpenChange,
 }: SavedViewsMenuProps) {
-  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [newViewName, setNewViewName] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
-  const open = controlledOpen ?? uncontrolledOpen;
 
   const setOpen = (nextOpen: boolean) => {
-    if (controlledOpen === undefined) {
-      setUncontrolledOpen(nextOpen);
-    }
-    onOpenChange?.(nextOpen);
+    onOpenChange(nextOpen);
   };
 
   const handleSaveView = () => {

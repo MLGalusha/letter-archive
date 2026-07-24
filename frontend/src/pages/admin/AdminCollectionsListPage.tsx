@@ -115,7 +115,6 @@ export default function CollectionsDashboard() {
   const [columnOrder, setColumnOrder] = useState<CollectionColumnId[]>(initialColumnState.columnOrder);
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const lastClickedIndex = useRef<number | null>(null);
-  const columnMenuRef = useRef<HTMLTableCellElement | null>(null);
   const columnById = useMemo(() => new Map(COLLECTION_COLUMNS.map((column) => [column.id, column])), []);
   const orderedColumns = useMemo(
     () => columnOrder.map((id) => columnById.get(id)).filter((column): column is typeof COLLECTION_COLUMNS[number] => Boolean(column)),
@@ -305,7 +304,6 @@ export default function CollectionsDashboard() {
                   onMoveColumn={handleMoveColumn}
                   onReorderColumn={handleReorderColumn}
                   onResetColumnOrder={handleResetColumnOrder}
-                  columnMenuRef={columnMenuRef}
                 />
                 {visibleOrderedColumns.map((col) => (
                   <th key={col.id}>{col.label}</th>

@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import ActiveFilterChips from "./ActiveFilterChips";
 import DashboardFilterPanel from "./DashboardFilterPanel";
 import DashboardFilterTrigger from "./DashboardFilterTrigger";
@@ -12,6 +12,7 @@ import type {
   DashboardFilterActions,
   DashboardFilterDrafts,
 } from "./useDashboardFilters";
+import type { DashboardManager } from "./useDashboardManagerState";
 import type {
   DashboardView,
   DashboardFilterStats,
@@ -19,13 +20,11 @@ import type {
   SortColumn,
 } from "./types";
 
-type ToolbarManager = "savedViews" | "sort";
-
 interface DashboardToolbarProps {
   dashboardView: DashboardView;
   onDashboardViewChange: (view: DashboardView) => void;
-  filtersOpen: boolean;
-  onFiltersOpenChange: Dispatch<SetStateAction<boolean>>;
+  activeManager: DashboardManager | null;
+  onManagerOpenChange: (manager: DashboardManager, open: boolean) => void;
   paginationTotal: number;
   stats: DashboardFilterStats;
   sortColumns: SortColumn[];
@@ -44,8 +43,8 @@ interface DashboardToolbarProps {
 export default function DashboardToolbar({
   dashboardView,
   onDashboardViewChange,
-  filtersOpen,
-  onFiltersOpenChange,
+  activeManager,
+  onManagerOpenChange,
   paginationTotal,
   stats,
   sortColumns,
@@ -67,31 +66,28 @@ export default function DashboardToolbar({
       dateButtonText,
   });
 
-  const [openManager, setOpenManager] = useState<ToolbarManager | null>(null);
+  const filtersOpen = activeManager === "filters";
 
   const handleFiltersToggle = () => {
     const nextFiltersOpen = !filtersOpen;
     if (nextFiltersOpen) {
-      setOpenManager(null);
       onManagerOpen?.();
     }
-    onFiltersOpenChange(nextFiltersOpen);
+    onManagerOpenChange("filters", nextFiltersOpen);
   };
 
   const handleSavedViewsOpenChange = (open: boolean) => {
-    setOpenManager(open ? "savedViews" : null);
     if (open) {
-      onFiltersOpenChange(false);
       onManagerOpen?.();
     }
+    onManagerOpenChange("savedViews", open);
   };
 
   const handleSortOpenChange = (open: boolean) => {
-    setOpenManager(open ? "sort" : null);
     if (open) {
-      onFiltersOpenChange(false);
       onManagerOpen?.();
     }
+    onManagerOpenChange("sort", open);
   };
 
   return (
@@ -121,14 +117,14 @@ export default function DashboardToolbar({
               onSaveView={onSaveView}
               onApplyView={onApplyView}
               onDeleteView={onDeleteView}
-              open={openManager === "savedViews"}
+              open={activeManager === "savedViews"}
               onOpenChange={handleSavedViewsOpenChange}
             />
 
             <DashboardSortControl
               sortColumns={sortColumns}
               setSortColumns={setSortColumns}
-              open={openManager === "sort"}
+              open={activeManager === "sort"}
               onOpenChange={handleSortOpenChange}
             />
           </>
@@ -148,7 +144,7 @@ export default function DashboardToolbar({
               type="button"
               className="filter-panel-backdrop"
               aria-label="Close filters"
-              onClick={() => onFiltersOpenChange(false)}
+              onClick={() => onManagerOpenChange("filters", false)}
             />
           )}
           <DashboardFilterPanel
@@ -159,7 +155,7 @@ export default function DashboardToolbar({
             filterActions={filterActions}
             dateButtonText={dateButtonText}
             activeFilterCount={activeFilterCount}
-            onClose={() => onFiltersOpenChange(false)}
+            onClose={() => onManagerOpenChange("filters", false)}
           />
         </>
       )}

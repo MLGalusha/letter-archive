@@ -1,4 +1,4 @@
-import type { RefObject, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Icon } from "../../../components/common/Icon";
 import ColumnToggleHeader from "./ColumnToggleHeader";
 import type { ColumnDef, ColumnId } from "./types";
@@ -67,7 +67,6 @@ interface RecentActivityTableHeaderProps {
   onMoveColumn: (id: ColumnId, direction: -1 | 1) => void;
   onReorderColumn: (id: ColumnId, targetIndex: number) => void;
   onResetColumnOrder: () => void;
-  columnMenuRef: RefObject<HTMLTableCellElement | null>;
 }
 
 export default function RecentActivityTableHeader({
@@ -80,7 +79,6 @@ export default function RecentActivityTableHeader({
   onMoveColumn,
   onReorderColumn,
   onResetColumnOrder,
-  columnMenuRef,
 }: RecentActivityTableHeaderProps) {
   return (
     <thead>
@@ -95,7 +93,6 @@ export default function RecentActivityTableHeader({
           onMoveColumn={onMoveColumn}
           onReorderColumn={onReorderColumn}
           onResetColumnOrder={onResetColumnOrder}
-          columnMenuRef={columnMenuRef}
         />
         {orderedColumns.filter((column) => visibleColumns.has(column.id)).map((column) => {
           const header = HEADER_COLUMNS[column.id];

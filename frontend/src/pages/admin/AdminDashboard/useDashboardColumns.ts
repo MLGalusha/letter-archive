@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ALL_COLUMNS,
   COLUMN_STORAGE_KEY,
@@ -36,8 +36,6 @@ export function useDashboardColumns() {
   const [columnOrder, setColumnOrder] = useState<ColumnId[]>(
     initialColumnState.columnOrder,
   );
-  const [showColumnMenu, setShowColumnMenu] = useState(false);
-  const columnMenuRef = useRef<HTMLTableCellElement>(null);
 
   useEffect(() => {
     try {
@@ -103,14 +101,6 @@ export function useDashboardColumns() {
     setColumnOrder([...DEFAULT_COLUMN_ORDER]);
   }, []);
 
-  const toggleColumnMenu = useCallback(() => {
-    setShowColumnMenu((previous) => !previous);
-  }, []);
-
-  const closeColumnMenu = useCallback(() => {
-    setShowColumnMenu(false);
-  }, []);
-
   const columnById = new Map(ALL_COLUMNS.map((column) => [column.id, column]));
   const orderedColumns = columnOrder
     .map((id) => columnById.get(id))
@@ -121,13 +111,9 @@ export function useDashboardColumns() {
     columnOrder,
     replaceStoredColumns,
     orderedColumns,
-    showColumnMenu,
-    columnMenuRef,
     toggleColumnVisibility,
     moveColumn,
     reorderColumn,
     resetColumnOrder,
-    toggleColumnMenu,
-    closeColumnMenu,
   };
 }

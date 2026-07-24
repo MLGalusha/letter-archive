@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { DragEvent, KeyboardEvent, RefObject } from "react";
+import { useRef, useState } from "react";
+import type { DragEvent, KeyboardEvent } from "react";
 import { Icon } from "../../../components/common/Icon";
 import DashboardManagerSurface from "./DashboardManagerSurface";
 
@@ -18,7 +18,6 @@ interface ColumnToggleHeaderProps<TColumnId extends string> {
   onMoveColumn: (id: TColumnId, direction: -1 | 1) => void;
   onReorderColumn: (id: TColumnId, targetIndex: number) => void;
   onResetColumnOrder: () => void;
-  columnMenuRef: RefObject<HTMLTableCellElement | null>;
 }
 
 export default function ColumnToggleHeader<TColumnId extends string>({
@@ -31,8 +30,8 @@ export default function ColumnToggleHeader<TColumnId extends string>({
   onMoveColumn,
   onReorderColumn,
   onResetColumnOrder,
-  columnMenuRef,
 }: ColumnToggleHeaderProps<TColumnId>) {
+  const columnMenuRef = useRef<HTMLTableCellElement>(null);
   const [draggedColumn, setDraggedColumn] = useState<TColumnId | null>(null);
   const [dropTargetColumn, setDropTargetColumn] = useState<TColumnId | null>(null);
 

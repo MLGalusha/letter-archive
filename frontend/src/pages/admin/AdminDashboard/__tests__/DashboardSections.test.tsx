@@ -1,4 +1,3 @@
-import { createRef } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -38,12 +37,14 @@ describe("RecentActivityTable", () => {
     onCheckboxChange = vi.fn(),
     onCellClick = vi.fn(),
     showColumnMenu = false,
+    onCloseColumnMenu = vi.fn(),
   }: {
     selectedIds?: Set<string>;
     onRowClick?: TableSelectionModel["onRowClick"];
     onCheckboxChange?: TableSelectionModel["onCheckboxChange"];
     onCellClick?: TableCopyEditModel["onCellClick"];
     showColumnMenu?: boolean;
+    onCloseColumnMenu?: () => void;
   } = {}) {
     render(
       <RecentActivityTable
@@ -70,12 +71,11 @@ describe("RecentActivityTable", () => {
           ],
           showColumnMenu,
           onToggleColumnMenu: vi.fn(),
-          onCloseColumnMenu: vi.fn(),
+          onCloseColumnMenu,
           onToggleColumn: vi.fn(),
           onMoveColumn: vi.fn(),
           onReorderColumn: vi.fn(),
           onResetColumnOrder: vi.fn(),
-          columnMenuRef: createRef<HTMLTableCellElement>(),
         }}
         selection={{
           selectedIds,
@@ -106,7 +106,12 @@ describe("RecentActivityTable", () => {
       />,
     );
 
-    return { onCellClick, onCheckboxChange, onRowClick };
+    return {
+      onCellClick,
+      onCheckboxChange,
+      onCloseColumnMenu,
+      onRowClick,
+    };
   }
 
   it("renders rows and forwards table interactions", async () => {
@@ -132,6 +137,19 @@ describe("RecentActivityTable", () => {
     expect(screen.getByRole("dialog", { name: "Column settings" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Columns" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reset" })).toBeInTheDocument();
+  });
+
+  it("dismisses column settings from outside its locally owned boundary", async () => {
+    const user = userEvent.setup();
+    const onCloseColumnMenu = vi.fn();
+    renderRecentActivityTable({
+      showColumnMenu: true,
+      onCloseColumnMenu,
+    });
+
+    await user.click(screen.getByText("Alice"));
+
+    expect(onCloseColumnMenu).toHaveBeenCalledOnce();
   });
 
   it("exposes selected rows through checkbox and row state", () => {

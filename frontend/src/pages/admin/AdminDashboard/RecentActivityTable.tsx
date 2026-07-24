@@ -1,5 +1,4 @@
 import type React from "react";
-import type { RefObject } from "react";
 import type { Letter, ContentStatus } from "../../../types/Letter";
 import DashboardPagination from "./DashboardPagination";
 import RecentActivityRow from "./RecentActivityRow";
@@ -62,7 +61,6 @@ export interface TableColumnModel {
   onMoveColumn: (id: ColumnId, direction: -1 | 1) => void;
   onReorderColumn: (id: ColumnId, targetIndex: number) => void;
   onResetColumnOrder: () => void;
-  columnMenuRef: RefObject<HTMLTableCellElement | null>;
 }
 
 export interface TableRowActions {
@@ -107,7 +105,6 @@ export default function RecentActivityTable({
             onMoveColumn={columns.onMoveColumn}
             onReorderColumn={columns.onReorderColumn}
             onResetColumnOrder={columns.onResetColumnOrder}
-            columnMenuRef={columns.columnMenuRef}
           />
           <tbody>
             {filteredLetters.map((letter, index) => (

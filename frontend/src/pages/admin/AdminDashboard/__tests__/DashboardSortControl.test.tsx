@@ -9,11 +9,14 @@ import type { SortColumn } from "../types";
 
 function SortControlHarness({ initialSort }: { initialSort: SortColumn[] }) {
   const [sortColumns, setSortColumns] = useState(initialSort);
+  const [open, setOpen] = useState(false);
 
   return (
     <DashboardSortControl
       sortColumns={sortColumns}
       setSortColumns={setSortColumns}
+      open={open}
+      onOpenChange={setOpen}
     />
   );
 }
@@ -83,6 +86,33 @@ describe("DashboardSortControl", () => {
 
     expect(screen.getByRole("button", {
       name: /Letter date is sorted oldest first/i,
+    })).toBeInTheDocument();
+  });
+
+  it("commits an applied draft through the controlled owner before closing", async () => {
+    const user = userEvent.setup();
+    render(
+      <SortControlHarness
+        initialSort={[{ field: "letterDate", direction: "asc" }]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Sort/i }));
+    await user.click(screen.getByRole("button", {
+      name: /Letter date is sorted oldest first/i,
+    }));
+    await user.click(screen.getByRole("button", { name: "Apply sorting" }));
+
+    expect(screen.queryByRole("dialog", { name: "Sort rules" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", {
+      name: /Sort Letter date, newest first/i,
+    })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", {
+      name: /Sort Letter date, newest first/i,
+    }));
+    expect(screen.getByRole("button", {
+      name: /Letter date is sorted newest first/i,
     })).toBeInTheDocument();
   });
 

@@ -1,9 +1,10 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import DashboardToolbar from "../DashboardToolbar";
 import { MAX_DASHBOARD_SEARCH_LENGTH } from "../constants";
+import { useDashboardManagerState } from "../useDashboardManagerState";
 import type { DashboardFilterState } from "../dashboardFilterStateModel";
 import type {
   DashboardFilterActions,
@@ -32,16 +33,14 @@ function ToolbarHarness({
 }) {
   const [dashboardView, setDashboardView] =
     useState<DashboardView>(initialView);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const managerState = useDashboardManagerState();
 
   return (
     <DashboardToolbar
       dashboardView={dashboardView}
       onDashboardViewChange={setDashboardView}
-      filtersOpen={filtersOpen}
-      onFiltersOpenChange={
-        setFiltersOpen as Dispatch<SetStateAction<boolean>>
-      }
+      activeManager={managerState.activeManager}
+      onManagerOpenChange={managerState.setManagerOpen}
       paginationTotal={12}
       stats={emptyDashboardFilterStats}
       sortColumns={[{ field: "lastOpenedAt", direction: "desc" }]}

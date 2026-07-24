@@ -17,30 +17,25 @@ import type { ExtendedSortField, SortColumn } from "./types";
 interface DashboardSortControlProps {
   sortColumns: SortColumn[];
   setSortColumns: Dispatch<SetStateAction<SortColumn[]>>;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 export default function DashboardSortControl({
   sortColumns,
   setSortColumns,
-  open: controlledOpen,
+  open,
   onOpenChange,
 }: DashboardSortControlProps) {
-  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [addRulePickerOpen, setAddRulePickerOpen] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [draftSortColumns, setDraftSortColumns] = useState<SortColumn[]>(
     sortColumns.slice(0, MAX_DASHBOARD_SORT_RULES),
   );
   const sortMenuRef = useRef<HTMLDivElement>(null);
-  const open = controlledOpen ?? uncontrolledOpen;
 
   const setOpen = (nextOpen: boolean) => {
-    if (controlledOpen === undefined) {
-      setUncontrolledOpen(nextOpen);
-    }
-    onOpenChange?.(nextOpen);
+    onOpenChange(nextOpen);
   };
 
   const availableAddOptions = useMemo(

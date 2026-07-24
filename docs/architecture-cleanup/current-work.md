@@ -7,9 +7,10 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 014 — primary-letter page source commit boundary
-- Last sealed cleanup implementation: primary page source ownership at `9ae1a7cb`
-- Current slice: 015 — frame one vertical Letter Review ownership extraction
+- Current checkpoint: 015 — shared reviewable-editor interaction ownership
+- Last sealed cleanup implementation: shared reviewable editor at `70ef6f3c`
+- Feedback reliability prerequisite: Express request deadlines at `c8ac080b`
+- Current slice: 016 — characterize the first true Letter Review vertical workspace
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -95,6 +96,8 @@ tree:
   state, reducer/actions, and pure adapters.
 - [ ] Model explicit versus all-filtered selection and make counts truthful.
 - [ ] Delete verified dead dashboard CSS and establish one style owner per surface.
+- [x] Give Photo Description and Extra Content one verified-editor interaction owner
+  and remove their unused imperative editor contract.
 - [ ] Refactor Letter Review by vertical workspace, one characterized domain at a time.
 - [ ] Extract and test pure geometry, history, and viewport state from interaction-heavy
   React modules.
@@ -1745,15 +1748,100 @@ Residuals:
 - Structural debt remains visible: `LetterReviewPage`, `LineReviewMode`, processing
   queue, public letter routes, and the dashboard stylesheet still own too much.
 
-## Slice 015 — Letter Review Vertical Ownership Extraction
+## Slice 015 — Shared Reviewable-Editor Interaction Ownership
 
-Status: framing next
+Status: complete at `70ef6f3c`
+
+Supporting feedback fix: `c8ac080b`
+
+Problem:
+
+Photo Description and Extra Content each rendered the same `DynamicEditor` verified
+flow, but `LetterReviewPage` owned two tooltip controllers, two unused imperative
+editor refs, and six nearly identical Tab/click/double-click callbacks. Both passive
+sections exposed 15 props. Double-clicking a verified editor also duplicated each
+domain's already source-fenced unverify mutation.
+
+Delivered invariant:
+
+The route owns domain mutations and source-conflict handling. One small, UI-only
+component owns verified contenteditable locking, tooltip placement/dismissal,
+double-click gating, and Tab indentation for both real consumers. The adopted backend
+status is the sole editability authority: a pending, failed, wrong-letter, or
+source-revision-conflicted unverify response cannot unlock the editor locally.
+
+What changed:
+
+- `ReviewableDynamicEditor` is an 87-line, five-prop interaction boundary used only by
+  Photo Description and Extra Content. It knows nothing about letter IDs, source
+  revisions, APIs, DTO adoption, notifications, or autosave.
+- Both sections retain their domain-specific header/actions while delegating the
+  shared editor surface. Each section contract dropped from 15 props to 7.
+- `LetterReviewPage` dropped from 2,005 to 1,823 lines. Direct callback ownership fell
+  from 39 to 33, refs from 6 to 4, and tooltip owners from 2 to 0. State and effect
+  counts deliberately did not change; the line-review interaction gate still owns the
+  two explicit editing flags until that behavior is characterized.
+- Across the six affected/new production files, physical source fell from 2,484 to
+  2,271 lines: 213 lines removed rather than merely moved.
+- Each domain now has one source-fenced unverify handler. The wrapper remains locked
+  until the guarded Letter DTO adopts the returned editable status.
+- The unused four-method `DynamicEditorRef`, both forwarding refs, and the public type
+  export were deleted. `DynamicEditor` remains the low-level controlled editor.
+- Unit coverage now owns verified locking, tooltip/edit delegation, one-change Tab
+  reporting, both domain section states, and the architecture boundary. Mocked browser
+  coverage proves successful verified Extra Content unlocking and fail-closed
+  `SOURCE_REVISION_CHANGED` behavior.
+
+The first aggregate run exposed an unrelated but repeated false failure: the shared
+Express test helper treated any mocked request exceeding 50 ms as hung. `c8ac080b`
+replaced that scheduler-sensitive threshold with a one-second default below Vitest's
+five-second deadline, retained caller-controlled short deadlines, removed the
+incorrect `headersSent` completion exemption, and added delayed-success plus
+never-completes regression tests.
+
+Evidence:
+
+- Focused editor/section/ownership coverage passed 5 files / 17 tests. The two new
+  browser interactions passed in isolation.
+- Complete backend suite: 102 files / 1,009 tests. Backend typecheck passed.
+- Complete frontend suite: 111 files / 727 tests. TypeScript production build and
+  ESLint across every changed/new frontend TypeScript file passed.
+- Definitive `CI=1 ./scripts/verify-all.sh` passed the same backend and frontend suites,
+  production build, and mocked browser suite 42/42 after the harness fix.
+- `git diff --check` passed. The rendered wrapper/classes did not change, and the full
+  browser suite found no layout or interaction regression.
+- Independent ownership, simplicity, and adversarial reviews found no remaining P0 or
+  P1 issue. The duplicate Chromium Tab change callback found in review was removed and
+  is now constrained to exactly one report.
+- The existing build warning remains: `LetterReviewPage` is 502.72 kB and
+  `UpdateEditorPage` is 1,182.96 kB after minification.
+
+Residuals:
+
+- This is honestly a shared interaction boundary, not a vertical domain-workspace
+  extraction. Route-owned state/effects and mutation coordination remain for Slice
+  016.
+- The two explicit supplemental-editor editing flags still gate entry into line
+  review. Combining or deleting them without first characterizing simultaneous edits
+  would change behavior.
+- Verified editor discovery remains pointer-oriented (tooltip plus double-click), an
+  existing accessibility debt this slice did not worsen.
+- `DynamicEditor` now has one production consumer while remaining a common low-level
+  export. Revisit that placement only if another real consumer does not emerge.
+
+No product feature, API, backend production behavior, database schema, deployment, or
+external state changed in this slice.
+
+## Slice 016 — First Letter Review Vertical Workspace
+
+Status: characterization next
 
 Intent:
 
-Characterize the state, effects, and callback ownership still concentrated in
-`LetterReviewPage`, then extract one cohesive vertical workspace behind a narrow
-contract. Preserve the terminal source-conflict and route-loading boundaries from
-Slice 014. Do not create a generic action container or move complexity into an
-unbounded hook; measure whether the route loses state/effect ownership and whether the
-extracted unit can be tested without rendering the whole page.
+Characterize Photo Description as the leading true vertical candidate: its six local
+states, generation context modal, verification/autosave mutations, route hydration,
+shared saving/debounce owner, and line-review edit gate. Extract it only if the parent
+contract is narrower than the state/callback surface it removes and stale A responses
+cannot mutate a B workspace. If those cross-workspace dependencies prevent a clean
+boundary, isolate the smallest coordinator first instead of adding imperative
+backchannels or a generic action container.

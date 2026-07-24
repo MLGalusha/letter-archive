@@ -7,11 +7,11 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 023 — single transcript-editor DOM owner
-- Last sealed cleanup implementation: transcript editor DOM projection at `8879951e`
+- Current checkpoint: 024 — visit-owned Line Review session
+- Last sealed cleanup implementation: Line Review session ownership at `12855606`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: 024 — visit-owned Line Review session
+- Current slice: 025 — committed Dashboard query snapshot
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2102,9 +2102,80 @@ Residuals:
 No product feature, visual layout, backend production behavior, database schema,
 deployment, or external state changed in this slice.
 
-## Slice 024 — Visit-Owned Line Review Session
+## Slice 025 — Committed Dashboard Query Ownership
 
 Status: next
+
+Problem:
+
+The Dashboard's 15 server-relevant filter fields plus ordered sort rules are projected
+independently in `useDashboardLettersData` and `useDashboardFilteredSelection`. Both
+hooks depend on the whole UI filter-controller contract, rebuild API parameters, and
+manually enumerate the same fields in effect/callback dependencies. The list request,
+selected-ID pruning, and “All filtered” request can therefore drift when a field is
+added or normalized differently.
+
+Those reads also have no current-request owner. A slow old-filter or old-page response
+can replace newer rows, pagination, stats, loading, or error state. Old pruning can
+remove IDs from the current query—or clear selection after a stale failure—and an old
+“All filtered” response can select IDs after the query has changed.
+
+Target invariant:
+
+One immutable, serializable `DashboardCommittedQuery` is the exact identity of current
+server-visible filters and sort. The route creates it once from committed controls and
+passes that same snapshot to list fetching, selected-ID pruning, and “All filtered.”
+Each async read is owned by the captured query/request identity; only a completion
+that is still current may publish rows, request state, selection, or errors.
+
+Planned minimum:
+
+- Characterize every query field and sort rule with exact equality, including default
+  omissions, multi-sort order, both flagged values, metadata status, and date shapes.
+- Add a focused query model with an explicit readonly whitelist and a pure API adapter.
+  Keep `searchInput`, collection input, sort-dialog draft, `dateMode`, filter-panel UI
+  state, setters, and callbacks outside the committed snapshot.
+- Memoize the snapshot once in `AdminDashboard`; make list data and filtered selection
+  accept it instead of `DashboardFilterControls` plus `sortColumns`.
+- Move initial/query-change page-one fetching into the list-data owner. Keep explicit
+  pagination and post-mutation refreshes behind its one `fetchLetters` boundary.
+- Fence list requests across query, page, and same-query refresh changes. Fence prune
+  success/failure and “All filtered” success/failure across query changes.
+- Delete the duplicated field projections, per-field dependency arrays, and mixed
+  query adapter from general dashboard utilities.
+- Add a narrow ownership tripwire and a mocked-browser compound-query flow proving the
+  list and ID-enumeration URLs carry the same canonical filter/sort parameters, with
+  only pagination differing.
+
+Non-goals:
+
+- No reducer migration for the 19 filter state cells or broad filter-control prop
+  redesign.
+- No persistence/saved-view schema migration or atomic saved-view application yet.
+- No date-input draft repair, search debounce behavior change, filter semantics,
+  default-sort change, page-size/stat change, or backend API change.
+- No redesign of explicit/all-filtered selection counts, bulk actions, Dashboard CSS,
+  mobile layout, or collection view.
+- No generic application-wide query framework.
+
+Acceptance:
+
+- Exact pure tests prove the committed whitelist, JSON round trip, array isolation,
+  default omission, and every API parameter.
+- Draft-only UI state cannot alter snapshot identity or trigger a read; committed
+  search/sort/filter changes trigger exactly one page-one list read.
+- List and filtered-ID calls consume the same committed filter/sort snapshot.
+  Pagination changes do not prune selection.
+- Deferred old query/page/refresh success and failure cannot overwrite current list
+  state. Deferred old prune/select-all success and failure cannot mutate current
+  selection or report a stale error.
+- Focused query/list/selection tests, source ownership, a discriminating mocked browser
+  flow, relevant Dashboard tests, touched lint/typecheck, and the full repository gate
+  pass.
+
+## Slice 024 — Visit-Owned Line Review Session
+
+Status: complete at `12855606`
 
 Problem:
 
@@ -2118,7 +2189,7 @@ initial page and renders no review surface. More seriously, selected mapping tex
 A can enter B's fresh Line Review session and be applied to B's segment. The route also
 retains a setter-only current-line state that has no consumer.
 
-Target invariant:
+Delivered invariant:
 
 One session boundary owns all Line Review intent for one opaque Letter Review visit.
 A new visit synchronously presents a fresh closed session before B loads; old controls
@@ -2127,19 +2198,30 @@ selection, header controls, transcript adoption, autosave, and exit all adapt th
 that same owner. `LetterReviewPage` composes the workspace but does not independently
 store or reset its state.
 
-Planned minimum:
+What changed:
 
-- Characterize A → B → fresh A, an out-of-range A page, inherited mapping intent, and
-  captured old controls before moving state.
-- Extract a visit-owned `useLineReviewWorkspace` session with a synchronous fresh
-  projection and guarded updates.
-- Move entry/exit, segment-first auto-entry, page/debug/selection/mapping state, the
-  imperative Line Review ref/header adapters, and transcript/autosave adapters behind
-  the workspace.
-- Remove the setter-only current-line state and its writes once selection behavior is
-  characterized.
-- Add a source-ownership tripwire plus a mocked SPA transition proving B cannot inherit
-  A's Line Review shell.
+- `useLineReviewWorkspace` now owns the complete visit-tagged session projection:
+  closed/standard/segment-first entry, page, filename, debug mode, transcript
+  selection, mapping intent, once-per-visit automatic entry, mode ref, header
+  controls, transcript adoption, autosave, mapping refresh, and exit.
+- A narrower entry capability fences callbacks after exit and reopen within the same
+  visit. Normal exit permits an already-authoritative mapping refresh to settle;
+  opening any newer viewer-image, Review, or mapping entry supersedes the old
+  capability. Multiple refreshes within one entry adopt only the latest response.
+- A visit change derives a fresh closed projection during render rather than waiting
+  for an effect. Out-of-range pages normalize to page zero, so a two-page A cannot
+  leave a one-page B with a blank review surface.
+- `LetterReviewPage` now composes grouped viewer, header, mapping, and mode contracts.
+  Its seven Line Review state cells, two refs, selection effect, segment-first effect,
+  four callbacks, direct refresh adoption, and setter-only current-line state were
+  removed.
+- The route fell from 1,373 to 1,243 lines. Direct state cells fell from 19 to 11,
+  refs from five to three, effect owners from seven to five, and callback owners from
+  18 to 14.
+- Source tripwires reject restored route state/effects/callbacks and require the
+  workspace contract. A mocked SPA transition leaves A on page two with selected
+  mapping text, then navigates to a one-page B and proves B's first shell is closed,
+  on page zero, and free of A's mapping, debug, and filename state.
 
 Non-goals:
 
@@ -2158,6 +2240,51 @@ Acceptance:
   save/versioning, verification revocation, error reporting, and exit remain green.
 - Focused workspace/ownership tests, discriminating mocked browser behavior, the full
   frontend/backend/build/browser gate, touched-file lint, and `git diff --check` pass.
+
+Evidence:
+
+- The new browser characterization failed against the old route with a blank B review
+  surface, then passed against the visit-owned workspace.
+- Final focused workspace and ownership coverage passed 4 files / 21 tests. It
+  discriminates A → B → fresh A first-render projection, closed stale entry controls,
+  once-per-visit automatic entry, selection/mapping exit and reopen, normal-exit
+  refresh survival, same-visit entry supersession through all three reopen paths,
+  reversed refresh completion, imperative-handle cleanup, and guarded adapters.
+- The related Letter Review plus Line Review unit surface passed 30 files / 220 tests.
+  The relevant Letter Review plus Line Review mocked-browser surface passed 38/38.
+- Definitive `CI=1 ./scripts/verify-all.sh` passed backend 104 files / 1,016 tests plus
+  typecheck, frontend 127 files / 856 tests plus production build, and the complete
+  mocked browser suite 56/56 without retry.
+- Touched frontend ESLint, frontend `tsc --noEmit`, and `git diff --check` passed.
+  Whole-frontend lint was not remeasured; the last recorded backlog remains 161
+  problems (141 errors and 20 warnings).
+- Three independent architecture, correctness, and adversarial-coverage reviews
+  initially stopped the checkpoint over same-visit stale callbacks, unordered mapping
+  refreshes, normal-exit refresh cancellation, retained imperative handles, and
+  branch-masked tests. Each issue was repaired; final passes found no remaining
+  P0–P2 issue.
+- Existing production-build warnings remain: `LetterReviewPage` is 527.84 kB and
+  `UpdateEditorPage` is 1,182.96 kB after minification.
+
+Residuals:
+
+- The 526-line workspace is sizable but cohesive around one session state machine. It
+  deliberately does not absorb `LineReviewMode`'s OCR, geometry, segment editing,
+  history, or persistence internals.
+- The full-viewport Line Review overlay retains its existing relationship with the
+  admin header. Header adapter ownership is behavior- and source-tested here, but this
+  slice does not claim a CSS or reachability redesign for controls behind that overlay.
+- `LineReviewMode` and `useSegmentEditor` remain large interaction-heavy modules.
+  Their pure geometry, viewport, and history state should move one characterized
+  invariant at a time rather than widening this route-shell workspace.
+- Metadata/entity regeneration still requires a product-contract decision before its
+  overlapping intents can move behind one workspace.
+- Dashboard query state remains repeated across fetching, filtered selection,
+  persistence, saved views, controls, chips, and sorting. Slice 025 begins with one
+  committed read-side snapshot rather than migrating every consumer at once.
+
+No product feature, visual layout, backend behavior, API, database schema, deployment,
+or external state changed in this slice.
 
 ## Slice 023 — Single Transcript-Editor DOM Owner
 

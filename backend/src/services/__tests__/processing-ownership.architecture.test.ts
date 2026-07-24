@@ -16,7 +16,7 @@ const pipelineDefinitions = new Set([
 
 const allowedExecutionOwners = new Set([
   'routes/admin/letters/content.ts',
-  'worker.ts',
+  'services/worker-processing-cycle.ts',
 ]);
 
 const allowedDirectRunningWriters = new Set([
@@ -97,7 +97,7 @@ describe('processing execution ownership', () => {
     expect(retiredOwners.sort()).toEqual([]);
   });
 
-  it('keeps the API lease reconciler until worker availability is durable', async () => {
+  it('keeps the API lease reconciler until the scheduled handoff is proven', async () => {
     const api = await readFile(path.join(sourceRoot, 'index.ts'), 'utf8');
 
     expect(api).toContain('recoverExpiredProcessingJobs');
@@ -207,13 +207,9 @@ describe('processing execution ownership', () => {
     expect(scheduleContract).toContain('--max-retry-duration=0s');
   });
 
-  it('keeps queued extra-content execution worker-owned and explicitly queued', async () => {
+  it('keeps dirty queued extra-content work in worker exit recovery', async () => {
     const worker = await readFile(path.join(sourceRoot, 'worker.ts'), 'utf8');
 
-    expect(worker).toContain('queuedExtraContentConditions');
-    expect(worker).toMatch(
-      /tryTranscribeExtras\(letter\.id,\s*\{\s*expectedStatus:\s*'PENDING',\s*claimKind:\s*'QUEUED',\s*workerExecutionToken:\s*executionToken,\s*\}\)/,
-    );
     expect(worker).toMatch(
       /extraContentJobStatus,\s*'RUNNING'[\s\S]*?isNotNull\(letters\.extraContentJobClaimKind\)[\s\S]*?extraContentJobClaimKind,\s*'QUEUED'[\s\S]*?extraContentJobDirty,\s*true/,
     );

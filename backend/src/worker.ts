@@ -1,9 +1,6 @@
 import 'dotenv/config';
 import { eq, and, isNotNull, or } from 'drizzle-orm';
 import { closeDatabase, db, letters } from './db/index.js';
-import { processLetter, processMetadata } from './pipeline/processor.js';
-import { runEntityExtractionOnly } from './pipeline/metadataV2.js';
-import { tryTranscribeExtras } from './services/letter/extra-content.js';
 import { createLogger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { notify } from './services/notifications.js';
 import {
@@ -22,24 +19,20 @@ import {
   type WorkerExecutionHeartbeat,
 } from './services/worker-execution-heartbeat.js';
 import {
+  processWorkerCycle,
+  WORKER_BATCH_SIZE,
+} from './services/worker-processing-cycle.js';
+import {
   createLeaseRecoveryCoordinator,
   decideEmptyWorkerJob,
   projectQueuedRecoveryForWorker,
 } from './services/lease-recovery-coordinator.js';
-import {
-  queuedEntityExtractionConditions,
-  queuedExtraContentConditions,
-  queuedMetadataConditions,
-  queuedTranscriptionConditions,
-} from './services/processing-eligibility.js';
 
 const log = createLogger({ module: 'worker' });
 
 const POLL_INTERVAL = 5000; // 5 seconds
-const BATCH_SIZE = 5;
 const LEASE_RECOVERY_INTERVAL_MS = 60_000;
 const SHUTDOWN_TIMEOUT_MS = 8_000;
-type WorkerStatePublisher = ReturnType<typeof createWorkerStatePublisher>;
 
 let shuttingDown = false;
 let executionTokenForRecovery: string | null = null;
@@ -105,17 +98,6 @@ async function getQueuedProcessingWorkState(): Promise<'pending' | 'leased' | 'n
   return leased ? 'leased' : 'none';
 }
 
-function publishHeartbeat(
-  workerStatePublisher: WorkerStatePublisher,
-  currentBatchSize: number,
-  lastError: string | null = null,
-): void {
-  workerStatePublisher.publish({
-    lastError,
-    currentBatchSize,
-  });
-}
-
 function canStartWorkerOperation(
   executionHeartbeat: WorkerExecutionHeartbeat,
 ): boolean {
@@ -123,317 +105,12 @@ function canStartWorkerOperation(
 }
 
 /**
- * When true, the worker drains both queues and then exits cleanly.
+ * When true, the worker drains the durable stage queues and then exits cleanly.
  * Used by the Cloud Run Job entry point so the container only lives
  * as long as there is work to do. When false (default), the worker
  * runs as a long-lived polling loop — the local-dev shape.
  */
 const EXIT_WHEN_EMPTY = process.env.EXIT_WHEN_EMPTY === 'true';
-
-/**
- * Finds letters that need transcription (type='L', status='PENDING', not deleted, not dead-letter).
- */
-async function findLettersNeedingTranscription() {
-  return db.query.letters.findMany({
-    where: and(...queuedTranscriptionConditions()),
-    limit: BATCH_SIZE,
-    orderBy: (l, { asc }) => [asc(l.createdAt)],
-  });
-}
-
-/**
- * Finds letters that need metadata extraction.
- * Requires: transcribed, metadata pending, transcript confirmed, not deleted, not dead-letter.
- */
-async function findLettersNeedingMetadata() {
-  return db.query.letters.findMany({
-    where: and(...queuedMetadataConditions()),
-    limit: BATCH_SIZE,
-    orderBy: (l, { asc }) => [asc(l.createdAt)],
-  });
-}
-
-/**
- * Finds letters that need entity extraction after metadata already succeeded.
- */
-async function findLettersNeedingEntityExtraction() {
-  return db.query.letters.findMany({
-    where: and(...queuedEntityExtractionConditions()),
-    limit: BATCH_SIZE,
-    orderBy: (l, { asc }) => [asc(l.createdAt)],
-  });
-}
-
-/**
- * Finds primary letters with queued supplementary-content transcription work.
- */
-async function findLettersNeedingExtraContent() {
-  return db.query.letters.findMany({
-    where: and(...queuedExtraContentConditions()),
-    limit: BATCH_SIZE,
-    orderBy: (l, { asc }) => [asc(l.createdAt)],
-  });
-}
-
-/**
- * Processes pending jobs. Returns true if any work was found this cycle,
- * false if both queues were empty — the Job-mode main loop uses this
- * signal to decide when to exit.
- */
-async function processPendingJobs(
-  executionHeartbeat: WorkerExecutionHeartbeat,
-  workerStatePublisher: WorkerStatePublisher,
-  executionToken: string,
-): Promise<boolean> {
-  const cycleStart = Date.now();
-
-  // Queue discovery is deliberately sequential so ownership loss or shutdown
-  // can stop later scans before they begin.
-  if (!canStartWorkerOperation(executionHeartbeat)) return false;
-  const needingTranscription = await findLettersNeedingTranscription();
-  if (!canStartWorkerOperation(executionHeartbeat)) return false;
-  const needingExtraContent = await findLettersNeedingExtraContent();
-  if (!canStartWorkerOperation(executionHeartbeat)) return false;
-  const needingMetadata = await findLettersNeedingMetadata();
-  if (!canStartWorkerOperation(executionHeartbeat)) return false;
-  const needingEntityExtraction = await findLettersNeedingEntityExtraction();
-  if (!canStartWorkerOperation(executionHeartbeat)) return false;
-  const totalPendingThisCycle =
-    needingTranscription.length
-    + needingExtraContent.length
-    + needingMetadata.length
-    + needingEntityExtraction.length;
-
-  // Heartbeat: let the admin API observe us.
-  publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
-
-  if (needingTranscription.length > 0) {
-    log.debug({ count: needingTranscription.length }, 'Found letters needing transcription');
-  }
-
-  for (const letter of needingTranscription) {
-    if (!canStartWorkerOperation(executionHeartbeat)) {
-      return totalPendingThisCycle > 0;
-    }
-    publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
-    const jobStart = Date.now();
-    log.info(
-      { letterId: letter.id, collectionId: letter.collectionId, dateRaw: letter.dateRaw },
-      'Starting transcription job'
-    );
-    try {
-      const outcome = await processLetter(letter.id, {
-        extraContent: 'skip',
-        workerExecutionToken: executionToken,
-      });
-      publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
-      const duration = Date.now() - jobStart;
-      if (outcome) {
-        log.info(
-          { letterId: letter.id, duration, reason: outcome.reason },
-          'Transcription job skipped',
-        );
-        continue;
-      }
-      log.info({ letterId: letter.id, duration }, 'Transcription job completed');
-      void notify({
-        type: 'transcription_success',
-        title: 'Letter transcribed',
-        message: `${letter.dateRaw ?? letter.id.slice(0, 8)} transcribed in ${(duration / 1000).toFixed(1)}s`,
-        link: `/admin/letters/${letter.id}`,
-        sourceType: 'letter',
-        sourceId: letter.id,
-        metadata: { durationMs: duration, dateRaw: letter.dateRaw },
-      });
-    } catch (error) {
-      const duration = Date.now() - jobStart;
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      publishHeartbeat(workerStatePublisher, totalPendingThisCycle, message);
-      log.error(
-        { letterId: letter.id, duration, err: error },
-        'Transcription job failed'
-      );
-      void notify({
-        type: 'transcription_failed',
-        title: 'Transcription failed',
-        message,
-        link: `/admin/letters/${letter.id}`,
-        sourceType: 'letter',
-        sourceId: letter.id,
-        metadata: { error: message, durationMs: duration, dateRaw: letter.dateRaw },
-        dedupeKey: `transcription_failed:${letter.id}`,
-      });
-    }
-  }
-
-  if (needingExtraContent.length > 0) {
-    log.debug({ count: needingExtraContent.length }, 'Found letters needing extra-content transcription');
-  }
-
-  // Process supplementary content before metadata so a metadata claim reloads
-  // the latest extra-content transcript and its source revision.
-  for (const letter of needingExtraContent) {
-    if (!canStartWorkerOperation(executionHeartbeat)) {
-      return totalPendingThisCycle > 0;
-    }
-    publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
-    const jobStart = Date.now();
-    log.info(
-      { letterId: letter.id, collectionId: letter.collectionId, dateRaw: letter.dateRaw },
-      'Starting extra-content transcription job'
-    );
-    try {
-      const outcome = await tryTranscribeExtras(letter.id, {
-        expectedStatus: 'PENDING',
-        claimKind: 'QUEUED',
-        workerExecutionToken: executionToken,
-      });
-      publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
-      const duration = Date.now() - jobStart;
-      if (outcome.kind !== 'completed') {
-        log.info(
-          { letterId: letter.id, duration, reason: outcome.kind },
-          'Extra-content transcription job skipped',
-        );
-        continue;
-      }
-      log.info({ letterId: letter.id, duration }, 'Extra-content transcription job completed');
-    } catch (error) {
-      const duration = Date.now() - jobStart;
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      publishHeartbeat(workerStatePublisher, totalPendingThisCycle, message);
-      log.error(
-        { letterId: letter.id, duration, err: error },
-        'Extra-content transcription job failed'
-      );
-      void notify({
-        type: 'extra_content_failed',
-        title: 'Extra-content transcription failed',
-        message,
-        link: `/admin/letters/${letter.id}`,
-        sourceType: 'letter',
-        sourceId: letter.id,
-        metadata: { error: message, durationMs: duration, dateRaw: letter.dateRaw },
-        dedupeKey: `extra_content_failed:${letter.id}`,
-      });
-    }
-  }
-
-  if (needingMetadata.length > 0) {
-    log.debug({ count: needingMetadata.length }, 'Found letters needing metadata extraction');
-  }
-
-  for (const letter of needingMetadata) {
-    if (!canStartWorkerOperation(executionHeartbeat)) {
-      return totalPendingThisCycle > 0;
-    }
-    publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
-    const jobStart = Date.now();
-    log.info(
-      { letterId: letter.id, collectionId: letter.collectionId, dateRaw: letter.dateRaw },
-      'Starting metadata extraction job'
-    );
-    try {
-      const outcome = await processMetadata(letter.id, {
-        entityExtraction: 'deferred',
-        workerExecutionToken: executionToken,
-      });
-      publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
-      const duration = Date.now() - jobStart;
-      if (outcome?.kind === 'skipped') {
-        log.info(
-          { letterId: letter.id, duration, reason: outcome.reason },
-          'Metadata extraction job skipped',
-        );
-        continue;
-      }
-      log.info({ letterId: letter.id, duration }, 'Metadata extraction job completed');
-      // Phase 1 success notification fires from inside metadataV2 — no duplicate here.
-    } catch (error) {
-      const duration = Date.now() - jobStart;
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      publishHeartbeat(workerStatePublisher, totalPendingThisCycle, message);
-      log.error(
-        { letterId: letter.id, duration, err: error },
-        'Metadata extraction job failed'
-      );
-      void notify({
-        type: 'metadata_failed',
-        title: 'Metadata extraction failed',
-        message,
-        link: `/admin/letters/${letter.id}`,
-        sourceType: 'letter',
-        sourceId: letter.id,
-        metadata: { error: message, durationMs: duration, dateRaw: letter.dateRaw },
-        dedupeKey: `metadata_failed:${letter.id}`,
-      });
-    }
-  }
-
-  if (needingEntityExtraction.length > 0) {
-    log.debug({ count: needingEntityExtraction.length }, 'Found letters needing entity extraction');
-  }
-
-  for (const letter of needingEntityExtraction) {
-    if (!canStartWorkerOperation(executionHeartbeat)) {
-      return totalPendingThisCycle > 0;
-    }
-    publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
-    const jobStart = Date.now();
-    log.info(
-      { letterId: letter.id, collectionId: letter.collectionId, dateRaw: letter.dateRaw },
-      'Starting entity extraction job'
-    );
-    try {
-      await runEntityExtractionOnly(letter.id, {
-        workerExecutionToken: executionToken,
-      });
-      publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
-      const duration = Date.now() - jobStart;
-      log.info({ letterId: letter.id, duration }, 'Entity extraction job completed');
-    } catch (error) {
-      const duration = Date.now() - jobStart;
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      publishHeartbeat(workerStatePublisher, totalPendingThisCycle, message);
-      log.error(
-        { letterId: letter.id, duration, err: error },
-        'Entity extraction job failed'
-      );
-      void notify({
-        type: 'entity_failed',
-        title: 'Entity extraction failed',
-        message,
-        link: `/admin/letters/${letter.id}`,
-        sourceType: 'letter',
-        sourceId: letter.id,
-        metadata: { error: message, durationMs: duration, dateRaw: letter.dateRaw },
-        dedupeKey: `entity_failed:${letter.id}`,
-      });
-    }
-  }
-
-  const totalProcessed =
-    needingTranscription.length
-    + needingExtraContent.length
-    + needingMetadata.length
-    + needingEntityExtraction.length;
-  if (totalProcessed > 0) {
-    const cycleDuration = Date.now() - cycleStart;
-    log.info(
-      {
-        transcriptionCount: needingTranscription.length,
-        extraContentCount: needingExtraContent.length,
-        metadataCount: needingMetadata.length,
-        entityCount: needingEntityExtraction.length,
-        totalProcessed,
-        cycleDuration,
-      },
-      'Processing cycle completed'
-    );
-  }
-
-  return totalProcessed > 0;
-}
 
 /**
  * Sleep utility.
@@ -447,7 +124,7 @@ async function main() {
     {
       mode: EXIT_WHEN_EMPTY ? 'job' : 'poll',
       pollInterval: POLL_INTERVAL,
-      batchSize: BATCH_SIZE,
+      batchSize: WORKER_BATCH_SIZE,
       logDir: LOG_DIR,
       logRetentionHours: getLogRetentionHours(),
     },
@@ -496,20 +173,23 @@ async function main() {
         type: 'system_worker_started',
         title: 'Worker started',
         message: 'Background processing worker is online.',
-        metadata: { pollInterval: POLL_INTERVAL, batchSize: BATCH_SIZE },
+        metadata: {
+          pollInterval: POLL_INTERVAL,
+          batchSize: WORKER_BATCH_SIZE,
+        },
         dedupeKey: 'system_worker_started',
         dedupeWindowMinutes: 5,
       });
     }
 
     while (canStartWorkerOperation(executionHeartbeat)) {
-      let processedAny = false;
+      let discoveredWork = false;
       try {
-        processedAny = await processPendingJobs(
-          executionHeartbeat,
-          workerStatePublisher,
-          executionLease.token,
-        );
+        discoveredWork = await processWorkerCycle({
+          executionToken: executionLease.token,
+          canStartOperation: () => canStartWorkerOperation(executionHeartbeat),
+          publishState: update => workerStatePublisher.publish(update),
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         log.error({ err: error }, 'Error in processing cycle');
@@ -532,7 +212,7 @@ async function main() {
       if (!canStartWorkerOperation(executionHeartbeat)) break;
 
       if (EXIT_WHEN_EMPTY) {
-        if (!processedAny) {
+        if (!discoveredWork) {
           // Quiesce periodic recovery while making the final durable decision.
           await leaseRecovery.stopAndWait();
           if (!canStartWorkerOperation(executionHeartbeat)) break;

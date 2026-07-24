@@ -37,7 +37,9 @@ describe('worker execution lifecycle architecture', () => {
       'const executionHeartbeat = createWorkerExecutionHeartbeat',
     );
     const recovery = main.indexOf('await leaseRecovery.reconcile()');
-    const processing = main.indexOf('processedAny = await processPendingJobs');
+    const processing = main.indexOf(
+      'discoveredWork = await processWorkerCycle',
+    );
 
     expect(acquisitionClock).toBeLessThan(acquire);
     expect(acquire).toBeLessThan(loserExit);
@@ -50,64 +52,26 @@ describe('worker execution lifecycle architecture', () => {
     );
   });
 
-  it('gates every queue scan and stage claim on live execution ownership', () => {
-    const processing = section(
-      'async function processPendingJobs(',
-      '/**\n * Sleep utility.',
+  it('wires the import-safe cycle to live ownership and the private token', () => {
+    const main = section('async function main()', '// Handle graceful shutdown');
+    const cycle = main.indexOf(
+      'discoveredWork = await processWorkerCycle',
     );
-    const gate = 'if (!canStartWorkerOperation(executionHeartbeat))';
-    const scans = [
-      'findLettersNeedingTranscription()',
-      'findLettersNeedingExtraContent()',
-      'findLettersNeedingMetadata()',
-      'findLettersNeedingEntityExtraction()',
-    ];
+    const emptyJobDecision = main.indexOf('if (!discoveredWork)', cycle);
 
-    let previousScan = -1;
-    for (const scan of scans) {
-      const scanIndex = processing.indexOf(`await ${scan}`, previousScan + 1);
-      const gateBefore = processing.lastIndexOf(gate, scanIndex);
-      const gateAfter = processing.indexOf(gate, scanIndex);
-
-      expect(scanIndex).toBeGreaterThan(previousScan);
-      expect(gateBefore).toBeGreaterThan(previousScan);
-      expect(gateAfter).toBeGreaterThan(scanIndex);
-      previousScan = scanIndex;
-    }
-
-    for (const queue of [
-      'needingTranscription',
-      'needingExtraContent',
-      'needingMetadata',
-      'needingEntityExtraction',
-    ]) {
-      expect(processing).toMatch(
-        new RegExp(
-          `for \\(const letter of ${queue}\\) \\{\\s*`
-          + 'if \\(!canStartWorkerOperation\\(executionHeartbeat\\)\\)',
-        ),
-      );
-    }
-  });
-
-  it('defers worker follow-ons to their durable stage queues', () => {
-    const processing = section(
-      'async function processPendingJobs(',
-      '/**\n * Sleep utility.',
+    expect(worker).toContain(
+      "from './services/worker-processing-cycle.js'",
     );
-
-    expect(processing).toMatch(
-      /processLetter\(letter\.id,\s*\{[\s\S]*?extraContent:\s*'skip',[\s\S]*?workerExecutionToken:\s*executionToken,[\s\S]*?\}\)/,
+    expect(main).toMatch(
+      /processWorkerCycle\(\{\s*executionToken:\s*executionLease\.token,\s*canStartOperation:\s*\(\)\s*=>\s*canStartWorkerOperation\(executionHeartbeat\),\s*publishState:\s*update\s*=>\s*workerStatePublisher\.publish\(update\),\s*\}\)/,
     );
-    expect(processing).toMatch(
-      /processMetadata\(letter\.id,\s*\{[\s\S]*?entityExtraction:\s*'deferred',[\s\S]*?workerExecutionToken:\s*executionToken,[\s\S]*?\}\)/,
+    expect(worker).not.toContain("from './pipeline/processor.js'");
+    expect(worker).not.toContain("from './pipeline/metadataV2.js'");
+    expect(worker).not.toContain(
+      "from './services/letter/extra-content.js'",
     );
-    expect(processing).toMatch(
-      /tryTranscribeExtras\(letter\.id,\s*\{[\s\S]*?claimKind:\s*'QUEUED',[\s\S]*?workerExecutionToken:\s*executionToken,[\s\S]*?\}\)/,
-    );
-    expect(processing).toMatch(
-      /runEntityExtractionOnly\(letter\.id,\s*\{\s*workerExecutionToken:\s*executionToken,\s*\}\)/,
-    );
+    expect(cycle).toBeGreaterThanOrEqual(0);
+    expect(emptyJobDecision).toBeGreaterThan(cycle);
   });
 
   it('keeps the execution lease during signal drain and releases in terminal order', () => {

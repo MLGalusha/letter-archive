@@ -7,11 +7,11 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 025 — committed Dashboard query ownership
-- Last sealed cleanup implementation: Dashboard read ownership at `5c10d875`
+- Current checkpoint: 026 — source-complete, query-bound Dashboard selection
+- Last sealed cleanup implementation: Dashboard selection provenance at `a68900d3`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: 026 — source-complete, query-bound Dashboard selection
+- Current slice: 027 — validated, replay-safe Dashboard stored state
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -95,7 +95,7 @@ tree:
 
 - [ ] Replace field-by-field dashboard filter plumbing with one serializable query
   state, reducer/actions, and pure adapters.
-- [ ] Model explicit versus all-filtered selection and make counts truthful.
+- [x] Model explicit versus all-filtered selection and make counts truthful.
 - [ ] Delete verified dead dashboard CSS and establish one style owner per surface.
 - [x] Give Photo Description and Extra Content one verified-editor interaction owner
   and remove their unused imperative editor contract.
@@ -2102,9 +2102,110 @@ Residuals:
 No product feature, visual layout, backend production behavior, database schema,
 deployment, or external state changed in this slice.
 
-## Slice 026 — Source-Complete, Query-Bound Dashboard Selection
+## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 
 Status: next
+
+Problem:
+
+Dashboard filter/sort storage and saved views reconstruct the same 17-field state in
+separate owners: filter initialization, persistence, saved-view capture, saved-view
+application, and the committed-query composition boundary. The storage loaders then
+cast JSON into those contracts instead of decoding it. Persisted state validates only
+sort field names; a JSON-valid value such as an object where a status array is
+expected reaches unconditional array spreads and can crash every `/admin` visit until
+the user manually clears site data.
+
+Saved-view validation is even narrower: any envelope whose `state` is an object with a
+`visibleColumns` array is accepted. A minimal legacy state that passes the current test
+can set sort and filter arrays to `undefined` when applied and crash query assembly. A
+single `state: null` member throws inside the filter predicate and causes every valid
+sibling view to be discarded.
+
+The saved-view transition owner is also replay-unsafe. This application runs in React
+19 Strict Mode, but UUID/time generation, state capture, and local-storage writes occur
+inside functional state updaters. A reproduced save invoked the updater twice, committed
+the first ID in React, and left the second ID in local storage. Saved snapshots and
+applied arrays are not defensively copied. Finally, each tab mutates the saved-view
+array loaded at mount, so a sequential save or delete from another already-open tab
+can permanently overwrite newer views.
+
+Target invariant:
+
+One pure Dashboard stored-state model owns the persisted field whitelist, defaults,
+allowed enum values, sort/date/column normalization, legitimate legacy backfills, and
+owned array copies. Every unknown local-storage value is decoded field by field before
+it can enter filter, sort, column, query, or saved-view state. Persisted filters and
+saved views capture the same canonical snapshot; saved-view application crosses each
+runtime owner through a named replacement transition instead of 21 external setter
+calls.
+
+Saved-view transitions are replay-safe: one user save creates one ID, timestamp, and
+snapshot outside a React updater; updater logic is pure; and the serialized value is
+the exact committed value. Save/delete operations rebase on the latest decoded storage
+and open tabs adopt storage events, so sequential cross-tab work is not silently lost.
+Malformed saved views are isolated from valid siblings.
+
+Planned minimum:
+
+- Add a focused `dashboardStoredStateModel` with total `unknown` decoders for a
+  complete canonical filter/sort snapshot and saved-view snapshot. Validate known
+  enums, arrays, dates, sort field/direction pairs, and known unique columns; preserve
+  compatible storage keys and backfill fields added after older saved views.
+- Tighten stored status/workflow contracts from `string[]` to their domain unions and
+  remove downstream casts that currently assert unvalidated values are safe.
+- Build one owned stored snapshot from the current committed query plus `dateMode`.
+  Feed its persisted subset to the persistence hook and its column-extended form to
+  saved views, rather than reconstructing the whitelist twice.
+- Give filters and columns one named stored-state replacement transition each. Keep
+  their existing individual controls for the UI; do not introduce a reducer merely to
+  hide setters.
+- Make saved-view record creation, cloning, save/delete calculation, and persistence
+  explicit pure transitions outside React state updater functions. Re-read the decoded
+  stored list before mutation and synchronize other open tabs through the browser
+  storage event. Document truly simultaneous writes as last-writer-wins.
+- Add focused decoder/capture/apply tests for partial legacy values, hostile JSON-valid
+  values, null and malformed siblings, owned array isolation, query serialization,
+  Strict Mode identity/storage parity, and sequential two-tab save/delete behavior.
+- Add one discriminating mocked-browser flow that seeds hostile persisted fields plus
+  a partial legacy saved view, proves the Dashboard still renders with a normalized
+  list request, applies the view, and remains usable.
+
+Non-goals:
+
+- No filter reducer, filter-component prop redesign, search-debounce change, or broad
+  route-state rewrite.
+- No range-date draft/input repair or change to user-visible date-filter semantics.
+- No query, fetching, selection, API endpoint, backend, database, CSS, or layout
+  change.
+- No server-synced, shared, renamed, or schema-versioned saved-view feature.
+- Do not merge the standalone Dashboard mode or column-durability storage keys into
+  the persisted filter key. Their separate ownership can be audited independently.
+- Storage remains best-effort browser configuration. Do not add new failure UI or
+  claim durability when local storage is unavailable.
+
+Acceptance:
+
+- Arbitrary JSON-valid persisted fields normalize independently to complete valid
+  defaults; one bad field cannot brick `/admin` or discard unrelated valid fields.
+- Partial legacy saved views become complete safe snapshots, structurally unusable
+  records are rejected individually, and every loaded view can be applied and
+  serialized into a committed query without throwing.
+- Persisted capture equals the persisted-field subset of saved-view capture, and
+  neither captured nor applied arrays alias mutable controller/view inputs.
+- Under the app's real Strict Mode, one save creates one identity/snapshot and parsed
+  local storage exactly equals committed hook state after save and delete.
+- Sequential save/delete work from two mounted owners retains both tabs' latest stored
+  views; storage events update the other owner. Simultaneous writes remain explicitly
+  last-writer-wins.
+- Focused model/hook/composition tests, touched lint/typecheck, a hostile-storage
+  browser proof, related Dashboard tests, and the full repository gate pass.
+
+Rollback base: `a68900d3`.
+
+## Slice 026 — Source-Complete, Query-Bound Dashboard Selection
+
+Status: complete at `a68900d3`
 
 Problem:
 
@@ -2125,34 +2226,46 @@ A partial delete replaces IDs with the skipped subset but leaves
 `allFilteredSelected=true`, so the toolbar can continue to describe a narrow manual
 subset as the complete filtered result.
 
-Target invariant:
+Delivered invariant:
 
 One atomic Dashboard selection owner holds IDs, exact source revisions, and scope.
 Every selected ID has the source revision observed during the selection operation.
 “All filtered” is true only for the exact committed query and untouched complete
 enumeration that established it. Query replacement, manual/shift/drag/page selection,
-and partial mutation outcomes revoke that provenance synchronously. No consumer can
-write IDs and all-filtered scope independently.
+or a newer edit/mutation intent revoke that provenance synchronously. Async
+select-all, prune failure, and mutation outcomes may publish selection state only
+while their opaque intent still owns it; a successful still-current query prune
+reconciles the latest manual selection. No consumer can write IDs and all-filtered
+scope independently, and an older completion cannot clear or replace newer selection
+or pending copy-edit work.
 
-Planned minimum:
+What changed:
 
-- Replace filtered ID enumeration with a paginated filtered-source snapshot that
-  preserves `{ letterId, primarySourceRevision }` for every matching row. Keep the
-  existing backend list API and pagination contract.
-- Give `useDashboardSelection` one state value for IDs, source revisions, and
-  `explicit` versus query-bound `all-filtered` scope. Derive the toolbar boolean
-  against the current `DashboardCommittedQuery`.
-- Expose intentful atomic transitions for toggle, explicit replacement, page
-  selection, query reconciliation, complete filtered selection, and clear. Remove the
-  public `setAllFilteredSelected` path and raw cross-hook coordination.
-- Adapt row selection, filtered-selection pruning/select-all, and partial bulk-delete
-  outcomes to those transitions. Preserve current source-revision capture for visible
-  row selection.
-- Add an ownership tripwire plus composed hook tests over more than one API page,
-  query replacement, shift/drag/page selection, reversed prune/select-all completion,
-  and partial mutation results.
-- Add a discriminating toolbar/browser proof that selected count and scope copy cannot
-  claim all-filtered after provenance is revoked.
+- `getFilteredLetterSources` now walks every page of the existing list endpoint and
+  preserves `{ letterId, primarySourceRevision }` rather than returning IDs while
+  discarding off-page source versions.
+- `useDashboardSelection` owns IDs, source revisions, explicit/query-bound scope, and
+  one opaque current intent in a single state model. The all-filtered toolbar claim is
+  derived against the exact `DashboardCommittedQuery`; there is no independent setter.
+- Toggle, explicit replacement, shift/range, drag, page selection, clear, query
+  reconciliation, and complete filtered selection are named atomic transitions.
+  `AdminCollectionsListPage` reuses only the queryless explicit subset.
+- Query/request fencing remains in `useDashboardFilteredSelection`. Successful
+  current-query pruning reconciles the latest selection, while stale failures and
+  select-all completions are inert. Successful select-all supersedes its older prune
+  immediately before publication.
+- Bulk deletion, clear, processing, field editing, visibility, and flag owners revoke
+  all-filtered provenance before mutation. Selection-changing completions carry the
+  intent captured at mutation start, so a slow older response cannot replace or clear
+  newer row intent. Pending copy edits use the same guard for both full and partial
+  save results.
+- The deterministic browser API now honors pagination and source revisions. Its
+  Dashboard flow enumerates 51 filtered rows over two pages, proves the manual
+  transition changes “All 51 ✓” back to explicit count copy, then sends all 51 exact
+  source pairs—including the off-page row—to transcription.
+- Source-level ownership tripwires reject a restored scope setter or mutation owner
+  that bypasses the explicit transition. Behavior tests cover the real selection
+  owner rather than relying only on setter mocks.
 
 Non-goals:
 
@@ -2167,20 +2280,49 @@ Non-goals:
 - No redesign of loaded-row publication-summary counts in
   `useDashboardSelectionDetails`; that separate limitation remains explicitly labeled.
 
-Acceptance:
+Evidence:
 
-- A 51-row filtered enumeration owns 51 IDs and 51 source revisions, and the next
-  source-bound action receives all 51.
-- All-filtered scope is true only for the exact query that produced the complete
-  snapshot and becomes false on the first render of another committed query, before
-  pruning settles.
-- Manual toggle, shift/range, drag, page selection, and partial mutation replacement
-  atomically retain intended IDs/revisions while establishing explicit scope.
-- Current prune success/failure and select-all success/failure retain Slice 025's
-  latest-owner behavior without any independent scope setter.
-- Focused API/selection/row/bulk/composition tests, source ownership, a discriminating
-  mocked-browser flow, related Dashboard tests, touched lint/typecheck, and the full
-  repository gate pass.
+- Final focused selection/filter/ownership/bulk/processing/copy surface passed 6 files
+  / 62 tests. It covers multi-page source enumeration, exact revisions, A → B → A
+  query ownership, manual/shift/drag/page intent, prune/select-all reversals, unmount,
+  partial mutation results, stale mutation completion, and newer pending edits during
+  both full and partial saves.
+- The serial Dashboard neighborhood passed 27 files / 160 tests before the final
+  partial-save adversarial case. That case then passed in the 5/5 copy-edit file and
+  in the complete frontend suite.
+- Definitive `CI=1 ./scripts/verify-all.sh` passed backend 104 files / 1,016 tests plus
+  typecheck, frontend 133 files / 904 tests plus production build, and the complete
+  mocked browser suite 58/58 without retry.
+- The strengthened Dashboard browser flow passed 8/8 during focused verification and
+  proved all 51 exact source pairs reached the source-bound mutation.
+- Touched frontend ESLint, frontend `tsc --noEmit`, and `git diff --check` passed.
+  Whole-frontend lint was not remeasured; the last recorded backlog remains 161
+  problems (141 errors and 20 warnings).
+- Independent architecture, correctness, and adversarial-test reviews first stopped
+  the checkpoint over a current-query prune dropped after manual intent, slow mutation
+  outcomes overwriting newer selection/edit work, and an uncovered partial-save
+  branch. Each was repaired; all three final passes found no remaining P0–P2 issue.
+- Existing production-build warnings remain: `LetterReviewPage` is 527.84 kB and
+  `UpdateEditorPage` is 1,182.96 kB after minification.
+
+Residuals:
+
+- The complete filtered enumeration is not a server transaction. It records each
+  observed revision, and source-bound mutations safely skip a row that changes after
+  enumeration rather than treating the read as a durable snapshot.
+- Superseded enumeration requests are publication-fenced but not aborted; they may
+  consume network work until completion.
+- Loaded-row publication-summary counts in `useDashboardSelectionDetails` remain
+  intentionally distinct from selection provenance and were not redesigned here.
+- `useDashboardSelection` is now a cohesive 285-line state owner because it contains
+  the explicit transitions and concurrency fences that were previously distributed.
+  Split it only along a proven responsibility boundary, not to reduce the line count.
+- Dashboard filter state and its stored/saved payload remain repeated and only
+  partially decoded. Slice 027 will address the smallest proven stored-state
+  ownership/correctness boundary without mixing in date-input behavior.
+
+No new product feature, visual layout, backend behavior, API endpoint, database
+schema, deployment, or external state changed in this slice.
 
 Rollback base: `5c10d875`.
 

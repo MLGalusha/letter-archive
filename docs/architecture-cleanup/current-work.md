@@ -7,10 +7,10 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 018 — Letter Review direct-mutation execution ownership
-- Last sealed cleanup implementation: direct-mutation executor at `dc946648`
+- Current checkpoint: 019 — Extra Content vertical workspace
+- Last sealed cleanup implementation: Extra Content workspace at `bf3be7dd`
 - Feedback reliability prerequisite: Express request deadlines at `c8ac080b`
-- Current slice: 019 — extract the Extra Content vertical workspace
+- Current slice: 020 — transcript editing visit isolation
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2101,17 +2101,150 @@ Residuals:
 No product feature, visual layout, backend production behavior, database schema,
 deployment, or external state changed in this slice.
 
-## Slice 019 — Extra Content Vertical Workspace
+## Slice 020 — Transcript Editing Visit Isolation
 
 Status: next
 
-Intent:
+Problem:
 
-Give one per-route-visit workspace ownership of the Extra Content draft, transcription
-progress, verified-editing state, autosave producer, transcription request, and
-verify/unverify mutations. Reuse the autosave coordinator and direct-mutation executor
-without moving their invariants or creating another scheduler. Preserve the existing
-section placement, regeneration-popup entrypoints, confirmation copy, line-review
-gate, and rendered behavior. Characterize the combined “letter then extras” action
-before moving it so one workflow cannot report success or begin the second request
-after the route visit becomes stale.
+`useTranscriptEditing` owns the verified-edit session, original transcript baseline,
+verification-restoration flag, dirty state, and tooltip, but none is keyed or reset by
+the opaque route visit. After unverify/edit on A, navigating to verified B can leave B
+visibly editable. A's dirty baseline can keep the header Revert action active, creating
+a path that can submit A's transcript text against B. A late first-A response must also
+remain unable to reopen editing during a fresh A visit.
+
+Target invariant:
+
+Every transcript edit session belongs to exactly one opaque route visit. Editing,
+baseline, verification-restoration intent, dirty state, and tooltip fail closed
+synchronously when ownership changes. Callbacks captured by an older visit cannot
+mutate a newer visit's local session. Existing guarded DTO adoption remains the
+authoritative fence for transcript responses.
+
+Planned minimum:
+
+- Replace independent edit-session fields with one owner-keyed local session in
+  `useTranscriptEditing`.
+- Close the edit tooltip and reset the session on every new visit.
+- Characterize accepted A editing followed by verified B, A → B → A with a late
+  unverify response, and the inability to invoke Revert from A's baseline on B.
+- Remove `hasTranscriptChanges` and `originalTranscriptText` from
+  `TranscriptionSection`'s prop contract; the section never reads them. Keep the hook
+  outputs in Page because the header Revert action owns that composition.
+
+Non-goals:
+
+- No Reading View extraction, letter-transcription generation extraction, or full
+  transcript workspace in this correctness slice.
+- No change to transcript autosave, verify/unverify/revert request contracts, editor
+  DOM, Line Review, or transcript/Extras regeneration-popup composition.
+- No generic session/workspace factory and no visual/CSS change.
+
+Acceptance:
+
+- Verified B is locked immediately after editing A, with no A baseline or dirty state.
+- A late first-A unverify cannot reopen editing during a fresh A visit.
+- Revert cannot submit a previous visit's transcript.
+- Focused hook/component behavior, complete frontend and mocked browser suites,
+  production build, changed-file lint, backend regression suite/typecheck, and
+  `git diff --check` pass.
+
+Expected next slice:
+
+Extract the narrow visit-owned Reading View workspace: one controlled preview mode for
+both the overlay and split pane, authoritative `letter.readingText`, executor-backed
+generation, and removal of the dead reader-edit/autosave path. Keep letter generation
+and the cross-domain transcript/Extras popup separate until they are characterized as
+their own workflow.
+
+## Slice 019 — Extra Content Vertical Workspace
+
+Status: complete at `bf3be7dd`
+
+Problem:
+
+The route still owned every part of the Extra Content workflow in disconnected regions:
+draft and progress state, route reset, initial and direct-response hydration,
+replacement confirmation, transcription, verification, autosave, line-review gating,
+section props, and regeneration-popup callbacks. A returned autosave DTO could repaint
+an older draft over newer typing. Replacement confirmation read the persisted Letter
+DTO rather than the visible draft. The popup's “Both” action always started Extras
+after the Letter promise settled, even when Letter transcription failed, its flush was
+blocked, its response was rejected, or its route visit became stale.
+
+Delivered invariant:
+
+One workspace owns Extra Content state and behavior for exactly one opaque Letter
+Review visit/source target. Its draft is reconciled from authoritative DTOs without
+overwriting newer local intent. Autosave remains in the target-wide Extra Content lane;
+transcription and verify/unverify reuse the ordered direct-mutation executor. Progress,
+hydration, edit-session gating, and success reporting are visit-fenced. Cross-domain
+“Both” remains route composition, runs Letter before Extras, and stops unless the first
+half was accepted and the originating visit is still active.
+
+What changed:
+
+- `useExtraContentWorkspace` now owns the visible draft, persisted baseline,
+  transcription progress, line-review edit-session gate, autosave request/payload,
+  response-envelope adaptation, verify/unverify selection, success copy, and thin
+  `ExtraContentSection` props.
+- Workspace ownership is keyed by the opaque route visit plus letter/source identity.
+  A fresh A visit resets immediately after A → B → A, and late first-A transcription
+  or autosave completion cannot hydrate, clear progress, or publish a toast.
+- Same-owner reconciliation advances the persisted baseline while preserving a newer
+  dirty draft. Autosave response hydration only replaces the exact draft that produced
+  that response.
+- The route's global Letter hydrator no longer writes Extra Content. This keeps hook
+  construction acyclic: shared autosave and existing domain hooks, global non-Extra
+  hydration, direct-mutation executor, then the Extra Content workspace.
+- Confirmation now reads the visible owned draft. Tests cover both directions:
+  nonempty local content prompts even when the DTO is empty, and a locally cleared
+  draft does not prompt merely because the DTO is stale and nonempty.
+- Letter transcription now reports an accepted boolean to the popup orchestrator.
+  “Both” stops after failure, blocked flush, rejected adoption, or navigation and never
+  issues the Extras request or stale success report in those cases.
+- `LetterReviewPage.tsx` fell from 1,745 to 1,618 lines and from 28 to 24 direct
+  `useCallback` owners. It no longer imports Extra Content APIs, stores Extra Content
+  state, hydrates that state, or defines Extra Content handlers.
+- The deterministic browser API now models `/transcribe-extras`, its revision-bound
+  payload, response envelope, failures, and request capture. Browser coverage proves
+  sequential same-revision “Both,” failure and stale-visit short-circuiting, and the
+  real viewer-click line-review gate after accepted unverify.
+
+Evidence:
+
+- Focused workspace and ownership coverage passed 3 files / 17 tests. The workspace's
+  8 behavior tests cover both confirmation directions, queued progress, accepted and
+  rejected adoption, exact autosave lane/payload, newer-draft preservation,
+  verification transitions, late autosave, and late transcription across A → B → A.
+- Complete frontend suite passed 121 files / 822 tests. Frontend TypeScript, changed
+  frontend ESLint, and the production build passed.
+- Complete backend suite passed 104 files / 1,016 tests; backend typecheck passed.
+- The complete mocked browser suite passed 52/52; the Letter Review spec passed 26/26.
+- `git diff --check` passed. Three independent lifecycle, architecture/simplicity, and
+  coverage reviews found no remaining checkpoint blocker after the four explicit gap
+  cases were added.
+- The production build retains its existing large-chunk warning:
+  `LetterReviewPage` is 522.67 kB and `UpdateEditorPage` is 1,182.96 kB after
+  minification.
+
+Residuals:
+
+- Extra Content autosave preserves the visible draft after failure, and the shared
+  lane blocks direct work until resolved, but this producer does not yet retain and
+  reschedule failed intent automatically. A subsequent edit retries it. Repair this
+  only through a coherent producer retry contract, not a workspace-local scheduler.
+- `lineReviewBlocked` intentionally preserves the historical “successfully unverified
+  in this visit” behavior. The warning banner's Map/Review controls still bypass the
+  viewer-click gate, so line-review entry does not yet have one comprehensive owner.
+- The verified status control remains a clickable `div` without keyboard semantics.
+  That DOM/accessibility correction was outside this no-visual-change slice.
+- The cross-domain regeneration popup and Letter transcription remain in the route.
+  The source-level architecture tests still enumerate some callback/property names;
+  behavior tests are authoritative and those assertions should shrink as owners move.
+- The 288-line workspace is cohesive around one domain state machine. Do not split it
+  by length alone or introduce a generic workspace/action framework.
+
+No product feature, visual layout, backend production behavior, database schema,
+deployment, or external state changed in this slice.

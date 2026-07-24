@@ -13,7 +13,7 @@ describe('useLetterReviewStatusResets', () => {
   });
 
   it('lets unrelated status lanes reset independently', () => {
-    const transcriptionReset = vi.fn();
+    const entityReset = vi.fn();
     const metadataReset = vi.fn();
     const { result } = renderHook(() => {
       const visit = useLetterReviewVisit('letter-a');
@@ -21,11 +21,11 @@ describe('useLetterReviewStatusResets', () => {
     });
 
     act(() => {
-      result.current('transcription', transcriptionReset, 1_000);
+      result.current('entity-reextract', entityReset, 1_000);
       result.current('metadata-regeneration', metadataReset, 2_000);
       vi.advanceTimersByTime(1_000);
     });
-    expect(transcriptionReset).toHaveBeenCalledTimes(1);
+    expect(entityReset).toHaveBeenCalledTimes(1);
     expect(metadataReset).not.toHaveBeenCalled();
 
     act(() => {
@@ -43,8 +43,8 @@ describe('useLetterReviewStatusResets', () => {
     });
 
     act(() => {
-      result.current('transcription', replaced, 1_000);
-      result.current('transcription', latest, 1_000);
+      result.current('metadata-regeneration', replaced, 1_000);
+      result.current('metadata-regeneration', latest, 1_000);
       vi.advanceTimersByTime(1_000);
     });
 
@@ -63,7 +63,7 @@ describe('useLetterReviewStatusResets', () => {
     );
 
     act(() => {
-      result.current('transcription', staleReset, 1_000);
+      result.current('metadata-reextract', staleReset, 1_000);
     });
     rerender({ letterId: 'letter-b' });
     act(() => {
@@ -81,7 +81,7 @@ describe('useLetterReviewStatusResets', () => {
     });
 
     act(() => {
-      result.current('transcription', reset, 1_000);
+      result.current('entity-reextract', reset, 1_000);
     });
     unmount();
     act(() => {

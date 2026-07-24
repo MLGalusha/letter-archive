@@ -157,6 +157,61 @@ test.describe('@mocked Letter Review', () => {
     );
   });
 
+  test('opens replacement choices from a visible transcript draft', async ({
+    page,
+  }) => {
+    const initialLetter = createMockLetterReviewLetter({
+      transcriptStatus: 'EMPTY',
+      metadataContentStatus: 'EMPTY',
+      transcript: {
+        pages: [],
+        fullText: '',
+        verified: false,
+      },
+    });
+    const mockedApi = await installMockLetterReviewApi(page, {
+      initialLetter,
+      routeFailures: {
+        updateLetter: {
+          status: 503,
+          error: 'Keep the chooser test draft local',
+        },
+      },
+    });
+    await page.goto(`/admin/letters/${initialLetter.id}`);
+    await page.locator('.letter-review-page').waitFor({ state: 'visible' });
+    await page.locator('.viewer-image').waitFor({ state: 'visible' });
+
+    const section = transcriptionSection(page);
+    await section.locator('.transcript-editor').fill(
+      'Visible local transcript draft',
+    );
+    await expect.poll(
+      () => mockedApi.updateLetterRequests.length,
+    ).toBe(1);
+    const regenerate = section.getByRole('button', {
+      name: 'Regenerate',
+      exact: true,
+    });
+    await expect(regenerate).toBeVisible();
+    await regenerate.click();
+
+    const dialog = page.locator('.regenerate-popup');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAttribute('role', 'dialog');
+    await expect(dialog).toContainText(
+      'This will overwrite the existing content.',
+    );
+    expect(mockedApi.transcribeLetterRequests).toHaveLength(0);
+
+    await dialog.getByRole('button', {
+      name: 'Cancel',
+      exact: true,
+    }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(mockedApi.transcribeLetterRequests).toHaveLength(0);
+  });
+
   test('resets Reading View generation, overlay, and split layout for a new visit', async ({
     page,
   }) => {

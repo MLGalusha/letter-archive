@@ -13,7 +13,6 @@ import {
   updateLetter,
   confirmTranscript,
   regenerateMetadata,
-  transcribeLetter,
 } from "../../api/admin";
 import {
   toggleLetterFlag,
@@ -61,6 +60,8 @@ import { useStructuredNoteActions } from "./LetterReview/useStructuredNoteAction
 import { usePhotoDescriptionWorkspace } from "./LetterReview/usePhotoDescriptionWorkspace";
 import { useExtraContentWorkspace } from "./LetterReview/useExtraContentWorkspace";
 import { useReadingViewWorkspace } from "./LetterReview/useReadingViewWorkspace";
+import { useLetterTranscriptionWorkspace } from "./LetterReview/useLetterTranscriptionWorkspace";
+import TranscriptionRegenerationDialog from "./LetterReview/TranscriptionRegenerationDialog";
 import { loadCurrentLetter } from "./LetterReview/loadCurrentLetter";
 import { usePretextFontSize } from "../../hooks/usePretextFontSize";
 import LineReviewMode, {
@@ -107,16 +108,7 @@ export default function LetterReviewPage() {
     "idle" | "extracting" | "done"
   >("idle");
 
-  // Letter transcription state (transcribe letter only, no extras)
-  const [letterTranscribeState, setLetterTranscribeState] = useState<
-    "idle" | "transcribing" | "done"
-  >("idle");
-  const [letterTranscribeMessage, setLetterTranscribeMessage] = useState<
-    string | null
-  >(null);
-
   // Regenerate popup state
-  const [showTranscriptRegeneratePopup, setShowTranscriptRegeneratePopup] = useState(false);
   const [showMetadataRegeneratePopup, setShowMetadataRegeneratePopup] = useState(false);
   const [showExtractionPopup, setShowExtractionPopup] = useState(false);
   const [extractionSender, setExtractionSender] = useState("");
@@ -149,9 +141,6 @@ export default function LetterReviewPage() {
     setRegenerateState("idle");
     setReExtractState("idle");
     setEntityReExtractState("idle");
-    setLetterTranscribeState("idle");
-    setLetterTranscribeMessage(null);
-    setShowTranscriptRegeneratePopup(false);
     setShowMetadataRegeneratePopup(false);
     setShowExtractionPopup(false);
     segmentFirstTriggeredRef.current = false;
@@ -292,6 +281,13 @@ export default function LetterReviewPage() {
     hydrateAdoptedLetter,
     handleMutationError,
   });
+  const letterTranscriptionWorkspace = useLetterTranscriptionWorkspace({
+    visit,
+    letter,
+    transcriptText: transcript,
+    executeLetterMutation,
+    scheduleStatusReset,
+  });
   const readingViewWorkspace = useReadingViewWorkspace({
     visit,
     letter,
@@ -415,74 +411,6 @@ export default function LetterReviewPage() {
   };
 
   useEffect(() => autoResizeTextarea(notesRef.current), [notes]);
-
-  // Clear any pending sync timer
-  // Letter transcription handler (transcribes only the letter, not extras)
-  const handleTranscribeLetter = useCallback(
-    async (skipConfirm = false): Promise<boolean> => {
-      if (!letterId || !letter) return false;
-
-      // Check if transcript already has content — show regenerate popup
-      if (!skipConfirm && letter.transcript.fullText.trim()) {
-        setShowTranscriptRegeneratePopup(true);
-        return false;
-      }
-
-      setShowTranscriptRegeneratePopup(false);
-      const releaseSaving = beginSaving();
-
-      try {
-        if (!visit.isActive() || !await flushPendingSaves()) return false;
-
-        setLetterTranscribeState("transcribing");
-        setLetterTranscribeMessage("Transcribing letter...");
-        const result = await transcribeLetter(
-          letterId,
-          letter.primarySourceRevision,
-        );
-
-        if (!tryAdoptLetter(result.letter)) return false;
-        hydrateAdoptedLetter(result.letter);
-
-        setLetterTranscribeState("done");
-        setLetterTranscribeMessage(
-          `Transcribed ${result.transcribed.pageCount} page(s)`,
-        );
-        showToast(
-          `Letter transcribed (${result.transcribed.pageCount} page(s))`,
-          "success",
-        );
-
-        scheduleStatusReset("transcription", () => {
-          setLetterTranscribeState("idle");
-          setLetterTranscribeMessage(null);
-        }, 3000);
-        return true;
-      } catch (err) {
-        if (visit.isActive()) {
-          setLetterTranscribeState("idle");
-          setLetterTranscribeMessage(null);
-        }
-        handleMutationError(err, "Transcription failed");
-        console.error("Letter transcription error:", err);
-        return false;
-      } finally {
-        releaseSaving();
-      }
-    },
-    [
-      beginSaving,
-      flushPendingSaves,
-      handleMutationError,
-      hydrateAdoptedLetter,
-      letterId,
-      letter,
-      scheduleStatusReset,
-      showToast,
-      tryAdoptLetter,
-      visit,
-    ],
-  );
 
   const handleVisibilityChange = useCallback(async (newVisibility: VisibilityState) => {
     if (!letterId || !letter) return;
@@ -1216,8 +1144,6 @@ export default function LetterReviewPage() {
               <TranscriptionSection
                 letter={letter}
                 transcriptText={transcript}
-                letterTranscribeState={letterTranscribeState}
-                letterTranscribeMessage={letterTranscribeMessage}
                 isTranscriptEditing={isTranscriptEditing}
                 transcriptFontSize={transcriptFontSize}
                 showEditTooltip={showEditTooltip}
@@ -1225,12 +1151,12 @@ export default function LetterReviewPage() {
                 editTooltipRef={editTooltipRef}
                 saving={saving}
                 editorRef={editorRef}
-                onTranscribeLetter={handleTranscribeLetter}
                 onVerifyTranscript={handleVerifyTranscript}
                 onTranscriptClick={handleTranscriptClick}
                 onTranscriptDoubleClick={handleTranscriptDoubleClick}
                 onTranscriptInput={handleTranscriptInput}
                 onEditorKeyDown={handleEditorKeyDown}
+                {...letterTranscriptionWorkspace.sectionProps}
                 {...readingViewWorkspace.sectionProps}
               />
             )}
@@ -1350,73 +1276,34 @@ export default function LetterReviewPage() {
         )}
       </div>
 
-      {/* Regenerate Transcription popup */}
-      {showTranscriptRegeneratePopup && (
-        <div
-          className="confirm-dialog-overlay"
-          onClick={() => setShowTranscriptRegeneratePopup(false)}
-        >
-          <div className="confirm-dialog regenerate-popup" onClick={(e) => e.stopPropagation()}>
-            <h3>Regenerate Transcription</h3>
-            <p>Choose what to regenerate. This will overwrite the existing content.</p>
-            <div className="regenerate-options">
-              <button
-                className="btn-option"
-                onClick={() => {
-                  setShowTranscriptRegeneratePopup(false);
-                  void handleTranscribeLetter(true);
-                }}
-              >
-                <Icon name="file" size={16} />
-                <span>Letter Transcript</span>
-              </button>
-              {hasExtras && (
-                <button
-                  className="btn-option"
-                  onClick={() => {
-                    setShowTranscriptRegeneratePopup(false);
-                    void extraContentWorkspace.transcribe({
-                      confirmReplacement: false,
-                    });
-                  }}
-                >
-                  <Icon name="plus" size={16} />
-                  <span>Extra Content</span>
-                </button>
-              )}
-              {hasExtras && (
-                <button
-                  className="btn-option"
-                  onClick={async () => {
-                    setShowTranscriptRegeneratePopup(false);
-                    // Transcribe both: letter first, then extras
-                    if (
-                      !await handleTranscribeLetter(true)
-                      || !visit.isActive()
-                    ) {
-                      return;
-                    }
-                    await extraContentWorkspace.transcribe({
-                      confirmReplacement: false,
-                    });
-                  }}
-                >
-                  <Icon name="process" size={16} />
-                  <span>Both</span>
-                </button>
-              )}
-            </div>
-            <div className="confirm-dialog-actions">
-              <button
-                className="btn-cancel"
-                onClick={() => setShowTranscriptRegeneratePopup(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <TranscriptionRegenerationDialog
+        isOpen={letterTranscriptionWorkspace.regenerationDialogOpen}
+        onClose={letterTranscriptionWorkspace.closeRegenerationDialog}
+        onLetter={() => {
+          letterTranscriptionWorkspace.closeRegenerationDialog();
+          void letterTranscriptionWorkspace.transcribe();
+        }}
+        onExtras={hasExtras ? () => {
+          letterTranscriptionWorkspace.closeRegenerationDialog();
+          void extraContentWorkspace.transcribe({
+            confirmReplacement: false,
+          });
+        } : undefined}
+        onBoth={hasExtras ? () => {
+          letterTranscriptionWorkspace.closeRegenerationDialog();
+          void (async () => {
+            if (
+              !await letterTranscriptionWorkspace.transcribe()
+              || !visit.isActive()
+            ) {
+              return;
+            }
+            await extraContentWorkspace.transcribe({
+              confirmReplacement: false,
+            });
+          })();
+        } : undefined}
+      />
 
       <IdentityExtractionModal
         isOpen={showExtractionPopup}

@@ -9,6 +9,12 @@ export type LetterReviewStatusResetLane =
 
 type Timer = ReturnType<typeof setTimeout>;
 
+export type ScheduleLetterReviewStatusReset = (
+  lane: LetterReviewStatusResetLane,
+  callback: () => void,
+  delayMs: number,
+) => void;
+
 /**
  * Keeps unrelated completion badges from cancelling one another.
  *
@@ -25,10 +31,10 @@ export function useLetterReviewStatusResets(visit: LetterReviewVisit) {
     timersRef.current.clear();
   }, []);
 
-  const scheduleStatusReset = useCallback((
-    lane: LetterReviewStatusResetLane,
-    callback: () => void,
-    delayMs: number,
+  const scheduleStatusReset = useCallback<ScheduleLetterReviewStatusReset>((
+    lane,
+    callback,
+    delayMs,
   ) => {
     const currentTimer = timersRef.current.get(lane);
     if (currentTimer) clearTimeout(currentTimer);

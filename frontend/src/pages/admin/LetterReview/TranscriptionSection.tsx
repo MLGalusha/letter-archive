@@ -28,7 +28,7 @@ interface TranscriptionSectionProps {
   editTooltipRef: RefObject<HTMLDivElement | null>;
   saving: boolean;
   editorRef: RefObject<HTMLDivElement | null>;
-  onTranscribeLetter: (force?: boolean) => void;
+  onTranscribeLetter: () => void;
   onVerifyTranscript: () => void;
   onTranscriptClick: (e: React.MouseEvent) => void;
   onTranscriptDoubleClick: (e: React.MouseEvent) => void;

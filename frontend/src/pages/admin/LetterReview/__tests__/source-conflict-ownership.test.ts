@@ -66,6 +66,10 @@ const readingViewWorkspacePath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/useReadingViewWorkspace.ts',
 );
+const letterTranscriptionWorkspacePath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/LetterReview/useLetterTranscriptionWorkspace.ts',
+);
 const reviewableDynamicEditorPath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/ReviewableDynamicEditor.tsx',
@@ -94,6 +98,7 @@ describe('Letter Review source-conflict ownership', () => {
       extraContentSection,
       extraContentWorkspace,
       readingViewWorkspace,
+      letterTranscriptionWorkspace,
       reviewableDynamicEditor,
       mutationExecutor,
       structuredNoteActions,
@@ -105,6 +110,7 @@ describe('Letter Review source-conflict ownership', () => {
       readFile(extraContentSectionPath, 'utf8'),
       readFile(extraContentWorkspacePath, 'utf8'),
       readFile(readingViewWorkspacePath, 'utf8'),
+      readFile(letterTranscriptionWorkspacePath, 'utf8'),
       readFile(reviewableDynamicEditorPath, 'utf8'),
       readFile(mutationExecutorPath, 'utf8'),
       readFile(structuredNoteActionsPath, 'utf8'),
@@ -112,7 +118,6 @@ describe('Letter Review source-conflict ownership', () => {
 
     expect(page).toContain('useLetterSourceConflict(showToast, visit)');
     for (const callback of [
-      'handleTranscribeLetter',
       'executeConfirmTranscript',
       'executeMetadataRegenerate',
       'handleReExtract',
@@ -144,6 +149,18 @@ describe('Letter Review source-conflict ownership', () => {
     expect(callbackBlock(readingViewWorkspace, 'generate')).toContain(
       'executeLetterMutation({',
     );
+    expect(page).toContain('useLetterTranscriptionWorkspace({');
+    expect(callbackBlock(letterTranscriptionWorkspace, 'transcribe')).toContain(
+      'executeLetterMutation({',
+    );
+    expect(letterTranscriptionWorkspace).toContain(
+      "scheduleStatusReset('transcription'",
+    );
+    expect(letterTranscriptionWorkspace).not.toContain('setTimeout(');
+    expect(page).not.toMatch(/\btranscribeLetter\b/);
+    expect(page).not.toContain('handleTranscribeLetter');
+    expect(page).not.toContain('letterTranscribeState');
+    expect(page).not.toContain('letterTranscribeMessage');
     expect(page).not.toContain('transcriptViewMode');
     expect(page).not.toContain('setReaderText');
     expect(page).not.toContain('handleReaderTextChange');
@@ -300,6 +317,7 @@ describe('Letter Review source-conflict ownership', () => {
       photoDescriptionWorkspace,
       extraContentWorkspace,
       readingViewWorkspace,
+      letterTranscriptionWorkspace,
       autoSaveCoordinator,
       mutationExecutor,
       structuredNoteActions,
@@ -311,6 +329,7 @@ describe('Letter Review source-conflict ownership', () => {
       readFile(photoDescriptionWorkspacePath, 'utf8'),
       readFile(extraContentWorkspacePath, 'utf8'),
       readFile(readingViewWorkspacePath, 'utf8'),
+      readFile(letterTranscriptionWorkspacePath, 'utf8'),
       readFile(autoSaveCoordinatorPath, 'utf8'),
       readFile(mutationExecutorPath, 'utf8'),
       readFile(structuredNoteActionsPath, 'utf8'),
@@ -324,7 +343,6 @@ describe('Letter Review source-conflict ownership', () => {
     );
     expect(page).toContain('flushPendingSaves,');
     for (const callback of [
-      'handleTranscribeLetter',
       'executeConfirmTranscript',
       'executeMetadataRegenerate',
       'handleReExtract',
@@ -337,6 +355,9 @@ describe('Letter Review source-conflict ownership', () => {
       expect(block).toContain('hydrateAdoptedLetter(');
     }
     expect(callbackBlock(readingViewWorkspace, 'generate')).toContain(
+      'executeLetterMutation({',
+    );
+    expect(callbackBlock(letterTranscriptionWorkspace, 'transcribe')).toContain(
       'executeLetterMutation({',
     );
     expect(autoSave).not.toContain('readingText?:');

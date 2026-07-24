@@ -11,7 +11,8 @@ Last updated: July 24, 2026
 - Last sealed cleanup implementation: Dashboard manager ownership at `cf7c0d27`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: next-slice orientation; no implementation is open
+- Current slice: 031 — delete the dead singular Dashboard filter-pill family;
+  framed against `6365ec4f`, with no production implementation yet
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2442,6 +2443,75 @@ external state changed. The only observable corrections are mutual exclusion and
 complete dismissal of ephemeral letter-Dashboard managers.
 
 Rollback base: `2a4e0415`.
+
+## Slice 031 — Delete the Dead Singular Dashboard Filter-Pill Family
+
+Status: framed; implementation not started
+
+Problem:
+
+`AdminDashboard.css` still carries roughly 270 lines for the exact singular
+`.filter-pill` and `.filter-pill-count` surface: base geometry, workflow/visibility/
+content colors, active/inactive rules, and a mobile override. Commit `33db3b5f`
+replaced every renderer in the six filter sections with `FilterOptionButton`, whose
+fixed base class is `.filter-option`, but retained the old CSS family.
+
+A repository-wide exact-token search finds no singular `filter-pill` producer outside
+the stylesheet and this checkpoint note. Dynamic filter variant classes such as
+`filter-published`, `filter-content-draft`, and `filter-content-shape` remain live, but
+their current cascade is explicitly rooted at `.filter-option`. The dead singular
+rules add a second historical visual vocabulary beside the real owner and make later
+Dashboard CSS work harder to reason about.
+
+Target invariant:
+
+Every rendered Dashboard filter option is owned by `FilterOptionButton` and the
+`.filter-option` selector family. The DOM contains zero exact `.filter-pill` and
+`.filter-pill-count` elements. Removing rules that require either absent class token
+must leave filter geometry, computed styles, responsive layout, interactions, and
+screenshots unchanged.
+
+Scope:
+
+- Delete only selector blocks containing the exact singular `.filter-pill` or
+  `.filter-pill-count` token from `AdminDashboard.css`, together with comments that
+  document only that retired family.
+- Preserve the plural `.filter-pills` selector, generic filter layout selectors,
+  every dynamic `filter-*` variant constant, and all live `.filter-option` rules.
+- Capture the same active filter panel before and after at desktop, tablet, and phone
+  viewports using the deterministic Dashboard API.
+- Compare exact DOM counts, panel/option/grid/body geometry and computed styles, plus
+  screenshots. Exercise multiple live variant families and all three content-status
+  tabs.
+
+Non-goals:
+
+- No selector renaming, CSS repartitioning, formatting sweep, visual redesign, or
+  state/component refactor.
+- Do not delete the separately suspicious plural `.filter-pills` family; existing
+  E2E locators still mention it and it needs its own characterization.
+- Do not delete generic or duplicate-looking Dashboard/table selectors merely because
+  they are nearby.
+- No product behavior, responsive breakpoint, accessibility, API, storage, backend,
+  or deployment change.
+
+Acceptance:
+
+- Exact-token source/history evidence proves that all current filter renderers use
+  `.filter-option` and no runtime path produces the singular legacy class.
+- Before/after desktop `1440×900`, tablet `768×1024`, and phone `390×844`
+  screenshots are pixel-identical for the same deterministic active-filter state;
+  phone coverage includes the panel top and scrolled bottom.
+- Before/after measurements report zero legacy elements and identical live filter
+  option count, filter-panel/grid rectangles, option dimensions, typography, colors,
+  borders, shadows, gaps, overflow, and scroll extents.
+- Focused filter tests, the Dashboard neighborhood, frontend suite/build, touched CSS
+  lint/parsing, deterministic Dashboard browser spec, aggregate verifier, and
+  `git diff --check` pass.
+- Independent selector/cascade, rendered-verification, and simplicity reviews find no
+  remaining P0–P2 issue in the bounded deletion.
+
+Rollback base: `6365ec4f`.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

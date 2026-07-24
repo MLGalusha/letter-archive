@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { StartProcessingOptions } from '../../../api/admin';
 import type { ContentStatus, WorkflowState } from '../../../types/Letter';
 import { loadPersistedState } from './utils';
 import type { ContentFilterView, ContentShapeFilter, DateMode, FlaggedFilter, MissingFilter, VisibilityFilter } from './types';
@@ -298,20 +297,5 @@ export function getDashboardFilterQueryFields(
     flaggedFilter: filters.flaggedFilter,
     missingFilters: filters.missingFilters,
     contentShapeFilters: filters.contentShapeFilters,
-  };
-}
-
-export function getDashboardProcessingFilters(
-  filters: DashboardFilterControls,
-): StartProcessingOptions {
-  return {
-    collectionCode: filters.collectionFilter !== 'all' ? filters.collectionFilter : undefined,
-    visibility: filters.visibilityFilter !== 'ALL' ? filters.visibilityFilter : undefined,
-    search: filters.searchQuery || undefined,
-    year: filters.yearFilter ?? undefined,
-    month: filters.monthFilter ?? undefined,
-    day: filters.dayFilter ?? undefined,
-    dateFrom: filters.dateFromFilter ?? undefined,
-    dateTo: filters.dateToFilter ?? undefined,
   };
 }

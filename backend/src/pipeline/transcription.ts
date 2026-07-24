@@ -11,11 +11,6 @@ import {
 } from '../services/letter/transcription-job.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
 import { createLogger } from '../utils/logger.js';
-import {
-  clearJobProgress,
-  shouldAbortProcessing,
-  updateJobProgress,
-} from '../services/processes/runner.js';
 import { getDocumentTypeFromCode, isTranscribableType } from '../services/letter/shared.js';
 import { runAutomaticExtraContent } from '../services/letter/extra-content.js';
 
@@ -84,7 +79,6 @@ async function executeClaimedTranscription(
     const stopIfLeaseLost = (): ClaimedTranscriptionOutcome | null => {
       if (heartbeat.hasOwnership()) return null;
       letterLog.info('Transcription lease was lost; discarding unfinished result');
-      clearJobProgress(letterId, 'transcription');
       return { kind: 'superseded' };
     };
 
@@ -93,16 +87,10 @@ async function executeClaimedTranscription(
 
     if (letter.type === 'L') {
       const results: Array<{ text: string } | null> = new Array(pages.length).fill(null);
-      let completedCount = 0;
 
       for (let batchStart = 0; batchStart < pages.length; batchStart += PAGE_CONCURRENCY) {
         const leaseLoss = stopIfLeaseLost();
         if (leaseLoss) return leaseLoss;
-
-        if (shouldAbortProcessing()) {
-          letterLog.info('Transcription aborted between page batches');
-          throw new Error('Processing aborted');
-        }
 
         const batch = pages.slice(batchStart, batchStart + PAGE_CONCURRENCY);
 
@@ -126,15 +114,6 @@ async function executeClaimedTranscription(
 
           results[batchStart + batchOffset] = { text: result.text };
           stubMode = result.isStub;
-          completedCount += 1;
-
-          updateJobProgress(
-            letterId,
-            'transcription',
-            completedCount,
-            pages.length,
-            `${completedCount} of ${pages.length} pages`,
-          );
 
           letterLog.debug(
             {
@@ -161,19 +140,7 @@ async function executeClaimedTranscription(
         const leaseLoss = stopIfLeaseLost();
         if (leaseLoss) return leaseLoss;
 
-        if (shouldAbortProcessing()) {
-          letterLog.info('Extra content transcription aborted');
-          throw new Error('Processing aborted');
-        }
-
         const pageStart = Date.now();
-        updateJobProgress(
-          letterId,
-          'transcription',
-          page.pageNumber - 1,
-          pages.length,
-          `Page ${page.pageNumber} of ${pages.length}`,
-        );
 
         const result = await transcribeExtraContent({
           filePath: getAbsoluteStoragePath(page.storagePath),
@@ -189,14 +156,6 @@ async function executeClaimedTranscription(
           pageTranscriptions.push(result.text.replace(/^\n+|\n+$/g, ''));
         }
         stubMode = result.isStub;
-
-        updateJobProgress(
-          letterId,
-          'transcription',
-          page.pageNumber,
-          pages.length,
-          `Page ${page.pageNumber} of ${pages.length}`,
-        );
 
         letterLog.debug(
           {
@@ -231,7 +190,6 @@ async function executeClaimedTranscription(
     const published = await completeTranscription(letterId, runId, combinedTranscription);
     if (!published) {
       letterLog.info('Transcription was cancelled or superseded; discarding result');
-      clearJobProgress(letterId, 'transcription');
       return { kind: 'superseded' };
     }
 
@@ -253,8 +211,6 @@ async function executeClaimedTranscription(
       }
     }
 
-    clearJobProgress(letterId, 'transcription');
-
     const textLength = combinedTranscription?.length ?? 0;
     letterLog.info(
       {
@@ -274,7 +230,6 @@ async function executeClaimedTranscription(
       textLength,
     };
   } catch (error) {
-    clearJobProgress(letterId, 'transcription');
     const message = error instanceof Error ? error.message : 'Unknown error';
 
     letterLog.error(

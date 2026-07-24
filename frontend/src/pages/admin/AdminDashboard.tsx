@@ -188,9 +188,7 @@ export default function AdminDashboard() {
 
   const processingActions = useDashboardProcessingActions({
     selectedIds,
-    letters,
     singleSelectedLetter,
-    filters: dashboardFilters,
     exitEditMode,
     fetchLetters,
   });

@@ -26,7 +26,6 @@ import { hashPassword } from './auth/jwt.js';
 import { notify } from './services/notifications.js';
 import { startNotificationSweeper, stopNotificationSweeper } from './services/notification-sweeper.js';
 import { initNotificationStreamBroadcaster } from './routes/admin/notifications-stream.js';
-import { initProcessingStreamBroadcaster } from './routes/admin/processing-stream.js';
 
 /* ── Process-level error monitoring ─────────────────────── */
 process.on('uncaughtException', (err) => {
@@ -165,14 +164,13 @@ const server = app.listen(env.PORT, () => {
     'Server started'
   );
 
-  // Only leased transcription/extra-content attempts are safe to recover automatically.
-  // Ownerless metadata/entity RUNNING rows remain visible for explicit action.
+  // Only run-bound leased transcription, extra-content, and metadata attempts are
+  // recovered automatically. Entity RUNNING rows remain visible for exact action.
   void apiLeaseRecovery.reconcile();
   apiLeaseRecovery.start();
 
-  // Wire the SSE broadcaster into notify() so every notification pushes to connected clients
+  // Wire the SSE broadcaster into notify() so every notification pushes to connected clients.
   initNotificationStreamBroadcaster();
-  initProcessingStreamBroadcaster();
 
   // Start the notification sweeper (stuck jobs, failure rate, worker silence, retention)
   startNotificationSweeper();

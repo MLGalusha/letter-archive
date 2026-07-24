@@ -115,15 +115,15 @@ Clicking any page image opens a full-screen lightbox — the same component the 
 
 **Search-result mode.** Opening a search hit (from the dashboard or anywhere else) drops you into the lightbox already scrolled to the matching line, with the matched phrase rendered as a labeled callout on the page itself. The line counter in the corner (`Line 7 / 86`, `Page 1 / 2`) tells you exactly where you are in a long letter — useful when the same phrase appears multiple times.
 
-### 3. Processing — the live pipeline
+### 3. Processing — the durable worker queue
 
 ![Processing dashboard](docs/screenshots/admin-processing.png)
 
-This page is a transitional operator view, not a durable control plane for the worker.
-It combines persisted worker availability with a temporary API-memory batch registry.
-The worker itself is a separate process (an on-demand Cloud Run Job in production);
-the registry's batch mutex, progress, pause, and abort state disappear when the API
-restarts and cannot control a separate worker execution.
+This page is a durable operator view over persisted processing state. The worker is a
+separate process—an on-demand Cloud Run Job in production—and is the only automatic
+batch executor. The page can request a global drain and mutate exact queued or active
+attempts, but it does not pretend to pause, resume, abort, or report in-memory progress
+for that separate execution.
 
 Each card is a pipeline stage:
 
@@ -132,24 +132,17 @@ Each card is a pipeline stage:
 - **Entity extraction** — extracts mentioned people and places from the transcript and matches them against the canonical registries, queueing new candidates for review.
 - **Extra content transcription** — telegrams, envelopes, covers, ephemera. Separately gated because not every supplementary scan contains transcribable text.
 
-Each stage shows an API-computed snapshot of **eligible / queued / active** work and a
-`Start batch` button. That button currently starts the temporary registry runner inside
-the API process. The durable worker-owned queue covers transcription, supplementary
-extra-content transcription, metadata, and entity extraction. It is also used by
-uploads, bulk actions, and retries; local development must run `npm run worker`
-separately.
+The page reads one durable snapshot for **queued / active / recent** work across all
+four stages. It polls persisted state, supports exact queue removal, clear, retry, and
+active-attempt cancellation, and offers one global worker-run request. There are no
+stage-local batch, pause, resume, abort, or process-memory progress controls: automatic
+AI work has one runtime owner, the separate worker.
 
-The collapsing queues underneath each card list every job individually with the letter ID, attempt count, and last error — useful when one of the 29 starts failing.
-
-The page subscribes to processing SSE events, but those broadcasts are process-local.
-It therefore reconciles from the API every 15 seconds even while SSE is healthy and
-every 5 seconds in fallback mode. Page state lives in
-[`useProcessingState`](frontend/src/hooks/useProcessingState.ts); the temporary registry
-is in [`services/processes/registry.ts`](backend/src/services/processes/registry.ts),
-while durable worker queue operations live in
-[`services/processing-queue.ts`](backend/src/services/processing-queue.ts). The
-architecture cleanup is intentionally retiring the registry next so automatic batch
-work has one runtime owner.
+The collapsing queues underneath each card list the persisted jobs currently returned
+by the queue snapshot. Local development must run `npm run worker` separately. Page
+state lives in [`useProcessingState`](frontend/src/hooks/useProcessingState.ts), and
+the durable observation/mutation boundary is
+[`services/processing-queue.ts`](backend/src/services/processing-queue.ts).
 
 ### 4. Usage & analytics — cost attribution at the letter level
 
@@ -277,20 +270,20 @@ A few things worth knowing that the diagram glosses:
 
 - **Storage is filesystem, not the GCS API.** In production the scan bucket is mounted into both the backend and worker containers via `gcsfuse` — see the volume mount in [`deploy/cloudrun/backend-worker-job.yaml`](deploy/cloudrun/backend-worker-job.yaml). In dev it's a local directory. Both processes call `getAbsoluteStoragePath()` and read files; nobody calls the GCS REST API directly.
 - **Image serving goes through the backend, not direct GCS URLs.** `GET /images/:pageId` ([`routes/images.ts`](backend/src/routes/images.ts)) streams the file with on-the-fly Sharp resize keyed by a `?w=` query param, cached in an in-process LRU (max 1000 variants). No signed URLs.
-- **The worker has two modes.** Locally it is normally a long-running polling process. With `EXIT_WHEN_EMPTY=true` it drains transcription, extra-content, metadata, and entity queues and exits, which is the Cloud Run Job shape. Upload, bulk, and filtered-start API paths leave durable work for this worker and optionally wake the configured Cloud Run Job; local development therefore needs `npm run worker` in a separate terminal. The newer processing-dashboard batch runner still executes inside the API process today.
-- **Processing-dashboard pause and abort are API-memory controls, not durable worker controls.** They belong only to the remaining registry runner. The `worker_state` row contains heartbeat/observation fields, and the separate worker does not read the registry runner's control flags.
-- **Frontend ↔ Backend uses both REST and SSE.** REST handles CRUD. Admin notifications
-  use `/admin/notifications/stream` through
-  [`useNotificationStream`](frontend/src/hooks/useNotificationStream.ts); the
-  transitional Processing page has a separate `/admin/processing/stream` connection
-  through [`useProcessingEvents`](frontend/src/hooks/useProcessingEvents.ts).
+- **The worker has two modes.** Locally it is normally a long-running polling process. With `EXIT_WHEN_EMPTY=true` it drains transcription, extra-content, metadata, and entity queues and exits, which is the Cloud Run Job shape. Upload, selected-ID bulk, retry, recovery, and the explicit global wake path leave durable work for this worker and optionally wake the configured Cloud Run Job; local development therefore needs `npm run worker` in a separate terminal.
+- **The Processing page is a durable queue observer, not an executor.** It polls PostgreSQL-backed job state and can mutate exact queued or active attempts. The `worker_state` row remains an observation until its execution lease is added; the page labels it as last-reported state rather than authoritative availability.
+- **Frontend ↔ Backend uses REST plus notification SSE.** REST handles processing
+  observation and mutations. Admin notifications use `/admin/notifications/stream`
+  through [`useNotificationStream`](frontend/src/hooks/useNotificationStream.ts).
 - **Line detection is an operator-run local tool.** From `backend/`, `npm run detect-lines` fetches pages through the admin API, runs Kraken in the local Python environment, and PATCHes the segments back to the API. Uploads and worker transcription do not launch Python, and production containers do not need Kraken for normal request or queue processing.
 
-Processing ownership is currently transitional: ordinary upload, bulk, and filtered
-starts are worker-owned, the processing dashboard still has one fire-and-forget API
-batch runner, and explicit single-letter actions await their claimed work directly.
-PostgreSQL stores stage state and run ownership; transcription, metadata, and
-extra-content attempts also have database-clock leases. The exact paths and remaining
+Automatic processing is worker-owned. Uploads, selected-ID bulk actions, retries, and
+the Processing page only persist or observe queue state or request a global worker
+drain; explicit single-letter actions still await their separately claimed work
+directly. PostgreSQL stores stage state and run ownership; transcription, metadata,
+and extra-content attempts also have database-clock leases. API-side lease
+reconciliation remains temporarily active until worker availability itself has a
+fenced execution lease and an external scheduled wake. The exact paths and remaining
 risks are tracked in
 [`docs/architecture-cleanup/processing-ownership.md`](docs/architecture-cleanup/processing-ownership.md).
 

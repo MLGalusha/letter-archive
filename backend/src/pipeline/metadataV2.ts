@@ -19,7 +19,6 @@ import {
   EntityExtractionClaimLostError,
   processEntityExtraction,
 } from '../services/entities.js';
-import { updateJobProgress, clearJobProgress } from '../services/processes/runner.js';
 import { createLogger } from '../utils/logger.js';
 import { notify } from '../services/notifications.js';
 
@@ -127,7 +126,6 @@ async function executeClaimedMetadataExtractionV2(
         claim,
         'Metadata source changed immediately after claim',
       );
-      clearJobProgress(letterId, 'metadata');
       return { kind: 'superseded' };
     }
     if (letter.type !== 'L') {
@@ -178,8 +176,6 @@ async function executeClaimedMetadataExtractionV2(
   // PHASE 1: Basic Metadata Extraction
   // ========================================================================
 
-  updateJobProgress(letterId, 'metadata', 0, 2, 'Extracting metadata');
-
   let metadataResult;
   try {
     const corrections: ExtractionCorrections | undefined = effectiveOptions
@@ -200,7 +196,6 @@ async function executeClaimedMetadataExtractionV2(
 
     if (!heartbeat.hasOwnership()) {
       letterLog.info('Metadata lease was lost; discarding unfinished result');
-      clearJobProgress(letterId, 'metadata');
       return { kind: 'superseded' };
     }
 
@@ -211,7 +206,6 @@ async function executeClaimedMetadataExtractionV2(
     );
     if (!published) {
       letterLog.info('Metadata ownership changed during processing — discarding result');
-      clearJobProgress(letterId, 'metadata');
       return { kind: 'superseded' };
     }
 
@@ -262,8 +256,6 @@ async function executeClaimedMetadataExtractionV2(
       });
     }
   } catch (error) {
-    clearJobProgress(letterId, 'metadata');
-
     const duration = Date.now() - start;
     const message = error instanceof Error ? error.message : 'Unknown error';
 
@@ -286,15 +278,12 @@ async function executeClaimedMetadataExtractionV2(
   // PHASE 2: Entity Extraction (non-fatal)
   // ========================================================================
 
-  updateJobProgress(letterId, 'metadata', 1, 2, 'Extracting entities');
-
   let entityClaim: EntityExtractionClaim | null = null;
   try {
     // Claim entity extraction atomically (within same pipeline, but still safe)
     entityClaim = await claimEntityExtraction(letterId, 'PENDING');
     if (!entityClaim) {
       letterLog.info('Entity extraction already claimed — skipping Phase 2');
-      clearJobProgress(letterId, 'metadata');
       return { kind: 'completed' };
     }
 
@@ -327,8 +316,6 @@ async function executeClaimedMetadataExtractionV2(
       letterId,
       entityClaim,
     );
-
-    clearJobProgress(letterId, 'metadata');
 
     const totalDuration = Date.now() - start;
     letterLog.info(
@@ -365,8 +352,6 @@ async function executeClaimedMetadataExtractionV2(
       },
     });
   } catch (error) {
-    clearJobProgress(letterId, 'metadata');
-
     if (error instanceof EntityExtractionClaimLostError) {
       letterLog.info('Entity extraction run was superseded before commit');
       return { kind: 'completed' };
@@ -425,7 +410,6 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
     letterLog.info('Entity extraction job already claimed by another process — skipping');
     return;
   }
-  updateJobProgress(letterId, 'entity_extraction', 0, 1, 'Extracting entities');
 
   const corrections: ExtractionCorrections | undefined = options
     ? {
@@ -473,8 +457,6 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
       claim,
     );
 
-    clearJobProgress(letterId, 'entity_extraction');
-
     const duration = Date.now() - start;
     letterLog.info(
       {
@@ -507,8 +489,6 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
       },
     });
   } catch (error) {
-    clearJobProgress(letterId, 'entity_extraction');
-
     if (error instanceof EntityExtractionClaimLostError) {
       letterLog.info('Entity extraction run was superseded before commit');
       return;

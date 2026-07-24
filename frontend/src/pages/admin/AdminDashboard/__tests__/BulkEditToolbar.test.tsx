@@ -123,6 +123,15 @@ describe("BulkEditToolbar", () => {
     expect(models.completion.onExit).toHaveBeenCalled();
   });
 
+  it("disables processing actions when the toolbar has no selected letters", () => {
+    render(<BulkEditToolbar {...makeToolbarModels({ selectedCount: 0 })} />);
+
+    expect(screen.getByRole("button", { name: "Transcribe" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Extract Metadata" }),
+    ).toBeDisabled();
+  });
+
   it("switches to save completion when copy edits are pending", () => {
     render(<BulkEditToolbar {...makeToolbarModels({ pendingChangesCount: 2 })} />);
 

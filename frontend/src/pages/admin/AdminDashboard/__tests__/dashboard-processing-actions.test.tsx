@@ -1,57 +1,39 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useDashboardProcessingActions } from "../useDashboardProcessingActions";
-import type { DashboardFilterControls } from "../useDashboardFilters";
 
 const {
+  bulkExtractMetadataMock,
   bulkTranscribeMock,
-  startMetadataExtractionMock,
-  startTranscriptionMock,
   showToastMock,
 } = vi.hoisted(() => ({
+  bulkExtractMetadataMock: vi.fn(),
   bulkTranscribeMock: vi.fn(),
-  startMetadataExtractionMock: vi.fn(),
-  startTranscriptionMock: vi.fn(),
   showToastMock: vi.fn(),
 }));
 
 vi.mock("../../../../api/admin", () => ({
-  bulkExtractMetadata: vi.fn(),
+  bulkExtractMetadata: bulkExtractMetadataMock,
   bulkTranscribe: bulkTranscribeMock,
   confirmTranscript: vi.fn(),
   regenerateMetadata: vi.fn(),
-  startMetadataExtraction: startMetadataExtractionMock,
-  startTranscription: startTranscriptionMock,
 }));
 
 vi.mock("../../../../contexts/ToastContext", () => ({
   useToast: () => ({ showToast: showToastMock }),
 }));
 
-function makeFilters(): DashboardFilterControls {
-  return {
-    collectionFilter: "009",
-    visibilityFilter: "ALL",
-    searchQuery: "",
-    yearFilter: null,
-    monthFilter: null,
-    dayFilter: null,
-    dateFromFilter: null,
-    dateToFilter: null,
-  } as unknown as DashboardFilterControls;
-}
-
 function renderProcessingActions(selectedIds = new Set<string>()) {
   const exitEditMode = vi.fn();
   const fetchLetters = vi.fn().mockResolvedValue(undefined);
-  const hook = renderHook(() => useDashboardProcessingActions({
-    selectedIds,
-    letters: [],
-    singleSelectedLetter: null,
-    filters: makeFilters(),
-    exitEditMode,
-    fetchLetters,
-  }));
+  const hook = renderHook(() =>
+    useDashboardProcessingActions({
+      selectedIds,
+      singleSelectedLetter: null,
+      exitEditMode,
+      fetchLetters,
+    }),
+  );
 
   return { ...hook, exitEditMode, fetchLetters };
 }
@@ -59,74 +41,78 @@ function renderProcessingActions(selectedIds = new Set<string>()) {
 describe("useDashboardProcessingActions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    bulkTranscribeMock.mockResolvedValue({
+      queued: 2,
+      skipped: 0,
+      skipReasons: [],
+    });
+    bulkExtractMetadataMock.mockResolvedValue({
+      queued: 2,
+      skipped: 0,
+      skipReasons: [],
+    });
   });
 
-  it("surfaces the backend message when no filtered transcription work is eligible", async () => {
-    startTranscriptionMock.mockResolvedValue({
-      message: "No letters to process",
-      total: 0,
-    });
+  it("does nothing without an explicit selection", async () => {
     const { result } = renderProcessingActions();
 
+    act(() => {
+      result.current.handleOpenTranscription();
+      result.current.handleOpenMetadataExtraction();
+    });
     await act(async () => {
       await result.current.handleStartTranscription();
+      await result.current.handleStartMetadataExtraction();
     });
 
-    expect(startTranscriptionMock).toHaveBeenCalledWith({ collectionCode: "009" });
-    expect(showToastMock).toHaveBeenCalledWith("No letters to process", "info");
+    expect(result.current.showTranscribeConfirm).toBe(false);
+    expect(result.current.showMetadataConfirm).toBe(false);
+    expect(bulkTranscribeMock).not.toHaveBeenCalled();
+    expect(bulkExtractMetadataMock).not.toHaveBeenCalled();
   });
 
-  it("surfaces the backend message when a filtered collection is not found", async () => {
-    startMetadataExtractionMock.mockResolvedValue({
-      message: "Collection not found",
-      total: 0,
+  it("passes every selected id to transcription instead of filtering through loaded rows", async () => {
+    const selectedIds = new Set(["letter-on-page", "letter-on-another-page"]);
+    const { result, exitEditMode, fetchLetters } =
+      renderProcessingActions(selectedIds);
+
+    await act(async () => {
+      await result.current.handleStartTranscription(false);
     });
-    const { result } = renderProcessingActions();
+
+    expect(bulkTranscribeMock).toHaveBeenCalledWith(
+      ["letter-on-page", "letter-on-another-page"],
+      false,
+    );
+    expect(showToastMock).toHaveBeenCalledWith(
+      "Queued 2 letters for transcription",
+      "success",
+    );
+    expect(exitEditMode).toHaveBeenCalled();
+    expect(fetchLetters).toHaveBeenCalled();
+  });
+
+  it("passes the explicit transcription overwrite choice to the backend", async () => {
+    const { result } = renderProcessingActions(new Set(["letter-1"]));
+
+    await act(async () => {
+      await result.current.handleStartTranscription(true);
+    });
+
+    expect(bulkTranscribeMock).toHaveBeenCalledWith(["letter-1"], true);
+  });
+
+  it("lets durable metadata eligibility evaluate every selected id", async () => {
+    const selectedIds = new Set(["letter-on-page", "letter-on-another-page"]);
+    const { result } = renderProcessingActions(selectedIds);
 
     await act(async () => {
       await result.current.handleStartMetadataExtraction();
     });
 
-    expect(startMetadataExtractionMock).toHaveBeenCalledWith({ collectionCode: "009" });
-    expect(showToastMock).toHaveBeenCalledWith("Collection not found", "info");
-  });
-
-  it("does not imply that a positive filter response scopes worker execution", async () => {
-    startTranscriptionMock.mockResolvedValue({
-      message: "Processing queued",
-      total: 2,
-    });
-    const { result } = renderProcessingActions();
-
-    await act(async () => {
-      await result.current.handleStartTranscription();
-    });
-
-    expect(showToastMock).toHaveBeenCalledWith(
-      "Worker requested; 2 matching letters are currently queued for transcription",
-      "success",
-    );
-  });
-
-  it("describes accepted bulk work as queued", async () => {
-    bulkTranscribeMock.mockResolvedValue({
-      queued: 1,
-      skipped: 0,
-      skipReasons: [],
-    });
-    const { result, exitEditMode, fetchLetters } = renderProcessingActions(
-      new Set(["letter-1"]),
-    );
-
-    await act(async () => {
-      await result.current.handleStartTranscription();
-    });
-
-    expect(showToastMock).toHaveBeenCalledWith(
-      "Queued 1 letters for transcription",
-      "success",
-    );
-    expect(exitEditMode).toHaveBeenCalled();
-    expect(fetchLetters).toHaveBeenCalled();
+    expect(bulkExtractMetadataMock).toHaveBeenCalledWith([
+      "letter-on-page",
+      "letter-on-another-page",
+    ]);
   });
 });

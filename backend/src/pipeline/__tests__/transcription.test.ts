@@ -57,12 +57,6 @@ vi.mock('../../services/storage.js', () => ({
   getAbsoluteStoragePath: vi.fn((path: string) => path),
 }));
 
-vi.mock('../../services/processes/runner.js', () => ({
-  updateJobProgress: vi.fn(),
-  clearJobProgress: vi.fn(),
-  shouldAbortProcessing: vi.fn(() => false),
-}));
-
 vi.mock('../../services/letter/extra-content.js', () => ({
   runAutomaticExtraContent: runAutomaticExtraContentMock,
 }));

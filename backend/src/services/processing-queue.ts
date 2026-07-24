@@ -1,4 +1,4 @@
-import { eq, and, inArray, ne, sql, or, type SQL } from 'drizzle-orm';
+import { eq, and, inArray, sql, or, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { PAGINATION } from '../constants/pagination.js';
 import { TIMING } from '../constants/timing.js';
@@ -27,15 +27,6 @@ import {
   failEntityExtraction,
 } from './letters.js';
 import {
-  clearJobProgress,
-  getJobProgress,
-} from './processes/runner.js';
-import {
-  buildProcessingConditions,
-  processingFilterSchema,
-  type ProcessingFilterOptions,
-} from './processes/filter-helpers.js';
-import {
   entityExtractionPrerequisiteConditions,
   extraContentPrerequisiteConditions,
   isMetadataStateEligible,
@@ -48,12 +39,6 @@ import {
   transcriptionPrerequisiteConditions,
 } from './processing-eligibility.js';
 import { getWorkerState } from './worker-state.js';
-
-export {
-  buildProcessingConditions,
-  processingFilterSchema,
-};
-export type { ProcessingFilterOptions };
 
 const log = createLogger({ module: 'processing-queue' });
 
@@ -137,10 +122,27 @@ export async function ensureBackgroundWorkerForQueuedProcessing(
   return true;
 }
 
-async function startQueuedProcessing(
-  type: 'transcription' | 'metadata' | 'entity_extraction',
-): Promise<void> {
-  await requestBackgroundWorkerRun(`queue:${type}`);
+export type ProcessingWorkerWakeResult =
+  | { requested: true }
+  | {
+      requested: false;
+      reason: 'queue_empty' | 'worker_not_configured';
+    };
+
+/**
+ * Truthful operator control for the global durable queue. It never suggests
+ * that a filter or stage scopes the worker's drain.
+ */
+export async function wakeBackgroundWorkerForQueuedProcessing(): Promise<ProcessingWorkerWakeResult> {
+  if (!shouldUseCloudRunWorkerJob()) {
+    return { requested: false, reason: 'worker_not_configured' };
+  }
+  if (!await hasQueuedProcessingWork()) {
+    return { requested: false, reason: 'queue_empty' };
+  }
+
+  await triggerWorkerJob('admin-processing-wake');
+  return { requested: true };
 }
 
 // ============================================================================
@@ -252,10 +254,8 @@ export async function getQueueStatus() {
       recipient: string | null;
       type: string;
       startedAt: string;
-      progress: { step: number; totalSteps: number; stepLabel: string } | null;
     }> = [];
     if (l.transcriptionStatus === 'RUNNING') {
-      const prog = getJobProgress(l.id, 'transcription');
       jobs.push({
         letterId: l.id,
         letterTitle: l.dateRaw,
@@ -264,11 +264,9 @@ export async function getQueueStatus() {
         recipient: l.recipient,
         type: 'transcription',
         startedAt: l.updatedAt?.toISOString() ?? now.toISOString(),
-        progress: prog ? { step: prog.step, totalSteps: prog.totalSteps, stepLabel: prog.stepLabel } : null,
       });
     }
     if (l.metadataStatus === 'RUNNING') {
-      const prog = getJobProgress(l.id, 'metadata');
       jobs.push({
         letterId: l.id,
         letterTitle: l.dateRaw,
@@ -277,11 +275,9 @@ export async function getQueueStatus() {
         recipient: l.recipient,
         type: 'metadata',
         startedAt: l.updatedAt?.toISOString() ?? now.toISOString(),
-        progress: prog ? { step: prog.step, totalSteps: prog.totalSteps, stepLabel: prog.stepLabel } : null,
       });
     }
     if (l.entityExtractionStatus === 'RUNNING') {
-      const prog = getJobProgress(l.id, 'entity_extraction');
       jobs.push({
         letterId: l.id,
         letterTitle: l.dateRaw,
@@ -290,11 +286,9 @@ export async function getQueueStatus() {
         recipient: l.recipient,
         type: 'entity_extraction',
         startedAt: l.updatedAt?.toISOString() ?? now.toISOString(),
-        progress: prog ? { step: prog.step, totalSteps: prog.totalSteps, stepLabel: prog.stepLabel } : null,
       });
     }
     if (l.extraContentJobStatus === 'RUNNING') {
-      const prog = getJobProgress(l.id, 'extra_content');
       jobs.push({
         letterId: l.id,
         letterTitle: l.dateRaw,
@@ -303,7 +297,6 @@ export async function getQueueStatus() {
         recipient: l.recipient,
         type: 'extra_content',
         startedAt: l.updatedAt?.toISOString() ?? now.toISOString(),
-        progress: prog ? { step: prog.step, totalSteps: prog.totalSteps, stepLabel: prog.stepLabel } : null,
       });
     }
     return jobs;
@@ -482,84 +475,6 @@ export async function getQueueStatus() {
       recentClearedCount: recent.filter(r => r.status === 'CLEARED').length,
     },
   };
-}
-
-/**
- * Start transcription processing for eligible letters matching the given filter options.
- */
-export async function startTranscriptionProcessing(options: ProcessingFilterOptions): Promise<{ message: string; total: number }> {
-  const { conditions, collectionNotFound } = await buildProcessingConditions(
-    options,
-    queuedTranscriptionConditions(),
-  );
-
-  if (collectionNotFound) {
-    return { message: 'Collection not found', total: 0 };
-  }
-
-  const eligible = await db.query.letters.findMany({
-    where: and(...conditions),
-    columns: { id: true },
-  });
-
-  if (eligible.length === 0) {
-    return { message: 'No letters to process', total: 0 };
-  }
-
-  await startQueuedProcessing('transcription');
-  return { message: 'Worker requested; matching letters are already queued', total: eligible.length };
-}
-
-/**
- * Start metadata processing for eligible letters matching the given filter options.
- */
-export async function startMetadataProcessing(options: ProcessingFilterOptions): Promise<{ message: string; total: number }> {
-  const { conditions, collectionNotFound } = await buildProcessingConditions(
-    options,
-    queuedMetadataConditions(),
-  );
-
-  if (collectionNotFound) {
-    return { message: 'Collection not found', total: 0 };
-  }
-
-  const eligible = await db.query.letters.findMany({
-    where: and(...conditions),
-    columns: { id: true },
-  });
-
-  if (eligible.length === 0) {
-    return { message: 'No letters to process', total: 0 };
-  }
-
-  await startQueuedProcessing('metadata');
-  return { message: 'Worker requested; matching letters are already queued', total: eligible.length };
-}
-
-/**
- * Start entity extraction processing for eligible letters (metadata succeeded, entities pending).
- */
-export async function startEntityExtractionProcessing(options: ProcessingFilterOptions): Promise<{ message: string; total: number }> {
-  const { conditions, collectionNotFound } = await buildProcessingConditions(
-    options,
-    queuedEntityExtractionConditions(),
-  );
-
-  if (collectionNotFound) {
-    return { message: 'Collection not found', total: 0 };
-  }
-
-  const eligible = await db.query.letters.findMany({
-    where: and(...conditions),
-    columns: { id: true },
-  });
-
-  if (eligible.length === 0) {
-    return { message: 'No letters to process', total: 0 };
-  }
-
-  await startQueuedProcessing('entity_extraction');
-  return { message: 'Worker requested; matching letters are already queued', total: eligible.length };
 }
 
 // ============================================================================
@@ -1010,7 +925,6 @@ export async function cancelActiveJob(letterId: string, type: QueueJobType): Pro
     await requestWorkerAfterExtraContentCancellation();
   }
 
-  clearJobProgress(letterId, type);
   log.info({ letterId, type }, 'Active job cancelled by admin');
 
   return { message: 'Job cancelled' };

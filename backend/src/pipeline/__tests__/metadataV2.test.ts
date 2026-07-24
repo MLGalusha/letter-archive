@@ -54,11 +54,6 @@ vi.mock('../../services/entities.js', () => ({
   processEntityExtraction: processEntityExtractionMock,
 }));
 
-vi.mock('../../services/processes/runner.js', () => ({
-  updateJobProgress: vi.fn(),
-  clearJobProgress: vi.fn(),
-}));
-
 vi.mock('../../services/notifications.js', () => ({ notify: notifyMock }));
 
 vi.mock('../../utils/logger.js', () => ({

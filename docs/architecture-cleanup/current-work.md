@@ -7,10 +7,10 @@ Last updated: July 23, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 011B — retire the process-registry batch executor
+- Current checkpoint: 011B — process-registry retirement complete; checkpoint commit
+  pending
 - Last sealed cleanup checkpoint: queued extra-content worker migration at `fa7eedb8`
-- Current slice: 011B — migrate the Processing page and retire the API registry
-  executor (audit and implementation next)
+- Next slice: 011C — fence worker availability and move recovery out of the API
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -71,9 +71,10 @@ tree:
   replacement and explicit rollout compatibility.
 - [ ] Make recovery worker-owned so API startup cannot reset active work.
 - [x] Establish one eligibility definition per processing stage.
-- [ ] Make the worker the sole executor; APIs enqueue, cancel, retry, and report.
+- [x] Make the worker the sole automatic executor; APIs enqueue, cancel, retry, and
+  report.
 - [x] Remove the legacy queue executor and its processing import cycle.
-- [ ] Remove the remaining registry execution and queue-management duplication.
+- [x] Remove the remaining registry execution and queue-management duplication.
 - [x] Separate metadata completion from entity-persistence completion.
 
 ### C. Domain state ownership
@@ -1288,7 +1289,7 @@ Residuals:
 
 ## Slice 011B — Retire the Process-Registry Batch Executor
 
-Status: framed, not started
+Status: complete; checkpoint commit pending
 
 Problem:
 
@@ -1297,30 +1298,81 @@ Its mutex, progress, pause, and abort state disappear on restart and cannot cont
 separate worker. The registry also duplicates eligibility, queue snapshots, and CRUD
 already exposed by the durable worker-owned queue.
 
-Target invariant:
+Delivered invariant:
 
 Automatic/batch AI work has one runtime owner: the worker. The Processing page observes
-and mutates durable stage state and requests worker wakeups; it does not create a second
-executor. Direct single-letter requests remain explicit and separately fenced.
-Recovery ownership remains transitional until the worker availability lease and
-scheduled reconciliation wake are implemented as the next contained checkpoint.
+and mutates durable four-stage state and may request one global worker drain; it never
+creates a second executor or claims a stage/filter-scoped batch exists. Direct
+single-letter requests remain explicit and separately fenced. Recovery ownership stays
+transitional until worker availability and its eventual wake are durable.
 
-First audit:
+What changed:
 
-- Characterize every registry route, frontend action, SSE event, and extra-content
-  dependency before choosing the smallest compatibility migration.
-- Prove which registry helpers are observation/CRUD versus execution-only, and reuse
-  the stage predicates from Slice 010 rather than adding another orchestration layer.
-- Preserve truthful queue/recent/error visibility while deleting process-local
-  batch-control promises the worker cannot honor.
-- Decide explicitly whether filtered starts should disappear as redundant global wakes
-  or gain durable scoped selection; do not preserve the current count-only illusion.
+- Deleted the complete `services/processes/` registry island, its API routes, duplicate
+  queue CRUD, fire-and-forget runner, mutex, pause/abort state, process-local progress
+  map, processing SSE/token path, and batch notification wrapper. Pipeline owners no
+  longer import control or progress state from an unrelated API process.
+- Deleted filtered transcription/metadata/entity starts. They counted matching
+  already-pending rows but woke a global worker, so their apparent scope was not a
+  durable execution contract. One unfiltered `/admin/processing/wake` now distinguishes
+  empty durable state, absent managed-worker configuration, and an actual request; a
+  Cloud Run trigger failure remains an API error.
+- Rebuilt the Processing page directly over `/admin/processing/queue`. One static
+  frontend descriptor defines the four display stages; active jobs remain arrays, queue
+  counts are explicitly labelled as rows shown, stage-ambiguous queue/active times are
+  not rendered, and shared recent timestamps are labelled as reported observations.
+  The page uses one non-overlapping five-second poll plus manual refresh. A refresh
+  requested while a read is active queues exactly one follow-up read, so mutation
+  invalidation cannot settle on a pre-mutation snapshot.
+- Split the 769-line route into a thin coordinator and focused stage summary, queue,
+  recent activity, worker observation, stage descriptor, and formatting modules. The
+  removed SSE hook and registry API client were not replaced with compatibility layers.
+- Dashboard processing now requires explicit selected IDs. Zero-selection actions are
+  disabled, select-all-filtered IDs are all sent to the bulk API instead of being
+  silently reduced to the currently loaded page, transcription's real overwrite flag
+  is explicit, and the nonexistent bulk-metadata overwrite promise was removed.
+- The admin CLI now observes extra-content queue rows and exposes only queue inspection
+  plus the same truthful global worker wake.
 
-Non-goal:
+Evidence:
 
-Do not remove API reconciliation or claim the ownerless `worker_state` singleton is
-safe in this slice. Slice 011C must add an execution-token lease and a durable scheduled
-worker wake before recovery can become worker-only without losing eventual liveness.
+- Focused backend ownership/route/queue/pipeline coverage passed: 7 files / 138 tests.
+- Complete backend suite passed: 75 files / 678 tests. Backend typecheck and the
+  standalone admin CLI typecheck passed.
+- Focused frontend processing/dashboard coverage passed: 5 files / 30 tests, including
+  mid-flight and completion-boundary queued-refresh race regressions.
+- Definitive `CI=1 ./scripts/verify-all.sh` passed: backend 75 files / 678 tests,
+  backend typecheck, frontend 92 files / 615 tests, production build, and the mocked
+  browser suite 37/37. The existing large-chunk build warning remains visible.
+- Rewritten mocked Processing browser coverage passed 6/6, including all four stages,
+  multiple same-stage active rows, durable mutations and errors, truthful wake
+  outcomes, and a 390-pixel overflow/control check.
+- A real Chromium render with route-mocked durable data was inspected at 1440×1000 and
+  390×844. Both retained the four-stage hierarchy and controls; the narrow document
+  measured exactly 390 pixels wide with no horizontal overflow, and the truthful
+  unconfigured-worker wake outcome was visible.
+- Backend and frontend stale-symbol searches and scoped `git diff --check` passed.
+- Independent adversarial review found one stale-snapshot race in refresh coalescing.
+  The fix queues a single post-flight read without overlap, has focused regression
+  coverage, and no other P1/P2 ownership or correctness blocker was reported.
+
+Residuals carried forward:
+
+- API startup and its periodic timer still run safe lease reconciliation. This is no
+  longer justified by an API batch executor; it remains because the ownerless
+  `worker_state` singleton and enqueue-time wakeups do not yet guarantee eventual
+  recovery after an exhausted or quiet failure.
+- `worker_state` is last-reported observation, not authoritative liveness. Slice 011C
+  must add an execution-token lease, token-fenced writes/releases, independent renewal,
+  and an external scheduled job invocation before recovery moves out of the API.
+- Entity extraction remains run/revision fenced but unleased. Current orphans stay
+  visible for exact administrative cancellation rather than being guessed dead.
+- Metadata/entity recent reporting still uses a shared letter timestamp. The UI labels
+  it as reported activity rather than exact completion time; stage-specific timestamps
+  remain separate schema debt.
+- Explicit single-letter regeneration remains request-owned behind the canonical claim
+  and publication boundaries. This slice removes automatic execution duplication, not
+  intentionally synchronous admin actions.
 
 ## Slice 011C — Fence Worker Availability and Move Recovery
 

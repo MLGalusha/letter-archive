@@ -60,31 +60,21 @@ is `null` and it is not projected into recent activity.
 
 **Service**: `getQueueStatus()` in `processing-queue.ts`
 
-### POST /admin/processing/start-transcription
-Request worker processing for already-queued, eligible letters. Accepts filter options.
-The response is
-`{ message: "Worker requested; matching letters are already queued", total }`. Filters
-scope the reported count and whether a wake is requested; they do not reserve a batch,
-so the worker may consume other globally eligible queued rows. In local development
-the separate `npm run worker` process consumes the queue.
+### POST /admin/processing/wake
+Request one global drain of any durable queued stage. This endpoint accepts no stage or
+filters because the worker polls the global queue. It returns `{ requested: true }`,
+`{ requested: false, reason: "queue_empty" }`, or
+`{ requested: false, reason: "worker_not_configured" }`. Cloud Run trigger failures
+propagate as request errors instead of being reported as successful requests.
 
-**Body** (optional): `{ collectionCode, visibility, search, year, month, day, dateFrom, dateTo }`
+The old filtered starts, process registry, process SSE, and process-local
+pause/resume/abort/progress controls have been removed. In local development the
+separate `npm run worker` process consumes the queue.
 
-**Service**: `startTranscriptionProcessing()` in `processing-queue.ts`
-
-### POST /admin/processing/start-metadata
-Request worker metadata extraction for eligible, confirmed transcripts.
-
-**Service**: `startMetadataProcessing()` in `processing-queue.ts`
-
-### POST /admin/processing/start-entities
-Request worker entity extraction for eligible letters whose metadata succeeded.
-
-**Service**: `startEntityExtractionProcessing()` in `processing-queue.ts`
-
-The retired legacy `/status`, `/pause`, `/resume`, and `/abort` endpoints are not
-worker controls. The separate process-registry API under `/admin/processing/snapshot`
-temporarily owns its own API-memory batch controls.
+### POST /admin/processing/cancel
+Cancel the exact persisted active attempt: `{ letterId, type }`. Cancellation revokes
+the observed run identity; an already-running AI call may finish, but its fenced result
+cannot publish afterward.
 
 ### POST /admin/processing/queue/remove
 Remove a PENDING item: `{ letterId, type }` where type is

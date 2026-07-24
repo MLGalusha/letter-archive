@@ -123,7 +123,7 @@ export function extraContentPrerequisiteConditions(): SQL[] {
 }
 
 /**
- * Durable queue predicates shared by API enqueueing, process snapshots, worker
+ * Durable queue predicates shared by API enqueueing, queue snapshots, worker
  * polling, and worker wake/exit decisions. Keeping these predicates together
  * prevents one runtime from seeing work that another runtime considers absent.
  */

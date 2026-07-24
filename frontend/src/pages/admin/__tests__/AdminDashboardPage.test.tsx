@@ -12,8 +12,6 @@ const {
   deleteLetterMock,
   toggleLetterFlagMock,
   regenerateMetadataMock,
-  startTranscriptionMock,
-  startMetadataExtractionMock,
   bulkClearTranscriptionsMock,
   bulkClearMetadataMock,
   bulkTranscribeMock,
@@ -28,8 +26,6 @@ const {
   deleteLetterMock: vi.fn(),
   toggleLetterFlagMock: vi.fn(),
   regenerateMetadataMock: vi.fn(),
-  startTranscriptionMock: vi.fn(),
-  startMetadataExtractionMock: vi.fn(),
   bulkClearTranscriptionsMock: vi.fn(),
   bulkClearMetadataMock: vi.fn(),
   bulkTranscribeMock: vi.fn(),
@@ -56,8 +52,6 @@ vi.mock("../../../api/admin/letters", () => ({
 vi.mock("../../../api/admin", () => ({
   confirmTranscript: (...args: unknown[]) => confirmTranscriptMock(...args),
   regenerateMetadata: (...args: unknown[]) => regenerateMetadataMock(...args),
-  startTranscription: (...args: unknown[]) => startTranscriptionMock(...args),
-  startMetadataExtraction: (...args: unknown[]) => startMetadataExtractionMock(...args),
   bulkClearTranscriptions: (...args: unknown[]) => bulkClearTranscriptionsMock(...args),
   bulkClearMetadata: (...args: unknown[]) => bulkClearMetadataMock(...args),
   bulkTranscribe: (...args: unknown[]) => bulkTranscribeMock(...args),
@@ -308,7 +302,7 @@ describe("AdminDashboard processing", () => {
     expect(screen.getByLabelText("Sender")).toBeInTheDocument();
     expect(screen.getByLabelText("Recipient")).toBeInTheDocument();
     expect(
-      screen.queryByText(/Extract metadata for 1 selected letter\?/i),
+      screen.queryByText(/Queue metadata extraction for 1 selected letter\?/i),
     ).not.toBeInTheDocument();
   });
 
@@ -343,7 +337,7 @@ describe("AdminDashboard processing", () => {
     );
 
     expect(
-      screen.getByText(/Extract metadata for 2 selected letters\?/i),
+      screen.getByText(/Queue metadata extraction for 2 selected letters\?/i),
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("Sender")).not.toBeInTheDocument();
   });

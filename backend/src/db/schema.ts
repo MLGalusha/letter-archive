@@ -910,9 +910,8 @@ export const apiUsageLogs = pgTable(
 // ============================================================================
 
 /**
- * Singleton row observed by the admin Processing page so it can show whether
- * the autonomous background worker process is alive. The worker writes on
- * every poll cycle; the API reads on demand.
+ * Singleton row observed by the admin Processing page as the worker's last reported
+ * state. It is not authoritative liveness until writes are execution-token fenced.
  */
 export const workerState = pgTable('worker_state', {
   id: text('id').primaryKey().default('singleton'),

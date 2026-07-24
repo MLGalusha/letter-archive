@@ -157,14 +157,11 @@ vi.mock('../../../services/letter-queries.js', () => ({
 vi.mock('../../../services/processing-queue.js', () => ({
   getQueueStatus: vi.fn(),
   requestBackgroundWorkerRun: vi.fn(),
-  startTranscriptionProcessing: vi.fn(),
-  startMetadataProcessing: vi.fn(),
+  wakeBackgroundWorkerForQueuedProcessing: vi.fn(),
   removeFromQueue: vi.fn(),
   clearQueue: vi.fn(),
   retryJob: vi.fn(),
   cancelActiveJob: vi.fn(),
-  startEntityExtractionProcessing: vi.fn(),
-  processingFilterSchema: { parse: vi.fn() },
   queueJobTypeSchema: { parse: vi.fn() },
 }));
 

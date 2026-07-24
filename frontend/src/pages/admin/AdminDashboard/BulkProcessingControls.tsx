@@ -11,10 +11,20 @@ export default function BulkProcessingControls({
 }: BulkProcessingControlsProps) {
   return (
     <div className="toolbar-process-actions">
-      <button type="button" className="toolbar-process-btn" onClick={onOpenTranscription}>
+      <button
+        type="button"
+        className="toolbar-process-btn"
+        disabled={selectedCount === 0}
+        onClick={onOpenTranscription}
+      >
         Transcribe{selectedCount > 0 ? ` (${selectedCount})` : ""}
       </button>
-      <button type="button" className="toolbar-process-btn" onClick={onOpenMetadataExtraction}>
+      <button
+        type="button"
+        className="toolbar-process-btn"
+        disabled={selectedCount === 0}
+        onClick={onOpenMetadataExtraction}
+      >
         Extract Metadata{selectedCount > 0 ? ` (${selectedCount})` : ""}
       </button>
     </div>

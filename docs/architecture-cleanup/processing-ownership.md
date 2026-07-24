@@ -14,15 +14,14 @@ existing owner remains frictionless, while behavior tests remain the authority.
 | Entry point | Runtime owner | Stages | Execution model | Control and recovery |
 | --- | --- | --- | --- | --- |
 | `worker.ts` polling loop | Worker process | Transcription, extra content, metadata, entity extraction | Queries durable eligible `PENDING` rows and invokes the pipeline directly | Worker availability is persisted but does not yet carry an execution owner token. Transcription, extra content, and metadata have run-bound database-clock leases and heartbeats; entity extraction has a run/revision commit fence but no lease. Polling, wake checks, queue snapshots, and both exit checks share stage-specific eligibility. The worker publishes idle before its final recheck so stage-only work cannot disappear in the handoff. |
-| `POST /admin/processing/processes/:key/start` | API process | Transcription, metadata, entity extraction, extra content | `processes/runner.ts` starts a fire-and-forget in-memory batch through `letter-process-helpers.ts` | Pause, abort, progress, and the batch mutex live only in API memory. Transcription, metadata, and extra-content attempts have persisted, run-ID-bound database-clock leases and explicit queued/requested intent. |
-| Filtered starts and post-upload auto-start | Worker process | Transcription, extra content, metadata, entity extraction | The API counts or observes durable eligible rows and optionally wakes the configured Cloud Run Job; local development relies on the separately running worker | No legacy process-local execution or controls remain. Filters scope the reported count and wake decision, not the worker's global drain. Upload auto-processing and recovery use the complete four-stage durable predicate. |
+| Upload, retry, recovery, and global wake | Worker process | Transcription, extra content, metadata, entity extraction | The API persists or observes durable eligible rows and optionally wakes the configured Cloud Run Job; local development relies on the separately running worker | No process-local execution or controls remain. The explicit admin wake has no stage or filter because every worker execution drains the global queue. All wake paths use the complete four-stage durable predicate. |
 | Bulk transcription and metadata operations | Worker process | Transcription, metadata | Guarded updates reset only exact observed eligible rows to durable `PENDING`, then optionally wake the configured worker | Full source/job compare-and-set prevents a stale selection from reporting stranded work. Metadata never bypasses transcript confirmation. |
 | Letter content actions | API request process | Letter-only transcription, metadata, entity extraction, extra content | The route awaits pipeline or regeneration functions directly | Transcription, metadata, and extra content share their respective canonical persisted ownership/lease boundaries with batch and automatic work. |
 
 The transcription, metadata, and extra-content lifecycle helpers own their
 compare-and-swap claims and terminal publication. Entity extraction separately owns an
-atomic run/revision projection commit. The process registry's shared runner adds UI
-lifecycle state around those functions; it is not a durable job runner.
+atomic run/revision projection commit. Automatic batch execution has no API-process
+runner; the Processing page reads and mutates only durable state.
 
 ## Recovery Coverage
 
@@ -66,8 +65,8 @@ published around work, not continuously during it. The API can then request an
 overlapping execution, and either execution can overwrite the singleton availability
 row. Stage run IDs still prevent stale content publication, so the residual is
 redundant execution and inaccurate availability rather than an unfenced content
-commit. The registry-removal slice must add an execution-owned availability
-compare-and-set or equivalent continuously renewed lease.
+commit. Slice 011C must add an execution-owned availability compare-and-set or
+equivalent continuously renewed lease.
 
 The old startup reset remains deleted. Entity extraction now has a run token and
 reserved revision, so only its exact owner can publish a replacement projection. It
@@ -90,9 +89,11 @@ metadata attempts are likewise kept manual until old executables have drained.
 | A worker AI call outlives the availability freshness window | Stage ownership fences content, but the ownerless availability singleton can cause a redundant worker launch and competing status writes; execution-owned availability remains Slice 011 work |
 | Legacy unleased or lease-mismatched transcription/metadata/extra attempt is encountered | It remains visible for deliberate reconciliation or exact-run cancellation; automatic recovery does not invent or misattribute liveness evidence |
 
-API startup still calls the safe processing reconciler because the process-registry
-runner remains an API-owned batch executor. Recovery can become worker-only after that
-last automatic API executor is removed.
+API startup still calls the safe processing reconciler even though the worker is now
+the sole automatic executor. Removing it immediately would create a liveness gap:
+worker availability is not yet execution-fenced, and no external scheduled invocation
+guarantees eventual reconciliation after enqueue-time wake failures. Slice 011C closes
+those two boundaries before recovery becomes worker-only.
 
 ## Entity-Extraction Ownership Repair
 
@@ -124,7 +125,7 @@ first remove the duplicate API batch executors so one runtime owns automatic wor
 ## Extra-Content Ownership Repair
 
 Extra content now has one lifecycle boundary shared by worker queues, automatic
-transcription, regeneration, the direct route, and the temporary dashboard batches:
+transcription, regeneration, and the direct route:
 
 - related T/C/E eligibility is established before a claim;
 - automatic work claims only `PENDING`; explicit regeneration may replace a completed
@@ -143,7 +144,7 @@ transcription, regeneration, the direct route, and the temporary dashboard batch
 - human edits, clears, and verification changes atomically close the job as
   `SUCCESS` and clear its complete ownership tuple. Human edits clear verification
   metadata, while verification compares the content revision the reviewer observed;
-- dashboard ownership loss is `skipped`, not a false completion or failure;
+- worker ownership loss is `skipped`, not a false completion or failure;
 - regeneration suppresses the automatic producer and runs its optional producer once.
 
 Expired dirty and queued attempts return to `PENDING`; an expired clean requested
@@ -161,8 +162,8 @@ or launch external worker executions.
 
 ## Main-Transcription Ownership Repair
 
-Queue work, the polling worker, dashboard batches, letter-only transcription, and main
-transcription regeneration now enter one canonical producer:
+Queue work, the polling worker, letter-only transcription, and main-transcription
+regeneration now enter one canonical producer:
 
 - automatic work claims only an eligible `PENDING` row and compares the workflow,
   dead-letter flag, attempt state, and observed transcript content state;
@@ -173,8 +174,8 @@ transcription regeneration now enter one canonical producer:
 - page sources are reloaded after the claim so work does not continue from the preflight
   page snapshot;
 - human transcript writes revoke an active AI attempt before publishing the human value;
-- ownership loss and stale eligibility propagate as `skipped`, so the worker and both
-  batch reporters do not announce a false transcription success.
+- ownership loss and stale eligibility propagate as `skipped`, so the worker does not
+  announce a false transcription success.
 
 Each new claim now also stores a database-clock expiry and queued/requested claim kind.
 The producer starts an immediate, serialized heartbeat, and exact run ID, matching
@@ -225,10 +226,16 @@ bulk reset paths use conditional updates rather than briefly reopening all stage
 8. **Completed in Slice 010:** move legacy batch entry points to enqueue/trigger only,
    delete `processLettersAsync()` plus its process-local control state, centralize the
    three worker eligibility predicates, and close the entity-only exit handoff.
-9. Delete the API registry executor after its route/UI contract is characterized.
-   With the worker as the sole batch owner, make recovery worker-owned, consolidate
-   eligibility queries, and keep direct request-owned regeneration as an explicitly
-   separate contract if the UI still requires synchronous completion.
+9. **Completed in Slice 011A:** make the worker consume queued extra-content work and
+   move its durable observation, mutation, recovery, wake, and exit decisions onto the
+   shared stage predicate.
+10. **Completed in Slice 011B:** delete the API registry executor, its process-local
+    progress/pause/abort/SSE state, duplicate queue CRUD, and filtered-start illusion.
+    The Processing page now polls the durable queue and offers only exact mutations
+    plus one truthful global wake.
+11. Add a database-clock execution lease to `worker_state`, fence every availability
+    write by the execution token, add an external scheduled reconciliation wake, and
+    then remove API-owned recovery.
 
 This order keeps behavior recoverable at each checkpoint while reducing, rather than
 temporarily increasing, the number of ambiguous owners.

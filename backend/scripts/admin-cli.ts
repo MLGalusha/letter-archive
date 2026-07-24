@@ -232,6 +232,7 @@ async function handleQueueStatus() {
         transcription: { letterId: string; queuedAt: string }[];
         metadata: { letterId: string; queuedAt: string }[];
         entityExtraction: { letterId: string; queuedAt: string }[];
+        extraContent: { letterId: string; queuedAt: string | null }[];
       };
       recent: {
         letterId: string;
@@ -262,6 +263,7 @@ async function handleQueueStatus() {
       ...q.queued.transcription.map(job => ({ ...job, type: 'transcription' })),
       ...q.queued.metadata.map(job => ({ ...job, type: 'metadata' })),
       ...q.queued.entityExtraction.map(job => ({ ...job, type: 'entity extraction' })),
+      ...q.queued.extraContent.map(job => ({ ...job, type: 'extra content' })),
     ];
     if (queued.length) {
       writeln(`\n  ${BOLD}Queued${RESET} ${DIM}(${queued.length} items)${RESET}`);
@@ -285,54 +287,24 @@ async function handleQueueStatus() {
   }
 }
 
-async function handleStartTranscription() {
-  const collection = await promptInput('Collection code filter (enter to skip)');
-  const body: Record<string, string> = {};
-  if (collection) body.collectionCode = collection;
-
-  if (!await confirm('Start transcription processing?')) return;
-
-  startSpinner('Queuing transcription...');
+async function handleWakeProcessingWorker() {
+  startSpinner('Requesting processing worker...');
   try {
-    const result = await api<{ message: string; total: number }>('POST', '/admin/processing/start-transcription', body);
+    const result = await api<
+      | { requested: true }
+      | {
+          requested: false;
+          reason: 'queue_empty' | 'worker_not_configured';
+        }
+    >('POST', '/admin/processing/wake');
     stopSpinner();
-    writeln(`  ${GREEN}${result.message}${RESET} — ${result.total} letters queued`);
-  } catch (err) {
-    stopSpinner();
-    writeln(`  ${RED}Error: ${err instanceof Error ? err.message : String(err)}${RESET}`);
-  }
-}
-
-async function handleStartMetadata() {
-  const collection = await promptInput('Collection code filter (enter to skip)');
-  const body: Record<string, string> = {};
-  if (collection) body.collectionCode = collection;
-
-  if (!await confirm('Start metadata extraction?')) return;
-
-  startSpinner('Queuing metadata extraction...');
-  try {
-    const result = await api<{ message: string; total: number }>('POST', '/admin/processing/start-metadata', body);
-    stopSpinner();
-    writeln(`  ${GREEN}${result.message}${RESET} — ${result.total} letters queued`);
-  } catch (err) {
-    stopSpinner();
-    writeln(`  ${RED}Error: ${err instanceof Error ? err.message : String(err)}${RESET}`);
-  }
-}
-
-async function handleStartEntities() {
-  const collection = await promptInput('Collection code filter (enter to skip)');
-  const body: Record<string, string> = {};
-  if (collection) body.collectionCode = collection;
-
-  if (!await confirm('Start entity extraction?')) return;
-
-  startSpinner('Queuing entity extraction...');
-  try {
-    const result = await api<{ message: string; total: number }>('POST', '/admin/processing/start-entities', body);
-    stopSpinner();
-    writeln(`  ${GREEN}${result.message}${RESET} — ${result.total} letters queued`);
+    if (result.requested === true) {
+      writeln(`  ${GREEN}Worker requested${RESET}`);
+    } else if (result.reason === 'queue_empty') {
+      writeln(`  ${DIM}No durable queued work${RESET}`);
+    } else {
+      writeln(`  ${YELLOW}Cloud Run worker job is not configured${RESET}`);
+    }
   } catch (err) {
     stopSpinner();
     writeln(`  ${RED}Error: ${err instanceof Error ? err.message : String(err)}${RESET}`);
@@ -727,12 +699,10 @@ const categories: MenuCategory[] = [
   {
     key: '1',
     title: 'Processing',
-    description: 'Queue and monitor transcription, metadata, and entity jobs',
+    description: 'Monitor durable jobs and request a global worker drain',
     items: [
       { key: '1', label: 'View queue', description: 'Active, queued, and recent jobs', handler: handleQueueStatus },
-      { key: '2', label: 'Queue transcription', description: 'Queue letters for transcription', handler: handleStartTranscription },
-      { key: '3', label: 'Queue metadata', description: 'Queue letters for metadata extraction', handler: handleStartMetadata },
-      { key: '4', label: 'Queue entities', description: 'Queue letters for entity extraction', handler: handleStartEntities },
+      { key: '2', label: 'Wake worker', description: 'Request a global durable-queue drain', handler: handleWakeProcessingWorker },
     ],
   },
   {

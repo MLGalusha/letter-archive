@@ -1,126 +1,223 @@
-import { act, renderHook } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AllProcessesStatus } from '../../api/admin/processes';
-import type { UseProcessingEventsOptions } from '../useProcessingEvents';
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ProcessingQueueStatus } from "../../api/admin/processing";
 
-const { getAllProcessesStatusMock, useProcessingEventsMock } = vi.hoisted(() => ({
-  getAllProcessesStatusMock: vi.fn(),
-  useProcessingEventsMock: vi.fn(),
+const { getProcessingQueueStatusMock } = vi.hoisted(() => ({
+  getProcessingQueueStatusMock: vi.fn(),
 }));
 
-vi.mock('../../api/admin/processes', () => ({
-  getAllProcessesStatus: getAllProcessesStatusMock,
+vi.mock("../../api/admin/processing", () => ({
+  getProcessingQueueStatus: getProcessingQueueStatusMock,
 }));
 
-vi.mock('../useProcessingEvents', () => ({
-  useProcessingEvents: useProcessingEventsMock,
-}));
+import {
+  PROCESSING_POLL_INTERVAL_MS,
+  useProcessingState,
+} from "../useProcessingState";
 
-import { useProcessingState } from '../useProcessingState';
-
-const snapshot: AllProcessesStatus = {
-  processes: [],
-  activeBatch: null,
+const snapshot: ProcessingQueueStatus = {
+  active: [],
+  queued: {
+    transcription: [],
+    metadata: [],
+    entityExtraction: [],
+    extraContent: [],
+  },
+  recent: [],
+  worker: {
+    lastTickAt: null,
+    isPolling: false,
+    lastError: null,
+    currentBatchSize: null,
+    updatedAt: null,
+  },
+  counts: {
+    activeCount: 0,
+    queuedTranscription: 0,
+    queuedMetadata: 0,
+    queuedEntityExtraction: 0,
+    queuedExtraContent: 0,
+    recentSuccessCount: 0,
+    recentFailedCount: 0,
+    recentClearedCount: 0,
+  },
 };
 
-function latestStreamOptions(): UseProcessingEventsOptions {
-  const call = useProcessingEventsMock.mock.calls.at(-1);
-  if (!call) throw new Error('processing stream hook was not called');
-  return call[0] as UseProcessingEventsOptions;
-}
-
-async function settleInitialRefresh(): Promise<void> {
+async function settle(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
   });
 }
 
-describe('useProcessingState snapshot reconciliation', () => {
+describe("useProcessingState durable polling", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
-    getAllProcessesStatusMock.mockResolvedValue(snapshot);
+    getProcessingQueueStatusMock.mockResolvedValue(snapshot);
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it('refreshes every 15 seconds while SSE is healthy', async () => {
+  it("loads immediately and polls five seconds after the prior read settles", async () => {
     const { result, unmount } = renderHook(() => useProcessingState());
-    await settleInitialRefresh();
+    await settle();
 
-    act(() => latestStreamOptions().onConnected?.());
-    expect(result.current.connectionState).toBe('connected');
-    getAllProcessesStatusMock.mockClear();
+    expect(getProcessingQueueStatusMock).toHaveBeenCalledTimes(1);
+    expect(result.current.status).toEqual(snapshot);
+    expect(result.current.loading).toBe(false);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(14_999);
+      await vi.advanceTimersByTimeAsync(PROCESSING_POLL_INTERVAL_MS - 1);
     });
-    expect(getAllProcessesStatusMock).not.toHaveBeenCalled();
+    expect(getProcessingQueueStatusMock).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1);
     });
-    expect(getAllProcessesStatusMock).toHaveBeenCalledTimes(1);
+    expect(getProcessingQueueStatusMock).toHaveBeenCalledTimes(2);
 
     unmount();
   });
 
-  it('refreshes every 5 seconds after the stream falls back', async () => {
-    const { result, unmount } = renderHook(() => useProcessingState());
-    await settleInitialRefresh();
+  it("does not overlap a slow durable read", async () => {
+    let resolveFirst!: (value: ProcessingQueueStatus) => void;
+    getProcessingQueueStatusMock.mockReturnValueOnce(
+      new Promise<ProcessingQueueStatus>((resolve) => {
+        resolveFirst = resolve;
+      }),
+    );
 
-    act(() => latestStreamOptions().onFallback?.());
-    expect(result.current.connectionState).toBe('fallback-polling');
-    getAllProcessesStatusMock.mockClear();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(4_999);
-    });
-    expect(getAllProcessesStatusMock).not.toHaveBeenCalled();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
-    });
-    expect(getAllProcessesStatusMock).toHaveBeenCalledTimes(1);
-
-    unmount();
-  });
-
-  it('replaces connection-state intervals and clears the final interval on unmount', async () => {
     const { unmount } = renderHook(() => useProcessingState());
-    await settleInitialRefresh();
+    expect(getProcessingQueueStatusMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PROCESSING_POLL_INTERVAL_MS * 3);
+    });
+    expect(getProcessingQueueStatusMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirst(snapshot);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PROCESSING_POLL_INTERVAL_MS);
+    });
+    expect(getProcessingQueueStatusMock).toHaveBeenCalledTimes(2);
+
+    unmount();
+  });
+
+  it("queues one follow-up read when refreshed during an active read", async () => {
+    const staleSnapshot = {
+      ...snapshot,
+      counts: {
+        ...snapshot.counts,
+        queuedMetadata: 1,
+      },
+    };
+    let resolveFirst!: (value: ProcessingQueueStatus) => void;
+    let resolveSecond!: (value: ProcessingQueueStatus) => void;
+    getProcessingQueueStatusMock
+      .mockReturnValueOnce(
+        new Promise<ProcessingQueueStatus>((resolve) => {
+          resolveFirst = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise<ProcessingQueueStatus>((resolve) => {
+          resolveSecond = resolve;
+        }),
+      );
+
+    const { result, unmount } = renderHook(() => useProcessingState());
+    expect(getProcessingQueueStatusMock).toHaveBeenCalledTimes(1);
+
+    let refreshAfterMutation!: Promise<void>;
+    act(() => {
+      refreshAfterMutation = result.current.refresh();
+      void result.current.refresh();
+    });
+    expect(getProcessingQueueStatusMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirst(staleSnapshot);
+      await Promise.resolve();
+    });
+    expect(getProcessingQueueStatusMock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveSecond(snapshot);
+      await refreshAfterMutation;
+    });
+
+    expect(getProcessingQueueStatusMock).toHaveBeenCalledTimes(2);
+    expect(result.current.status).toEqual(snapshot);
+    expect(result.current.loading).toBe(false);
+
+    unmount();
+  });
+
+  it("does not lose a refresh requested at the read completion boundary", async () => {
+    let resolveFirst!: (value: ProcessingQueueStatus) => void;
+    getProcessingQueueStatusMock
+      .mockReturnValueOnce(
+        new Promise<ProcessingQueueStatus>((resolve) => {
+          resolveFirst = resolve;
+        }),
+      )
+      .mockResolvedValueOnce(snapshot);
+
+    const { result, unmount } = renderHook(() => useProcessingState());
+    await settle();
+    expect(getProcessingQueueStatusMock).toHaveBeenCalledTimes(1);
+
+    let boundaryRefresh!: Promise<void>;
+    await act(async () => {
+      resolveFirst(snapshot);
+      queueMicrotask(() => {
+        boundaryRefresh = result.current.refresh();
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      await boundaryRefresh;
+    });
+
+    expect(getProcessingQueueStatusMock).toHaveBeenCalledTimes(2);
+    expect(result.current.status).toEqual(snapshot);
+    expect(result.current.loading).toBe(false);
+
+    unmount();
+  });
+
+  it("keeps the last snapshot visible when a later poll fails", async () => {
+    const { result, unmount } = renderHook(() => useProcessingState());
+    await settle();
+    getProcessingQueueStatusMock.mockRejectedValueOnce(
+      new Error("Queue unavailable"),
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PROCESSING_POLL_INTERVAL_MS);
+    });
+
+    expect(result.current.status).toEqual(snapshot);
+    expect(result.current.error).toBe("Queue unavailable");
+    expect(result.current.loading).toBe(false);
+
+    unmount();
+  });
+
+  it("clears its pending poll on unmount", async () => {
+    const { unmount } = renderHook(() => useProcessingState());
+    await settle();
     expect(vi.getTimerCount()).toBe(1);
-    getAllProcessesStatusMock.mockClear();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(10_000);
-    });
-    expect(getAllProcessesStatusMock).not.toHaveBeenCalled();
-
-    act(() => latestStreamOptions().onFallback?.());
-    expect(vi.getTimerCount()).toBe(1);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_000);
-    });
-    expect(getAllProcessesStatusMock).toHaveBeenCalledTimes(1);
-
-    act(() => latestStreamOptions().onConnected?.());
-    expect(vi.getTimerCount()).toBe(1);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_000);
-    });
-    expect(getAllProcessesStatusMock).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(10_000);
-    });
-    expect(getAllProcessesStatusMock).toHaveBeenCalledTimes(2);
 
     unmount();
     expect(vi.getTimerCount()).toBe(0);
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(getAllProcessesStatusMock).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(PROCESSING_POLL_INTERVAL_MS * 2);
+    expect(getProcessingQueueStatusMock).toHaveBeenCalledTimes(1);
   });
 });

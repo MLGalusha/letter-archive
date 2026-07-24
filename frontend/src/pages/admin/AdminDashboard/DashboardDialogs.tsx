@@ -50,54 +50,31 @@ export default function DashboardDialogs({
         onCancel={() => bulkActions.setShowClearMetadataModal(false)}
       />
 
-      {processingActions.showTranscribeConfirm && (
+      {selectedCount > 0 && processingActions.showTranscribeConfirm && (
         <ProcessingConfirmDialog
           title="Transcribe Letters"
-          selectedCount={selectedCount}
-          existingCount={processingActions.transcribeExistingCount}
-          existingSingularText="a transcript"
-          existingPluralText="transcripts"
-          emptyActionText="Transcribe"
-          confirmText="Transcribe"
-          skipActionText="Skip Existing"
-          overwriteActionText="Overwrite All"
+          message={`Queue transcription for ${selectedCount} selected letter${selectedCount === 1 ? "" : "s"}? Existing transcripts are skipped unless you explicitly overwrite them.`}
+          confirmText="Queue Eligible"
+          alternateText="Overwrite Existing"
           onCancel={() => processingActions.setShowTranscribeConfirm(false)}
           onConfirm={() => {
             processingActions.setShowTranscribeConfirm(false);
-            void processingActions.handleStartTranscription();
+            void processingActions.handleStartTranscription(false);
           }}
-          onSkipExisting={() => {
+          onAlternate={() => {
             processingActions.setShowTranscribeConfirm(false);
             void processingActions.handleStartTranscription(true);
-          }}
-          onOverwriteAll={() => {
-            processingActions.setShowTranscribeConfirm(false);
-            void processingActions.handleStartTranscription(false);
           }}
         />
       )}
 
-      {processingActions.showMetadataConfirm && (
+      {selectedCount > 0 && processingActions.showMetadataConfirm && (
         <ProcessingConfirmDialog
           title="Extract Metadata"
-          selectedCount={selectedCount}
-          existingCount={processingActions.metadataExistingCount}
-          existingSingularText="metadata"
-          existingPluralText="metadata"
-          emptyActionText="Extract metadata for"
-          confirmText="Extract"
-          skipActionText="Skip Existing"
-          overwriteActionText="Overwrite All"
+          message={`Queue metadata extraction for ${selectedCount} selected letter${selectedCount === 1 ? "" : "s"}? Ineligible or already processed letters will be skipped.`}
+          confirmText="Queue Eligible"
           onCancel={() => processingActions.setShowMetadataConfirm(false)}
           onConfirm={() => {
-            processingActions.setShowMetadataConfirm(false);
-            void processingActions.handleStartMetadataExtraction();
-          }}
-          onSkipExisting={() => {
-            processingActions.setShowMetadataConfirm(false);
-            void processingActions.handleStartMetadataExtraction(true);
-          }}
-          onOverwriteAll={() => {
             processingActions.setShowMetadataConfirm(false);
             void processingActions.handleStartMetadataExtraction();
           }}

@@ -3,13 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   findFirstMock,
   findManyLettersMock,
-  findManyCollectionsMock,
   dbUpdateMock,
   updateSetMock,
   updateWhereMock,
   updateReturningMock,
-  clearJobProgressMock,
-  getJobProgressMock,
   notifyMock,
   recoverExpiredTranscriptionsMock,
   recoverExpiredMetadataJobsMock,
@@ -25,13 +22,10 @@ const {
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   findManyLettersMock: vi.fn(),
-  findManyCollectionsMock: vi.fn(),
   dbUpdateMock: vi.fn(),
   updateSetMock: vi.fn(),
   updateWhereMock: vi.fn(),
   updateReturningMock: vi.fn(),
-  clearJobProgressMock: vi.fn(),
-  getJobProgressMock: vi.fn(),
   notifyMock: vi.fn(),
   recoverExpiredTranscriptionsMock: vi.fn(),
   recoverExpiredMetadataJobsMock: vi.fn(),
@@ -63,7 +57,6 @@ vi.mock('drizzle-orm', () => ({
     values,
   })),
   or: vi.fn((...clauses: unknown[]) => ({ kind: 'or', clauses })),
-  ilike: vi.fn((field: unknown, value: unknown) => ({ kind: 'ilike', field, value })),
 }));
 
 vi.mock('../../db/index.js', () => {
@@ -80,9 +73,6 @@ vi.mock('../../db/index.js', () => {
         letters: {
           findFirst: findFirstMock,
           findMany: findManyLettersMock,
-        },
-        collections: {
-          findMany: findManyCollectionsMock,
         },
       },
       update: dbUpdateMock,
@@ -127,19 +117,11 @@ vi.mock('../../db/index.js', () => {
       transcriptionText: 'letters.transcriptionText',
       deadLetter: 'letters.deadLetter',
     },
-    collections: {
-      collectionCode: 'collections.collectionCode',
-    },
     letterPages: {
       letterId: 'letterPages.letterId',
     },
   };
 });
-
-vi.mock('../processes/runner.js', () => ({
-  clearJobProgress: clearJobProgressMock,
-  getJobProgress: getJobProgressMock,
-}));
 
 vi.mock('../notifications.js', () => ({
   notify: notifyMock,
@@ -184,7 +166,6 @@ vi.mock('../../utils/logger.js', () => ({
 }));
 
 import {
-  buildProcessingConditions,
   cancelActiveJob,
   clearQueue,
   ensureBackgroundWorkerForQueuedProcessing,
@@ -194,15 +175,12 @@ import {
   recoverExpiredProcessingJobs,
   retryJob,
   queueJobTypeSchema,
-  startEntityExtractionProcessing,
-  startMetadataProcessing,
-  startTranscriptionProcessing,
+  wakeBackgroundWorkerForQueuedProcessing,
 } from '../processing-queue.js';
 
 describe('processing queue service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    findManyCollectionsMock.mockResolvedValue([]);
     findManyLettersMock.mockResolvedValue([]);
     findFirstMock.mockResolvedValue(null);
     updateWhereMock.mockReturnValue({ returning: updateReturningMock });
@@ -224,45 +202,6 @@ describe('processing queue service', () => {
       currentBatchSize: null,
       updatedAt: null,
     });
-  });
-
-  it('returns collectionNotFound when the collection code does not match any records', async () => {
-    const result = await buildProcessingConditions(
-      { collectionCode: '999' },
-      [{ kind: 'eq', field: 'letters.type', value: 'L' } as never],
-    );
-
-    expect(findManyCollectionsMock).toHaveBeenCalledWith({
-      where: {
-        kind: 'ilike',
-        field: 'collections.collectionCode',
-        value: '%999',
-      },
-    });
-    expect(result).toEqual({
-      conditions: [],
-      collectionNotFound: true,
-    });
-  });
-
-  it('adds the matched collection ids into processing conditions', async () => {
-    findManyCollectionsMock.mockResolvedValue([
-      { id: 'collection-9a' },
-      { id: 'collection-9b' },
-    ]);
-
-    const baseCondition = { kind: 'eq', field: 'letters.type', value: 'L' } as never;
-    const result = await buildProcessingConditions({ collectionCode: '009' }, [baseCondition]);
-
-    expect(result.collectionNotFound).toBe(false);
-    expect(result.conditions).toEqual([
-      baseCondition,
-      {
-        kind: 'inArray',
-        field: 'letters.collectionId',
-        values: ['collection-9a', 'collection-9b'],
-      },
-    ]);
   });
 
   it('accepts extra content as a durable queue job type', () => {
@@ -322,7 +261,6 @@ describe('processing queue service', () => {
       recipient: 'Bob',
       type: 'extra_content',
       startedAt: activeAt.toISOString(),
-      progress: null,
     }]);
     expect(status.queued.extraContent).toEqual([{
       letterId: 'extra-queued',
@@ -369,38 +307,6 @@ describe('processing queue service', () => {
         ]),
       },
     });
-  });
-
-  it('excludes retranscribing letters from metadata queue starts', async () => {
-    await expect(startMetadataProcessing({})).resolves.toEqual({
-      message: 'No letters to process',
-      total: 0,
-    });
-
-    expect(findManyLettersMock).toHaveBeenCalledWith(expect.objectContaining({
-      where: {
-        kind: 'and',
-        clauses: expect.arrayContaining([
-          { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
-        ]),
-      },
-    }));
-  });
-
-  it('excludes retranscribing letters from entity queue starts', async () => {
-    await expect(startEntityExtractionProcessing({})).resolves.toEqual({
-      message: 'No letters to process',
-      total: 0,
-    });
-
-    expect(findManyLettersMock).toHaveBeenCalledWith(expect.objectContaining({
-      where: {
-        kind: 'and',
-        clauses: expect.arrayContaining([
-          { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
-        ]),
-      },
-    }));
   });
 
   it('marks removed transcription jobs so they no longer stay queued', async () => {
@@ -892,7 +798,7 @@ describe('processing queue service', () => {
     expect(dbUpdateMock).not.toHaveBeenCalled();
   });
 
-  it('cancels running transcription jobs and clears progress tracking', async () => {
+  it('delegates transcription cancellation to the canonical exact-run lifecycle owner', async () => {
     findFirstMock.mockResolvedValue({
       id: 'letter-3',
       transcriptionStatus: 'RUNNING',
@@ -902,7 +808,6 @@ describe('processing queue service', () => {
 
     expect(result).toEqual({ message: 'Job cancelled' });
     expect(cancelTranscriptionAttemptMock).toHaveBeenCalledWith('letter-3', 'run-a');
-    expect(clearJobProgressMock).toHaveBeenCalledWith('letter-3', 'transcription');
   });
 
   it('delegates metadata cancellation to the canonical exact-run lifecycle owner', async () => {
@@ -919,7 +824,6 @@ describe('processing queue service', () => {
       'letter-4',
       'metadata-run-a',
     );
-    expect(clearJobProgressMock).toHaveBeenCalledWith('letter-4', 'metadata');
   });
 
   it('delegates extra-content cancellation to the canonical exact-run lifecycle owner', async () => {
@@ -939,7 +843,6 @@ describe('processing queue service', () => {
       'letter-extra',
       'extra-run-a',
     );
-    expect(clearJobProgressMock).toHaveBeenCalledWith('letter-extra', 'extra_content');
     expect(triggerWorkerJobMock).not.toHaveBeenCalled();
   });
 
@@ -1183,6 +1086,50 @@ describe('processing queue service', () => {
     expect(triggerWorkerJobMock).toHaveBeenCalledWith('metadata-lease-recovery');
   });
 
+  it('reports that a manual wake cannot run without worker configuration', async () => {
+    shouldUseCloudRunWorkerJobMock.mockReturnValue(false);
+
+    await expect(wakeBackgroundWorkerForQueuedProcessing()).resolves.toEqual({
+      requested: false,
+      reason: 'worker_not_configured',
+    });
+
+    expect(findFirstMock).not.toHaveBeenCalled();
+    expect(triggerWorkerJobMock).not.toHaveBeenCalled();
+  });
+
+  it('reports an empty durable queue without requesting a manual wake', async () => {
+    shouldUseCloudRunWorkerJobMock.mockReturnValue(true);
+
+    await expect(wakeBackgroundWorkerForQueuedProcessing()).resolves.toEqual({
+      requested: false,
+      reason: 'queue_empty',
+    });
+
+    expect(findFirstMock).toHaveBeenCalledTimes(4);
+    expect(triggerWorkerJobMock).not.toHaveBeenCalled();
+  });
+
+  it('requests one global worker drain when durable work exists', async () => {
+    shouldUseCloudRunWorkerJobMock.mockReturnValue(true);
+    findFirstMock.mockResolvedValueOnce({ id: 'queued-letter' });
+
+    await expect(wakeBackgroundWorkerForQueuedProcessing()).resolves.toEqual({
+      requested: true,
+    });
+
+    expect(triggerWorkerJobMock).toHaveBeenCalledWith('admin-processing-wake');
+  });
+
+  it('propagates a failed manual worker request', async () => {
+    const failure = new Error('Cloud Run unavailable');
+    shouldUseCloudRunWorkerJobMock.mockReturnValue(true);
+    findFirstMock.mockResolvedValueOnce({ id: 'queued-letter' });
+    triggerWorkerJobMock.mockRejectedValue(failure);
+
+    await expect(wakeBackgroundWorkerForQueuedProcessing()).rejects.toBe(failure);
+  });
+
   it('treats entity-only pending rows as durable queued processing work', async () => {
     findFirstMock
       .mockResolvedValueOnce(null)
@@ -1232,25 +1179,6 @@ describe('processing queue service', () => {
       columns: { id: true },
     });
   });
-
-  it.each([
-    ['transcription', startTranscriptionProcessing, 'queue:transcription'],
-    ['metadata', startMetadataProcessing, 'queue:metadata'],
-    ['entity extraction', startEntityExtractionProcessing, 'queue:entity_extraction'],
-  ] as const)(
-    'starts %s by waking the worker without executing an in-process batch',
-    async (_label, start, wakeReason) => {
-      shouldUseCloudRunWorkerJobMock.mockReturnValue(true);
-      findManyLettersMock.mockResolvedValue([{ id: 'queued-letter' }]);
-
-      await expect(start({})).resolves.toEqual({
-        message: 'Worker requested; matching letters are already queued',
-        total: 1,
-      });
-
-      expect(triggerWorkerJobMock).toHaveBeenCalledWith(wakeReason);
-    },
-  );
 
   it('propagates a failed worker wake so periodic recovery can retry it', async () => {
     const failure = new Error('Cloud Run unavailable');

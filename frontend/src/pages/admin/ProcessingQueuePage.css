@@ -1,5 +1,5 @@
 /* ── Processing Page ───────────────────────────────────
-   Registry-driven control center for background pipelines.
+   Durable queue control center for background pipelines.
    Styled after NotificationsPage.css using shared design tokens.
    Class prefix: proc-*
    ──────────────────────────────────────────────────────── */
@@ -73,49 +73,9 @@ body.dark .proc-page {
   gap: 4px;
 }
 
-.proc-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: var(--font-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border: 1px solid var(--border);
-  background: var(--bg-light);
-  color: var(--text-muted);
-}
-
-.proc-chip::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.proc-chip-connecting {
-  color: var(--text-muted);
-}
-
-.proc-chip-connected {
-  background: var(--proc-success-bg);
-  border-color: var(--proc-success);
-  color: var(--proc-success);
-}
-
-.proc-chip-reconnecting {
-  background: var(--proc-warn-bg);
-  border-color: var(--proc-warn);
-  color: var(--proc-warn);
-}
-
-.proc-chip-fallback-polling {
-  background: var(--proc-error-bg);
-  border-color: var(--proc-error);
-  color: var(--proc-error);
+.proc-header-actions {
+  display: flex;
+  gap: var(--spacing-xs);
 }
 
 .proc-updated {
@@ -188,6 +148,7 @@ body.dark .proc-page {
 }
 
 .proc-card[data-key="transcription"]::before { background: var(--proc-info); }
+.proc-card[data-key="extra_content"]::before { background: var(--proc-neutral); }
 .proc-card[data-key="metadata"]::before { background: var(--proc-warn); }
 .proc-card[data-key="entity_extraction"]::before { background: var(--proc-success); }
 
@@ -213,7 +174,7 @@ body.dark .proc-page {
 
 .proc-card-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--spacing-xs);
   padding: var(--spacing-sm) 0;
   border-top: 1px solid var(--border);
@@ -241,89 +202,6 @@ body.dark .proc-page {
   color: var(--text);
   font-variant-numeric: tabular-nums;
   line-height: 1;
-}
-
-.proc-card-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-/* ── Active batch panel ───────────────────────────────── */
-
-.proc-active-batch {
-  position: relative;
-  background: var(--proc-info-bg);
-  border: 1px solid var(--proc-info);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md);
-  margin-bottom: var(--spacing-lg);
-}
-
-.proc-active-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-sm);
-  flex-wrap: wrap;
-}
-
-.proc-active-head .proc-section-title {
-  margin: 0;
-  color: var(--proc-info);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-}
-
-.proc-badge {
-  display: inline-flex;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: var(--font-xs);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.proc-badge-paused {
-  background: var(--proc-warn-bg);
-  color: var(--proc-warn);
-}
-
-.proc-active-actions {
-  display: flex;
-  gap: var(--spacing-xs);
-}
-
-.proc-progress-outer {
-  height: 10px;
-  background: var(--bg-light);
-  border: 1px solid var(--proc-info);
-  border-radius: 999px;
-  overflow: hidden;
-  margin: var(--spacing-sm) 0;
-}
-
-.proc-progress-inner {
-  height: 100%;
-  background: var(--proc-info);
-  transition: width 300ms ease;
-}
-
-.proc-active-stats {
-  display: flex;
-  gap: var(--spacing-md);
-  font-size: var(--font-sm);
-  color: var(--text);
-  flex-wrap: wrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.proc-active-stats span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
 }
 
 /* ── Queue sections (collapsible per process) ─────────── */
@@ -406,16 +284,22 @@ body.dark .proc-page {
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--proc-info-bg);
-  border-top: 1px solid var(--proc-info);
-  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
   font-size: var(--font-sm);
   color: var(--text);
 }
 
-.proc-progress-label {
-  font-size: var(--font-xs);
-  color: var(--text-muted);
-  margin-top: 2px;
+.proc-active-list {
+  border-top: 1px solid var(--proc-info);
+}
+
+.proc-active-row:first-child {
+  border-top: none;
+}
+
+.proc-active-row a {
+  color: inherit;
+  font-weight: 600;
 }
 
 .proc-queue-list {
@@ -468,13 +352,6 @@ body.dark .proc-page {
 .proc-queue-item-meta {
   font-size: var(--font-xs);
   color: var(--text-muted);
-}
-
-.proc-queue-item-time {
-  font-size: var(--font-xs);
-  color: var(--text-muted);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
 }
 
 .proc-queue-empty {
@@ -544,8 +421,7 @@ body.dark .proc-page {
   transition: background 0.12s;
 }
 
-.proc-recent-item:last-child,
-.proc-recent-group:last-child {
+.proc-recent-item:last-child {
   border-bottom: none;
 }
 
@@ -616,84 +492,6 @@ body.dark .proc-recent-item:hover {
   flex-shrink: 0;
 }
 
-/* Grouped recent activity */
-.proc-recent-group {
-  position: relative;
-  border-bottom: 1px solid var(--border);
-}
-
-.proc-recent-group::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  background: var(--proc-neutral);
-}
-
-.proc-recent-group.proc-recent-success::before { background: var(--proc-success); }
-.proc-recent-group.proc-recent-failed::before { background: var(--proc-error); }
-.proc-recent-group.proc-recent-cleared::before { background: var(--proc-neutral); }
-
-.proc-recent-group .proc-recent-item::before {
-  display: none;
-}
-
-.proc-recent-group .proc-recent-group-header {
-  border-bottom: none;
-}
-
-.proc-recent-expandable {
-  cursor: pointer;
-}
-
-.proc-recent-expandable:hover {
-  background: hsla(0, 0%, 50%, 0.04);
-}
-
-body.dark .proc-recent-expandable:hover {
-  background: hsla(0, 0%, 100%, 0.03);
-}
-
-.proc-recent-chevron {
-  display: inline-block;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  transition: transform 0.15s ease;
-}
-
-.proc-recent-chevron-open {
-  transform: rotate(90deg);
-}
-
-/* Expanded step rows */
-.proc-recent-steps {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.proc-recent-step {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--spacing-sm);
-  padding: 8px 14px 8px 32px;
-  border-top: 1px solid var(--border);
-  background: hsla(0, 0%, 50%, 0.02);
-}
-
-body.dark .proc-recent-step {
-  background: hsla(0, 0%, 100%, 0.015);
-}
-
-.proc-recent-step-label {
-  font-size: var(--font-sm);
-  font-weight: 500;
-  color: var(--text);
-}
-
 .proc-status-pill {
   padding: 3px 10px;
   border-radius: 999px;
@@ -732,7 +530,13 @@ body.dark .proc-recent-step {
 }
 
 .proc-worker-card .proc-section-title {
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: 4px;
+}
+
+.proc-worker-note {
+  margin: 0 0 var(--spacing-sm);
+  color: var(--text-muted);
+  font-size: var(--font-xs);
 }
 
 .proc-worker-grid {
@@ -803,13 +607,8 @@ body.dark .proc-recent-step {
     align-items: flex-start;
   }
 
-  .proc-active-head {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .proc-active-actions {
-    width: 100%;
+  .proc-header-actions {
+    flex-wrap: wrap;
   }
 
   .proc-recent-filters select {

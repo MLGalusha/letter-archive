@@ -3,13 +3,10 @@ import {
   cancelActiveJob,
   clearQueue,
   getQueueStatus,
-  processingFilterSchema,
   queueJobTypeSchema,
   removeFromQueue,
   retryJob,
-  startEntityExtractionProcessing,
-  startMetadataProcessing,
-  startTranscriptionProcessing,
+  wakeBackgroundWorkerForQueuedProcessing,
 } from '../../../services/processing-queue.js';
 import { requireString } from './helpers.js';
 
@@ -23,31 +20,9 @@ router.get('/queue', async (_req, res, next) => {
   }
 });
 
-router.post('/start-transcription', async (req, res, next) => {
+router.post('/wake', async (_req, res, next) => {
   try {
-    const options = processingFilterSchema.parse(req.body || {});
-    const result = await startTranscriptionProcessing(options);
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.post('/start-metadata', async (req, res, next) => {
-  try {
-    const options = processingFilterSchema.parse(req.body || {});
-    const result = await startMetadataProcessing(options);
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.post('/start-entities', async (req, res, next) => {
-  try {
-    const options = processingFilterSchema.parse(req.body || {});
-    const result = await startEntityExtractionProcessing(options);
-    res.json(result);
+    res.json(await wakeBackgroundWorkerForQueuedProcessing());
   } catch (error) {
     next(error);
   }

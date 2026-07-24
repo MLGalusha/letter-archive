@@ -1,134 +1,111 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  getAllProcessesStatus,
-  type AllProcessesStatus,
-  type ProcessingEvent,
-} from '../api/admin/processes';
-import { useProcessingEvents } from './useProcessingEvents';
+  getProcessingQueueStatus,
+  type ProcessingQueueStatus,
+} from '../api/admin/processing';
 
-export type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'fallback-polling';
+export const PROCESSING_POLL_INTERVAL_MS = 5_000;
 
 export interface UseProcessingStateResult {
-  status: AllProcessesStatus | null;
+  status: ProcessingQueueStatus | null;
   loading: boolean;
   error: string | null;
-  connectionState: ConnectionState;
   lastUpdatedAt: number | null;
   refresh: () => Promise<void>;
 }
 
+interface ProcessingRefreshRun {
+  promise: Promise<void>;
+  invalidated: boolean;
+}
+
 /**
- * Single source of truth for the Processing page. Owns the snapshot,
- * subscribes to the SSE stream, applies in-place patches for fine-grained
- * events, and refetches on structural changes.
+ * Owns the Processing page's durable queue snapshot. Polls only after the
+ * previous request settles so slow responses cannot create overlapping reads.
  */
 export function useProcessingState(): UseProcessingStateResult {
-  const [status, setStatus] = useState<AllProcessesStatus | null>(null);
+  const [status, setStatus] = useState<ProcessingQueueStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
+  const mounted = useRef(true);
+  const refreshInFlight = useRef<ProcessingRefreshRun | null>(null);
 
-  const refreshInFlight = useRef(false);
-
-  const refresh = useCallback(async () => {
-    if (refreshInFlight.current) return;
-    refreshInFlight.current = true;
-    try {
-      const data = await getAllProcessesStatus();
-      setStatus(data);
-      setError(null);
-      setLastUpdatedAt(Date.now());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load processing status');
-    } finally {
-      refreshInFlight.current = false;
-      setLoading(false);
+  const refresh = useCallback((): Promise<void> => {
+    if (refreshInFlight.current) {
+      refreshInFlight.current.invalidated = true;
+      return refreshInFlight.current.promise;
     }
+
+    let resolveRun!: () => void;
+    let rejectRun!: (reason: unknown) => void;
+    const run: ProcessingRefreshRun = {
+      invalidated: false,
+      promise: new Promise<void>((resolve, reject) => {
+        resolveRun = resolve;
+        rejectRun = reject;
+      }),
+    };
+    refreshInFlight.current = run;
+
+    void (async () => {
+      if (mounted.current) setLoading(true);
+      try {
+        do {
+          run.invalidated = false;
+          try {
+            const data = await getProcessingQueueStatus();
+            if (!mounted.current) return;
+            setStatus(data);
+            setError(null);
+            setLastUpdatedAt(Date.now());
+          } catch (err) {
+            if (!mounted.current) return;
+            setError(
+              err instanceof Error
+                ? err.message
+                : 'Failed to load processing status',
+            );
+          }
+        } while (mounted.current && run.invalidated);
+      } finally {
+        if (mounted.current) setLoading(false);
+        if (refreshInFlight.current === run) {
+          refreshInFlight.current = null;
+        }
+      }
+    })().then(resolveRun, rejectRun);
+
+    return run.promise;
   }, []);
 
-  // Initial load
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    mounted.current = true;
+    let stopped = false;
+    let timer: number | null = null;
 
-  // Apply SSE events to local state
-  const handleEvent = useCallback(
-    (event: ProcessingEvent) => {
-      setLastUpdatedAt(Date.now());
-      switch (event.type) {
-        case 'batch-progress': {
-          setStatus(prev => {
-            if (!prev || !prev.activeBatch) return prev;
-            return {
-              ...prev,
-              activeBatch: {
-                ...prev.activeBatch,
-                completed: event.completed,
-                failed: event.failed,
-                skipped: event.skipped,
-                total: event.total,
-                currentJob: event.currentLetterId ? { letterId: event.currentLetterId } : null,
-              },
-            };
-          });
-          return;
-        }
-        case 'batch-paused':
-          setStatus(prev =>
-            prev && prev.activeBatch
-              ? { ...prev, activeBatch: { ...prev.activeBatch, isPaused: true } }
-              : prev
-          );
-          return;
-        case 'batch-resumed':
-          setStatus(prev =>
-            prev && prev.activeBatch
-              ? { ...prev, activeBatch: { ...prev.activeBatch, isPaused: false } }
-              : prev
-          );
-          return;
-        case 'batch-started':
-        case 'batch-completed':
-        case 'batch-aborted':
-        case 'queue-changed':
-        case 'status-updated':
-        case 'job-started':
-        case 'job-completed':
-        case 'job-failed':
-          void refresh();
-          return;
-        case 'worker-state':
-          // Patched via refresh on the next status-updated; cheap.
-          void refresh();
-          return;
+    const poll = async () => {
+      await refresh();
+      if (!stopped) {
+        timer = window.setTimeout(() => {
+          void poll();
+        }, PROCESSING_POLL_INTERVAL_MS);
       }
-    },
-    [refresh]
-  );
+    };
 
-  useProcessingEvents({
-    onEvent: handleEvent,
-    onConnected: () => setConnectionState('connected'),
-    onFallback: () => setConnectionState('fallback-polling'),
-  });
+    void poll();
 
-  // SSE broadcasters are process-local, while workers update persisted state in a
-  // separate process. Reconcile periodically even when SSE is healthy; poll faster
-  // only when the stream has fallen back.
-  useEffect(() => {
-    const intervalMs = connectionState === 'fallback-polling' ? 5_000 : 15_000;
-    const id = window.setInterval(() => {
-      void refresh();
-    }, intervalMs);
-    return () => window.clearInterval(id);
-  }, [connectionState, refresh]);
+    return () => {
+      stopped = true;
+      mounted.current = false;
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [refresh]);
 
   return {
     status,
     loading,
     error,
-    connectionState,
     lastUpdatedAt,
     refresh,
   };

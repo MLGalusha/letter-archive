@@ -16,9 +16,6 @@ const pipelineDefinitions = new Set([
 
 const allowedExecutionOwners = new Set([
   'routes/admin/letters/content.ts',
-  'routes/admin/letters/processes.ts',
-  'services/processes/letter-process-helpers.ts',
-  'services/processes/runner.ts',
   'worker.ts',
 ]);
 
@@ -81,7 +78,14 @@ describe('processing execution ownership', () => {
   it('keeps the retired API in-process executor deleted', async () => {
     const files = await productionTypeScriptFiles(sourceRoot);
     const retiredOwners: string[] = [];
-    const retiredSymbols = /\b(?:processLettersAsync|getProcessingStatus|resetProcessingState)\b/;
+    const retiredSymbols = new RegExp(
+      String.raw`\b(?:processLettersAsync|getProcessingStatus|resetProcessingState`
+      + String.raw`|startBatch|runLetterBatch|shouldAbortProcessing`
+      + String.raw`|updateJobProgress|getJobProgress`
+      + String.raw`|startTranscriptionProcessing|startMetadataProcessing`
+      + String.raw`|startEntityExtractionProcessing|initProcessingStreamBroadcaster`
+      + String.raw`|issueProcessingStreamToken)\b`,
+    );
 
     for (const absolutePath of files) {
       const relativePath = path.relative(sourceRoot, absolutePath);
@@ -91,6 +95,17 @@ describe('processing execution ownership', () => {
     }
 
     expect(retiredOwners.sort()).toEqual([]);
+  });
+
+  it('keeps the API lease reconciler until worker availability is durable', async () => {
+    const api = await readFile(path.join(sourceRoot, 'index.ts'), 'utf8');
+
+    expect(api).toContain('recoverExpiredProcessingJobs');
+    expect(api).toContain(
+      "ensureBackgroundWorkerForQueuedProcessing('api-lease-recovery')",
+    );
+    expect(api).toContain('apiLeaseRecovery.start()');
+    expect(api).toContain('apiLeaseRecovery.stopAndWait()');
   });
 
   it('keeps processing-queue as durable queue orchestration, not a pipeline executor', async () => {

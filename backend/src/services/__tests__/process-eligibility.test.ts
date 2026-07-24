@@ -1,12 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const {
-  buildProcessingConditionsMock,
-  countEligibleMock,
-} = vi.hoisted(() => ({
-  buildProcessingConditionsMock: vi.fn(),
-  countEligibleMock: vi.fn(),
-}));
+import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((field: unknown, value: unknown) => ({ kind: 'eq', field, value })),
@@ -56,55 +48,17 @@ vi.mock('../../db/index.js', () => ({
   },
 }));
 
-vi.mock('../processes/filter-helpers.js', () => ({
-  processingFilterSchema: {},
-  buildProcessingConditions: buildProcessingConditionsMock,
-}));
-
-vi.mock('../processes/letter-process-helpers.js', () => ({
-  letterProcessSpecs: {
-    transcription: {},
-    metadata: {},
-    entity_extraction: {},
-    extra_content: {},
-  },
-  queueSnapshot: vi.fn(),
-  activeJobSnapshot: vi.fn(),
-  recentJobsSnapshot: vi.fn(),
-  removeFromQueue: vi.fn(),
-  clearQueue: vi.fn(),
-  retryJob: vi.fn(),
-  cancelActive: vi.fn(),
-  runLetterBatch: vi.fn(),
-  countEligible: countEligibleMock,
-  resolveEligibleLetterIds: vi.fn(),
-}));
-
-vi.mock('../processes/runner.js', () => ({
-  getJobProgress: vi.fn(),
-}));
-
-import { metadataProcess } from '../processes/metadata.js';
-import { entityExtractionProcess } from '../processes/entity-extraction.js';
-import { extraContentProcess } from '../processes/extra-content.js';
-import { transcriptionProcess } from '../processes/transcription.js';
 import {
   extraContentPrerequisiteConditions,
   isMetadataStateEligible,
+  queuedEntityExtractionConditions,
   queuedExtraContentConditions,
+  queuedMetadataConditions,
+  queuedTranscriptionConditions,
 } from '../processing-eligibility.js';
 
-describe('process registry downstream eligibility', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    buildProcessingConditionsMock.mockResolvedValue({
-      conditions: [],
-      collectionNotFound: false,
-    });
-    countEligibleMock.mockResolvedValue(0);
-  });
-
-  it('keeps the in-memory metadata transcript check aligned with SQL whitespace semantics', () => {
+describe('durable processing eligibility', () => {
+  it('keeps in-memory metadata eligibility aligned with SQL whitespace semantics', () => {
     const eligibleState = {
       type: 'L',
       transcriptionStatus: 'SUCCESS',
@@ -121,10 +75,8 @@ describe('process registry downstream eligibility', () => {
     expect(isMetadataStateEligible(eligibleState)).toBe(true);
   });
 
-  it('uses the shared page-backed transcription queue predicate', async () => {
-    await transcriptionProcess.getEligibleCount({});
-
-    expect(buildProcessingConditionsMock).toHaveBeenCalledWith({}, [
+  it('defines a page-backed durable transcription queue', () => {
+    expect(queuedTranscriptionConditions()).toEqual([
       {
         kind: 'inArray',
         field: 'letters.type',
@@ -134,14 +86,7 @@ describe('process registry downstream eligibility', () => {
       { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
       expect.objectContaining({
         kind: 'sql',
-        strings: expect.arrayContaining([
-          expect.stringContaining('EXISTS'),
-        ]),
-        values: [
-          { letterId: 'letterPages.letterId' },
-          'letterPages.letterId',
-          'letters.id',
-        ],
+        strings: expect.arrayContaining([expect.stringContaining('EXISTS')]),
       }),
       { kind: 'eq', field: 'letters.workflow', value: 'UPLOADED' },
       { kind: 'eq', field: 'letters.transcriptionStatus', value: 'PENDING' },
@@ -151,10 +96,8 @@ describe('process registry downstream eligibility', () => {
     ]);
   });
 
-  it('uses the confirmation-gated metadata queue predicate', async () => {
-    await metadataProcess.getEligibleCount({});
-
-    expect(buildProcessingConditionsMock).toHaveBeenCalledWith({}, [
+  it('defines a confirmation-gated durable metadata queue', () => {
+    expect(queuedMetadataConditions()).toEqual([
       { kind: 'eq', field: 'letters.type', value: 'L' },
       { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
       { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
@@ -177,10 +120,8 @@ describe('process registry downstream eligibility', () => {
     ]);
   });
 
-  it('uses the metadata-success entity queue predicate', async () => {
-    await entityExtractionProcess.getEligibleCount({});
-
-    expect(buildProcessingConditionsMock).toHaveBeenCalledWith({}, [
+  it('defines an entity queue only after metadata succeeds', () => {
+    expect(queuedEntityExtractionConditions()).toEqual([
       { kind: 'eq', field: 'letters.type', value: 'L' },
       { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
       { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
@@ -189,15 +130,14 @@ describe('process registry downstream eligibility', () => {
     ]);
   });
 
-  it('shares the archive-identity extra-content predicate without requiring PENDING', () => {
-    expect(extraContentPrerequisiteConditions()).toEqual([
+  it('shares archive identity between extra-content prerequisites and its queue', () => {
+    const prerequisites = extraContentPrerequisiteConditions();
+
+    expect(prerequisites).toEqual([
       { kind: 'eq', field: 'letters.type', value: 'L' },
       expect.objectContaining({
         kind: 'sql',
         strings: expect.arrayContaining([
-          expect.stringContaining('rel.collection_id'),
-          expect.stringContaining('rel.date_raw'),
-          expect.stringContaining('rel.type_sequence'),
           expect.stringContaining("rel.type IN ('T', 'C', 'E')"),
         ]),
         values: [
@@ -208,18 +148,8 @@ describe('process registry downstream eligibility', () => {
         ],
       }),
     ]);
-  });
-
-  it('uses the shared queued extra-content predicate in the registry adapter', async () => {
-    await extraContentProcess.getEligibleCount({});
-
-    expect(buildProcessingConditionsMock).toHaveBeenCalledWith(
-      {},
-      queuedExtraContentConditions(),
-    );
-    expect(buildProcessingConditionsMock.mock.calls[0]?.[1]).toEqual([
-      { kind: 'eq', field: 'letters.type', value: 'L' },
-      expect.objectContaining({ kind: 'sql' }),
+    expect(queuedExtraContentConditions()).toEqual([
+      ...prerequisites,
       { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'PENDING' },
     ]);
   });

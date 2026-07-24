@@ -13,14 +13,11 @@ const {
   resetLetterForProcessingMock,
   getQueueStatusMock,
   requestBackgroundWorkerRunMock,
-  startTranscriptionProcessingMock,
-  startMetadataProcessingMock,
-  startEntityExtractionProcessingMock,
+  wakeBackgroundWorkerForQueuedProcessingMock,
   removeFromQueueMock,
   clearQueueMock,
   retryJobMock,
   cancelActiveJobMock,
-  processingFilterParseMock,
   queueJobTypeParseMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
@@ -34,14 +31,11 @@ const {
   resetLetterForProcessingMock: vi.fn(),
   getQueueStatusMock: vi.fn(),
   requestBackgroundWorkerRunMock: vi.fn(),
-  startTranscriptionProcessingMock: vi.fn(),
-  startMetadataProcessingMock: vi.fn(),
-  startEntityExtractionProcessingMock: vi.fn(),
+  wakeBackgroundWorkerForQueuedProcessingMock: vi.fn(),
   removeFromQueueMock: vi.fn(),
   clearQueueMock: vi.fn(),
   retryJobMock: vi.fn(),
   cancelActiveJobMock: vi.fn(),
-  processingFilterParseMock: vi.fn(),
   queueJobTypeParseMock: vi.fn(),
 }));
 
@@ -139,14 +133,12 @@ vi.mock('../../../services/letter-queries.js', () => ({
 vi.mock('../../../services/processing-queue.js', () => ({
   getQueueStatus: getQueueStatusMock,
   requestBackgroundWorkerRun: requestBackgroundWorkerRunMock,
-  startTranscriptionProcessing: startTranscriptionProcessingMock,
-  startMetadataProcessing: startMetadataProcessingMock,
+  wakeBackgroundWorkerForQueuedProcessing:
+    wakeBackgroundWorkerForQueuedProcessingMock,
   removeFromQueue: removeFromQueueMock,
   clearQueue: clearQueueMock,
   retryJob: retryJobMock,
   cancelActiveJob: cancelActiveJobMock,
-  startEntityExtractionProcessing: startEntityExtractionProcessingMock,
-  processingFilterSchema: { parse: processingFilterParseMock },
   queueJobTypeSchema: { parse: queueJobTypeParseMock },
 }));
 
@@ -218,7 +210,6 @@ function createQueueStatus() {
 describe('admin letters processing queue integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    processingFilterParseMock.mockImplementation((value) => value);
     queueJobTypeParseMock.mockImplementation((value) => value);
     requestBackgroundWorkerRunMock.mockResolvedValue(false);
   });
@@ -237,58 +228,24 @@ describe('admin letters processing queue integration', () => {
     expect(response.body).toEqual(createQueueStatus());
   });
 
-  it('starts transcription with validated filter options', async () => {
-    processingFilterParseMock.mockReturnValue({ collectionCode: '009' });
-    startTranscriptionProcessingMock.mockResolvedValue({
-      message: 'Worker requested; matching letters are already queued',
-      total: 2,
+  it('exposes one unfiltered global worker wake', async () => {
+    wakeBackgroundWorkerForQueuedProcessingMock.mockResolvedValue({
+      requested: false,
+      reason: 'queue_empty',
     });
-
     const response = await invokeRouter(lettersRouter, {
       method: 'POST',
-      url: '/processing/start-transcription',
-      path: '/processing/start-transcription',
+      url: '/processing/wake',
+      path: '/processing/wake',
       headers: { accept: 'application/json' },
-      body: { collectionCode: '009' },
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toEqual({
-      message: 'Worker requested; matching letters are already queued',
-      total: 2,
+      requested: false,
+      reason: 'queue_empty',
     });
-    expect(processingFilterParseMock).toHaveBeenCalledWith({ collectionCode: '009' });
-    expect(startTranscriptionProcessingMock).toHaveBeenCalledWith({ collectionCode: '009' });
-  });
-
-  it('starts entity extraction with validated filter options', async () => {
-    processingFilterParseMock.mockReturnValue({ collectionCode: '009', year: 1947 });
-    startEntityExtractionProcessingMock.mockResolvedValue({
-      message: 'Worker requested; matching letters are already queued',
-      total: 3,
-    });
-
-    const response = await invokeRouter(lettersRouter, {
-      method: 'POST',
-      url: '/processing/start-entities',
-      path: '/processing/start-entities',
-      headers: { accept: 'application/json' },
-      body: { collectionCode: '009', year: 1947 },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toEqual({
-      message: 'Worker requested; matching letters are already queued',
-      total: 3,
-    });
-    expect(processingFilterParseMock).toHaveBeenCalledWith({
-      collectionCode: '009',
-      year: 1947,
-    });
-    expect(startEntityExtractionProcessingMock).toHaveBeenCalledWith({
-      collectionCode: '009',
-      year: 1947,
-    });
+    expect(wakeBackgroundWorkerForQueuedProcessingMock).toHaveBeenCalledOnce();
   });
 
   it('rejects cancel requests that do not include a letter id', async () => {

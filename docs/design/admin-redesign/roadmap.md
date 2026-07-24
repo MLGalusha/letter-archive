@@ -61,9 +61,11 @@ Progress:
 - Dashboard confirmation and metadata identity dialogs moved into `AdminDashboard/DashboardDialogs.tsx`.
 - Row shift-click and drag selection behavior moved into `useDashboardRowSelection`.
 - Delete, clear, and publish/hide bulk mutation workflows moved into `useDashboardBulkActions`.
-- The dashboard processing poller and its process-local pause/resume/abort controls
-  were retired with the legacy in-process executor in architecture-cleanup Slice 010.
-- Transcription and metadata start flows, including confirmation modal state, moved into `useDashboardProcessingActions`.
+- The legacy dashboard processing poller and its process-local
+  pause/resume/abort/progress controls were fully retired with the in-process
+  executors in architecture-cleanup Slices 010 and 011B.
+- Selected-ID transcription and metadata queue flows, including confirmation modal
+  state, moved into `useDashboardProcessingActions`.
 - Copy/paste edit-mode state, pending field updates, and edit-mode row click behavior moved into `useDashboardCopyPasteEdit`.
 - Dashboard filter/sort query construction centralized in `buildDashboardLetterQuery` so fetch, select-all, and selection-pruning use the same API parameters.
 - Letter fetching, pagination, stats normalization, loading/error state, and computed-column client sorting moved into `useDashboardLettersData`.
@@ -83,8 +85,12 @@ Progress:
 - Recent activity column toggling and pagination are split out of the table component, leaving the table focused on header and row composition.
 - Dashboard filter state now has a first controller boundary: the toolbar and filter panel consume the filter hook result as one model instead of long repeated filter prop lists.
 - Persisted dashboard state and saved dashboard views now consume the same filter controller, reducing repeated setter lists and making future filter additions less brittle.
-- Letter fetching, filtered selection pruning/select-all, and processing start actions now consume the same filter controller instead of each receiving duplicate filter prop lists.
-- Dashboard filter-to-query translation is centralized in filter adapter helpers, so letter queries and processing actions derive API fields from the same source.
+- Letter fetching and filtered selection pruning/select-all consume the same filter
+  controller instead of each receiving duplicate filter prop lists. Processing actions
+  consume explicit resolved IDs rather than implying a filtered worker batch.
+- Dashboard filter-to-query translation is centralized for letter queries and
+  select-all. It is deliberately not reused to scope worker execution because no
+  durable filtered-batch contract exists.
 - Dashboard dialogs now consume grouped bulk-action and processing-action models instead of a long modal prop list from the page component.
 - Bulk edit toolbar destructive actions are split into their own control component, matching the existing selection, copy, processing, and publishing sections.
 - Recent activity table header composition and sortable column definitions are split into a table-header component, leaving the table focused on header/row/pagination structure.
@@ -225,8 +231,13 @@ Deferred sort slice:
 
 Deferred processing redesign note:
 
-- The broader transcription/metadata pipeline needs its own redesign after the dashboard pass. Current stored workflow stages can show counts for `TRANSCRIBING` or `METADATA_EXTRACTING` even when nothing is actively queued or running, which makes dashboard filters and processing status feel contradictory.
-- That redesign should separate durable letter content status, live queue/job status, retry/error state, and admin actions instead of using one mixed workflow concept for everything.
+- Architecture-cleanup Slices 010–011B removed both API-memory batch executors and
+  migrated the Processing page to durable queue/job state. The remaining design debt is
+  narrower: stored workflow stages can still disagree with live queue state, and
+  worker availability still needs an execution-fenced lease.
+- Later redesign work should finish separating durable letter content status, live
+  queue/job status, retry/error state, and admin language instead of treating one mixed
+  workflow concept as authoritative for everything.
 
 ## Phase 2.6 - Extra Content Data Model Correction
 
@@ -535,7 +546,7 @@ Goals:
 
 ## Phase 6 - Processing Pipeline Redesign
 
-Status: pending
+Status: in progress through the architecture-cleanup program
 
 Why this exists:
 
@@ -548,3 +559,15 @@ Goals:
 - Define separate source-of-truth fields for durable letter state versus live job/queue state.
 - Redesign the Processing page and related dashboard status/filter language around those separate concepts.
 - Preserve data integrity and avoid changing processing semantics until the state model is explicitly designed.
+
+Progress:
+
+- Automatic batch execution now has one owner: the separate worker.
+- The Processing page polls the durable four-stage queue and no longer exposes
+  process-local start/pause/resume/abort/progress or SSE state.
+- Dashboard processing requires explicit selected IDs; filtered-start endpoints that
+  counted one scope while waking a global drain have been removed.
+- Transcription, extra-content, and metadata attempts have run-bound leases; entity
+  extraction has an atomic run/revision projection boundary.
+- Worker availability fencing, scheduled recovery wake, and the remaining workflow
+  versus queue-language cleanup are still open.

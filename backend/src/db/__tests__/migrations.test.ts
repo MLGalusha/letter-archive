@@ -175,4 +175,25 @@ describe("migration validation", () => {
       /NEW\.entity_extraction_status <> 'RUNNING'[\s\S]*?NEW\.entity_extraction_status <> 'SUCCESS'[\s\S]*?discard_legacy_entity_extraction_projection/,
     );
   });
+
+  it("adds nullable, unbackfilled worker execution ownership as one complete tuple", () => {
+    const sql = readMigrationSql("0052_add_worker_execution_lease");
+
+    expect(sql).toContain(
+      'ADD COLUMN "execution_token" uuid',
+    );
+    expect(sql).toContain(
+      'ADD COLUMN "execution_lease_expires_at" timestamp(3) with time zone',
+    );
+    expect(sql).toMatch(
+      /ADD CONSTRAINT "worker_execution_lease_shape"[\s\S]*\("execution_token" IS NULL\)\s*=\s*\("execution_lease_expires_at" IS NULL\)/,
+    );
+    expect(sql).toContain(
+      'INSERT INTO "worker_state" ("id")',
+    );
+    expect(sql).toContain('ON CONFLICT DO NOTHING');
+    expect(sql).not.toMatch(/\bUPDATE\s+"worker_state"\b/i);
+    expect(sql).not.toMatch(/\bCREATE\s+(?:UNIQUE\s+)?INDEX\b/i);
+    expect(sql).not.toMatch(/DEFAULT\s+gen_random_uuid/i);
+  });
 });

@@ -130,12 +130,89 @@ describe('processing execution ownership', () => {
     expect(workerJob).toMatch(/name:\s*CLOUD_RUN_WORKER_JOB_NAME/);
   });
 
+  it('keeps scheduled worker reconciliation authenticated and ordered after invoker grants', async () => {
+    const cloudBuild = await readFile(
+      path.join(repositoryRoot, 'cloudbuild.yaml'),
+      'utf8',
+    );
+    const backendGrant = cloudBuild.indexOf('id: grant-backend-worker-job-invoke');
+    const schedulerGrant = cloudBuild.indexOf(
+      'id: grant-scheduler-worker-job-invoke',
+    );
+    const scheduleStep = cloudBuild.indexOf(
+      'id: configure-worker-reconciliation-schedule',
+    );
+
+    expect(cloudBuild).toContain(
+      "_SCHEDULER_SERVICE_ACCOUNT: 'letter-archive-scheduler@${PROJECT_ID}.iam.gserviceaccount.com'",
+    );
+    expect(cloudBuild).toContain(
+      "_WORKER_RECONCILIATION_SCHEDULE: '*/5 * * * *'",
+    );
+    expect(cloudBuild).toContain(
+      "_ENABLE_WORKER_RECONCILIATION_SCHEDULE: 'false'",
+    );
+    expect(backendGrant).toBeGreaterThan(-1);
+    expect(schedulerGrant).toBeGreaterThan(backendGrant);
+    expect(scheduleStep).toBeGreaterThan(schedulerGrant);
+
+    expect(cloudBuild.slice(backendGrant, schedulerGrant)).toContain(
+      '--member=serviceAccount:${_SERVICE_ACCOUNT}',
+    );
+    expect(cloudBuild.slice(backendGrant, schedulerGrant)).toContain(
+      '--role=roles/run.invoker',
+    );
+    expect(cloudBuild.slice(schedulerGrant, scheduleStep)).toContain(
+      '--member="serviceAccount:${_SCHEDULER_SERVICE_ACCOUNT}"',
+    );
+    expect(cloudBuild.slice(schedulerGrant, scheduleStep)).toContain(
+      '--role=roles/run.invoker',
+    );
+    expect(cloudBuild.slice(schedulerGrant, scheduleStep)).toContain(
+      'if [[ "${_ENABLE_WORKER_RECONCILIATION_SCHEDULE}" != "true" ]]',
+    );
+    expect(cloudBuild.slice(schedulerGrant, scheduleStep)).toContain(
+      "waitFor: ['grant-backend-worker-job-invoke']",
+    );
+
+    const scheduleContract = cloudBuild.slice(scheduleStep);
+    expect(scheduleContract).toContain(
+      "waitFor: ['grant-scheduler-worker-job-invoke']",
+    );
+    expect(scheduleContract).toContain(
+      'if [[ "${_ENABLE_WORKER_RECONCILIATION_SCHEDULE}" != "true" ]]',
+    );
+    expect(scheduleContract).toContain(
+      'gcloud scheduler jobs "$${scheduler_action}" http',
+    );
+    expect(scheduleContract).toContain(
+      'gcloud scheduler jobs describe letter-archive-worker-reconcile',
+    );
+    expect(scheduleContract).toContain(
+      '--schedule="${_WORKER_RECONCILIATION_SCHEDULE}"',
+    );
+    expect(scheduleContract).toContain('--time-zone=Etc/UTC');
+    expect(scheduleContract).toContain(
+      '--uri="https://run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${_REGION}/jobs/letter-archive-worker:run"',
+    );
+    expect(scheduleContract).toContain(
+      '--oauth-service-account-email="${_SCHEDULER_SERVICE_ACCOUNT}"',
+    );
+    expect(scheduleContract).toContain(
+      '--oauth-token-scope=https://www.googleapis.com/auth/cloud-platform',
+    );
+    expect(scheduleContract).not.toContain('--oidc-service-account-email');
+    expect(scheduleContract).toContain('--http-method=POST');
+    expect(scheduleContract).toContain('--max-retry-attempts=0');
+    expect(scheduleContract).toContain('--max-retry-duration=0s');
+  });
+
   it('keeps queued extra-content execution worker-owned and explicitly queued', async () => {
     const worker = await readFile(path.join(sourceRoot, 'worker.ts'), 'utf8');
 
     expect(worker).toContain('queuedExtraContentConditions');
     expect(worker).toMatch(
-      /tryTranscribeExtras\(letter\.id,\s*\{\s*expectedStatus:\s*'PENDING',\s*claimKind:\s*'QUEUED',\s*\}\)/,
+      /tryTranscribeExtras\(letter\.id,\s*\{\s*expectedStatus:\s*'PENDING',\s*claimKind:\s*'QUEUED',\s*workerExecutionToken:\s*executionToken,\s*\}\)/,
     );
     expect(worker).toMatch(
       /extraContentJobStatus,\s*'RUNNING'[\s\S]*?isNotNull\(letters\.extraContentJobClaimKind\)[\s\S]*?extraContentJobClaimKind,\s*'QUEUED'[\s\S]*?extraContentJobDirty,\s*true/,
@@ -321,7 +398,7 @@ describe('processing execution ownership', () => {
       const relativePath = path.relative(sourceRoot, absolutePath);
       if (relativePath === canonicalTranscriptionClaimOwner) continue;
       if (
-        /\brecoverExpiredTranscriptions\s*\(\)/.test(await readFile(absolutePath, 'utf8'))
+        /\brecoverExpiredTranscriptions\s*\(/.test(await readFile(absolutePath, 'utf8'))
         && !allowedExpiredTranscriptionRecoveryCallers.has(relativePath)
       ) {
         unexpectedCallers.push(relativePath);
@@ -339,7 +416,7 @@ describe('processing execution ownership', () => {
       const relativePath = path.relative(sourceRoot, absolutePath);
       if (relativePath === canonicalExtraContentClaimOwner) continue;
       if (
-        /\brecoverExpiredExtraContentJobs\s*\(\)/.test(
+        /\brecoverExpiredExtraContentJobs\s*\(/.test(
           await readFile(absolutePath, 'utf8'),
         ) && !allowedExpiredExtraContentRecoveryCallers.has(relativePath)
       ) {
@@ -358,7 +435,7 @@ describe('processing execution ownership', () => {
       const relativePath = path.relative(sourceRoot, absolutePath);
       if (relativePath === canonicalMetadataClaimOwner) continue;
       if (
-        /\brecoverExpiredMetadataJobs\s*\(\)/.test(
+        /\brecoverExpiredMetadataJobs\s*\(/.test(
           await readFile(absolutePath, 'utf8'),
         ) && !allowedExpiredMetadataRecoveryCallers.has(relativePath)
       ) {
@@ -377,7 +454,7 @@ describe('processing execution ownership', () => {
       const relativePath = path.relative(sourceRoot, absolutePath);
       if (relativePath === 'services/processing-queue.ts') continue;
       if (
-        /\brecoverExpiredProcessingJobs\s*\(\)/.test(
+        /\brecoverExpiredProcessingJobs\s*\(/.test(
           await readFile(absolutePath, 'utf8'),
         ) &&
         !allowedRecoveryCallers.has(relativePath)

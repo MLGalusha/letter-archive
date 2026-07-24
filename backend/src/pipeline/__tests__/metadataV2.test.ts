@@ -163,8 +163,15 @@ describe('metadata entity persistence ownership', () => {
   });
 
   it('passes standalone ownership to the atomic entity commit boundary', async () => {
-    await runEntityExtractionOnly('letter-1');
+    await runEntityExtractionOnly('letter-1', {
+      workerExecutionToken: 'execution-a',
+    });
 
+    expect(claimEntityExtractionMock).toHaveBeenCalledWith(
+      'letter-1',
+      'PENDING',
+      'execution-a',
+    );
     expect(claimEntityExtractionMock.mock.invocationCallOrder[0]).toBeLessThan(
       getLetterWithPagesMock.mock.invocationCallOrder[0]!,
     );
@@ -198,7 +205,7 @@ describe('metadata entity persistence ownership', () => {
     }));
   });
 
-  it('passes pipeline ownership to the atomic entity commit boundary', async () => {
+  it('keeps entity extraction automatic by default and passes pipeline ownership', async () => {
     await runMetadataExtractionV2('letter-1', undefined, { runId: 'run-a', revision: 4 });
 
     expect(completeMetadataMock).toHaveBeenCalledWith(
@@ -212,6 +219,31 @@ describe('metadata entity persistence ownership', () => {
       entityClaim,
     );
     expect(failEntityExtractionMock).not.toHaveBeenCalled();
+  });
+
+  it('leaves entity extraction on the durable queue when the worker defers it', async () => {
+    await expect(
+      runMetadataExtractionV2(
+        'letter-1',
+        { entityExtraction: 'deferred' },
+        { runId: 'run-a', revision: 4 },
+      ),
+    ).resolves.toEqual({ kind: 'completed' });
+
+    expect(completeMetadataMock).toHaveBeenCalledWith(
+      'letter-1',
+      { runId: 'run-a', revision: 4 },
+      expect.any(Object),
+    );
+    expect(extractMetadataV2Mock).toHaveBeenCalledWith(expect.objectContaining({
+      corrections: {
+        confirmedSender: 'Alice',
+        confirmedRecipient: 'Bob',
+      },
+    }));
+    expect(claimEntityExtractionMock).not.toHaveBeenCalled();
+    expect(extractEntitiesMock).not.toHaveBeenCalled();
+    expect(processEntityExtractionMock).not.toHaveBeenCalled();
   });
 
   it('fails only the exact standalone run when extraction throws', async () => {
@@ -235,6 +267,20 @@ describe('metadata entity persistence ownership', () => {
 
     expect(extractMetadataV2Mock).not.toHaveBeenCalled();
     expect(getLetterWithPagesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('binds a queued metadata claim to its worker execution token', async () => {
+    await expect(runMetadataExtractionV2('letter-1', {
+      entityExtraction: 'deferred',
+      workerExecutionToken: 'execution-a',
+    })).resolves.toEqual({ kind: 'completed' });
+
+    expect(claimQueuedMetadataMock).toHaveBeenCalledWith(
+      'letter-1',
+      expect.any(Object),
+      'execution-a',
+    );
+    expect(claimEntityExtractionMock).not.toHaveBeenCalled();
   });
 
   it('reloads input after claim and returns superseded without notifications or entities', async () => {

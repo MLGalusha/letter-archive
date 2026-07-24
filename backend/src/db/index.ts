@@ -37,12 +37,20 @@ export const db = drizzle(client, { schema });
 
 export type Database = typeof db;
 
-// Graceful shutdown — close DB connections so the process can exit
-function cleanup() {
-  client.end({ timeout: 3 }).catch(() => {});
-}
+let closePromise: Promise<void> | null = null;
 
-process.on('SIGINT', cleanup);
-process.on('SIGTERM', cleanup);
+/**
+ * Close the database pool after the owning process has drained its work.
+ *
+ * This is deliberately explicit rather than a module-level signal listener:
+ * the API must first drain requests, and the worker must keep its execution
+ * heartbeat and stage terminal writes available until the active job settles.
+ */
+export function closeDatabase(): Promise<void> {
+  if (!closePromise) {
+    closePromise = client.end({ timeout: 3 });
+  }
+  return closePromise;
+}
 
 export * from './schema.js';

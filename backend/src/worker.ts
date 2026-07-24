@@ -1,24 +1,29 @@
 import 'dotenv/config';
 import { eq, and, isNotNull, or } from 'drizzle-orm';
-import { db, letters } from './db/index.js';
+import { closeDatabase, db, letters } from './db/index.js';
 import { processLetter, processMetadata } from './pipeline/processor.js';
 import { runEntityExtractionOnly } from './pipeline/metadataV2.js';
 import { tryTranscribeExtras } from './services/letter/extra-content.js';
 import { createLogger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { notify } from './services/notifications.js';
 import {
+  ensureBackgroundWorkerForQueuedProcessing,
   hasQueuedProcessingWork,
   recoverExpiredProcessingJobs,
-  requestBackgroundWorkerRun,
 } from './services/processing-queue.js';
 import {
+  acquireWorkerExecutionLease,
   createWorkerStatePublisher,
-  setWorkerState,
+  renewWorkerExecutionLease,
+  WORKER_EXECUTION_LEASE_MS,
 } from './services/worker-state.js';
+import {
+  createWorkerExecutionHeartbeat,
+  type WorkerExecutionHeartbeat,
+} from './services/worker-execution-heartbeat.js';
 import {
   createLeaseRecoveryCoordinator,
   decideEmptyWorkerJob,
-  decideEmptyWorkerJobWithHandoff,
   projectQueuedRecoveryForWorker,
 } from './services/lease-recovery-coordinator.js';
 import {
@@ -33,11 +38,22 @@ const log = createLogger({ module: 'worker' });
 const POLL_INTERVAL = 5000; // 5 seconds
 const BATCH_SIZE = 5;
 const LEASE_RECOVERY_INTERVAL_MS = 60_000;
-const workerStatePublisher = createWorkerStatePublisher();
+const SHUTDOWN_TIMEOUT_MS = 8_000;
+type WorkerStatePublisher = ReturnType<typeof createWorkerStatePublisher>;
+
+let shuttingDown = false;
+let executionTokenForRecovery: string | null = null;
 
 const leaseRecovery = createLeaseRecoveryCoordinator({
   intervalMs: LEASE_RECOVERY_INTERVAL_MS,
-  recover: recoverExpiredProcessingJobs,
+  recover: () => {
+    if (!executionTokenForRecovery) {
+      throw new Error('Worker recovery requested without execution ownership');
+    }
+    return recoverExpiredProcessingJobs({
+      workerExecutionToken: executionTokenForRecovery,
+    });
+  },
   onError: (error: unknown) => {
     log.error({ err: error }, 'Expired processing lease recovery failed');
   },
@@ -89,13 +105,21 @@ async function getQueuedProcessingWorkState(): Promise<'pending' | 'leased' | 'n
   return leased ? 'leased' : 'none';
 }
 
-function publishHeartbeat(currentBatchSize: number, lastError: string | null = null): void {
-  workerStatePublisher.publishHeartbeat({
-    lastTickAt: new Date(),
-    isPolling: true,
+function publishHeartbeat(
+  workerStatePublisher: WorkerStatePublisher,
+  currentBatchSize: number,
+  lastError: string | null = null,
+): void {
+  workerStatePublisher.publish({
     lastError,
     currentBatchSize,
   });
+}
+
+function canStartWorkerOperation(
+  executionHeartbeat: WorkerExecutionHeartbeat,
+): boolean {
+  return !shuttingDown && executionHeartbeat.hasOwnership();
 }
 
 /**
@@ -156,14 +180,24 @@ async function findLettersNeedingExtraContent() {
  * false if both queues were empty — the Job-mode main loop uses this
  * signal to decide when to exit.
  */
-async function processPendingJobs(): Promise<boolean> {
+async function processPendingJobs(
+  executionHeartbeat: WorkerExecutionHeartbeat,
+  workerStatePublisher: WorkerStatePublisher,
+  executionToken: string,
+): Promise<boolean> {
   const cycleStart = Date.now();
 
-  // Phase 1: Transcription
+  // Queue discovery is deliberately sequential so ownership loss or shutdown
+  // can stop later scans before they begin.
+  if (!canStartWorkerOperation(executionHeartbeat)) return false;
   const needingTranscription = await findLettersNeedingTranscription();
+  if (!canStartWorkerOperation(executionHeartbeat)) return false;
   const needingExtraContent = await findLettersNeedingExtraContent();
+  if (!canStartWorkerOperation(executionHeartbeat)) return false;
   const needingMetadata = await findLettersNeedingMetadata();
+  if (!canStartWorkerOperation(executionHeartbeat)) return false;
   const needingEntityExtraction = await findLettersNeedingEntityExtraction();
+  if (!canStartWorkerOperation(executionHeartbeat)) return false;
   const totalPendingThisCycle =
     needingTranscription.length
     + needingExtraContent.length
@@ -171,22 +205,28 @@ async function processPendingJobs(): Promise<boolean> {
     + needingEntityExtraction.length;
 
   // Heartbeat: let the admin API observe us.
-  publishHeartbeat(totalPendingThisCycle);
+  publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
 
   if (needingTranscription.length > 0) {
     log.debug({ count: needingTranscription.length }, 'Found letters needing transcription');
   }
 
   for (const letter of needingTranscription) {
-    publishHeartbeat(totalPendingThisCycle);
+    if (!canStartWorkerOperation(executionHeartbeat)) {
+      return totalPendingThisCycle > 0;
+    }
+    publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
     const jobStart = Date.now();
     log.info(
       { letterId: letter.id, collectionId: letter.collectionId, dateRaw: letter.dateRaw },
       'Starting transcription job'
     );
     try {
-      const outcome = await processLetter(letter.id);
-      publishHeartbeat(totalPendingThisCycle);
+      const outcome = await processLetter(letter.id, {
+        extraContent: 'skip',
+        workerExecutionToken: executionToken,
+      });
+      publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
       const duration = Date.now() - jobStart;
       if (outcome) {
         log.info(
@@ -208,7 +248,7 @@ async function processPendingJobs(): Promise<boolean> {
     } catch (error) {
       const duration = Date.now() - jobStart;
       const message = error instanceof Error ? error.message : 'Unknown error';
-      publishHeartbeat(totalPendingThisCycle, message);
+      publishHeartbeat(workerStatePublisher, totalPendingThisCycle, message);
       log.error(
         { letterId: letter.id, duration, err: error },
         'Transcription job failed'
@@ -233,7 +273,10 @@ async function processPendingJobs(): Promise<boolean> {
   // Process supplementary content before metadata so a metadata claim reloads
   // the latest extra-content transcript and its source revision.
   for (const letter of needingExtraContent) {
-    publishHeartbeat(totalPendingThisCycle);
+    if (!canStartWorkerOperation(executionHeartbeat)) {
+      return totalPendingThisCycle > 0;
+    }
+    publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
     const jobStart = Date.now();
     log.info(
       { letterId: letter.id, collectionId: letter.collectionId, dateRaw: letter.dateRaw },
@@ -243,8 +286,9 @@ async function processPendingJobs(): Promise<boolean> {
       const outcome = await tryTranscribeExtras(letter.id, {
         expectedStatus: 'PENDING',
         claimKind: 'QUEUED',
+        workerExecutionToken: executionToken,
       });
-      publishHeartbeat(totalPendingThisCycle);
+      publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
       const duration = Date.now() - jobStart;
       if (outcome.kind !== 'completed') {
         log.info(
@@ -257,7 +301,7 @@ async function processPendingJobs(): Promise<boolean> {
     } catch (error) {
       const duration = Date.now() - jobStart;
       const message = error instanceof Error ? error.message : 'Unknown error';
-      publishHeartbeat(totalPendingThisCycle, message);
+      publishHeartbeat(workerStatePublisher, totalPendingThisCycle, message);
       log.error(
         { letterId: letter.id, duration, err: error },
         'Extra-content transcription job failed'
@@ -280,15 +324,21 @@ async function processPendingJobs(): Promise<boolean> {
   }
 
   for (const letter of needingMetadata) {
-    publishHeartbeat(totalPendingThisCycle);
+    if (!canStartWorkerOperation(executionHeartbeat)) {
+      return totalPendingThisCycle > 0;
+    }
+    publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
     const jobStart = Date.now();
     log.info(
       { letterId: letter.id, collectionId: letter.collectionId, dateRaw: letter.dateRaw },
       'Starting metadata extraction job'
     );
     try {
-      const outcome = await processMetadata(letter.id);
-      publishHeartbeat(totalPendingThisCycle);
+      const outcome = await processMetadata(letter.id, {
+        entityExtraction: 'deferred',
+        workerExecutionToken: executionToken,
+      });
+      publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
       const duration = Date.now() - jobStart;
       if (outcome?.kind === 'skipped') {
         log.info(
@@ -302,7 +352,7 @@ async function processPendingJobs(): Promise<boolean> {
     } catch (error) {
       const duration = Date.now() - jobStart;
       const message = error instanceof Error ? error.message : 'Unknown error';
-      publishHeartbeat(totalPendingThisCycle, message);
+      publishHeartbeat(workerStatePublisher, totalPendingThisCycle, message);
       log.error(
         { letterId: letter.id, duration, err: error },
         'Metadata extraction job failed'
@@ -325,21 +375,26 @@ async function processPendingJobs(): Promise<boolean> {
   }
 
   for (const letter of needingEntityExtraction) {
-    publishHeartbeat(totalPendingThisCycle);
+    if (!canStartWorkerOperation(executionHeartbeat)) {
+      return totalPendingThisCycle > 0;
+    }
+    publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
     const jobStart = Date.now();
     log.info(
       { letterId: letter.id, collectionId: letter.collectionId, dateRaw: letter.dateRaw },
       'Starting entity extraction job'
     );
     try {
-      await runEntityExtractionOnly(letter.id);
-      publishHeartbeat(totalPendingThisCycle);
+      await runEntityExtractionOnly(letter.id, {
+        workerExecutionToken: executionToken,
+      });
+      publishHeartbeat(workerStatePublisher, totalPendingThisCycle);
       const duration = Date.now() - jobStart;
       log.info({ letterId: letter.id, duration }, 'Entity extraction job completed');
     } catch (error) {
       const duration = Date.now() - jobStart;
       const message = error instanceof Error ? error.message : 'Unknown error';
-      publishHeartbeat(totalPendingThisCycle, message);
+      publishHeartbeat(workerStatePublisher, totalPendingThisCycle, message);
       log.error(
         { letterId: letter.id, duration, err: error },
         'Entity extraction job failed'
@@ -387,12 +442,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Main worker loop. Exits cleanly when a shutdown signal is received,
- * finishing the current job before stopping.
- */
-let shuttingDown = false;
-
 async function main() {
   log.info(
     {
@@ -405,98 +454,138 @@ async function main() {
     'Background worker starting'
   );
 
-  // Only fully-owned leased attempts are safe to recover automatically.
-  // Ownerless legacy metadata and entity RUNNING rows remain explicit actions.
-  await leaseRecovery.reconcile();
-  leaseRecovery.start();
-
-  if (!EXIT_WHEN_EMPTY) {
-    // Only announce in long-running polling mode — a short-lived Job
-    // firing a "started" notification on every run would be noise.
-    void notify({
-      type: 'system_worker_started',
-      title: 'Worker started',
-      message: 'Background processing worker is online.',
-      metadata: { pollInterval: POLL_INTERVAL, batchSize: BATCH_SIZE },
-      dedupeKey: 'system_worker_started',
-      dedupeWindowMinutes: 5,
-    });
+  // Start the local safety window when acquisition begins. A slow database
+  // response must shorten—not extend—our belief that the lease remains live.
+  const acquisitionStartedAtMs = performance.now();
+  const executionLease = await acquireWorkerExecutionLease();
+  if (!executionLease) {
+    log.info('Another worker execution owns the processing lease; exiting');
+    return;
   }
+  executionTokenForRecovery = executionLease.token;
 
-  while (!shuttingDown) {
-    let processedAny = false;
-    try {
-      processedAny = await processPendingJobs();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      log.error({ err: error }, 'Error in processing cycle');
-      void setWorkerState({ lastError: message });
-      void notify({
-        type: 'system_worker_error',
-        title: 'Worker processing cycle failed',
-        message,
-        metadata: { error: message },
-        dedupeKey: 'system_worker_error',
-        dedupeWindowMinutes: 30,
-      });
-      if (EXIT_WHEN_EMPTY) {
-        // In Job mode, surface the failure as a non-zero exit so the
-        // Cloud Run Job execution is marked failed and retried. Throwing lets
-        // the top-level handler settle any active lease recovery before exit.
-        throw error;
-      }
-    }
+  const workerStatePublisher = createWorkerStatePublisher(executionLease.token);
+  const executionHeartbeat = createWorkerExecutionHeartbeat({
+    renew: () => renewWorkerExecutionLease(executionLease.token),
+    onRenewalError: (error: unknown) => {
+      log.warn({ err: error }, 'Worker execution lease renewal failed');
+    },
+    onOwnershipLost: () => {
+      log.warn('Worker execution lease lost; stopping future processing work');
+      void leaseRecovery.stopAndWait();
+    },
+    leaseDurationMs: WORKER_EXECUTION_LEASE_MS,
+    initialConfirmationStartedAtMs: acquisitionStartedAtMs,
+  });
+  let completedNormally = false;
 
-    if (shuttingDown) break;
-
-    if (EXIT_WHEN_EMPTY) {
-      if (!processedAny) {
-        // Quiesce the interval before the exit decision so a recovery cannot
-        // requeue work between the empty scan and process exit.
-        await leaseRecovery.stopAndWait();
-        const decision = await decideEmptyWorkerJobWithHandoff({
-          decide: () => decideEmptyWorkerJob({
-            reconcile: reconcileQueuedProcessingForExit,
-            getQueuedWorkState: getQueuedProcessingWorkState,
-          }),
-          relinquish: () => workerStatePublisher.relinquish({
-            lastTickAt: new Date(),
-            isPolling: false,
-            currentBatchSize: 0,
-          }),
-        });
-
-        if (decision === 'exit') {
-          log.info('Queues empty with no queued processing lease, exiting (EXIT_WHEN_EMPTY mode)');
-          break;
-        }
-        if (shuttingDown) break;
-        await workerStatePublisher.resume({
-          lastTickAt: new Date(),
-          isPolling: true,
-          currentBatchSize: 0,
-        });
-        if (shuttingDown) break;
+  try {
+    if (canStartWorkerOperation(executionHeartbeat)) {
+      // Only the singleton execution owner may recover or scan durable queues.
+      // Ownerless legacy metadata and entity RUNNING rows remain explicit actions.
+      await leaseRecovery.reconcile();
+      if (canStartWorkerOperation(executionHeartbeat)) {
         leaseRecovery.start();
-        if (decision === 'wait') {
-          log.info('Queues empty but a queued processing lease remains; waiting for recovery');
-          await sleep(POLL_INTERVAL);
-        }
       }
-      // Drain as fast as we can — no poll sleep in Job mode.
-      continue;
     }
 
-    await sleep(POLL_INTERVAL);
+    if (!EXIT_WHEN_EMPTY && canStartWorkerOperation(executionHeartbeat)) {
+      // Only announce in long-running polling mode — a short-lived Job
+      // firing a "started" notification on every run would be noise.
+      void notify({
+        type: 'system_worker_started',
+        title: 'Worker started',
+        message: 'Background processing worker is online.',
+        metadata: { pollInterval: POLL_INTERVAL, batchSize: BATCH_SIZE },
+        dedupeKey: 'system_worker_started',
+        dedupeWindowMinutes: 5,
+      });
+    }
+
+    while (canStartWorkerOperation(executionHeartbeat)) {
+      let processedAny = false;
+      try {
+        processedAny = await processPendingJobs(
+          executionHeartbeat,
+          workerStatePublisher,
+          executionLease.token,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        log.error({ err: error }, 'Error in processing cycle');
+        workerStatePublisher.publish({ lastError: message });
+        void notify({
+          type: 'system_worker_error',
+          title: 'Worker processing cycle failed',
+          message,
+          metadata: { error: message },
+          dedupeKey: 'system_worker_error',
+          dedupeWindowMinutes: 30,
+        });
+        if (EXIT_WHEN_EMPTY) {
+          // Surface the failure so Cloud Run marks the execution failed and
+          // applies its configured retry policy.
+          throw error;
+        }
+      }
+
+      if (!canStartWorkerOperation(executionHeartbeat)) break;
+
+      if (EXIT_WHEN_EMPTY) {
+        if (!processedAny) {
+          // Quiesce periodic recovery while making the final durable decision.
+          await leaseRecovery.stopAndWait();
+          if (!canStartWorkerOperation(executionHeartbeat)) break;
+
+          const decision = await decideEmptyWorkerJob({
+            reconcile: async () => {
+              if (!canStartWorkerOperation(executionHeartbeat)) return null;
+              return reconcileQueuedProcessingForExit();
+            },
+            getQueuedWorkState: async () => {
+              if (!canStartWorkerOperation(executionHeartbeat)) return 'none';
+              return getQueuedProcessingWorkState();
+            },
+          });
+
+          if (!canStartWorkerOperation(executionHeartbeat)) break;
+          if (decision === 'exit') {
+            log.info('Queues empty with no queued processing lease, exiting (EXIT_WHEN_EMPTY mode)');
+            break;
+          }
+
+          leaseRecovery.start();
+          if (decision === 'wait') {
+            log.info('Queues empty but a queued processing lease remains; waiting for recovery');
+            await sleep(POLL_INTERVAL);
+          }
+        }
+        // Drain as fast as we can — no poll sleep in Job mode.
+        continue;
+      }
+
+      await sleep(POLL_INTERVAL);
+    }
+
+    completedNormally = true;
+  } finally {
+    // Keep renewal alive until the current fenced stage and recovery call have
+    // settled, then quiesce both loops before the exact-token terminal release.
+    await leaseRecovery.stopAndWait();
+    await executionHeartbeat.stopAndWait();
+    const released = await workerStatePublisher.release({
+      currentBatchSize: 0,
+    });
+    executionTokenForRecovery = null;
+
+    if (completedNormally && released) {
+      // This required post-release database recheck closes the race with work
+      // committed while producers still observed our execution lease.
+      await ensureBackgroundWorkerForQueuedProcessing('worker-exit-handoff');
+    }
   }
 
-  await leaseRecovery.stopAndWait();
-  await workerStatePublisher.relinquish({ isPolling: false });
-  if (await hasQueuedProcessingWork()) {
-    await requestBackgroundWorkerRun('worker-exit-handoff');
-  }
   log.info({ mode: EXIT_WHEN_EMPTY ? 'job' : 'poll' }, 'Worker loop exited cleanly');
-  process.exit(0);
 }
 
 // Handle graceful shutdown — let the current job finish, then exit
@@ -505,27 +594,28 @@ function gracefulShutdown(signal: string) {
   shuttingDown = true;
   void leaseRecovery.stopAndWait();
   log.info({ signal }, 'Shutdown signal received, finishing current job');
-  void workerStatePublisher.relinquish({ isPolling: false }).catch((error: unknown) => {
-    log.warn({ err: error }, 'Failed to publish worker shutdown state');
-  });
 
-  // Force exit after 25s if a job is stuck (Cloud Run default termination is 30s)
+  // Cloud Run can send SIGKILL ten seconds after a task-timeout SIGTERM. Exit
+  // nonzero with a small buffer, deliberately leaving the execution token to
+  // expire rather than releasing while an AI call may still be active.
   setTimeout(() => {
     log.warn('Forced worker shutdown after timeout');
     process.exit(1);
-  }, 25_000).unref();
+  }, SHUTDOWN_TIMEOUT_MS).unref();
 }
 
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
-main().catch(async (error) => {
-  await leaseRecovery.stopAndWait();
-  try {
-    await workerStatePublisher.relinquish({ isPolling: false });
-  } catch (stateError) {
-    log.error({ err: stateError }, 'Failed to publish worker idle state during fatal exit');
-  }
+main().then(async () => {
+  await closeDatabase();
+  process.exit(0);
+}).catch(async (error) => {
   log.fatal({ err: error }, 'Fatal error in worker');
+  try {
+    await closeDatabase();
+  } catch (closeError) {
+    log.error({ err: closeError }, 'Failed to close database during fatal exit');
+  }
   process.exit(1);
 });

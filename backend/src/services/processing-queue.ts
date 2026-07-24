@@ -159,7 +159,9 @@ export interface ProcessingLeaseRecoveryResult {
   extraContent: ExtraContentRecoveryResult;
 }
 
-export async function recoverExpiredProcessingJobs(): Promise<ProcessingLeaseRecoveryResult> {
+export async function recoverExpiredProcessingJobs(
+  options: { workerExecutionToken?: string } = {},
+): Promise<ProcessingLeaseRecoveryResult> {
   let transcription: TranscriptionRecoveryResult = { requeued: [], failed: [] };
   let metadata: MetadataRecoveryResult = { requeued: [], failed: [] };
   let extraContent: ExtraContentRecoveryResult = { requeued: [], failed: [] };
@@ -168,19 +170,23 @@ export async function recoverExpiredProcessingJobs(): Promise<ProcessingLeaseRec
   // and a successful main recovery must still reach the API's worker trigger if
   // extra-content recovery fails (or vice versa).
   try {
-    transcription = await recoverExpiredTranscriptions();
+    transcription = await recoverExpiredTranscriptions(
+      options.workerExecutionToken,
+    );
   } catch (error) {
     log.error({ err: error }, 'Expired transcription lease recovery failed');
   }
 
   try {
-    metadata = await recoverExpiredMetadataJobs();
+    metadata = await recoverExpiredMetadataJobs(options.workerExecutionToken);
   } catch (error) {
     log.error({ err: error }, 'Expired metadata lease recovery failed');
   }
 
   try {
-    extraContent = await recoverExpiredExtraContentJobs();
+    extraContent = await recoverExpiredExtraContentJobs(
+      options.workerExecutionToken,
+    );
   } catch (error) {
     log.error({ err: error }, 'Expired extra-content lease recovery failed');
   }

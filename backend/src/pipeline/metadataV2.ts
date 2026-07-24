@@ -28,6 +28,10 @@ export interface ExtractionOptions {
   confirmedRecipient?: string;
   previousAiSender?: string;
   previousAiRecipient?: string;
+  /** Defaults to automatic. Workers may defer this follow-on to the durable queue. */
+  entityExtraction?: 'automatic' | 'deferred';
+  /** Worker-only admission token; direct request claims intentionally omit it. */
+  workerExecutionToken?: string;
 }
 
 export type MetadataRunOutcome =
@@ -75,6 +79,7 @@ export async function runMetadataExtractionV2(
     const queuedClaim = await claimQueuedMetadata(
       letterId,
       observeMetadataState(observedLetter),
+      options?.workerExecutionToken,
     );
     if (!queuedClaim) {
       letterLog.info('Metadata source changed or another process won the claim');
@@ -163,14 +168,24 @@ async function executeClaimedMetadataExtractionV2(
   // Queue preflight data is intentionally not passed into this function. When
   // no explicit admin corrections were bound to the claim, derive prefills
   // from the authoritative post-claim reload instead of an earlier snapshot.
-  const effectiveOptions: ExtractionOptions | undefined = options ?? (
-    letter.sender || letter.recipient
+  const effectiveCorrections: ExtractionCorrections | undefined = options && (
+    options.confirmedSender !== undefined
+      || options.confirmedRecipient !== undefined
+      || options.previousAiSender !== undefined
+      || options.previousAiRecipient !== undefined
+  )
+    ? {
+        confirmedSender: options.confirmedSender,
+        confirmedRecipient: options.confirmedRecipient,
+        previousAiSender: options.previousAiSender,
+        previousAiRecipient: options.previousAiRecipient,
+      }
+    : letter.sender || letter.recipient
       ? {
           confirmedSender: letter.sender ?? undefined,
           confirmedRecipient: letter.recipient ?? undefined,
         }
-      : undefined
-  );
+      : undefined;
 
   // ========================================================================
   // PHASE 1: Basic Metadata Extraction
@@ -178,20 +193,11 @@ async function executeClaimedMetadataExtractionV2(
 
   let metadataResult;
   try {
-    const corrections: ExtractionCorrections | undefined = effectiveOptions
-      ? {
-          confirmedSender: effectiveOptions.confirmedSender,
-          confirmedRecipient: effectiveOptions.confirmedRecipient,
-          previousAiSender: effectiveOptions.previousAiSender,
-          previousAiRecipient: effectiveOptions.previousAiRecipient,
-        }
-      : undefined;
-
     metadataResult = await extractMetadataV2({
       transcriptionText: letter.transcriptionText,
       letterId,
       context: extractionContext,
-      corrections,
+      corrections: effectiveCorrections,
     });
 
     if (!heartbeat.hasOwnership()) {
@@ -274,6 +280,11 @@ async function executeClaimedMetadataExtractionV2(
     throw error;
   }
 
+  if (options?.entityExtraction === 'deferred') {
+    letterLog.info('Entity extraction deferred to the durable queue');
+    return { kind: 'completed' };
+  }
+
   // ========================================================================
   // PHASE 2: Entity Extraction (non-fatal)
   // ========================================================================
@@ -281,20 +292,15 @@ async function executeClaimedMetadataExtractionV2(
   let entityClaim: EntityExtractionClaim | null = null;
   try {
     // Claim entity extraction atomically (within same pipeline, but still safe)
-    entityClaim = await claimEntityExtraction(letterId, 'PENDING');
+    entityClaim = await claimEntityExtraction(
+      letterId,
+      'PENDING',
+      options?.workerExecutionToken,
+    );
     if (!entityClaim) {
       letterLog.info('Entity extraction already claimed — skipping Phase 2');
       return { kind: 'completed' };
     }
-
-    const entityCorrections: ExtractionCorrections | undefined = effectiveOptions
-      ? {
-          confirmedSender: effectiveOptions.confirmedSender,
-          confirmedRecipient: effectiveOptions.confirmedRecipient,
-          previousAiSender: effectiveOptions.previousAiSender,
-          previousAiRecipient: effectiveOptions.previousAiRecipient,
-        }
-      : undefined;
 
     const entityResult = await extractEntities({
       transcriptionText: letter.transcriptionText,
@@ -306,7 +312,7 @@ async function executeClaimedMetadataExtractionV2(
         summary: metadataResult.metadata.summary,
       },
       context: extractionContext,
-      corrections: entityCorrections,
+      corrections: effectiveCorrections,
     });
 
     // The service materializes and commits the complete replacement under the
@@ -405,18 +411,28 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
 
   // Claim before loading model input so the source bound to this run is an
   // authoritative post-claim snapshot rather than a stale pre-claim read.
-  const claim = await claimEntityExtraction(letterId, 'PENDING');
+  const claim = await claimEntityExtraction(
+    letterId,
+    'PENDING',
+    options?.workerExecutionToken,
+  );
   if (!claim) {
     letterLog.info('Entity extraction job already claimed by another process — skipping');
     return;
   }
 
-  const corrections: ExtractionCorrections | undefined = options
+  const hasExplicitCorrections = options && (
+    options.confirmedSender !== undefined
+    || options.confirmedRecipient !== undefined
+    || options.previousAiSender !== undefined
+    || options.previousAiRecipient !== undefined
+  );
+  const corrections: ExtractionCorrections | undefined = hasExplicitCorrections
     ? {
-        confirmedSender: options.confirmedSender,
-        confirmedRecipient: options.confirmedRecipient,
-        previousAiSender: options.previousAiSender,
-        previousAiRecipient: options.previousAiRecipient,
+        confirmedSender: options?.confirmedSender,
+        confirmedRecipient: options?.confirmedRecipient,
+        previousAiSender: options?.previousAiSender,
+        previousAiRecipient: options?.previousAiRecipient,
       }
     : undefined;
 

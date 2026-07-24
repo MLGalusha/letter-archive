@@ -22,6 +22,7 @@ import {
   type LeaseHeartbeat,
 } from './lease-heartbeat.js';
 import { isMetadataSourceEligible } from '../processing-eligibility.js';
+import { activeWorkerExecutionCondition } from '../worker-state.js';
 
 const log = createLogger({ module: 'metadata-job' });
 const LEASE_EXPIRED_ERROR = 'Metadata lease expired before the attempt completed';
@@ -198,6 +199,7 @@ async function claimMetadata(
   observed: ObservedMetadataState,
   claimKind: MetadataClaimKind,
   updates: Record<string, unknown>,
+  workerExecutionToken?: string,
 ): Promise<MetadataClaim | null> {
   const runId = randomUUID();
   const claimed = await db
@@ -217,6 +219,9 @@ async function claimMetadata(
     .where(and(
       eq(letters.id, letterId),
       ...observedMetadataStateConditions(observed),
+      ...(workerExecutionToken
+        ? [activeWorkerExecutionCondition(workerExecutionToken)]
+        : []),
     ))
     .returning({ id: letters.id });
 
@@ -227,6 +232,7 @@ async function claimMetadata(
 export async function claimQueuedMetadata(
   letterId: string,
   observed: ObservedMetadataState,
+  workerExecutionToken?: string,
 ): Promise<MetadataClaim | null> {
   if (
     !hasClaimableSource(observed)
@@ -245,7 +251,7 @@ export async function claimQueuedMetadata(
     entityExtractionRunId: null,
     entityExtractionRunRevision: null,
     entityExtractionError: null,
-  });
+  }, workerExecutionToken);
 }
 
 /**
@@ -509,7 +515,9 @@ export async function cancelMetadataAttempt(
  * metadata. Conditional UPDATE RETURNING makes each result authoritative when
  * multiple reconcilers race.
  */
-export async function recoverExpiredMetadataJobs(): Promise<MetadataRecoveryResult> {
+export async function recoverExpiredMetadataJobs(
+  workerExecutionToken?: string,
+): Promise<MetadataRecoveryResult> {
   const requeued = await db
     .update(letters)
     .set({
@@ -530,6 +538,9 @@ export async function recoverExpiredMetadataJobs(): Promise<MetadataRecoveryResu
       isNotNull(letters.metadataLeaseRunId),
       eq(letters.metadataLeaseRunId, letters.metadataRunId),
       lte(letters.metadataLeaseExpiresAt, databaseNow()),
+      ...(workerExecutionToken
+        ? [activeWorkerExecutionCondition(workerExecutionToken)]
+        : []),
     ))
     .returning({ id: letters.id, dateRaw: letters.dateRaw });
 
@@ -553,6 +564,9 @@ export async function recoverExpiredMetadataJobs(): Promise<MetadataRecoveryResu
       isNotNull(letters.metadataLeaseRunId),
       eq(letters.metadataLeaseRunId, letters.metadataRunId),
       lte(letters.metadataLeaseExpiresAt, databaseNow()),
+      ...(workerExecutionToken
+        ? [activeWorkerExecutionCondition(workerExecutionToken)]
+        : []),
     ))
     .returning({ id: letters.id, dateRaw: letters.dateRaw });
 

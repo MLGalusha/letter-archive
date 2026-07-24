@@ -23,6 +23,7 @@ import {
   type ExtraContentPatch,
 } from './extra-content-job.js';
 import { buildMetadataSourceInvalidationPatch } from './metadata-job.js';
+import { activeWorkerExecutionCondition } from '../worker-state.js';
 
 const log = createLogger({ module: 'extra-content' });
 
@@ -277,12 +278,14 @@ async function executeEligibleExtraContent<T>(
     source: ExtraContentSource,
     heartbeat: ExtraContentHeartbeat,
   ) => Promise<{ value: T; patch: ExtraContentPatch }>,
+  workerExecutionToken?: string,
 ): Promise<ExtraContentJobResult<T>> {
   return runExtraContentJob({
     letterId,
     expectedStatus,
     expectedUpdatedAt,
     claimKind,
+    workerExecutionToken,
     produce: async (heartbeat) => {
       const claimedSource = await loadExtraContentSource(letterId);
       if (!claimedSource) {
@@ -339,6 +342,7 @@ export async function tryTranscribeExtras(
   options: {
     expectedStatus?: ClaimableJobStatus;
     claimKind: ExtraContentClaimKind;
+    workerExecutionToken?: string;
   },
 ): Promise<ExtraContentExecution<TranscribeExtrasResult>> {
   const source = await loadExtraContentSource(letterId);
@@ -362,6 +366,9 @@ export async function tryTranscribeExtras(
         eq(letters.id, letterId),
         eq(letters.extraContentJobStatus, expectedStatus),
         observedTimestampMatches(letters.updatedAt, source.letter.updatedAt),
+        ...(options.workerExecutionToken
+          ? [activeWorkerExecutionCondition(options.workerExecutionToken)]
+          : []),
       ))
       .returning({ id: letters.id });
 
@@ -383,6 +390,7 @@ export async function tryTranscribeExtras(
     source.letter.updatedAt,
     options.claimKind,
     produceStandaloneExtras,
+    options.workerExecutionToken,
   );
 }
 

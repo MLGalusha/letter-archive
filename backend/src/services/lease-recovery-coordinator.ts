@@ -97,18 +97,3 @@ export async function decideEmptyWorkerJob(options: {
   if (workState === 'pending') return 'drain';
   return workState === 'leased' ? 'wait' : 'exit';
 }
-
-/**
- * Publish worker unavailability before the final empty check. Work committed
- * before relinquishment is visible to the recheck; work committed afterward
- * observes an idle worker and can wake a replacement.
- */
-export async function decideEmptyWorkerJobWithHandoff(options: {
-  decide(): Promise<EmptyWorkerJobDecision>;
-  relinquish(): Promise<void>;
-}): Promise<EmptyWorkerJobDecision> {
-  const initial = await options.decide();
-  if (initial !== 'exit') return initial;
-  await options.relinquish();
-  return options.decide();
-}

@@ -14,6 +14,10 @@ substitutions:
   _ARCHIVE_BUCKET: letter-archive-485110-archive
   _DOMAIN: voicesthatremain.com
   _SERVICE_ACCOUNT: 'letter-archive-runner@${PROJECT_ID}.iam.gserviceaccount.com'
+  _SCHEDULER_SERVICE_ACCOUNT: 'letter-archive-scheduler@${PROJECT_ID}.iam.gserviceaccount.com'
+  _WORKER_RECONCILIATION_SCHEDULE: '*/5 * * * *'
+  # Initial lease rollout must drain pre-lease executions before this is enabled.
+  _ENABLE_WORKER_RECONCILIATION_SCHEDULE: 'false'
   _BACKEND_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/letter-archive/backend'
   _FRONTEND_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/letter-archive/frontend'
 
@@ -209,6 +213,61 @@ steps:
       - --member=serviceAccount:${_SERVICE_ACCOUNT}
       - --role=roles/run.invoker
     waitFor: ['deploy-worker']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: grant-scheduler-worker-job-invoke
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        if [[ "${_ENABLE_WORKER_RECONCILIATION_SCHEDULE}" != "true" ]]; then
+          echo "Scheduled worker reconciliation remains disabled for this deployment."
+          exit 0
+        fi
+        gcloud run jobs add-iam-policy-binding letter-archive-worker \
+          --region="${_REGION}" \
+          --member="serviceAccount:${_SCHEDULER_SERVICE_ACCOUNT}" \
+          --role=roles/run.invoker
+    waitFor: ['grant-backend-worker-job-invoke']
+
+  # Cloud Scheduler calls the asynchronous Cloud Run jobs.run API. The worker's
+  # database execution lease, not Scheduler delivery, serializes executions.
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: configure-worker-reconciliation-schedule
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        if [[ "${_ENABLE_WORKER_RECONCILIATION_SCHEDULE}" != "true" ]]; then
+          echo "Skipping Scheduler configuration until the lease rollout is proven."
+          exit 0
+        fi
+        if gcloud scheduler jobs describe letter-archive-worker-reconcile \
+          --project="${PROJECT_ID}" \
+          --location="${_REGION}" >/dev/null 2>&1; then
+          scheduler_action=update
+        else
+          scheduler_action=create
+        fi
+
+        gcloud scheduler jobs "$${scheduler_action}" http \
+          letter-archive-worker-reconcile \
+          --project="${PROJECT_ID}" \
+          --location="${_REGION}" \
+          --schedule="${_WORKER_RECONCILIATION_SCHEDULE}" \
+          --time-zone=Etc/UTC \
+          --uri="https://run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${_REGION}/jobs/letter-archive-worker:run" \
+          --http-method=POST \
+          --oauth-service-account-email="${_SCHEDULER_SERVICE_ACCOUNT}" \
+          --oauth-token-scope=https://www.googleapis.com/auth/cloud-platform \
+          --attempt-deadline=30s \
+          --max-retry-attempts=0 \
+          --max-retry-duration=0s \
+          --description="Periodic durable processing reconciliation" \
+          --quiet
+    waitFor: ['grant-scheduler-worker-job-invoke']
 
 images:
   - '${_BACKEND_IMAGE}:${_TAG}'

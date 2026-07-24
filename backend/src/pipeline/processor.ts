@@ -1,6 +1,11 @@
-import { runTranscription, type TranscriptionRunOutcome } from './transcription.js';
+import {
+  runTranscription,
+  type TranscriptionOptions,
+  type TranscriptionRunOutcome,
+} from './transcription.js';
 import {
   runMetadataExtractionV2,
+  type ExtractionOptions,
   type MetadataRunOutcome,
 } from './metadataV2.js';
 import { getLetterById } from '../services/letters.js';
@@ -23,6 +28,10 @@ export type SkippedMetadataReason = Exclude<
 export type ProcessMetadataOutcome =
   | void
   | { kind: 'skipped'; reason: SkippedMetadataReason };
+export type ProcessMetadataOptions = Pick<
+  ExtractionOptions,
+  'entityExtraction' | 'workerExecutionToken'
+>;
 
 /**
  * Processes a letter through the transcription phase only.
@@ -30,7 +39,10 @@ export type ProcessMetadataOutcome =
  *
  * Supports all transcribable types (L, T, C, E, N, A, D). Excludes P (Photo) and V (Voice).
  */
-export async function processLetter(letterId: string): Promise<ProcessLetterOutcome> {
+export async function processLetter(
+  letterId: string,
+  options?: TranscriptionOptions,
+): Promise<ProcessLetterOutcome> {
   const letter = await getLetterById(letterId);
 
   if (!letter) {
@@ -46,7 +58,9 @@ export async function processLetter(letterId: string): Promise<ProcessLetterOutc
 
   // Phase 1: Transcription
   if (letter.workflow === 'UPLOADED' && letter.transcriptionStatus === 'PENDING') {
-    const outcome = await runTranscription(letterId);
+    const outcome = options
+      ? await runTranscription(letterId, options)
+      : await runTranscription(letterId);
     if (outcome.kind !== 'completed') {
       return { kind: 'skipped', reason: outcome.kind };
     }
@@ -62,7 +76,10 @@ export async function processLetter(letterId: string): Promise<ProcessLetterOutc
  * Processes metadata extraction for a letter that has confirmed transcript.
  * Called by worker after transcript is confirmed.
  */
-export async function processMetadata(letterId: string): Promise<ProcessMetadataOutcome> {
+export async function processMetadata(
+  letterId: string,
+  options?: ProcessMetadataOptions,
+): Promise<ProcessMetadataOutcome> {
   const letter = await getLetterById(letterId);
 
   if (!letter) {
@@ -85,7 +102,9 @@ export async function processMetadata(letterId: string): Promise<ProcessMetadata
     log.info({ letterId }, 'Processing metadata');
     // The producer derives any pre-filled names from its post-claim reload so
     // this preflight snapshot cannot become stale before ownership is won.
-    const outcome = await runMetadataExtractionV2(letterId);
+    const outcome = options
+      ? await runMetadataExtractionV2(letterId, options)
+      : await runMetadataExtractionV2(letterId);
     if (outcome.kind !== 'completed') {
       return { kind: 'skipped', reason: outcome.kind };
     }

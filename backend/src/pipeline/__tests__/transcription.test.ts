@@ -127,20 +127,24 @@ describe('canonical transcription pipeline', () => {
       textLength: 15,
     });
 
-    expect(claimQueuedTranscriptionMock).toHaveBeenCalledWith('letter-1', {
-      status: 'PENDING',
-      workflow: 'UPLOADED',
-      transcriptionText: null,
-      transcriptionError: null,
-      transcriptionAttemptCount: 0,
-      transcriptionLeaseExpiresAt: null,
-      transcriptionLeaseRunId: null,
-      transcriptionClaimKind: null,
-      metadataStatus: 'PENDING',
-      entityExtractionStatus: 'PENDING',
-      deadLetter: false,
-      transcriptStatus: 'EMPTY',
-    });
+    expect(claimQueuedTranscriptionMock).toHaveBeenCalledWith(
+      'letter-1',
+      {
+        status: 'PENDING',
+        workflow: 'UPLOADED',
+        transcriptionText: null,
+        transcriptionError: null,
+        transcriptionAttemptCount: 0,
+        transcriptionLeaseExpiresAt: null,
+        transcriptionLeaseRunId: null,
+        transcriptionClaimKind: null,
+        metadataStatus: 'PENDING',
+        entityExtractionStatus: 'PENDING',
+        deadLetter: false,
+        transcriptStatus: 'EMPTY',
+      },
+      undefined,
+    );
     expect(completeTranscriptionMock).toHaveBeenCalledWith(
       'letter-1',
       'run-a',
@@ -155,13 +159,21 @@ describe('canonical transcription pipeline', () => {
     expect(runAutomaticExtraContentMock).toHaveBeenCalledWith('letter-1');
   });
 
-  it('skips automatic extras when a caller owns the explicit extra contract', async () => {
-    await expect(runTranscription('letter-1', { extraContent: 'skip' })).resolves.toEqual({
+  it('skips automatic extras and binds a worker claim to its execution token', async () => {
+    await expect(runTranscription('letter-1', {
+      extraContent: 'skip',
+      workerExecutionToken: 'execution-a',
+    })).resolves.toEqual({
       kind: 'completed',
       pageCount: 1,
       textLength: 15,
     });
 
+    expect(claimQueuedTranscriptionMock).toHaveBeenCalledWith(
+      'letter-1',
+      expect.any(Object),
+      'execution-a',
+    );
     expect(runAutomaticExtraContentMock).not.toHaveBeenCalled();
   });
 

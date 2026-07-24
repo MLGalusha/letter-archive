@@ -1,77 +1,149 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createWorkerStatePublisher, type WorkerStateUpdate } from '../worker-state.js';
+
+const { loggerWarnMock } = vi.hoisted(() => ({
+  loggerWarnMock: vi.fn(),
+}));
+
+vi.mock('../../utils/logger.js', () => ({
+  createLogger: () => ({
+    warn: loggerWarnMock,
+  }),
+}));
+
+import {
+  WORKER_EXECUTION_LEASE_MS,
+  createWorkerStatePublisher,
+  type WorkerStateUpdate,
+} from '../worker-state.js';
 
 describe('worker state publisher', () => {
-  it('settles accepted heartbeats before the exit handoff and rejects later heartbeats', async () => {
-    let releaseHeartbeat!: () => void;
-    const heartbeatBlocked = new Promise<void>((resolve) => {
-      releaseHeartbeat = resolve;
+  it('uses a two-minute execution lease', () => {
+    expect(WORKER_EXECUTION_LEASE_MS).toBe(120_000);
+  });
+
+  it('settles accepted reports before one terminal release and rejects later reports', async () => {
+    let finishReport!: () => void;
+    const reportBlocked = new Promise<void>((resolve) => {
+      finishReport = resolve;
     });
     const writes: string[] = [];
-    const writeBestEffort = vi.fn(async (partial: WorkerStateUpdate) => {
-      writes.push(`heartbeat-start:${partial.isPolling}`);
-      await heartbeatBlocked;
-      writes.push(`heartbeat-end:${partial.isPolling}`);
+    const writeBestEffort = vi.fn(async (
+      token: string,
+      update: WorkerStateUpdate,
+    ) => {
+      writes.push(`report-start:${token}:${update.currentBatchSize}`);
+      await reportBlocked;
+      writes.push(`report-end:${token}:${update.currentBatchSize}`);
+      return true;
     });
-    const writeRequired = vi.fn(async (partial: WorkerStateUpdate) => {
-      writes.push(`required:${partial.isPolling}`);
+    const writeRelease = vi.fn(async (
+      token: string,
+      update: WorkerStateUpdate,
+    ) => {
+      writes.push(`release:${token}:${update.currentBatchSize}`);
+      return true;
     });
-    const publisher = createWorkerStatePublisher({ writeBestEffort, writeRequired });
+    const publisher = createWorkerStatePublisher('execution-a', {
+      writeBestEffort,
+      writeRelease,
+    });
 
-    publisher.publishHeartbeat({ isPolling: true });
+    publisher.publish({ currentBatchSize: 3 });
     await vi.waitFor(() => expect(writeBestEffort).toHaveBeenCalledTimes(1));
 
-    const relinquishing = publisher.relinquish({ isPolling: false });
-    const repeatedRelinquishing = publisher.relinquish({ isPolling: false });
-    publisher.publishHeartbeat({ isPolling: true });
-    expect(writeRequired).not.toHaveBeenCalled();
+    const releasing = publisher.release({ currentBatchSize: 0 });
+    const repeatedRelease = publisher.release({ currentBatchSize: 9 });
+    publisher.publish({ currentBatchSize: 4 });
+    expect(writeRelease).not.toHaveBeenCalled();
 
-    releaseHeartbeat();
-    await Promise.all([relinquishing, repeatedRelinquishing]);
+    finishReport();
+    await expect(Promise.all([releasing, repeatedRelease])).resolves.toEqual([
+      true,
+      true,
+    ]);
 
     expect(writes).toEqual([
-      'heartbeat-start:true',
-      'heartbeat-end:true',
-      'required:false',
+      'report-start:execution-a:3',
+      'report-end:execution-a:3',
+      'release:execution-a:0',
     ]);
-    expect(writeBestEffort).toHaveBeenCalledTimes(1);
-    expect(writeRequired).toHaveBeenCalledTimes(1);
+    expect(releasing).toBe(repeatedRelease);
+    expect(writeBestEffort).toHaveBeenCalledOnce();
+    expect(writeRelease).toHaveBeenCalledOnce();
   });
 
-  it('surfaces a required handoff failure and keeps heartbeats disabled', async () => {
+  it('contains report failures without poisoning the required release', async () => {
     const failure = new Error('worker state unavailable');
-    const writeBestEffort = vi.fn(async () => undefined);
-    const writeRequired = vi.fn(async () => {
+    const writeBestEffort = vi.fn(async () => {
       throw failure;
     });
-    const publisher = createWorkerStatePublisher({ writeBestEffort, writeRequired });
+    const writeRelease = vi.fn(async () => true);
+    const publisher = createWorkerStatePublisher('execution-a', {
+      writeBestEffort,
+      writeRelease,
+    });
 
-    await expect(publisher.relinquish({ isPolling: false })).rejects.toBe(failure);
-    await expect(publisher.relinquish({ isPolling: false })).rejects.toBe(failure);
-    publisher.publishHeartbeat({ isPolling: true });
-    await Promise.resolve();
+    publisher.publish({ lastError: 'processing failed' });
+    await expect(publisher.release()).resolves.toBe(true);
 
-    expect(writeBestEffort).not.toHaveBeenCalled();
-    expect(writeRequired).toHaveBeenCalledOnce();
+    expect(writeBestEffort).toHaveBeenCalledOnce();
+    expect(writeRelease).toHaveBeenCalledOnce();
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      { err: failure },
+      'Failed to publish worker state',
+    );
   });
 
-  it('allows heartbeats again after an abandoned exit decision resumes polling', async () => {
-    const writes: boolean[] = [];
-    const writeBestEffort = vi.fn(async (partial: WorkerStateUpdate) => {
-      writes.push(partial.isPolling ?? false);
+  it('surfaces and memoizes a required release failure', async () => {
+    const failure = new Error('worker state unavailable');
+    const writeRelease = vi.fn(async () => {
+      throw failure;
     });
-    const writeRequired = vi.fn(async (partial: WorkerStateUpdate) => {
-      writes.push(partial.isPolling ?? false);
+    const publisher = createWorkerStatePublisher('execution-a', {
+      writeBestEffort: vi.fn(async () => true),
+      writeRelease,
     });
-    const publisher = createWorkerStatePublisher({ writeBestEffort, writeRequired });
 
-    await publisher.relinquish({ isPolling: false });
-    await publisher.resume({ isPolling: true });
-    publisher.publishHeartbeat({ isPolling: true });
-    await vi.waitFor(() => expect(writeBestEffort).toHaveBeenCalledTimes(2));
-    await publisher.relinquish({ isPolling: false });
+    const first = publisher.release();
+    const second = publisher.release();
+    await expect(first).rejects.toBe(failure);
+    await expect(second).rejects.toBe(failure);
+    publisher.publish({ currentBatchSize: 1 });
+    await Promise.resolve();
 
-    expect(writes).toEqual([false, true, true, false]);
-    expect(writeRequired).toHaveBeenCalledTimes(2);
+    expect(first).toBe(second);
+    expect(writeRelease).toHaveBeenCalledOnce();
+  });
+
+  it('does not let a hung best-effort report block required release', async () => {
+    vi.useFakeTimers();
+    try {
+      const writeBestEffort = vi.fn(
+        () => new Promise<boolean>(() => {}),
+      );
+      const writeRelease = vi.fn(async () => true);
+      const publisher = createWorkerStatePublisher('execution-a', {
+        writeBestEffort,
+        writeRelease,
+        reportWaitMs: 1_000,
+      });
+
+      publisher.publish({ currentBatchSize: 3 });
+      const releasing = publisher.release({ currentBatchSize: 0 });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(writeBestEffort).toHaveBeenCalledOnce();
+      expect(writeRelease).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(releasing).resolves.toBe(true);
+
+      expect(writeRelease).toHaveBeenCalledOnce();
+      expect(loggerWarnMock).toHaveBeenCalledWith(
+        { reportWaitMs: 1_000 },
+        'Timed out publishing worker state; suppressing later reports',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

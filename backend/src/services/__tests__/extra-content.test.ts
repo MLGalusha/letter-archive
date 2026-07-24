@@ -300,12 +300,14 @@ describe('extra-content producers', () => {
     await tryTranscribeExtras(parent.id, {
       expectedStatus: 'PENDING',
       claimKind: 'QUEUED',
+      workerExecutionToken: 'execution-a',
     });
 
     expect(runExtraContentJobMock).toHaveBeenCalledWith(expect.objectContaining({
       letterId: parent.id,
       expectedStatus: 'PENDING',
       claimKind: 'QUEUED',
+      workerExecutionToken: 'execution-a',
     }));
   });
 

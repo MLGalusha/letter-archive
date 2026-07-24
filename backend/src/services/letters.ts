@@ -17,6 +17,7 @@ import {
   publicCatalogueLetterTypeSql,
   selectPublicCatalogueRepresentative,
 } from './public-catalogue-unit.js';
+import { activeWorkerExecutionCondition } from './worker-state.js';
 
 export interface LetterIdentity {
   collectionId: string;
@@ -189,6 +190,7 @@ export async function invalidateExtraContentJobForSourceChange(
 export async function claimEntityExtraction(
   letterId: string,
   expectedStatus: JobStatus = 'PENDING',
+  workerExecutionToken?: string,
 ): Promise<EntityExtractionClaim | null> {
   const runId = randomUUID();
   const result = await db
@@ -205,6 +207,9 @@ export async function claimEntityExtraction(
       eq(letters.entityExtractionStatus, expectedStatus),
       ne(letters.transcriptionStatus, 'RUNNING'),
       eq(letters.metadataStatus, 'SUCCESS'),
+      ...(workerExecutionToken
+        ? [activeWorkerExecutionCondition(workerExecutionToken)]
+        : []),
     ))
     .returning({ revision: letters.entityExtractionRunRevision });
 

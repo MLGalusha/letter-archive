@@ -910,17 +910,31 @@ export const apiUsageLogs = pgTable(
 // ============================================================================
 
 /**
- * Singleton row observed by the admin Processing page as the worker's last reported
- * state. It is not authoritative liveness until writes are execution-token fenced.
+ * Singleton row observed by the admin Processing page. A complete execution-token
+ * lease is authoritative liveness; the remaining fields are its last fenced report.
  */
-export const workerState = pgTable('worker_state', {
-  id: text('id').primaryKey().default('singleton'),
-  lastTickAt: timestamp('last_tick_at', { withTimezone: true }),
-  isPolling: boolean('is_polling').notNull().default(false),
-  lastError: text('last_error'),
-  currentBatchSize: integer('current_batch_size'),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const workerState = pgTable(
+  'worker_state',
+  {
+    id: text('id').primaryKey().default('singleton'),
+    lastTickAt: timestamp('last_tick_at', { withTimezone: true }),
+    isPolling: boolean('is_polling').notNull().default(false),
+    lastError: text('last_error'),
+    currentBatchSize: integer('current_batch_size'),
+    executionToken: uuid('execution_token'),
+    executionLeaseExpiresAt: timestamp('execution_lease_expires_at', {
+      withTimezone: true,
+      precision: 3,
+    }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'worker_execution_lease_shape',
+      sql`(${table.executionToken} IS NULL) = (${table.executionLeaseExpiresAt} IS NULL)`,
+    ),
+  ],
+);
 
 // ============================================================================
 // RELATIONS

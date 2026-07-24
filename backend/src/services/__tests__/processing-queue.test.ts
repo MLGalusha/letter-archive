@@ -1020,6 +1020,16 @@ describe('processing queue service', () => {
     expect(notifyMock).not.toHaveBeenCalled();
   });
 
+  it('binds every worker recovery statement to its execution token', async () => {
+    await recoverExpiredProcessingJobs({
+      workerExecutionToken: 'execution-a',
+    });
+
+    expect(recoverExpiredTranscriptionsMock).toHaveBeenCalledWith('execution-a');
+    expect(recoverExpiredMetadataJobsMock).toHaveBeenCalledWith('execution-a');
+    expect(recoverExpiredExtraContentJobsMock).toHaveBeenCalledWith('execution-a');
+  });
+
   it('preserves recovered transcription work when extra-content recovery fails', async () => {
     recoverExpiredTranscriptionsMock.mockResolvedValue({
       requeued: [{ id: 'letter-orphan', dateRaw: '19470813' }],

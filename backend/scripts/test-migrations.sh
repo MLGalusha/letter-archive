@@ -45,6 +45,86 @@ DATABASE_URL="postgres://$DB_USER:$DB_PASS@localhost:$DB_PORT/$DB_NAME" \
 
 echo "Migrations applied successfully on fresh database."
 
+docker exec -i "$CONTAINER_NAME" \
+  psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+  < "src/db/__tests__/worker-execution-lease.sql" \
+  > /dev/null
+
+echo "Worker execution lease semantics regression passed."
+
+docker exec -i "$CONTAINER_NAME" \
+  psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+  > /dev/null <<'SQL' &
+BEGIN;
+SET LOCAL application_name = 'worker-lease-owner-a';
+UPDATE worker_state
+SET execution_token = '30000000-0000-4000-8000-000000000003',
+    execution_lease_expires_at = clock_timestamp() + interval '2 minutes',
+    is_polling = true
+WHERE id = 'singleton'
+  AND (
+    execution_token IS NULL
+    OR execution_lease_expires_at <= clock_timestamp()
+  );
+SELECT pg_sleep(3);
+COMMIT;
+SQL
+lease_owner_pid=$!
+
+owner_locked=false
+for _ in $(seq 1 30); do
+  if [[ "$(
+    docker exec "$CONTAINER_NAME" \
+      psql -At -U "$DB_USER" -d "$DB_NAME" \
+      -c "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'worker-lease-owner-a' AND query LIKE 'SELECT pg_sleep%';"
+  )" == "1" ]]; then
+    owner_locked=true
+    break
+  fi
+  sleep 0.1
+done
+
+if [[ "$owner_locked" != "true" ]]; then
+  echo "Timed out waiting for the first worker acquisition lock."
+  wait "$lease_owner_pid" || true
+  exit 1
+fi
+
+contender_count="$(
+  docker exec "$CONTAINER_NAME" \
+    psql -At -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+    -c "WITH claimed AS (
+      UPDATE worker_state
+      SET execution_token = '40000000-0000-4000-8000-000000000004',
+          execution_lease_expires_at = clock_timestamp() + interval '2 minutes'
+      WHERE id = 'singleton'
+        AND (
+          execution_token IS NULL
+          OR execution_lease_expires_at <= clock_timestamp()
+        )
+      RETURNING 1
+    )
+    SELECT count(*) FROM claimed;"
+)"
+wait "$lease_owner_pid"
+
+if [[ "$contender_count" != "0" ]]; then
+  echo "A blocked worker contender acquired the already-owned singleton."
+  exit 1
+fi
+
+docker exec "$CONTAINER_NAME" \
+  psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+  -c "UPDATE worker_state
+      SET execution_token = NULL,
+          execution_lease_expires_at = NULL,
+          is_polling = false
+      WHERE id = 'singleton'
+        AND execution_token = '30000000-0000-4000-8000-000000000003';" \
+  > /dev/null
+
+echo "Worker execution lease blocked-contender regression passed."
+
 echo "Replaying migration 0051 over legacy entity state..."
 docker exec "$CONTAINER_NAME" createdb -U "$DB_USER" "$LEGACY_DB_NAME"
 

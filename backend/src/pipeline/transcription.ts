@@ -21,6 +21,8 @@ const PAGE_CONCURRENCY = 3;
 
 export interface TranscriptionOptions {
   extraContent?: 'automatic' | 'skip';
+  /** Worker-only admission token; direct request claims intentionally omit it. */
+  workerExecutionToken?: string;
 }
 
 type ClaimedTranscriptionOutcome =
@@ -295,7 +297,11 @@ export async function runTranscription(
     return { kind: 'ineligible' };
   }
 
-  const claim = await claimQueuedTranscription(letterId, observeTranscriptionState(letter));
+  const claim = await claimQueuedTranscription(
+    letterId,
+    observeTranscriptionState(letter),
+    options.workerExecutionToken,
+  );
   if (!claim) {
     letterLog.info('Transcription job already claimed by another process — skipping');
     return { kind: 'claim_lost' };

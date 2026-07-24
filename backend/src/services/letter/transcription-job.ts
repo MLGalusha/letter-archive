@@ -15,6 +15,7 @@ import {
 } from './lease-heartbeat.js';
 import { buildMetadataSourceInvalidationPatch } from './metadata-job.js';
 import { hasIdleTranscriptionDownstream } from '../processing-eligibility.js';
+import { activeWorkerExecutionCondition } from '../worker-state.js';
 
 const log = createLogger({ module: 'transcription-job' });
 const LEASE_EXPIRED_ERROR = 'Transcription lease expired before the attempt completed';
@@ -165,6 +166,7 @@ function revokedTranscriptionWorkflow(runId: string) {
 export async function claimQueuedTranscription(
   letterId: string,
   observed: ObservedTranscriptionState,
+  workerExecutionToken?: string,
 ): Promise<TranscriptionClaim | null> {
   if (
     observed.status !== 'PENDING'
@@ -191,6 +193,9 @@ export async function claimQueuedTranscription(
     .where(and(
       eq(letters.id, letterId),
       ...observedTranscriptionStateConditions(observed),
+      ...(workerExecutionToken
+        ? [activeWorkerExecutionCondition(workerExecutionToken)]
+        : []),
     ))
     .returning({ id: letters.id });
 
@@ -361,7 +366,9 @@ export async function cancelTranscriptionAttempt(
  * Reclaims only expired, fully-owned lease tuples. Conditional UPDATE RETURNING
  * makes the returned rows the authoritative recovery report under concurrency.
  */
-export async function recoverExpiredTranscriptions(): Promise<TranscriptionRecoveryResult> {
+export async function recoverExpiredTranscriptions(
+  workerExecutionToken?: string,
+): Promise<TranscriptionRecoveryResult> {
   const requeued = await db
     .update(letters)
     .set({
@@ -379,6 +386,9 @@ export async function recoverExpiredTranscriptions(): Promise<TranscriptionRecov
       isNotNull(letters.transcriptionLeaseRunId),
       eq(letters.transcriptionLeaseRunId, letters.transcriptionRunId),
       lte(letters.transcriptionLeaseExpiresAt, databaseNow()),
+      ...(workerExecutionToken
+        ? [activeWorkerExecutionCondition(workerExecutionToken)]
+        : []),
     ))
     .returning({ id: letters.id, dateRaw: letters.dateRaw });
 
@@ -398,6 +408,9 @@ export async function recoverExpiredTranscriptions(): Promise<TranscriptionRecov
       isNotNull(letters.transcriptionLeaseRunId),
       eq(letters.transcriptionLeaseRunId, letters.transcriptionRunId),
       lte(letters.transcriptionLeaseExpiresAt, databaseNow()),
+      ...(workerExecutionToken
+        ? [activeWorkerExecutionCondition(workerExecutionToken)]
+        : []),
     ))
     .returning({ id: letters.id, dateRaw: letters.dateRaw });
 

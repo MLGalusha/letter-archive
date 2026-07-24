@@ -45,6 +45,22 @@ describe('processLetter', () => {
 
   it('returns normally when the canonical transcription attempt completes', async () => {
     await expect(processLetter('letter-1')).resolves.toBeUndefined();
+
+    expect(runTranscriptionMock).toHaveBeenCalledWith('letter-1');
+  });
+
+  it('passes the worker no-extras contract to the canonical transcription attempt', async () => {
+    await expect(
+      processLetter('letter-1', {
+        extraContent: 'skip',
+        workerExecutionToken: 'execution-a',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(runTranscriptionMock).toHaveBeenCalledWith('letter-1', {
+      extraContent: 'skip',
+      workerExecutionToken: 'execution-a',
+    });
   });
 
   it.each(['claim_lost', 'superseded', 'ineligible'] as const)(
@@ -111,6 +127,20 @@ describe('processMetadata', () => {
     await expect(processMetadata('letter-1')).resolves.toBeUndefined();
 
     expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith('letter-1');
+  });
+
+  it('passes worker entity deferral to the canonical metadata attempt', async () => {
+    await expect(
+      processMetadata('letter-1', {
+        entityExtraction: 'deferred',
+        workerExecutionToken: 'execution-a',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith('letter-1', {
+      entityExtraction: 'deferred',
+      workerExecutionToken: 'execution-a',
+    });
   });
 
   it('does not start metadata while retranscription is running', async () => {

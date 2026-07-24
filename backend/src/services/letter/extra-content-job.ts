@@ -14,6 +14,7 @@ import {
 } from './lease-heartbeat.js';
 import { buildMetadataSourceInvalidationPatch } from './metadata-job.js';
 import { observedTimestampMatches } from './shared.js';
+import { activeWorkerExecutionCondition } from '../worker-state.js';
 
 const log = createLogger({ module: 'extra-content-job' });
 const LEASE_EXPIRED_ERROR = 'Extra-content lease expired before the attempt completed';
@@ -49,6 +50,7 @@ interface ExtraContentJobOptions<T> {
   expectedStatus: ClaimableJobStatus;
   expectedUpdatedAt: Date;
   claimKind: ExtraContentClaimKind;
+  workerExecutionToken?: string;
   produce: (
     heartbeat: ExtraContentHeartbeat,
   ) => Promise<{ value: T; patch: ExtraContentPatch }>;
@@ -234,6 +236,7 @@ export async function runExtraContentJob<T>({
   expectedStatus,
   expectedUpdatedAt,
   claimKind,
+  workerExecutionToken,
   produce,
 }: ExtraContentJobOptions<T>): Promise<ExtraContentJobResult<T>> {
   const runId = randomUUID();
@@ -253,6 +256,9 @@ export async function runExtraContentJob<T>({
       eq(letters.id, letterId),
       eq(letters.extraContentJobStatus, expectedStatus),
       observedTimestampMatches(letters.updatedAt, expectedUpdatedAt),
+      ...(workerExecutionToken
+        ? [activeWorkerExecutionCondition(workerExecutionToken)]
+        : []),
     ))
     .returning({ id: letters.id });
 
@@ -322,7 +328,9 @@ export async function runExtraContentJob<T>({
  * over requested-versus-queued intent. Conditional UPDATE RETURNING makes the
  * returned rows authoritative even when multiple reconcilers race.
  */
-export async function recoverExpiredExtraContentJobs(): Promise<ExtraContentRecoveryResult> {
+export async function recoverExpiredExtraContentJobs(
+  workerExecutionToken?: string,
+): Promise<ExtraContentRecoveryResult> {
   const dirty = await db
     .update(letters)
     .set({
@@ -340,6 +348,9 @@ export async function recoverExpiredExtraContentJobs(): Promise<ExtraContentReco
       isNotNull(letters.extraContentJobClaimKind),
       eq(letters.extraContentJobLeaseRunId, letters.extraContentJobRunId),
       lte(letters.extraContentJobLeaseExpiresAt, databaseNow()),
+      ...(workerExecutionToken
+        ? [activeWorkerExecutionCondition(workerExecutionToken)]
+        : []),
     ))
     .returning({ id: letters.id, dateRaw: letters.dateRaw });
 
@@ -360,6 +371,9 @@ export async function recoverExpiredExtraContentJobs(): Promise<ExtraContentReco
       isNotNull(letters.extraContentJobLeaseRunId),
       eq(letters.extraContentJobLeaseRunId, letters.extraContentJobRunId),
       lte(letters.extraContentJobLeaseExpiresAt, databaseNow()),
+      ...(workerExecutionToken
+        ? [activeWorkerExecutionCondition(workerExecutionToken)]
+        : []),
     ))
     .returning({ id: letters.id, dateRaw: letters.dateRaw });
 
@@ -380,6 +394,9 @@ export async function recoverExpiredExtraContentJobs(): Promise<ExtraContentReco
       isNotNull(letters.extraContentJobLeaseRunId),
       eq(letters.extraContentJobLeaseRunId, letters.extraContentJobRunId),
       lte(letters.extraContentJobLeaseExpiresAt, databaseNow()),
+      ...(workerExecutionToken
+        ? [activeWorkerExecutionCondition(workerExecutionToken)]
+        : []),
     ))
     .returning({ id: letters.id, dateRaw: letters.dateRaw });
 

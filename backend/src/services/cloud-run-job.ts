@@ -1,10 +1,9 @@
 import { env } from '../config/env.js';
 import { notifyApiError } from './notifications.js';
-import { getWorkerState } from './worker-state.js';
+import { hasActiveWorkerExecutionLease } from './worker-state.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger({ module: 'cloud-run-job' });
-const ACTIVE_WORKER_HEARTBEAT_MS = 120_000;
 
 const METADATA_TOKEN_URL =
   'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token';
@@ -39,20 +38,6 @@ async function getAccessToken(): Promise<string> {
   return payload.access_token;
 }
 
-async function hasActiveWorkerHeartbeat(): Promise<boolean> {
-  const snapshot = await getWorkerState();
-  if (!snapshot.isPolling) {
-    return false;
-  }
-
-  const lastSeen = snapshot.updatedAt ?? snapshot.lastTickAt;
-  if (!lastSeen) {
-    return false;
-  }
-
-  return Date.now() - new Date(lastSeen).getTime() < ACTIVE_WORKER_HEARTBEAT_MS;
-}
-
 let triggerInFlight: Promise<void> | null = null;
 
 export async function triggerWorkerJob(reason: string): Promise<boolean> {
@@ -72,14 +57,14 @@ export async function triggerWorkerJob(reason: string): Promise<boolean> {
 
   triggerInFlight = (async () => {
     try {
-      if (await hasActiveWorkerHeartbeat()) {
+      if (await hasActiveWorkerExecutionLease()) {
         log.info(
           {
             jobName: env.CLOUD_RUN_WORKER_JOB_NAME,
             region: env.CLOUD_RUN_REGION,
             reason,
           },
-          'Skipping worker job trigger because another worker execution is still active',
+          'Skipping worker job trigger because another worker execution owns the lease',
         );
         return;
       }

@@ -21,7 +21,7 @@ import {
   recoverExpiredProcessingJobs,
 } from './services/processing-queue.js';
 import { createLeaseRecoveryCoordinator } from './services/lease-recovery-coordinator.js';
-import { db, sql, adminUsers } from './db/index.js';
+import { closeDatabase, db, sql, adminUsers } from './db/index.js';
 import { hashPassword } from './auth/jwt.js';
 import { notify } from './services/notifications.js';
 import { startNotificationSweeper, stopNotificationSweeper } from './services/notification-sweeper.js';
@@ -252,9 +252,15 @@ function gracefulShutdown(signal: string) {
 
   // Stop accepting new connections and drain in-flight requests
   server.close(async () => {
-    await recoveryStopped;
-    logger.info('All connections drained, exiting');
-    process.exit(0);
+    try {
+      await recoveryStopped;
+      await closeDatabase();
+      logger.info('All connections drained, exiting');
+      process.exit(0);
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to close resources during shutdown');
+      process.exit(1);
+    }
   });
 
   // Force exit after 8s (Cloud Run gives 10s, leave buffer)

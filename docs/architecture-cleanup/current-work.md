@@ -11,7 +11,7 @@ Last updated: July 24, 2026
 - Last sealed cleanup implementation: Dashboard filter ownership at `557e01bf`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: 029 — next ownership boundary orientation
+- Current slice: 029 — typed, lossless letter version snapshots
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2200,6 +2200,108 @@ Residuals:
 
 No product feature, filter behavior, API, backend, storage schema, CSS, visual layout,
 deployment, or external state changed in this slice.
+
+## Slice 029 — Typed, Lossless Letter Version Snapshots
+
+Status: in progress
+
+Problem:
+
+Letter Review records metadata versions after saving any of nine editable fields:
+sender, recipient, extracted date, written location, hook, summary, emotional tone,
+sender-recipient relationship, and primary topics. The frontend API and backend
+`VersionInput` nevertheless type version content as a string or arbitrary record, and
+the route accepts either representation for either field type.
+
+The backend locks the letter before creating a version, but selects and compares only
+the original five string fields. A delayed snapshot whose date, tone, relationship, or
+topics are stale can therefore be accepted as current. Restore has the same five-field
+blind spot, so selecting a nine-field version silently leaves four recorded fields
+unchanged. Stored JSON is cast rather than decoded; malformed known metadata can be
+ignored or coerced, and malformed transcript content can become an empty transcript,
+while the restore is reported as successful. Current service tests characterize only
+the five-field metadata subset and happy-path transcript objects.
+
+Target invariant:
+
+A newly accepted metadata version is one complete, explicitly typed snapshot of all
+nine editable metadata fields. Under the existing letter/source lock, every supplied
+candidate field is compared with the same authoritative row, omitted fields from an
+older client are filled from that row, and only the canonical complete snapshot is
+inserted. Transcript candidates are likewise decoded and stored in one canonical
+shape.
+
+Restore decodes stored content before writing. Every valid field present in a legacy
+or current metadata snapshot is restored in the same transaction; fields absent from
+a legacy partial snapshot preserve their current values, while explicit null still
+clears. Malformed transcript content, a malformed known metadata field, or an empty
+metadata snapshot fails closed without updating the letter or its projections.
+Flattened columns, structured/legacy metadata documents, participant links, and the
+sender-recipient relationship projection remain transactionally coherent.
+
+Scope:
+
+- Introduce one domain codec with explicit transcript, complete metadata, and
+  legacy-partial metadata content types plus Zod schemas. Replace the route's
+  independent `fieldType`/arbitrary-content union with a discriminated request
+  contract while tolerating the already accepted legacy create shapes. Validate
+  tone and relationship against the full persisted database enum sets, including
+  historical values, and preserve topics as ordered strings rather than narrowing
+  historical rows to the current AI vocabulary.
+- Make the frontend version API accept the same discriminated intent. Build a complete
+  metadata snapshot at the autosave owner, normalizing absent DTO fields to explicit
+  `null` rather than relying on JSON to drop `undefined`, centralizing DTO/storage
+  field aliases, and copying the topics array.
+- Extend the locked create query and equality check to extracted date, emotional tone,
+  sender-recipient relationship, and primary topics. Compare arrays by value,
+  canonicalize accepted partial metadata candidates from the locked row, and keep the
+  existing source/content conflict outcomes.
+- Decode stored transcript versions and decode metadata versions through a
+  legacy-compatible, presence-sensitive partial schema. Apply only present metadata
+  fields, preserve absent fields, update both metadata document projections, and
+  synchronize participant/relationship projections inside the existing transaction.
+- Return an explicit invalid-content outcome before any write and map it to a stable
+  conflict response. Keep history-list content typed as `unknown`; one malformed
+  historical row must neither crash the list nor be presented as a validated snapshot.
+- Add service transition tests for all nine fields, explicit nulls, array ownership,
+  stale extended fields, legacy partial rows, malformed stored rows, and transactional
+  projection failure. Add route tests proving invalid field/content combinations
+  never reach the service.
+
+Non-goals:
+
+- No database migration, version backfill, retention change, new history UI, visual
+  change, or public API change.
+- Do not combine the primary autosave request and subsequent version-history request
+  into one transaction. Their current two-request partial-success behavior remains a
+  separately recorded risk.
+- Do not make identity-only retag edits or other metadata workflows create versions.
+  They have different mutation ownership and remain a separate version-history gap.
+- Do not change source-revision fencing, metadata revision conditions, publication
+  rules, metadata job lifecycle, or valid transcript restore semantics.
+- Do not create a generic cross-package contract library for this single consumer.
+
+Acceptance:
+
+- Existing baseline remains green: backend version service plus containing route
+  integration 2 files / 67 tests; frontend autosave 1 file / 14 tests.
+- New route and service tests reject wrong content shapes, stale extended metadata,
+  malformed stored transcript/metadata fields, and empty stored snapshots before any
+  write.
+- A legacy partial create candidate remains accepted during frontend/backend rollout,
+  but the inserted metadata snapshot is the complete canonical nine-field row observed
+  under the lock.
+- Complete snapshots restore all nine fields. Legacy partial snapshots preserve every
+  omitted flattened and document field while restoring the fields they contain.
+- Explicit nulls clear their fields; topic arrays are validated, copied, compared, and
+  restored without reference leakage; participant and relationship synchronization
+  stays inside the restore transaction.
+- Focused backend/frontend tests, both package typechecks, affected lint, full package
+  suites, `git diff --check`, and `CI=1 ./scripts/verify-all.sh` pass.
+- Independent contract, correctness, and adversarial reviews find no unresolved
+  P0–P2 issue.
+
+Rollback base: `5f6dd87a`.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

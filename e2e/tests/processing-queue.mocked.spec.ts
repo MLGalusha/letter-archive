@@ -106,17 +106,19 @@ test.describe("@mocked Processing Queue", () => {
         has: page.getByText("Extra content transcription queue", {
           exact: true,
         }),
-      });
+    });
     await extraSection.getByRole("button", { name: "Clear queue" }).click();
 
-    expect(mockedApi.clearRequests).toEqual([{
-      type: "extra_content",
-      items: [{
-        letterId: "letter-extra",
-        primarySourceRevision: 7,
-        jobStateToken: "v1.queued-extra-letter-extra",
-      }],
-    }]);
+    await expect.poll(() => mockedApi.clearRequests).toEqual([
+      {
+        type: "extra_content",
+        items: [{
+          letterId: "letter-extra",
+          primarySourceRevision: 7,
+          jobStateToken: "v1.queued-extra-letter-extra",
+        }],
+      },
+    ]);
     expect(mockedApi.state.queued.extraContent.map(({ letterId }) => letterId))
       .toEqual(["letter-extra-new"]);
     await expect(page.locator(".toast-info")).toContainText(

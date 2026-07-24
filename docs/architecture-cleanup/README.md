@@ -141,6 +141,16 @@ agent framework:
   (November 26, 2025) reports that one-slice-at-a-time work, clean git checkpoints,
   durable progress notes, and end-to-end browser testing reduced half-finished work
   and premature completion. It explicitly leaves multi-agent superiority unresolved.
+- Anthropic's [Harness design for long-running application development](https://www.anthropic.com/engineering/harness-design-long-running-apps)
+  (March 24, 2026) found that a separate skeptical evaluator can add value near the
+  model's capability boundary, while also showing that harness pieces should be
+  removed one at a time when stronger models make them unnecessary. This program uses
+  independent review for risky boundaries, not as permanent ceremony for every edit.
+- Anthropic's [Scaling Managed Agents](https://www.anthropic.com/engineering/managed-agents)
+  (April 8, 2026) separates durable, recoverable session state from a replaceable
+  harness because model-specific scaffolding goes stale. That supports keeping this
+  loop's state in repository artifacts and tests rather than coupling it to one agent
+  runtime.
 - Anthropic's [Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)
   (January 9, 2026) distinguishes regression gates from capability evaluation and
   recommends deterministic tests for coding outcomes.

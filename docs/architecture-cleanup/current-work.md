@@ -1,17 +1,19 @@
 # Architecture Cleanup Current Work
 
-Last updated: July 18, 2026
+Last updated: July 23, 2026
 
 ## Resume Here
 
 - Working branch: `architecture-cleanup`
 - Recovery point: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 008 — complete
-- Last green implementation checkpoint: Slice 008 in this checkpoint (hash recorded
-  by the following checkpoint note)
-- Current slice: 008B — explicit public read-boundary correction
-- Next queued slice: 009 — retry-safe entity-extraction lifecycle boundary
+- Current checkpoint: 009 — complete
+- Last green implementation checkpoint: public delivery and entity projection
+  boundaries at `97bca4a3`
+- Current slice: 010 — retire the legacy in-process batch executor (framed, not
+  started)
+- Next queued slice: 011 — retire the API registry executor, then make recovery
+  worker-owned
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -65,15 +67,19 @@ Architecture indicators:
   the canonical main-transcription lifecycle.
 - [x] Add a revision-bound canonical metadata owner, lease, terminal publication, and
   expiry-aware reconciliation path.
+- [x] Add a run- and revision-bound entity-extraction owner with atomic projection
+  replacement and explicit rollout compatibility.
 - [ ] Make recovery worker-owned so API startup cannot reset active work.
 - [ ] Establish one eligibility definition per processing stage.
 - [ ] Make the worker the sole executor; APIs enqueue, cancel, retry, and report.
 - [ ] Remove legacy queue/registry execution duplication and the processing import cycle.
-- [ ] Separate metadata completion from entity-persistence completion.
+- [x] Separate metadata completion from entity-persistence completion.
 
 ### C. Domain state ownership
 
 - [ ] Centralize explicit letter stage, content-review, and publication transitions.
+- [x] Replace public admin-DTO reuse with positive allowlist read models and enforce
+  publication gates before matching, ranking, aggregation, or response projection.
 - [ ] Introduce a correspondence-group seam for keying, representative selection,
   visibility, deletion, and companion lookup.
 - [ ] Add compensation or recoverability around database/filesystem ingestion changes.
@@ -918,8 +924,10 @@ Evidence:
   review remapped every production metadata-status writer against the database trigger
   and found no remaining P0/P1 lifecycle blocker.
 - Request-owned routes now report a conflict when a run is superseded instead of
-  returning a false success. Direct, bulk, and auto-publication share the same
-  completed-and-verified eligibility rule.
+  returning a false success. Direct, bulk, and auto-publication share one eligibility
+  rule based on the last committed verified content. A running or failed replacement
+  attempt does not invalidate that committed review or make it impossible to
+  republish.
 - Historical camelCase `metadata_json` and snake_case V2 documents are projected
   independently; legacy rows are never silently promoted into an invalid V2 shape.
 - `db:test-migrations` was found to swallow Docker startup failures in its EXIT trap.
@@ -933,3 +941,251 @@ Separate UI contract residual: Date, Emotional Tone, Relationship, and Primary T
 look editable in admin Letter Review but are not part of its save contract. Navigation
 can silently discard those local edits. Fix or make those controls read-only in a
 dedicated vertical slice; do not hide the issue inside entity ownership work.
+
+## Slice 008B — Explicit Public Read Boundary Correction
+
+Status: complete in this checkpoint
+
+Problem:
+
+Unauthenticated routes reused the broad admin letter DTO and several queries applied
+publication checks after selecting, matching, ranking, aggregating, or linking data.
+Hidden letters and unpublished transcript/metadata fields could therefore leak
+directly or through search facets, previews, names, collection profiles, entity pages,
+and relationship provenance.
+
+Delivered invariant:
+
+Public responses are explicit positive projections. A public letter must be visible;
+transcript-derived fields exist only when `transcriptPublished` is true, and
+metadata-derived fields exist only when `metadataPublished` is true. Query-time search,
+sort, facets, adjacent navigation, aggregations, entity discovery, relationships, and
+sitemap inclusion apply those gates before data can influence a result. Adding a field
+to a public response is now an explicit publication decision covered by a matrix test.
+
+Scope:
+
+- Converted public letter list, detail, summaries, search, adjacent navigation,
+  collections, collection profiles, featured content, content pages, persons, places,
+  relationships, relationship paths/graphs, and sitemap routes.
+- Rejected public hidden/workflow filters and internal sort oracles.
+- Exposed generated collection profiles and person biographies only after verification.
+- Hid collections with no public primary letters and removed the unauthenticated
+  `/collections/next-number` administration utility plus its unused frontend wrapper.
+- Kept the documented all-photo exception only for photo descriptions; it does not
+  expose OCR, filenames, notes, extraction state, or other metadata.
+- Projected transcript pages explicitly, excluding raw structured OCR pages, and
+  required supplemental transcript content to be independently `VERIFIED` before it
+  can appear in payloads, shelf search text, archive matching, ranking, or previews.
+- Removed public search and collection payload caches until publication writers own a
+  single invalidation/revision seam; visibility or content revocation now takes effect
+  on the next request.
+- Added an explicit frontend `PublicLetter` contract and kept the full workflow-aware
+  `Letter` contract behind admin APIs. Public components no longer compile against
+  fields the backend intentionally omits.
+
+Evidence:
+
+- Focused public-boundary matrix: 49/49 tests passed. The lifecycle/publication
+  correction surface passed 60/60 before its separate `8547874c` checkpoint.
+- Integrated full backend suite: 61 files and 563 tests passed; backend typecheck
+  passed.
+- Focused frontend public-contract surface: 5 files and 110 tests passed.
+- Full frontend suite: 86 files and 593 tests passed; frontend typecheck and production
+  build passed with the pre-existing large-chunk warning.
+- Aggregate `CI=1 ./scripts/verify-all.sh` passed the backend suite/typecheck, frontend
+  suite/build, and mocked browser gate. The browser suite was also rerun with the line
+  reporter and passed 35/35.
+- `git diff --check` passed.
+
+Residuals carried forward:
+
+- Entity junctions do not yet identify which extraction run produced them, and reruns
+  append rather than atomically replacing a letter-owned projection. Public aliases,
+  place notes, and place themes remain intentionally omitted because their canonical
+  rows cannot prove public provenance. Slice 009 adds run provenance and atomic
+  replacement before richer fields can be restored safely. This residual is closed by
+  Slice 009 below.
+- Admin DTO/read-model separation remains broader than this correction. This slice
+  establishes the public side of the boundary without combining it with an admin API
+  rewrite.
+
+## Slice 008C — Public Delivery, Image Authorization, and Navigation Cleanup
+
+Status: complete at `97bca4a3`
+
+Problem:
+
+Private image bytes shared the general API-token boundary, credential-bearing URLs
+could escape into browser/cache history, public transform caching was vulnerable to
+credential-shaped cache fragmentation, and image telemetry accepted more data than the
+server needed. Collection navigation simultaneously retained a second cache/scrubber
+state model, while featured/start-here repair writes could overwrite a newer curator
+selection.
+
+Delivered invariant:
+
+- Hidden images require a purpose-bound, host-only, `HttpOnly` image-session cookie.
+  General API verification rejects image tokens, deleted or hidden records are checked
+  at the image boundary, and credential-bearing responses are `private, no-store`.
+- Public transforms share one content-versioned encode cache even when a request
+  carries irrelevant query, bearer, or cookie data. Public bytes remain revalidated;
+  private bytes never enter that cache.
+- Image URLs are scrubbed of credential-shaped query parameters. Telemetry is a
+  bounded chronological queue, sends at most 20 sanitized records, and dequeues only
+  after `sendBeacon` accepts the batch. Server parsing, rate limiting, body size, and
+  malformed-body logging are bounded.
+- Featured-setting normalization/deletion and collection start-here repair use
+  compare-and-swap. A lost repair rereads the curator winner, collection selections
+  cannot point into another collection, and the selected ID plus reason are one
+  coherent snapshot.
+- Public collection navigation has one fresh request per route generation. The
+  duplicate cache, scrubber hook, adjacent-collection hook, and no-op image-access prop
+  plumbing are deleted.
+
+Entropy removed:
+
+- Deleted the retired collection-analysis producer, prompt, endpoint/client surface,
+  and stale browser test—roughly 900 lines from a UI path removed in March 2026.
+- Deleted the old collection navigation cache and overlapping hooks rather than
+  adapting them to the new public contract.
+
+Evidence:
+
+- Definitive `CI=1 ./scripts/verify-all.sh`: backend 76 files / 669 tests, backend
+  typecheck, frontend 91 files / 610 tests, production build, and mocked browser suite
+  35/35 all passed.
+- Image route integration surface passed 15/15; bounded frontend telemetry passed 5/5.
+- Featured/start-here and navigation concurrency regressions passed before the
+  aggregate gate, including lost compare-and-swap and A→B→A failed-refresh cases.
+- Full frontend execution is capped at 25% of machine-relative workers. The prior
+  unrestricted JSDOM run timed out only under worker oversubscription; isolated tests
+  and the complete 91-file suite pass with their real five-second assertions intact.
+- `git diff --check` and the retired-symbol repository sweep passed.
+
+Residuals carried forward:
+
+- The production build still reports the existing large-chunk warning, including the
+  editor and review surfaces. This checkpoint did not hide or raise that limit.
+- Public read models are explicit, but broader admin DTO decomposition remains future
+  work.
+
+## Slice 009 — Retry-Safe Entity Extraction Projection
+
+Status: complete at `97bca4a3`
+
+Problem:
+
+Entity reruns appended into shared junction tables and then marked the letter
+successful in a separate write. A cancelled, retried, old-version, or concurrent run
+could therefore leave a mixed projection or report success after losing ownership.
+Relationships and merge/undo paths could also combine content from one source with
+provenance from another.
+
+Delivered invariant:
+
+- A claim reserves the next entity revision under a unique run ID without replacing
+  the last committed projection. One transaction materializes people, places,
+  relationships, and review items, verifies the exact owner, and publishes the JSON,
+  revision, status, and complete projection together.
+- Ambiguous revisionless conflicts abort the transaction. Revision-0 legacy rows are
+  promoted only when their stored extraction document proves the match. Backfill uses
+  exact compare-and-swap and never reports a skipped conflict as inserted.
+- Public entity and relationship queries accept only human-confirmed rows or rows whose
+  discovery letter still commits that exact revision and non-null extraction document.
+- Merge collision selection keeps a complete content/provenance tuple. Merges lock
+  canonical and affected child rows in stable order; undo verifies the recorded
+  post-merge state, refuses partial/diverged restores, and rolls back without a false
+  audit entry.
+- Manual participant and relationship edits atomically switch to the complete human
+  provenance tuple. Letter identity metadata and its participant projection now share
+  one transaction, so projection failure cannot return HTTP success after committing
+  only the letter.
+- Migration 0051 is an expand/drain boundary: it blocks new tokenless runs, stamps and
+  atomically promotes output from a pre-existing old run, rejects stale old terminal
+  writes over a current owner, and discards an abandoned candidate before its revision
+  can be reused.
+
+Evidence:
+
+- Definitive `CI=1 ./scripts/verify-all.sh`: backend 76 files / 669 tests, backend
+  typecheck, frontend 91 files / 610 tests, production build, and mocked browser suite
+  35/35 all passed.
+- Focused migration/lifecycle coverage passed 102 tests; final merge/provenance coverage
+  passed 81 tests; the transactional identity and manual-provenance affected surface
+  passed 100 tests.
+- Migration registration validation passed 7/7 and `drizzle-kit check` reported no
+  drift. `bash -n scripts/test-migrations.sh` and `git diff --check` passed.
+- An isolated PostgreSQL 17 cluster applied the complete 0000–0051 journal and proved
+  malformed-JSON safety, all four provenance indexes, mixed-version drain, stale
+  terminal fencing, and legacy crash → cancellation → current revision reuse without
+  inheriting partial output.
+- Docker was offline, so the standard container wrapper could not run. Its persistent
+  migration regression and shell syntax are checked in; the equivalent native
+  PostgreSQL 17 execution is the runtime evidence for this checkpoint.
+- Multiple adversarial review passes found and corrected lost curator updates,
+  cross-collection selection, stale navigation, partial merge undo, child-row merge
+  races, false-success identity saves, mixed provenance, and legacy revision reuse
+  before the aggregate gate.
+
+Residuals carried forward:
+
+- Current entity runs have a run/revision fence but no lease or heartbeat. A current
+  orphan remains visible for exact administrative cancellation rather than being
+  guessed dead automatically.
+- Migration 0051 is drain-only: deploy the boundary, let or terminate old entity
+  executors, then cancel remaining tokenless rows before starting new claimers. Do not
+  cancel a tokenless row while its old executor is still materializing child output.
+- The largest UI and route files remain. This checkpoint made their data boundaries
+  safer; it did not yet decompose `AdminDashboard.css`, `LineReviewMode.tsx`,
+  `LetterReviewPage.tsx`, or the public letters route.
+
+## Slice 010 — Retire the Legacy In-Process Batch Executor
+
+Status: framed, not started
+
+Problem:
+
+`processing-queue.ts` still owns a mutable in-memory `processingState` and
+`processLettersAsync()` loop in addition to the polling worker and the process-registry
+runner. Legacy start routes, upload auto-start, and bulk operations choose between a
+configured Cloud Run job and this API-process fallback. Pause/abort semantics are
+therefore process-local, execution ownership depends on deployment configuration, and
+the legacy loop participates in the processing import cycle.
+
+Target invariant:
+
+Batch entry points persist eligible `PENDING` work and optionally wake a configured
+worker; they never execute AI work in the API process. Local development uses the
+documented separate worker process. One durable eligibility definition includes entity
+work in wake/exit decisions, and the documented transcript-confirmation gate applies
+to every metadata producer.
+
+Planned minimum:
+
+- Add characterization for legacy route/bulk/upload responses and worker handoff.
+- Include eligible `PENDING` entity extraction in configured-worker wakeup and
+  exit-when-empty rechecks before removing the fallback that currently masks it.
+- Delete the contradictory bulk `skipConfirmationCheck` path; project documentation
+  already defines confirmation as the metadata gate.
+- Move legacy and bulk starts to enqueue/wake only, then delete
+  `processLettersAsync()`, its API-memory batch state, and controls proven to operate
+  only that retired executor.
+- Remove the resulting import-cycle shims and update the architecture tripwire.
+
+Non-goals:
+
+- Do not remove the separate process-registry runner in this slice.
+- Do not move direct request-owned regeneration to the worker.
+- Do not make recovery worker-only until every API batch executor is gone.
+- Do not add a generic queue or orchestration framework.
+
+Acceptance:
+
+- No production reference to `processLettersAsync` or its legacy mutable batch state.
+- Upload, filtered starts, bulk transcription, bulk metadata, and entity starts leave
+  durable worker-eligible rows and report queued work truthfully.
+- Worker wake/exit tests cover entity-only work and recheck before availability handoff.
+- Focused queue/bulk/worker/API/frontend contracts, package typechecks/build, the full
+  suites, mocked browser gate, architecture review, and `git diff --check` pass before
+  checkpointing.

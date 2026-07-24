@@ -36,6 +36,7 @@ import { useDashboardSelectionDetails } from "./AdminDashboard/useDashboardSelec
 import { useDashboardSort } from "./AdminDashboard/useDashboardSort";
 import { useDashboardViewState } from "./AdminDashboard/useDashboardViewState";
 import { createDashboardCommittedQuery } from "./AdminDashboard/dashboardQueryModel";
+import { createDashboardStoredState } from "./AdminDashboard/dashboardStoredStateModel";
 import CollectionsDashboard from "./AdminCollectionsListPage";
 import "./AdminDashboard.css";
 
@@ -64,7 +65,11 @@ export default function AdminDashboard() {
     contentShapeFilters,
     initialSortColumns,
   } = dashboardFilters;
-  const { sortColumns, setSortColumns } = useDashboardSort(initialSortColumns);
+  const {
+    sortColumns,
+    setSortColumns,
+    replaceSortColumns,
+  } = useDashboardSort(initialSortColumns);
   const committedQuery = useMemo(
     () => createDashboardCommittedQuery(
       {
@@ -105,11 +110,17 @@ export default function AdminDashboard() {
       sortColumns,
     ],
   );
+  const dashboardStoredState = useMemo(
+    () => createDashboardStoredState(
+      committedQuery,
+      dashboardFilters.dateMode,
+    ),
+    [committedQuery, dashboardFilters.dateMode],
+  );
   const {
     visibleColumns,
-    setVisibleColumns,
     columnOrder,
-    setColumnOrder,
+    replaceStoredColumns,
     orderedColumns,
     showColumnMenu,
     columnMenuRef,
@@ -121,7 +132,7 @@ export default function AdminDashboard() {
     closeColumnMenu,
   } = useDashboardColumns();
 
-  useDashboardPersistedState({ filters: dashboardFilters, sortColumns });
+  useDashboardPersistedState(dashboardStoredState);
 
   const {
     letters,
@@ -283,13 +294,12 @@ export default function AdminDashboard() {
     applyView: handleApplyDashboardView,
     deleteView: handleDeleteDashboardView,
   } = useDashboardSavedViewState({
-    filters: dashboardFilters,
-    sortColumns,
-    setSortColumns,
+    storedState: dashboardStoredState,
     visibleColumns,
-    setVisibleColumns,
     columnOrder,
-    setColumnOrder,
+    replaceStoredFilters: dashboardFilters.replaceStoredFilters,
+    replaceSortColumns,
+    replaceStoredColumns,
   });
 
   if (loading && isInitialLoad) {

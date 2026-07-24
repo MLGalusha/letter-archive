@@ -7,10 +7,11 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 022 — Letter transcription workspace
-- Last sealed cleanup implementation: Letter transcription workspace at `2f9e17bc`
-- Feedback reliability prerequisite: Express request deadlines at `c8ac080b`
-- Current slice: 023 — single transcript-editor DOM owner
+- Current checkpoint: 023 — single transcript-editor DOM owner
+- Last sealed cleanup implementation: transcript editor DOM projection at `8879951e`
+- Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
+  Processing Queue clear-request proof at `c909580c`
+- Current slice: 024 — visit-owned Line Review session
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2101,59 +2102,154 @@ Residuals:
 No product feature, visual layout, backend production behavior, database schema,
 deployment, or external state changed in this slice.
 
-## Slice 023 — Single Transcript-Editor DOM Owner
+## Slice 024 — Visit-Owned Line Review Session
 
 Status: next
 
 Problem:
 
-The transcript contenteditable has three production DOM writers. `LetterReviewPage`
-reprojects highlighted HTML from a route effect keyed to transcript and Line Review
-mode; `TranscriptionSection` repeats that projection when Reading View closes, but
-skips empty text; and `useTranscriptEditing` writes the DOM imperatively after Revert.
-The route also owns editor-specific Tab insertion and page-separator deletion rules.
-The route effect currently masks the section's empty-text bug: removing or reordering
-one writer can leave the previous letter's transcript visible when the next
-authoritative transcript is empty.
+`LineReviewMode` remounts when the route target changes, but its route shell does not.
+`reviewMode`, `segmentFirstMode`, `debugMode`, `viewerPageIndex`, `selectedText`,
+`mappingText`, and `currentFilename` are plain `LetterReviewPage` state; only the
+segment-first trigger ref resets on the opaque visit. An A → B transition can therefore
+open B in A's review mode, full-viewport mode, debug mode, page, or mapping intent. If A
+leaves page index 1 and B has one page, `LineReviewMode` receives an out-of-range
+initial page and renders no review surface. More seriously, selected mapping text from
+A can enter B's fresh Line Review session and be applied to B's segment. The route also
+retains a setter-only current-line state that has no consumer.
 
 Target invariant:
 
-React transcript state is the sole content authority and `TranscriptionSection` is the
-sole owner that projects it into the contenteditable DOM, including an explicit empty
-value. The section also owns its keyboard/structural rules. Route and domain-mutation
-hooks never write editor HTML, so Line Review exit, Revert, generation, same-letter
-adoption, and A → B navigation all reach the same tested projection boundary.
+One session boundary owns all Line Review intent for one opaque Letter Review visit.
+A new visit synchronously presents a fresh closed session before B loads; old controls
+fail closed; segment-first auto-entry, manual entry, page handoff, mapping, debug,
+selection, header controls, transcript adoption, autosave, and exit all adapt through
+that same owner. `LetterReviewPage` composes the workspace but does not independently
+store or reset its state.
 
 Planned minimum:
 
-- Characterize nonempty marker projection, nonempty → empty reconciliation, Tab
-  insertion, and adjacent page-separator deletion protection in section tests.
-- Make the section reconcile every authoritative transcript while its editor surface
-  is active, including the empty string.
-- Move the existing editor keydown behavior and page-separator helper into the section
-  boundary; remove the route callback/prop contract.
-- Remove the route transcript DOM effect and highlighter import.
-- Remove `editorRef` and the imperative highlighter write from
-  `useTranscriptEditing`; successful Revert should update React state only.
-- Add an ownership tripwire and a discriminating browser transition or Line Review
-  exit case proving stale text is cleared without the route effect.
+- Characterize A → B → fresh A, an out-of-range A page, inherited mapping intent, and
+  captured old controls before moving state.
+- Extract a visit-owned `useLineReviewWorkspace` session with a synchronous fresh
+  projection and guarded updates.
+- Move entry/exit, segment-first auto-entry, page/debug/selection/mapping state, the
+  imperative Line Review ref/header adapters, and transcript/autosave adapters behind
+  the workspace.
+- Remove the setter-only current-line state and its writes once selection behavior is
+  characterized.
+- Add a source-ownership tripwire plus a mocked SPA transition proving B cannot inherit
+  A's Line Review shell.
 
 Non-goals:
 
-- No transcript edit-session, autosave, verification, Revert request ordering, marker
-  syntax, Reading View, generation, Line Review state, layout, CSS, or backend change.
-- No replacement of the existing `execCommand` Tab behavior in this structural slice.
-- No generic contenteditable framework.
+- No `LineReviewMode` geometry, OCR alignment, segment editing, mapping algorithm,
+  persistence request, CSS, or backend change.
+- No redesign of the image viewer, transcript editor, header, or segment-first product
+  behavior.
+- No generic route-workspace framework.
 
 Acceptance:
 
-- One production module writes transcript editor HTML.
-- Empty authoritative text clears stale DOM on the same render path as nonempty text.
-- Existing typing, markers, Tab insertion, separator protection, Revert, Reading View,
-  and Line Review behavior remain executable and green.
-- Focused component/hook/ownership tests, relevant mocked browser behavior, complete
-  frontend/backend suites, production build, touched-file lint, CI-mode mocked browser
-  suite, and `git diff --check` pass.
+- Line Review session state belongs to one current visit and old controls cannot mutate
+  a newer visit.
+- A → B cannot inherit mode, page, mapping, selection, debug, or full-viewport intent.
+- Existing segment-first entry, manual entry, mapping, page navigation, transcript
+  save/versioning, verification revocation, error reporting, and exit remain green.
+- Focused workspace/ownership tests, discriminating mocked browser behavior, the full
+  frontend/backend/build/browser gate, touched-file lint, and `git diff --check` pass.
+
+## Slice 023 — Single Transcript-Editor DOM Owner
+
+Status: complete at `8879951e`
+
+Problem:
+
+The transcript contenteditable had three production DOM writers.
+`LetterReviewPage` reprojected highlighted HTML from a route effect;
+`TranscriptionSection` repeated that projection when Reading View closed but skipped
+empty text; and `useTranscriptEditing` wrote the DOM imperatively after Revert. The
+route also owned editor-specific Tab insertion and page-separator deletion rules. The
+route effect masked the section's empty-text bug: removing one writer could leave stale
+text visible when authoritative transcript state became empty.
+
+Delivered invariant:
+
+React transcript state is the sole content authority and `TranscriptionSection` is the
+sole owner that projects it into `.transcript-editor`, including an explicit empty
+value. The section also owns the editor's keyboard and separator rules. Route and
+domain-mutation hooks never write transcript editor HTML, so Revert, generation,
+Reading View close, and Line Review exit all converge on one projection boundary.
+
+What changed:
+
+- `TranscriptionSection` now reconciles every authoritative transcript while its editor
+  surface is active. Empty text follows the same path as marker-rich text, so stale DOM
+  is cleared rather than retained.
+- Existing Tab insertion and adjacent page-separator deletion protection moved into the
+  section. The route callback, helper, and prop contract were deleted without changing
+  the still-deprecated `execCommand` behavior.
+- `LetterReviewPage` no longer imports the transcript highlighter or writes editor
+  HTML. Its duplicate projection effect and two keyboard callback owners were removed.
+- `useTranscriptEditing` no longer accepts `editorRef`, imports the highlighter, or
+  writes the DOM after Revert. A successful Revert persists and adopts the original
+  text, updates React state, verifies against the returned revision, and resets its
+  session in the existing order.
+- An architecture tripwire requires projection and keyboard ownership in the section
+  and rejects those paths in the route and mutation hook.
+- `LetterReviewPage.tsx` fell from 1,440 to 1,373 lines. Direct route effect owners fell
+  from eight to seven and callback owners from 20 to 18; its 19 state cells and five
+  refs did not change. Across the three affected production files, physical source
+  fell from 2,097 to 2,070 lines.
+
+Evidence:
+
+- The characterization run first failed the five intended contracts: marker/empty
+  reconciliation, Tab ownership, Backspace and Delete separator protection, and source
+  ownership; 11 existing tests remained green.
+- Focused section, Revert, and ownership coverage passed 3 files / 21 tests. The
+  successful Revert case proves exact update and verification revisions plus state and
+  session reset without an editor ref.
+- A real-browser accepted-result regression keeps the original editor node mounted,
+  returns an authoritative empty transcript, and requires exact empty HTML. The full
+  Letter Review plus Line Review mocked-browser surfaces passed 37/37.
+- The first aggregate run surfaced an unrelated Processing Queue browser race: the
+  detached async clear handler had not necessarily reached request interception when
+  the test synchronously inspected its capture array. It reproduced 2/5, was repaired
+  with an exact request-based poll at separate checkpoint `c909580c`, and passed 10/10
+  stress repetitions.
+- Definitive `CI=1 ./scripts/verify-all.sh` passed backend 104 files / 1,016 tests plus
+  typecheck, frontend 125 files / 845 tests plus production build, and the complete
+  mocked browser suite 55/55 without retry.
+- Touched frontend ESLint and `git diff --check` passed. Whole-frontend lint remains the
+  known backlog at 161 problems (141 errors and 20 warnings).
+- Three independent architecture, correctness, and adversarial-coverage reviews found
+  no remaining P0–P2 issue. They separately traced Reading View deferral, Line Review
+  remount, route visits, Revert ordering, real Chromium marker/newline behavior, and
+  whether each regression proof could false-pass.
+- Existing build warnings remain: `LetterReviewPage` is 524.89 kB and
+  `UpdateEditorPage` is 1,182.96 kB after minification.
+
+Residuals:
+
+- The route intentionally retains `editorRef` for font measurement and
+  selection-to-mapping reads. Those are read-only consumers and moving the ref would
+  not improve the single-writer invariant.
+- Page-separator protection still preserves the existing text-node caret model, and Tab
+  insertion still uses deprecated `execCommand`; changing either is a behavior slice,
+  not part of this ownership move.
+- Line Review's route shell is not visit-owned. Slice 024 closes the demonstrated
+  cross-letter page/mapping leak before extracting another large workspace.
+- Metadata/entity regeneration still exposes overlapping user intents over a backend
+  pipeline that rebuilds entities with replacement metadata. Characterize or decide
+  that product contract before consolidating its UI.
+- Dashboard committed query state remains repeated across controls, persistence, saved
+  views, fetching, selection, chips, and sorting. Start with one read-side committed
+  query snapshot rather than migrating every consumer at once.
+
+No new product feature, transcript behavior, Reading View behavior, Line Review
+behavior, layout, CSS, backend production behavior, API, prompt, database schema,
+deployment, or external state changed in this slice.
 
 ## Slice 022 — Letter Transcription Workspace
 

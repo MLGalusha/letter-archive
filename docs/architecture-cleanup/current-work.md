@@ -7,10 +7,10 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 015 — shared reviewable-editor interaction ownership
-- Last sealed cleanup implementation: shared reviewable editor at `70ef6f3c`
+- Current checkpoint: 016 — first Letter Review vertical workspace
+- Last sealed cleanup implementation: photo-description workspace at `fdb7acfd`
 - Feedback reliability prerequisite: Express request deadlines at `c8ac080b`
-- Current slice: 016 — characterize the first true Letter Review vertical workspace
+- Current slice: 017 — characterize shared Letter Review mutation scheduling ownership
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -1834,14 +1834,96 @@ external state changed in this slice.
 
 ## Slice 016 — First Letter Review Vertical Workspace
 
+Status: complete at `fdb7acfd`
+
+Problem:
+
+Photo Description was rendered by its own section, but `LetterReviewPage` still owned
+its draft/context/dialog state, generation, editing, verification, and autosave
+callbacks, API imports, and inline context modal. That left six related operations
+scattered through a 1,823-line route. The guarded Letter DTO setter returned no
+adoption outcome, so a rejected stale response could still be followed by local
+success state and a success toast. A response from an earlier A visit also needed to
+remain stale after an A → B → A navigation.
+
+Delivered invariant:
+
+One per-route-visit owner now coordinates the complete Photo Description workflow.
+Async completion can update local state or report success only while its originating
+route visit is current and its returned Letter DTO passes guarded adoption. Busy state
+is also route-visit scoped, so a late completion cannot clear the active workspace's
+lock. The section remains in the scrollable editor content and the non-portaled modal
+remains at the route tail, preserving their existing DOM ancestry and layout.
+
+What changed:
+
+- `usePhotoDescriptionWorkspace` owns description/context/dialog state plus generation,
+  edit, verify, unverify, and scheduled autosave behavior. The route consumes two
+  declarative render contracts rather than reproducing the workflow.
+- `PhotoDescriptionContextModal` extracts the existing modal without nesting it below
+  the editor section. Controls remain locked during generation.
+- `useGuardedLetterState` now exposes the boolean result of `tryAdoptLetter()`.
+  Workspace-local success state and notifications occur only after adoption succeeds.
+- `useLetterSavingState` scopes saving ownership to a route-visit identity. Late
+  completion from A cannot clear B or a fresh A visit.
+- The explicit photo line-review editing flag was removed after characterization
+  proved it unreachable: photo workflows cannot also satisfy the primary-transcript
+  content predicate used by image line review.
+- `LetterReviewPage` fell from 1,823 to 1,633 lines. Direct route state calls fell from
+  35 to 28 and callbacks from 33 to 27; refs and effects stayed at 4 and 7.
+- Across the affected/new production files, physical source rose from 2,520 to 2,681
+  lines. The 161-line increase is explicit ownership and stale-response safety rather
+  than a raw line-reduction win; no new production file exceeds 204 lines.
+- The mocked Letter Review API now models photo generation, edit, verification,
+  unverification, context, request capture, and coded source conflicts. Browser tests
+  cover the complete workflow and fail-closed conflict behavior.
+
+Evidence:
+
+- Focused frontend coverage passed 9 files / 43 tests, including route-visit and
+  A → B → A generation/autosave interleavings. ESLint passed on every changed/new
+  frontend TypeScript file.
+- Complete backend suite passed 102 files / 1,009 tests and backend typecheck passed.
+- Complete frontend suite passed 114 files / 745 tests and the production build
+  succeeded.
+- The complete mocked browser suite passed 45/45 in its settled run. During the
+  definitive aggregate verification, one unrelated Processing Queue timing assertion
+  required Playwright's automatic retry; it then passed and also passed immediately
+  when rerun alone.
+- `CI=1 ./scripts/verify-all.sh` completed successfully, and `git diff --check` passed.
+- Independent ownership, UI/test, simplicity, and adversarial reviews found no
+  remaining P0 or P1 issue.
+- The existing build warning remains: `LetterReviewPage` is 503.85 kB and
+  `UpdateEditorPage` is 1,182.96 kB after minification.
+
+Residuals:
+
+- All Letter Review workspaces still share one debounced-save timer and status label.
+  A deliberately ignored stale photo-save rejection can therefore briefly present
+  `Saved`, although it cannot mutate or block the active workspace. Characterize that
+  coordinator before extracting Extra Content.
+- Saving remains a Boolean within one route visit rather than an operation lease or
+  counter. This preserves existing same-visit semantics but should be revisited with
+  the shared mutation scheduler.
+- Fresh nested prop objects prevent `PhotoDescriptionSection`'s `React.memo` from
+  skipping parent rerenders. Treat this as measured performance debt, not a reason to
+  add memoization machinery speculatively.
+- This slice improves ownership and shrinks the route, but does not yet reduce total
+  affected production lines. Continue reducing the parent through characterized
+  vertical workspaces.
+
+No product feature, public API, backend production behavior, database schema,
+deployment, or external state changed in this slice.
+
+## Slice 017 — Letter Review Mutation Scheduling Ownership
+
 Status: characterization next
 
 Intent:
 
-Characterize Photo Description as the leading true vertical candidate: its six local
-states, generation context modal, verification/autosave mutations, route hydration,
-shared saving/debounce owner, and line-review edit gate. Extract it only if the parent
-contract is narrower than the state/callback surface it removes and stale A responses
-cannot mutate a B workspace. If those cross-workspace dependencies prevent a clean
-boundary, isolate the smallest coordinator first instead of adding imperative
-backchannels or a generic action container.
+Characterize the shared 1,500 ms debounce timer, save-status reporting, route-visit
+identity, and cross-workspace cancellation behavior before moving another vertical
+domain. Preserve queued-write behavior across route transitions unless a new contract
+is proven safer. Establish the smallest explicit coordinator and executable
+interleaving tests first; then use that seam to extract Extra Content without adding a
+generic action layer or duplicating async ownership.

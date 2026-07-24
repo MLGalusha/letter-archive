@@ -47,11 +47,15 @@ interface MockLetterReviewLetter {
   metadataContentStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
   extraContentStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
   extraContentTranscript?: string;
+  photoDescriptionStatus?: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+  photoDescription?: string;
+  photoDescriptionContext?: string;
   createdAt: string;
   updatedAt?: string;
   transcriptVerifiedAt?: string;
   metadataVerifiedAt?: string;
   extraContentVerifiedAt?: string;
+  photoDescriptionVerifiedAt?: string;
   flagged: boolean;
   linkedPersons?: unknown[];
   linkedPlaces?: unknown[];
@@ -122,6 +126,15 @@ interface MockExtraContentRequest {
   };
 }
 
+interface MockPhotoDescriptionRequest {
+  url: string;
+  body: {
+    photoDescription?: string;
+    photoDescriptionContext?: string;
+    primarySourceRevision?: number;
+  };
+}
+
 interface MockAiNotesRequest {
   url: string;
   body: {
@@ -144,6 +157,7 @@ type MockLetterReviewOverrides = Partial<MockLetterReviewLetter> & {
 const TRANSCRIPT_VERIFIED_AT = '2025-03-01T00:00:00.000Z';
 const METADATA_VERIFIED_AT = '2025-03-02T00:00:00.000Z';
 const EXTRA_CONTENT_VERIFIED_AT = '2025-03-03T00:00:00.000Z';
+const PHOTO_DESCRIPTION_VERIFIED_AT = '2025-03-04T00:00:00.000Z';
 const COLLECTION_009_ROOT = path.resolve(
   process.cwd(),
   '../backend/storage/collections/009',
@@ -294,6 +308,7 @@ const baseLetter: MockLetterReviewLetter = {
   transcriptStatus: 'EDITED',
   metadataContentStatus: 'EDITED',
   extraContentStatus: 'EMPTY',
+  photoDescriptionStatus: 'EMPTY',
   createdAt: '2025-01-01T00:00:00.000Z',
   updatedAt: '2025-01-02T00:00:00.000Z',
   flagged: false,
@@ -349,6 +364,10 @@ export interface MockLetterReviewContext {
   verifyMetadataRequests: string[];
   unverifyMetadataRequests: string[];
   updateExtraContentRequests: MockExtraContentRequest[];
+  describePhotoRequests: MockPhotoDescriptionRequest[];
+  updatePhotoDescriptionRequests: MockPhotoDescriptionRequest[];
+  verifyPhotoDescriptionRequests: string[];
+  unverifyPhotoDescriptionRequests: string[];
   updateAiNotesRequests: MockAiNotesRequest[];
   verifyExtraContentRequests: string[];
   unverifyExtraContentRequests: string[];
@@ -387,6 +406,10 @@ export async function installMockLetterReviewApi(
         | 'transcribeLetter'
         | 'verifyMetadata'
         | 'extraContent'
+        | 'describePhoto'
+        | 'photoDescription'
+        | 'verifyPhotoDescription'
+        | 'unverifyPhotoDescription'
         | 'aiNotes'
         | 'verifyExtraContent'
         | 'unverifyExtraContent'
@@ -404,6 +427,10 @@ export async function installMockLetterReviewApi(
   const verifyMetadataRequests: string[] = [];
   const unverifyMetadataRequests: string[] = [];
   const updateExtraContentRequests: MockExtraContentRequest[] = [];
+  const describePhotoRequests: MockPhotoDescriptionRequest[] = [];
+  const updatePhotoDescriptionRequests: MockPhotoDescriptionRequest[] = [];
+  const verifyPhotoDescriptionRequests: string[] = [];
+  const unverifyPhotoDescriptionRequests: string[] = [];
   const updateAiNotesRequests: MockAiNotesRequest[] = [];
   const verifyExtraContentRequests: string[] = [];
   const unverifyExtraContentRequests: string[] = [];
@@ -651,6 +678,100 @@ export async function installMockLetterReviewApi(
     letter.metadataContentStatus = 'EDITED';
     letter.metadata.verified = false;
     delete letter.metadataVerifiedAt;
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(letter),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/describe-photo$`), async (route) => {
+    const body = route.request().postDataJSON() as MockPhotoDescriptionRequest['body'];
+    describePhotoRequests.push({ url: route.request().url(), body });
+    if (routeFailures.describePhoto) {
+      await fulfillFailure(route, routeFailures.describePhoto);
+      return;
+    }
+    if (body.primarySourceRevision !== letter.primarySourceRevision) {
+      await fulfillFailure(route, {
+        status: 409,
+        error: 'Letter source changed; reload before describing this photo',
+        code: 'SOURCE_REVISION_CHANGED',
+      });
+      return;
+    }
+
+    letter.photoDescription =
+      'A black-and-white family photograph taken on a front porch.';
+    letter.photoDescriptionContext = body.photoDescriptionContext ?? '';
+    letter.photoDescriptionStatus = 'AI_DRAFT';
+    delete letter.photoDescriptionVerifiedAt;
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        letter,
+        describedCount: 1,
+        photoDescriptionStatus: 'AI_DRAFT',
+      }),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/photo-description$`), async (route) => {
+    const body = route.request().postDataJSON() as MockPhotoDescriptionRequest['body'];
+    updatePhotoDescriptionRequests.push({ url: route.request().url(), body });
+    if (routeFailures.photoDescription) {
+      await fulfillFailure(route, routeFailures.photoDescription);
+      return;
+    }
+    if (body.primarySourceRevision !== letter.primarySourceRevision) {
+      await fulfillFailure(route, {
+        status: 409,
+        error: 'Letter source changed; reload before saving this description',
+        code: 'SOURCE_REVISION_CHANGED',
+      });
+      return;
+    }
+
+    letter.photoDescription = body.photoDescription ?? '';
+    letter.photoDescriptionStatus = letter.photoDescription.trim()
+      ? 'EDITED'
+      : 'EMPTY';
+    delete letter.photoDescriptionVerifiedAt;
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(letter),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/verify-photo-description$`), async (route) => {
+    verifyPhotoDescriptionRequests.push(route.request().url());
+    if (routeFailures.verifyPhotoDescription) {
+      await fulfillFailure(route, routeFailures.verifyPhotoDescription);
+      return;
+    }
+    letter.photoDescriptionStatus = 'VERIFIED';
+    letter.photoDescriptionVerifiedAt = PHOTO_DESCRIPTION_VERIFIED_AT;
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(letter),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/unverify-photo-description$`), async (route) => {
+    unverifyPhotoDescriptionRequests.push(route.request().url());
+    if (routeFailures.unverifyPhotoDescription) {
+      await fulfillFailure(route, routeFailures.unverifyPhotoDescription);
+      return;
+    }
+    letter.photoDescriptionStatus = 'EDITED';
+    delete letter.photoDescriptionVerifiedAt;
 
     await route.fulfill({
       status: 200,
@@ -917,6 +1038,10 @@ export async function installMockLetterReviewApi(
     verifyMetadataRequests,
     unverifyMetadataRequests,
     updateExtraContentRequests,
+    describePhotoRequests,
+    updatePhotoDescriptionRequests,
+    verifyPhotoDescriptionRequests,
+    unverifyPhotoDescriptionRequests,
     updateAiNotesRequests,
     verifyExtraContentRequests,
     unverifyExtraContentRequests,

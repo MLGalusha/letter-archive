@@ -34,6 +34,47 @@ async function openMockLetterReviewWithOptions(
   return mockedApi;
 }
 
+function createMockPhotoLetter(
+  overrides: Parameters<typeof createMockLetterReviewLetter>[0] = {},
+) {
+  const baseLetter = createMockLetterReviewLetter();
+  return createMockLetterReviewLetter({
+    transcriptStatus: 'EMPTY',
+    metadataContentStatus: 'EMPTY',
+    photoDescriptionStatus: 'EMPTY',
+    photoDescription: '',
+    ...overrides,
+    images: overrides.images ?? [{
+      ...baseLetter.images[0],
+      id: 'collection-009-photo-1',
+      type: 'photo',
+      originalFilename: '009-19470810-P01-01.jpg',
+    }],
+    transcript: {
+      pages: [],
+      fullText: '',
+      verified: false,
+      ...(overrides.transcript ?? {}),
+    },
+  });
+}
+
+async function openMockPhotoReview(
+  page: Page,
+  initialLetter = createMockPhotoLetter(),
+  options: Omit<Parameters<typeof installMockLetterReviewApi>[1], 'initialLetter'> = {},
+) {
+  const mockedApi = await installMockLetterReviewApi(page, {
+    initialLetter,
+    ...options,
+  });
+  await page.goto(`/admin/letters/${initialLetter.id}`);
+  await page.locator('.letter-review-page').waitFor({ state: 'visible' });
+  await page.locator('.viewer-image').waitFor({ state: 'visible' });
+  await page.locator('.photo-description-section').waitFor({ state: 'visible' });
+  return mockedApi;
+}
+
 function createMockLetterWithExtras(
   overrides: Parameters<typeof createMockLetterReviewLetter>[0] = {},
 ) {
@@ -248,6 +289,93 @@ test.describe('@mocked Letter Review', () => {
     expect(mockedApi.unverifyMetadataRequests).toEqual([
       `${API_BASE_URL}/admin/letters/letter-review-1/unverify-metadata`,
     ]);
+  });
+
+  test('generates a photo description with saved AI context', async ({ page }) => {
+    const mockedApi = await openMockPhotoReview(page);
+    const photoSection = page.locator('.photo-description-section');
+
+    await photoSection.getByRole('button', { name: 'Describe Photo' }).click();
+    const modal = page.locator('.modal-content');
+    await expect(modal.locator('.modal-title')).toHaveText('Describe Photo');
+    await modal.getByLabel('AI Context').fill('Jimmy and Molly on the porch.');
+    await modal.getByRole('button', { name: 'Describe Photo' }).click();
+
+    await expect(photoSection.locator('.dynamic-editor')).toContainText(
+      'A black-and-white family photograph taken on a front porch.',
+    );
+    await expect(photoSection.getByText('AI context saved')).toBeVisible();
+    await expect(modal).toHaveCount(0);
+    expect(mockedApi.describePhotoRequests).toEqual([{
+      url: `${API_BASE_URL}/admin/letters/letter-review-1/describe-photo`,
+      body: {
+        photoDescriptionContext: 'Jimmy and Molly on the porch.',
+        primarySourceRevision: 4,
+      },
+    }]);
+  });
+
+  test('edits, verifies, and unlocks a photo description', async ({ page }) => {
+    const initialLetter = createMockPhotoLetter({
+      photoDescriptionStatus: 'AI_DRAFT',
+      photoDescription: 'Original photo description.',
+    });
+    const mockedApi = await openMockPhotoReview(page, initialLetter);
+    const photoSection = page.locator('.photo-description-section');
+    const editor = photoSection.locator('.dynamic-editor');
+
+    await editor.fill('Corrected photo description.');
+    await expect
+      .poll(() => mockedApi.updatePhotoDescriptionRequests.length)
+      .toBe(1);
+    expect(mockedApi.updatePhotoDescriptionRequests[0]).toEqual({
+      url: `${API_BASE_URL}/admin/letters/letter-review-1/photo-description`,
+      body: {
+        photoDescription: 'Corrected photo description.',
+        primarySourceRevision: 4,
+      },
+    });
+
+    await photoSection.getByRole('button', { name: 'Verify' }).click();
+    await expect(editor).toHaveAttribute('contenteditable', 'false');
+    await editor.dblclick();
+    await expect(editor).toHaveAttribute('contenteditable', 'true');
+
+    expect(mockedApi.verifyPhotoDescriptionRequests).toEqual([
+      `${API_BASE_URL}/admin/letters/letter-review-1/verify-photo-description`,
+    ]);
+    expect(mockedApi.unverifyPhotoDescriptionRequests).toEqual([
+      `${API_BASE_URL}/admin/letters/letter-review-1/unverify-photo-description`,
+    ]);
+  });
+
+  test('keeps a verified photo description locked after a source conflict', async ({
+    page,
+  }) => {
+    const initialLetter = createMockPhotoLetter({
+      photoDescriptionStatus: 'VERIFIED',
+      photoDescription: 'Verified photo description.',
+      photoDescriptionVerifiedAt: '2025-03-04T00:00:00.000Z',
+    });
+    const mockedApi = await openMockPhotoReview(page, initialLetter, {
+      routeFailures: {
+        unverifyPhotoDescription: {
+          status: 409,
+          error: 'The photo source changed',
+          code: 'SOURCE_REVISION_CHANGED',
+          requestId: 'req-photo-source-409',
+        },
+      },
+    });
+    const editor = page.locator('.photo-description-section .dynamic-editor');
+
+    await editor.dblclick();
+
+    await expect(
+      page.getByRole('alertdialog', { name: 'Letter source changed' }),
+    ).toBeVisible();
+    await expect(editor).toHaveAttribute('contenteditable', 'false');
+    expect(mockedApi.unverifyPhotoDescriptionRequests).toHaveLength(1);
   });
 
   test('edits and verifies extra content through the review UI', async ({ page }) => {

@@ -41,18 +41,12 @@ export function useGuardedLetterState(
     setLetterState(nextLetter);
   }, []);
 
-  const setLetter = useCallback<Dispatch<SetStateAction<Letter | null>>>(
-    (nextAction) => {
+  const adoptIncrementalLetter = useCallback(
+    (nextLetter: Letter | null): boolean => {
       const currentLetter = currentLetterRef.current;
-      const nextLetter = typeof nextAction === 'function'
-        ? nextAction(currentLetter)
-        : nextAction;
 
-      if (
-        nextLetter
-        && nextLetter.id !== activeLetterIdRef.current
-      ) {
-        return;
+      if (nextLetter && nextLetter.id !== activeLetterIdRef.current) {
+        return false;
       }
 
       if (
@@ -63,7 +57,7 @@ export function useGuardedLetterState(
           !== nextLetter.primarySourceRevision
       ) {
         markSourceConflict(SOURCE_REFRESH_CONFLICT);
-        return;
+        return false;
       }
 
       // Incremental responses from a route that has already been left are
@@ -73,18 +67,35 @@ export function useGuardedLetterState(
         && nextLetter
         && currentLetter.id !== nextLetter.id
       ) {
-        return;
+        return false;
       }
 
       currentLetterRef.current = nextLetter;
       setLetterState(nextLetter);
+      return true;
     },
     [markSourceConflict],
+  );
+
+  const tryAdoptLetter = useCallback(
+    (nextLetter: Letter) => adoptIncrementalLetter(nextLetter),
+    [adoptIncrementalLetter],
+  );
+
+  const setLetter = useCallback<Dispatch<SetStateAction<Letter | null>>>(
+    (nextAction) => {
+      const nextLetter = typeof nextAction === 'function'
+        ? nextAction(currentLetterRef.current)
+        : nextAction;
+      adoptIncrementalLetter(nextLetter);
+    },
+    [adoptIncrementalLetter],
   );
 
   return {
     letter,
     setAuthoritativeLetter,
     setLetter,
+    tryAdoptLetter,
   };
 }

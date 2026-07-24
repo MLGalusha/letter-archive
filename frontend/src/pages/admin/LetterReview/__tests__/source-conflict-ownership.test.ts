@@ -30,6 +30,10 @@ const photoDescriptionSectionPath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/PhotoDescriptionSection.tsx',
 );
+const photoDescriptionWorkspacePath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/LetterReview/usePhotoDescriptionWorkspace.ts',
+);
 const extraContentSectionPath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/ExtraContentSection.tsx',
@@ -57,18 +61,19 @@ describe('Letter Review source-conflict ownership', () => {
     const [
       page,
       photoDescriptionSection,
+      photoDescriptionWorkspace,
       extraContentSection,
       reviewableDynamicEditor,
     ] = await Promise.all([
       readFile(pagePath, 'utf8'),
       readFile(photoDescriptionSectionPath, 'utf8'),
+      readFile(photoDescriptionWorkspacePath, 'utf8'),
       readFile(extraContentSectionPath, 'utf8'),
       readFile(reviewableDynamicEditorPath, 'utf8'),
     ]);
 
     expect(page).toContain('useLetterSourceConflict(showToast, {');
     for (const callback of [
-      'handleDescribePhoto',
       'handleTranscribeLetter',
       'handleTranscribeExtrasWithConfirm',
       'handleVisibilityChange',
@@ -76,8 +81,6 @@ describe('Letter Review source-conflict ownership', () => {
       'executeConfirmTranscript',
       'executeMetadataRegenerate',
       'handleReExtract',
-      'handleVerifyPhotoDescription',
-      'handleUnverifyPhotoDescription',
       'handleVerifyExtraContent',
       'handleUnverifyExtraContent',
       'handleGenerateReadingView',
@@ -86,6 +89,11 @@ describe('Letter Review source-conflict ownership', () => {
       'handleAddNote',
     ]) {
       expect(callbackBlock(page, callback)).toContain('handleMutationError(');
+    }
+    for (const callback of ['describe', 'toggleVerification']) {
+      expect(callbackBlock(photoDescriptionWorkspace, callback)).toContain(
+        'handleMutationError(',
+      );
     }
     expect(callbackBlock(page, 'handleDelete')).toContain(
       'deleteLetter(letterId, primarySourceRevision)',
@@ -101,8 +109,20 @@ describe('Letter Review source-conflict ownership', () => {
     expect(extraContentSection).toContain(
       'onRequestEdit={onVerifyExtraContent}',
     );
-    expect(page).toMatch(
-      /<PhotoDescriptionSection[\s\S]*?onVerifyPhotoDescription=\{[\s\S]*?handleUnverifyPhotoDescription[\s\S]*?: handleVerifyPhotoDescription/,
+    expect(page).toContain(
+      '<PhotoDescriptionSection {...photoDescriptionWorkspace.sectionProps} />',
+    );
+    const sectionSlot = page.indexOf('<PhotoDescriptionSection');
+    const splitPaneEnd = page.indexOf('</ResizableSplitPane>');
+    const dialogSlot = page.indexOf('<PhotoDescriptionContextModal');
+    expect(sectionSlot).toBeLessThan(splitPaneEnd);
+    expect(dialogSlot).toBeGreaterThan(splitPaneEnd);
+    expect(photoDescriptionWorkspace).toContain(
+      "letter.photoDescriptionStatus === 'VERIFIED'",
+    );
+    expect(photoDescriptionWorkspace).toContain('tryAdoptLetter(');
+    expect(page).not.toMatch(
+      /\b(describePhoto|updatePhotoDescription|verifyPhotoDescription|unverifyPhotoDescription)\b/,
     );
     expect(page).toMatch(
       /<ExtraContentSection[\s\S]*?onVerifyExtraContent=\{[\s\S]*?handleUnverifyExtraContent[\s\S]*?: handleVerifyExtraContent/,

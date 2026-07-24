@@ -30,8 +30,9 @@ describe("reviewable dynamic editor ownership", () => {
       expect(page).not.toContain(removedOwner);
     }
 
+    expect(page).not.toContain("isPhotoDescriptionEditing");
     expect(page).toMatch(
-      /const handleImageClick[\s\S]*?isPhotoDescriptionEditing[\s\S]*?isExtraContentEditing/,
+      /const handleImageClick[\s\S]*?isTranscriptEditing[\s\S]*?isExtraContentEditing/,
     );
   });
 

@@ -84,6 +84,37 @@ describe('useGuardedLetterState', () => {
     expect(markSourceConflict).not.toHaveBeenCalled();
   });
 
+  it('reports whether an incremental DTO became authoritative', () => {
+    const markSourceConflict = vi.fn();
+    const rev1 = letterAtRevision(1);
+    const { result } = renderHook(() =>
+      useGuardedLetterState(markSourceConflict, 'letter-1'),
+    );
+
+    act(() => {
+      result.current.setAuthoritativeLetter(rev1);
+    });
+
+    let accepted = false;
+    act(() => {
+      accepted = result.current.tryAdoptLetter({
+        ...rev1,
+        flagged: true,
+      });
+    });
+    expect(accepted).toBe(true);
+    expect(result.current.letter?.flagged).toBe(true);
+
+    act(() => {
+      accepted = result.current.tryAdoptLetter(
+        letterAtRevision(2, { flagged: false }),
+      );
+    });
+    expect(accepted).toBe(false);
+    expect(result.current.letter?.flagged).toBe(true);
+    expect(markSourceConflict).toHaveBeenCalledTimes(1);
+  });
+
   it('masks the previous DTO synchronously when route ownership changes', () => {
     const markSourceConflict = vi.fn();
     const letterA = letterAtRevision(1, { id: 'letter-a' });
@@ -99,6 +130,7 @@ describe('useGuardedLetterState', () => {
     });
     const staleAuthoritativeA = result.current.setAuthoritativeLetter;
     const staleIncrementalA = result.current.setLetter;
+    const staleTryAdoptA = result.current.tryAdoptLetter;
     expect(result.current.letter).toBe(letterA);
 
     act(() => {
@@ -120,5 +152,12 @@ describe('useGuardedLetterState', () => {
     });
     expect(result.current.letter).toBe(letterB);
     expect(markSourceConflict).not.toHaveBeenCalled();
+
+    let accepted = true;
+    act(() => {
+      accepted = staleTryAdoptA({ ...letterA, flagged: true });
+    });
+    expect(accepted).toBe(false);
+    expect(result.current.letter).toBe(letterB);
   });
 });

@@ -38,11 +38,16 @@ interface UseAutoSaveOptions {
   syncIdentityMetadata: (updatedLetter: Letter) => void;
 }
 
-interface DebouncedSaveOptions {
+export interface DebouncedSaveOptions {
   delayMs?: number;
   errorMessage: string;
   onError?: (error: unknown) => void;
 }
+
+export type ScheduleDebouncedSave = (
+  task: () => Promise<void>,
+  options: DebouncedSaveOptions,
+) => void;
 
 type IdentityUpdateState = 'idle' | 'pending' | 'saving';
 

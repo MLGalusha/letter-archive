@@ -6,15 +6,11 @@ import { getAdminLetterById, deleteLetter } from "../../api/letters";
 import {
   updateLetter,
   confirmTranscript,
-  describePhoto,
   regenerateMetadata,
   transcribeExtras,
   updateExtraContent,
-  updatePhotoDescription,
   verifyExtraContent,
-  verifyPhotoDescription,
   unverifyExtraContent,
-  unverifyPhotoDescription,
   transcribeLetter,
 } from "../../api/admin";
 import {
@@ -29,7 +25,6 @@ import AdminLayout from "../../components/AdminLayout";
 import { useToast } from "../../contexts/ToastContext";
 import {
   Icon,
-  Modal,
   WorkflowBadge,
   ResizableSplitPane,
   Dropdown,
@@ -48,6 +43,7 @@ import {
 import TranscriptionSection from "./LetterReview/TranscriptionSection";
 import { ExtraContentSection } from "./LetterReview/ExtraContentSection";
 import { PhotoDescriptionSection } from "./LetterReview/PhotoDescriptionSection";
+import { PhotoDescriptionContextModal } from "./LetterReview/PhotoDescriptionContextModal";
 import MetadataSection from "./LetterReview/MetadataSection";
 import EntitySection from "./LetterReview/EntitySection";
 import NotesSection from "./LetterReview/NotesSection";
@@ -59,6 +55,8 @@ import { useMetadataEditing } from "./LetterReview/useMetadataEditing";
 import { useTranscriptEditing } from "./LetterReview/useTranscriptEditing";
 import { useLetterSourceConflict } from "./LetterReview/useLetterSourceConflict";
 import { useGuardedLetterState } from "./LetterReview/useGuardedLetterState";
+import { useLetterSavingState } from "./LetterReview/useLetterSavingState";
+import { usePhotoDescriptionWorkspace } from "./LetterReview/usePhotoDescriptionWorkspace";
 import { loadCurrentLetter } from "./LetterReview/loadCurrentLetter";
 import { usePretextFontSize } from "../../hooks/usePretextFontSize";
 import LineReviewMode, {
@@ -86,6 +84,7 @@ export default function LetterReviewPage() {
     letter,
     setAuthoritativeLetter,
     setLetter,
+    tryAdoptLetter,
   } = useGuardedLetterState(markSourceConflict, letterId);
 
   const [transcript, setTranscript] = useState("");
@@ -111,13 +110,6 @@ export default function LetterReviewPage() {
       setReaderText(letter.readingText);
     }
   }, [letter?.readingText, readerText]);
-
-  // Photo description state
-  const [photoDescription, setPhotoDescription] = useState("");
-  const [photoDescriptionContext, setPhotoDescriptionContext] = useState("");
-  const [draftPhotoDescriptionContext, setDraftPhotoDescriptionContext] = useState("");
-  const [photoDescriptionGenerating, setPhotoDescriptionGenerating] =
-    useState(false);
 
   // Extra content state
   const [extraContent, setExtraContent] = useState("");
@@ -153,20 +145,16 @@ export default function LetterReviewPage() {
   const [showExtractionPopup, setShowExtractionPopup] = useState(false);
   const [extractionSender, setExtractionSender] = useState("");
   const [extractionRecipient, setExtractionRecipient] = useState("");
-  const [showPhotoContextModal, setShowPhotoContextModal] = useState(false);
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useLetterSavingState(letterId);
   const [message, setMessage] = useState("");
   const [currentFilename, setCurrentFilename] = useState<string | undefined>(
     undefined,
   );
   const editorRef = useRef<HTMLDivElement>(null);
   const lineReviewRef = useRef<LineReviewModeHandle>(null);
-
-  // Verified photo description editing flow state
-  const [isPhotoDescriptionEditing, setIsPhotoDescriptionEditing] = useState(false);
 
   // Verified extra content editing flow state
   const [isExtraContentEditing, setIsExtraContentEditing] = useState(false);
@@ -246,6 +234,14 @@ export default function LetterReviewPage() {
     mutationsBlocked,
     syncIdentityMetadata,
   });
+  const photoDescriptionWorkspace = usePhotoDescriptionWorkspace({
+    letter,
+    saving,
+    setSaving,
+    tryAdoptLetter,
+    scheduleDebouncedSave,
+    handleMutationError,
+  });
   const {
     editTooltipRef,
     handleTranscriptClick,
@@ -291,10 +287,6 @@ export default function LetterReviewPage() {
               setAuthoritativeLetter(foundLetter);
               setTranscript(foundLetter.transcript.fullText);
               applyLetterMetadata(foundLetter);
-              setPhotoDescription(foundLetter.photoDescription || "");
-              setPhotoDescriptionContext(foundLetter.photoDescriptionContext || "");
-              setDraftPhotoDescriptionContext(foundLetter.photoDescriptionContext || "");
-              setIsPhotoDescriptionEditing(false);
               // Extra content
               setExtraContent(foundLetter.extraContentTranscript || "");
               // Reset extra content editing state for new letter
@@ -435,56 +427,6 @@ export default function LetterReviewPage() {
     ],
   );
 
-  const handleOpenPhotoContextModal = useCallback(() => {
-    if (!letter) return;
-    setDraftPhotoDescriptionContext(letter.photoDescriptionContext || "");
-    setShowPhotoContextModal(true);
-  }, [letter]);
-
-  const handleClosePhotoContextModal = useCallback(() => {
-    if (photoDescriptionGenerating) return;
-    setShowPhotoContextModal(false);
-  }, [photoDescriptionGenerating]);
-
-  const handleDescribePhoto = useCallback(async () => {
-    if (!letterId || !letter) return;
-
-    setPhotoDescriptionGenerating(true);
-    try {
-      const result = await describePhoto(
-        letterId,
-        draftPhotoDescriptionContext,
-        letter.primarySourceRevision,
-      );
-      setLetter(result.letter);
-      setPhotoDescription(result.letter.photoDescription || "");
-      setPhotoDescriptionContext(result.letter.photoDescriptionContext || "");
-      setDraftPhotoDescriptionContext(result.letter.photoDescriptionContext || "");
-      setShowPhotoContextModal(false);
-      setIsPhotoDescriptionEditing(false);
-
-      if (result.describedCount > 0) {
-        showToast(
-          `Generated ${result.describedCount} photo description draft(s)`,
-          "success",
-        );
-      } else {
-        showToast("No photo description was generated", "info");
-      }
-    } catch (err) {
-      handleMutationError(err, "Failed to describe photo");
-    } finally {
-      setPhotoDescriptionGenerating(false);
-    }
-  }, [
-    draftPhotoDescriptionContext,
-    handleMutationError,
-    letter,
-    letterId,
-    setLetter,
-    showToast,
-  ]);
-
   // Extra content transcription handler with confirmation
   const handleTranscribeExtrasWithConfirm = useCallback(
     async (skipConfirm = false) => {
@@ -542,7 +484,7 @@ export default function LetterReviewPage() {
     } finally {
       setSaving(false);
     }
-  }, [handleMutationError, letter, letterId, setLetter, showToast]);
+  }, [handleMutationError, letter, letterId, setLetter, setSaving, showToast]);
 
   const handleContentPublishToggle = useCallback(async (
     field: 'transcriptPublished' | 'metadataPublished',
@@ -563,7 +505,7 @@ export default function LetterReviewPage() {
     } finally {
       setSaving(false);
     }
-  }, [handleMutationError, letter, letterId, setLetter, showToast]);
+  }, [handleMutationError, letter, letterId, setLetter, setSaving, showToast]);
 
   const handleConfirmTranscript = useCallback(() => {
     if (!letterId) return;
@@ -606,6 +548,7 @@ export default function LetterReviewPage() {
     letter,
     letterId,
     setLetter,
+    setSaving,
     showToast,
   ]);
 
@@ -761,6 +704,7 @@ export default function LetterReviewPage() {
     letter,
     letterId,
     navigate,
+    setSaving,
     showToast,
   ]);
 
@@ -818,72 +762,6 @@ export default function LetterReviewPage() {
     }
   }, [isPageSepNode]);
 
-  const handleVerifyPhotoDescription = useCallback(async () => {
-    if (!letterId || !letter) return;
-    setSaving(true);
-    try {
-      const updated = await verifyPhotoDescription(
-        letterId,
-        letter.primarySourceRevision,
-      );
-      setLetter(updated);
-      setIsPhotoDescriptionEditing(false);
-      showToast("Photo description verified", "success");
-    } catch (err) {
-      handleMutationError(err, "Failed to verify photo description");
-    } finally {
-      setSaving(false);
-    }
-  }, [handleMutationError, letter, letterId, setLetter, showToast]);
-
-  const handleUnverifyPhotoDescription = useCallback(async () => {
-    if (!letterId || !letter) return;
-    if (letter.photoDescriptionStatus !== "VERIFIED") return;
-
-    setSaving(true);
-    try {
-      const updated = await unverifyPhotoDescription(
-        letterId,
-        letter.primarySourceRevision,
-      );
-      setLetter(updated);
-      setIsPhotoDescriptionEditing(true);
-      showToast("Photo description verification removed", "info");
-    } catch (err) {
-      handleMutationError(err, "Failed to unverify photo description");
-    } finally {
-      setSaving(false);
-    }
-  }, [handleMutationError, letter, letterId, setLetter, showToast]);
-
-  const handlePhotoDescriptionChange = useCallback(
-    (newContent: string) => {
-      startTransition(() => {
-        setPhotoDescription(newContent);
-      });
-      if (!letterId || !letter) return;
-
-      scheduleDebouncedSave(
-        async () => {
-          const updated = await updatePhotoDescription(
-            letterId,
-            newContent,
-            letter.primarySourceRevision,
-          );
-          setLetter(updated);
-          setPhotoDescriptionContext(updated.photoDescriptionContext || "");
-        },
-        {
-          errorMessage: "Failed to save photo description",
-          onError: (error) => {
-            console.error("Photo description auto-save error:", error);
-          },
-        },
-      );
-    },
-    [letter, letterId, scheduleDebouncedSave, setLetter],
-  );
-
   // Extra content verification handlers
   const handleVerifyExtraContent = useCallback(async () => {
     if (!letterId || !letter) return;
@@ -901,7 +779,7 @@ export default function LetterReviewPage() {
     } finally {
       setSaving(false);
     }
-  }, [handleMutationError, letter, letterId, setLetter, showToast]);
+  }, [handleMutationError, letter, letterId, setLetter, setSaving, showToast]);
 
   const handleUnverifyExtraContent = useCallback(async () => {
     if (!letterId || !letter) return;
@@ -921,7 +799,7 @@ export default function LetterReviewPage() {
     } finally {
       setSaving(false);
     }
-  }, [handleMutationError, letterId, letter, setLetter, showToast]);
+  }, [handleMutationError, letterId, letter, setLetter, setSaving, showToast]);
 
   // Extra content auto-save
   const handleExtraContentChange = useCallback(
@@ -994,14 +872,13 @@ export default function LetterReviewPage() {
       !letter ||
       !hasPrimaryTranscriptContent(letter) ||
       isTranscriptEditing ||
-      isPhotoDescriptionEditing ||
       isExtraContentEditing
     ) {
       return;
     }
     setViewerPageIndex(pageIndex);
     setReviewMode(true);
-  }, [isExtraContentEditing, isPhotoDescriptionEditing, isTranscriptEditing, letter]);
+  }, [isExtraContentEditing, isTranscriptEditing, letter]);
 
   const handleReaderTextChange = useCallback((text: string) => {
     startTransition(() => {
@@ -1439,19 +1316,7 @@ export default function LetterReviewPage() {
             )}
 
             {showPhotoDescriptionSection && (
-              <PhotoDescriptionSection
-                letter={letter}
-                photoDescription={photoDescription}
-                photoDescriptionGenerating={photoDescriptionGenerating}
-                saving={saving}
-                onDescribePhoto={handleOpenPhotoContextModal}
-                onVerifyPhotoDescription={
-                  letter.photoDescriptionStatus === "VERIFIED"
-                    ? handleUnverifyPhotoDescription
-                    : handleVerifyPhotoDescription
-                }
-                onPhotoDescriptionChange={handlePhotoDescriptionChange}
-              />
+              <PhotoDescriptionSection {...photoDescriptionWorkspace.sectionProps} />
             )}
 
             {/* Extra Content Section - only shown when letter has transcribable extras */}
@@ -1727,64 +1592,9 @@ export default function LetterReviewPage() {
         </div>
       )}
 
-      <Modal
-        isOpen={showPhotoContextModal}
-        onClose={handleClosePhotoContextModal}
-        title={photoDescription.trim() ? "Regenerate Photo Description" : "Describe Photo"}
-        subtitle="Optional AI context helps the model interpret uncertain people, places, or scenes."
-        size="md"
-        actions={
-          <>
-            <button
-              className="btn-cancel"
-              onClick={handleClosePhotoContextModal}
-              disabled={photoDescriptionGenerating}
-            >
-              Cancel
-            </button>
-            <button
-              className="btn-confirm photo-context-confirm"
-              onClick={() => void handleDescribePhoto()}
-              disabled={photoDescriptionGenerating}
-            >
-              {photoDescriptionGenerating
-                ? "Describing..."
-                : photoDescription.trim()
-                  ? "Regenerate Description"
-                  : "Describe Photo"}
-            </button>
-          </>
-        }
-      >
-        <div className="photo-context-modal">
-          <p className="photo-context-copy">
-            Add optional context that should be sent to the model with this image.
-            Leave it blank if the photo should be described on its own.
-          </p>
-          <div className="photo-context-examples">
-            <span>Examples:</span>
-            <span className="photo-context-chip">This is likely Jimmy and Molly.</span>
-            <span className="photo-context-chip">Family porch snapshot, probably at home in Ohio.</span>
-          </div>
-          {photoDescriptionContext && (
-            <p className="photo-context-copy photo-context-saved">
-              Current saved context will be replaced when you run this action.
-            </p>
-          )}
-          <label className="photo-context-label" htmlFor="photo-description-context">
-            AI Context
-          </label>
-          <textarea
-            id="photo-description-context"
-            className="photo-context-textarea"
-            value={draftPhotoDescriptionContext}
-            onChange={(e) => setDraftPhotoDescriptionContext(e.target.value)}
-            placeholder="Add optional context for the AI model"
-            rows={6}
-            disabled={photoDescriptionGenerating}
-          />
-        </div>
-      </Modal>
+      <PhotoDescriptionContextModal
+        {...photoDescriptionWorkspace.dialogProps}
+      />
 
       {sourceConflict && (
         <div

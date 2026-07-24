@@ -1,9 +1,8 @@
-import { createRef, type ComponentProps } from "react";
+import { type ComponentProps } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ExtraContentSection } from "../ExtraContentSection";
-import type { DynamicEditorRef } from "../../../../components/common";
 
 const buildProps = (overrides: Partial<ComponentProps<typeof ExtraContentSection>> = {}) => ({
   letter: {
@@ -12,18 +11,10 @@ const buildProps = (overrides: Partial<ComponentProps<typeof ExtraContentSection
   },
   extraContent: "notes",
   extraContentTranscribing: false,
-  isExtraContentEditing: false,
-  showExtraContentTooltip: false,
-  extraContentTooltipPosition: { x: 100, y: 100 },
-  extraContentTooltipRef: createRef<HTMLDivElement>(),
   saving: false,
-  extraContentRef: createRef<DynamicEditorRef>(),
   onTranscribeExtras: vi.fn(),
   onVerifyExtraContent: vi.fn(),
   onExtraContentChange: vi.fn(),
-  onExtraContentKeyDown: vi.fn(),
-  onExtraContentClick: vi.fn(),
-  onExtraContentDoubleClick: vi.fn(),
   ...overrides,
 });
 

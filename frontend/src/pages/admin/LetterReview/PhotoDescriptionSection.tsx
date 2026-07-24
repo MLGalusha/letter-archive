@@ -1,5 +1,6 @@
-import React, { type RefObject } from "react";
-import { Icon, DynamicEditor, type DynamicEditorRef } from "../../../components/common";
+import React from "react";
+import { Icon } from "../../../components/common";
+import { ReviewableDynamicEditor } from "./ReviewableDynamicEditor";
 
 interface PhotoDescriptionSectionProps {
   letter: {
@@ -9,36 +10,20 @@ interface PhotoDescriptionSectionProps {
   };
   photoDescription: string;
   photoDescriptionGenerating: boolean;
-  isPhotoDescriptionEditing: boolean;
-  showPhotoDescriptionTooltip: boolean;
-  photoDescriptionTooltipPosition: { x: number; y: number };
-  photoDescriptionTooltipRef: RefObject<HTMLDivElement | null>;
   saving: boolean;
-  photoDescriptionRef: RefObject<DynamicEditorRef | null>;
   onDescribePhoto: () => void;
   onVerifyPhotoDescription: () => void;
   onPhotoDescriptionChange: (value: string) => void;
-  onPhotoDescriptionKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
-  onPhotoDescriptionClick: (e: React.MouseEvent<HTMLDivElement>) => void;
-  onPhotoDescriptionDoubleClick: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
 export const PhotoDescriptionSection = React.memo(function PhotoDescriptionSection({
   letter,
   photoDescription,
   photoDescriptionGenerating,
-  isPhotoDescriptionEditing,
-  showPhotoDescriptionTooltip,
-  photoDescriptionTooltipPosition,
-  photoDescriptionTooltipRef,
   saving,
-  photoDescriptionRef,
   onDescribePhoto,
   onVerifyPhotoDescription,
   onPhotoDescriptionChange,
-  onPhotoDescriptionKeyDown,
-  onPhotoDescriptionClick,
-  onPhotoDescriptionDoubleClick,
 }: PhotoDescriptionSectionProps) {
   const hasSavedContext = Boolean(letter.photoDescriptionContext?.trim());
   const photoDescriptionStatus = letter.photoDescriptionStatus ?? "EMPTY";
@@ -53,8 +38,7 @@ export const PhotoDescriptionSection = React.memo(function PhotoDescriptionSecti
           )}
         </h2>
         <div className="header-right">
-          {(photoDescriptionStatus !== "VERIFIED" ||
-            isPhotoDescriptionEditing) && (
+          {photoDescriptionStatus !== "VERIFIED" && (
             <button
               className="action-btn transcribe-btn"
               onClick={onDescribePhoto}
@@ -109,43 +93,13 @@ export const PhotoDescriptionSection = React.memo(function PhotoDescriptionSecti
           )}
         </div>
       </div>
-      <div className="extra-content-container">
-        <DynamicEditor
-          ref={photoDescriptionRef}
-          value={photoDescription}
-          onChange={onPhotoDescriptionChange}
-          onKeyDown={onPhotoDescriptionKeyDown}
-          onClick={onPhotoDescriptionClick}
-          onDoubleClick={onPhotoDescriptionDoubleClick}
-          placeholder="Describe what is visible in this photo, or generate an AI draft."
-          readOnly={
-            photoDescriptionStatus === "VERIFIED" &&
-            !isPhotoDescriptionEditing
-          }
-          verified={
-            photoDescriptionStatus === "VERIFIED" &&
-            !isPhotoDescriptionEditing
-          }
-          baseFontSize={1.0}
-          minHeight={180}
-        />
-
-        {showPhotoDescriptionTooltip && (
-          <div
-            ref={photoDescriptionTooltipRef}
-            className="edit-tooltip"
-            style={{
-              left: Math.min(
-                photoDescriptionTooltipPosition.x,
-                window.innerWidth - 280,
-              ),
-              top: photoDescriptionTooltipPosition.y + 10,
-            }}
-          >
-            Verified. Double-click to edit and unverify.
-          </div>
-        )}
-      </div>
+      <ReviewableDynamicEditor
+        value={photoDescription}
+        verified={photoDescriptionStatus === "VERIFIED"}
+        onChange={onPhotoDescriptionChange}
+        onRequestEdit={onVerifyPhotoDescription}
+        placeholder="Describe what is visible in this photo, or generate an AI draft."
+      />
     </div>
   );
 });

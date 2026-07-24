@@ -1,17 +1,6 @@
-import { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useEffect } from 'react';
 import { usePretextFontSize } from '../../hooks/usePretextFontSize.js';
 import './DynamicEditor.css';
-
-export interface DynamicEditorRef {
-  /** Get the current text content */
-  getText: () => string;
-  /** Set the text content programmatically */
-  setText: (text: string) => void;
-  /** Focus the editor */
-  focus: () => void;
-  /** Get the underlying DOM element */
-  getElement: () => HTMLDivElement | null;
-}
 
 interface DynamicEditorProps {
   /** Current text value */
@@ -48,7 +37,7 @@ interface DynamicEditorProps {
  * Uses Pretext for cached text measurement — prepare() runs once when text changes,
  * resize only compares cached width to container width (essentially free).
  */
-export const DynamicEditor = forwardRef<DynamicEditorRef, DynamicEditorProps>(({
+export function DynamicEditor({
   value,
   onChange,
   onInput,
@@ -62,20 +51,8 @@ export const DynamicEditor = forwardRef<DynamicEditorRef, DynamicEditorProps>(({
   onKeyDown,
   onClick,
   onDoubleClick,
-}, ref) => {
+}: DynamicEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
-
-  // Expose methods via ref
-  useImperativeHandle(ref, () => ({
-    getText: () => editorRef.current?.innerText || '',
-    setText: (text: string) => {
-      if (editorRef.current) {
-        editorRef.current.innerText = text;
-      }
-    },
-    focus: () => editorRef.current?.focus(),
-    getElement: () => editorRef.current,
-  }));
 
   // Use Pretext-backed font sizing
   const fontSize = usePretextFontSize(editorRef, value, {
@@ -125,8 +102,6 @@ export const DynamicEditor = forwardRef<DynamicEditorRef, DynamicEditorProps>(({
       onDoubleClick={onDoubleClick}
     />
   );
-});
-
-DynamicEditor.displayName = 'DynamicEditor';
+}
 
 export default DynamicEditor;

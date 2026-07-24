@@ -26,6 +26,18 @@ const guardedLetterStatePath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/useGuardedLetterState.ts',
 );
+const photoDescriptionSectionPath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/LetterReview/PhotoDescriptionSection.tsx',
+);
+const extraContentSectionPath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/LetterReview/ExtraContentSection.tsx',
+);
+const reviewableDynamicEditorPath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/LetterReview/ReviewableDynamicEditor.tsx',
+);
 const lineReviewPath = path.resolve(
   process.cwd(),
   'src/components/LineReviewMode/LineReviewMode.tsx',
@@ -42,7 +54,17 @@ function callbackBlock(source: string, name: string): string {
 
 describe('Letter Review source-conflict ownership', () => {
   it('routes every direct source-bound mutation through one terminal owner', async () => {
-    const page = await readFile(pagePath, 'utf8');
+    const [
+      page,
+      photoDescriptionSection,
+      extraContentSection,
+      reviewableDynamicEditor,
+    ] = await Promise.all([
+      readFile(pagePath, 'utf8'),
+      readFile(photoDescriptionSectionPath, 'utf8'),
+      readFile(extraContentSectionPath, 'utf8'),
+      readFile(reviewableDynamicEditorPath, 'utf8'),
+    ]);
 
     expect(page).toContain('useLetterSourceConflict(showToast, {');
     for (const callback of [
@@ -56,10 +78,8 @@ describe('Letter Review source-conflict ownership', () => {
       'handleReExtract',
       'handleVerifyPhotoDescription',
       'handleUnverifyPhotoDescription',
-      'handlePhotoDescriptionDoubleClick',
       'handleVerifyExtraContent',
       'handleUnverifyExtraContent',
-      'handleExtraContentDoubleClick',
       'handleGenerateReadingView',
       'handleDelete',
       'handleNoteStatusChange',
@@ -75,6 +95,21 @@ describe('Letter Review source-conflict ownership', () => {
         'letter.primarySourceRevision',
       );
     }
+    expect(photoDescriptionSection).toContain(
+      'onRequestEdit={onVerifyPhotoDescription}',
+    );
+    expect(extraContentSection).toContain(
+      'onRequestEdit={onVerifyExtraContent}',
+    );
+    expect(page).toMatch(
+      /<PhotoDescriptionSection[\s\S]*?onVerifyPhotoDescription=\{[\s\S]*?handleUnverifyPhotoDescription[\s\S]*?: handleVerifyPhotoDescription/,
+    );
+    expect(page).toMatch(
+      /<ExtraContentSection[\s\S]*?onVerifyExtraContent=\{[\s\S]*?handleUnverifyExtraContent[\s\S]*?: handleVerifyExtraContent/,
+    );
+    expect(reviewableDynamicEditor).toContain('if (!verified) return');
+    expect(reviewableDynamicEditor).toContain('onRequestEdit();');
+    expect(reviewableDynamicEditor).not.toMatch(/api\//);
     expect(page).toContain('sourceConflict &&');
     expect(page).toContain('Reload latest source');
   });

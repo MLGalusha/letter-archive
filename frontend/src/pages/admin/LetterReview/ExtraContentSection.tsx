@@ -1,5 +1,6 @@
-import React, { type RefObject } from "react";
-import { Icon, DynamicEditor, type DynamicEditorRef } from "../../../components/common";
+import React from "react";
+import { Icon } from "../../../components/common";
+import { ReviewableDynamicEditor } from "./ReviewableDynamicEditor";
 
 interface ExtraContentSectionProps {
   letter: {
@@ -8,36 +9,20 @@ interface ExtraContentSectionProps {
   };
   extraContent: string;
   extraContentTranscribing: boolean;
-  isExtraContentEditing: boolean;
-  showExtraContentTooltip: boolean;
-  extraContentTooltipPosition: { x: number; y: number };
-  extraContentTooltipRef: RefObject<HTMLDivElement | null>;
   saving: boolean;
-  extraContentRef: RefObject<DynamicEditorRef | null>;
   onTranscribeExtras: () => void;
   onVerifyExtraContent: () => void;
   onExtraContentChange: (value: string) => void;
-  onExtraContentKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
-  onExtraContentClick: (e: React.MouseEvent<HTMLDivElement>) => void;
-  onExtraContentDoubleClick: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
 export const ExtraContentSection = React.memo(function ExtraContentSection({
   letter,
   extraContent,
   extraContentTranscribing,
-  isExtraContentEditing,
-  showExtraContentTooltip,
-  extraContentTooltipPosition,
-  extraContentTooltipRef,
   saving,
-  extraContentRef,
   onTranscribeExtras,
   onVerifyExtraContent,
   onExtraContentChange,
-  onExtraContentKeyDown,
-  onExtraContentClick,
-  onExtraContentDoubleClick,
 }: ExtraContentSectionProps) {
   return (
     <div className="editor-section extra-content-section">
@@ -45,8 +30,7 @@ export const ExtraContentSection = React.memo(function ExtraContentSection({
         <h2>Extra Content</h2>
         <div className="header-right">
           {/* Transcribe button - hidden when verified */}
-          {(letter.extraContentStatus !== "VERIFIED" ||
-            isExtraContentEditing) && (
+          {letter.extraContentStatus !== "VERIFIED" && (
             <button
               className="action-btn transcribe-btn"
               onClick={() => onTranscribeExtras()}
@@ -102,44 +86,13 @@ export const ExtraContentSection = React.memo(function ExtraContentSection({
           )}
         </div>
       </div>
-      <div className="extra-content-container">
-        <DynamicEditor
-          ref={extraContentRef}
-          value={extraContent}
-          onChange={onExtraContentChange}
-          onKeyDown={onExtraContentKeyDown}
-          onClick={onExtraContentClick}
-          onDoubleClick={onExtraContentDoubleClick}
-          placeholder=""
-          readOnly={
-            letter.extraContentStatus === "VERIFIED" &&
-            !isExtraContentEditing
-          }
-          verified={
-            letter.extraContentStatus === "VERIFIED" &&
-            !isExtraContentEditing
-          }
-          baseFontSize={1.0}
-          minHeight={180}
-        />
-
-        {/* Double-click to edit tooltip for extra content */}
-        {showExtraContentTooltip && (
-          <div
-            ref={extraContentTooltipRef}
-            className="edit-tooltip"
-            style={{
-              left: Math.min(
-                extraContentTooltipPosition.x,
-                window.innerWidth - 280,
-              ),
-              top: extraContentTooltipPosition.y + 10,
-            }}
-          >
-            Verified. Double-click to edit and unverify.
-          </div>
-        )}
-      </div>
+      <ReviewableDynamicEditor
+        value={extraContent}
+        verified={letter.extraContentStatus === "VERIFIED"}
+        onChange={onExtraContentChange}
+        onRequestEdit={onVerifyExtraContent}
+        placeholder=""
+      />
     </div>
   );
 });

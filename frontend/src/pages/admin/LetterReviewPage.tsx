@@ -34,11 +34,9 @@ import {
   ResizableSplitPane,
   Dropdown,
   DropdownItem,
-  type DynamicEditorRef,
 } from "../../components/common";
 import { trackEdit } from "../../utils/recentEdits";
 import { highlightTranscriptMarkers } from "../../utils/transcriptHighlight";
-import { useTooltip } from "../../hooks/useTooltip";
 import type { LetterImage, VisibilityState } from "../../types/Letter";
 import {
   getPrimaryImageType,
@@ -126,12 +124,6 @@ export default function LetterReviewPage() {
   const [extraContentTranscribing, setExtraContentTranscribing] =
     useState(false);
 
-  // Photo description refs
-  const photoDescriptionRef = useRef<DynamicEditorRef>(null);
-
-  // Extra content refs
-  const extraContentRef = useRef<DynamicEditorRef>(null);
-
   // Metadata regeneration state
   const [regenerateState, setRegenerateState] = useState<
     "idle" | "regenerating" | "done"
@@ -175,23 +167,9 @@ export default function LetterReviewPage() {
 
   // Verified photo description editing flow state
   const [isPhotoDescriptionEditing, setIsPhotoDescriptionEditing] = useState(false);
-  const {
-    show: showPhotoDescriptionTooltip,
-    position: photoDescriptionTooltipPosition,
-    ref: photoDescriptionTooltipRef,
-    showAt: showPhotoDescriptionTooltipAt,
-    close: closePhotoDescriptionTooltip,
-  } = useTooltip();
 
   // Verified extra content editing flow state
   const [isExtraContentEditing, setIsExtraContentEditing] = useState(false);
-  const {
-    show: showExtraContentTooltip,
-    position: extraContentTooltipPosition,
-    ref: extraContentTooltipRef,
-    showAt: showExtraContentTooltipAt,
-    close: closeExtraContentTooltip,
-  } = useTooltip();
 
   // Line highlighting state
   const [, setCurrentLineIndex] = useState<number | null>(
@@ -840,46 +818,6 @@ export default function LetterReviewPage() {
     }
   }, [isPageSepNode]);
 
-  // Handle Tab key for extra content editor
-  const handleExtraContentKeyDown = useCallback((
-    e: React.KeyboardEvent<HTMLDivElement>,
-  ) => {
-    if (e.key === "Tab") {
-      e.preventDefault();
-      e.stopPropagation();
-
-      // Ensure the editor is focused before inserting text
-      const editor = e.currentTarget;
-      if (document.activeElement !== editor) {
-        editor.focus();
-      }
-
-      // Use execCommand to insert text - works better with contentEditable
-      // and integrates with browser's undo/redo stack
-      document.execCommand("insertText", false, "    ");
-
-      // Update state
-      setExtraContent(editor.innerText);
-    }
-  }, []);
-
-  const handlePhotoDescriptionKeyDown = useCallback((
-    e: React.KeyboardEvent<HTMLDivElement>,
-  ) => {
-    if (e.key === "Tab") {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const editor = e.currentTarget;
-      if (document.activeElement !== editor) {
-        editor.focus();
-      }
-
-      document.execCommand("insertText", false, "    ");
-      setPhotoDescription(editor.innerText);
-    }
-  }, []);
-
   const handleVerifyPhotoDescription = useCallback(async () => {
     if (!letterId || !letter) return;
     setSaving(true);
@@ -917,60 +855,6 @@ export default function LetterReviewPage() {
       setSaving(false);
     }
   }, [handleMutationError, letter, letterId, setLetter, showToast]);
-
-  const handlePhotoDescriptionClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (
-        !letter?.photoDescriptionStatus ||
-        letter.photoDescriptionStatus !== "VERIFIED" ||
-        isPhotoDescriptionEditing
-      ) {
-        return;
-      }
-
-      showPhotoDescriptionTooltipAt(e.clientX, e.clientY);
-    },
-    [
-      isPhotoDescriptionEditing,
-      letter?.photoDescriptionStatus,
-      showPhotoDescriptionTooltipAt,
-    ],
-  );
-
-  const handlePhotoDescriptionDoubleClick = useCallback(async () => {
-    if (
-      !letter?.photoDescriptionStatus ||
-      letter.photoDescriptionStatus !== "VERIFIED" ||
-      !letterId
-    ) {
-      return;
-    }
-
-    closePhotoDescriptionTooltip();
-
-    setSaving(true);
-    try {
-      const updated = await unverifyPhotoDescription(
-        letterId,
-        letter.primarySourceRevision,
-      );
-      setLetter(updated);
-      setIsPhotoDescriptionEditing(true);
-      showToast("Photo description verification removed", "info");
-    } catch (err) {
-      handleMutationError(err, "Failed to unverify photo description");
-    } finally {
-      setSaving(false);
-    }
-  }, [
-    closePhotoDescriptionTooltip,
-    handleMutationError,
-    letter?.primarySourceRevision,
-    letter?.photoDescriptionStatus,
-    letterId,
-    setLetter,
-    showToast,
-  ]);
 
   const handlePhotoDescriptionChange = useCallback(
     (newContent: string) => {
@@ -1038,56 +922,6 @@ export default function LetterReviewPage() {
       setSaving(false);
     }
   }, [handleMutationError, letterId, letter, setLetter, showToast]);
-
-  // Extra content click/double-click handlers for verified state
-  const handleExtraContentClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (
-        !letter?.extraContentStatus ||
-        letter.extraContentStatus !== "VERIFIED" ||
-        isExtraContentEditing
-      )
-        return;
-
-      showExtraContentTooltipAt(e.clientX, e.clientY);
-    },
-    [letter?.extraContentStatus, isExtraContentEditing, showExtraContentTooltipAt],
-  );
-
-  const handleExtraContentDoubleClick = useCallback(async () => {
-    if (
-      !letter?.extraContentStatus ||
-      letter.extraContentStatus !== "VERIFIED" ||
-      !letterId
-    )
-      return;
-
-    closeExtraContentTooltip();
-
-    // Unverify via API
-    setSaving(true);
-    try {
-      const updated = await unverifyExtraContent(
-        letterId,
-        letter.primarySourceRevision,
-      );
-      setLetter(updated);
-      setIsExtraContentEditing(true);
-      showToast("Extra content verification removed", "info");
-    } catch (err) {
-      handleMutationError(err, "Failed to unverify extra content");
-    } finally {
-      setSaving(false);
-    }
-  }, [
-    closeExtraContentTooltip,
-    handleMutationError,
-    letter?.extraContentStatus,
-    letter?.primarySourceRevision,
-    letterId,
-    setLetter,
-    showToast,
-  ]);
 
   // Extra content auto-save
   const handleExtraContentChange = useCallback(
@@ -1609,12 +1443,7 @@ export default function LetterReviewPage() {
                 letter={letter}
                 photoDescription={photoDescription}
                 photoDescriptionGenerating={photoDescriptionGenerating}
-                isPhotoDescriptionEditing={isPhotoDescriptionEditing}
-                showPhotoDescriptionTooltip={showPhotoDescriptionTooltip}
-                photoDescriptionTooltipPosition={photoDescriptionTooltipPosition}
-                photoDescriptionTooltipRef={photoDescriptionTooltipRef}
                 saving={saving}
-                photoDescriptionRef={photoDescriptionRef}
                 onDescribePhoto={handleOpenPhotoContextModal}
                 onVerifyPhotoDescription={
                   letter.photoDescriptionStatus === "VERIFIED"
@@ -1622,9 +1451,6 @@ export default function LetterReviewPage() {
                     : handleVerifyPhotoDescription
                 }
                 onPhotoDescriptionChange={handlePhotoDescriptionChange}
-                onPhotoDescriptionKeyDown={handlePhotoDescriptionKeyDown}
-                onPhotoDescriptionClick={handlePhotoDescriptionClick}
-                onPhotoDescriptionDoubleClick={handlePhotoDescriptionDoubleClick}
               />
             )}
 
@@ -1634,12 +1460,7 @@ export default function LetterReviewPage() {
                 letter={letter}
                 extraContent={extraContent}
                 extraContentTranscribing={extraContentTranscribing}
-                isExtraContentEditing={isExtraContentEditing}
-                showExtraContentTooltip={showExtraContentTooltip}
-                extraContentTooltipPosition={extraContentTooltipPosition}
-                extraContentTooltipRef={extraContentTooltipRef}
                 saving={saving}
-                extraContentRef={extraContentRef}
                 onTranscribeExtras={handleTranscribeExtrasWithConfirm}
                 onVerifyExtraContent={
                   letter.extraContentStatus === "VERIFIED"
@@ -1647,9 +1468,6 @@ export default function LetterReviewPage() {
                     : handleVerifyExtraContent
                 }
                 onExtraContentChange={handleExtraContentChange}
-                onExtraContentKeyDown={handleExtraContentKeyDown}
-                onExtraContentClick={handleExtraContentClick}
-                onExtraContentDoubleClick={handleExtraContentDoubleClick}
               />
             ) : null}
 

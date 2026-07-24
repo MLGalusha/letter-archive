@@ -283,6 +283,54 @@ test.describe('@mocked Letter Review', () => {
     ]);
   });
 
+  test('unlocks verified extra content through the shared review interaction', async ({ page }) => {
+    const initialLetter = createMockLetterWithExtras({
+      extraContentStatus: 'VERIFIED',
+      extraContentVerifiedAt: '2025-03-02T00:00:00.000Z',
+    });
+    const mockedApi = await openMockLetterReview(page, initialLetter);
+    const extraSection = page.locator('.extra-content-section');
+    const editor = extraSection.locator('.dynamic-editor');
+
+    await expect(editor).toHaveAttribute('contenteditable', 'false');
+    await editor.dblclick();
+
+    await expect(
+      page.locator('.toast:has-text("Extra content verification removed")'),
+    ).toBeVisible();
+    await expect(editor).toHaveAttribute('contenteditable', 'true');
+    expect(mockedApi.unverifyExtraContentRequests).toEqual([
+      `${API_BASE_URL}/admin/letters/letter-review-1/unverify-extra-content`,
+    ]);
+  });
+
+  test('keeps verified extra content locked after a source conflict', async ({ page }) => {
+    const initialLetter = createMockLetterWithExtras({
+      extraContentStatus: 'VERIFIED',
+      extraContentVerifiedAt: '2025-03-02T00:00:00.000Z',
+    });
+    const mockedApi = await openMockLetterReviewWithOptions(page, initialLetter, {
+      routeFailures: {
+        unverifyExtraContent: {
+          status: 409,
+          error: 'The letter source changed',
+          code: 'SOURCE_REVISION_CHANGED',
+          requestId: 'req-extra-source-409',
+        },
+      },
+    });
+    const extraSection = page.locator('.extra-content-section');
+    const editor = extraSection.locator('.dynamic-editor');
+
+    await editor.dblclick();
+
+    await expect(
+      page.getByRole('alertdialog', { name: 'Letter source changed' }),
+    ).toBeVisible();
+    await expect(editor).toHaveAttribute('contenteditable', 'false');
+    expect(mockedApi.unverifyExtraContentRequests).toHaveLength(1);
+  });
+
   test('clears extra content back to the empty state in the review UI', async ({ page }) => {
     const initialLetter = createMockLetterWithExtras({
       extraContentStatus: 'EDITED',

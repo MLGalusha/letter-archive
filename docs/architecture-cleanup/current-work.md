@@ -11,7 +11,7 @@ Last updated: July 24, 2026
 - Last sealed cleanup implementation: Dashboard stored-state ownership at `4c72423f`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: 028 — next ownership boundary orientation
+- Current slice: 028 — intent-owned Dashboard filter state
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2101,6 +2101,95 @@ Residuals:
 
 No product feature, visual layout, backend production behavior, database schema,
 deployment, or external state changed in this slice.
+
+## Slice 028 — Intent-Owned Dashboard Filter State
+
+Status: in progress
+
+Problem:
+
+The Dashboard filter controller still has one cached initialization cell plus 19
+runtime state cells: 16 committed/persisted values and three UI drafts. Its inferred
+return type exposes 55 members, including 19 raw setters. Stored-view replacement and
+clear-all fan out through many independent writes; date-mode changes coordinate
+incompatible fields in a presentation component; search clear is reconstructed in two
+places; and collection clear loops through per-code mutations. Those paths can expose
+transiently contradictory state and make one new filter propagate through the hook,
+route, toolbar, panel, chips, leaf controls, and cast-based test fixtures.
+
+The read-side query boundary from Slice 025 is still assembled by enumerating all 15
+committed filter fields and the same dependency list in `AdminDashboard`. Toolbar and
+panel tests must fabricate the inferred controller through unsafe casts. The broad
+surface makes internal implementation details a de facto component contract and leaves
+the prepared frontend-isolation program item incomplete.
+
+Target invariant:
+
+One pure Dashboard filter model owns a serializable `{ query, dateMode }` state.
+`query` is the exact `DashboardCommittedQuerySource` consumed by the route and retains
+object identity across draft-only and semantically empty transitions. Explicit domain
+actions atomically maintain date-mode exclusivity, owned arrays, collection
+normalization, idempotent removals, stored replacement, and clear-all behavior.
+
+`searchInput`, `collectionInput`, and `contentFilterView` remain explicit UI drafts
+outside committed query state. The hook owns their effects and exposes named actions,
+never raw React setters or an inferred whole-hook contract. Pending search work cannot
+overwrite clear-all, search clear, or saved-view replacement. Presentation components
+consume explicit state/draft/action contracts and never coordinate multiple committed
+writes themselves.
+
+Scope:
+
+- Add a pure reducer/model for initial-state construction and every committed filter
+  transition. Characterize no-op identity, array ownership, every toggle/removal,
+  collection ordering/deduplication, date exclusivity, stored replacement, and
+  clear-all before migrating behavior.
+- Load the already-validated persisted snapshot once at the route composition
+  boundary, seed filter and sort owners separately, and pass `filterState.query`
+  directly into committed-query construction.
+- Keep draft search debouncing in the hook, with explicit cancellation before clear or
+  replacement transitions. Keep the existing 300 ms delay and bounded input.
+- Replace raw setter and `ReturnType<typeof useDashboardFilters>` contracts with
+  explicit `{ state, drafts, actions }` contracts. Narrow search, date, collection,
+  panel, toolbar, and active-chip boundaries around user intents.
+- Make chip removals idempotent named removals rather than toggles, preserving exact
+  chip order, labels, and count semantics.
+- Add a one-way source tripwire against restored field-by-field route projection,
+  raw committed setters in presentation components, or inferred controller contracts.
+
+Non-goals:
+
+- No filter meaning, default, debounce duration, date formatting, storage schema,
+  saved-view behavior, sort behavior, fetching, selection, backend, API, CSS, layout,
+  or visual change.
+- Do not repair the known range-date text-entry defect. It needs a separate display
+  draft/commit owner because incomplete `mm/dd/yyyy` text is not committed query state.
+- Keep sort, columns, Dashboard mode, manager-open state, and collection view outside
+  the filter reducer.
+- No React context, external state library, generic form reducer, or application-wide
+  query framework.
+
+Acceptance:
+
+- Pure transition-table tests cover every action, replayed removals, no-op state/query
+  identity, owned arrays, date-mode exclusivity, normalized collections, stored
+  replacement, and clear-all.
+- Draft-only changes and date-mode-only changes with no incompatible committed values
+  preserve committed query identity. Search commits after 300 ms; clear and stored-view
+  replacement win immediately over pending drafts.
+- The route consumes the nested query without re-enumerating its 15 fields. Existing
+  list, selection, persistence, saved-view, sort, and query serialization behavior
+  remains exact.
+- Existing chip labels/order/count and filter-panel behavior remain exact, with a
+  compound mocked-browser flow proving normalized request parity through add, toggle,
+  remove, date-mode, search, and clear actions.
+- Focused model/hook/component/architecture tests, the complete Dashboard unit
+  neighborhood, touched lint and TypeScript, the mocked Dashboard browser spec, and
+  `CI=1 ./scripts/verify-all.sh` pass.
+- Independent architecture, correctness, and adversarial-coverage reviews find no
+  unresolved P0–P2 issue.
+
+Rollback base: `4c72423f`.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

@@ -1,14 +1,14 @@
 import 'dotenv/config';
-import { eq, and, isNotNull, inArray, ne, or } from 'drizzle-orm';
+import { eq, and, isNotNull, or } from 'drizzle-orm';
 import { db, letters } from './db/index.js';
 import { processLetter, processMetadata } from './pipeline/processor.js';
 import { runEntityExtractionOnly } from './pipeline/metadataV2.js';
 import { createLogger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
-import { TRANSCRIBABLE_TYPES } from './services/letter/shared.js';
 import { notify } from './services/notifications.js';
 import {
   hasQueuedProcessingWork,
   recoverExpiredProcessingJobs,
+  requestBackgroundWorkerRun,
 } from './services/processing-queue.js';
 import {
   createWorkerStatePublisher,
@@ -17,8 +17,14 @@ import {
 import {
   createLeaseRecoveryCoordinator,
   decideEmptyWorkerJob,
+  decideEmptyWorkerJobWithHandoff,
   projectQueuedRecoveryForWorker,
 } from './services/lease-recovery-coordinator.js';
+import {
+  queuedEntityExtractionConditions,
+  queuedMetadataConditions,
+  queuedTranscriptionConditions,
+} from './services/processing-eligibility.js';
 
 const log = createLogger({ module: 'worker' });
 
@@ -91,12 +97,7 @@ const EXIT_WHEN_EMPTY = process.env.EXIT_WHEN_EMPTY === 'true';
  */
 async function findLettersNeedingTranscription() {
   return db.query.letters.findMany({
-    where: and(
-      inArray(letters.type, [...TRANSCRIBABLE_TYPES]),
-      eq(letters.transcriptionStatus, 'PENDING'),
-      eq(letters.workflow, 'UPLOADED'),
-      eq(letters.deadLetter, false),
-    ),
+    where: and(...queuedTranscriptionConditions()),
     limit: BATCH_SIZE,
     orderBy: (l, { asc }) => [asc(l.createdAt)],
   });
@@ -108,16 +109,7 @@ async function findLettersNeedingTranscription() {
  */
 async function findLettersNeedingMetadata() {
   return db.query.letters.findMany({
-    where: and(
-      eq(letters.type, 'L'),
-      eq(letters.workflow, 'TRANSCRIBED'),
-      ne(letters.transcriptionStatus, 'RUNNING'),
-      eq(letters.metadataStatus, 'PENDING'),
-      ne(letters.entityExtractionStatus, 'RUNNING'),
-      ne(letters.extraContentJobStatus, 'RUNNING'),
-      isNotNull(letters.transcriptConfirmedAt),
-      eq(letters.deadLetter, false),
-    ),
+    where: and(...queuedMetadataConditions()),
     limit: BATCH_SIZE,
     orderBy: (l, { asc }) => [asc(l.createdAt)],
   });
@@ -128,13 +120,7 @@ async function findLettersNeedingMetadata() {
  */
 async function findLettersNeedingEntityExtraction() {
   return db.query.letters.findMany({
-    where: and(
-      eq(letters.type, 'L'),
-      ne(letters.transcriptionStatus, 'RUNNING'),
-      eq(letters.metadataStatus, 'SUCCESS'),
-      eq(letters.entityExtractionStatus, 'PENDING'),
-      eq(letters.deadLetter, false),
-    ),
+    where: and(...queuedEntityExtractionConditions()),
     limit: BATCH_SIZE,
     orderBy: (l, { asc }) => [asc(l.createdAt)],
   });
@@ -386,26 +372,17 @@ async function main() {
         // Quiesce the interval before the exit decision so a recovery cannot
         // requeue work between the empty scan and process exit.
         await leaseRecovery.stopAndWait();
-        let decision = await decideEmptyWorkerJob({
-          reconcile: reconcileQueuedProcessingForExit,
-          getQueuedWorkState: getQueuedProcessingWorkState,
-        });
-
-        if (decision === 'exit') {
-          // Relinquish the persisted heartbeat before the final queue check.
-          // An enqueue that still observed the old heartbeat committed first
-          // and is visible to this recheck; a later enqueue sees idle state and
-          // triggers a replacement Cloud Run Job.
-          await workerStatePublisher.relinquish({
+        const decision = await decideEmptyWorkerJobWithHandoff({
+          decide: () => decideEmptyWorkerJob({
+            reconcile: reconcileQueuedProcessingForExit,
+            getQueuedWorkState: getQueuedProcessingWorkState,
+          }),
+          relinquish: () => workerStatePublisher.relinquish({
             lastTickAt: new Date(),
             isPolling: false,
             currentBatchSize: 0,
-          });
-          decision = await decideEmptyWorkerJob({
-            reconcile: reconcileQueuedProcessingForExit,
-            getQueuedWorkState: getQueuedProcessingWorkState,
-          });
-        }
+          }),
+        });
 
         if (decision === 'exit') {
           log.info('Queues empty with no queued processing lease, exiting (EXIT_WHEN_EMPTY mode)');
@@ -417,6 +394,7 @@ async function main() {
           isPolling: true,
           currentBatchSize: 0,
         });
+        if (shuttingDown) break;
         leaseRecovery.start();
         if (decision === 'wait') {
           log.info('Queues empty but a queued processing lease remains; waiting for recovery');
@@ -432,6 +410,9 @@ async function main() {
 
   await leaseRecovery.stopAndWait();
   await workerStatePublisher.relinquish({ isPolling: false });
+  if (await hasQueuedProcessingWork()) {
+    await requestBackgroundWorkerRun('worker-exit-handoff');
+  }
   log.info({ mode: EXIT_WHEN_EMPTY ? 'job' : 'poll' }, 'Worker loop exited cleanly');
   process.exit(0);
 }

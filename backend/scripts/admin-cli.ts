@@ -223,46 +223,23 @@ interface MenuCategory {
 // Command handlers — Processing
 // ---------------------------------------------------------------------------
 
-async function handleProcessingStatus() {
-  startSpinner('Fetching processing status...');
-  try {
-    const status = await api<{
-      isRunning: boolean;
-      isPaused: boolean;
-      currentJob: { letterId: string; type: string } | null;
-      completed: number;
-      failed: number;
-      total: number;
-      errors: string[];
-    }>('GET', '/admin/processing/status');
-    stopSpinner();
-
-    const state = status.isPaused ? 'PAUSED' : status.isRunning ? 'RUNNING' : 'IDLE';
-    writeln(`\n  State:     ${colorStatus(state)}`);
-    if (status.currentJob) {
-      writeln(`  Job:       ${status.currentJob.type} → ${DIM}${status.currentJob.letterId}${RESET}`);
-    }
-    writeln(`  Progress:  ${GREEN}${status.completed}${RESET} done, ${RED}${status.failed}${RESET} failed, ${status.total} total`);
-    if (status.errors.length > 0) {
-      writeln(`\n  ${RED}Recent errors:${RESET}`);
-      for (const err of status.errors.slice(-5)) {
-        writeln(`    ${DIM}•${RESET} ${err}`);
-      }
-    }
-  } catch (err) {
-    stopSpinner();
-    writeln(`  ${RED}Error: ${err instanceof Error ? err.message : String(err)}${RESET}`);
-  }
-}
-
 async function handleQueueStatus() {
   startSpinner('Fetching queue status...');
   try {
     const q = await api<{
       active: { letterId: string; type: string; startedAt: string }[];
-      queued: { letterId: string; type: string; queuedAt: string }[];
-      recentCompleted: { letterId: string; type: string; completedAt: string }[];
-      recentFailed: { letterId: string; type: string; failedAt: string; error: string }[];
+      queued: {
+        transcription: { letterId: string; queuedAt: string }[];
+        metadata: { letterId: string; queuedAt: string }[];
+        entityExtraction: { letterId: string; queuedAt: string }[];
+      };
+      recent: {
+        letterId: string;
+        type: string;
+        status: string;
+        completedAt: string;
+        error?: string;
+      }[];
       counts: Record<string, number>;
     }>('GET', '/admin/processing/queue');
     stopSpinner();
@@ -281,17 +258,23 @@ async function handleQueueStatus() {
       }
     }
 
-    if (q.queued?.length) {
-      writeln(`\n  ${BOLD}Queued${RESET} ${DIM}(${q.queued.length} items)${RESET}`);
-      for (const job of q.queued.slice(0, 10)) {
+    const queued = [
+      ...q.queued.transcription.map(job => ({ ...job, type: 'transcription' })),
+      ...q.queued.metadata.map(job => ({ ...job, type: 'metadata' })),
+      ...q.queued.entityExtraction.map(job => ({ ...job, type: 'entity extraction' })),
+    ];
+    if (queued.length) {
+      writeln(`\n  ${BOLD}Queued${RESET} ${DIM}(${queued.length} items)${RESET}`);
+      for (const job of queued.slice(0, 10)) {
         writeln(`    ${DIM}○${RESET} ${job.type} — ${DIM}${job.letterId}${RESET}`);
       }
-      if (q.queued.length > 10) writeln(`    ${DIM}... and ${q.queued.length - 10} more${RESET}`);
+      if (queued.length > 10) writeln(`    ${DIM}... and ${queued.length - 10} more${RESET}`);
     }
 
-    if (q.recentFailed?.length) {
+    const recentFailed = q.recent.filter(job => job.status === 'FAILED');
+    if (recentFailed.length) {
       writeln(`\n  ${RED}Recent Failures${RESET}`);
-      for (const job of q.recentFailed.slice(0, 5)) {
+      for (const job of recentFailed.slice(0, 5)) {
         writeln(`    ${RED}✗${RESET} ${job.type} — ${DIM}${job.letterId}${RESET}`);
         if (job.error) writeln(`      ${DIM}${job.error}${RESET}`);
       }
@@ -309,7 +292,7 @@ async function handleStartTranscription() {
 
   if (!await confirm('Start transcription processing?')) return;
 
-  startSpinner('Starting transcription...');
+  startSpinner('Queuing transcription...');
   try {
     const result = await api<{ message: string; total: number }>('POST', '/admin/processing/start-transcription', body);
     stopSpinner();
@@ -327,7 +310,7 @@ async function handleStartMetadata() {
 
   if (!await confirm('Start metadata extraction?')) return;
 
-  startSpinner('Starting metadata extraction...');
+  startSpinner('Queuing metadata extraction...');
   try {
     const result = await api<{ message: string; total: number }>('POST', '/admin/processing/start-metadata', body);
     stopSpinner();
@@ -345,49 +328,11 @@ async function handleStartEntities() {
 
   if (!await confirm('Start entity extraction?')) return;
 
-  startSpinner('Starting entity extraction...');
+  startSpinner('Queuing entity extraction...');
   try {
     const result = await api<{ message: string; total: number }>('POST', '/admin/processing/start-entities', body);
     stopSpinner();
     writeln(`  ${GREEN}${result.message}${RESET} — ${result.total} letters queued`);
-  } catch (err) {
-    stopSpinner();
-    writeln(`  ${RED}Error: ${err instanceof Error ? err.message : String(err)}${RESET}`);
-  }
-}
-
-async function handlePause() {
-  startSpinner('Pausing...');
-  try {
-    const result = await api<{ message: string }>('POST', '/admin/processing/pause');
-    stopSpinner();
-    writeln(`  ${YELLOW}${result.message}${RESET}`);
-  } catch (err) {
-    stopSpinner();
-    writeln(`  ${RED}Error: ${err instanceof Error ? err.message : String(err)}${RESET}`);
-  }
-}
-
-async function handleResume() {
-  startSpinner('Resuming...');
-  try {
-    const result = await api<{ message: string }>('POST', '/admin/processing/resume');
-    stopSpinner();
-    writeln(`  ${GREEN}${result.message}${RESET}`);
-  } catch (err) {
-    stopSpinner();
-    writeln(`  ${RED}Error: ${err instanceof Error ? err.message : String(err)}${RESET}`);
-  }
-}
-
-async function handleAbort() {
-  if (!await confirm('Abort current processing?')) return;
-
-  startSpinner('Aborting...');
-  try {
-    const result = await api<{ message: string }>('POST', '/admin/processing/abort');
-    stopSpinner();
-    writeln(`  ${RED}${result.message}${RESET}`);
   } catch (err) {
     stopSpinner();
     writeln(`  ${RED}Error: ${err instanceof Error ? err.message : String(err)}${RESET}`);
@@ -697,11 +642,15 @@ async function handleBulkTranscribe() {
   writeln(`  Will transcribe ${BOLD}${letterIds.length}${RESET} letters`);
   if (!await confirm('Proceed?')) return;
 
-  startSpinner('Starting bulk transcription...');
+  startSpinner('Queuing bulk transcription...');
   try {
-    const result = await api<{ message: string; total: number }>('POST', '/admin/letters/bulk/transcribe', { letterIds });
+    const result = await api<{ queued: number; skipped: number }>(
+      'POST',
+      '/admin/letters/bulk/transcribe',
+      { letterIds },
+    );
     stopSpinner();
-    writeln(`  ${GREEN}${result.message}${RESET} — ${result.total} queued`);
+    writeln(`  ${GREEN}${result.queued} queued${RESET}, ${result.skipped} skipped`);
   } catch (err) {
     stopSpinner();
     writeln(`  ${RED}Error: ${err instanceof Error ? err.message : String(err)}${RESET}`);
@@ -716,11 +665,18 @@ async function handleBulkMetadata() {
   writeln(`  Will extract metadata for ${BOLD}${letterIds.length}${RESET} letters`);
   if (!await confirm('Proceed?')) return;
 
-  startSpinner('Starting bulk metadata extraction...');
+  startSpinner('Queuing bulk metadata extraction...');
   try {
-    const result = await api<{ message: string; total: number }>('POST', '/admin/letters/bulk/extract-metadata', { letterIds });
+    const result = await api<{ queued: number; skipped: number; unconfirmedCount?: number }>(
+      'POST',
+      '/admin/letters/bulk/extract-metadata',
+      { letterIds },
+    );
     stopSpinner();
-    writeln(`  ${GREEN}${result.message}${RESET} — ${result.total} queued`);
+    writeln(`  ${GREEN}${result.queued} queued${RESET}, ${result.skipped} skipped`);
+    if (result.unconfirmedCount) {
+      writeln(`  ${YELLOW}${result.unconfirmedCount} transcript${result.unconfirmedCount === 1 ? '' : 's'} not confirmed${RESET}`);
+    }
   } catch (err) {
     stopSpinner();
     writeln(`  ${RED}Error: ${err instanceof Error ? err.message : String(err)}${RESET}`);
@@ -771,16 +727,12 @@ const categories: MenuCategory[] = [
   {
     key: '1',
     title: 'Processing',
-    description: 'Start, pause, monitor transcription & metadata jobs',
+    description: 'Queue and monitor transcription, metadata, and entity jobs',
     items: [
-      { key: '1', label: 'View status', description: 'Current processing state', handler: handleProcessingStatus },
-      { key: '2', label: 'View queue', description: 'Active, queued, and recent jobs', handler: handleQueueStatus },
-      { key: '3', label: 'Start transcription', description: 'Queue letters for transcription', handler: handleStartTranscription },
-      { key: '4', label: 'Start metadata', description: 'Queue letters for metadata extraction', handler: handleStartMetadata },
-      { key: '5', label: 'Start entities', description: 'Queue letters for entity extraction', handler: handleStartEntities },
-      { key: '6', label: 'Pause', description: 'Pause current processing batch', handler: handlePause },
-      { key: '7', label: 'Resume', description: 'Resume paused processing', handler: handleResume },
-      { key: '8', label: 'Abort', description: 'Abort and reset processing state', handler: handleAbort },
+      { key: '1', label: 'View queue', description: 'Active, queued, and recent jobs', handler: handleQueueStatus },
+      { key: '2', label: 'Queue transcription', description: 'Queue letters for transcription', handler: handleStartTranscription },
+      { key: '3', label: 'Queue metadata', description: 'Queue letters for metadata extraction', handler: handleStartMetadata },
+      { key: '4', label: 'Queue entities', description: 'Queue letters for entity extraction', handler: handleStartEntities },
     ],
   },
   {

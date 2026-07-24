@@ -11,6 +11,7 @@ import {
 } from '../db/index.js';
 import { isPlaceholderValue } from '../utils/placeholders.js';
 import { buildExtraContentSourceInvalidationPatch } from './letter/extra-content-job.js';
+import { transcriptionPrerequisiteConditions } from './processing-eligibility.js';
 import {
   isPublicCatalogueLetterType,
   publicCatalogueLetterTypeSql,
@@ -316,9 +317,8 @@ export async function resetLetterForProcessing(letterId: string): Promise<boolea
     })
     .where(and(
       eq(letters.id, letterId),
+      ...transcriptionPrerequisiteConditions(),
       ne(letters.transcriptionStatus, 'RUNNING'),
-      ne(letters.metadataStatus, 'RUNNING'),
-      ne(letters.entityExtractionStatus, 'RUNNING'),
     ))
     .returning({ id: letters.id });
 

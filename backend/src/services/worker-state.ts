@@ -77,6 +77,7 @@ export function createWorkerStatePublisher({
 } = {}) {
   let writesEnabled = true;
   let tail: Promise<void> = Promise.resolve();
+  let relinquishment: Promise<void> | null = null;
 
   const enqueue = (
     write: (partial: WorkerStateUpdate) => Promise<void>,
@@ -96,12 +97,15 @@ export function createWorkerStatePublisher({
     },
 
     async relinquish(partial: WorkerStateUpdate): Promise<void> {
+      if (relinquishment) return relinquishment;
       writesEnabled = false;
-      await enqueue(writeRequired, partial);
+      relinquishment = enqueue(writeRequired, partial);
+      return relinquishment;
     },
 
     async resume(partial: WorkerStateUpdate): Promise<void> {
       await enqueue(writeBestEffort, partial);
+      relinquishment = null;
       writesEnabled = true;
     },
   };

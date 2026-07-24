@@ -32,14 +32,6 @@ function requireCapability(key: string, capability: keyof import('../../../servi
   return config;
 }
 
-async function asyncHandler(
-  fn: (req: Request, res: Response) => Promise<void>
-): Promise<(req: Request, res: Response, next: NextFunction) => void> {
-  return (req, res, next) => {
-    Promise.resolve(fn(req, res)).catch(next);
-  };
-}
-
 // ============================================================================
 // Error handling middleware: maps ProcessingError to its statusCode.
 // ============================================================================
@@ -66,10 +58,8 @@ function wrap(fn: (req: Request, res: Response) => Promise<void> | void) {
 // ============================================================================
 // GET /snapshot — full snapshot for the new processing page.
 //
-// NOTE: this is temporarily mounted as /snapshot (not /status) because the
-// legacy /admin/processing/status route still exists and serves a different
-// shape to AdminDashboard. Checkpoint E deletes the legacy route and this
-// can be renamed back to /status.
+// Kept as /snapshot because the response is a full multi-process projection,
+// not the status of one process or one in-memory executor.
 // ============================================================================
 
 router.get(

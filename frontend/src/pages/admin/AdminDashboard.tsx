@@ -25,7 +25,6 @@ import { useDashboardFilters } from "./AdminDashboard/useDashboardFilters";
 import { useDashboardLettersData } from "./AdminDashboard/useDashboardLettersData";
 import { useDashboardPersistedState } from "./AdminDashboard/useDashboardPersistedState";
 import { useDashboardProcessingActions } from "./AdminDashboard/useDashboardProcessingActions";
-import { useDashboardProcessingControls } from "./AdminDashboard/useDashboardProcessingControls";
 import { useDashboardRowSelection } from "./AdminDashboard/useDashboardRowSelection";
 import { useDashboardSavedViewState } from "./AdminDashboard/useDashboardSavedViewState";
 import { useDashboardSelection } from "./AdminDashboard/useDashboardSelection";
@@ -187,15 +186,6 @@ export default function AdminDashboard() {
     handleBulkContentVisibility,
   } = bulkActions;
 
-  const {
-    processingStatus,
-    pausePending,
-    abortPending,
-    handlePauseProcessing,
-    handleResumeProcessing,
-    handleAbortProcessing,
-  } = useDashboardProcessingControls({ fetchLetters });
-
   const processingActions = useDashboardProcessingActions({
     selectedIds,
     letters,
@@ -278,8 +268,6 @@ export default function AdminDashboard() {
           getDateButtonText={getDateButtonText}
           dateRawToDisplay={dateRawToDisplay}
           displayToDateRaw={displayToDateRaw}
-          processingStatus={processingStatus}
-          selectedCount={selectedIds.size}
           onManagerOpen={handleToolbarManagerOpen}
         />
       </section>
@@ -359,14 +347,8 @@ export default function AdminDashboard() {
             onToggleCopyMode: toggleCopyMode,
           }}
           processing={{
-            processingStatus,
-            pausePending,
-            abortPending,
             onOpenTranscription: handleOpenTranscription,
             onOpenMetadataExtraction: handleOpenMetadataExtraction,
-            onPauseProcessing: handlePauseProcessing,
-            onResumeProcessing: handleResumeProcessing,
-            onAbortProcessing: handleAbortProcessing,
           }}
           publishing={{
             bulkActionLoading,

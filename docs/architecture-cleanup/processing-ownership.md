@@ -13,10 +13,10 @@ existing owner remains frictionless, while behavior tests remain the authority.
 
 | Entry point | Runtime owner | Stages | Execution model | Control and recovery |
 | --- | --- | --- | --- | --- |
-| `worker.ts` polling loop | Worker process | Transcription, metadata, entity extraction | Queries `PENDING` rows and invokes the pipeline directly | Worker availability is persisted. Transcription and metadata have run-bound database-clock leases and heartbeats; entity extraction has a run/revision commit fence but no lease. The worker runs stage-contained transcription/metadata/extra reconciliation at startup and every 60 seconds. Exit decisions currently project authoritative queued transcription and metadata work, but not entity-only work; Slice 010 closes that handoff gap before deleting the API fallback. |
-| `POST /admin/letters/processing/processes/:key/start` | API process | Transcription, metadata, entity extraction, extra content | `processes/runner.ts` starts a fire-and-forget in-memory batch through `letter-process-helpers.ts` | Pause, abort, progress, and the batch mutex live only in API memory. Transcription, metadata, and extra-content attempts have persisted, run-ID-bound database-clock leases and explicit queued/requested intent. |
-| Legacy processing endpoints and post-upload auto-start | Worker in configured production, otherwise API process | Transcription, metadata, entity extraction | `processing-queue.ts` triggers a Cloud Run Job when configured and otherwise falls back to `processLettersAsync()` | Legacy pause, abort, and progress live only in API memory. API and worker safely reconcile leased transcription/metadata/extra attempts; entity projection publication is run/revision fenced but not leased. The API still derives configured-worker wakeups from only durable eligible `PENDING` transcription or metadata state. |
-| Bulk transcription and metadata operations | Worker in configured production, otherwise API process | Transcription, metadata | `bulk-operations.ts` repeats the Cloud Run versus `processLettersAsync()` choice | Uses the same legacy in-memory state but bypasses `startQueuedProcessing()` |
+| `worker.ts` polling loop | Worker process | Transcription, metadata, entity extraction | Queries durable eligible `PENDING` rows and invokes the pipeline directly | Worker availability is persisted but does not yet carry an execution owner token. Transcription and metadata have run-bound database-clock leases and heartbeats; entity extraction has a run/revision commit fence but no lease. Polling, wake checks, queue snapshots, and both exit checks share stage-specific eligibility. The worker publishes idle before its final recheck so entity-only work cannot disappear in the handoff. |
+| `POST /admin/processing/processes/:key/start` | API process | Transcription, metadata, entity extraction, extra content | `processes/runner.ts` starts a fire-and-forget in-memory batch through `letter-process-helpers.ts` | Pause, abort, progress, and the batch mutex live only in API memory. Transcription, metadata, and extra-content attempts have persisted, run-ID-bound database-clock leases and explicit queued/requested intent. |
+| Filtered starts and post-upload auto-start | Worker process | Transcription, metadata, entity extraction | The API counts durable eligible rows and optionally wakes the configured Cloud Run Job; local development relies on the separately running worker | No process-local execution or controls remain. Filters scope the reported count and wake decision, not the worker's global drain. Entity-only rows participate in level-triggered wake and exit checks. |
+| Bulk transcription and metadata operations | Worker process | Transcription, metadata | Guarded updates reset only exact observed eligible rows to durable `PENDING`, then optionally wake the configured worker | Full source/job compare-and-set prevents a stale selection from reporting stranded work. Metadata never bypasses transcript confirmation. |
 | Letter content actions | API request process | Letter-only transcription, metadata, entity extraction, extra content | The route awaits pipeline or regeneration functions directly | Transcription, metadata, and extra content share their respective canonical persisted ownership/lease boundaries with batch and automatic work. |
 
 The transcription, metadata, and extra-content lifecycle helpers own their
@@ -49,12 +49,24 @@ does not create avoidable lock ordering. Conditional `UPDATE ... RETURNING` oper
 make overlapping API/worker reconcilers report and transition each expiry once.
 
 After API reconciliation, configured-worker wakeup is level-triggered: the API asks the
-database whether eligible transcription or metadata remains `PENDING`, awaits the Cloud Run
-trigger, and retries on a later tick if the trigger fails. A Cloud Run exit-when-empty
-worker projects queued transcription and metadata recovery/leases into its exit
-decision; extra recovery alone cannot keep it alive. It waits for a queued lease it can observe,
-rechecks before relinquishing worker availability, and propagates a failed relinquish
-so the job exits nonzero.
+database whether eligible transcription, metadata, or entity work remains `PENDING`,
+awaits the Cloud Run trigger, and retries on a later tick if the trigger fails. A Cloud
+Run exit-when-empty worker projects queued transcription and metadata recovery/leases
+plus all three stages' current pending state into its exit decision; extra recovery
+alone cannot keep it alive. It waits for a queued lease it can observe, publishes idle,
+then repeats reconciliation and the durable queue check. A failed required idle write
+propagates so the job exits nonzero, while successful/rejected duplicate cleanup is
+memoized inside one execution. The deployment supplies the worker job identity so a
+final non-empty recheck can request a successor execution.
+
+That availability row is not yet fenced across worker executions. A main or metadata
+AI call can outlive the two-minute freshness window because availability is currently
+published around work, not continuously during it. The API can then request an
+overlapping execution, and either execution can overwrite the singleton availability
+row. Stage run IDs still prevent stale content publication, so the residual is
+redundant execution and inaccurate availability rather than an unfenced content
+commit. The registry-removal slice must add an execution-owned availability
+compare-and-set or equivalent continuously renewed lease.
 
 The old startup reset remains deleted. Entity extraction now has a run token and
 reserved revision, so only its exact owner can publish a replacement projection. It
@@ -74,11 +86,12 @@ metadata attempts are likewise kept manual until old executables have drained.
 | Old entity executor is still running during migration 0051 | It may drain its already-claimed tokenless attempt; new tokenless claims are rejected and its output is database-stamped as one candidate revision |
 | Drained/terminated old entity executor left a tokenless orphan | Exact legacy cancellation discards only its abandoned candidate revision before a current retry can reuse that revision |
 | Two reconcilers overlap | Exact expired-lease compare-and-swap lets only one report and transition an attempt; one stage failure does not suppress the other |
+| A worker AI call outlives the availability freshness window | Stage ownership fences content, but the ownerless availability singleton can cause a redundant worker launch and competing status writes; execution-owned availability remains Slice 011 work |
 | Legacy unleased or lease-mismatched transcription/metadata/extra attempt is encountered | It remains visible for deliberate reconciliation or exact-run cancellation; automatic recovery does not invent or misattribute liveness evidence |
 
-API startup still calls the safe processing reconciler because API-owned execution has
-not yet been removed. Recovery can become worker-only after batch execution becomes
-worker-only; that executor migration remains a separate simplification.
+API startup still calls the safe processing reconciler because the process-registry
+runner remains an API-owned batch executor. Recovery can become worker-only after that
+last automatic API executor is removed.
 
 ## Entity-Extraction Ownership Repair
 
@@ -202,9 +215,9 @@ bulk reset paths use conditional updates rather than briefly reopening all stage
 7. **Completed in Slice 009:** give entity extraction a run/revision claim, atomic
    projection replacement, public provenance boundary, merge/undo integrity, and an
    explicit mixed-version drain contract.
-8. Move legacy batch entry points to enqueue/trigger only and delete
-   `processLettersAsync()` plus its process-local control state. Keep the registry
-   runner temporarily so this remains one executor deletion.
+8. **Completed in Slice 010:** move legacy batch entry points to enqueue/trigger only,
+   delete `processLettersAsync()` plus its process-local control state, centralize the
+   three worker eligibility predicates, and close the entity-only exit handoff.
 9. Delete the API registry executor after its route/UI contract is characterized.
    With the worker as the sole batch owner, make recovery worker-owned, consolidate
    eligibility queries, and keep direct request-owned regeneration as an explicitly

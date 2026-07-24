@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url));
+const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 
 const pipelineDefinitions = new Set([
   'pipeline/metadataV2.ts',
@@ -16,10 +17,8 @@ const pipelineDefinitions = new Set([
 const allowedExecutionOwners = new Set([
   'routes/admin/letters/content.ts',
   'routes/admin/letters/processes.ts',
-  'services/letter/bulk-operations.ts',
   'services/processes/letter-process-helpers.ts',
   'services/processes/runner.ts',
-  'services/processing-queue.ts',
   'worker.ts',
 ]);
 
@@ -79,6 +78,43 @@ async function productionTypeScriptFiles(directory: string): Promise<string[]> {
 }
 
 describe('processing execution ownership', () => {
+  it('keeps the retired API in-process executor deleted', async () => {
+    const files = await productionTypeScriptFiles(sourceRoot);
+    const retiredOwners: string[] = [];
+    const retiredSymbols = /\b(?:processLettersAsync|getProcessingStatus|resetProcessingState)\b/;
+
+    for (const absolutePath of files) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      if (retiredSymbols.test(await readFile(absolutePath, 'utf8'))) {
+        retiredOwners.push(relativePath);
+      }
+    }
+
+    expect(retiredOwners.sort()).toEqual([]);
+  });
+
+  it('keeps processing-queue as durable queue orchestration, not a pipeline executor', async () => {
+    const processingQueue = await readFile(
+      path.join(sourceRoot, 'services/processing-queue.ts'),
+      'utf8',
+    );
+
+    expect(processingQueue).not.toMatch(
+      /from ['"]\.\.\/pipeline\/(?:processor|metadataV2)\.js['"]/,
+    );
+    expect(processingQueue).not.toMatch(/\bprocessLettersAsync\b/);
+  });
+
+  it('keeps the worker exit handoff trigger configured in its deployment', async () => {
+    const workerJob = await readFile(
+      path.join(repositoryRoot, 'deploy/cloudrun/backend-worker-job.yaml'),
+      'utf8',
+    );
+
+    expect(workerJob).toMatch(/name:\s*CLOUD_RUN_REGION/);
+    expect(workerJob).toMatch(/name:\s*CLOUD_RUN_WORKER_JOB_NAME/);
+  });
+
   it('allows existing execution owners to be deleted but not silently multiplied', async () => {
     const files = await productionTypeScriptFiles(sourceRoot);
     const unexpectedOwners: string[] = [];

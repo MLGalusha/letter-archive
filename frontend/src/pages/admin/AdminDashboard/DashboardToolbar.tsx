@@ -1,5 +1,4 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
-import type { ProcessingStatus } from "../../../api/admin";
 import ActiveFilterChips from "./ActiveFilterChips";
 import DashboardFilterPanel from "./DashboardFilterPanel";
 import DashboardFilterTrigger from "./DashboardFilterTrigger";
@@ -35,8 +34,6 @@ interface DashboardToolbarProps {
   getDateButtonText: () => string;
   dateRawToDisplay: (dateRaw: string | null) => string;
   displayToDateRaw: (display: string) => string | null;
-  processingStatus: ProcessingStatus | null;
-  selectedCount: number;
   onManagerOpen?: () => void;
 }
 
@@ -57,8 +54,6 @@ export default function DashboardToolbar({
   getDateButtonText,
   dateRawToDisplay,
   displayToDateRaw,
-  processingStatus,
-  selectedCount,
   onManagerOpen,
 }: DashboardToolbarProps) {
   const {
@@ -191,8 +186,6 @@ export default function DashboardToolbar({
           <ActiveFilterChips
             paginationTotal={paginationTotal}
             activeFilterChips={activeFilterChips}
-            processingStatus={processingStatus}
-            selectedCount={selectedCount}
             onClearAllFilters={handleClearAllFilters}
           />
 

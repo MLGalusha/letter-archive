@@ -14,6 +14,7 @@ import {
   type LeaseHeartbeat,
 } from './lease-heartbeat.js';
 import { buildMetadataSourceInvalidationPatch } from './metadata-job.js';
+import { hasIdleTranscriptionDownstream } from '../processing-eligibility.js';
 
 const log = createLogger({ module: 'transcription-job' });
 const LEASE_EXPIRED_ERROR = 'Transcription lease expired before the attempt completed';
@@ -168,8 +169,7 @@ export async function claimQueuedTranscription(
   if (
     observed.status !== 'PENDING'
     || observed.workflow !== 'UPLOADED'
-    || observed.metadataStatus === 'RUNNING'
-    || observed.entityExtractionStatus === 'RUNNING'
+    || !hasIdleTranscriptionDownstream(observed)
     || !hasPairedLeaseMetadata(observed)
     || observed.deadLetter
   ) {
@@ -207,8 +207,7 @@ export async function claimRequestedTranscription(
 ): Promise<TranscriptionClaim | null> {
   if (
     observed.status === 'RUNNING'
-    || observed.metadataStatus === 'RUNNING'
-    || observed.entityExtractionStatus === 'RUNNING'
+    || !hasIdleTranscriptionDownstream(observed)
     || !hasPairedLeaseMetadata(observed)
   ) {
     return null;

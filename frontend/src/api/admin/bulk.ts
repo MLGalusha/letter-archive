@@ -4,7 +4,6 @@ export interface BulkProcessResponse {
   queued: number;
   skipped: number;
   skipReasons?: Array<{ letterId: string; reason: string }>;
-  processing?: boolean;
   unconfirmedCount?: number;
 }
 
@@ -25,12 +24,8 @@ export async function bulkTranscribe(letterIds: string[], overwrite = false): Pr
 
 export async function bulkExtractMetadata(
   letterIds: string[],
-  skipConfirmationCheck = false,
 ): Promise<BulkProcessResponse> {
-  return apiPost<BulkProcessResponse>("/admin/letters/bulk/extract-metadata", {
-    letterIds,
-    skipConfirmationCheck,
-  });
+  return apiPost<BulkProcessResponse>("/admin/letters/bulk/extract-metadata", { letterIds });
 }
 
 export async function bulkClearTranscriptions(letterIds: string[]): Promise<BulkUpdateResponse> {

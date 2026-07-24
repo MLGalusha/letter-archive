@@ -258,15 +258,6 @@ export const SELECTORS = {
     closeBtn: '.modal-close',
   },
 
-  // Processing
-  processing: {
-    progressBar: '.progress-bar',
-    progressText: '.progress-text',
-    pauseBtn: '.pause-button',
-    resumeBtn: '.resume-button',
-    abortBtn: '.abort-button',
-  },
-
   // Entity Pages
   entities: {
     peopleList: '.people-list',

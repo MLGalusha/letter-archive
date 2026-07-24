@@ -61,7 +61,8 @@ Progress:
 - Dashboard confirmation and metadata identity dialogs moved into `AdminDashboard/DashboardDialogs.tsx`.
 - Row shift-click and drag selection behavior moved into `useDashboardRowSelection`.
 - Delete, clear, and publish/hide bulk mutation workflows moved into `useDashboardBulkActions`.
-- Processing status polling and pause/resume/abort controls moved into `useDashboardProcessingControls`.
+- The dashboard processing poller and its process-local pause/resume/abort controls
+  were retired with the legacy in-process executor in architecture-cleanup Slice 010.
 - Transcription and metadata start flows, including confirmation modal state, moved into `useDashboardProcessingActions`.
 - Copy/paste edit-mode state, pending field updates, and edit-mode row click behavior moved into `useDashboardCopyPasteEdit`.
 - Dashboard filter/sort query construction centralized in `buildDashboardLetterQuery` so fetch, select-all, and selection-pruning use the same API parameters.

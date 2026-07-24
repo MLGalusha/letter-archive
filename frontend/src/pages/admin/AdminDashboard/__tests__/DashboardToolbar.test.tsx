@@ -122,8 +122,6 @@ function ToolbarHarness({
       getDateButtonText={() => "Date"}
       dateRawToDisplay={(dateRaw) => dateRaw ?? ""}
       displayToDateRaw={(display) => display || null}
-      processingStatus={null}
-      selectedCount={0}
       onManagerOpen={onManagerOpen}
     />
   );

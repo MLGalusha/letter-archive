@@ -105,9 +105,10 @@ The API and worker run the shared serialized recovery coordinator at startup and
 expired. A queued first extraction returns to `PENDING`/`TRANSCRIBED` and receives a
 new metadata revision; a requested regeneration becomes `FAILED`, restores the
 workflow implied by the committed metadata content, and also advances the revision.
-The configured API worker wake is level-triggered from durable queued transcription
-or metadata work, and an exit-when-empty worker treats queued metadata leases as work
-it can wait for and drain.
+The configured API worker wake is level-triggered from durable queued transcription,
+metadata, or entity-extraction work. An exit-when-empty worker treats queued
+transcription/metadata leases as work it can wait for and drain, and includes
+entity-only pending work in its final exit decision.
 
 Heartbeat renewal, success, and producer failure require the exact run ID, exact bound
 revision, matching lease-run ID, and a lease that is still live according to

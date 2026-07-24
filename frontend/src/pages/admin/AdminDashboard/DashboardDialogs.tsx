@@ -50,15 +50,6 @@ export default function DashboardDialogs({
         onCancel={() => bulkActions.setShowClearMetadataModal(false)}
       />
 
-      <ConfirmDialog
-        isOpen={processingActions.showUnconfirmedDialog}
-        title="Unverified Transcripts"
-        message={`${processingActions.unconfirmedCount} of the selected letter${processingActions.unconfirmedCount === 1 ? " has an" : "s have"} unverified transcript${processingActions.unconfirmedCount === 1 ? "" : "s"}. Metadata extraction may be less accurate without verified transcripts. Do you want to proceed anyway?`}
-        confirmText="Extract Anyway"
-        onConfirm={processingActions.handleConfirmUnverified}
-        onCancel={() => processingActions.setShowUnconfirmedDialog(false)}
-      />
-
       {processingActions.showTranscribeConfirm && (
         <ProcessingConfirmDialog
           title="Transcribe Letters"
@@ -104,7 +95,7 @@ export default function DashboardDialogs({
           }}
           onSkipExisting={() => {
             processingActions.setShowMetadataConfirm(false);
-            void processingActions.handleStartMetadataExtraction(false, true);
+            void processingActions.handleStartMetadataExtraction(true);
           }}
           onOverwriteAll={() => {
             processingActions.setShowMetadataConfirm(false);

@@ -7,12 +7,12 @@ import {
   personRelationships,
 } from '../../db/index.js';
 import {
-  getProcessingStatus,
-  processLettersAsync,
   requestBackgroundWorkerRun,
-  resetProcessingState,
 } from '../processing-queue.js';
-import { shouldUseCloudRunWorkerJob } from '../cloud-run-job.js';
+import {
+  metadataPrerequisiteConditions,
+  transcriptionPrerequisiteConditions,
+} from '../processing-eligibility.js';
 import { syncLetterParticipantsFromMetadata } from '../entities/participant-sync.js';
 import {
   commitDirectIdentityField,
@@ -29,7 +29,8 @@ import {
   observedTranscriptionStateConditions,
 } from './transcription-job.js';
 import {
-  observedMetadataRevisionConditions,
+  observeMetadataState,
+  observedMetadataStateConditions,
 } from './metadata-job.js';
 import {
   isTranscribableType,
@@ -69,6 +70,10 @@ export async function bulkTranscribe(letterIds: string[], overwrite = false): Pr
       skipReasons.push({ letterId: letter.id, reason: 'No page images uploaded' });
     } else if (letter.transcriptionStatus === 'RUNNING') {
       skipReasons.push({ letterId: letter.id, reason: 'Transcription already running' });
+    } else if (letter.metadataStatus === 'RUNNING') {
+      skipReasons.push({ letterId: letter.id, reason: 'Metadata extraction already running' });
+    } else if (letter.entityExtractionStatus === 'RUNNING') {
+      skipReasons.push({ letterId: letter.id, reason: 'Entity extraction already running' });
     } else {
       eligible.push(letter);
     }
@@ -76,7 +81,7 @@ export async function bulkTranscribe(letterIds: string[], overwrite = false): Pr
 
   if (eligible.length === 0) {
     log.info({ skipped: skipReasons.length }, 'Bulk transcribe: no eligible letters');
-    return { queued: 0, skipped: skipReasons.length, skipReasons, processing: false };
+    return { queued: 0, skipped: skipReasons.length, skipReasons };
   }
 
   const needsResetLetters = overwrite
@@ -87,6 +92,7 @@ export async function bulkTranscribe(letterIds: string[], overwrite = false): Pr
 
   const observedQueueState = (letter: (typeof eligible)[number]) => and(
     eq(letters.id, letter.id),
+    ...transcriptionPrerequisiteConditions(),
     ...observedTranscriptionStateConditions(observeTranscriptionState(letter)),
   );
 
@@ -128,34 +134,20 @@ export async function bulkTranscribe(letterIds: string[], overwrite = false): Pr
 
   if (queuedIds.length === 0) {
     log.info({ skipped: skipReasons.length }, 'Bulk transcribe: no letters remained eligible');
-    return { queued: 0, skipped: skipReasons.length, skipReasons, processing: false };
+    return { queued: 0, skipped: skipReasons.length, skipReasons };
   }
 
-  if (!shouldUseCloudRunWorkerJob() && getProcessingStatus().isRunning) {
-    log.info(
-      { queued: queuedIds.length, skipped: skipReasons.length },
-      'Bulk transcribe queued (another batch running)',
-    );
-    return { queued: queuedIds.length, skipped: skipReasons.length, skipReasons, processing: false };
-  }
-
-  if (shouldUseCloudRunWorkerJob()) {
-    await requestBackgroundWorkerRun('bulk:transcription');
-  } else {
-    resetProcessingState(queuedIds.length);
-    void processLettersAsync(queuedIds, 'transcription');
-  }
+  await requestBackgroundWorkerRun('bulk:transcription');
 
   log.info(
     { queued: queuedIds.length, skipped: skipReasons.length },
-    'Bulk transcribe started immediately',
+    'Bulk transcribe queued',
   );
-  return { queued: queuedIds.length, skipped: skipReasons.length, skipReasons, processing: true };
+  return { queued: queuedIds.length, skipped: skipReasons.length, skipReasons };
 }
 
 export async function bulkExtractMetadata(
   letterIds: string[],
-  skipConfirmationCheck = false,
 ): Promise<BulkResult> {
   const allRequested = await db.query.letters.findMany({
     where: and(
@@ -185,24 +177,20 @@ export async function bulkExtractMetadata(
       skipReasons.push({ letterId: letter.id, reason: 'Needs transcription first (workflow: UPLOADED)' });
     } else if (letter.workflow !== 'TRANSCRIBED') {
       skipReasons.push({ letterId: letter.id, reason: `Already processed (workflow: ${letter.workflow})` });
-    } else if (!letter.transcriptConfirmedAt && !skipConfirmationCheck) {
+    } else if (!letter.transcriptConfirmedAt) {
       unconfirmedCount++;
       skipReasons.push({ letterId: letter.id, reason: 'Transcript not yet confirmed' });
+    } else if (!letter.transcriptionText?.trim()) {
+      skipReasons.push({ letterId: letter.id, reason: 'No transcript text available' });
     } else if (letter.metadataStatus === 'RUNNING') {
       skipReasons.push({ letterId: letter.id, reason: 'Metadata extraction already running' });
+    } else if (letter.entityExtractionStatus === 'RUNNING') {
+      skipReasons.push({ letterId: letter.id, reason: 'Entity extraction already running' });
+    } else if (letter.extraContentJobStatus === 'RUNNING') {
+      skipReasons.push({ letterId: letter.id, reason: 'Extra-content transcription already running' });
     } else {
       eligible.push(letter);
     }
-  }
-
-  if (unconfirmedCount > 0 && !skipConfirmationCheck && eligible.length === 0) {
-    return {
-      queued: 0,
-      skipped: skipReasons.length,
-      skipReasons,
-      processing: false,
-      unconfirmedCount,
-    };
   }
 
   if (eligible.length === 0) {
@@ -210,7 +198,6 @@ export async function bulkExtractMetadata(
       queued: 0,
       skipped: skipReasons.length,
       skipReasons,
-      processing: false,
       unconfirmedCount,
     };
   }
@@ -224,11 +211,13 @@ export async function bulkExtractMetadata(
     metadataClaimKind: null,
     metadataRevision: sql`${letters.metadataRevision} + 1`,
     metadataError: null,
+    metadataAttemptCount: 0,
+    deadLetter: false,
     updatedAt: new Date(),
   }).where(or(...eligible.map(letter => and(
-    ...observedMetadataRevisionConditions(letter.id, letter),
-    eq(letters.metadataStatus, letter.metadataStatus),
-    ne(letters.transcriptionStatus, 'RUNNING'),
+    eq(letters.id, letter.id),
+    ...metadataPrerequisiteConditions(),
+    ...observedMetadataStateConditions(observeMetadataState(letter)),
   )))).returning({ id: letters.id });
 
   const queuedIds = queuedRows.map(row => row.id);
@@ -247,33 +236,16 @@ export async function bulkExtractMetadata(
       queued: 0,
       skipped: skipReasons.length,
       skipReasons,
-      processing: false,
       unconfirmedCount,
     };
   }
 
-  if (!shouldUseCloudRunWorkerJob() && getProcessingStatus().isRunning) {
-    return {
-      queued: queuedIds.length,
-      skipped: skipReasons.length,
-      skipReasons,
-      processing: false,
-      unconfirmedCount,
-    };
-  }
-
-  if (shouldUseCloudRunWorkerJob()) {
-    await requestBackgroundWorkerRun('bulk:metadata');
-  } else {
-    resetProcessingState(queuedIds.length);
-    void processLettersAsync(queuedIds, 'metadata');
-  }
+  await requestBackgroundWorkerRun('bulk:metadata');
 
   return {
     queued: queuedIds.length,
     skipped: skipReasons.length,
     skipReasons,
-    processing: true,
     unconfirmedCount,
   };
 }

@@ -98,6 +98,8 @@ describe('processMetadata', () => {
       type: 'L',
       workflow: 'TRANSCRIBED',
       transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'Dear Bob',
+      transcriptConfirmedAt: new Date('2026-07-17T12:00:00.000Z'),
       metadataStatus: 'PENDING',
       sender: null,
       recipient: null,
@@ -120,6 +122,25 @@ describe('processMetadata', () => {
       metadataStatus: 'PENDING',
       sender: null,
       recipient: null,
+    });
+
+    await expect(processMetadata('letter-1')).resolves.toEqual({
+      kind: 'skipped',
+      reason: 'ineligible',
+    });
+
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
+  });
+
+  it('does not start metadata before the transcript is confirmed', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-1',
+      type: 'L',
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'Dear Bob',
+      transcriptConfirmedAt: null,
+      metadataStatus: 'PENDING',
     });
 
     await expect(processMetadata('letter-1')).resolves.toEqual({

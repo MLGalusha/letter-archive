@@ -43,7 +43,9 @@ const {
 vi.mock('drizzle-orm', () => ({
   and: vi.fn((...clauses: unknown[]) => ({ kind: 'and', clauses })),
   eq: vi.fn((field: unknown, value: unknown) => ({ kind: 'eq', field, value })),
+  ne: vi.fn((field: unknown, value: unknown) => ({ kind: 'ne', field, value })),
   inArray: vi.fn((field: unknown, values: unknown[]) => ({ kind: 'inArray', field, values })),
+  isNotNull: vi.fn((field: unknown) => ({ kind: 'isNotNull', field })),
   isNull: vi.fn((field: unknown) => ({ kind: 'isNull', field })),
   sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
     kind: 'sql',
@@ -64,6 +66,7 @@ vi.mock('../../db/index.js', () => {
     },
     letters: {
       id: 'letters.id',
+      type: 'letters.type',
       transcriptionStatus: 'letters.transcriptionStatus',
       transcriptionRunId: 'letters.transcriptionRunId',
       transcriptionLeaseExpiresAt: 'letters.transcriptionLeaseExpiresAt',
@@ -78,7 +81,12 @@ vi.mock('../../db/index.js', () => {
       extraContentJobStatus: 'letters.extraContentJobStatus',
       extraContentJobRunId: 'letters.extraContentJobRunId',
       extraContentJobDirty: 'letters.extraContentJobDirty',
+      transcriptConfirmedAt: 'letters.transcriptConfirmedAt',
+      transcriptionText: 'letters.transcriptionText',
       updatedAt: 'letters.updatedAt',
+    },
+    letterPages: {
+      letterId: 'letterPages.letterId',
     },
   };
 });
@@ -424,7 +432,10 @@ describe('letter process helpers', () => {
     const observedAt = new Date('2026-07-17T12:00:00Z');
     findFirstMock.mockResolvedValue({
       id: 'letter-1',
+      type: 'L',
       transcriptionStatus: 'FAILED',
+      metadataStatus: 'PENDING',
+      entityExtractionStatus: 'PENDING',
       updatedAt: observedAt,
     });
 
@@ -442,14 +453,67 @@ describe('letter process helpers', () => {
       deadLetter: false,
       updatedAt: expect.any(Date),
     });
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+        { kind: 'eq', field: 'letters.transcriptionStatus', value: 'FAILED' },
+        {
+          kind: 'sql',
+          strings: ["date_trunc('milliseconds', ", ') = ', '::timestamptz'],
+          values: ['letters.updatedAt', observedAt.toISOString()],
+        },
+        {
+          kind: 'inArray',
+          field: 'letters.type',
+          values: ['L', 'T', 'C', 'E', 'N', 'A', 'D'],
+        },
+        { kind: 'ne', field: 'letters.metadataStatus', value: 'RUNNING' },
+        { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
+        expect.objectContaining({
+          kind: 'sql',
+          strings: expect.arrayContaining([
+            expect.stringContaining('EXISTS'),
+          ]),
+          values: [
+            { letterId: 'letterPages.letterId' },
+            'letterPages.letterId',
+            'letters.id',
+          ],
+        }),
+      ],
+    });
+  });
+
+  it('rejects a registry transcription retry when a downstream stage is active', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-1',
+      type: 'L',
+      transcriptionStatus: 'FAILED',
+      metadataStatus: 'PENDING',
+      entityExtractionStatus: 'RUNNING',
+      updatedAt: new Date('2026-07-17T12:00:00Z'),
+    });
+
+    await expect(retryJob(transcriptionSpec, 'letter-1')).rejects.toMatchObject({
+      statusCode: 400,
+      message: 'Cannot retry: transcription prerequisites are not satisfied',
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
   });
 
   it('advances and compares the metadata revision when retrying a failed job', async () => {
     const observedAt = new Date('2026-07-17T12:00:00Z');
     findFirstMock.mockResolvedValue({
       id: 'letter-1',
+      type: 'L',
+      transcriptionStatus: 'SUCCESS',
       metadataStatus: 'FAILED',
       metadataRevision: 6,
+      entityExtractionStatus: 'PENDING',
+      extraContentJobStatus: 'PENDING',
+      transcriptConfirmedAt: new Date('2026-07-17T11:00:00Z'),
+      transcriptionText: 'Confirmed transcript',
       updatedAt: observedAt,
     });
 
@@ -462,18 +526,63 @@ describe('letter process helpers', () => {
       metadataLeaseExpiresAt: null,
       metadataLeaseRunId: null,
       metadataClaimKind: null,
+      metadataAttemptCount: 0,
+      deadLetter: false,
       metadataRevision: expect.objectContaining({ kind: 'sql' }),
     }));
-    expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
-      clauses: expect.arrayContaining([
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+        { kind: 'eq', field: 'letters.metadataStatus', value: 'FAILED' },
+        {
+          kind: 'sql',
+          strings: ["date_trunc('milliseconds', ", ') = ', '::timestamptz'],
+          values: ['letters.updatedAt', observedAt.toISOString()],
+        },
+        { kind: 'eq', field: 'letters.type', value: 'L' },
+        { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
+        { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
+        { kind: 'ne', field: 'letters.extraContentJobStatus', value: 'RUNNING' },
+        { kind: 'isNotNull', field: 'letters.transcriptConfirmedAt' },
+        { kind: 'isNotNull', field: 'letters.transcriptionText' },
+        {
+          kind: 'sql',
+          strings: ['', " ~ '[^[:space:]]'"],
+          values: ['letters.transcriptionText'],
+        },
         { kind: 'eq', field: 'letters.metadataRevision', value: 6 },
-      ]),
-    }));
+      ],
+    });
+  });
+
+  it('rejects a registry metadata retry when the confirmed transcript is blank', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-1',
+      type: 'L',
+      transcriptionStatus: 'SUCCESS',
+      metadataStatus: 'FAILED',
+      metadataRevision: 6,
+      entityExtractionStatus: 'PENDING',
+      extraContentJobStatus: 'PENDING',
+      transcriptConfirmedAt: new Date('2026-07-17T11:00:00Z'),
+      transcriptionText: '   ',
+      updatedAt: new Date('2026-07-17T12:00:00Z'),
+    });
+
+    await expect(retryJob(metadataSpec, 'letter-1')).rejects.toMatchObject({
+      statusCode: 400,
+      message: 'Cannot retry: metadata prerequisites are not satisfied',
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
   });
 
   it('clears stale entity ownership before retrying a failed job', async () => {
     findFirstMock.mockResolvedValue({
       id: 'letter-1',
+      type: 'L',
+      transcriptionStatus: 'SUCCESS',
+      metadataStatus: 'SUCCESS',
       entityExtractionStatus: 'FAILED',
       entityExtractionRunId: 'stale-run',
       entityExtractionRunRevision: 8,
@@ -486,6 +595,7 @@ describe('letter process helpers', () => {
       entityExtractionStatus: 'PENDING',
       entityExtractionRunId: null,
       entityExtractionRunRevision: null,
+      deadLetter: false,
     }));
   });
 

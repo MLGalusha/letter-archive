@@ -1,23 +1,4 @@
-import { apiGet, apiPost } from "../client";
-
-export interface ProcessingStatus {
-  isRunning: boolean;
-  isPaused: boolean;
-  shouldAbort: boolean;
-  currentJob: { letterId: string; type: "transcription" | "metadata" | "entity_extraction" | "entity_resolution" | "line_detection" } | null;
-  completed: number;
-  failed: number;
-  skipped: number;
-  total: number;
-  errors: string[];
-  lastCompletedAt: number | null;
-}
-
-export function countProcessedJobs(
-  status: Pick<ProcessingStatus, "completed" | "failed" | "skipped">,
-): number {
-  return status.completed + status.failed + (status.skipped ?? 0);
-}
+import { apiPost } from "../client";
 
 export interface StartProcessingOptions {
   collectionCode?: string;
@@ -28,10 +9,6 @@ export interface StartProcessingOptions {
   day?: number;
   dateFrom?: string;
   dateTo?: string;
-}
-
-export async function getProcessingStatus(): Promise<ProcessingStatus> {
-  return apiGet<ProcessingStatus>("/admin/processing/status");
 }
 
 export async function startTranscription(
@@ -47,22 +24,4 @@ export async function startMetadataExtraction(
   options?: StartProcessingOptions,
 ): Promise<{ message: string; total: number }> {
   return apiPost<{ message: string; total: number }>("/admin/processing/start-metadata", options || {});
-}
-
-export async function startEntityExtraction(
-  options?: StartProcessingOptions,
-): Promise<{ message: string; total: number }> {
-  return apiPost<{ message: string; total: number }>("/admin/processing/start-entities", options || {});
-}
-
-export async function pauseProcessing(): Promise<{ message: string }> {
-  return apiPost<{ message: string }>("/admin/processing/pause");
-}
-
-export async function resumeProcessing(): Promise<{ message: string }> {
-  return apiPost<{ message: string }>("/admin/processing/resume");
-}
-
-export async function abortProcessing(): Promise<{ message: string }> {
-  return apiPost<{ message: string }>("/admin/processing/abort");
 }

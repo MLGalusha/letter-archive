@@ -1,6 +1,7 @@
-import { and, eq, inArray, isNotNull, sql, type SQL } from 'drizzle-orm';
-import { db, letters, letterPages } from '../../db/index.js';
-import { TRANSCRIBABLE_TYPES } from '../letter/shared.js';
+import { type SQL } from 'drizzle-orm';
+import {
+  queuedTranscriptionConditions,
+} from '../processing-eligibility.js';
 import {
   processingFilterSchema,
   buildProcessingConditions,
@@ -16,6 +17,8 @@ import {
   retryJob,
   cancelActive,
   runLetterBatch,
+  countEligible,
+  resolveEligibleLetterIds,
 } from './letter-process-helpers.js';
 import { getJobProgress } from './runner.js';
 import type { ProcessConfig } from './types.js';
@@ -27,11 +30,7 @@ const spec = letterProcessSpecs.transcription;
  * letter type that has been uploaded and is pending transcription. Used for
  * both eligibility (with user filters) and `queueSnapshot` (without).
  */
-const baseQueueConditions: SQL[] = [
-  inArray(letters.type, [...TRANSCRIBABLE_TYPES]),
-  eq(letters.workflow, 'UPLOADED'),
-  eq(letters.transcriptionStatus, 'PENDING'),
-];
+const baseQueueConditions: SQL[] = queuedTranscriptionConditions();
 
 export const transcriptionProcess: ProcessConfig<ProcessingFilterOptions> = {
   key: 'transcription',
@@ -58,17 +57,7 @@ export const transcriptionProcess: ProcessConfig<ProcessingFilterOptions> = {
       baseQueueConditions
     );
     if (collectionNotFound) return 0;
-    // Must also have at least one page to transcribe.
-    const rows = await db
-      .select({ c: sql<number>`count(*)` })
-      .from(letters)
-      .where(
-        and(
-          ...conditions,
-          sql`EXISTS (SELECT 1 FROM ${letterPages} WHERE ${letterPages.letterId} = ${letters.id})`
-        )
-      );
-    return Number(rows[0]?.c ?? 0);
+    return countEligible(conditions);
   },
 
   async resolveEligibleLetterIds(filters) {
@@ -77,11 +66,7 @@ export const transcriptionProcess: ProcessConfig<ProcessingFilterOptions> = {
       baseQueueConditions
     );
     if (collectionNotFound) return [];
-    const rows = await db.query.letters.findMany({
-      where: and(...conditions),
-      with: { pages: { columns: { id: true } } },
-    });
-    return rows.filter(l => l.pages.length > 0).map(l => l.id);
+    return resolveEligibleLetterIds(conditions);
   },
 
   async getQueue() {

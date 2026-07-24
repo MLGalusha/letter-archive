@@ -39,14 +39,8 @@ function makeToolbarModels({
   };
 
   const processing: BulkProcessingToolbarModel = {
-    processingStatus: null,
-    pausePending: false,
-    abortPending: false,
     onOpenTranscription: vi.fn(),
     onOpenMetadataExtraction: vi.fn(),
-    onPauseProcessing: vi.fn(),
-    onResumeProcessing: vi.fn(),
-    onAbortProcessing: vi.fn(),
   };
 
   const publishing: BulkPublishingToolbarModel = {

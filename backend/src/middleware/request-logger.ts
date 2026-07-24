@@ -13,11 +13,6 @@ declare global {
   }
 }
 
-// Paths that are polled frequently - only log errors/slow requests for these
-const QUIET_PATHS = [
-  '/admin/processing/status',
-];
-
 // Paths to completely skip logging (health checks, etc.)
 const SKIP_PATHS: string[] = [
   // Add paths like '/health' if needed
@@ -27,8 +22,7 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
   const requestId = randomUUID();
   const start = Date.now();
 
-  // Check if this is a quiet or skip path
-  const isQuietPath = QUIET_PATHS.includes(req.path);
+  // Check if this is a skip path
   const isSkipPath = SKIP_PATHS.includes(req.path);
 
   // Cloud Trace header: extract trace ID for log correlation in Cloud Logging.
@@ -80,29 +74,20 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
     return;
   }
 
-  // Log incoming request (skip for quiet paths)
-  if (!isQuietPath) {
-    log.debug(
-      {
-        query: Object.keys(req.query).length > 0
-          ? redactSensitiveQuery(req.query)
-          : undefined,
-        contentLength: req.get('content-length'),
-      },
-      'Request started'
-    );
-  }
+  log.debug(
+    {
+      query: Object.keys(req.query).length > 0
+        ? redactSensitiveQuery(req.query)
+        : undefined,
+      contentLength: req.get('content-length'),
+    },
+    'Request started'
+  );
 
   // Log response when finished
   res.on('finish', () => {
     const duration = Date.now() - start;
-    const isError = res.statusCode >= 400;
     const isSlow = duration > TIMING_THRESHOLDS.REQUEST_TOTAL;
-
-    // For quiet paths, only log if there's an error or it's slow
-    if (isQuietPath && !isError && !isSlow) {
-      return;
-    }
 
     const level = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info';
 

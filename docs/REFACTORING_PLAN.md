@@ -1,6 +1,13 @@
-# Codebase Refactoring Plan
+# Historical Codebase Refactoring Plan
 
-This document contains all refactoring targets for the Letter Archive project. Each section describes the problem, affected files, and the expected outcome. All refactoring is non-UI — no visual changes, no new features. The goal is to split monoliths, extract reusable patterns, standardize conventions, and make the codebase easier to extend.
+> **Archived planning snapshot.** This file describes the pre-cleanup topology and is
+> not an execution checklist. Several named files, controls, and compatibility targets
+> no longer exist. Resume current work from
+> [`architecture-cleanup/current-work.md`](architecture-cleanup/current-work.md).
+
+This document records the original refactoring targets for the Letter Archive project.
+Each section describes the problem, affected files, and expected outcome as understood
+when this snapshot was written.
 
 **Important constraints:**
 - Do NOT change any UI behavior or visual output

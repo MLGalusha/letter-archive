@@ -1,5 +1,5 @@
-import { and, eq, isNotNull, ne, type SQL } from 'drizzle-orm';
-import { letters } from '../../db/index.js';
+import { type SQL } from 'drizzle-orm';
+import { queuedMetadataConditions } from '../processing-eligibility.js';
 import {
   processingFilterSchema,
   buildProcessingConditions,
@@ -23,13 +23,7 @@ import type { ProcessConfig } from './types.js';
 
 const spec = letterProcessSpecs.metadata;
 
-const baseQueueConditions: SQL[] = [
-  eq(letters.type, 'L'),
-  eq(letters.workflow, 'TRANSCRIBED'),
-  eq(letters.metadataStatus, 'PENDING'),
-  ne(letters.transcriptionStatus, 'RUNNING'),
-  isNotNull(letters.transcriptConfirmedAt),
-];
+const baseQueueConditions: SQL[] = queuedMetadataConditions();
 
 export const metadataProcess: ProcessConfig<ProcessingFilterOptions> = {
   key: 'metadata',

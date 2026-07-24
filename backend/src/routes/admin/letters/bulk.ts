@@ -15,7 +15,6 @@ import {
 } from '../../../services/letter/publication.js';
 import {
   bulkLetterIdsSchema,
-  bulkMetadataSchema,
   bulkUpdateFieldsSchema,
 } from './shared.js';
 import { parseOrThrow } from './helpers.js';
@@ -49,8 +48,8 @@ router.post('/transcribe', async (req, res, next) => {
 
 router.post('/extract-metadata', async (req, res, next) => {
   try {
-    const { letterIds, skipConfirmationCheck } = parseOrThrow(bulkMetadataSchema, req.body, 'Invalid request');
-    const result = await bulkExtractMetadata(letterIds, skipConfirmationCheck);
+    const { letterIds } = parseOrThrow(bulkLetterIdsSchema, req.body, 'Invalid request');
+    const result = await bulkExtractMetadata(letterIds);
     res.json(result);
   } catch (error) {
     next(error);

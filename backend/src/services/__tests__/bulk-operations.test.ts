@@ -7,10 +7,7 @@ const {
   updateSetMock,
   updateWhereMock,
   updateReturningMock,
-  getProcessingStatusMock,
-  processLettersAsyncMock,
-  resetProcessingStateMock,
-  shouldUseCloudRunWorkerJobMock,
+  requestBackgroundWorkerRunMock,
   propagateNameMock,
   propagatePlaceholderReplacementMock,
   commitDirectIdentityFieldMock,
@@ -23,10 +20,7 @@ const {
   updateSetMock: vi.fn(),
   updateWhereMock: vi.fn(),
   updateReturningMock: vi.fn(),
-  getProcessingStatusMock: vi.fn(),
-  processLettersAsyncMock: vi.fn(),
-  resetProcessingStateMock: vi.fn(),
-  shouldUseCloudRunWorkerJobMock: vi.fn(),
+  requestBackgroundWorkerRunMock: vi.fn(),
   propagateNameMock: vi.fn(),
   propagatePlaceholderReplacementMock: vi.fn(),
   commitDirectIdentityFieldMock: vi.fn(),
@@ -60,6 +54,7 @@ vi.mock('../../db/index.js', () => {
     },
     letters: {
       id: 'letters.id',
+      type: 'letters.type',
       transcriptionStatus: 'letters.transcriptionStatus',
       workflow: 'letters.workflow',
       transcriptionText: 'letters.transcriptionText',
@@ -70,9 +65,17 @@ vi.mock('../../db/index.js', () => {
       transcriptionLeaseRunId: 'letters.transcriptionLeaseRunId',
       transcriptionClaimKind: 'letters.transcriptionClaimKind',
       metadataStatus: 'letters.metadataStatus',
+      metadataRunRevision: 'letters.metadataRunRevision',
+      metadataLeaseExpiresAt: 'letters.metadataLeaseExpiresAt',
+      metadataLeaseRunId: 'letters.metadataLeaseRunId',
+      metadataClaimKind: 'letters.metadataClaimKind',
       entityExtractionStatus: 'letters.entityExtractionStatus',
+      extraContentTranscript: 'letters.extraContentTranscript',
+      extraContentJobStatus: 'letters.extraContentJobStatus',
+      extraContentJobRunId: 'letters.extraContentJobRunId',
       deadLetter: 'letters.deadLetter',
       transcriptStatus: 'letters.transcriptStatus',
+      transcriptConfirmedAt: 'letters.transcriptConfirmedAt',
       sender: 'letters.sender',
       recipient: 'letters.recipient',
       metadataRunId: 'letters.metadataRunId',
@@ -85,6 +88,9 @@ vi.mock('../../db/index.js', () => {
       entityExtractionError: 'letters.entityExtractionError',
       updatedAt: 'letters.updatedAt',
     },
+    letterPages: {
+      letterId: 'letterPages.letterId',
+    },
     letterPersons: {},
     letterPlaces: {},
     personRelationships: {},
@@ -92,14 +98,7 @@ vi.mock('../../db/index.js', () => {
 });
 
 vi.mock('../processing-queue.js', () => ({
-  getProcessingStatus: getProcessingStatusMock,
-  processLettersAsync: processLettersAsyncMock,
-  requestBackgroundWorkerRun: vi.fn(),
-  resetProcessingState: resetProcessingStateMock,
-}));
-
-vi.mock('../cloud-run-job.js', () => ({
-  shouldUseCloudRunWorkerJob: shouldUseCloudRunWorkerJobMock,
+  requestBackgroundWorkerRun: requestBackgroundWorkerRunMock,
 }));
 
 vi.mock('../entities/participant-sync.js', () => ({
@@ -131,6 +130,7 @@ vi.mock('../../utils/placeholders.js', () => ({
 }));
 
 vi.mock('../letter/shared.js', () => ({
+  TRANSCRIBABLE_TYPES: ['L', 'T', 'C', 'E', 'N', 'A', 'D'],
   isTranscribableType: vi.fn(() => true),
   log: { info: vi.fn(), warn: vi.fn() },
 }));
@@ -143,6 +143,7 @@ const uploadedLetter = {
   workflow: 'UPLOADED',
   transcriptionStatus: 'PENDING',
   transcriptionText: null,
+  transcriptConfirmedAt: null,
   transcriptionError: null,
   transcriptionAttemptCount: 0,
   transcriptionRunId: null,
@@ -150,7 +151,18 @@ const uploadedLetter = {
   transcriptionLeaseRunId: null,
   transcriptionClaimKind: null,
   metadataStatus: 'PENDING',
+  metadataRunId: null,
+  metadataRunRevision: null,
+  metadataLeaseExpiresAt: null,
+  metadataLeaseRunId: null,
+  metadataClaimKind: null,
+  metadataContentStatus: 'EMPTY',
+  metadataVerifiedAt: null,
+  metadataVerifiedBy: null,
   entityExtractionStatus: 'PENDING',
+  extraContentTranscript: null,
+  extraContentJobStatus: 'PENDING',
+  extraContentJobRunId: null,
   deadLetter: false,
   transcriptStatus: 'EMPTY',
   pages: [{ id: 'page-1' }],
@@ -161,15 +173,13 @@ describe('bulk transcription ownership', () => {
     vi.clearAllMocks();
     findManyMock.mockResolvedValue([uploadedLetter]);
     updateReturningMock.mockResolvedValue([{ id: 'letter-1' }]);
-    getProcessingStatusMock.mockReturnValue({ isRunning: true });
-    shouldUseCloudRunWorkerJobMock.mockReturnValue(false);
+    requestBackgroundWorkerRunMock.mockResolvedValue(undefined);
   });
 
   it('queues only rows that are still idle and clears any stale run fence', async () => {
     await expect(bulkTranscribe(['letter-1'])).resolves.toMatchObject({
       queued: 1,
       skipped: 0,
-      processing: false,
     });
 
     expect(updateSetMock).toHaveBeenCalledWith({
@@ -190,6 +200,14 @@ describe('bulk transcription ownership', () => {
           kind: 'and',
           clauses: [
             { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+            {
+              kind: 'inArray',
+              field: 'letters.type',
+              values: ['L', 'T', 'C', 'E', 'N', 'A', 'D'],
+            },
+            { kind: 'ne', field: 'letters.metadataStatus', value: 'RUNNING' },
+            { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
+            expect.objectContaining({ kind: 'sql' }),
             { kind: 'eq', field: 'letters.transcriptionStatus', value: 'PENDING' },
             { kind: 'eq', field: 'letters.workflow', value: 'UPLOADED' },
             { kind: 'isNull', field: 'letters.transcriptionText' },
@@ -207,6 +225,7 @@ describe('bulk transcription ownership', () => {
         },
       ],
     });
+    expect(requestBackgroundWorkerRunMock).toHaveBeenCalledWith('bulk:transcription');
   });
 
   it('does not revoke a transcription claimed after the eligibility read', async () => {
@@ -219,11 +238,29 @@ describe('bulk transcription ownership', () => {
         letterId: 'letter-1',
         reason: 'Transcription changed before it could be queued',
       }],
-      processing: false,
     });
 
-    expect(processLettersAsyncMock).not.toHaveBeenCalled();
-    expect(resetProcessingStateMock).not.toHaveBeenCalled();
+    expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['metadata', { metadataStatus: 'RUNNING' }, 'Metadata extraction already running'],
+    ['entity', { entityExtractionStatus: 'RUNNING' }, 'Entity extraction already running'],
+  ])('does not queue overwrite transcription while %s work is active', async (
+    _stage,
+    override,
+    reason,
+  ) => {
+    findManyMock.mockResolvedValue([{ ...uploadedLetter, ...override }]);
+
+    await expect(bulkTranscribe(['letter-1'], true)).resolves.toEqual({
+      queued: 0,
+      skipped: 1,
+      skipReasons: [{ letterId: 'letter-1', reason }],
+    });
+
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+    expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
   });
 
   it('makes an explicitly requeued dead-lettered transcription claimable again', async () => {
@@ -238,7 +275,6 @@ describe('bulk transcription ownership', () => {
     await expect(bulkTranscribe(['letter-1'])).resolves.toMatchObject({
       queued: 1,
       skipped: 0,
-      processing: false,
     });
 
     expect(updateSetMock).toHaveBeenCalledWith({
@@ -277,7 +313,6 @@ describe('bulk transcription ownership', () => {
         letterId: 'letter-1',
         reason: 'Transcription changed before it could be queued',
       }],
-      processing: false,
     });
     expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'or',
@@ -291,7 +326,7 @@ describe('bulk transcription ownership', () => {
         ]),
       })],
     }));
-    expect(processLettersAsyncMock).not.toHaveBeenCalled();
+    expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
   });
 
   it('atomically resets overwrite state in the guarded queue transition', async () => {
@@ -320,17 +355,18 @@ describe('bulk metadata downstream exclusion', () => {
     ...uploadedLetter,
     workflow: 'TRANSCRIBED',
     transcriptionStatus: 'SUCCESS',
+    transcriptionText: 'Dear Bob',
     transcriptConfirmedAt: new Date('2026-01-01T00:00:00Z'),
     metadataStatus: 'SUCCESS',
     metadataRevision: 0,
+    extraContentJobStatus: 'SUCCESS',
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
     findManyMock.mockResolvedValue([metadataLetter]);
     updateReturningMock.mockResolvedValue([{ id: 'letter-1' }]);
-    getProcessingStatusMock.mockReturnValue({ isRunning: true });
-    shouldUseCloudRunWorkerJobMock.mockReturnValue(false);
+    requestBackgroundWorkerRunMock.mockResolvedValue(undefined);
   });
 
   it('reports an explicit skip while retranscription is already running', async () => {
@@ -343,31 +379,78 @@ describe('bulk metadata downstream exclusion', () => {
       queued: 0,
       skipped: 1,
       skipReasons: [{ letterId: 'letter-1', reason: 'Transcription already running' }],
-      processing: false,
       unconfirmedCount: 0,
     });
     expect(dbUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      { transcriptionText: '   ' },
+      'No transcript text available',
+    ],
+    [
+      { entityExtractionStatus: 'RUNNING' },
+      'Entity extraction already running',
+    ],
+    [
+      { extraContentJobStatus: 'RUNNING' },
+      'Extra-content transcription already running',
+    ],
+  ])('does not queue metadata across an ineligible source or active downstream stage', async (
+    override,
+    reason,
+  ) => {
+    findManyMock.mockResolvedValue([{
+      ...metadataLetter,
+      ...override,
+    }]);
+
+    await expect(bulkExtractMetadata(['letter-1'])).resolves.toEqual({
+      queued: 0,
+      skipped: 1,
+      skipReasons: [{ letterId: 'letter-1', reason }],
+      unconfirmedCount: 0,
+    });
+
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+    expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
   });
 
   it('queues metadata through a transcription-idle compare-and-set', async () => {
     await expect(bulkExtractMetadata(['letter-1'])).resolves.toMatchObject({
       queued: 1,
       skipped: 0,
-      processing: false,
     });
 
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'or',
       clauses: [{
         kind: 'and',
-        clauses: [
+        clauses: expect.arrayContaining([
           { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+          { kind: 'eq', field: 'letters.type', value: 'L' },
+          { kind: 'eq', field: 'letters.workflow', value: 'TRANSCRIBED' },
+          { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
+          { kind: 'eq', field: 'letters.transcriptionText', value: 'Dear Bob' },
+          {
+            kind: 'eq',
+            field: 'letters.transcriptConfirmedAt',
+            value: metadataLetter.transcriptConfirmedAt,
+          },
           { kind: 'eq', field: 'letters.metadataRevision', value: 0 },
           { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
-          { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
-        ],
+          { kind: 'eq', field: 'letters.entityExtractionStatus', value: 'PENDING' },
+          { kind: 'eq', field: 'letters.deadLetter', value: false },
+        ]),
       }],
     });
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      metadataStatus: 'PENDING',
+      metadataAttemptCount: 0,
+      deadLetter: false,
+    }));
+    expect(requestBackgroundWorkerRunMock).toHaveBeenCalledWith('bulk:metadata');
   });
 
   it('does not report metadata queued when transcription wins after the read', async () => {
@@ -380,11 +463,29 @@ describe('bulk metadata downstream exclusion', () => {
         letterId: 'letter-1',
         reason: 'Letter processing state changed before metadata could be queued',
       }],
-      processing: false,
       unconfirmedCount: 0,
     });
-    expect(processLettersAsyncMock).not.toHaveBeenCalled();
-    expect(resetProcessingStateMock).not.toHaveBeenCalled();
+    expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps unconfirmed transcripts out of the metadata queue', async () => {
+    findManyMock.mockResolvedValue([{
+      ...metadataLetter,
+      transcriptConfirmedAt: null,
+    }]);
+
+    await expect(bulkExtractMetadata(['letter-1'])).resolves.toEqual({
+      queued: 0,
+      skipped: 1,
+      skipReasons: [{
+        letterId: 'letter-1',
+        reason: 'Transcript not yet confirmed',
+      }],
+      unconfirmedCount: 1,
+    });
+
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+    expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
   });
 });
 

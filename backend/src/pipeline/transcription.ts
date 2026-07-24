@@ -15,7 +15,7 @@ import {
   clearJobProgress,
   shouldAbortProcessing,
   updateJobProgress,
-} from '../services/processing-queue.js';
+} from '../services/processes/runner.js';
 import { getDocumentTypeFromCode, isTranscribableType } from '../services/letter/shared.js';
 import { runAutomaticExtraContent } from '../services/letter/extra-content.js';
 

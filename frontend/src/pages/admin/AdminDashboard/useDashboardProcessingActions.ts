@@ -35,6 +35,11 @@ function summarizeSkipReasons(reasons: Array<{ reason: string }>) {
     .join(", ");
 }
 
+function summarizeWorkerRequest(total: number, stage: string) {
+  const subject = total === 1 ? "letter is" : "letters are";
+  return `Worker requested; ${total} matching ${subject} currently queued for ${stage}`;
+}
+
 export function useDashboardProcessingActions({
   selectedIds,
   letters,
@@ -44,9 +49,6 @@ export function useDashboardProcessingActions({
   fetchLetters,
 }: UseDashboardProcessingActionsOptions) {
   const { showToast } = useToast();
-  const [showUnconfirmedDialog, setShowUnconfirmedDialog] = useState(false);
-  const [unconfirmedCount, setUnconfirmedCount] = useState(0);
-  const [pendingMetadataIds, setPendingMetadataIds] = useState<string[]>([]);
   const [showTranscribeConfirm, setShowTranscribeConfirm] = useState(false);
   const [showMetadataConfirm, setShowMetadataConfirm] = useState(false);
   const [showSingleMetadataModal, setShowSingleMetadataModal] = useState(false);
@@ -86,17 +88,20 @@ export function useDashboardProcessingActions({
           showToast(`No letters processed: ${summary}`, "error");
         } else if (result.skipped > 0) {
           const summary = result.skipReasons ? summarizeSkipReasons(result.skipReasons) : `${result.skipped} skipped`;
-          const verb = result.processing ? "Processing" : "Queued";
-          showToast(`${verb} ${result.queued} for transcription. Skipped: ${summary}`, "info");
+          showToast(`Queued ${result.queued} for transcription. Skipped: ${summary}`, "info");
         } else {
-          const verb = result.processing ? "Processing" : "Queued";
-          showToast(`${verb} ${result.queued} letters for transcription`, "success");
+          showToast(`Queued ${result.queued} letters for transcription`, "success");
         }
         exitEditMode();
         await fetchLetters();
       } else {
         const result = await startTranscription(buildProcessingFilters());
-        showToast(`Started transcription for ${result.total} letters`, "success");
+        showToast(
+          result.total === 0
+            ? result.message
+            : summarizeWorkerRequest(result.total, "transcription"),
+          result.total === 0 ? "info" : "success",
+        );
       }
     } catch (err) {
       console.error("Failed to start transcription:", err);
@@ -104,10 +109,10 @@ export function useDashboardProcessingActions({
     }
   }, [buildProcessingFilters, exitEditMode, fetchLetters, letters, selectedIds, showToast]);
 
-  const handleStartMetadataExtraction = useCallback(async (skipConfirmation = false, skipExisting = false) => {
+  const handleStartMetadataExtraction = useCallback(async (skipExisting = false) => {
     try {
       if (selectedIds.size > 0) {
-        let ids = skipConfirmation ? pendingMetadataIds : Array.from(selectedIds);
+        let ids = Array.from(selectedIds);
         if (skipExisting) {
           ids = letters.filter(l => ids.includes(l.id) && l.metadataContentStatus === "EMPTY").map(l => l.id);
           if (ids.length === 0) {
@@ -115,42 +120,33 @@ export function useDashboardProcessingActions({
             return;
           }
         }
-        const result = await bulkExtractMetadata(ids, skipConfirmation);
-
-        if (result.unconfirmedCount && result.unconfirmedCount > 0 && !skipConfirmation && result.queued === 0) {
-          setUnconfirmedCount(result.unconfirmedCount);
-          setPendingMetadataIds(ids);
-          setShowUnconfirmedDialog(true);
-          return;
-        }
+        const result = await bulkExtractMetadata(ids);
 
         if (result.queued === 0 && result.skipped > 0) {
           const summary = result.skipReasons ? summarizeSkipReasons(result.skipReasons) : `${result.skipped} skipped`;
           showToast(`No letters processed: ${summary}`, "error");
         } else if (result.skipped > 0) {
           const summary = result.skipReasons ? summarizeSkipReasons(result.skipReasons) : `${result.skipped} skipped`;
-          const verb = result.processing ? "Processing" : "Queued";
-          showToast(`${verb} ${result.queued} for metadata extraction. Skipped: ${summary}`, "info");
+          showToast(`Queued ${result.queued} for metadata extraction. Skipped: ${summary}`, "info");
         } else {
-          const verb = result.processing ? "Processing" : "Queued";
-          showToast(`${verb} ${result.queued} letters for metadata extraction`, "success");
+          showToast(`Queued ${result.queued} letters for metadata extraction`, "success");
         }
         exitEditMode();
         await fetchLetters();
       } else {
         const result = await startMetadataExtraction(buildProcessingFilters());
-        showToast(`Started metadata extraction for ${result.total} letters`, "success");
+        showToast(
+          result.total === 0
+            ? result.message
+            : summarizeWorkerRequest(result.total, "metadata extraction"),
+          result.total === 0 ? "info" : "success",
+        );
       }
     } catch (err) {
       console.error("Failed to start metadata extraction:", err);
       showToast(err instanceof Error ? err.message : "Failed to start metadata extraction", "error");
     }
-  }, [buildProcessingFilters, exitEditMode, fetchLetters, letters, pendingMetadataIds, selectedIds, showToast]);
-
-  const handleConfirmUnverified = useCallback(async () => {
-    setShowUnconfirmedDialog(false);
-    await handleStartMetadataExtraction(true);
-  }, [handleStartMetadataExtraction]);
+  }, [buildProcessingFilters, exitEditMode, fetchLetters, letters, selectedIds, showToast]);
 
   const handleOpenTranscription = useCallback(() => {
     if (selectedIds.size > 0) {
@@ -259,9 +255,6 @@ export function useDashboardProcessingActions({
   ]);
 
   return {
-    showUnconfirmedDialog,
-    setShowUnconfirmedDialog,
-    unconfirmedCount,
     showTranscribeConfirm,
     setShowTranscribeConfirm,
     transcribeExistingCount,
@@ -278,7 +271,6 @@ export function useDashboardProcessingActions({
     singleMetadataMode,
     handleStartTranscription,
     handleStartMetadataExtraction,
-    handleConfirmUnverified,
     handleOpenTranscription,
     handleOpenMetadataExtraction,
     handleSingleMetadataExtraction,

@@ -21,6 +21,7 @@ import {
   withLeaseHeartbeat,
   type LeaseHeartbeat,
 } from './lease-heartbeat.js';
+import { isMetadataSourceEligible } from '../processing-eligibility.js';
 
 const log = createLogger({ module: 'metadata-job' });
 const LEASE_EXPIRED_ERROR = 'Metadata lease expired before the attempt completed';
@@ -188,11 +189,7 @@ function hasEmptyOwnershipTuple(observed: ObservedMetadataState): boolean {
 }
 
 function hasClaimableSource(observed: ObservedMetadataState): boolean {
-  return observed.type === 'L'
-    && observed.transcriptionStatus !== 'RUNNING'
-    && !!observed.transcriptionText?.trim()
-    && observed.entityExtractionStatus !== 'RUNNING'
-    && observed.extraContentJobStatus !== 'RUNNING'
+  return isMetadataSourceEligible(observed)
     && hasEmptyOwnershipTuple(observed);
 }
 
@@ -235,6 +232,7 @@ export async function claimQueuedMetadata(
     !hasClaimableSource(observed)
     || observed.status !== 'PENDING'
     || observed.workflow !== 'TRANSCRIBED'
+    || !observed.transcriptConfirmedAt
     || observed.deadLetter
   ) {
     return null;
@@ -258,7 +256,13 @@ export async function claimRequestedMetadata(
   letterId: string,
   observed: ObservedMetadataState,
 ): Promise<MetadataClaim | null> {
-  if (!hasClaimableSource(observed) || observed.status === 'RUNNING') return null;
+  if (
+    !hasClaimableSource(observed)
+    || !observed.transcriptConfirmedAt
+    || observed.status === 'RUNNING'
+  ) {
+    return null;
+  }
 
   return claimMetadata(letterId, observed, 'REQUESTED', {
     metadataAttemptCount: 0,
@@ -287,6 +291,8 @@ export async function claimMetadataAfterTranscriptConfirmation(
   return claimMetadata(letterId, observed, 'QUEUED', {
     transcriptConfirmedAt: new Date(),
     transcriptConfirmedBy: confirmedBy,
+    metadataAttemptCount: 0,
+    deadLetter: false,
     entityExtractionStatus: 'PENDING',
     entityExtractionRunId: null,
     entityExtractionRunRevision: null,
@@ -433,6 +439,7 @@ export async function completeMetadata(
       metadataStatus: 'SUCCESS',
       ...clearedMetadataOwnership(),
       metadataError: null,
+      deadLetter: false,
       metadataRevision: sql`${letters.metadataRevision} + 1`,
       metadataContentStatus: 'AI_DRAFT' as ContentStatus,
       metadataVerifiedAt: null,

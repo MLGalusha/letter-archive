@@ -119,7 +119,11 @@ Clicking any page image opens a full-screen lightbox — the same component the 
 
 ![Processing dashboard](docs/screenshots/admin-processing.png)
 
-This is the control center for the worker. (The worker itself is a Cloud Run Job fired on demand — see Architecture below.)
+This page is a transitional operator view, not a durable control plane for the worker.
+It combines persisted worker availability with a temporary API-memory batch registry.
+The worker itself is a separate process (an on-demand Cloud Run Job in production);
+the registry's batch mutex, progress, pause, and abort state disappear when the API
+restarts and cannot control a separate worker execution.
 
 Each card is a pipeline stage:
 
@@ -128,11 +132,22 @@ Each card is a pipeline stage:
 - **Entity extraction** — extracts mentioned people and places from the transcript and matches them against the canonical registries, queueing new candidates for review.
 - **Extra content transcription** — telegrams, envelopes, covers, ephemera. Separately gated because not every supplementary scan contains transcribable text.
 
-Each stage shows three counts — **eligible / queued / active** — and a `Start batch` button. "Eligible" means the letter is in a state that _could_ enter this stage; "queued" means a job has been written; "active" means the worker has it. The Extra-content card showing `29 eligible / 29 queued / 0 active` in the screenshot means a batch was just dispatched and the worker hasn't started picking it up yet.
+Each stage shows an API-computed snapshot of **eligible / queued / active** work and a
+`Start batch` button. That button currently starts the temporary registry runner inside
+the API process. The durable worker-owned queue is also used by uploads, bulk actions,
+and retries; local development must run `npm run worker` separately.
 
 The collapsing queues underneath each card list every job individually with the letter ID, attempt count, and last error — useful when one of the 29 starts failing.
 
-The dashboard isn't polled on a fixed interval. It subscribes to the admin notifications SSE stream (`GET /admin/notifications/stream`, gated by a one-time token) and updates as the worker pushes state diffs; periodic polling is the fallback if the stream drops. The page state is owned by [`useProcessingState`](frontend/src/hooks/useProcessingState.ts); orchestration lives in [`services/processing-queue.ts`](backend/src/services/processing-queue.ts). The eligible / queued / active counts are derived client-side from the three arrays the API returns (`ActiveBatchState`, `QueuedItem[]`, `RecentJob[]`) — the backend doesn't precompute them.
+The page subscribes to processing SSE events, but those broadcasts are process-local.
+It therefore reconciles from the API every 15 seconds even while SSE is healthy and
+every 5 seconds in fallback mode. Page state lives in
+[`useProcessingState`](frontend/src/hooks/useProcessingState.ts); the temporary registry
+is in [`services/processes/registry.ts`](backend/src/services/processes/registry.ts),
+while durable worker queue operations live in
+[`services/processing-queue.ts`](backend/src/services/processing-queue.ts). The
+architecture cleanup is intentionally retiring the registry next so automatic batch
+work has one runtime owner.
 
 ### 4. Usage & analytics — cost attribution at the letter level
 
@@ -260,16 +275,22 @@ A few things worth knowing that the diagram glosses:
 
 - **Storage is filesystem, not the GCS API.** In production the scan bucket is mounted into both the backend and worker containers via `gcsfuse` — see the volume mount in [`deploy/cloudrun/backend-worker-job.yaml`](deploy/cloudrun/backend-worker-job.yaml). In dev it's a local directory. Both processes call `getAbsoluteStoragePath()` and read files; nobody calls the GCS REST API directly.
 - **Image serving goes through the backend, not direct GCS URLs.** `GET /images/:pageId` ([`routes/images.ts`](backend/src/routes/images.ts)) streams the file with on-the-fly Sharp resize keyed by a `?w=` query param, cached in an in-process LRU (max 1000 variants). No signed URLs.
-- **The worker has two modes.** Locally it is normally a long-running polling process. With `EXIT_WHEN_EMPTY=true` it drains the queue and exits, which is the Cloud Run Job shape. Some legacy and bulk API paths call `triggerWorkerJob()` when production Cloud Run settings are present; their non-production fallback runs the same work inside the API process. The newer processing-dashboard batch runner also executes inside the API process today.
-- **Pause and abort are API-memory controls, not durable worker controls.** The registry runner and legacy queue each keep separate in-memory pause, abort, and progress state. The `worker_state` row contains only heartbeat/observation fields, and the separate worker does not read either API pause flag.
-- **Frontend ↔ Backend uses both REST and SSE.** REST for everything CRUD; a Server-Sent Events stream ([`useNotificationStream`](frontend/src/hooks/useNotificationStream.ts)) holds open for the admin notifications feed and live processing-dashboard updates.
+- **The worker has two modes.** Locally it is normally a long-running polling process. With `EXIT_WHEN_EMPTY=true` it drains the queue and exits, which is the Cloud Run Job shape. Upload, bulk, and filtered-start API paths leave durable work for this worker and optionally wake the configured Cloud Run Job; local development therefore needs `npm run worker` in a separate terminal. The newer processing-dashboard batch runner still executes inside the API process today.
+- **Processing-dashboard pause and abort are API-memory controls, not durable worker controls.** They belong only to the remaining registry runner. The `worker_state` row contains heartbeat/observation fields, and the separate worker does not read the registry runner's control flags.
+- **Frontend ↔ Backend uses both REST and SSE.** REST handles CRUD. Admin notifications
+  use `/admin/notifications/stream` through
+  [`useNotificationStream`](frontend/src/hooks/useNotificationStream.ts); the
+  transitional Processing page has a separate `/admin/processing/stream` connection
+  through [`useProcessingEvents`](frontend/src/hooks/useProcessingEvents.ts).
 - **Line detection is an operator-run local tool.** From `backend/`, `npm run detect-lines` fetches pages through the admin API, runs Kraken in the local Python environment, and PATCHes the segments back to the API. Uploads and worker transcription do not launch Python, and production containers do not need Kraken for normal request or queue processing.
 
-Processing ownership is currently transitional: the API sometimes enqueues and triggers
-the worker, sometimes starts a fire-and-forget in-process batch, and some letter actions
-await AI work directly. PostgreSQL stores stage statuses and the worker heartbeat, but
-not a durable pause flag or an execution lease. The exact paths and known recovery risks
-are tracked in [`docs/architecture-cleanup/processing-ownership.md`](docs/architecture-cleanup/processing-ownership.md).
+Processing ownership is currently transitional: ordinary upload, bulk, and filtered
+starts are worker-owned, the processing dashboard still has one fire-and-forget API
+batch runner, and explicit single-letter actions await their claimed work directly.
+PostgreSQL stores stage state and run ownership; transcription, metadata, and
+extra-content attempts also have database-clock leases. The exact paths and remaining
+risks are tracked in
+[`docs/architecture-cleanup/processing-ownership.md`](docs/architecture-cleanup/processing-ownership.md).
 
 ## Tech Stack
 

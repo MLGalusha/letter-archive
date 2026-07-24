@@ -15,8 +15,6 @@ describe("ActiveFilterChips", () => {
         activeFilterChips={[
           { key: "visibility", label: "Published", onRemove: onRemoveVisibility },
         ]}
-        processingStatus={null}
-        selectedCount={0}
         onClearAllFilters={onClearAllFilters}
       />,
     );
@@ -29,54 +27,15 @@ describe("ActiveFilterChips", () => {
     expect(onClearAllFilters).toHaveBeenCalled();
   });
 
-  it("hides clear all without chips and suppresses processing status while rows are selected", () => {
+  it("hides clear all without chips", () => {
     render(
       <ActiveFilterChips
         paginationTotal={3}
         activeFilterChips={[]}
-        processingStatus={{
-          isRunning: true,
-          isPaused: false,
-          shouldAbort: false,
-          total: 8,
-          completed: 2,
-          failed: 0,
-          skipped: 0,
-          errors: [],
-          lastCompletedAt: null,
-          currentJob: { letterId: "letter-1", type: "transcription" },
-        }}
-        selectedCount={1}
         onClearAllFilters={vi.fn()}
       />,
     );
 
     expect(screen.queryByRole("button", { name: "Clear all" })).not.toBeInTheDocument();
-    expect(screen.queryByText("T: 2/8")).not.toBeInTheDocument();
-  });
-
-  it("counts completed, failed, and skipped jobs in legacy batch progress", () => {
-    render(
-      <ActiveFilterChips
-        paginationTotal={3}
-        activeFilterChips={[]}
-        processingStatus={{
-          isRunning: true,
-          isPaused: false,
-          shouldAbort: false,
-          total: 8,
-          completed: 2,
-          failed: 1,
-          skipped: 1,
-          errors: [],
-          lastCompletedAt: null,
-          currentJob: { letterId: "letter-1", type: "transcription" },
-        }}
-        selectedCount={0}
-        onClearAllFilters={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText("T: 4/8")).toBeInTheDocument();
   });
 });

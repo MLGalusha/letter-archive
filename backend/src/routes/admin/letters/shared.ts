@@ -4,11 +4,6 @@ export const bulkLetterIdsSchema = z.object({
   letterIds: z.array(z.string().uuid()).min(1),
 });
 
-export const bulkMetadataSchema = z.object({
-  letterIds: z.array(z.string().uuid()).min(1),
-  skipConfirmationCheck: z.boolean().optional().default(false),
-});
-
 export const bulkUpdateFieldsSchema = z.object({
   updates: z.array(z.object({
     letterId: z.string().uuid(),

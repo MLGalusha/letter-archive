@@ -27,6 +27,11 @@ vi.mock('drizzle-orm', () => ({
   ne: vi.fn((field: unknown, value: unknown) => ({ kind: 'ne', field, value })),
   and: vi.fn((...clauses: unknown[]) => ({ kind: 'and', clauses })),
   gt: vi.fn((field: unknown, value: unknown) => ({ kind: 'gt', field, value })),
+  inArray: vi.fn((field: unknown, values: unknown[]) => ({
+    kind: 'inArray',
+    field,
+    values,
+  })),
   isNotNull: vi.fn((field: unknown) => ({ kind: 'isNotNull', field })),
   isNull: vi.fn((field: unknown) => ({ kind: 'isNull', field })),
   lte: vi.fn((field: unknown, value: unknown) => ({ kind: 'lte', field, value })),
@@ -84,6 +89,9 @@ vi.mock('../../db/index.js', () => {
       extraContentJobDirty: 'letters.extraContentJobDirty',
       extraContentJobLeaseExpiresAt: 'letters.extraContentJobLeaseExpiresAt',
       extraContentJobClaimKind: 'letters.extraContentJobClaimKind',
+    },
+    letterPages: {
+      letterId: 'letterPages.letterId',
     },
   };
 });
@@ -398,9 +406,25 @@ describe('letters service', () => {
       kind: 'and',
       clauses: [
         { kind: 'eq', field: 'letters.id', value: 'letter-3' },
-        { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
+        {
+          kind: 'inArray',
+          field: 'letters.type',
+          values: ['L', 'T', 'C', 'E', 'N', 'A', 'D'],
+        },
         { kind: 'ne', field: 'letters.metadataStatus', value: 'RUNNING' },
         { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
+        expect.objectContaining({
+          kind: 'sql',
+          strings: expect.arrayContaining([
+            expect.stringContaining('EXISTS'),
+          ]),
+          values: [
+            { letterId: 'letterPages.letterId' },
+            'letterPages.letterId',
+            'letters.id',
+          ],
+        }),
+        { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
       ],
     });
   });

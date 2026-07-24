@@ -251,26 +251,6 @@ test.describe('Dashboard Bulk Actions', () => {
     });
   });
 
-  test.describe('Processing Status Display', () => {
-    test('shows processing controls when processing is running', async ({ page }) => {
-      // This test checks if the UI displays processing state correctly
-      // We can't easily trigger long-running processing in tests
-
-      const processingControls = page.locator('.processing-controls');
-      const hasProcessing = await processingControls.isVisible().catch(() => false);
-
-      // If processing is running, verify controls are shown
-      if (hasProcessing) {
-        await expect(page.locator('.progress-bar')).toBeVisible();
-        await expect(page.locator('.pause-button, .resume-button')).toBeVisible();
-        await expect(page.locator('.abort-button')).toBeVisible();
-      }
-
-      // Test passes regardless - we're just checking UI state
-      expect(true).toBe(true);
-    });
-  });
-
   test.describe('Menu Interactions', () => {
     test('process menu closes when action is clicked', async ({ page }) => {
       await page.locator(SELECTORS.dashboard.processBtn).click();

@@ -1,5 +1,5 @@
-import { eq, ne, type SQL } from 'drizzle-orm';
-import { letters } from '../../db/index.js';
+import { type SQL } from 'drizzle-orm';
+import { queuedEntityExtractionConditions } from '../processing-eligibility.js';
 import {
   processingFilterSchema,
   buildProcessingConditions,
@@ -23,12 +23,7 @@ import type { ProcessConfig } from './types.js';
 
 const spec = letterProcessSpecs.entity_extraction;
 
-const baseQueueConditions: SQL[] = [
-  eq(letters.type, 'L'),
-  eq(letters.metadataStatus, 'SUCCESS'),
-  eq(letters.entityExtractionStatus, 'PENDING'),
-  ne(letters.transcriptionStatus, 'RUNNING'),
-];
+const baseQueueConditions: SQL[] = queuedEntityExtractionConditions();
 
 export const entityExtractionProcess: ProcessConfig<ProcessingFilterOptions> = {
   key: 'entity_extraction',

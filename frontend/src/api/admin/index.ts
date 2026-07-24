@@ -3,12 +3,8 @@ export * from "./letters";
 export * from "./versions";
 export * from "./bulk";
 export * from "./processing";
-export * from "./queue";
 export {
   getAllProcessesStatus,
-  getProcessEligibility,
-  getProcessQueue,
-  getProcessRecent,
   startProcess,
   pauseBatch,
   resumeBatch,

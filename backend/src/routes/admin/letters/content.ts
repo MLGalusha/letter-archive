@@ -113,7 +113,10 @@ router.post('/:letterId/process', async (req, res, next) => {
     const { letterId } = req.params;
     await requireLetter(letterId);
     if (!await resetLetterForProcessing(letterId)) {
-      throw new AppError(409, 'Cannot reprocess a letter while another job is running');
+      throw new AppError(
+        409,
+        'Cannot reprocess: the letter is not transcribable, has no pages, or another job is running',
+      );
     }
     await requestBackgroundWorkerRun('letter:process');
     res.json({ message: 'Letter enqueued for processing', letterId });
@@ -297,6 +300,7 @@ router.post('/:letterId/regenerate-entities', async (req, res, next) => {
       entityExtractionRunId: null,
       entityExtractionRunRevision: null,
       entityExtractionError: null,
+      deadLetter: false,
       updatedAt: new Date(),
     }).where(and(
       ...observedTranscriptConditions(letterId, letter),
@@ -361,6 +365,9 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
     );
 
     if (mode === 'full' || mode === 'metadata_only') {
+      if (!letter.transcriptConfirmedAt) {
+        throw new BadRequestError('Transcript must be confirmed before regenerating metadata');
+      }
       if (letter.metadataStatus === 'RUNNING') {
         throw new BadRequestError('Metadata extraction is already in progress');
       }
@@ -396,6 +403,7 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
         entityExtractionRunId: null,
         entityExtractionRunRevision: null,
         entityExtractionError: null,
+        deadLetter: false,
         updatedAt: new Date(),
       }).where(and(
         ...observedTranscriptConditions(letterId, letter),

@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
-import { ApiError } from "../../../api/client";
 import type { Letter } from "../../../types/Letter";
 
 const {
@@ -12,13 +11,9 @@ const {
   getFilteredLetterIdsMock,
   deleteLetterMock,
   toggleLetterFlagMock,
-  getProcessingStatusMock,
   regenerateMetadataMock,
   startTranscriptionMock,
   startMetadataExtractionMock,
-  pauseProcessingMock,
-  resumeProcessingMock,
-  abortProcessingMock,
   bulkClearTranscriptionsMock,
   bulkClearMetadataMock,
   bulkTranscribeMock,
@@ -32,13 +27,9 @@ const {
   getFilteredLetterIdsMock: vi.fn(),
   deleteLetterMock: vi.fn(),
   toggleLetterFlagMock: vi.fn(),
-  getProcessingStatusMock: vi.fn(),
   regenerateMetadataMock: vi.fn(),
   startTranscriptionMock: vi.fn(),
   startMetadataExtractionMock: vi.fn(),
-  pauseProcessingMock: vi.fn(),
-  resumeProcessingMock: vi.fn(),
-  abortProcessingMock: vi.fn(),
   bulkClearTranscriptionsMock: vi.fn(),
   bulkClearMetadataMock: vi.fn(),
   bulkTranscribeMock: vi.fn(),
@@ -64,13 +55,9 @@ vi.mock("../../../api/admin/letters", () => ({
 
 vi.mock("../../../api/admin", () => ({
   confirmTranscript: (...args: unknown[]) => confirmTranscriptMock(...args),
-  getProcessingStatus: (...args: unknown[]) => getProcessingStatusMock(...args),
   regenerateMetadata: (...args: unknown[]) => regenerateMetadataMock(...args),
   startTranscription: (...args: unknown[]) => startTranscriptionMock(...args),
   startMetadataExtraction: (...args: unknown[]) => startMetadataExtractionMock(...args),
-  pauseProcessing: (...args: unknown[]) => pauseProcessingMock(...args),
-  resumeProcessing: (...args: unknown[]) => resumeProcessingMock(...args),
-  abortProcessing: (...args: unknown[]) => abortProcessingMock(...args),
   bulkClearTranscriptions: (...args: unknown[]) => bulkClearTranscriptionsMock(...args),
   bulkClearMetadata: (...args: unknown[]) => bulkClearMetadataMock(...args),
   bulkTranscribe: (...args: unknown[]) => bulkTranscribeMock(...args),
@@ -253,7 +240,6 @@ function createLettersResponse(letters: Letter[] = [makeLetter()]) {
 }
 
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
-let consoleDebugSpy: ReturnType<typeof vi.spyOn>;
 
 describe("AdminDashboard processing", () => {
   beforeEach(() => {
@@ -261,52 +247,12 @@ describe("AdminDashboard processing", () => {
     localStorage.clear();
     isAuthenticatedMock.mockReturnValue(true);
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    consoleDebugSpy = vi.spyOn(console, "debug").mockImplementation(() => undefined);
 
     getAdminLettersMock.mockResolvedValue(createLettersResponse());
-    getProcessingStatusMock.mockResolvedValue({
-      isRunning: false,
-      isPaused: false,
-      shouldAbort: false,
-      currentJob: null,
-      completed: 0,
-      failed: 0,
-      skipped: 0,
-      total: 0,
-      errors: [],
-      lastCompletedAt: null,
-    });
   });
 
   afterEach(() => {
     consoleErrorSpy.mockRestore();
-    consoleDebugSpy.mockRestore();
-  });
-
-  it("ignores processing status poll failures without surfacing a toast", async () => {
-    getProcessingStatusMock.mockRejectedValueOnce(
-      new ApiError(
-        503,
-        "processing status offline",
-        undefined,
-        "req-dashboard-status-503",
-      ),
-    );
-
-    render(
-      <MemoryRouter>
-        <AdminDashboard />
-      </MemoryRouter>,
-    );
-
-    await waitFor(() => {
-      expect(getProcessingStatusMock).toHaveBeenCalled();
-    });
-    expect(showToastMock).not.toHaveBeenCalledWith(
-      "processing status offline (Request ID: req-dashboard-status-503)",
-      "error",
-    );
-    expect(consoleDebugSpy).toHaveBeenCalled();
   });
 
   it("closes dashboard filters when the mobile admin nav opens", async () => {

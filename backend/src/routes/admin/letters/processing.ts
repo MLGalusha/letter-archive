@@ -1,28 +1,19 @@
 import { Router } from 'express';
 import {
-  abortProcessing,
   cancelActiveJob,
   clearQueue,
-  getProcessingStatus,
   getQueueStatus,
-  pauseProcessing,
   processingFilterSchema,
   queueJobTypeSchema,
   removeFromQueue,
-  resumeProcessing,
   retryJob,
   startEntityExtractionProcessing,
   startMetadataProcessing,
   startTranscriptionProcessing,
 } from '../../../services/processing-queue.js';
-import { BadRequestError } from '../../../utils/response-helpers.js';
 import { requireString } from './helpers.js';
 
 const router = Router();
-
-router.get('/status', (_req, res) => {
-  res.json(getProcessingStatus());
-});
 
 router.get('/queue', async (_req, res, next) => {
   try {
@@ -56,31 +47,6 @@ router.post('/start-entities', async (req, res, next) => {
   try {
     const options = processingFilterSchema.parse(req.body || {});
     const result = await startEntityExtractionProcessing(options);
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.post('/pause', (_req, res, next) => {
-  try {
-    res.json(pauseProcessing());
-  } catch (error) {
-    next(new BadRequestError((error as Error).message));
-  }
-});
-
-router.post('/resume', (_req, res, next) => {
-  try {
-    res.json(resumeProcessing());
-  } catch (error) {
-    next(new BadRequestError((error as Error).message));
-  }
-});
-
-router.post('/abort', async (req, res, next) => {
-  try {
-    const result = await abortProcessing();
     res.json(result);
   } catch (error) {
     next(error);

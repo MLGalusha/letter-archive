@@ -142,31 +142,6 @@ export async function getAllProcessesStatus(): Promise<AllProcessesStatus> {
   return apiGet<AllProcessesStatus>('/admin/processing/snapshot');
 }
 
-export async function getProcessEligibility(
-  key: ProcessKey,
-  filters: ProcessFilters = {}
-): Promise<{ count: number }> {
-  const params = new URLSearchParams();
-  for (const [k, v] of Object.entries(filters)) {
-    if (v !== undefined && v !== '') params.set(k, String(v));
-  }
-  const qs = params.toString();
-  return apiGet<{ count: number }>(
-    `/admin/processing/processes/${key}/eligibility${qs ? `?${qs}` : ''}`
-  );
-}
-
-export async function getProcessQueue(key: ProcessKey): Promise<{ queue: QueuedItem[] }> {
-  return apiGet(`/admin/processing/processes/${key}/queue`);
-}
-
-export async function getProcessRecent(
-  key: ProcessKey,
-  limit = 50
-): Promise<{ recent: RecentJob[] }> {
-  return apiGet(`/admin/processing/processes/${key}/recent?limit=${limit}`);
-}
-
 export async function startProcess(
   key: ProcessKey,
   filters: ProcessFilters = {}

@@ -74,13 +74,13 @@ export async function processMetadata(letterId: string): Promise<ProcessMetadata
     return { kind: 'skipped', reason: 'ineligible' };
   }
 
-  // Only process if workflow is TRANSCRIBED and metadata is pending
-  // Note: transcriptConfirmedAt check is handled by the calling endpoint,
-  // which may allow bypassing confirmation with user approval
+  // The canonical claim repeats this confirmation check under compare-and-set;
+  // this preflight avoids invoking the producer for obviously ineligible work.
   if (
     letter.workflow === 'TRANSCRIBED' &&
     letter.metadataStatus === 'PENDING' &&
-    letter.transcriptionStatus !== 'RUNNING'
+    letter.transcriptionStatus !== 'RUNNING' &&
+    letter.transcriptConfirmedAt
   ) {
     log.info({ letterId }, 'Processing metadata');
     // The producer derives any pre-filled names from its post-claim reload so

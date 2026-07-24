@@ -75,8 +75,8 @@ export function createLeaseRecoveryCoordinator<T>(
 
 /**
  * Requested and extra-content leases deliberately do not keep an
- * EXIT_WHEN_EMPTY worker alive. Pending or leased queued transcription and
- * metadata are work this worker can drain.
+ * EXIT_WHEN_EMPTY worker alive. Pending transcription, metadata, or entity
+ * work—and leased queued transcription or metadata—can keep it draining.
  */
 export async function decideEmptyWorkerJob(options: {
   reconcile(): Promise<WorkerQueueRecoveryResult | null>;
@@ -87,4 +87,19 @@ export async function decideEmptyWorkerJob(options: {
   const workState = await options.getQueuedWorkState();
   if (workState === 'pending') return 'drain';
   return workState === 'leased' ? 'wait' : 'exit';
+}
+
+/**
+ * Publish worker unavailability before the final empty check. Work committed
+ * before relinquishment is visible to the recheck; work committed afterward
+ * observes an idle worker and can wake a replacement.
+ */
+export async function decideEmptyWorkerJobWithHandoff(options: {
+  decide(): Promise<EmptyWorkerJobDecision>;
+  relinquish(): Promise<void>;
+}): Promise<EmptyWorkerJobDecision> {
+  const initial = await options.decide();
+  if (initial !== 'exit') return initial;
+  await options.relinquish();
+  return options.decide();
 }

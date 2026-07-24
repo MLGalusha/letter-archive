@@ -1346,14 +1346,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.stat-processing {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background: color-mix(in srgb, var(--highlight) 15%, transparent);
-  color: var(--highlight);
-  border-radius: var(--radius-sm);
-  font-weight: 500;
-}
-
 .letter-count {
   font-size: 0.75rem;
   color: var(--text-muted);
@@ -2360,25 +2352,6 @@
   color: var(--text-muted);
 }
 
-/* Processing indicator (animated) */
-.stat-pill.stat-processing {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 8px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: var(--radius-sm);
-  background: #fff3cd;
-  color: #e65100;
-  border: 1px solid #ffeeba;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
 /* Single scrollable table container with sticky header */
 .letters-table-container {
   flex: 1;
@@ -2594,77 +2567,6 @@
 /* Count cells */
 .count-cell {
   text-align: center;
-}
-
-/* Processing controls (shown when processing is active) */
-.processing-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
-
-.processing-progress {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  min-width: 150px;
-}
-
-.progress-text {
-  font-size: var(--font-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-
-.progress-text .failed-count {
-  color: #c62828;
-}
-
-.progress-bar {
-  height: 6px;
-  background: var(--border);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: #4caf50;
-  transition: width 0.3s ease;
-}
-
-.pause-button,
-.resume-button {
-  padding: 0.375rem 0.75rem;
-  font-size: var(--font-sm);
-  font-weight: 600;
-  background: #fff3e0;
-  color: #e65100;
-  border: solid 1px #ffcc80;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.pause-button:hover,
-.resume-button:hover {
-  background: #ffe0b2;
-}
-
-.abort-button {
-  padding: 0.375rem 0.75rem;
-  font-size: var(--font-sm);
-  font-weight: 600;
-  background: #ffebee;
-  color: #c62828;
-  border: solid 1px #ef9a9a;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.abort-button:hover {
-  background: #ffcdd2;
 }
 
 /* Responsive */
@@ -3855,70 +3757,6 @@
   cursor: not-allowed;
 }
 
-/* Toolbar processing controls (when running) */
-.toolbar-processing-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
-
-.toolbar-progress {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 150px;
-}
-
-.toolbar-progress-text {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #e5e7eb;
-}
-
-.toolbar-progress-text .failed-count {
-  color: #ef4444;
-}
-
-.toolbar-progress-bar {
-  height: 4px;
-  background: #374151;
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.toolbar-progress-fill {
-  height: 100%;
-  background: #4caf50;
-  transition: width 0.3s ease;
-}
-
-.toolbar-process-pause {
-  color: #fbbf24 !important;
-  border-color: rgba(251, 191, 36, 0.4) !important;
-}
-
-.toolbar-process-pause:hover:not(:disabled) {
-  background: rgba(251, 191, 36, 0.15) !important;
-}
-
-.toolbar-process-resume {
-  color: #4caf50 !important;
-  border-color: rgba(76, 175, 80, 0.4) !important;
-}
-
-.toolbar-process-resume:hover:not(:disabled) {
-  background: rgba(76, 175, 80, 0.15) !important;
-}
-
-.toolbar-process-abort {
-  color: #ef4444 !important;
-  border-color: rgba(239, 68, 68, 0.4) !important;
-}
-
-.toolbar-process-abort:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.15) !important;
-}
-
 /* Right section: destructive actions + cancel/save */
 .edit-toolbar-right {
   display: flex;
@@ -4330,15 +4168,10 @@
   }
 
   .mobile-bulk-action-sheet .toolbar-process-actions,
-  .mobile-bulk-action-sheet .toolbar-processing-controls,
   .mobile-bulk-action-sheet .toolbar-destructive-actions {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 0.5rem;
-  }
-
-  .mobile-bulk-action-sheet .toolbar-progress {
-    min-width: 0;
   }
 
   .edit-toolbar-content {

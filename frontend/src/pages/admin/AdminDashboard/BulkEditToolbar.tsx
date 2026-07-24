@@ -1,5 +1,4 @@
 import { useState, type ReactNode } from "react";
-import type { ProcessingStatus } from "../../../api/admin";
 import Icon from "../../../components/common/Icon";
 import useIsMobile from "../../../hooks/useIsMobile";
 import BulkCopyControls from "./BulkCopyControls";
@@ -32,14 +31,8 @@ export interface BulkCopyToolbarModel {
 }
 
 export interface BulkProcessingToolbarModel {
-  processingStatus: ProcessingStatus | null;
-  pausePending: boolean;
-  abortPending: boolean;
   onOpenTranscription: () => void;
   onOpenMetadataExtraction: () => void;
-  onPauseProcessing: () => void;
-  onResumeProcessing: () => void;
-  onAbortProcessing: () => void;
 }
 
 export interface BulkPublishingToolbarModel {
@@ -202,9 +195,6 @@ function MobileBulkEditToolbar({
         >
           <BulkProcessingControls
             selectedCount={selection.selectedCount}
-            processingStatus={processing.processingStatus}
-            pausePending={processing.pausePending}
-            abortPending={processing.abortPending}
             onOpenTranscription={() => {
               processing.onOpenTranscription();
               setActiveSheet(null);
@@ -213,9 +203,6 @@ function MobileBulkEditToolbar({
               processing.onOpenMetadataExtraction();
               setActiveSheet(null);
             }}
-            onPauseProcessing={processing.onPauseProcessing}
-            onResumeProcessing={processing.onResumeProcessing}
-            onAbortProcessing={processing.onAbortProcessing}
           />
         </MobileBulkActionSheet>
       )}
@@ -303,14 +290,8 @@ export default function BulkEditToolbar({
           <ToolbarSection label="Process" modifier="processing">
             <BulkProcessingControls
               selectedCount={selection.selectedCount}
-              processingStatus={processing.processingStatus}
-              pausePending={processing.pausePending}
-              abortPending={processing.abortPending}
               onOpenTranscription={processing.onOpenTranscription}
               onOpenMetadataExtraction={processing.onOpenMetadataExtraction}
-              onPauseProcessing={processing.onPauseProcessing}
-              onResumeProcessing={processing.onResumeProcessing}
-              onAbortProcessing={processing.onAbortProcessing}
             />
           </ToolbarSection>
         </div>

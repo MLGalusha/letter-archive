@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import { db, letters } from '../../db/index.js';
 import { processLetter, processMetadata } from '../../pipeline/processor.js';
 import { runEntityExtractionOnly } from '../../pipeline/metadataV2.js';
@@ -14,6 +14,13 @@ import { createLogger } from '../../utils/logger.js';
 import { notify } from '../notifications.js';
 import { allOf } from './filter-helpers.js';
 import { observedTimestampMatches } from '../letter/shared.js';
+import {
+  entityExtractionPrerequisiteConditions,
+  isMetadataStateEligible,
+  isTranscriptionStateEligible,
+  metadataPrerequisiteConditions,
+  transcriptionPrerequisiteConditions,
+} from '../processing-eligibility.js';
 import {
   clearJobProgress,
   recordJobCompleted,
@@ -341,6 +348,28 @@ export async function retryJob(
   if (status !== 'FAILED') {
     throw new ProcessingError(`Cannot retry: ${spec.processKey} status is ${status}`, 400);
   }
+  if (
+    spec.processKey === 'transcription'
+    && !isTranscriptionStateEligible(letter)
+  ) {
+    throw new ProcessingError('Cannot retry: transcription prerequisites are not satisfied', 400);
+  }
+  if (
+    spec.processKey === 'metadata'
+    && !isMetadataStateEligible(letter)
+  ) {
+    throw new ProcessingError('Cannot retry: metadata prerequisites are not satisfied', 400);
+  }
+  if (
+    spec.processKey === 'entity_extraction'
+    && (
+      letter.type !== 'L'
+      || letter.transcriptionStatus === 'RUNNING'
+      || letter.metadataStatus !== 'SUCCESS'
+    )
+  ) {
+    throw new ProcessingError('Cannot retry: entity extraction prerequisites are not satisfied', 400);
+  }
   const updates: Record<string, unknown> = {
     [spec.statusColumn]: 'PENDING',
     [spec.errorColumn]: null,
@@ -372,6 +401,7 @@ export async function retryJob(
   } else if (spec.processKey === 'entity_extraction') {
     updates.entityExtractionRunId = null;
     updates.entityExtractionRunRevision = null;
+    updates.deadLetter = false;
   }
   const retried = await db
     .update(letters)
@@ -381,7 +411,16 @@ export async function retryJob(
       eq(letters[spec.statusColumn], 'FAILED'),
       observedTimestampMatches(letters.updatedAt, letter.updatedAt),
       ...(spec.processKey === 'metadata'
-        ? [eq(letters.metadataRevision, letter.metadataRevision)]
+        ? [
+            ...metadataPrerequisiteConditions(),
+            eq(letters.metadataRevision, letter.metadataRevision),
+          ]
+        : []),
+      ...(spec.processKey === 'transcription'
+        ? transcriptionPrerequisiteConditions()
+        : []),
+      ...(spec.processKey === 'entity_extraction'
+        ? entityExtractionPrerequisiteConditions()
         : []),
     ))
     .returning({ id: letters.id });

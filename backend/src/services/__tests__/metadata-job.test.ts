@@ -300,6 +300,7 @@ describe('metadata job lifecycle', () => {
     row.workflow = 'METADATA_DRAFTED';
     row.sender = 'Existing sender';
     row.metadataContentStatus = 'VERIFIED';
+    row.deadLetter = true;
     randomUUIDMock.mockReturnValue('run-b');
 
     await expect(
@@ -314,6 +315,7 @@ describe('metadata job lifecycle', () => {
       sender: 'Existing sender',
       metadataContentStatus: 'VERIFIED',
       entityExtractionStatus: 'PENDING',
+      deadLetter: false,
     });
   });
 
@@ -328,6 +330,10 @@ describe('metadata job lifecycle', () => {
     row.transcriptionText = null;
     await expect(claimRequestedMetadata(row.id, observeMetadataState(row))).resolves.toBeNull();
     row.transcriptionText = 'Dear Bob';
+    row.transcriptConfirmedAt = null;
+    await expect(claimQueuedMetadata(row.id, observeMetadataState(row))).resolves.toBeNull();
+    await expect(claimRequestedMetadata(row.id, observeMetadataState(row))).resolves.toBeNull();
+    row.transcriptConfirmedAt = new Date('2026-07-17T12:00:00.000Z');
     row.entityExtractionStatus = 'RUNNING';
     await expect(claimQueuedMetadata(row.id, observeMetadataState(row))).resolves.toBeNull();
 
@@ -338,6 +344,7 @@ describe('metadata job lifecycle', () => {
   it('confirms the exact transcript revision in the same write that claims metadata', async () => {
     row.transcriptConfirmedAt = null;
     row.transcriptConfirmedBy = null;
+    row.deadLetter = true;
 
     await expect(
       claimMetadataAfterTranscriptConfirmation(
@@ -354,11 +361,13 @@ describe('metadata job lifecycle', () => {
       metadataStatus: 'RUNNING',
       metadataRunId: 'run-a',
       metadataClaimKind: 'QUEUED',
+      deadLetter: false,
     });
   });
 
   it('publishes one exact run atomically and cannot overwrite its replacement', async () => {
     await claimQueuedMetadata(row.id, observeMetadataState(row));
+    row.deadLetter = true;
 
     await expect(
       completeMetadata(row.id, { runId: 'run-a', revision: 0 }, metadata),
@@ -369,6 +378,7 @@ describe('metadata job lifecycle', () => {
       metadataRunId: null,
       metadataError: null,
       metadataContentStatus: 'AI_DRAFT',
+      deadLetter: false,
       sender: 'Alice',
       recipient: 'Bob',
       locationWritten: 'Boston',

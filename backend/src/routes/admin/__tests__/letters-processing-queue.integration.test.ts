@@ -12,14 +12,10 @@ const {
   getLetterByIdMock,
   resetLetterForProcessingMock,
   getQueueStatusMock,
-  getProcessingStatusMock,
   requestBackgroundWorkerRunMock,
   startTranscriptionProcessingMock,
   startMetadataProcessingMock,
   startEntityExtractionProcessingMock,
-  pauseProcessingMock,
-  resumeProcessingMock,
-  abortProcessingMock,
   removeFromQueueMock,
   clearQueueMock,
   retryJobMock,
@@ -37,14 +33,10 @@ const {
   getLetterByIdMock: vi.fn(),
   resetLetterForProcessingMock: vi.fn(),
   getQueueStatusMock: vi.fn(),
-  getProcessingStatusMock: vi.fn(),
   requestBackgroundWorkerRunMock: vi.fn(),
   startTranscriptionProcessingMock: vi.fn(),
   startMetadataProcessingMock: vi.fn(),
   startEntityExtractionProcessingMock: vi.fn(),
-  pauseProcessingMock: vi.fn(),
-  resumeProcessingMock: vi.fn(),
-  abortProcessingMock: vi.fn(),
   removeFromQueueMock: vi.fn(),
   clearQueueMock: vi.fn(),
   retryJobMock: vi.fn(),
@@ -60,6 +52,7 @@ vi.mock('drizzle-orm', () => ({
   or: vi.fn((...clauses: unknown[]) => clauses),
   inArray: vi.fn((field: unknown, values: unknown[]) => ({ field, values })),
   isNotNull: vi.fn((field: unknown) => ({ field, isNotNull: true })),
+  isNull: vi.fn((field: unknown) => ({ field, isNull: true })),
   ilike: vi.fn((field: unknown, value: unknown) => ({ field, value })),
   asc: vi.fn((field: unknown) => ({ field, direction: 'asc' })),
   desc: vi.fn((field: unknown) => ({ field, direction: 'desc' })),
@@ -97,10 +90,28 @@ vi.mock('../../../db/index.js', () => {
       id: 'letters.id',
       collectionId: 'letters.collectionId',
       dateRaw: 'letters.dateRaw',
+      type: 'letters.type',
       typeSequence: 'letters.typeSequence',
+      workflow: 'letters.workflow',
+      transcriptionStatus: 'letters.transcriptionStatus',
+      transcriptionRunId: 'letters.transcriptionRunId',
+      transcriptionLeaseExpiresAt: 'letters.transcriptionLeaseExpiresAt',
+      transcriptionClaimKind: 'letters.transcriptionClaimKind',
+      metadataStatus: 'letters.metadataStatus',
+      metadataRunId: 'letters.metadataRunId',
+      metadataRunRevision: 'letters.metadataRunRevision',
+      metadataLeaseExpiresAt: 'letters.metadataLeaseExpiresAt',
+      metadataLeaseRunId: 'letters.metadataLeaseRunId',
+      metadataClaimKind: 'letters.metadataClaimKind',
+      entityExtractionStatus: 'letters.entityExtractionStatus',
+      extraContentJobStatus: 'letters.extraContentJobStatus',
+      transcriptConfirmedAt: 'letters.transcriptConfirmedAt',
+      transcriptionText: 'letters.transcriptionText',
+      deadLetter: 'letters.deadLetter',
     },
     letterPages: {
       id: 'letterPages.id',
+      letterId: 'letterPages.letterId',
     },
   };
 });
@@ -126,14 +137,10 @@ vi.mock('../../../services/letter-queries.js', () => ({
 }));
 
 vi.mock('../../../services/processing-queue.js', () => ({
-  getProcessingStatus: getProcessingStatusMock,
   getQueueStatus: getQueueStatusMock,
   requestBackgroundWorkerRun: requestBackgroundWorkerRunMock,
   startTranscriptionProcessing: startTranscriptionProcessingMock,
   startMetadataProcessing: startMetadataProcessingMock,
-  pauseProcessing: pauseProcessingMock,
-  resumeProcessing: resumeProcessingMock,
-  abortProcessing: abortProcessingMock,
   removeFromQueue: removeFromQueueMock,
   clearQueue: clearQueueMock,
   retryJob: retryJobMock,
@@ -194,18 +201,7 @@ function createQueueStatus() {
       queuedEntityExtraction: 0,
       recentSuccessCount: 0,
       recentFailedCount: 0,
-    },
-    onDemandProcessing: {
-      isRunning: false,
-      isPaused: false,
-      shouldAbort: false,
-      currentJob: null,
-      completed: 0,
-      failed: 0,
-      skipped: 0,
-      total: 0,
-      errors: [],
-      lastCompletedAt: null,
+      recentClearedCount: 0,
     },
   };
 }
@@ -235,7 +231,7 @@ describe('admin letters processing queue integration', () => {
   it('starts transcription with validated filter options', async () => {
     processingFilterParseMock.mockReturnValue({ collectionCode: '009' });
     startTranscriptionProcessingMock.mockResolvedValue({
-      message: 'Started transcription',
+      message: 'Worker requested; matching letters are already queued',
       total: 2,
     });
 
@@ -249,61 +245,17 @@ describe('admin letters processing queue integration', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toEqual({
-      message: 'Started transcription',
+      message: 'Worker requested; matching letters are already queued',
       total: 2,
     });
     expect(processingFilterParseMock).toHaveBeenCalledWith({ collectionCode: '009' });
     expect(startTranscriptionProcessingMock).toHaveBeenCalledWith({ collectionCode: '009' });
   });
 
-  it('returns a request-correlated 400 when pause fails synchronously', async () => {
-    pauseProcessingMock.mockImplementation(() => {
-      throw new Error('Already paused');
-    });
-
-    const response = await invokeRouter(lettersRouter, {
-      method: 'POST',
-      url: '/processing/pause',
-      path: '/processing/pause',
-      headers: { accept: 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.body).toEqual({
-      error: 'Already paused',
-      requestId: expect.any(String),
-    });
-    expect(response.headers['x-request-id']).toBe(
-      (response.body as { requestId: string }).requestId,
-    );
-  });
-
-  it('returns a request-correlated 400 when resume fails synchronously', async () => {
-    resumeProcessingMock.mockImplementation(() => {
-      throw new Error('Not paused');
-    });
-
-    const response = await invokeRouter(lettersRouter, {
-      method: 'POST',
-      url: '/processing/resume',
-      path: '/processing/resume',
-      headers: { accept: 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.body).toEqual({
-      error: 'Not paused',
-      requestId: expect.any(String),
-    });
-    expect(response.headers['x-request-id']).toBe(
-      (response.body as { requestId: string }).requestId,
-    );
-  });
-
   it('starts entity extraction with validated filter options', async () => {
     processingFilterParseMock.mockReturnValue({ collectionCode: '009', year: 1947 });
     startEntityExtractionProcessingMock.mockResolvedValue({
-      message: 'Started entity extraction',
+      message: 'Worker requested; matching letters are already queued',
       total: 3,
     });
 
@@ -317,7 +269,7 @@ describe('admin letters processing queue integration', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toEqual({
-      message: 'Started entity extraction',
+      message: 'Worker requested; matching letters are already queued',
       total: 3,
     });
     expect(processingFilterParseMock).toHaveBeenCalledWith({
@@ -328,21 +280,6 @@ describe('admin letters processing queue integration', () => {
       collectionCode: '009',
       year: 1947,
     });
-  });
-
-  it('aborts the running queue through the processing service', async () => {
-    abortProcessingMock.mockResolvedValue({ message: 'Processing aborted' });
-
-    const response = await invokeRouter(lettersRouter, {
-      method: 'POST',
-      url: '/processing/abort',
-      path: '/processing/abort',
-      headers: { accept: 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toEqual({ message: 'Processing aborted' });
-    expect(abortProcessingMock).toHaveBeenCalledTimes(1);
   });
 
   it('rejects cancel requests that do not include a letter id', async () => {

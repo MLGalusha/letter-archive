@@ -106,7 +106,6 @@ export interface BulkResult {
   queued: number;
   skipped: number;
   skipReasons: Array<{ letterId: string; reason: string }>;
-  processing: boolean;
   unconfirmedCount?: number;
 }
 

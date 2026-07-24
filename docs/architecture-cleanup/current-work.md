@@ -5,15 +5,13 @@ Last updated: July 23, 2026
 ## Resume Here
 
 - Working branch: `architecture-cleanup`
-- Recovery point: `admin-main-redesign` at `bb0bfb29`
+- Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 009 — complete
-- Last green implementation checkpoint: public delivery and entity projection
-  boundaries at `97bca4a3`
-- Current slice: 010 — retire the legacy in-process batch executor (framed, not
-  started)
-- Next queued slice: 011 — retire the API registry executor, then make recovery
-  worker-owned
+- Current checkpoint: 010 — retire the legacy in-process batch executor, complete
+- Last sealed cleanup checkpoint: public delivery and entity projection boundaries at
+  `97bca4a3`
+- Current slice: 011 — retire the API registry executor, then make recovery
+  worker-owned (framed, not started)
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -34,20 +32,23 @@ Measured on `bb0bfb29` before cleanup:
 
 Architecture indicators:
 
-- Three batch execution paths remain active—autonomous worker, legacy queue, and
+These are historical measurements from the recovery base, not claims about the current
+tree:
+
+- Three batch execution paths were active—autonomous worker, legacy queue, and
   API-process registry runner—plus direct request-owned AI actions.
-- API and worker startup both recover `RUNNING` transcription, metadata, and entity
-  extraction rows, allowing an API restart to reset work owned by a live worker.
-  Extra-content jobs have a separate status and are not recovered by this function.
-- Letter lifecycle state is mutated directly in about 80 production call sites across
+- API and worker startup both blindly recovered `RUNNING` transcription, metadata, and
+  entity extraction rows, allowing an API restart to reset work owned by a live worker.
+  Extra-content jobs had a separate status and were not recovered by that function.
+- Letter lifecycle state was mutated directly in about 80 production call sites across
   18 files.
-- Dashboard query/filter state is repeated across state, persistence, saved views,
+- Dashboard query/filter state was repeated across state, persistence, saved views,
   chips, API serialization, selection, and UI prop contracts.
-- `AdminDashboard.css` is 4,448 lines with overlapping global ownership.
-- The largest mixed-responsibility frontend route is `LetterReviewPage.tsx` at about
+- `AdminDashboard.css` was 4,448 lines with overlapping global ownership.
+- The largest mixed-responsibility frontend route was `LetterReviewPage.tsx` at about
   1,871 lines; the largest public backend route is `routes/letters.ts` at about 2,230
   lines, though its search section is comparatively cohesive.
-- Redesign and refactoring docs contain stale active-phase claims.
+- Redesign and refactoring docs contained stale active-phase claims.
 
 ## Prioritized Program
 
@@ -70,9 +71,10 @@ Architecture indicators:
 - [x] Add a run- and revision-bound entity-extraction owner with atomic projection
   replacement and explicit rollout compatibility.
 - [ ] Make recovery worker-owned so API startup cannot reset active work.
-- [ ] Establish one eligibility definition per processing stage.
+- [x] Establish one eligibility definition per processing stage.
 - [ ] Make the worker the sole executor; APIs enqueue, cancel, retry, and report.
-- [ ] Remove legacy queue/registry execution duplication and the processing import cycle.
+- [x] Remove the legacy queue executor and its processing import cycle.
+- [ ] Remove the remaining registry execution and queue-management duplication.
 - [x] Separate metadata completion from entity-persistence completion.
 
 ### C. Domain state ownership
@@ -1142,7 +1144,7 @@ Residuals carried forward:
 
 ## Slice 010 — Retire the Legacy In-Process Batch Executor
 
-Status: framed, not started
+Status: complete
 
 Problem:
 
@@ -1153,7 +1155,7 @@ configured Cloud Run job and this API-process fallback. Pause/abort semantics ar
 therefore process-local, execution ownership depends on deployment configuration, and
 the legacy loop participates in the processing import cycle.
 
-Target invariant:
+Delivered invariant:
 
 Batch entry points persist eligible `PENDING` work and optionally wake a configured
 worker; they never execute AI work in the API process. Local development uses the
@@ -1161,31 +1163,96 @@ documented separate worker process. One durable eligibility definition includes 
 work in wake/exit decisions, and the documented transcript-confirmation gate applies
 to every metadata producer.
 
-Planned minimum:
+What changed:
 
-- Add characterization for legacy route/bulk/upload responses and worker handoff.
-- Include eligible `PENDING` entity extraction in configured-worker wakeup and
-  exit-when-empty rechecks before removing the fallback that currently masks it.
-- Delete the contradictory bulk `skipConfirmationCheck` path; project documentation
-  already defines confirmation as the metadata gate.
-- Move legacy and bulk starts to enqueue/wake only, then delete
-  `processLettersAsync()`, its API-memory batch state, and controls proven to operate
-  only that retired executor.
-- Remove the resulting import-cycle shims and update the architecture tripwire.
+- Deleted `processLettersAsync()`, its module-global state and counters, its local
+  fallback, and the legacy status/pause/resume/abort HTTP, dashboard, API-client, CSS,
+  E2E, and admin-CLI surfaces.
+- Filtered starts, post-upload auto-start, and bulk transcription/metadata now only
+  preserve or compare-and-set durable queue state and request a configured-worker
+  wake. Their responses distinguish a matching queued count from execution scope;
+  local execution requires the separate worker.
+- Added `processing-eligibility.ts` as the one stage-specific predicate boundary used
+  by enqueue/reset/retry operations, worker polling, wake/exit decisions, queue
+  snapshots, filtered starts, registry eligibility, and queue clearing. Transcription
+  requires a transcribable type and a page; metadata requires a confirmed nonblank
+  transcript and idle downstream stages; entity work requires successful metadata.
+  All three exclude dead-letter rows once queued.
+- Entity-only work now participates in level-triggered wakeups and both empty-worker
+  checks. The worker publishes idle before its final database recheck, and repeated
+  cleanup cannot overwrite a replacement worker heartbeat with a second old-worker
+  idle write. The worker deployment now includes the region/job identity needed to
+  request a successor execution when that final recheck finds work.
+- Removed the contradictory `skipConfirmationCheck` contract. Queued and requested
+  metadata claims both enforce confirmation, while the transcript-confirm-and-claim
+  operation remains the sole atomic exception. Bulk metadata uses the complete observed
+  source/job compare-and-set, resets retry/dead-letter state, and cannot report a row
+  queued after confirmation or downstream state changes.
+- Explicit entity requeues clear stale dead-letter state. Metadata confirmation and
+  successful publication also establish the non-dead-letter invariant needed by the
+  entity worker.
+- Pipelines now import progress/abort state directly from the temporary registry
+  runner, removing the queue compatibility shims and three processing import cycles.
+  Architecture tests reject any return of the retired executor or queue-to-pipeline
+  ownership.
 
-Non-goals:
+Evidence:
 
-- Do not remove the separate process-registry runner in this slice.
-- Do not move direct request-owned regeneration to the worker.
-- Do not make recovery worker-only until every API batch executor is gone.
-- Do not add a generic queue or orchestration framework.
+- Backend typecheck and the complete backend suite passed: 76 files / 693 tests.
+- Frontend complete suite and production build passed: 92 files / 612 tests.
+- Playwright discovered 547 tests in 36 files after obsolete legacy-control coverage
+  was removed; the deterministic mocked browser gate passed 35/35.
+- Focused queue, bulk, metadata-claim, worker-state, worker-handoff, route, pipeline,
+  and architecture characterization passed before the aggregate runs.
+- No schema or migration changed. Stale-symbol search and `git diff --check` passed.
 
-Acceptance:
+Residuals carried forward:
 
-- No production reference to `processLettersAsync` or its legacy mutable batch state.
-- Upload, filtered starts, bulk transcription, bulk metadata, and entity starts leave
-  durable worker-eligible rows and report queued work truthfully.
-- Worker wake/exit tests cover entity-only work and recheck before availability handoff.
-- Focused queue/bulk/worker/API/frontend contracts, package typechecks/build, the full
-  suites, mocked browser gate, architecture review, and `git diff --check` pass before
-  checkpointing.
+- The process-registry runner still starts API-memory batches and owns process-local
+  pause, abort, progress, and mutex state. Its Processing-page contract is deliberately
+  retained for one separately characterized deletion.
+- Explicit single-letter regeneration still runs synchronously in the request process
+  behind the canonical persisted claim/publication owners.
+- Recovery still runs in both API and worker because one API batch executor remains.
+- The durable queue and registry APIs still duplicate snapshot and queue-management
+  scaffolding; consolidation belongs with registry retirement, not this slice.
+- Filtered start endpoints count matching globally queued rows, but they do not persist
+  a scoped batch selection. The wake is deliberately documented as global; a future
+  scoped-batch feature would need durable selection state rather than another
+  process-local list.
+- `worker_state` is still an ownerless singleton. Stage run fences protect content, but
+  an AI call longer than the two-minute availability window can make a replacement
+  worker appear necessary, and overlapping executions can publish competing
+  availability. Slice 011 must choose an execution token/compare-and-set boundary or a
+  continuously renewed availability lease before claiming singleton ownership.
+
+## Slice 011 — Retire the Process-Registry Batch Executor
+
+Status: framed, not started
+
+Problem:
+
+The Processing page still starts `processes/runner.ts` batches inside the API process.
+Its mutex, progress, pause, and abort state disappear on restart and cannot control the
+separate worker. The registry also duplicates eligibility, queue snapshots, and CRUD
+already exposed by the durable worker-owned queue.
+
+Target invariant:
+
+Automatic/batch AI work has one runtime owner: the worker. The Processing page observes
+and mutates durable stage state and requests worker wakeups; it does not create a second
+executor. API startup no longer owns automatic recovery after the final API batch
+executor is gone. Direct single-letter requests remain explicit and separately fenced.
+
+First audit:
+
+- Characterize every registry route, frontend action, SSE event, and extra-content
+  dependency before choosing the smallest compatibility migration.
+- Prove which registry helpers are observation/CRUD versus execution-only, and reuse
+  the stage predicates from Slice 010 rather than adding another orchestration layer.
+- Preserve truthful queue/recent/error visibility while deleting process-local
+  batch-control promises the worker cannot honor.
+- Move automatic reconciliation out of API startup after the last API batch executor
+  is gone, and give worker availability an execution-owned liveness boundary.
+- Decide explicitly whether filtered starts should disappear as redundant global wakes
+  or gain durable scoped selection; do not preserve the current count-only illusion.

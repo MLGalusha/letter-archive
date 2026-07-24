@@ -224,6 +224,7 @@ describe('admin downstream extraction exclusion', () => {
       body: { mode: 'metadata_only' },
       letter: {
         transcriptionText: 'transcript',
+        transcriptConfirmedAt: new Date(),
         transcriptionStatus: 'SUCCESS',
         metadataStatus: 'SUCCESS',
         entityExtractionStatus: 'RUNNING',
@@ -270,6 +271,33 @@ describe('admin downstream extraction exclusion', () => {
     expect(dbUpdateMock).not.toHaveBeenCalled();
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
     expect(runEntityExtractionOnlyMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects metadata re-extraction until the transcript is confirmed', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      type: 'L',
+      workflow: 'TRANSCRIBED',
+      transcriptionText: 'transcript',
+      transcriptConfirmedAt: null,
+      transcriptionStatus: 'SUCCESS',
+      metadataStatus: 'SUCCESS',
+      entityExtractionStatus: 'PENDING',
+    });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/re-extract',
+      path: '/letter-1/re-extract',
+      body: { mode: 'metadata_only' },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toMatchObject({
+      error: 'Transcript must be confirmed before regenerating metadata',
+    });
+    expect(claimRequestedMetadataMock).not.toHaveBeenCalled();
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
   });
 
   it('does not preclaim metadata when transcription wins the atomic race', async () => {
@@ -321,6 +349,10 @@ describe('admin downstream extraction exclusion', () => {
     });
 
     expect(response.statusCode).toBe(400);
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      entityExtractionStatus: 'PENDING',
+      deadLetter: false,
+    }));
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
       clauses: [
@@ -344,6 +376,7 @@ describe('admin downstream extraction exclusion', () => {
       type: 'L',
       workflow: 'TRANSCRIBED',
       transcriptionText: 'transcript',
+      transcriptConfirmedAt: new Date(),
       transcriptionStatus: 'SUCCESS',
       metadataStatus: 'SUCCESS',
       entityExtractionStatus: 'PENDING',

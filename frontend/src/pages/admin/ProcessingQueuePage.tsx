@@ -227,7 +227,7 @@ export default function ProcessingQueuePage() {
             <p className="proc-kicker">Admin</p>
             <h1 className="proc-title">Processing</h1>
             <p className="proc-subtitle">
-              Control center for all background pipelines.
+              Monitor worker status and manage temporary API-memory batches.
             </p>
           </div>
           <div className="proc-header-meta">

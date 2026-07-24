@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createLeaseRecoveryCoordinator,
   decideEmptyWorkerJob,
+  decideEmptyWorkerJobWithHandoff,
   projectQueuedRecoveryForWorker,
 } from '../lease-recovery-coordinator.js';
 
@@ -48,6 +49,25 @@ describe('worker queue recovery coordination', () => {
     const getQueuedWorkState = vi.fn().mockResolvedValue('pending');
 
     await expect(decideEmptyWorkerJob({ reconcile, getQueuedWorkState })).resolves.toBe('drain');
+  });
+
+  it('rechecks after relinquishment and drains entity work inserted during handoff', async () => {
+    const decisions = vi
+      .fn<() => Promise<'exit' | 'drain'>>()
+      .mockResolvedValueOnce('exit')
+      .mockResolvedValueOnce('drain');
+    const relinquish = vi.fn(async () => {
+      // Models an entity-only PENDING row committed after the first empty
+      // decision and before the required post-idle database recheck.
+    });
+
+    await expect(decideEmptyWorkerJobWithHandoff({
+      decide: decisions,
+      relinquish,
+    })).resolves.toBe('drain');
+
+    expect(relinquish).toHaveBeenCalledOnce();
+    expect(decisions).toHaveBeenCalledTimes(2);
   });
 
   it('serializes recovery and waits for an active call when stopped', async () => {

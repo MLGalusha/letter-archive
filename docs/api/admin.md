@@ -11,7 +11,7 @@ The admin letters route file is a thin routing layer. Business logic lives in se
 | Service | File | Responsibility |
 |---------|------|---------------|
 | Letter Queries | `services/letter-queries.ts` | Listing, filtering, pagination, stats |
-| Processing Queue | `services/processing-queue.ts` | Background processing, queue CRUD, pause/resume/abort |
+| Processing Queue | `services/processing-queue.ts` | Durable queue snapshot/CRUD, recovery, and configured-worker wakeups |
 | Letter Operations facade | `services/letter-operations.ts` | Stable import surface for the smaller modules under `services/letter/` |
 | Transcription pipeline | `pipeline/transcription.ts` | Canonical queue and direct-request transcription producer |
 | Transcription ownership | `services/letter/transcription-job.ts` | Claim, run-ID fencing, and terminal publication |
@@ -52,33 +52,36 @@ Soft delete.
 
 ## Processing Queue
 
-### GET /admin/processing/status
-Current on-demand processing state. Terminal counts are reported separately as
-`completed`, `failed`, and `skipped`; ownership loss is never counted as success.
-
-**Service**: `getProcessingStatus()` in `processing-queue.ts`
-
 ### GET /admin/processing/queue
 Full queue status: active, queued, and recent jobs.
 
 **Service**: `getQueueStatus()` in `processing-queue.ts`
 
 ### POST /admin/processing/start-transcription
-Start transcription for eligible letters. Accepts filter options.
+Request worker processing for already-queued, eligible letters. Accepts filter options.
+The response is
+`{ message: "Worker requested; matching letters are already queued", total }`. Filters
+scope the reported count and whether a wake is requested; they do not reserve a batch,
+so the worker may consume other globally eligible queued rows. In local development
+the separate `npm run worker` process consumes the queue.
 
 **Body** (optional): `{ collectionCode, visibility, search, year, month, day, dateFrom, dateTo }`
 
 **Service**: `startTranscriptionProcessing()` in `processing-queue.ts`
 
 ### POST /admin/processing/start-metadata
-Start metadata extraction for eligible letters.
+Request worker metadata extraction for eligible, confirmed transcripts.
 
 **Service**: `startMetadataProcessing()` in `processing-queue.ts`
 
-### POST /admin/processing/pause | resume | abort
-Control background processing.
+### POST /admin/processing/start-entities
+Request worker entity extraction for eligible letters whose metadata succeeded.
 
-**Service**: `pauseProcessing()`, `resumeProcessing()`, `abortProcessing()` in `processing-queue.ts`
+**Service**: `startEntityExtractionProcessing()` in `processing-queue.ts`
+
+The retired legacy `/status`, `/pause`, `/resume`, and `/abort` endpoints are not
+worker controls. The separate process-registry API under `/admin/processing/snapshot`
+temporarily owns its own API-memory batch controls.
 
 ### POST /admin/processing/queue/remove
 Remove a PENDING item: `{ letterId, type }` where type is `transcription | metadata | entity_extraction`
@@ -99,7 +102,7 @@ Queue letters for transcription: `{ letterIds: [...] }`
 **Service**: `bulkTranscribe()` in `letter-operations.ts`
 
 ### POST /admin/letters/bulk/extract-metadata
-Queue for metadata extraction: `{ letterIds: [...], skipConfirmationCheck? }`
+Queue confirmed transcripts for metadata extraction: `{ letterIds: [...] }`
 
 **Service**: `bulkExtractMetadata()` in `letter-operations.ts`
 
@@ -135,7 +138,7 @@ Triggers metadata extraction. Requires TRANSCRIBED state.
 Re-run metadata extraction. Requires confirmed transcript.
 
 ### POST /admin/letters/:letterId/regenerate-entities
-Re-run entity extraction only. Requires transcription.
+Re-run entity extraction only. Requires successful metadata.
 
 ---
 

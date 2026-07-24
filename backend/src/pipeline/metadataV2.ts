@@ -19,7 +19,7 @@ import {
   EntityExtractionClaimLostError,
   processEntityExtraction,
 } from '../services/entities.js';
-import { updateJobProgress, clearJobProgress } from '../services/processing-queue.js';
+import { updateJobProgress, clearJobProgress } from '../services/processes/runner.js';
 import { createLogger } from '../utils/logger.js';
 import { notify } from '../services/notifications.js';
 

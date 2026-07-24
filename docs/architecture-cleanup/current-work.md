@@ -7,10 +7,11 @@ Last updated: July 23, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 011B — process-registry retirement complete; checkpoint commit
-  pending
-- Last sealed cleanup checkpoint: queued extra-content worker migration at `fa7eedb8`
-- Next slice: 011C — fence worker availability and move recovery out of the API
+- Current checkpoint: 011C — fence worker availability and move recovery out of the
+  API
+- Last sealed cleanup checkpoint: process-registry retirement at `9e480383`
+- Current slice: 011C — audited; implementation and failure-mode characterization
+  next
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -1289,7 +1290,7 @@ Residuals:
 
 ## Slice 011B — Retire the Process-Registry Batch Executor
 
-Status: complete; checkpoint commit pending
+Status: complete at `9e480383`
 
 Problem:
 

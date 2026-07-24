@@ -76,6 +76,97 @@ test.describe('@mocked Line Review', () => {
     );
   });
 
+  test('starts a fresh review shell when navigating to another letter', async ({
+    page,
+  }) => {
+    const firstLetterBase = createMockLetterReviewLetter();
+    const firstLetter = createMockLetterReviewLetter({
+      images: firstLetterBase.images.map((image, index) => ({
+        ...image,
+        segmentTrustState: 'trusted',
+        ...(index === 0
+          ? {
+              lineSegments: [{
+                line: 1,
+                bbox: [170, 210, 1480, 280],
+                baseline: [[170, 274], [1480, 274]],
+                ocrText: '',
+                segmentClass: 'continuation',
+                isMapped: false,
+              }],
+            }
+          : {}),
+      })),
+    });
+    const secondLetterImage = createMockLetterReviewLetter().images[0];
+    const secondLetter = createMockLetterReviewLetter({
+      id: 'letter-review-2',
+      title: 'Review Letter Two',
+      metadata: {
+        sender: 'Second Letter Sender',
+      },
+      images: [{
+        ...secondLetterImage,
+        id: 'letter-review-2-page-1',
+        originalFilename: '009-19470811-L02-01.jpg',
+      }],
+      transcript: {
+        pages: [{
+          pageNumber: 1,
+          text: 'Second letter transcript.',
+        }],
+        fullText: 'Second letter transcript.',
+        verified: false,
+      },
+    });
+    await installMockLetterReviewApi(page, {
+      initialLetter: secondLetter,
+    });
+    await installMockLetterReviewApi(page, {
+      initialLetter: firstLetter,
+    });
+    await page.goto(`/admin/letters/${firstLetter.id}`);
+    await page.locator('.letter-review-page').waitFor({ state: 'visible' });
+    await page.locator('.viewer-image').waitFor({ state: 'visible' });
+
+    await page.locator('.overlay-center .nav-button').nth(1).click();
+    await expect(page.locator('.image-counter')).toHaveText('2 / 2');
+    await page.locator('.transcript-editor').selectText();
+    const mapButton = page.getByRole('button', { name: 'Map to Segment' });
+    await expect(mapButton).toBeVisible();
+    await mapButton.click();
+    await expect(page.locator('.line-review-mode')).toBeVisible();
+    await expect(page.locator('.line-review-mapping-banner')).toContainText(
+      'My dear mother,',
+    );
+
+    const secondLetterResponse = page.waitForResponse((response) => (
+      response.request().method() === 'GET'
+      && response.url()
+        === `${API_BASE_URL}/admin/letters/${secondLetter.id}`
+    ));
+    await page.evaluate((letterId) => {
+      window.history.pushState({}, '', `/admin/letters/${letterId}`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }, secondLetter.id);
+
+    expect((await secondLetterResponse).ok()).toBe(true);
+    await expect(page).toHaveURL(`/admin/letters/${secondLetter.id}`);
+    await expect(page.locator('#sender')).toHaveValue(
+      'Second Letter Sender',
+    );
+    await expect(page.locator('.line-review-mode')).toHaveCount(0);
+    await expect(page.locator('.line-review-mapping-banner')).toHaveCount(0);
+    await expect(page.locator('.viewer-image')).toBeVisible();
+    await expect(page.locator('.filename-value')).toHaveText(
+      '009-19470811-L02-01.jpg',
+    );
+    await expect(page.locator('.overlay-center .nav-button')).toHaveCount(0);
+    await expect(page.locator('.transcript-editor')).toContainText(
+      'Second letter transcript.',
+    );
+  });
+
   test('shows no-segments message when line-segments returns empty', async ({
     page,
   }) => {

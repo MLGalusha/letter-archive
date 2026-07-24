@@ -10,10 +10,18 @@ const sourcePath = (relativePath: string) => path.resolve(
 
 describe("reviewable dynamic editor ownership", () => {
   it("keeps verified editor mechanics out of the Letter Review route", async () => {
-    const page = await readFile(
-      sourcePath("pages/admin/LetterReviewPage.tsx"),
-      "utf8",
-    );
+    const [page, lineReviewWorkspace] = await Promise.all([
+      readFile(
+        sourcePath("pages/admin/LetterReviewPage.tsx"),
+        "utf8",
+      ),
+      readFile(
+        sourcePath(
+          "pages/admin/LetterReview/useLineReviewWorkspace.ts",
+        ),
+        "utf8",
+      ),
+    ]);
 
     for (const removedOwner of [
       "DynamicEditorRef",
@@ -32,8 +40,12 @@ describe("reviewable dynamic editor ownership", () => {
 
     expect(page).not.toContain("isPhotoDescriptionEditing");
     expect(page).not.toContain("isExtraContentEditing");
-    expect(page).toMatch(
-      /const handleImageClick[\s\S]*?isTranscriptEditing[\s\S]*?extraContentWorkspace\.lineReviewBlocked/,
+    expect(page).toContain("isTranscriptEditing,");
+    expect(page).toContain(
+      "lineReviewBlocked: extraContentWorkspace.lineReviewBlocked",
+    );
+    expect(lineReviewWorkspace).toMatch(
+      /const onImageClick[\s\S]*?isTranscriptEditing[\s\S]*?lineReviewBlocked/,
     );
   });
 

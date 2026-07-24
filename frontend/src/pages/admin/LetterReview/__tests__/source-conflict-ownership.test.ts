@@ -70,6 +70,10 @@ const letterTranscriptionWorkspacePath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/useLetterTranscriptionWorkspace.ts',
 );
+const lineReviewWorkspacePath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/LetterReview/useLineReviewWorkspace.ts',
+);
 const reviewableDynamicEditorPath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/ReviewableDynamicEditor.tsx',
@@ -270,6 +274,7 @@ describe('Letter Review source-conflict ownership', () => {
       reviewVisit,
       autoSaveCoordinator,
       lineReview,
+      lineReviewWorkspace,
     ] = await Promise.all([
       readFile(pagePath, 'utf8'),
       readFile(autoSavePath, 'utf8'),
@@ -278,6 +283,7 @@ describe('Letter Review source-conflict ownership', () => {
       readFile(reviewVisitPath, 'utf8'),
       readFile(autoSaveCoordinatorPath, 'utf8'),
       readFile(lineReviewPath, 'utf8'),
+      readFile(lineReviewWorkspacePath, 'utf8'),
     ]);
 
     expect(page).toContain('const visit = useLetterReviewVisit(letterId)');
@@ -331,8 +337,15 @@ describe('Letter Review source-conflict ownership', () => {
     expect(lineReview).toContain('mutationsBlockedRef.current');
     expect(lineReview).toContain('clearTimeout(autoSaveTimerRef.current)');
     expect(page).toContain('toggleLetterFlag(letter.id, newFlagged)');
-    expect(page).toMatch(
-      /getAdminLetterById\(letterId\)\.then\(\(updated\) => \{[\s\S]*?setLetter\(updated\)/,
+    expect(page).not.toMatch(
+      /getAdminLetterById\(letterId\)\.then[\s\S]*?setLetter\(updated\)/,
+    );
+    expect(lineReviewWorkspace).toContain(
+      'getAdminLetterById(targetLetterId)',
+    );
+    expect(lineReviewWorkspace).toContain('visit.isActive()');
+    expect(lineReviewWorkspace).toContain(
+      'tryAdoptLetter(updatedLetter)',
     );
     expect(page).toContain('window.location.reload();');
   });

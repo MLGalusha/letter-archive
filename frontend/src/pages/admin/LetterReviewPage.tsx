@@ -29,7 +29,7 @@ import {
   DropdownItem,
 } from "../../components/common";
 import { trackEdit } from "../../utils/recentEdits";
-import type { Letter, LetterImage, VisibilityState } from "../../types/Letter";
+import type { Letter, VisibilityState } from "../../types/Letter";
 import {
   hasPrimaryTranscriptContent,
   hasRelatedExtraContent,
@@ -60,12 +60,11 @@ import { usePhotoDescriptionWorkspace } from "./LetterReview/usePhotoDescription
 import { useExtraContentWorkspace } from "./LetterReview/useExtraContentWorkspace";
 import { useReadingViewWorkspace } from "./LetterReview/useReadingViewWorkspace";
 import { useLetterTranscriptionWorkspace } from "./LetterReview/useLetterTranscriptionWorkspace";
+import { useLineReviewWorkspace } from "./LetterReview/useLineReviewWorkspace";
 import TranscriptionRegenerationDialog from "./LetterReview/TranscriptionRegenerationDialog";
 import { loadCurrentLetter } from "./LetterReview/loadCurrentLetter";
 import { usePretextFontSize } from "../../hooks/usePretextFontSize";
-import LineReviewMode, {
-  type LineReviewModeHandle,
-} from "../../components/LineReviewMode/LineReviewMode";
+import LineReviewMode from "../../components/LineReviewMode/LineReviewMode";
 import IdentityExtractionModal from "../../components/admin/IdentityExtractionModal";
 import "./LetterReviewPage.css";
 
@@ -86,7 +85,6 @@ export default function LetterReviewPage() {
   const {
     letter,
     setAuthoritativeLetter,
-    setLetter,
     tryAdoptLetter,
   } = useGuardedLetterState(markSourceConflict, visit);
 
@@ -117,24 +115,7 @@ export default function LetterReviewPage() {
 
   const { saving, beginSaving } = useLetterSavingState(visit);
   const [message, setMessage] = useState("");
-  const [currentFilename, setCurrentFilename] = useState<string | undefined>(
-    undefined,
-  );
   const editorRef = useRef<HTMLDivElement>(null);
-  const lineReviewRef = useRef<LineReviewModeHandle>(null);
-
-  // Line highlighting state
-  const [, setCurrentLineIndex] = useState<number | null>(
-    null,
-  );
-  const [reviewMode, setReviewMode] = useState(false);
-  const [segmentFirstMode, setSegmentFirstMode] = useState(false);
-  const segmentFirstTriggeredRef = useRef(false);
-  const [debugMode, setDebugMode] = useState(false);
-  const [viewerPageIndex, setViewerPageIndex] = useState(0);
-  // Mapping mode: selected transcript text to map to a segment
-  const [selectedText, setSelectedText] = useState("");
-  const [mappingText, setMappingText] = useState<string | undefined>(undefined);
 
   useLayoutEffect(() => {
     setRegenerateState("idle");
@@ -142,7 +123,6 @@ export default function LetterReviewPage() {
     setEntityReExtractState("idle");
     setShowMetadataRegeneratePopup(false);
     setShowExtractionPopup(false);
-    segmentFirstTriggeredRef.current = false;
   }, [visit]);
 
   const transcriptFontSize = usePretextFontSize(
@@ -286,19 +266,29 @@ export default function LetterReviewPage() {
     executeLetterMutation,
     scheduleStatusReset,
   });
-  const readingViewWorkspace = useReadingViewWorkspace({
-    visit,
-    letter,
-    transcriptText: transcript,
-    surfaceActive: !reviewMode,
-    executeLetterMutation,
-  });
   const extraContentWorkspace = useExtraContentWorkspace({
     visit,
     letter,
     saving,
     scheduleDebouncedSave,
     tryAdoptLetter,
+    executeLetterMutation,
+  });
+  const lineReviewWorkspace = useLineReviewWorkspace({
+    visit,
+    letter,
+    editorRef,
+    isTranscriptEditing,
+    lineReviewBlocked: extraContentWorkspace.lineReviewBlocked,
+    tryAdoptLetter,
+    onTranscriptChange: setTranscript,
+    onAutoSave: triggerAutoSave,
+  });
+  const readingViewWorkspace = useReadingViewWorkspace({
+    visit,
+    letter,
+    transcriptText: transcript,
+    surfaceActive: !lineReviewWorkspace.active,
     executeLetterMutation,
   });
   const {
@@ -346,26 +336,6 @@ export default function LetterReviewPage() {
       };
     }
   }, [applyLetterMetadata, letterId, navigate, setAuthoritativeLetter]);
-
-  // Segment-first entry: auto-enter full-viewport segment review when pages
-  // have unverified segments with data. Only triggers once per letter visit.
-  useEffect(() => {
-    if (!letter || segmentFirstTriggeredRef.current) return;
-    segmentFirstTriggeredRef.current = true;
-
-    const letterImages = letter.images.filter((img) => img.type === 'letter');
-    const hasUnverifiedSegments = letterImages.some(
-      (img) =>
-        img.segmentTrustState !== 'trusted' &&
-        img.lineSegments &&
-        img.lineSegments.length > 0,
-    );
-
-    if (hasUnverifiedSegments) {
-      setReviewMode(true);
-      setSegmentFirstMode(true);
-    }
-  }, [letter]);
 
   useEffect(() => {
     if (!letter || !routeLocation.hash) return;
@@ -671,11 +641,6 @@ export default function LetterReviewPage() {
     visit,
   ]);
 
-  const handlePageChange = useCallback((index: number, image: LetterImage) => {
-    setCurrentFilename(image.originalFilename);
-    setViewerPageIndex(index);
-  }, []);
-
   const handleFlagToggle = useCallback(async () => {
     if (!letter) return;
     const newFlagged = !letter.flagged;
@@ -689,23 +654,6 @@ export default function LetterReviewPage() {
     letter,
   ]);
 
-  const handleImageClick = useCallback((pageIndex: number) => {
-    if (
-      !letter ||
-      !hasPrimaryTranscriptContent(letter) ||
-      isTranscriptEditing ||
-      extraContentWorkspace.lineReviewBlocked
-    ) {
-      return;
-    }
-    setViewerPageIndex(pageIndex);
-    setReviewMode(true);
-  }, [
-    extraContentWorkspace.lineReviewBlocked,
-    isTranscriptEditing,
-    letter,
-  ]);
-
   const handleMetadataAutoSave = useCallback((updates: AutoSaveData) => {
     void triggerAutoSave(updates);
   }, [triggerAutoSave]);
@@ -714,16 +662,6 @@ export default function LetterReviewPage() {
     void handleReExtract("entities_only");
   }, [handleReExtract]);
 
-  const handleTranscriptFromLineReview = useCallback((newText: string) => {
-    startTransition(() => {
-      setTranscript(newText);
-    });
-  }, []);
-
-  const handleLineReviewAutoSave = useCallback((data: AutoSaveData) => {
-    void triggerAutoSave(data);
-  }, [triggerAutoSave]);
-
   const handlePersonalNotesChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const nextValue = e.target.value;
     startTransition(() => {
@@ -731,56 +669,6 @@ export default function LetterReviewPage() {
     });
     void triggerAutoSave({ notes: nextValue || null });
   }, [triggerAutoSave, setNotes]);
-
-  // Line highlighting - update on cursor move
-  useEffect(() => {
-    const transcriptStatus = letter?.transcriptStatus;
-    const isEditing =
-      (transcriptStatus !== undefined && transcriptStatus !== "VERIFIED") ||
-      isTranscriptEditing;
-
-    const handleSelectionChange = () => {
-      const editor = editorRef.current;
-      if (!editor || !isEditing) {
-        setCurrentLineIndex(null);
-        setSelectedText("");
-        return;
-      }
-
-      const selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0) {
-        setCurrentLineIndex(null);
-        setSelectedText("");
-        return;
-      }
-
-      // Check if selection is within the editor
-      const range = selection.getRangeAt(0);
-      if (!editor.contains(range.commonAncestorContainer)) {
-        setCurrentLineIndex(null);
-        setSelectedText("");
-        return;
-      }
-
-      // Track selected text for mapping
-      const selText = selection.toString().trim();
-      setSelectedText(selText);
-
-      // Find the cursor position
-      const preRange = document.createRange();
-      preRange.setStart(editor, 0);
-      preRange.setEnd(range.startContainer, range.startOffset);
-      const textBeforeCursor = preRange.toString();
-
-      // Count newlines to determine line index
-      const lineIndex = (textBeforeCursor.match(/\n/g) || []).length;
-      setCurrentLineIndex(lineIndex);
-    };
-
-    document.addEventListener("selectionchange", handleSelectionChange);
-    return () =>
-      document.removeEventListener("selectionchange", handleSelectionChange);
-  }, [letter?.transcriptStatus, isTranscriptEditing]);
 
   if (loading || !letter) {
     return (
@@ -846,21 +734,27 @@ export default function LetterReviewPage() {
           </button>
         )}
 
-        {reviewMode && (
+        {lineReviewWorkspace.active && (
           <button
-            className={`header-action debug ${debugMode ? "active" : ""}`}
-            onClick={() => setDebugMode(prev => !prev)}
-            data-tooltip={debugMode ? "Hide Debug Overlay" : "Show Debug Overlay"}
+            className={`header-action debug ${
+              lineReviewWorkspace.headerControls.debugMode ? "active" : ""
+            }`}
+            onClick={lineReviewWorkspace.headerControls.toggleDebugMode}
+            data-tooltip={
+              lineReviewWorkspace.headerControls.debugMode
+                ? "Hide Debug Overlay"
+                : "Show Debug Overlay"
+            }
           >
             <Icon name="code" size={18} />
           </button>
         )}
 
-        {reviewMode && (
+        {lineReviewWorkspace.active && (
           <button
             className="header-action redetect"
-            onClick={() => lineReviewRef.current?.reloadSegments()}
-            disabled={lineReviewRef.current?.isLoading}
+            onClick={lineReviewWorkspace.headerControls.reloadSegments}
+            disabled={lineReviewWorkspace.headerControls.reloadDisabled}
             data-tooltip="Reload Segments"
           >
             <Icon name="refresh" size={18} />
@@ -878,34 +772,14 @@ export default function LetterReviewPage() {
     >
     <div className="letter-review-page">
       <div className="review-body">
-        {reviewMode ? (
+        {lineReviewWorkspace.active ? (
           <LineReviewMode
-            ref={lineReviewRef}
+            ref={lineReviewWorkspace.modeRef}
             letter={letter}
             transcript={transcript}
-            onTranscriptChange={handleTranscriptFromLineReview}
-            onExit={() => {
-              setReviewMode(false);
-              setSegmentFirstMode(false);
-              setMappingText(undefined);
-            }}
-            onAutoSave={handleLineReviewAutoSave}
             handleMutationError={handleMutationError}
             mutationsBlocked={mutationsBlocked}
-            debugMode={debugMode}
-            onDebugModeChange={setDebugMode}
-            initialPageIndex={viewerPageIndex}
-            fullViewport={segmentFirstMode}
-            mappingText={mappingText}
-            onMappingComplete={() => {
-              setMappingText(undefined);
-              // Re-fetch letter to reflect updated segment data
-              if (letterId) {
-                void getAdminLetterById(letterId).then((updated) => {
-                  setLetter(updated);
-                });
-              }
-            }}
+            {...lineReviewWorkspace.modeProps}
           />
         ) : (
         <ResizableSplitPane
@@ -921,8 +795,7 @@ export default function LetterReviewPage() {
               images={letter.images}
               letterId={letterId}
               showOnlyLetterPages={false}
-              onPageChange={handlePageChange}
-              onImageClick={handleImageClick}
+              {...lineReviewWorkspace.viewerProps}
             />
           </div>
 
@@ -931,12 +804,12 @@ export default function LetterReviewPage() {
             {/* Status Panel */}
             <div className="status-panel">
               {/* Filename Display - shows current page's filename */}
-              {(currentFilename || letter.images[0]?.originalFilename) && (
+              {lineReviewWorkspace.currentFilename && (
                 <div className="filename-row">
                   <div className="filename-display">
                     <span className="filename-label">File</span>
                     <code className="filename-value">
-                      {currentFilename || letter.images[0]?.originalFilename}
+                      {lineReviewWorkspace.currentFilename}
                     </code>
                   </div>
                   <Dropdown
@@ -1048,24 +921,21 @@ export default function LetterReviewPage() {
                 <div className="unmapped-segment-warning">
                   <span className="unmapped-segment-icon">⚠</span>
                   <span>{unmappedCount} unmapped special segment{unmappedCount !== 1 ? 's' : ''}</span>
-                  {selectedText.length > 0 && (
+                  {lineReviewWorkspace.selectedText.length > 0 && (
                     <button
                       className="unmapped-segment-map-btn"
-                      onClick={() => {
-                        setMappingText(selectedText);
-                        setReviewMode(true);
-                        setSegmentFirstMode(true);
-                      }}
+                      onClick={
+                        lineReviewWorkspace.mappingControls.mapSelectedText
+                      }
                     >
                       Map to Segment
                     </button>
                   )}
                   <button
                     className="unmapped-segment-review-btn"
-                    onClick={() => {
-                      setReviewMode(true);
-                      setSegmentFirstMode(true);
-                    }}
+                    onClick={
+                      lineReviewWorkspace.mappingControls.reviewSegments
+                    }
                   >
                     Review
                   </button>

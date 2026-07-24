@@ -4,7 +4,7 @@ import type { DashboardFilterStats, MissingFilter } from "./types";
 
 interface MissingDataFilterSectionProps {
   stats: DashboardFilterStats;
-  missingFilters: MissingFilter[];
+  missingFilters: readonly MissingFilter[];
   toggleMissingFilter: (value: MissingFilter) => void;
 }
 

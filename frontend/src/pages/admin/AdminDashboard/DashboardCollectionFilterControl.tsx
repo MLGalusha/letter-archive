@@ -2,10 +2,11 @@ import Icon from "../../../components/common/Icon";
 
 interface DashboardCollectionFilterControlProps {
   collectionInput: string;
-  collectionFilters: string[];
+  collectionFilters: readonly string[];
   onCollectionInputChange: (value: string) => void;
   onAddCollectionFilter: () => void;
   onRemoveCollectionFilter: (code: string) => void;
+  onClearCollectionFilters: () => void;
 }
 
 export default function DashboardCollectionFilterControl({
@@ -14,6 +15,7 @@ export default function DashboardCollectionFilterControl({
   onCollectionInputChange,
   onAddCollectionFilter,
   onRemoveCollectionFilter,
+  onClearCollectionFilters,
 }: DashboardCollectionFilterControlProps) {
   const hasCollectionFilter = collectionFilters.length > 0;
 
@@ -32,7 +34,7 @@ export default function DashboardCollectionFilterControl({
           <button
             type="button"
             className="filter-panel-clear"
-            onClick={() => collectionFilters.forEach(onRemoveCollectionFilter)}
+            onClick={onClearCollectionFilters}
             aria-label="Clear collection filters"
           >
             Clear

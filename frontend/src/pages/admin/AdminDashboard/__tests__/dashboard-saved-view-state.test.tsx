@@ -1,6 +1,13 @@
 import { useState, type ReactNode } from "react";
 import { act, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { ToastProvider } from "../../../../contexts/ToastContext";
 import {
   DEFAULT_COLUMN_ORDER,
@@ -9,26 +16,56 @@ import {
   STORAGE_KEY,
 } from "../constants";
 import { createDashboardCommittedQuery } from "../dashboardQueryModel";
+import { getDashboardCollectionFilters } from "../dashboardFilterStateModel";
 import { createDashboardStoredState } from "../dashboardStoredStateModel";
 import type {
   ColumnId,
   DashboardViewState,
+  PersistedState,
   SavedDashboardView,
   SortColumn,
 } from "../types";
 import { useDashboardFilters } from "../useDashboardFilters";
 import { useDashboardSavedViewState } from "../useDashboardSavedViewState";
+import { loadPersistedState } from "../utils";
 
 function wrapper({ children }: { children: ReactNode }) {
   return <ToastProvider>{children}</ToastProvider>;
 }
 
+function makePersistedState(
+  overrides: Partial<PersistedState> = {},
+): PersistedState {
+  return {
+    visibilityFilter: "ALL",
+    collectionFilter: "all",
+    searchQuery: "",
+    sortColumns: [{ ...DEFAULT_DASHBOARD_SORT }],
+    dateMode: "specific",
+    year: null,
+    month: null,
+    day: null,
+    dateFrom: null,
+    dateTo: null,
+    transcriptStatusFilters: [],
+    metadataStatusFilters: [],
+    extraContentStatusFilters: [],
+    workflowFilters: [],
+    flaggedFilter: "ALL",
+    missingFilters: [],
+    contentShapeFilters: [],
+    ...overrides,
+  };
+}
+
 function useSavedViewHarness() {
-  const filters = useDashboardFilters();
+  const [initialStoredState] = useState(loadPersistedState);
+  const filters = useDashboardFilters(initialStoredState);
   const [sortColumns, setSortColumns] = useState<SortColumn[]>([
     { field: "lastOpenedAt", direction: "desc" },
   ]);
-  const [visibleColumns, setVisibleColumns] = useState<Set<ColumnId>>(new Set(["sender", "date"]));
+  const [visibleColumns, setVisibleColumns] =
+    useState<Set<ColumnId>>(new Set(["sender", "date"]));
   const [columnOrder, setColumnOrder] = useState<ColumnId[]>([
     "date",
     "sender",
@@ -37,30 +74,14 @@ function useSavedViewHarness() {
     )),
   ]);
   const storedState = createDashboardStoredState(
-    createDashboardCommittedQuery({
-      collectionFilter: filters.collectionFilter,
-      visibilityFilter: filters.visibilityFilter,
-      searchQuery: filters.searchQuery,
-      yearFilter: filters.yearFilter,
-      monthFilter: filters.monthFilter,
-      dayFilter: filters.dayFilter,
-      dateFromFilter: filters.dateFromFilter,
-      dateToFilter: filters.dateToFilter,
-      transcriptStatusFilters: filters.transcriptStatusFilters,
-      metadataStatusFilters: filters.metadataStatusFilters,
-      extraContentStatusFilters: filters.extraContentStatusFilters,
-      workflowFilters: filters.workflowFilters,
-      flaggedFilter: filters.flaggedFilter,
-      missingFilters: filters.missingFilters,
-      contentShapeFilters: filters.contentShapeFilters,
-    }, sortColumns),
-    filters.dateMode,
+    createDashboardCommittedQuery(filters.state.query, sortColumns),
+    filters.state.dateMode,
   );
   const savedViewState = useDashboardSavedViewState({
     storedState,
     visibleColumns,
     columnOrder,
-    replaceStoredFilters: filters.replaceStoredFilters,
+    replaceStoredFilters: filters.actions.replaceStoredFilters,
     replaceSortColumns: (columns) => {
       setSortColumns(columns.map((column) => ({ ...column })));
     },
@@ -80,25 +101,11 @@ function useSavedViewHarness() {
   };
 }
 
-function makeViewState(overrides: Partial<DashboardViewState> = {}): DashboardViewState {
+function makeViewState(
+  overrides: Partial<DashboardViewState> = {},
+): DashboardViewState {
   return {
-    visibilityFilter: "ALL",
-    collectionFilter: "all",
-    searchQuery: "",
-    sortColumns: [],
-    dateMode: "specific",
-    year: null,
-    month: null,
-    day: null,
-    dateFrom: null,
-    dateTo: null,
-    transcriptStatusFilters: [],
-    metadataStatusFilters: [],
-    extraContentStatusFilters: [],
-    workflowFilters: [],
-    flaggedFilter: "ALL",
-    missingFilters: [],
-    contentShapeFilters: [],
+    ...makePersistedState(),
     visibleColumns: ["sender", "recipient"],
     columnOrder: ["sender", "recipient"],
     ...overrides,
@@ -123,7 +130,7 @@ describe("useDashboardSavedViewState", () => {
     vi.useRealTimers();
   });
 
-  it("normalizes hostile persisted filter JSON before exposing Dashboard state", () => {
+  it("normalizes hostile persisted JSON before seeding filter and sort owners", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       visibilityFilter: "PUBLIC",
       collectionFilter: 42,
@@ -144,73 +151,74 @@ describe("useDashboardSavedViewState", () => {
       contentShapeFilters: "photos",
     }));
 
+    const initialStoredState = loadPersistedState();
     let mountedFilters!: ReturnType<typeof useDashboardFilters>;
     expect(() => {
-      const { result } = renderHook(() => useDashboardFilters());
+      const { result } = renderHook(
+        () => useDashboardFilters(initialStoredState),
+      );
       mountedFilters = result.current;
     }).not.toThrow();
 
     expect({
-      visibilityFilter: mountedFilters.visibilityFilter,
-      collectionFilter: mountedFilters.collectionFilter,
-      searchInput: mountedFilters.searchInput,
-      searchQuery: mountedFilters.searchQuery,
-      dateMode: mountedFilters.dateMode,
-      yearFilter: mountedFilters.yearFilter,
-      monthFilter: mountedFilters.monthFilter,
-      dayFilter: mountedFilters.dayFilter,
-      dateFromFilter: mountedFilters.dateFromFilter,
-      dateToFilter: mountedFilters.dateToFilter,
-      transcriptStatusFilters: mountedFilters.transcriptStatusFilters,
-      metadataStatusFilters: mountedFilters.metadataStatusFilters,
-      extraContentStatusFilters: mountedFilters.extraContentStatusFilters,
-      workflowFilters: mountedFilters.workflowFilters,
-      flaggedFilter: mountedFilters.flaggedFilter,
-      missingFilters: mountedFilters.missingFilters,
-      contentShapeFilters: mountedFilters.contentShapeFilters,
-      initialSortColumns: mountedFilters.initialSortColumns,
+      ...mountedFilters.state,
+      drafts: mountedFilters.drafts,
+      initialSortColumns: initialStoredState.sortColumns,
     }).toEqual({
-      visibilityFilter: "ALL",
-      collectionFilter: "all",
-      searchInput: "",
-      searchQuery: "",
+      query: {
+        collectionFilter: "all",
+        visibilityFilter: "ALL",
+        searchQuery: "",
+        yearFilter: null,
+        monthFilter: null,
+        dayFilter: null,
+        dateFromFilter: null,
+        dateToFilter: null,
+        transcriptStatusFilters: [],
+        metadataStatusFilters: [],
+        extraContentStatusFilters: [],
+        workflowFilters: [],
+        flaggedFilter: "ALL",
+        missingFilters: [],
+        contentShapeFilters: [],
+      },
       dateMode: "specific",
-      yearFilter: null,
-      monthFilter: null,
-      dayFilter: null,
-      dateFromFilter: null,
-      dateToFilter: null,
-      transcriptStatusFilters: [],
-      metadataStatusFilters: [],
-      extraContentStatusFilters: [],
-      workflowFilters: [],
-      flaggedFilter: "ALL",
-      missingFilters: [],
-      contentShapeFilters: [],
+      drafts: {
+        contentFilterView: "transcript",
+        collectionInput: "",
+        searchInput: "",
+      },
       initialSortColumns: [{ ...DEFAULT_DASHBOARD_SORT }],
     });
   });
 
-  it("captures the current dashboard filters, sort, visible columns, and column order", () => {
-    const { result } = renderHook(() => useSavedViewHarness(), { wrapper });
+  it("captures current filters, sort, visible columns, and column order", () => {
+    const { result } = renderHook(
+      () => useSavedViewHarness(),
+      { wrapper },
+    );
 
     act(() => {
-      result.current.filters.setVisibilityFilter("PUBLISHED");
-      result.current.filters.setCollectionFilter("003");
-      result.current.filters.setCollectionInput("003");
-      result.current.filters.setSearchInput("molly");
-      result.current.filters.setSearchQuery("molly");
-      result.current.filters.setDateMode("range");
-      result.current.filters.setDateFromFilter("18860101");
-      result.current.filters.setDateToFilter("18861231");
-      result.current.filters.setTranscriptStatusFilters(["AI_DRAFT"]);
-      result.current.filters.setMetadataStatusFilters(["EDITED"]);
-      result.current.filters.setExtraContentStatusFilters(["VERIFIED"]);
-      result.current.filters.setWorkflowFilters(["METADATA_DRAFTED"]);
-      result.current.filters.setFlaggedFilter("FLAGGED");
-      result.current.filters.setMissingFilters(["sender", "date"]);
-      result.current.filters.setContentShapeFilters(["extras", "photos"]);
-      result.current.setSortColumns([{ field: "letterDate", direction: "asc" }]);
+      result.current.filters.actions.replaceStoredFilters(
+        makePersistedState({
+          visibilityFilter: "PUBLISHED",
+          collectionFilter: "003",
+          searchQuery: "molly",
+          dateMode: "range",
+          dateFrom: "18860101",
+          dateTo: "18861231",
+          transcriptStatusFilters: ["AI_DRAFT"],
+          metadataStatusFilters: ["EDITED"],
+          extraContentStatusFilters: ["VERIFIED"],
+          workflowFilters: ["METADATA_DRAFTED"],
+          flaggedFilter: "FLAGGED",
+          missingFilters: ["sender", "date"],
+          contentShapeFilters: ["extras", "photos"],
+        }),
+      );
+      result.current.setSortColumns([
+        { field: "letterDate", direction: "asc" },
+      ]);
     });
 
     act(() => {
@@ -242,12 +250,17 @@ describe("useDashboardSavedViewState", () => {
       ],
     });
 
-    const persisted = JSON.parse(localStorage.getItem(SAVED_VIEWS_STORAGE_KEY) ?? "[]");
+    const persisted = JSON.parse(
+      localStorage.getItem(SAVED_VIEWS_STORAGE_KEY) ?? "[]",
+    );
     expect(persisted[0]?.name).toBe("Cleanup");
   });
 
-  it("applies saved dashboard state and backfills fields missing from older saved views", () => {
-    const { result } = renderHook(() => useSavedViewHarness(), { wrapper });
+  it("applies saved state and backfills fields missing from older views", () => {
+    const { result } = renderHook(
+      () => useSavedViewHarness(),
+      { wrapper },
+    );
     const legacyState = makeViewState({
       visibilityFilter: "HIDDEN",
       collectionFilter: "012",
@@ -269,26 +282,38 @@ describe("useDashboardSavedViewState", () => {
       result.current.applyView(makeSavedView(legacyState));
     });
 
-    expect(result.current.filters.visibilityFilter).toBe("HIDDEN");
-    expect(result.current.filters.collectionFilter).toBe("012");
-    expect(result.current.filters.collectionFilters).toEqual(["012"]);
-    expect(result.current.filters.collectionInput).toBe("");
-    expect(result.current.filters.searchInput).toBe("jimmie");
-    expect(result.current.filters.searchQuery).toBe("jimmie");
-    expect(result.current.filters.yearFilter).toBe(1947);
-    expect(result.current.filters.transcriptStatusFilters).toEqual(["VERIFIED"]);
-    expect(result.current.filters.metadataStatusFilters).toEqual(["AI_DRAFT"]);
-    expect(result.current.filters.extraContentStatusFilters).toEqual([]);
-    expect(result.current.filters.workflowFilters).toEqual([]);
-    expect(result.current.filters.flaggedFilter).toBe("ALL");
-    expect(result.current.filters.missingFilters).toEqual([]);
-    expect(result.current.filters.contentShapeFilters).toEqual([]);
-    expect(result.current.sortColumns).toEqual([{ field: "sender", direction: "asc" }]);
-    expect([...result.current.visibleColumns]).toEqual(["recipient", "visibility"]);
+    const { query } = result.current.filters.state;
+    expect(query).toMatchObject({
+      visibilityFilter: "HIDDEN",
+      collectionFilter: "012",
+      searchQuery: "jimmie",
+      yearFilter: 1947,
+      transcriptStatusFilters: ["VERIFIED"],
+      metadataStatusFilters: ["AI_DRAFT"],
+      extraContentStatusFilters: [],
+      workflowFilters: [],
+      flaggedFilter: "ALL",
+      missingFilters: [],
+      contentShapeFilters: [],
+    });
+    expect(
+      getDashboardCollectionFilters(result.current.filters.state),
+    ).toEqual(["012"]);
+    expect(result.current.filters.drafts).toMatchObject({
+      collectionInput: "",
+      searchInput: "jimmie",
+    });
+    expect(result.current.sortColumns).toEqual([
+      { field: "sender", direction: "asc" },
+    ]);
+    expect([...result.current.visibleColumns]).toEqual([
+      "recipient",
+      "visibility",
+    ]);
     expect(result.current.columnOrder).toEqual(DEFAULT_COLUMN_ORDER);
   });
 
-  it("decodes and safely applies a partial legacy saved view as one complete snapshot", () => {
+  it("safely applies a partial legacy view as one complete snapshot", () => {
     localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify([{
       id: "legacy-view",
       name: "Legacy cleanup",
@@ -299,12 +324,17 @@ describe("useDashboardSavedViewState", () => {
       },
     }]));
 
-    const { result } = renderHook(() => useSavedViewHarness(), { wrapper });
+    const { result } = renderHook(
+      () => useSavedViewHarness(),
+      { wrapper },
+    );
 
     act(() => {
-      result.current.filters.setVisibilityFilter("PUBLISHED");
-      result.current.filters.setTranscriptStatusFilters(["VERIFIED"]);
-      result.current.setSortColumns([{ field: "sender", direction: "asc" }]);
+      result.current.filters.actions.toggleVisibilityFilter("PUBLISHED");
+      result.current.filters.actions.toggleTranscriptFilter("VERIFIED");
+      result.current.setSortColumns([
+        { field: "sender", direction: "asc" },
+      ]);
     });
 
     expect(result.current.savedViews).toHaveLength(1);
@@ -314,29 +344,40 @@ describe("useDashboardSavedViewState", () => {
       });
     }).not.toThrow();
 
-    expect(result.current.filters.visibilityFilter).toBe("ALL");
-    expect(result.current.filters.collectionFilter).toBe("all");
-    expect(result.current.filters.searchInput).toBe("needle");
-    expect(result.current.filters.searchQuery).toBe("needle");
-    expect(result.current.filters.dateMode).toBe("specific");
-    expect(result.current.filters.yearFilter).toBeNull();
-    expect(result.current.filters.monthFilter).toBeNull();
-    expect(result.current.filters.dayFilter).toBeNull();
-    expect(result.current.filters.dateFromFilter).toBeNull();
-    expect(result.current.filters.dateToFilter).toBeNull();
-    expect(result.current.filters.transcriptStatusFilters).toEqual([]);
-    expect(result.current.filters.metadataStatusFilters).toEqual([]);
-    expect(result.current.filters.extraContentStatusFilters).toEqual([]);
-    expect(result.current.filters.workflowFilters).toEqual([]);
-    expect(result.current.filters.flaggedFilter).toBe("ALL");
-    expect(result.current.filters.missingFilters).toEqual([]);
-    expect(result.current.filters.contentShapeFilters).toEqual([]);
+    expect(result.current.filters.state).toEqual({
+      query: {
+        collectionFilter: "all",
+        visibilityFilter: "ALL",
+        searchQuery: "needle",
+        yearFilter: null,
+        monthFilter: null,
+        dayFilter: null,
+        dateFromFilter: null,
+        dateToFilter: null,
+        transcriptStatusFilters: [],
+        metadataStatusFilters: [],
+        extraContentStatusFilters: [],
+        workflowFilters: [],
+        flaggedFilter: "ALL",
+        missingFilters: [],
+        contentShapeFilters: [],
+      },
+      dateMode: "specific",
+    });
+    expect(result.current.filters.drafts.searchInput).toBe("needle");
     expect(result.current.sortColumns).toEqual([DEFAULT_DASHBOARD_SORT]);
     expect([...result.current.visibleColumns]).toEqual(["sender"]);
     expect(result.current.columnOrder).toEqual(DEFAULT_COLUMN_ORDER);
   });
 
-  it("replaces the stored snapshot exactly and owns every applied array", () => {
+  it("replaces the snapshot exactly and owns every applied array", () => {
+    const expectedColumnOrder: ColumnId[] = [
+      "visibility",
+      "sender",
+      ...DEFAULT_COLUMN_ORDER.filter((column) => (
+        column !== "visibility" && column !== "sender"
+      )),
+    ];
     const sourceState = makeViewState({
       visibilityFilter: "HIDDEN",
       collectionFilter: "004,012",
@@ -349,39 +390,35 @@ describe("useDashboardSavedViewState", () => {
       missingFilters: ["date"],
       contentShapeFilters: ["photos"],
       visibleColumns: ["sender", "visibility"],
-      columnOrder: [
-        "visibility",
-        "sender",
-        ...DEFAULT_COLUMN_ORDER.filter((column) => (
-          column !== "visibility" && column !== "sender"
-        )),
-      ],
+      columnOrder: [...expectedColumnOrder],
     });
     const savedView = makeSavedView(sourceState);
-    const { result } = renderHook(() => useSavedViewHarness(), { wrapper });
+    const { result } = renderHook(
+      () => useSavedViewHarness(),
+      { wrapper },
+    );
 
     act(() => {
-      result.current.filters.setTranscriptStatusFilters(["EMPTY", "AI_DRAFT"]);
-      result.current.filters.setMetadataStatusFilters(["VERIFIED"]);
-      result.current.setSortColumns([{ field: "letterDate", direction: "desc" }]);
       result.current.applyView(savedView);
     });
 
-    expect(result.current.filters.transcriptStatusFilters).toEqual(["VERIFIED"]);
-    expect(result.current.filters.metadataStatusFilters).toEqual(["AI_DRAFT"]);
-    expect(result.current.filters.extraContentStatusFilters).toEqual(["EDITED"]);
-    expect(result.current.filters.workflowFilters).toEqual(["METADATA_DRAFTED"]);
-    expect(result.current.filters.missingFilters).toEqual(["date"]);
-    expect(result.current.filters.contentShapeFilters).toEqual(["photos"]);
-    expect(result.current.sortColumns).toEqual([{ field: "sender", direction: "asc" }]);
-    expect([...result.current.visibleColumns]).toEqual(["sender", "visibility"]);
-    expect(result.current.columnOrder).toEqual([
-      "visibility",
-      "sender",
-      ...DEFAULT_COLUMN_ORDER.filter((column) => (
-        column !== "visibility" && column !== "sender"
-      )),
+    const queryAfterApply = result.current.filters.state.query;
+    expect(queryAfterApply).toMatchObject({
+      transcriptStatusFilters: ["VERIFIED"],
+      metadataStatusFilters: ["AI_DRAFT"],
+      extraContentStatusFilters: ["EDITED"],
+      workflowFilters: ["METADATA_DRAFTED"],
+      missingFilters: ["date"],
+      contentShapeFilters: ["photos"],
+    });
+    expect(result.current.sortColumns).toEqual([
+      { field: "sender", direction: "asc" },
     ]);
+    expect([...result.current.visibleColumns]).toEqual([
+      "sender",
+      "visibility",
+    ]);
+    expect(result.current.columnOrder).toEqual(expectedColumnOrder);
 
     sourceState.transcriptStatusFilters.push("EMPTY");
     sourceState.metadataStatusFilters.push("VERIFIED");
@@ -389,43 +426,53 @@ describe("useDashboardSavedViewState", () => {
     sourceState.workflowFilters.push("REVIEWED");
     sourceState.missingFilters.push("sender");
     sourceState.contentShapeFilters.push("cover");
-    sourceState.sortColumns.push({ field: "createdAt", direction: "desc" });
+    sourceState.sortColumns.push({
+      field: "createdAt",
+      direction: "desc",
+    });
     sourceState.visibleColumns.push("recipient");
     sourceState.columnOrder.push("recipient");
 
-    expect(result.current.filters.transcriptStatusFilters).toEqual(["VERIFIED"]);
-    expect(result.current.filters.metadataStatusFilters).toEqual(["AI_DRAFT"]);
-    expect(result.current.filters.extraContentStatusFilters).toEqual(["EDITED"]);
-    expect(result.current.filters.workflowFilters).toEqual(["METADATA_DRAFTED"]);
-    expect(result.current.filters.missingFilters).toEqual(["date"]);
-    expect(result.current.filters.contentShapeFilters).toEqual(["photos"]);
-    expect(result.current.sortColumns).toEqual([{ field: "sender", direction: "asc" }]);
-    expect([...result.current.visibleColumns]).toEqual(["sender", "visibility"]);
-    expect(result.current.columnOrder).toEqual([
-      "visibility",
-      "sender",
-      ...DEFAULT_COLUMN_ORDER.filter((column) => (
-        column !== "visibility" && column !== "sender"
-      )),
+    expect(result.current.filters.state.query).toBe(queryAfterApply);
+    expect(queryAfterApply).toMatchObject({
+      transcriptStatusFilters: ["VERIFIED"],
+      metadataStatusFilters: ["AI_DRAFT"],
+      extraContentStatusFilters: ["EDITED"],
+      workflowFilters: ["METADATA_DRAFTED"],
+      missingFilters: ["date"],
+      contentShapeFilters: ["photos"],
+    });
+    expect(result.current.sortColumns).toEqual([
+      { field: "sender", direction: "asc" },
     ]);
+    expect([...result.current.visibleColumns]).toEqual([
+      "sender",
+      "visibility",
+    ]);
+    expect(result.current.columnOrder).toEqual(expectedColumnOrder);
   });
 
   it("cancels an older search draft when applying a saved view", () => {
     vi.useFakeTimers();
-    const { result } = renderHook(() => useSavedViewHarness(), { wrapper });
+    const { result } = renderHook(
+      () => useSavedViewHarness(),
+      { wrapper },
+    );
     const savedView = makeSavedView(makeViewState({
       searchQuery: "saved search",
     }));
 
     act(() => {
-      result.current.filters.setSearchInput("older draft");
+      result.current.filters.actions.changeSearchInput("older draft");
     });
     act(() => {
       result.current.applyView(savedView);
       vi.advanceTimersByTime(300);
     });
 
-    expect(result.current.filters.searchInput).toBe("saved search");
-    expect(result.current.filters.searchQuery).toBe("saved search");
+    expect(result.current.filters.drafts.searchInput).toBe("saved search");
+    expect(result.current.filters.state.query.searchQuery).toBe(
+      "saved search",
+    );
   });
 });

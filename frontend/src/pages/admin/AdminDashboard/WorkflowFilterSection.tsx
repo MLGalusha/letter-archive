@@ -5,7 +5,7 @@ import type { DashboardFilterStats } from "./types";
 
 interface WorkflowFilterSectionProps {
   stats: DashboardFilterStats;
-  workflowFilters: WorkflowState[];
+  workflowFilters: readonly WorkflowState[];
   toggleWorkflowFilter: (value: WorkflowState) => void;
 }
 

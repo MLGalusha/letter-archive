@@ -4,105 +4,34 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import DashboardToolbar from "../DashboardToolbar";
 import { MAX_DASHBOARD_SEARCH_LENGTH } from "../constants";
-import type { DashboardFilterControls } from "../useDashboardFilters";
-import type { DashboardFilterStats, DashboardView } from "../types";
-
-const emptyStats: DashboardFilterStats = {
-  total: 0,
-  published: 0,
-  hidden: 0,
-  flagged: 0,
-  uploaded: 0,
-  transcribing: 0,
-  transcribed: 0,
-  metadataExtracting: 0,
-  metadataReady: 0,
-  reviewed: 0,
-  transcriptEmpty: 0,
-  transcriptAiDraft: 0,
-  transcriptEdited: 0,
-  transcriptVerified: 0,
-  metadataEmpty: 0,
-  metadataAiDraft: 0,
-  metadataEdited: 0,
-  metadataVerified: 0,
-  extraContentEmpty: 0,
-  extraContentAiDraft: 0,
-  extraContentEdited: 0,
-  extraContentVerified: 0,
-  missingSender: 0,
-  missingRecipient: 0,
-  missingDate: 0,
-  hasExtras: 0,
-  hasPhotos: 0,
-  hasCover: 0,
-  hasTelegram: 0,
-  hasCard: 0,
-  hasEphemera: 0,
-  hasArticle: 0,
-  hasDiary: 0,
-  hasVoice: 0,
-};
-
-function makeFilters(overrides: Partial<DashboardFilterControls> = {}): DashboardFilterControls {
-  return {
-    collectionInput: "",
-    collectionFilter: "all",
-    collectionFilters: [],
-    handleCollectionInputChange: vi.fn(),
-    addCollectionFilter: vi.fn(),
-    removeCollectionFilter: vi.fn(),
-    visibilityFilter: "ALL",
-    toggleVisibilityFilter: vi.fn(),
-    contentFilterView: "transcript",
-    setContentFilterView: vi.fn(),
-    transcriptStatusFilters: [],
-    toggleTranscriptFilter: vi.fn(),
-    metadataStatusFilters: [],
-    toggleMetadataFilter: vi.fn(),
-    extraContentStatusFilters: [],
-    toggleExtraContentFilter: vi.fn(),
-    workflowFilters: [],
-    toggleWorkflowFilter: vi.fn(),
-    flaggedFilter: "ALL",
-    toggleFlaggedFilter: vi.fn(),
-    missingFilters: [],
-    toggleMissingFilter: vi.fn(),
-    contentShapeFilters: [],
-    toggleContentShapeFilter: vi.fn(),
-    searchInput: "",
-    setSearchInput: vi.fn(),
-    searchQuery: "",
-    setSearchQuery: vi.fn(),
-    dateMode: "specific",
-    setDateMode: vi.fn(),
-    hasDateFilter: false,
-    yearFilter: null,
-    setYearFilter: vi.fn(),
-    monthFilter: null,
-    setMonthFilter: vi.fn(),
-    dayFilter: null,
-    setDayFilter: vi.fn(),
-    dateFromFilter: null,
-    setDateFromFilter: vi.fn(),
-    dateToFilter: null,
-    setDateToFilter: vi.fn(),
-    clearDateFilters: vi.fn(),
-    handleClearAllFilters: vi.fn(),
-    ...overrides,
-  } as DashboardFilterControls;
-}
+import type { DashboardFilterState } from "../dashboardFilterStateModel";
+import type {
+  DashboardFilterActions,
+  DashboardFilterDrafts,
+} from "../useDashboardFilters";
+import type { DashboardView } from "../types";
+import {
+  emptyDashboardFilterStats,
+  makeDashboardFilterActions,
+  makeDashboardFilterDrafts,
+  makeDashboardFilterState,
+} from "./dashboardFilterFixtures";
 
 function ToolbarHarness({
   initialView = "letters",
-  filters = makeFilters(),
+  filterState = makeDashboardFilterState(),
+  filterDrafts = makeDashboardFilterDrafts(),
+  filterActions = makeDashboardFilterActions(),
   onManagerOpen,
 }: {
   initialView?: DashboardView;
-  filters?: DashboardFilterControls;
+  filterState?: DashboardFilterState;
+  filterDrafts?: DashboardFilterDrafts;
+  filterActions?: DashboardFilterActions;
   onManagerOpen?: () => void;
 }) {
-  const [dashboardView, setDashboardView] = useState<DashboardView>(initialView);
+  const [dashboardView, setDashboardView] =
+    useState<DashboardView>(initialView);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   return (
@@ -110,19 +39,21 @@ function ToolbarHarness({
       dashboardView={dashboardView}
       onDashboardViewChange={setDashboardView}
       filtersOpen={filtersOpen}
-      onFiltersOpenChange={setFiltersOpen as Dispatch<SetStateAction<boolean>>}
+      onFiltersOpenChange={
+        setFiltersOpen as Dispatch<SetStateAction<boolean>>
+      }
       paginationTotal={12}
-      stats={emptyStats}
+      stats={emptyDashboardFilterStats}
       sortColumns={[{ field: "lastOpenedAt", direction: "desc" }]}
       setSortColumns={vi.fn()}
       savedViews={[]}
       onSaveView={vi.fn()}
       onApplyView={vi.fn()}
       onDeleteView={vi.fn()}
-      filters={filters}
-      getDateButtonText={() => "Date"}
-      dateRawToDisplay={(dateRaw) => dateRaw ?? ""}
-      displayToDateRaw={(display) => display || null}
+      filterState={filterState}
+      filterDrafts={filterDrafts}
+      filterActions={filterActions}
+      dateButtonText="Date"
       onManagerOpen={onManagerOpen}
     />
   );
@@ -135,39 +66,49 @@ describe("DashboardToolbar", () => {
 
     const trigger = screen.getByRole("button", { name: /Filters/ });
     await user.click(trigger);
-    expect(screen.getByRole("heading", { name: "Filters" })).toBeInTheDocument();
-    const closeButtons = screen.getAllByRole("button", { name: "Close filters" });
+    expect(
+      screen.getByRole("heading", { name: "Filters" }),
+    ).toBeInTheDocument();
+    const closeButtons = screen.getAllByRole(
+      "button",
+      { name: "Close filters" },
+    );
     expect(closeButtons).toHaveLength(2);
 
     await user.click(closeButtons[1]);
     expect(trigger).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("button", { name: "Close filters" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Close filters" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("routes active search chip clearing through filter state", async () => {
+  it("routes active search chip clearing through one named action", async () => {
     const user = userEvent.setup();
-    const setSearchInput = vi.fn();
-    const setSearchQuery = vi.fn();
-    const handleClearAllFilters = vi.fn();
+    const clearSearch = vi.fn();
+    const clearAllFilters = vi.fn();
 
     render(
       <ToolbarHarness
-        filters={makeFilters({
+        filterState={makeDashboardFilterState({
+          query: { searchQuery: "molly" },
+        })}
+        filterDrafts={makeDashboardFilterDrafts({
           searchInput: "molly",
-          searchQuery: "molly",
-          setSearchInput,
-          setSearchQuery,
-          handleClearAllFilters,
+        })}
+        filterActions={makeDashboardFilterActions({
+          clearSearch,
+          clearAllFilters,
         })}
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /Search: molly/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Search: molly/ }),
+    );
     await user.click(screen.getByRole("button", { name: "Clear all" }));
 
-    expect(setSearchInput).toHaveBeenCalledWith("");
-    expect(setSearchQuery).toHaveBeenCalledWith("");
-    expect(handleClearAllFilters).toHaveBeenCalled();
+    expect(clearSearch).toHaveBeenCalledOnce();
+    expect(clearAllFilters).toHaveBeenCalledOnce();
   });
 
   it("hides letter-only controls when switching to collections", async () => {
@@ -175,12 +116,18 @@ describe("DashboardToolbar", () => {
     render(<ToolbarHarness />);
 
     expect(
-      screen.getByPlaceholderText("Search letters, senders, recipients..."),
+      screen.getByPlaceholderText(
+        "Search letters, senders, recipients...",
+      ),
     ).toHaveAttribute("maxLength", String(MAX_DASHBOARD_SEARCH_LENGTH));
 
     await user.click(screen.getByRole("button", { name: "Collections" }));
 
-    expect(screen.queryByPlaceholderText("Search letters, senders, recipients...")).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText(
+        "Search letters, senders, recipients...",
+      ),
+    ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Active filters")).not.toBeInTheDocument();
   });
 
@@ -190,20 +137,34 @@ describe("DashboardToolbar", () => {
 
     const filtersTrigger = screen.getByRole("button", { name: /Filters/ });
     await user.click(filtersTrigger);
-    expect(screen.getByRole("heading", { name: "Filters" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Filters" }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Save view" }));
     expect(filtersTrigger).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("heading", { name: "Filters" })).not.toBeInTheDocument();
-    expect(screen.getByRole("dialog", { name: "Saved views" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Filters" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Saved views" }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Sort/i }));
-    expect(screen.queryByRole("dialog", { name: "Saved views" })).not.toBeInTheDocument();
-    expect(screen.getByRole("dialog", { name: "Sort rules" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Saved views" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Sort rules" }),
+    ).toBeInTheDocument();
 
     await user.click(filtersTrigger);
-    expect(screen.queryByRole("dialog", { name: "Sort rules" })).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Filters" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Sort rules" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Filters" }),
+    ).toBeInTheDocument();
   });
 
   it("announces toolbar manager opens for mobile selection dismissal", async () => {

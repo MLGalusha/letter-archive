@@ -8,16 +8,24 @@ import FlaggedFilterSection from "./FlaggedFilterSection";
 import MissingDataFilterSection from "./MissingDataFilterSection";
 import VisibilityFilterSection from "./VisibilityFilterSection";
 import WorkflowFilterSection from "./WorkflowFilterSection";
+import {
+  getDashboardCollectionFilters,
+  getDashboardDateFilterValue,
+  type DashboardFilterState,
+} from "./dashboardFilterStateModel";
 import type { DashboardFilterStats } from "./types";
-import type { DashboardFilterControls } from "./useDashboardFilters";
+import type {
+  DashboardFilterActions,
+  DashboardFilterDrafts,
+} from "./useDashboardFilters";
 
 interface DashboardFilterPanelProps {
   open: boolean;
   stats: DashboardFilterStats;
-  filters: DashboardFilterControls;
-  getDateButtonText: () => string;
-  dateRawToDisplay: (dateRaw: string | null) => string;
-  displayToDateRaw: (display: string) => string | null;
+  filterState: DashboardFilterState;
+  filterDrafts: DashboardFilterDrafts;
+  filterActions: DashboardFilterActions;
+  dateButtonText: string;
   activeFilterCount: number;
   onClose: () => void;
 }
@@ -25,54 +33,25 @@ interface DashboardFilterPanelProps {
 export default function DashboardFilterPanel({
   open,
   stats,
-  filters,
-  getDateButtonText,
-  dateRawToDisplay,
-  displayToDateRaw,
+  filterState,
+  filterDrafts,
+  filterActions,
+  dateButtonText,
   activeFilterCount,
   onClose,
 }: DashboardFilterPanelProps) {
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const {
-    collectionInput,
-    handleCollectionInputChange,
-    collectionFilters,
-    addCollectionFilter,
-    removeCollectionFilter,
     visibilityFilter,
-    toggleVisibilityFilter,
-    contentFilterView,
-    setContentFilterView,
     transcriptStatusFilters,
-    toggleTranscriptFilter,
     metadataStatusFilters,
-    toggleMetadataFilter,
     extraContentStatusFilters,
-    toggleExtraContentFilter,
     workflowFilters,
-    toggleWorkflowFilter,
     flaggedFilter,
-    toggleFlaggedFilter,
     missingFilters,
-    toggleMissingFilter,
     contentShapeFilters,
-    toggleContentShapeFilter,
-    dateMode,
-    setDateMode,
-    hasDateFilter,
-    yearFilter,
-    setYearFilter,
-    monthFilter,
-    setMonthFilter,
-    dayFilter,
-    setDayFilter,
-    dateFromFilter,
-    setDateFromFilter,
-    dateToFilter,
-    setDateToFilter,
-    clearDateFilters,
-    handleClearAllFilters,
-  } = filters;
+  } = filterState.query;
+  const collectionFilters = getDashboardCollectionFilters(filterState);
 
   useEffect(() => {
     if (open) {
@@ -92,7 +71,7 @@ export default function DashboardFilterPanel({
         </div>
         <div className="filter-panel-header-actions">
           {activeFilterCount > 0 && (
-            <button type="button" className="filter-panel-clear" onClick={handleClearAllFilters}>
+            <button type="button" className="filter-panel-clear" onClick={filterActions.clearAllFilters}>
               Clear
             </button>
           )}
@@ -106,71 +85,64 @@ export default function DashboardFilterPanel({
         <VisibilityFilterSection
           stats={stats}
           visibilityFilter={visibilityFilter}
-          toggleVisibilityFilter={toggleVisibilityFilter}
+          toggleVisibilityFilter={filterActions.toggleVisibilityFilter}
         />
 
         <ContentStatusFilterSection
           stats={stats}
-          contentFilterView={contentFilterView}
-          setContentFilterView={setContentFilterView}
+          contentFilterView={filterDrafts.contentFilterView}
+          onContentFilterViewChange={filterActions.changeContentFilterView}
           transcriptStatusFilters={transcriptStatusFilters}
-          toggleTranscriptFilter={toggleTranscriptFilter}
+          toggleTranscriptFilter={filterActions.toggleTranscriptFilter}
           metadataStatusFilters={metadataStatusFilters}
-          toggleMetadataFilter={toggleMetadataFilter}
+          toggleMetadataFilter={filterActions.toggleMetadataFilter}
           extraContentStatusFilters={extraContentStatusFilters}
-          toggleExtraContentFilter={toggleExtraContentFilter}
+          toggleExtraContentFilter={filterActions.toggleExtraContentFilter}
         />
 
         <DashboardCollectionFilterControl
-          collectionInput={collectionInput}
+          collectionInput={filterDrafts.collectionInput}
           collectionFilters={collectionFilters}
-          onCollectionInputChange={handleCollectionInputChange}
-          onAddCollectionFilter={addCollectionFilter}
-          onRemoveCollectionFilter={removeCollectionFilter}
+          onCollectionInputChange={filterActions.changeCollectionInput}
+          onAddCollectionFilter={filterActions.addCollectionFilter}
+          onRemoveCollectionFilter={filterActions.removeCollectionFilter}
+          onClearCollectionFilters={filterActions.clearCollectionFilters}
         />
 
         <DashboardDateFilterControl
-          dateMode={dateMode}
-          setDateMode={setDateMode}
-          hasDateFilter={hasDateFilter}
-          yearFilter={yearFilter}
-          setYearFilter={setYearFilter}
-          monthFilter={monthFilter}
-          setMonthFilter={setMonthFilter}
-          dayFilter={dayFilter}
-          setDayFilter={setDayFilter}
-          dateFromFilter={dateFromFilter}
-          setDateFromFilter={setDateFromFilter}
-          dateToFilter={dateToFilter}
-          setDateToFilter={setDateToFilter}
-          clearDateFilters={clearDateFilters}
-          getDateButtonText={getDateButtonText}
-          dateRawToDisplay={dateRawToDisplay}
-          displayToDateRaw={displayToDateRaw}
+          value={getDashboardDateFilterValue(filterState)}
+          summary={dateButtonText}
+          onModeChange={filterActions.changeDateMode}
+          onYearChange={filterActions.changeYear}
+          onMonthChange={filterActions.changeMonth}
+          onDayChange={filterActions.changeDay}
+          onDateFromChange={filterActions.changeDateFrom}
+          onDateToChange={filterActions.changeDateTo}
+          onClear={filterActions.clearDateFilters}
         />
 
         <ContentShapeFilterSection
           stats={stats}
           contentShapeFilters={contentShapeFilters}
-          toggleContentShapeFilter={toggleContentShapeFilter}
+          toggleContentShapeFilter={filterActions.toggleContentShapeFilter}
         />
 
         <WorkflowFilterSection
           stats={stats}
           workflowFilters={workflowFilters}
-          toggleWorkflowFilter={toggleWorkflowFilter}
+          toggleWorkflowFilter={filterActions.toggleWorkflowFilter}
         />
 
         <MissingDataFilterSection
           stats={stats}
           missingFilters={missingFilters}
-          toggleMissingFilter={toggleMissingFilter}
+          toggleMissingFilter={filterActions.toggleMissingFilter}
         />
 
         <FlaggedFilterSection
           stats={stats}
           flaggedFilter={flaggedFilter}
-          toggleFlaggedFilter={toggleFlaggedFilter}
+          toggleFlaggedFilter={filterActions.toggleFlaggedFilter}
         />
       </div>
 

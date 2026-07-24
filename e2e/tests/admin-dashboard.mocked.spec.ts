@@ -174,6 +174,115 @@ test.describe('@mocked Admin Dashboard', () => {
     await expect(page.locator(SELECTORS.dashboard.table)).toContainText('Alice Smith');
   });
 
+  test('keeps compound filter intents on one normalized request state', async ({
+    page,
+  }) => {
+    await installMockAdminDashboardApi(page);
+
+    await page.goto('/admin');
+    await waitForAdminDashboardReady(page);
+    await page.getByRole('button', { name: 'Filters' }).click();
+
+    const collectionRequest = waitForAdminLettersRequest(
+      page,
+      (url) => url.searchParams.get('collection') === '001',
+    );
+    await page.getByRole('textbox', { name: 'Collection code' }).fill('001');
+    await page.getByRole('button', { name: 'Add collection filter' }).click();
+    await collectionRequest;
+
+    const visibilityRequest = waitForAdminLettersRequest(
+      page,
+      (url) => (
+        url.searchParams.get('collection') === '001'
+        && url.searchParams.get('visibility') === 'PUBLISHED'
+      ),
+    );
+    await page.locator('.filter-published').click();
+    await visibilityRequest;
+
+    await page.getByRole('button', { name: 'Range' }).click();
+    const dateInputs = page.getByPlaceholder('mm/dd/yyyy');
+    const dateFromInput = dateInputs.nth(0);
+    const dateToInput = dateInputs.nth(1);
+    await dateFromInput.fill('07/01/1932');
+    await dateToInput.fill('07/31/1932');
+
+    const compoundRequest = waitForAdminLettersRequest(
+      page,
+      (url) => (
+        url.searchParams.get('collection') === '001'
+        && url.searchParams.get('visibility') === 'PUBLISHED'
+        && url.searchParams.get('dateFrom') === '19320701'
+        && url.searchParams.get('dateTo') === '19320731'
+        && url.searchParams.get('search') === 'alice'
+      ),
+    );
+    await page.getByRole('searchbox', {
+      name: 'Search letters, senders, recipients...',
+    }).fill('alice');
+    const compoundUrl = await compoundRequest;
+
+    expect(Object.fromEntries(compoundUrl.searchParams.entries())).toEqual({
+      page: '1',
+      limit: '50',
+      collection: '001',
+      visibility: 'PUBLISHED',
+      search: 'alice',
+      sort: 'lastOpenedAt',
+      sortOrder: 'desc',
+      sortRules: 'lastOpenedAt:desc',
+      dateFrom: '19320701',
+      dateTo: '19320731',
+    });
+
+    const collectionRemovalRequest = waitForAdminLettersRequest(
+      page,
+      (url) => (
+        !url.searchParams.has('collection')
+        && url.searchParams.get('visibility') === 'PUBLISHED'
+        && url.searchParams.get('search') === 'alice'
+        && url.searchParams.get('dateFrom') === '19320701'
+        && url.searchParams.get('dateTo') === '19320731'
+      ),
+    );
+    await page.getByRole('button', {
+      name: 'Collection 001',
+      exact: true,
+    }).click();
+    await collectionRemovalRequest;
+
+    const clearedRequest = waitForAdminLettersRequest(
+      page,
+      (url) => (
+        !url.searchParams.has('collection')
+        && !url.searchParams.has('visibility')
+        && !url.searchParams.has('search')
+        && !url.searchParams.has('dateFrom')
+        && !url.searchParams.has('dateTo')
+      ),
+    );
+    await page.getByRole('button', {
+      name: 'Clear all',
+      exact: true,
+    }).click();
+    const clearedUrl = await clearedRequest;
+
+    expect(Object.fromEntries(clearedUrl.searchParams.entries())).toEqual({
+      page: '1',
+      limit: '50',
+      sort: 'lastOpenedAt',
+      sortOrder: 'desc',
+      sortRules: 'lastOpenedAt:desc',
+    });
+    await expect(page.getByRole('searchbox', {
+      name: 'Search letters, senders, recipients...',
+    })).toHaveValue('');
+    await expect(page.getByLabel('Active filters')).not.toContainText(
+      'Collection 001',
+    );
+  });
+
   test('keeps list and filtered-selection requests on the same committed query', async ({
     page,
   }) => {

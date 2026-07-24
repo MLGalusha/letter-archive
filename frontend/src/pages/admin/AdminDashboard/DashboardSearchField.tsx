@@ -1,37 +1,31 @@
 import Icon from "../../../components/common/Icon";
 import { MAX_DASHBOARD_SEARCH_LENGTH } from "./constants";
-import { normalizeDashboardSearchQuery } from "./dashboardStoredStateModel";
 
 interface DashboardSearchFieldProps {
-  searchInput: string;
-  setSearchInput: (value: string) => void;
-  setSearchQuery: (value: string) => void;
+  value: string;
+  onChange: (value: string) => void;
+  onClear: () => void;
 }
 
 export default function DashboardSearchField({
-  searchInput,
-  setSearchInput,
-  setSearchQuery,
+  value,
+  onChange,
+  onClear,
 }: DashboardSearchFieldProps) {
   return (
     <div className="dashboard-search-field">
       <input
         type="search"
         placeholder="Search letters, senders, recipients..."
-        value={searchInput}
+        value={value}
         maxLength={MAX_DASHBOARD_SEARCH_LENGTH}
-        onChange={(event) => {
-          setSearchInput(normalizeDashboardSearchQuery(event.target.value));
-        }}
+        onChange={(event) => onChange(event.target.value)}
       />
-      {searchInput && (
+      {value && (
         <button
           type="button"
           className="dashboard-search-clear"
-          onClick={() => {
-            setSearchInput("");
-            setSearchQuery("");
-          }}
+          onClick={onClear}
           aria-label="Clear search"
         >
           <Icon name="close" size={14} />

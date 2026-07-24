@@ -6,14 +6,18 @@ import DashboardSearchField from "./DashboardSearchField";
 import DashboardSortControl from "./DashboardSortControl";
 import DashboardViewToggle from "./DashboardViewToggle";
 import SavedViewsMenu from "./SavedViewsMenu";
-import type { DashboardFilterControls } from "./useDashboardFilters";
+import { createDashboardActiveFilters } from "./dashboardActiveFilters";
+import type { DashboardFilterState } from "./dashboardFilterStateModel";
+import type {
+  DashboardFilterActions,
+  DashboardFilterDrafts,
+} from "./useDashboardFilters";
 import type {
   DashboardView,
   DashboardFilterStats,
   SavedDashboardView,
   SortColumn,
 } from "./types";
-import { useDashboardActiveFilters } from "./useDashboardActiveFilters";
 
 type ToolbarManager = "savedViews" | "sort";
 
@@ -30,10 +34,10 @@ interface DashboardToolbarProps {
   onSaveView: (name: string) => void;
   onApplyView: (view: SavedDashboardView) => void;
   onDeleteView: (viewId: string) => void;
-  filters: DashboardFilterControls;
-  getDateButtonText: () => string;
-  dateRawToDisplay: (dateRaw: string | null) => string;
-  displayToDateRaw: (display: string) => string | null;
+  filterState: DashboardFilterState;
+  filterDrafts: DashboardFilterDrafts;
+  filterActions: DashboardFilterActions;
+  dateButtonText: string;
   onManagerOpen?: () => void;
 }
 
@@ -50,67 +54,17 @@ export default function DashboardToolbar({
   onSaveView,
   onApplyView,
   onDeleteView,
-  filters,
-  getDateButtonText,
-  dateRawToDisplay,
-  displayToDateRaw,
+  filterState,
+  filterDrafts,
+  filterActions,
+  dateButtonText,
   onManagerOpen,
 }: DashboardToolbarProps) {
-  const {
-    collectionFilters,
-    removeCollectionFilter,
-    visibilityFilter,
-    toggleVisibilityFilter,
-    transcriptStatusFilters,
-    toggleTranscriptFilter,
-    metadataStatusFilters,
-    toggleMetadataFilter,
-    extraContentStatusFilters,
-    toggleExtraContentFilter,
-    workflowFilters,
-    toggleWorkflowFilter,
-    flaggedFilter,
-    toggleFlaggedFilter,
-    missingFilters,
-    toggleMissingFilter,
-    contentShapeFilters,
-    toggleContentShapeFilter,
-    collectionFilter,
-    searchInput,
-    setSearchInput,
-    searchQuery,
-    setSearchQuery,
-    hasDateFilter,
-    clearDateFilters,
-    handleClearAllFilters,
-  } = filters;
-
-  const { activeFilterCount, activeFilterChips } = useDashboardActiveFilters({
-    collectionFilter,
-    collectionFilters,
-    visibilityFilter,
-    searchQuery,
-    transcriptStatusFilters,
-    metadataStatusFilters,
-    extraContentStatusFilters,
-    workflowFilters,
-    flaggedFilter,
-    missingFilters,
-    contentShapeFilters,
-    hasDateFilter,
-    toggleVisibilityFilter,
-    removeCollectionFilter,
-    setSearchInput,
-    setSearchQuery,
-    getDateButtonText,
-    clearDateFilters,
-    toggleTranscriptFilter,
-    toggleMetadataFilter,
-    toggleExtraContentFilter,
-    toggleWorkflowFilter,
-    toggleFlaggedFilter,
-    toggleMissingFilter,
-    toggleContentShapeFilter,
+  const { activeFilterCount, activeFilterChips } =
+    createDashboardActiveFilters({
+      state: filterState,
+      actions: filterActions,
+      dateButtonText,
   });
 
   const [openManager, setOpenManager] = useState<ToolbarManager | null>(null);
@@ -151,9 +105,9 @@ export default function DashboardToolbar({
         {dashboardView === "letters" && (
           <>
             <DashboardSearchField
-              searchInput={searchInput}
-              setSearchInput={setSearchInput}
-              setSearchQuery={setSearchQuery}
+              value={filterDrafts.searchInput}
+              onChange={filterActions.changeSearchInput}
+              onClear={filterActions.clearSearch}
             />
 
             <DashboardFilterTrigger
@@ -186,7 +140,7 @@ export default function DashboardToolbar({
           <ActiveFilterChips
             paginationTotal={paginationTotal}
             activeFilterChips={activeFilterChips}
-            onClearAllFilters={handleClearAllFilters}
+            onClearAllFilters={filterActions.clearAllFilters}
           />
 
           {filtersOpen && (
@@ -200,10 +154,10 @@ export default function DashboardToolbar({
           <DashboardFilterPanel
             open={filtersOpen}
             stats={stats}
-            filters={filters}
-            getDateButtonText={getDateButtonText}
-            dateRawToDisplay={dateRawToDisplay}
-            displayToDateRaw={displayToDateRaw}
+            filterState={filterState}
+            filterDrafts={filterDrafts}
+            filterActions={filterActions}
+            dateButtonText={dateButtonText}
             activeFilterCount={activeFilterCount}
             onClose={() => onFiltersOpenChange(false)}
           />

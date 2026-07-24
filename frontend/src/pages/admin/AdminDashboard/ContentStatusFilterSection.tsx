@@ -6,19 +6,19 @@ import type { ContentFilterView, DashboardFilterStats } from "./types";
 interface ContentStatusFilterSectionProps {
   stats: DashboardFilterStats;
   contentFilterView: ContentFilterView;
-  setContentFilterView: (value: ContentFilterView) => void;
-  transcriptStatusFilters: ContentStatus[];
+  onContentFilterViewChange: (value: ContentFilterView) => void;
+  transcriptStatusFilters: readonly ContentStatus[];
   toggleTranscriptFilter: (value: ContentStatus) => void;
-  metadataStatusFilters: ContentStatus[];
+  metadataStatusFilters: readonly ContentStatus[];
   toggleMetadataFilter: (value: ContentStatus) => void;
-  extraContentStatusFilters: ContentStatus[];
+  extraContentStatusFilters: readonly ContentStatus[];
   toggleExtraContentFilter: (value: ContentStatus) => void;
 }
 
 export default function ContentStatusFilterSection({
   stats,
   contentFilterView,
-  setContentFilterView,
+  onContentFilterViewChange,
   transcriptStatusFilters,
   toggleTranscriptFilter,
   metadataStatusFilters,
@@ -44,7 +44,7 @@ export default function ContentStatusFilterSection({
         <button
           type="button"
           className={`content-toggle-btn ${contentFilterView === "transcript" ? "active" : ""}`}
-          onClick={() => setContentFilterView("transcript")}
+          onClick={() => onContentFilterViewChange("transcript")}
         >
           Transcript
           {contentFilterView !== "transcript" && transcriptStatusFilters.length > 0 && (
@@ -54,7 +54,7 @@ export default function ContentStatusFilterSection({
         <button
           type="button"
           className={`content-toggle-btn ${contentFilterView === "metadata" ? "active" : ""}`}
-          onClick={() => setContentFilterView("metadata")}
+          onClick={() => onContentFilterViewChange("metadata")}
         >
           Metadata
           {contentFilterView !== "metadata" && metadataStatusFilters.length > 0 && (
@@ -64,7 +64,7 @@ export default function ContentStatusFilterSection({
         <button
           type="button"
           className={`content-toggle-btn ${contentFilterView === "extras" ? "active" : ""}`}
-          onClick={() => setContentFilterView("extras")}
+          onClick={() => onContentFilterViewChange("extras")}
         >
           Extras
           {contentFilterView !== "extras" && extraContentStatusFilters.length > 0 && (

@@ -1,54 +1,54 @@
 import { DAY_OPTIONS, MONTH_OPTIONS, YEAR_OPTIONS } from "./constants";
+import type { DashboardDateFilterValue } from "./dashboardFilterStateModel";
+import { dateRawToDisplay, displayToDateRaw } from "./utils";
 import type { DateMode } from "./types";
 
 interface DashboardDateFilterControlProps {
-  dateMode: DateMode;
-  setDateMode: (value: DateMode) => void;
-  hasDateFilter: boolean;
-  yearFilter: number | null;
-  setYearFilter: (value: number | null) => void;
-  monthFilter: number | null;
-  setMonthFilter: (value: number | null) => void;
-  dayFilter: number | null;
-  setDayFilter: (value: number | null) => void;
-  dateFromFilter: string | null;
-  setDateFromFilter: (value: string | null) => void;
-  dateToFilter: string | null;
-  setDateToFilter: (value: string | null) => void;
-  clearDateFilters: () => void;
-  getDateButtonText: () => string;
-  dateRawToDisplay: (dateRaw: string | null) => string;
-  displayToDateRaw: (display: string) => string | null;
+  value: DashboardDateFilterValue;
+  summary: string;
+  onModeChange: (value: DateMode) => void;
+  onYearChange: (value: number | null) => void;
+  onMonthChange: (value: number | null) => void;
+  onDayChange: (value: number | null) => void;
+  onDateFromChange: (value: string | null) => void;
+  onDateToChange: (value: string | null) => void;
+  onClear: () => void;
 }
 
 export default function DashboardDateFilterControl({
-  dateMode,
-  setDateMode,
-  hasDateFilter,
-  yearFilter,
-  setYearFilter,
-  monthFilter,
-  setMonthFilter,
-  dayFilter,
-  setDayFilter,
-  dateFromFilter,
-  setDateFromFilter,
-  dateToFilter,
-  setDateToFilter,
-  clearDateFilters,
-  getDateButtonText,
-  dateRawToDisplay,
-  displayToDateRaw,
+  value,
+  summary,
+  onModeChange,
+  onYearChange,
+  onMonthChange,
+  onDayChange,
+  onDateFromChange,
+  onDateToChange,
+  onClear,
 }: DashboardDateFilterControlProps) {
+  const {
+    dateMode,
+    yearFilter,
+    monthFilter,
+    dayFilter,
+    dateFromFilter,
+    dateToFilter,
+  } = value;
+  const hasDateFilter = yearFilter !== null
+    || monthFilter !== null
+    || dayFilter !== null
+    || dateFromFilter !== null
+    || dateToFilter !== null;
+
   return (
     <section className={`filter-panel-section date-filter-section ${hasDateFilter ? "date-filter-section--active" : ""}`}>
       <div className="filter-panel-section-header">
         <div>
           <span className="filter-panel-label">Date</span>
-          <span className="filter-panel-summary">{hasDateFilter ? getDateButtonText() : "Any date"}</span>
+          <span className="filter-panel-summary">{hasDateFilter ? summary : "Any date"}</span>
         </div>
         {hasDateFilter && (
-          <button type="button" className="filter-panel-clear" onClick={clearDateFilters}>
+          <button type="button" className="filter-panel-clear" onClick={onClear}>
             Clear
           </button>
         )}
@@ -59,11 +59,7 @@ export default function DashboardDateFilterControl({
           type="button"
           className={`mode-btn ${dateMode === "specific" ? "active" : ""}`}
           aria-pressed={dateMode === "specific"}
-          onClick={() => {
-            setDateMode("specific");
-            setDateFromFilter(null);
-            setDateToFilter(null);
-          }}
+          onClick={() => onModeChange("specific")}
         >
           Specific
         </button>
@@ -71,12 +67,7 @@ export default function DashboardDateFilterControl({
           type="button"
           className={`mode-btn ${dateMode === "range" ? "active" : ""}`}
           aria-pressed={dateMode === "range"}
-          onClick={() => {
-            setDateMode("range");
-            setYearFilter(null);
-            setMonthFilter(null);
-            setDayFilter(null);
-          }}
+          onClick={() => onModeChange("range")}
         >
           Range
         </button>
@@ -89,7 +80,7 @@ export default function DashboardDateFilterControl({
             <select
               aria-label="Date year"
               value={yearFilter ?? ""}
-              onChange={(event) => setYearFilter(event.target.value ? Number(event.target.value) : null)}
+              onChange={(event) => onYearChange(event.target.value ? Number(event.target.value) : null)}
             >
               <option value="">Any</option>
               {YEAR_OPTIONS.map((year) => <option key={year} value={year}>{year}</option>)}
@@ -100,7 +91,7 @@ export default function DashboardDateFilterControl({
             <select
               aria-label="Date month"
               value={monthFilter ?? ""}
-              onChange={(event) => setMonthFilter(event.target.value ? Number(event.target.value) : null)}
+              onChange={(event) => onMonthChange(event.target.value ? Number(event.target.value) : null)}
             >
               <option value="">Any</option>
               {MONTH_OPTIONS.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}
@@ -111,7 +102,7 @@ export default function DashboardDateFilterControl({
             <select
               aria-label="Date day"
               value={dayFilter ?? ""}
-              onChange={(event) => setDayFilter(event.target.value ? Number(event.target.value) : null)}
+              onChange={(event) => onDayChange(event.target.value ? Number(event.target.value) : null)}
             >
               <option value="">Any</option>
               {DAY_OPTIONS.map((day) => <option key={day} value={day}>{day}</option>)}
@@ -126,7 +117,7 @@ export default function DashboardDateFilterControl({
               type="text"
               placeholder="mm/dd/yyyy"
               value={dateFromFilter ? dateRawToDisplay(dateFromFilter) : ""}
-              onChange={(event) => setDateFromFilter(displayToDateRaw(event.target.value))}
+              onChange={(event) => onDateFromChange(displayToDateRaw(event.target.value))}
               maxLength={10}
             />
           </label>
@@ -136,7 +127,7 @@ export default function DashboardDateFilterControl({
               type="text"
               placeholder="mm/dd/yyyy"
               value={dateToFilter ? dateRawToDisplay(dateToFilter) : ""}
-              onChange={(event) => setDateToFilter(displayToDateRaw(event.target.value))}
+              onChange={(event) => onDateToChange(displayToDateRaw(event.target.value))}
               maxLength={10}
             />
           </label>

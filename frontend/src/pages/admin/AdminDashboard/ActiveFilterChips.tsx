@@ -1,5 +1,5 @@
 import Icon from "../../../components/common/Icon";
-import type { DashboardFilterChip } from "./useDashboardActiveFilters";
+import type { DashboardFilterChip } from "./dashboardActiveFilters";
 
 interface ActiveFilterChipsProps {
   paginationTotal: number;

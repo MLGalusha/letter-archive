@@ -4,7 +4,7 @@ import type { ContentShapeFilter, DashboardFilterStats } from "./types";
 
 interface ContentShapeFilterSectionProps {
   stats: DashboardFilterStats;
-  contentShapeFilters: ContentShapeFilter[];
+  contentShapeFilters: readonly ContentShapeFilter[];
   toggleContentShapeFilter: (value: ContentShapeFilter) => void;
 }
 

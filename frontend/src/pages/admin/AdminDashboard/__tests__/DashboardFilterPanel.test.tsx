@@ -1,101 +1,30 @@
 import type { ComponentProps } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import DashboardFilterPanel from "../DashboardFilterPanel";
-import type { DashboardFilterStats } from "../types";
-import type { DashboardFilterControls } from "../useDashboardFilters";
+import {
+  emptyDashboardFilterStats,
+  makeDashboardFilterActions,
+  makeDashboardFilterDrafts,
+  makeDashboardFilterState,
+} from "./dashboardFilterFixtures";
 
-const emptyStats: DashboardFilterStats = {
-  total: 0,
-  published: 0,
-  hidden: 0,
-  flagged: 0,
-  uploaded: 0,
-  transcribing: 0,
-  transcribed: 0,
-  metadataExtracting: 0,
-  metadataReady: 0,
-  reviewed: 0,
-  transcriptEmpty: 0,
-  transcriptAiDraft: 0,
-  transcriptEdited: 0,
-  transcriptVerified: 0,
-  metadataEmpty: 0,
-  metadataAiDraft: 0,
-  metadataEdited: 0,
-  metadataVerified: 0,
-  extraContentEmpty: 0,
-  extraContentAiDraft: 0,
-  extraContentEdited: 0,
-  extraContentVerified: 0,
-  missingSender: 0,
-  missingRecipient: 0,
-  missingDate: 0,
-  hasExtras: 0,
-  hasPhotos: 0,
-  hasCover: 0,
-  hasTelegram: 0,
-  hasCard: 0,
-  hasEphemera: 0,
-  hasArticle: 0,
-  hasDiary: 0,
-  hasVoice: 0,
-};
-
-function makeFilters(overrides: Partial<DashboardFilterControls> = {}): DashboardFilterControls {
-  return {
-    collectionInput: "",
-    collectionFilter: "all",
-    collectionFilters: [],
-    handleCollectionInputChange: vi.fn(),
-    addCollectionFilter: vi.fn(),
-    removeCollectionFilter: vi.fn(),
-    visibilityFilter: "ALL",
-    toggleVisibilityFilter: vi.fn(),
-    contentFilterView: "transcript",
-    setContentFilterView: vi.fn(),
-    transcriptStatusFilters: [],
-    toggleTranscriptFilter: vi.fn(),
-    metadataStatusFilters: [],
-    toggleMetadataFilter: vi.fn(),
-    extraContentStatusFilters: [],
-    toggleExtraContentFilter: vi.fn(),
-    workflowFilters: [],
-    toggleWorkflowFilter: vi.fn(),
-    flaggedFilter: "ALL",
-    toggleFlaggedFilter: vi.fn(),
-    missingFilters: [],
-    toggleMissingFilter: vi.fn(),
-    contentShapeFilters: [],
-    toggleContentShapeFilter: vi.fn(),
-    dateMode: "specific",
-    setDateMode: vi.fn(),
-    hasDateFilter: false,
-    yearFilter: null,
-    setYearFilter: vi.fn(),
-    monthFilter: null,
-    setMonthFilter: vi.fn(),
-    dayFilter: null,
-    setDayFilter: vi.fn(),
-    dateFromFilter: null,
-    setDateFromFilter: vi.fn(),
-    dateToFilter: null,
-    setDateToFilter: vi.fn(),
-    clearDateFilters: vi.fn(),
-    handleClearAllFilters: vi.fn(),
-    ...overrides,
-  } as unknown as DashboardFilterControls;
-}
-
-function renderFilterPanel(overrides: Partial<ComponentProps<typeof DashboardFilterPanel>> = {}) {
+function renderFilterPanel(
+  overrides: Partial<ComponentProps<typeof DashboardFilterPanel>> = {},
+) {
   const props: ComponentProps<typeof DashboardFilterPanel> = {
     open: true,
-    stats: emptyStats,
-    filters: makeFilters(),
-    getDateButtonText: () => "Date",
-    dateRawToDisplay: (dateRaw) => dateRaw ?? "",
-    displayToDateRaw: (display) => display || null,
+    stats: emptyDashboardFilterStats,
+    filterState: makeDashboardFilterState(),
+    filterDrafts: makeDashboardFilterDrafts(),
+    filterActions: makeDashboardFilterActions(),
+    dateButtonText: "Date",
     activeFilterCount: 0,
     onClose: vi.fn(),
     ...overrides,
@@ -108,11 +37,11 @@ function renderFilterPanel(overrides: Partial<ComponentProps<typeof DashboardFil
 describe("DashboardFilterPanel", () => {
   it("shows active filter count and routes clear/close actions", async () => {
     const user = userEvent.setup();
-    const filters = makeFilters({ handleClearAllFilters: vi.fn() });
+    const clearAllFilters = vi.fn();
     const onClose = vi.fn();
 
     renderFilterPanel({
-      filters,
+      filterActions: makeDashboardFilterActions({ clearAllFilters }),
       activeFilterCount: 2,
       onClose,
     });
@@ -120,59 +49,165 @@ describe("DashboardFilterPanel", () => {
     expect(screen.getByText("2 active")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Clear" }));
-    await user.click(screen.getByRole("button", { name: "Close filters" }));
+    await user.click(
+      screen.getByRole("button", { name: "Close filters" }),
+    );
 
-    expect(filters.handleClearAllFilters).toHaveBeenCalled();
-    expect(onClose).toHaveBeenCalled();
+    expect(clearAllFilters).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
   it("does not show the clear action without active filters", () => {
     renderFilterPanel({ activeFilterCount: 0 });
 
     expect(screen.getByText("No active filters")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Clear" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Clear" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("routes collection input changes and additions through the filter controller", async () => {
-    const handleCollectionInputChange = vi.fn();
+  it("routes collection drafts and additions through named actions", () => {
+    const changeCollectionInput = vi.fn();
     const addCollectionFilter = vi.fn();
-    const filters = makeFilters({ handleCollectionInputChange, addCollectionFilter });
-
-    renderFilterPanel({ filters });
-
-    fireEvent.change(screen.getByRole("textbox", { name: "Collection code" }), {
-      target: { value: "123" },
+    const filterActions = makeDashboardFilterActions({
+      changeCollectionInput,
+      addCollectionFilter,
     });
 
-    expect(handleCollectionInputChange).toHaveBeenLastCalledWith("123");
+    renderFilterPanel({ filterActions });
+
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Collection code" }),
+      { target: { value: "123" } },
+    );
+
+    expect(changeCollectionInput).toHaveBeenLastCalledWith("123");
 
     cleanup();
-    renderFilterPanel({ filters: makeFilters({ collectionInput: "123", addCollectionFilter }) });
+    renderFilterPanel({
+      filterDrafts: makeDashboardFilterDrafts({
+        collectionInput: "123",
+      }),
+      filterActions,
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Add collection filter" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add collection filter" }),
+    );
 
-    expect(addCollectionFilter).toHaveBeenCalled();
+    expect(addCollectionFilter).toHaveBeenCalledOnce();
   });
 
-  it("routes cleanup and content-shape filters through the filter controller", async () => {
+  it("clears every collection through one atomic action", async () => {
+    const user = userEvent.setup();
+    const clearCollectionFilters = vi.fn();
+    const removeCollectionFilter = vi.fn();
+
+    renderFilterPanel({
+      filterState: makeDashboardFilterState({
+        query: { collectionFilter: "003,009" },
+      }),
+      filterActions: makeDashboardFilterActions({
+        clearCollectionFilters,
+        removeCollectionFilter,
+      }),
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "Clear collection filters" }),
+    );
+
+    expect(clearCollectionFilters).toHaveBeenCalledOnce();
+    expect(removeCollectionFilter).not.toHaveBeenCalled();
+  });
+
+  it("routes cleanup and content-shape filters through named actions", async () => {
     const user = userEvent.setup();
     const toggleMissingFilter = vi.fn();
     const toggleContentShapeFilter = vi.fn();
-    const filters = makeFilters({ toggleMissingFilter, toggleContentShapeFilter });
 
     renderFilterPanel({
-      filters,
+      filterActions: makeDashboardFilterActions({
+        toggleMissingFilter,
+        toggleContentShapeFilter,
+      }),
       stats: {
-        ...emptyStats,
+        ...emptyDashboardFilterStats,
         missingSender: 4,
         hasPhotos: 3,
       },
     });
 
-    await user.click(screen.getByRole("button", { name: "Missing sender 4" }));
+    await user.click(
+      screen.getByRole("button", { name: "Missing sender 4" }),
+    );
     await user.click(screen.getByRole("button", { name: "Photos 3" }));
 
     expect(toggleMissingFilter).toHaveBeenCalledWith("sender");
     expect(toggleContentShapeFilter).toHaveBeenCalledWith("photos");
+  });
+
+  it("routes visibility, content, workflow, and flag intents correctly", async () => {
+    const user = userEvent.setup();
+    const toggleVisibilityFilter = vi.fn();
+    const toggleTranscriptFilter = vi.fn();
+    const toggleMetadataFilter = vi.fn();
+    const toggleExtraContentFilter = vi.fn();
+    const toggleWorkflowFilter = vi.fn();
+    const toggleFlaggedFilter = vi.fn();
+    const changeContentFilterView = vi.fn();
+    const filterActions = makeDashboardFilterActions({
+      changeContentFilterView,
+      toggleVisibilityFilter,
+      toggleTranscriptFilter,
+      toggleMetadataFilter,
+      toggleExtraContentFilter,
+      toggleWorkflowFilter,
+      toggleFlaggedFilter,
+    });
+
+    renderFilterPanel({
+      filterActions,
+    });
+
+    await user.click(screen.getByRole("button", { name: "Public 0" }));
+    await user.click(screen.getByRole("button", { name: "Draft 0" }));
+    await user.click(
+      screen.getByRole("button", { name: /^Metadata$/ }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /^Extras$/ }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Awaiting transcript 0" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Flagged 0" }));
+
+    expect(changeContentFilterView).toHaveBeenNthCalledWith(1, "metadata");
+    expect(changeContentFilterView).toHaveBeenNthCalledWith(2, "extras");
+    expect(toggleVisibilityFilter).toHaveBeenCalledWith("PUBLISHED");
+    expect(toggleTranscriptFilter).toHaveBeenCalledWith("AI_DRAFT");
+    expect(toggleWorkflowFilter).toHaveBeenCalledWith("UPLOADED");
+    expect(toggleFlaggedFilter).toHaveBeenCalledWith("FLAGGED");
+
+    cleanup();
+    renderFilterPanel({
+      filterDrafts: makeDashboardFilterDrafts({
+        contentFilterView: "metadata",
+      }),
+      filterActions,
+    });
+    await user.click(screen.getByRole("button", { name: "Edited 0" }));
+    expect(toggleMetadataFilter).toHaveBeenCalledWith("EDITED");
+
+    cleanup();
+    renderFilterPanel({
+      filterDrafts: makeDashboardFilterDrafts({
+        contentFilterView: "extras",
+      }),
+      filterActions,
+    });
+    await user.click(screen.getByRole("button", { name: "Done 0" }));
+    expect(toggleExtraContentFilter).toHaveBeenCalledWith("VERIFIED");
   });
 });

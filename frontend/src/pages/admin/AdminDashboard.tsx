@@ -12,12 +12,11 @@ import DashboardToolbar from "./AdminDashboard/DashboardToolbar";
 import BulkEditToolbar from "./AdminDashboard/BulkEditToolbar";
 import DashboardDialogs from "./AdminDashboard/DashboardDialogs";
 import {
-  dateRawToDisplay,
-  displayToDateRaw,
   formatDashboardDateTime,
   formatDateRaw,
   getDashboardDateButtonText,
   getCombinedTranscriptStatus,
+  loadPersistedState,
 } from "./AdminDashboard/utils";
 import { StatusIcon } from "./AdminDashboard/StatusIcon";
 import { useDashboardBulkActions } from "./AdminDashboard/useDashboardBulkActions";
@@ -36,6 +35,7 @@ import { useDashboardSelectionDetails } from "./AdminDashboard/useDashboardSelec
 import { useDashboardSort } from "./AdminDashboard/useDashboardSort";
 import { useDashboardViewState } from "./AdminDashboard/useDashboardViewState";
 import { createDashboardCommittedQuery } from "./AdminDashboard/dashboardQueryModel";
+import { getDashboardDateFilterValue } from "./AdminDashboard/dashboardFilterStateModel";
 import { createDashboardStoredState } from "./AdminDashboard/dashboardStoredStateModel";
 import CollectionsDashboard from "./AdminCollectionsListPage";
 import "./AdminDashboard.css";
@@ -46,76 +46,29 @@ export default function AdminDashboard() {
   const isMobile = useIsMobile(768);
   const { dashboardView, handleDashboardViewChange } = useDashboardViewState();
 
-  const dashboardFilters = useDashboardFilters();
-  const {
-    collectionFilter,
-    visibilityFilter,
-    searchQuery,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
-    extraContentStatusFilters,
-    workflowFilters,
-    flaggedFilter,
-    missingFilters,
-    contentShapeFilters,
-    initialSortColumns,
-  } = dashboardFilters;
+  const [initialStoredState] = useState(loadPersistedState);
+  const dashboardFilters = useDashboardFilters(initialStoredState);
   const {
     sortColumns,
     setSortColumns,
     replaceSortColumns,
-  } = useDashboardSort(initialSortColumns);
+  } = useDashboardSort(initialStoredState.sortColumns);
   const committedQuery = useMemo(
     () => createDashboardCommittedQuery(
-      {
-        collectionFilter,
-        visibilityFilter,
-        searchQuery,
-        yearFilter,
-        monthFilter,
-        dayFilter,
-        dateFromFilter,
-        dateToFilter,
-        transcriptStatusFilters,
-        metadataStatusFilters,
-        extraContentStatusFilters,
-        workflowFilters,
-        flaggedFilter,
-        missingFilters,
-        contentShapeFilters,
-      },
+      dashboardFilters.state.query,
       sortColumns,
     ),
     [
-      collectionFilter,
-      visibilityFilter,
-      searchQuery,
-      yearFilter,
-      monthFilter,
-      dayFilter,
-      dateFromFilter,
-      dateToFilter,
-      transcriptStatusFilters,
-      metadataStatusFilters,
-      extraContentStatusFilters,
-      workflowFilters,
-      flaggedFilter,
-      missingFilters,
-      contentShapeFilters,
+      dashboardFilters.state.query,
       sortColumns,
     ],
   );
   const dashboardStoredState = useMemo(
     () => createDashboardStoredState(
       committedQuery,
-      dashboardFilters.dateMode,
+      dashboardFilters.state.dateMode,
     ),
-    [committedQuery, dashboardFilters.dateMode],
+    [committedQuery, dashboardFilters.state.dateMode],
   );
   const {
     visibleColumns,
@@ -279,14 +232,9 @@ export default function AdminDashboard() {
     handleOpenMetadataExtraction,
   } = processingActions;
 
-  const getDateButtonText = () => getDashboardDateButtonText({
-    dateMode: dashboardFilters.dateMode,
-    yearFilter: dashboardFilters.yearFilter,
-    monthFilter: dashboardFilters.monthFilter,
-    dayFilter: dashboardFilters.dayFilter,
-    dateFromFilter: dashboardFilters.dateFromFilter,
-    dateToFilter: dashboardFilters.dateToFilter,
-  });
+  const dateButtonText = getDashboardDateButtonText(
+    getDashboardDateFilterValue(dashboardFilters.state),
+  );
 
   const {
     savedViews,
@@ -297,7 +245,7 @@ export default function AdminDashboard() {
     storedState: dashboardStoredState,
     visibleColumns,
     columnOrder,
-    replaceStoredFilters: dashboardFilters.replaceStoredFilters,
+    replaceStoredFilters: dashboardFilters.actions.replaceStoredFilters,
     replaceSortColumns,
     replaceStoredColumns,
   });
@@ -343,10 +291,10 @@ export default function AdminDashboard() {
           onSaveView={handleSaveDashboardView}
           onApplyView={handleApplyDashboardView}
           onDeleteView={handleDeleteDashboardView}
-          filters={dashboardFilters}
-          getDateButtonText={getDateButtonText}
-          dateRawToDisplay={dateRawToDisplay}
-          displayToDateRaw={displayToDateRaw}
+          filterState={dashboardFilters.state}
+          filterDrafts={dashboardFilters.drafts}
+          filterActions={dashboardFilters.actions}
+          dateButtonText={dateButtonText}
           onManagerOpen={handleToolbarManagerOpen}
         />
       </section>

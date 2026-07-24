@@ -1,7 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ContentStatus, WorkflowState } from '../../../types/Letter';
-import { parseDashboardCollectionFilter } from './dashboardStoredStateModel';
-import { loadPersistedState } from './utils';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
+import type { ContentStatus, WorkflowState } from "../../../types/Letter";
+import { normalizeDashboardSearchQuery } from "./dashboardStoredStateModel";
+import {
+  createDashboardFilterState,
+  dashboardFilterReducer,
+  type DashboardFilterState,
+} from "./dashboardFilterStateModel";
 import type {
   ContentFilterView,
   ContentShapeFilter,
@@ -10,277 +21,211 @@ import type {
   MissingFilter,
   PersistedState,
   VisibilityFilter,
-} from './types';
+} from "./types";
 
-export function useDashboardFilters() {
-  const [persistedState] = useState(loadPersistedState);
+export interface DashboardFilterDrafts {
+  readonly contentFilterView: ContentFilterView;
+  readonly collectionInput: string;
+  readonly searchInput: string;
+}
 
-  const [dateMode, setDateMode] = useState<DateMode>(
-    persistedState.dateMode,
-  );
-  const [contentFilterView, setContentFilterView] = useState<ContentFilterView>('transcript');
-  const [collectionInput, setCollectionInput] = useState('');
-  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>(
-    persistedState.visibilityFilter,
-  );
-  const [transcriptStatusFilters, setTranscriptStatusFilters] = useState<ContentStatus[]>(
-    persistedState.transcriptStatusFilters,
-  );
-  const [metadataStatusFilters, setMetadataStatusFilters] = useState<ContentStatus[]>(
-    persistedState.metadataStatusFilters,
-  );
-  const [extraContentStatusFilters, setExtraContentStatusFilters] = useState<ContentStatus[]>(
-    persistedState.extraContentStatusFilters,
-  );
-  const [workflowFilters, setWorkflowFilters] = useState<WorkflowState[]>(
-    persistedState.workflowFilters,
-  );
-  const [flaggedFilter, setFlaggedFilter] = useState<FlaggedFilter>(
-    persistedState.flaggedFilter,
-  );
-  const [missingFilters, setMissingFilters] = useState<MissingFilter[]>(
-    persistedState.missingFilters,
-  );
-  const [contentShapeFilters, setContentShapeFilters] = useState<ContentShapeFilter[]>(
-    persistedState.contentShapeFilters,
-  );
-  const [collectionFilters, setCollectionFilters] = useState<string[]>(
-    parseDashboardCollectionFilter(persistedState.collectionFilter),
-  );
-  const [yearFilter, setYearFilter] = useState<number | null>(
-    persistedState.year,
-  );
-  const [monthFilter, setMonthFilter] = useState<number | null>(
-    persistedState.month,
-  );
-  const [dayFilter, setDayFilter] = useState<number | null>(
-    persistedState.day,
-  );
-  const [dateFromFilter, setDateFromFilter] = useState<string | null>(
-    persistedState.dateFrom,
-  );
-  const [dateToFilter, setDateToFilter] = useState<string | null>(
-    persistedState.dateTo,
-  );
-  const [searchInput, setSearchInput] = useState(persistedState.searchQuery);
-  const [searchQuery, setSearchQuery] = useState(persistedState.searchQuery);
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+export interface DashboardFilterActions {
+  changeContentFilterView: (value: ContentFilterView) => void;
+  changeCollectionInput: (value: string) => void;
+  addCollectionFilter: () => void;
+  removeCollectionFilter: (code: string) => void;
+  clearCollectionFilters: () => void;
+  changeSearchInput: (value: string) => void;
+  clearSearch: () => void;
+  toggleVisibilityFilter: (
+    value: Exclude<VisibilityFilter, "ALL">,
+  ) => void;
+  clearVisibilityFilter: () => void;
+  toggleTranscriptFilter: (value: ContentStatus) => void;
+  removeTranscriptFilter: (value: ContentStatus) => void;
+  toggleMetadataFilter: (value: ContentStatus) => void;
+  removeMetadataFilter: (value: ContentStatus) => void;
+  toggleExtraContentFilter: (value: ContentStatus) => void;
+  removeExtraContentFilter: (value: ContentStatus) => void;
+  toggleWorkflowFilter: (value: WorkflowState) => void;
+  removeWorkflowFilter: (value: WorkflowState) => void;
+  toggleFlaggedFilter: (
+    value: Exclude<FlaggedFilter, "ALL">,
+  ) => void;
+  clearFlaggedFilter: () => void;
+  toggleMissingFilter: (value: MissingFilter) => void;
+  removeMissingFilter: (value: MissingFilter) => void;
+  toggleContentShapeFilter: (value: ContentShapeFilter) => void;
+  removeContentShapeFilter: (value: ContentShapeFilter) => void;
+  changeDateMode: (value: DateMode) => void;
+  changeYear: (value: number | null) => void;
+  changeMonth: (value: number | null) => void;
+  changeDay: (value: number | null) => void;
+  changeDateFrom: (value: string | null) => void;
+  changeDateTo: (value: string | null) => void;
+  clearDateFilters: () => void;
+  replaceStoredFilters: (state: PersistedState) => void;
+  clearAllFilters: () => void;
+}
 
-  useEffect(() => {
-    if (searchDebounceRef.current) {
-      clearTimeout(searchDebounceRef.current);
-    }
+export interface DashboardFilterController {
+  readonly state: DashboardFilterState;
+  readonly drafts: DashboardFilterDrafts;
+  readonly actions: DashboardFilterActions;
+}
 
-    searchDebounceRef.current = setTimeout(() => {
-      setSearchQuery(searchInput);
-    }, 300);
-
-    return () => {
-      if (searchDebounceRef.current) {
-        clearTimeout(searchDebounceRef.current);
-      }
-    };
-  }, [searchInput]);
-
-  const collectionFilter = useMemo(
-    () => collectionFilters.length > 0 ? collectionFilters.join(',') : 'all',
-    [collectionFilters],
+export function useDashboardFilters(
+  initialStoredState: PersistedState,
+): DashboardFilterController {
+  const [state, dispatch] = useReducer(
+    dashboardFilterReducer,
+    initialStoredState,
+    createDashboardFilterState,
   );
+  const [contentFilterView, setContentFilterView] =
+    useState<ContentFilterView>("transcript");
+  const [collectionInput, setCollectionInput] = useState("");
+  const [searchInput, setSearchInput] = useState(
+    initialStoredState.searchQuery,
+  );
+  const searchDebounceRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleCollectionInputChange = useCallback((value: string) => {
-    const cleaned = value.replace(/\D/g, '').slice(0, 3);
-    setCollectionInput(cleaned);
-  }, []);
-
-  const addCollectionFilter = useCallback(() => {
-    const cleaned = collectionInput.replace(/\D/g, '').slice(0, 3);
-    if (cleaned === '' || Number(cleaned) === 0) return;
-
-    setCollectionFilters((previous) => (
-      previous.includes(cleaned) ? previous : [...previous, cleaned]
-    ));
-    setCollectionInput('');
-  }, [collectionInput]);
-
-  const removeCollectionFilter = useCallback((code: string) => {
-    setCollectionFilters((previous) => previous.filter((collectionCode) => collectionCode !== code));
-  }, []);
-
-  const setCollectionFilter = useCallback((value: string) => {
-    setCollectionFilters(parseDashboardCollectionFilter(value));
-    setCollectionInput('');
-  }, []);
-
-  const replaceStoredFilters = useCallback((state: PersistedState) => {
-    if (searchDebounceRef.current) {
+  const cancelPendingSearch = useCallback(() => {
+    if (searchDebounceRef.current !== null) {
       clearTimeout(searchDebounceRef.current);
       searchDebounceRef.current = null;
     }
-
-    setVisibilityFilter(state.visibilityFilter);
-    setCollectionFilters(parseDashboardCollectionFilter(state.collectionFilter));
-    setCollectionInput('');
-    setSearchInput(state.searchQuery);
-    setSearchQuery(state.searchQuery);
-    setDateMode(state.dateMode);
-    setYearFilter(state.year);
-    setMonthFilter(state.month);
-    setDayFilter(state.day);
-    setDateFromFilter(state.dateFrom);
-    setDateToFilter(state.dateTo);
-    setTranscriptStatusFilters([...state.transcriptStatusFilters]);
-    setMetadataStatusFilters([...state.metadataStatusFilters]);
-    setExtraContentStatusFilters([...state.extraContentStatusFilters]);
-    setWorkflowFilters([...state.workflowFilters]);
-    setFlaggedFilter(state.flaggedFilter);
-    setMissingFilters([...state.missingFilters]);
-    setContentShapeFilters([...state.contentShapeFilters]);
   }, []);
 
-  const toggleVisibilityFilter = useCallback((value: 'PUBLISHED' | 'HIDDEN') => {
-    setVisibilityFilter((current) => (current === value ? 'ALL' : value));
-  }, []);
+  useEffect(() => {
+    cancelPendingSearch();
+    searchDebounceRef.current = setTimeout(() => {
+      searchDebounceRef.current = null;
+      dispatch({ type: "commitSearch", value: searchInput });
+    }, 300);
 
-  const toggleTranscriptFilter = useCallback((value: ContentStatus) => {
-    setTranscriptStatusFilters((previous) =>
-      previous.includes(value)
-        ? previous.filter((status) => status !== value)
-        : [...previous, value],
-    );
-  }, []);
+    return cancelPendingSearch;
+  }, [cancelPendingSearch, searchInput]);
 
-  const toggleMetadataFilter = useCallback((value: ContentStatus) => {
-    setMetadataStatusFilters((previous) =>
-      previous.includes(value)
-        ? previous.filter((status) => status !== value)
-        : [...previous, value],
-    );
-  }, []);
-
-  const toggleExtraContentFilter = useCallback((value: ContentStatus) => {
-    setExtraContentStatusFilters((previous) =>
-      previous.includes(value)
-        ? previous.filter((status) => status !== value)
-        : [...previous, value],
-    );
-  }, []);
-
-  const toggleWorkflowFilter = useCallback((value: WorkflowState) => {
-    setWorkflowFilters((previous) =>
-      previous.includes(value)
-        ? previous.filter((workflow) => workflow !== value)
-        : [...previous, value],
-    );
-  }, []);
-
-  const toggleFlaggedFilter = useCallback((value: Exclude<FlaggedFilter, 'ALL'>) => {
-    setFlaggedFilter((current) => (current === value ? 'ALL' : value));
-  }, []);
-
-  const toggleMissingFilter = useCallback((value: MissingFilter) => {
-    setMissingFilters((previous) =>
-      previous.includes(value)
-        ? previous.filter((filter) => filter !== value)
-        : [...previous, value],
-    );
-  }, []);
-
-  const toggleContentShapeFilter = useCallback((value: ContentShapeFilter) => {
-    setContentShapeFilters((previous) =>
-      previous.includes(value)
-        ? previous.filter((filter) => filter !== value)
-        : [...previous, value],
-    );
-  }, []);
-
-  const clearDateFilters = useCallback(() => {
-    setYearFilter(null);
-    setMonthFilter(null);
-    setDayFilter(null);
-    setDateFromFilter(null);
-    setDateToFilter(null);
-  }, []);
-
-  const handleClearAllFilters = useCallback(() => {
-    setVisibilityFilter('ALL');
-    setFlaggedFilter('ALL');
-    setTranscriptStatusFilters([]);
-    setMetadataStatusFilters([]);
-    setExtraContentStatusFilters([]);
-    setWorkflowFilters([]);
-    setMissingFilters([]);
-    setContentShapeFilters([]);
-    setCollectionFilters([]);
-    setCollectionInput('');
-    setSearchInput('');
-    setSearchQuery('');
-    clearDateFilters();
-    setDateMode('specific');
-  }, [clearDateFilters]);
-
-  const hasDateFilter = yearFilter !== null
-    || monthFilter !== null
-    || dayFilter !== null
-    || dateFromFilter !== null
-    || dateToFilter !== null;
+  const actions = useMemo<DashboardFilterActions>(() => ({
+    changeContentFilterView: (value) => setContentFilterView(value),
+    changeCollectionInput: (value) => {
+      setCollectionInput(value.replace(/\D/g, "").slice(0, 3));
+    },
+    addCollectionFilter: () => {
+      const cleaned = collectionInput.replace(/\D/g, "").slice(0, 3);
+      if (cleaned === "" || Number(cleaned) === 0) return;
+      dispatch({ type: "addCollection", value: cleaned });
+      setCollectionInput("");
+    },
+    removeCollectionFilter: (value) => {
+      dispatch({ type: "removeCollection", value });
+    },
+    clearCollectionFilters: () => {
+      dispatch({ type: "clearCollections" });
+    },
+    changeSearchInput: (value) => {
+      setSearchInput(normalizeDashboardSearchQuery(value));
+    },
+    clearSearch: () => {
+      cancelPendingSearch();
+      setSearchInput("");
+      dispatch({ type: "clearSearch" });
+    },
+    toggleVisibilityFilter: (value) => {
+      dispatch({ type: "toggleVisibility", value });
+    },
+    clearVisibilityFilter: () => {
+      dispatch({ type: "clearVisibility" });
+    },
+    toggleTranscriptFilter: (value) => {
+      dispatch({ type: "toggleTranscriptStatus", value });
+    },
+    removeTranscriptFilter: (value) => {
+      dispatch({ type: "removeTranscriptStatus", value });
+    },
+    toggleMetadataFilter: (value) => {
+      dispatch({ type: "toggleMetadataStatus", value });
+    },
+    removeMetadataFilter: (value) => {
+      dispatch({ type: "removeMetadataStatus", value });
+    },
+    toggleExtraContentFilter: (value) => {
+      dispatch({ type: "toggleExtraContentStatus", value });
+    },
+    removeExtraContentFilter: (value) => {
+      dispatch({ type: "removeExtraContentStatus", value });
+    },
+    toggleWorkflowFilter: (value) => {
+      dispatch({ type: "toggleWorkflow", value });
+    },
+    removeWorkflowFilter: (value) => {
+      dispatch({ type: "removeWorkflow", value });
+    },
+    toggleFlaggedFilter: (value) => {
+      dispatch({ type: "toggleFlagged", value });
+    },
+    clearFlaggedFilter: () => {
+      dispatch({ type: "clearFlagged" });
+    },
+    toggleMissingFilter: (value) => {
+      dispatch({ type: "toggleMissing", value });
+    },
+    removeMissingFilter: (value) => {
+      dispatch({ type: "removeMissing", value });
+    },
+    toggleContentShapeFilter: (value) => {
+      dispatch({ type: "toggleContentShape", value });
+    },
+    removeContentShapeFilter: (value) => {
+      dispatch({ type: "removeContentShape", value });
+    },
+    changeDateMode: (value) => {
+      dispatch({ type: "changeDateMode", value });
+    },
+    changeYear: (value) => {
+      dispatch({ type: "changeYear", value });
+    },
+    changeMonth: (value) => {
+      dispatch({ type: "changeMonth", value });
+    },
+    changeDay: (value) => {
+      dispatch({ type: "changeDay", value });
+    },
+    changeDateFrom: (value) => {
+      dispatch({ type: "changeDateFrom", value });
+    },
+    changeDateTo: (value) => {
+      dispatch({ type: "changeDateTo", value });
+    },
+    clearDateFilters: () => {
+      dispatch({ type: "clearDate" });
+    },
+    replaceStoredFilters: (nextState) => {
+      cancelPendingSearch();
+      setCollectionInput("");
+      setSearchInput(nextState.searchQuery);
+      dispatch({ type: "replaceStoredFilters", value: nextState });
+    },
+    clearAllFilters: () => {
+      cancelPendingSearch();
+      setCollectionInput("");
+      setSearchInput("");
+      dispatch({ type: "clearAllFilters" });
+    },
+  }), [
+    cancelPendingSearch,
+    collectionInput,
+  ]);
 
   return {
-    dateMode,
-    setDateMode,
-    contentFilterView,
-    setContentFilterView,
-    collectionInput,
-    setCollectionInput,
-    handleCollectionInputChange,
-    collectionFilters,
-    addCollectionFilter,
-    removeCollectionFilter,
-    visibilityFilter,
-    setVisibilityFilter,
-    toggleVisibilityFilter,
-    transcriptStatusFilters,
-    setTranscriptStatusFilters,
-    toggleTranscriptFilter,
-    metadataStatusFilters,
-    setMetadataStatusFilters,
-    toggleMetadataFilter,
-    extraContentStatusFilters,
-    setExtraContentStatusFilters,
-    toggleExtraContentFilter,
-    workflowFilters,
-    setWorkflowFilters,
-    toggleWorkflowFilter,
-    flaggedFilter,
-    setFlaggedFilter,
-    toggleFlaggedFilter,
-    missingFilters,
-    setMissingFilters,
-    toggleMissingFilter,
-    contentShapeFilters,
-    setContentShapeFilters,
-    toggleContentShapeFilter,
-    collectionFilter,
-    setCollectionFilter,
-    replaceStoredFilters,
-    yearFilter,
-    setYearFilter,
-    monthFilter,
-    setMonthFilter,
-    dayFilter,
-    setDayFilter,
-    dateFromFilter,
-    setDateFromFilter,
-    dateToFilter,
-    setDateToFilter,
-    searchInput,
-    setSearchInput,
-    searchQuery,
-    setSearchQuery,
-    hasDateFilter,
-    clearDateFilters,
-    handleClearAllFilters,
-    initialSortColumns: persistedState.sortColumns,
+    state,
+    drafts: {
+      contentFilterView,
+      collectionInput,
+      searchInput,
+    },
+    actions,
   };
 }
-
-export type DashboardFilterControls = ReturnType<typeof useDashboardFilters>;

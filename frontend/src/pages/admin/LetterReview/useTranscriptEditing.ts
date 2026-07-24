@@ -5,7 +5,6 @@ import {
   useState,
   type Dispatch,
   type MouseEvent,
-  type RefObject,
   type SetStateAction,
 } from 'react';
 import {
@@ -15,7 +14,6 @@ import {
 } from '../../../api/admin';
 import { useTooltip } from '../../../hooks/useTooltip';
 import type { Letter } from '../../../types/Letter';
-import { highlightTranscriptMarkers } from '../../../utils/transcriptHighlight';
 import type { AutoSaveData } from './useAutoSave';
 import type { BeginLetterSaving } from './useLetterSavingState';
 import type { LetterReviewVisit } from './useLetterReviewVisit';
@@ -35,7 +33,6 @@ interface UseTranscriptEditingOptions {
   setTranscript: Dispatch<SetStateAction<string>>;
   handleMutationError: HandleMutationError;
   showToast: ShowToast;
-  editorRef: RefObject<HTMLDivElement | null>;
   triggerAutoSave: (data: AutoSaveData) => Promise<void>;
 }
 
@@ -64,7 +61,6 @@ export function useTranscriptEditing({
   setTranscript,
   handleMutationError,
   showToast,
-  editorRef,
   triggerAutoSave,
 }: UseTranscriptEditingOptions) {
   const [storedSession, setStoredSession] = useState(
@@ -276,11 +272,6 @@ export function useTranscriptEditing({
       if (!tryAdoptLetter(updated)) return;
       setTranscript(originalTranscriptText);
 
-      if (editorRef.current) {
-        editorRef.current.innerHTML =
-          highlightTranscriptMarkers(originalTranscriptText);
-      }
-
       const verifiedLetter = await verifyTranscript(
         letterId,
         updated.primarySourceRevision,
@@ -295,7 +286,6 @@ export function useTranscriptEditing({
       releaseSaving();
     }
   }, [
-    editorRef,
     handleMutationError,
     letter,
     letterId,

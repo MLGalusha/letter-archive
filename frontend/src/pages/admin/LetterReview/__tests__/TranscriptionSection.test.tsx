@@ -23,7 +23,6 @@ const buildProps = (overrides: Partial<ComponentProps<typeof TranscriptionSectio
   onTranscriptClick: vi.fn(),
   onTranscriptDoubleClick: vi.fn(),
   onTranscriptInput: vi.fn(),
-  onEditorKeyDown: vi.fn(),
   readingViewOpen: false,
   onReadingViewOpenChange: vi.fn(),
   readerText: "",
@@ -35,6 +34,7 @@ const buildProps = (overrides: Partial<ComponentProps<typeof TranscriptionSectio
 describe("TranscriptionSection", () => {
   afterEach(() => {
     document.body.style.overflow = "";
+    window.getSelection()?.removeAllRanges();
   });
 
   it("shows transcribe and verify actions while unverified", () => {
@@ -78,14 +78,126 @@ describe("TranscriptionSection", () => {
     const editor = container.querySelector(".transcript-editor") as HTMLDivElement;
     editor.innerText = "updated transcript";
     fireEvent.input(editor);
-    fireEvent.keyDown(editor, { key: "Tab" });
 
     expect(props.onTranscribeLetter).toHaveBeenCalledTimes(1);
     expect(props.onVerifyTranscript).toHaveBeenCalledTimes(1);
     expect(props.onTranscriptClick).toHaveBeenCalledTimes(1);
     expect(props.onTranscriptDoubleClick).toHaveBeenCalledTimes(1);
     expect(props.onTranscriptInput).toHaveBeenCalledWith("updated transcript");
-    expect(props.onEditorKeyDown).toHaveBeenCalledTimes(1);
+  });
+
+  it("projects markers and clears stale DOM when authoritative text becomes empty", () => {
+    const props = buildProps({
+      transcriptText: "Dear [unclear: Molly]\n--- Page 2 ---\nGoodbye",
+    });
+    const { container, rerender } = render(
+      <TranscriptionSection {...props} />,
+    );
+    const editor = container.querySelector(
+      ".transcript-editor",
+    ) as HTMLDivElement;
+
+    const marker = editor.querySelector(
+      ".transcript-marker.transcript-marker--unclear",
+    );
+    expect(marker).toHaveTextContent("[unclear: Molly]");
+    expect(marker).toHaveAttribute(
+      "title",
+      "Unclear — best guess shown",
+    );
+    const separator = editor.querySelector(".page-sep");
+    expect(separator).toHaveAttribute("contenteditable", "false");
+    expect(separator).toHaveAttribute("data-page", "2");
+
+    rerender(
+      <TranscriptionSection
+        {...props}
+        transcriptText=""
+      />,
+    );
+
+    expect(editor.innerHTML).toBe("");
+  });
+
+  it("owns Tab insertion inside the transcript editor", () => {
+    const originalExecCommand = Object.getOwnPropertyDescriptor(
+      document,
+      "execCommand",
+    );
+    const execCommand = vi.fn();
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: execCommand,
+    });
+
+    try {
+      const { container } = render(
+        <TranscriptionSection {...buildProps()} />,
+      );
+      const editor = container.querySelector(
+        ".transcript-editor",
+      ) as HTMLDivElement;
+      expect(fireEvent.keyDown(editor, { key: "Tab" })).toBe(false);
+      expect(execCommand).toHaveBeenCalledWith(
+        "insertText",
+        false,
+        "    ",
+      );
+    } finally {
+      if (originalExecCommand) {
+        Object.defineProperty(
+          document,
+          "execCommand",
+          originalExecCommand,
+        );
+      } else {
+        Reflect.deleteProperty(document, "execCommand");
+      }
+    }
+  });
+
+  it.each([
+    {
+      key: "Backspace",
+      focus: (separator: Element) => separator.nextSibling,
+      offset: () => 0,
+    },
+    {
+      key: "Delete",
+      focus: (separator: Element) => separator.previousSibling,
+      offset: (node: Node) => node.textContent?.length ?? 0,
+    },
+  ])("protects a page separator from $key", ({
+    key,
+    focus,
+    offset,
+  }) => {
+    const { container } = render(
+      <TranscriptionSection
+        {...buildProps({
+          transcriptText: "Before\n--- Page 2 ---\nAfter",
+        })}
+      />,
+    );
+    const editor = container.querySelector(
+      ".transcript-editor",
+    ) as HTMLDivElement;
+    const separator = editor.querySelector(".page-sep")!;
+    const focusNode = focus(separator)!;
+    const selection = window.getSelection()!;
+    const range = document.createRange();
+    range.setStart(focusNode, offset(focusNode));
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    expect(fireEvent.keyDown(editor, { key })).toBe(false);
+
+    range.setStart(focusNode, 1);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    expect(fireEvent.keyDown(editor, { key })).toBe(true);
   });
 
   it("renders Reading View from its controlled owner", () => {

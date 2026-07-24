@@ -212,6 +212,48 @@ test.describe('@mocked Letter Review', () => {
     expect(mockedApi.transcribeLetterRequests).toHaveLength(0);
   });
 
+  test('clears the same transcript editor after an accepted empty result', async ({
+    page,
+  }) => {
+    const initialLetter = createMockLetterReviewLetter();
+    await openMockLetterReview(page, initialLetter);
+    const editor = transcriptionSection(page).locator('.transcript-editor');
+    const originalEditor = await editor.elementHandle();
+    expect(originalEditor).not.toBeNull();
+
+    const emptyLetter = createMockLetterReviewLetter({
+      transcriptStatus: 'EMPTY',
+      transcript: {
+        pages: [],
+        fullText: '',
+        verified: false,
+      },
+    });
+    await page.route(/\/transcribe-letter$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          letter: emptyLetter,
+          transcribed: {
+            pageCount: 0,
+            textLength: 0,
+          },
+        }),
+      });
+    });
+
+    await transcriptionSection(page).locator('.transcribe-btn').click();
+    await page.locator('.regenerate-popup .btn-option', {
+      hasText: 'Letter Transcript',
+    }).click();
+
+    await expect(page.locator('.toast')).toContainText('Letter transcribed');
+    expect(await originalEditor!.evaluate((element) => element.isConnected))
+      .toBe(true);
+    await expect(editor).toHaveJSProperty('innerHTML', '');
+  });
+
   test('resets Reading View generation, overlay, and split layout for a new visit', async ({
     page,
   }) => {

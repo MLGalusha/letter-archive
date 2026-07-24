@@ -232,6 +232,35 @@ describe('Letter Review source-conflict ownership', () => {
     expect(page).toContain('mutationsBlocked={mutationsBlocked}');
   });
 
+  it('keeps transcript editor DOM projection in the section boundary', async () => {
+    const [
+      page,
+      transcriptEditing,
+      transcriptionSection,
+    ] = await Promise.all([
+      readFile(pagePath, 'utf8'),
+      readFile(transcriptEditingPath, 'utf8'),
+      readFile(transcriptionSectionPath, 'utf8'),
+    ]);
+
+    expect(transcriptionSection).toContain(
+      'highlightTranscriptMarkers(transcriptText)',
+    );
+    expect(transcriptionSection).toContain(
+      'document.execCommand("insertText", false, "    ")',
+    );
+    expect(transcriptionSection).toContain(
+      'classList.contains("page-sep")',
+    );
+    expect(transcriptionSection).not.toContain('onEditorKeyDown');
+    expect(page).not.toContain('highlightTranscriptMarkers');
+    expect(page).not.toContain('onEditorKeyDown');
+    expect(page).not.toContain('handleEditorKeyDown');
+    expect(page).not.toContain('isPageSepNode');
+    expect(transcriptEditing).not.toContain('innerHTML');
+    expect(transcriptEditing).not.toContain('editorRef');
+  });
+
   it('keys terminal and queued ownership to an opaque route visit', async () => {
     const [
       page,

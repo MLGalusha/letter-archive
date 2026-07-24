@@ -33,7 +33,6 @@ interface TranscriptionSectionProps {
   onTranscriptClick: (e: React.MouseEvent) => void;
   onTranscriptDoubleClick: (e: React.MouseEvent) => void;
   onTranscriptInput: (text: string) => void;
-  onEditorKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
   readingViewOpen: boolean;
   onReadingViewOpenChange: (open: boolean) => void;
   readerText: string;
@@ -44,6 +43,56 @@ interface TranscriptionSectionProps {
 }
 
 const hasContent = (text: string) => text.trim().length > 0;
+
+const isPageSeparator = (node: Node | null): boolean => (
+  node?.nodeType === Node.ELEMENT_NODE
+  && (node as HTMLElement).classList.contains("page-sep")
+);
+
+function handleEditorKeyDown(
+  event: React.KeyboardEvent<HTMLDivElement>,
+  editor: HTMLDivElement | null,
+) {
+  if (event.key === "Tab") {
+    event.preventDefault();
+    event.stopPropagation();
+    document.execCommand("insertText", false, "    ");
+    return;
+  }
+
+  if (
+    !editor
+    || (event.key !== "Backspace" && event.key !== "Delete")
+  ) {
+    return;
+  }
+
+  const selection = window.getSelection();
+  const node = selection?.focusNode;
+  if (
+    !selection
+    || !selection.isCollapsed
+    || !node
+    || !editor.contains(node)
+  ) {
+    return;
+  }
+
+  if (event.key === "Backspace") {
+    const previous = selection.focusOffset === 0
+      ? node.previousSibling ?? node.parentElement?.previousSibling ?? null
+      : null;
+    if (isPageSeparator(previous)) event.preventDefault();
+    return;
+  }
+
+  const parent = node.parentNode;
+  const next = node.nodeType === Node.TEXT_NODE
+    && selection.focusOffset === node.textContent?.length
+    ? node.nextSibling ?? parent?.nextSibling ?? null
+    : null;
+  if (isPageSeparator(next)) event.preventDefault();
+}
 
 const TranscriptionSection = memo(function TranscriptionSection({
   letter,
@@ -62,7 +111,6 @@ const TranscriptionSection = memo(function TranscriptionSection({
   onTranscriptClick,
   onTranscriptDoubleClick,
   onTranscriptInput,
-  onEditorKeyDown,
   readingViewOpen,
   onReadingViewOpenChange,
   readerText,
@@ -74,9 +122,9 @@ const TranscriptionSection = memo(function TranscriptionSection({
     && readingViewOpen
     && hasContent(transcriptText);
 
-  // Re-populate editor when switching back from preview to edit.
+  // React state is authoritative; this is the only transcript DOM projection.
   useEffect(() => {
-    if (!showReadingView && editorRef.current && transcriptText) {
+    if (!showReadingView && editorRef.current) {
       const current = editorRef.current.innerText;
       if (current !== transcriptText) {
         editorRef.current.innerHTML = highlightTranscriptMarkers(transcriptText);
@@ -220,7 +268,9 @@ const TranscriptionSection = memo(function TranscriptionSection({
           onInput={(e) => {
             onTranscriptInput(e.currentTarget.innerText);
           }}
-          onKeyDown={onEditorKeyDown}
+          onKeyDown={(event) => {
+            handleEditorKeyDown(event, event.currentTarget);
+          }}
         />
       </div>
 

@@ -88,7 +88,6 @@ function optionsFor(
     setTranscript: vi.fn(),
     handleMutationError: vi.fn(() => false),
     showToast: vi.fn(),
-    editorRef: { current: null },
     triggerAutoSave: vi.fn(async () => undefined),
     ...overrides,
   };
@@ -177,6 +176,89 @@ describe('useTranscriptEditing visit ownership', () => {
     });
     expect(confirm).not.toHaveBeenCalled();
     expect(updateLetterMock).not.toHaveBeenCalled();
+  });
+
+  it('reverts through React state and restores verification without a DOM writer', async () => {
+    const active = { current: true };
+    const currentVisit = visit('letter-a', active);
+    const initialLetter = makeLetter();
+    const unverifiedLetter = makeLetter({
+      transcriptStatus: 'EDITED',
+      transcriptVerifiedAt: undefined,
+      transcript: {
+        pages: [],
+        fullText: 'Original A transcript',
+        verified: false,
+      },
+    });
+    const changedLetter = makeLetter({
+      transcriptStatus: 'EDITED',
+      transcriptVerifiedAt: undefined,
+      transcript: {
+        pages: [],
+        fullText: 'Changed A transcript',
+        verified: false,
+      },
+    });
+    const revertedLetter = makeLetter({
+      primarySourceRevision: 7,
+      transcriptStatus: 'EDITED',
+      transcriptVerifiedAt: undefined,
+      transcript: {
+        pages: [],
+        fullText: 'Original A transcript',
+        verified: false,
+      },
+    });
+    const verifiedLetter = makeLetter({
+      primarySourceRevision: 7,
+    });
+    const setTranscript = vi.fn();
+    const showToast = vi.fn();
+    const sharedEffects = {
+      setTranscript,
+      showToast,
+    };
+    unverifyTranscriptMock.mockResolvedValue(unverifiedLetter);
+    updateLetterMock.mockResolvedValue(revertedLetter);
+    verifyTranscriptMock.mockResolvedValue(verifiedLetter);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    const { result, rerender } = renderHook(
+      ({ letter }) => useTranscriptEditing(
+        optionsFor(letter, currentVisit, sharedEffects),
+      ),
+      {
+        initialProps: { letter: initialLetter },
+      },
+    );
+
+    await act(async () => {
+      await result.current.handleTranscriptDoubleClick();
+    });
+    act(() => {
+      result.current.handleTranscriptInput('Changed A transcript');
+    });
+    rerender({ letter: changedLetter });
+
+    await act(async () => {
+      await result.current.handleTranscriptRevert();
+    });
+
+    expect(updateLetterMock).toHaveBeenCalledWith('letter-a', {
+      primarySourceRevision: 3,
+      transcriptionText: 'Original A transcript',
+    });
+    expect(verifyTranscriptMock).toHaveBeenCalledWith('letter-a', 7);
+    expect(setTranscript).toHaveBeenLastCalledWith(
+      'Original A transcript',
+    );
+    expect(showToast).toHaveBeenLastCalledWith(
+      'Changes reverted and verification restored',
+      'success',
+    );
+    expect(result.current.isTranscriptEditing).toBe(false);
+    expect(result.current.hasTranscriptChanges).toBe(false);
   });
 
   it('ignores late first-A unverify completion during a fresh A visit', async () => {

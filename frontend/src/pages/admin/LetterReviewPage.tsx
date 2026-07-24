@@ -29,7 +29,6 @@ import {
   DropdownItem,
 } from "../../components/common";
 import { trackEdit } from "../../utils/recentEdits";
-import { highlightTranscriptMarkers } from "../../utils/transcriptHighlight";
 import type { Letter, LetterImage, VisibilityState } from "../../types/Letter";
 import {
   hasPrimaryTranscriptContent,
@@ -262,7 +261,6 @@ export default function LetterReviewPage() {
     setTranscript,
     handleMutationError,
     showToast,
-    editorRef,
     triggerAutoSave,
   });
   const hydrateAdoptedLetter = useCallback((updatedLetter: Letter) => {
@@ -382,21 +380,6 @@ export default function LetterReviewPage() {
 
     return () => window.cancelAnimationFrame(frameId);
   }, [letter, routeLocation.hash]);
-
-  // Keep the contenteditable DOM in sync when the editor mounts or when
-  // transcript state changes outside direct typing (for example after exiting
-  // line review). We only write when the DOM is actually out of sync to avoid
-  // cursor jumps during normal editing.
-  // Uses innerHTML to render highlighted uncertainty markers ([illegible], etc.)
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (editor) {
-      const currentContent = editor.innerText;
-      if (currentContent !== transcript) {
-        editor.innerHTML = highlightTranscriptMarkers(transcript);
-      }
-    }
-  }, [transcript, reviewMode]);
 
   // Auto-resize textareas to fit content
   const autoResizeTextarea = (textarea: HTMLTextAreaElement | null, minHeight = 80) => {
@@ -692,55 +675,6 @@ export default function LetterReviewPage() {
     setCurrentFilename(image.originalFilename);
     setViewerPageIndex(index);
   }, []);
-
-  const isPageSepNode = useCallback((node: Node): boolean => {
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      const el = node as HTMLElement;
-      return el.classList.contains("page-sep");
-    }
-    return false;
-  }, []);
-
-  // Handle Tab key to insert spaces instead of changing focus (for transcript editor)
-  const handleEditorKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Tab") {
-      e.preventDefault();
-      e.stopPropagation();
-      document.execCommand("insertText", false, "    ");
-      return;
-    }
-
-    // Prevent deleting page separators
-    if (e.key === "Backspace" || e.key === "Delete") {
-      const sel = window.getSelection();
-      if (!sel || !sel.isCollapsed) return;
-      const node = sel.focusNode;
-      if (!node) return;
-
-      // Check if adjacent node is a page separator
-      const isInEditor = editorRef.current?.contains(node);
-      if (!isInEditor) return;
-
-      if (e.key === "Backspace") {
-        // Check the node/element just before cursor
-        const prev = sel.focusOffset === 0
-          ? node.previousSibling || node.parentElement?.previousSibling
-          : null;
-        if (prev && isPageSepNode(prev)) {
-          e.preventDefault();
-        }
-      } else {
-        // Delete key: check element just after cursor
-        const parent = node.parentNode;
-        const next = node.nodeType === Node.TEXT_NODE && sel.focusOffset === node.textContent?.length
-          ? node.nextSibling || parent?.nextSibling
-          : null;
-        if (next && isPageSepNode(next)) {
-          e.preventDefault();
-        }
-      }
-    }
-  }, [isPageSepNode]);
 
   const handleFlagToggle = useCallback(async () => {
     if (!letter) return;
@@ -1155,7 +1089,6 @@ export default function LetterReviewPage() {
                 onTranscriptClick={handleTranscriptClick}
                 onTranscriptDoubleClick={handleTranscriptDoubleClick}
                 onTranscriptInput={handleTranscriptInput}
-                onEditorKeyDown={handleEditorKeyDown}
                 {...letterTranscriptionWorkspace.sectionProps}
                 {...readingViewWorkspace.sectionProps}
               />

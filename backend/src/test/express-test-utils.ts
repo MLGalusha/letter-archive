@@ -10,6 +10,7 @@ interface InvokeOptions {
   body?: unknown;
   query?: Record<string, unknown>;
   headers?: Record<string, string>;
+  timeoutMs?: number;
 }
 
 interface MockResponse extends EventEmitter {
@@ -33,6 +34,8 @@ export interface InvokeResult {
   body: unknown;
   headers: Record<string, string>;
 }
+
+const DEFAULT_INVOKE_TIMEOUT_MS = 1_000;
 
 function createMockResponse(): { res: MockResponse; headers: Record<string, string> } {
   const headers: Record<string, string> = {};
@@ -131,11 +134,14 @@ export async function invokeRouter(
 
   return await new Promise<InvokeResult>((resolve, reject) => {
     let settled = false;
+    const timeoutMs = options.timeoutMs ?? DEFAULT_INVOKE_TIMEOUT_MS;
     const timeout = setTimeout(() => {
-      if (!settled && !res.headersSent) {
-        reject(new Error(`Request did not complete for ${options.method} ${options.url}`));
-      }
-    }, 50);
+      if (settled) return;
+      settled = true;
+      reject(new Error(
+        `Request did not complete within ${timeoutMs}ms for ${options.method} ${options.url}`,
+      ));
+    }, timeoutMs);
 
     const finalize = () => {
       if (settled) return;

@@ -18,6 +18,10 @@ id, collection_code (unique 3-digit), title, description, created_at
 
 **V2 metadata:** `emotional_tone`, `sender_recipient_relationship`, `primary_topics[]`, `metadata_v2_json`, `entity_extraction_json`
 
+**Processing ownership:** stage status, run ID, lease deadline, lease-run binding, and
+queued/requested claim kind for transcription, extra content, metadata, and entity
+extraction; committed/reserved revision fields for revisioned stages
+
 **Tracking:** `reviewed_at`, `deleted_at`, timestamps
 
 ### letter_pages
@@ -78,6 +82,8 @@ Used for admin action history including rename/merge undo snapshots.
 
 **job_status:** PENDING, RUNNING, SUCCESS, FAILED
 
+**\*_claim_kind:** QUEUED, REQUESTED
+
 **person_role:** sender, recipient, mentioned
 
 **place_role:** written_from, mentioned, destination
@@ -94,6 +100,9 @@ Used for admin action history including rename/merge undo snapshots.
 - Published requires `reviewed_at` set
 - Pages cascade delete with letter
 - Versions cascade delete with letter
+- Current processing attempts use paired ownership/liveness tuples; automatic recovery
+  accepts only an exact run-bound tuple and leaves rolling-deployment residue manual
+- Entity extraction reserves exactly `committed revision + 1` while `RUNNING`
 
 ## Common Queries
 

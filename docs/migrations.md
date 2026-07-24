@@ -1,6 +1,6 @@
 # Database Migrations
 
-## Golden Rule
+## Default Workflow
 
 ```
 schema.ts → drizzle:generate → drizzle:migrate
@@ -10,7 +10,17 @@ schema.ts → drizzle:generate → drizzle:migrate
 2. Run `npm run drizzle:generate` to create a migration SQL file
 3. Run `npm run drizzle:migrate` to apply it
 
-**Never** hand-write migration SQL. **Never** use `db:push` — it applies schema changes directly without creating migration files, causing drift between local state and the migration journal.
+Use generated migrations for ordinary schema changes. A hand-authored migration is
+reserved for a reviewed rollout contract that Drizzle cannot express safely—such as
+expand/drain compatibility, triggers, or staged legacy behavior. In that case it must:
+
+- be registered explicitly in `meta/_journal.json`;
+- stay consistent with `schema.ts`;
+- include filesystem validation and a fresh PostgreSQL regression;
+- document mixed-version behavior and the later contraction step.
+
+**Never** use `db:push`—it applies changes directly without a migration artifact and
+causes drift between local state and the migration journal.
 
 ## Command Reference
 
@@ -85,7 +95,10 @@ If the extension creation is in a later migration than the index, fresh database
 
 ### Duplicate Column Additions
 
-When hand-writing SQL alongside drizzle-generated migrations, it's easy to add a column that drizzle also adds. This causes `column already exists` errors on fresh databases. Use `IF NOT EXISTS` for hand-written migrations, or better yet, let drizzle generate all SQL.
+When a reviewed hand-authored rollout migration accompanies generated history, it is
+easy to add a column twice. This causes `column already exists` errors on fresh
+databases. Search the complete journal first and prove the full migration chain on a
+disposable PostgreSQL instance. Do not use `IF NOT EXISTS` to hide unexpected drift.
 
 ## Automated Validation
 

@@ -1,15 +1,15 @@
 # Architecture Cleanup Current Work
 
-Last updated: July 23, 2026
+Last updated: July 24, 2026
 
 ## Resume Here
 
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 013 — establish durable entity-extraction liveness
-- Last sealed cleanup implementation: worker processing-cycle extraction at `45903733`
-- Current slice: 013 — framed; ownership and recovery characterization next
+- Current checkpoint: 014 — invalidate derived state with primary-letter page changes
+- Last sealed cleanup implementation: durable entity-extraction liveness at `0b76d592`
+- Current slice: 014 — framed; primary-page writer characterization next
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -67,7 +67,8 @@ tree:
 - [x] Add a revision-bound canonical metadata owner, lease, terminal publication, and
   expiry-aware reconciliation path.
 - [x] Add a run- and revision-bound entity-extraction owner with atomic projection
-  replacement and explicit rollout compatibility.
+  replacement, database-clock liveness, expiry-aware recovery, and explicit rollout
+  compatibility.
 - [ ] After the scheduled wake is deployed and proven, remove API startup/periodic
   recovery so reconciliation is worker-owned.
 - [x] Establish one eligibility definition per processing stage.
@@ -1132,9 +1133,8 @@ Evidence:
 
 Residuals carried forward:
 
-- Current entity runs have a run/revision fence but no lease or heartbeat. A current
-  orphan remains visible for exact administrative cancellation rather than being
-  guessed dead automatically.
+- This checkpoint intentionally left current entity runs unleased. Slice 013 later
+  closed that residual with run-bound leases, heartbeats, and intent-specific recovery.
 - Migration 0051 is drain-only: deploy the boundary, let or terminate old entity
   executors, then cancel remaining tokenless rows before starting new claimers. Do not
   cancel a tokenless row while its old executor is still materializing child output.
@@ -1449,9 +1449,8 @@ does not pause an existing schedule. The operational sequence is:
 
 Residuals:
 
-- Entity extraction is run/revision fenced but still has no stage lease or automatic
-  expiry policy. A killed owner leaves the exact `RUNNING` row visible for manual
-  cancellation.
+- This checkpoint intentionally left entity extraction without a stage lease. Slice
+  013 later closed that residual with exact liveness and expiry-aware recovery.
 - Best-effort state reports are individually bounded, but the complete cleanup queue
   and required database release do not yet have an aggregate statement deadline.
 - Worker lifecycle tests combine executable heartbeat/state tests with source-order
@@ -1528,12 +1527,12 @@ Residuals:
 - The outer lifecycle remains an executable entry point, so acquisition, signal,
   cleanup, release, and fatal-exit composition still has small source-order tripwires.
   Heartbeat/state behavior and the complete processing cycle are executable tests.
-- Entity extraction is now the only automatic stage with a run/revision publication
-  fence but no stage lease, heartbeat, or expiry-aware recovery.
+- Entity extraction was the only automatic stage without stage liveness at this
+  checkpoint. Slice 013 later added its lease, heartbeat, and expiry-aware recovery.
 
 ## Slice 013 — Durable Entity-Extraction Liveness
 
-Status: framed; characterization next
+Status: complete at `0b76d592`
 
 Problem:
 
@@ -1544,7 +1543,7 @@ current `RUNNING` row indefinitely. The singleton worker lease prevents overlapp
 automatic executors; it cannot prove that a particular entity attempt survived after
 the process owning that global lease disappeared.
 
-Target invariant:
+Delivered invariant:
 
 Every new entity attempt has one run/revision-bound liveness contract before AI work
 starts. Renewal and terminal projection publication must still own that exact live
@@ -1552,42 +1551,128 @@ attempt. Expiry reconciliation follows explicit persisted intent, reports one
 compare-and-set winner, and never guesses that a tokenless, mismatched, or
 rolling-deployment attempt is abandoned.
 
+What changed:
+
+- `entity-extraction-job.ts` now owns exact observed-state `QUEUED` and `REQUESTED`
+  claims, the complete ownership tuple, renewal, failure, cancellation, and recovery.
+  Every current claim binds its run and reserved revision to a five-minute deadline
+  from the PostgreSQL clock.
+- The shared heartbeat now awaits its initial renewal before any provider work. Entity
+  extraction reloads authoritative source data after claiming, filters explicit
+  sender/recipient corrections independently when a newer identity superseded them,
+  and reports neutral ownership outcomes instead of false completion.
+- Projection materialization refreshes the lease while acquiring the letter row lock.
+  It holds that lock through child replacement and publishes only the unchanged exact
+  run/revision tuple; the terminal predicate deliberately does not require the
+  deadline to outlive database-only work while the heartbeat waits on that lock.
+- Queued expiry returns to durable `PENDING`; requested expiry becomes visibly
+  `FAILED`. Both preserve the last committed entity projection. Legacy, unleased,
+  partially populated, or lease-mismatched attempts remain manual.
+- Entity and extra-content claims are mutually exclusive. The current entity producer
+  also self-fences at renewal, post-claim reload, transaction entry, and publication
+  if an older extra-content executable starts during rolling overlap.
+- Every entity status reset or invalidation clears the complete ownership tuple.
+  Architecture tests constrain the sole `RUNNING` owner, every non-null ownership
+  writer, all terminal/reset writers, recovery callers, worker-token admission, and
+  the entity/extra-content exclusion.
+- Worker recovery, wake, drain, and exit observations now include exact queued entity
+  leases. The atomic projection model from Slice 009 remains unchanged.
+- Migration 0053 is expand-only: nullable liveness fields are not backfilled, the
+  shape check permits all-null or all-present metadata, and a trigger prevents a
+  same-run current `RUNNING` writer from stripping its liveness while still allowing
+  an older terminal writer to leave non-authoritative residue.
+
+Evidence:
+
+- Focused final ownership, pipeline, queue, route, and architecture coverage passed:
+  7 files / 151 tests. Reviewer-specific focused suites also passed.
+- Complete backend suite: 83 files / 765 tests. Backend typecheck, `drizzle-kit check`,
+  migration validation 11/11, migration-script shell syntax, and `git diff --check`
+  passed.
+- Definitive `CI=1 ./scripts/verify-all.sh` passed: backend 765/765, frontend 92 files /
+  615 tests, production build, and mocked browser suite 37/37. The existing large-
+  chunk warning remains visible.
+- A disposable native PostgreSQL 17 cluster applied the complete journal through 0053
+  and passed the strengthened liveness fixture, a staged 0050 → 0051/0052 → 0053
+  mixed-version replay, and both real two-session lock orders: recovery-first blocks
+  stale publication, while publication-first blocks stale recovery.
+- Docker was unavailable locally, so the container wrapper itself did not run. Its SQL
+  and session interleavings were exercised against native PostgreSQL 17.
+- Independent lifecycle, migration, pipeline, and simplicity reviews found no
+  remaining P0–P2 issue after fixes for initial-renewal ordering, row-lock deadline
+  semantics, stale explicit corrections, and mixed-version extra-content overlap.
+
+Rollout boundary:
+
+1. Schedule migration 0053 during a low-write window because its ordinary partial
+   index creation can briefly block writes.
+2. Apply 0053 before deploying the liveness-aware binary; it is safe while 0051-aware
+   executors remain.
+3. Drain or terminate older entity executors. Inspect tokenless, unleased, partial, and
+   lease-mismatched `RUNNING` rows; cancel only an exact abandoned attempt after its
+   producer is known to be gone.
+4. Deploy the current API and worker. Unknown rollout residue remains deliberately
+   excluded from automatic recovery and is overwritten only by a later exact claim.
+
+This repository checkpoint did not deploy a migration, replace a worker, enable
+Scheduler, or remove transitional API recovery.
+
+Residuals:
+
+- Migration 0053's ordinary index build is operationally scheduled rather than
+  concurrent. A later contract migration may validate/tighten rollout-era shapes only
+  after old binaries and residue are gone.
+- API startup and periodic reconciliation remain until the already-documented worker
+  schedule rollout is deployed and proven.
+- The writer audit exposed the next correctness seam: inserting a new primary `L`
+  page or force-replacing its stored source mutates transcription input without
+  invalidating transcription, metadata, entity, review, or publication state.
+
+## Slice 014 — Primary-Letter Page Source Invalidation
+
+Status: framed; characterization next
+
+Problem:
+
+`findOrCreatePage()` couples T/C/E page changes to extra-content invalidation in the
+same database transaction, but L-page insert/force-replacement passes no corresponding
+effect. A changed image can therefore remain paired with a transcript, metadata,
+entity projection, review state, and public visibility derived from the previous
+source. File replacement also occurs before the database transaction, so a failed
+state mutation can leave filesystem/database disagreement.
+
+Target invariant:
+
+A meaningful primary-letter page change and revocation of every source-derived
+processing/publication state share one explicit database boundary. Unchanged uploads
+are no-ops. An active producer cannot publish from the replaced source, and the durable
+queue truthfully reflects the work required to rebuild it. Filesystem replacement
+failure/recovery remains explicit rather than being mistaken for transactional safety.
+
 Scope:
 
-- Trace and characterize every worker, metadata follow-on, explicit regeneration,
-  retry, reset, cancellation, failure, and terminal-publication path before changing
-  schema or recovery.
-- Inventory every ownership-revoking patch and direct writer—including human metadata
-  edits, source invalidation, identity/name propagation, version restore, extra-content
-  and transcription changes, retagging, bulk operations, and queue mutations—so each
-  clears the complete current entity liveness tuple or deliberately treats
-  rolling-version residue as non-authoritative.
-- Persist a PostgreSQL-clock lease, exact run binding, and explicit claim intent for
-  current entity claims, with a rolling-deployment boundary that leaves unknown legacy
-  attempts manual.
-- Reuse the existing serialized heartbeat scheduler and recovery coordinator without
-  merging entity projection rules into another stage's lifecycle helper.
-- Require the exact run, reserved revision, live lease, and worker execution token
-  where applicable at claim, renewal, recovery, failure, and transactional publication
-  boundaries.
-- Add entity recovery to durable wake/exit observations only after its queued/requested
-  expiry policy is executable and proven.
+- Characterize page insert, unchanged upload, force replacement, upload batching,
+  current transcription/metadata/entity attempts, review/publication state, and
+  storage-before-database failure behavior.
+- Identify one canonical primary-source invalidation operation instead of reproducing
+  a reset patch inside `letter-pages.ts` or the upload route.
+- Persist the page row and database invalidation in one transaction, using exact
+  ownership-revocation helpers and the existing processing eligibility contract.
+- Preserve the existing T/C/E extra-content invalidation path and filename identity.
 
 Non-goals:
 
-- No entity prompt, matching, merge, public projection, or review-workflow redesign.
-- No change to the atomic revisioned projection model established in Slice 009.
-- No removal of transitional API recovery and no deployment or Scheduler activation.
-- No generic multi-stage lease framework.
+- No upload UI, filename scheme, storage backend, retry policy, or feature change.
+- No claim that filesystem writes roll back with PostgreSQL; compensation or
+  recoverable staging requires a separately framed ingestion slice if not achievable
+  without broadening this boundary.
+- No generic event bus or source-version framework.
 
 Acceptance:
 
-- Focused tests prove intent-specific claim, renewal, expiry, cancellation, stale
-  producer, supersession/invalidation, worker-token, and transactional publication
-  behavior. The architecture boundary accounts for every claim, terminal, recovery,
-  and ownership-tuple writer.
-- Migration checks and a real PostgreSQL proof cover rolling overlap, exact
-  compare-and-set recovery, and publication fencing.
-- Full backend/typecheck and aggregate repository verification remain green.
-- Independent concurrency and simplicity reviews find no P0–P2 issue before the
-  checkpoint is committed.
+- Characterization and behavior tests cover inserted, unchanged, force-replaced,
+  active, reviewed/published, and failed-invalidation cases.
+- Architecture coverage leaves one named owner for primary-source invalidation and
+  prevents direct upload/page writers from bypassing it.
+- Focused and complete package checks, aggregate verification, and an independent
+  data-integrity/simplicity review are green before checkpointing.

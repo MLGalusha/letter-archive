@@ -7,12 +7,11 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 029 — typed, lossless letter version snapshots
-- Last sealed cleanup implementation: lossless letter versions at `e76aa48d`
+- Current checkpoint: 030 — single Dashboard manager-surface owner
+- Last sealed cleanup implementation: Dashboard manager ownership at `cf7c0d27`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: 030 — single Dashboard manager-surface owner; framed against
-  `2a4e0415`, with no production implementation yet
+- Current slice: next-slice orientation; no implementation is open
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2334,7 +2333,7 @@ Rollback base: `5f6dd87a`.
 
 ## Slice 030 — Single Dashboard Manager-Surface Owner
 
-Status: framed; implementation not started
+Status: complete at `cf7c0d27`
 
 Problem:
 
@@ -2351,7 +2350,7 @@ controls without clearing their owners, so a surface can reappear when the user
 returns. Closing callbacks are unconditional, which would also let a late close from
 one surface dismiss a newer surface if these owners were naively combined.
 
-Target invariant:
+Delivered invariant:
 
 One route-level controller owns a closed
 `filters | savedViews | sort | columns | null` state for the letter Dashboard. Opening
@@ -2365,21 +2364,31 @@ column drag state remain local drafts. Existing mobile selection dismissal remai
 limited to Filters, Saved Views, and Sort; opening Columns must not newly clear
 selection or pending edits.
 
-Scope:
+What changed:
 
-- Add one small `useDashboardManagerState` controller with explicit
-  open/toggle/close/close-all intents.
-- Compose the controller in `AdminDashboard` across the toolbar and letter-table
-  Columns surface.
-- Remove the route's separate Filters state and the toolbar's private Saved
-  Views/Sort owner.
-- Make Saved Views and Sort fully controlled; their only production consumer already
-  controls them.
-- Remove transient visibility and the DOM ref from `useDashboardColumns`, leaving it
-  responsible only for persisted column visibility/order.
-- Let `ColumnToggleHeader` own its close-boundary ref where the DOM node is used.
-- Characterize the four-surface lifecycle, mobile-navigation dismissal, view-switch
-  dismissal, stale close handling, and the existing mobile edit-mode policy.
+- `useDashboardManagerState` owns one closed four-value union plus null. Opening and
+  toggling replace the active manager atomically; identity-aware close ignores a late
+  dismissal for an older surface, while close-all handles explicit route-wide
+  dismissal.
+- `AdminDashboard` composes that owner across the toolbar and letter Columns menu.
+  The mobile-navigation event now closes any active manager. A real
+  Letters/Collections transition closes the letter surface, while clicking the
+  already-selected view preserves it.
+- `DashboardToolbar` no longer owns Saved Views/Sort state or coordinates a separate
+  route-owned Filters boolean. It consumes the one controlled manager contract.
+  `SavedViewsMenu` and `DashboardSortControl` no longer retain unused uncontrolled
+  fallbacks.
+- `useDashboardColumns` now owns only persisted visibility/order and their mutations.
+  The Columns menu state moved to the route owner, while `ColumnToggleHeader` owns its
+  actual DOM close boundary. The ref and visibility contract no longer travel through
+  the route, table, and table header.
+- Existing interaction drafts remain local to their surfaces. Opening Filters, Saved
+  Views, or Sort on mobile retains the existing edit-mode dismissal; opening Columns
+  still preserves selection and pending edits.
+- Executable coverage now owns manager replacement, stale close, toggle, close-all,
+  mobile-navigation dismissal, view-transition dismissal, same-view compatibility,
+  outside/Escape dismissal, controlled sort/save behavior, and all four rendered
+  surfaces.
 
 Non-goals:
 
@@ -2391,22 +2400,46 @@ Non-goals:
 - The Collections table may keep its independently mounted Columns visibility state;
   only the shared header ref contract changes.
 
-Acceptance:
+Evidence:
 
-- The existing focused manager baseline remains green: 5 files / 27 tests.
-- Pure/controller tests prove replacement, active toggle, identity-aware close, and
-  close-all behavior.
-- Rendered tests exercise Filters, Saved Views, Sort, and Columns and prove that at
-  most one letter-Dashboard manager is open.
-- The mobile-navigation event closes each surface, and
-  Letters → Collections → Letters leaves every letter manager closed.
-- Escape, outside click, close button/backdrop, Filter Done, sort apply/discard,
-  saved-view save/apply/delete, and column visibility/order/reset retain their
-  existing behavior.
-- Opening the existing three toolbar managers retains mobile edit-mode dismissal;
-  opening Columns does not introduce that destructive behavior.
-- Focused Dashboard tests, the frontend suite, TypeScript/build, touched-file lint,
-  the deterministic mocked Dashboard browser flow, and `git diff --check` pass.
+- The pre-change manager baseline passed 5 files / 27 tests. Added characterization
+  then reproduced two ownership defects: mobile navigation left Saved Views open, and
+  Columns could coexist with another manager.
+- Final focused boundary passed 7 files / 40 tests. The complete Dashboard
+  neighborhood passed 31 files / 215 tests.
+- The deterministic Dashboard browser spec passed 11/11. Its rendered Chromium flow
+  opened Filters → Saved Views → Sort → Columns, proved exactly one dialog at each
+  step, and dismissed the active manager through the real mobile-navigation event.
+- Aggregate `CI=1 ./scripts/verify-all.sh` passed: backend 105 files / 1,070 tests,
+  backend typecheck, frontend 141 files / 974 tests, frontend production build, and
+  mocked browser 61/61.
+- TypeScript, ESLint over every changed/new frontend TypeScript file, and
+  `git diff --check` passed.
+- Three independent architecture/simplicity, interaction-correctness, and
+  verification reviews approved the final tree with no remaining P0–P2 finding.
+  Review caught the same-view dismissal regression and brittle source assertions;
+  both were corrected before approval.
+- The production build retains its existing large-chunk warning:
+  `LetterReviewPage` is 527.84 kB and `UpdateEditorPage` is 1,182.96 kB after
+  minification.
+
+Residuals:
+
+- The Collections table intentionally retains its separately mounted Columns open
+  state. It cannot coexist with the letter managers because changing Dashboard view
+  closes and unmounts them; combining its persisted column model is a separate
+  ownership decision.
+- The verified dead singular `.filter-pill` selector family remains in the
+  4,281-line Dashboard stylesheet. It is now the best-contained CSS-deletion
+  candidate, but must remain separate from this state slice and retain rendered
+  desktop/mobile filter verification.
+- Bulk Processing, Publishing, and Danger menus have distinct selection/mutation
+  lifecycles and were not widened into the letter manager owner.
+
+No API request, persisted query/view/column state, filter or sort result, selection
+semantics, CSS, layout geometry, product feature, backend behavior, deployment, or
+external state changed. The only observable corrections are mutual exclusion and
+complete dismissal of ephemeral letter-Dashboard managers.
 
 Rollback base: `2a4e0415`.
 

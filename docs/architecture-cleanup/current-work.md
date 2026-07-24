@@ -7,11 +7,11 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 024 — visit-owned Line Review session
-- Last sealed cleanup implementation: Line Review session ownership at `12855606`
+- Current checkpoint: 025 — committed Dashboard query ownership
+- Last sealed cleanup implementation: Dashboard read ownership at `5c10d875`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: 025 — committed Dashboard query snapshot
+- Current slice: 026 — source-complete, query-bound Dashboard selection
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2102,9 +2102,91 @@ Residuals:
 No product feature, visual layout, backend production behavior, database schema,
 deployment, or external state changed in this slice.
 
-## Slice 025 — Committed Dashboard Query Ownership
+## Slice 026 — Source-Complete, Query-Bound Dashboard Selection
 
 Status: next
+
+Problem:
+
+Dashboard selection has two competing state owners. `useDashboardSelection` stores
+selected IDs and observed source revisions together, but stores “All filtered” in a
+separate boolean and exposes both raw setters to row, query-prune, and bulk-action
+hooks. Those consumers must remember to update scope separately. A query change
+therefore presents the old all-filtered claim until a passive effect clears it, and an
+arbitrary or partial ID replacement can retain the claim without provenance that the
+remaining IDs still exhaust the current query.
+
+More importantly, `getFilteredLetterIds` enumerates every matching page but discards
+each row's `primarySourceRevision`. “All filtered” can hold 51 IDs while
+`selectedSources` contains only the 50 revisions observed on the loaded page.
+Source-bound publish, clear, process, and delete operations then skip the off-page
+selection as `SOURCE_NOT_OBSERVED` instead of operating on the scope the UI claimed.
+A partial delete replaces IDs with the skipped subset but leaves
+`allFilteredSelected=true`, so the toolbar can continue to describe a narrow manual
+subset as the complete filtered result.
+
+Target invariant:
+
+One atomic Dashboard selection owner holds IDs, exact source revisions, and scope.
+Every selected ID has the source revision observed during the selection operation.
+“All filtered” is true only for the exact committed query and untouched complete
+enumeration that established it. Query replacement, manual/shift/drag/page selection,
+and partial mutation outcomes revoke that provenance synchronously. No consumer can
+write IDs and all-filtered scope independently.
+
+Planned minimum:
+
+- Replace filtered ID enumeration with a paginated filtered-source snapshot that
+  preserves `{ letterId, primarySourceRevision }` for every matching row. Keep the
+  existing backend list API and pagination contract.
+- Give `useDashboardSelection` one state value for IDs, source revisions, and
+  `explicit` versus query-bound `all-filtered` scope. Derive the toolbar boolean
+  against the current `DashboardCommittedQuery`.
+- Expose intentful atomic transitions for toggle, explicit replacement, page
+  selection, query reconciliation, complete filtered selection, and clear. Remove the
+  public `setAllFilteredSelected` path and raw cross-hook coordination.
+- Adapt row selection, filtered-selection pruning/select-all, and partial bulk-delete
+  outcomes to those transitions. Preserve current source-revision capture for visible
+  row selection.
+- Add an ownership tripwire plus composed hook tests over more than one API page,
+  query replacement, shift/drag/page selection, reversed prune/select-all completion,
+  and partial mutation results.
+- Add a discriminating toolbar/browser proof that selected count and scope copy cannot
+  claim all-filtered after provenance is revoked.
+
+Non-goals:
+
+- No backend endpoint, database, or bulk-operation semantic change.
+- No server-side durable selection token or long-lived snapshot transaction; the
+  frontend records the revisions returned by the existing paginated read.
+- No attempt to preserve all-filtered scope after an arbitrary replacement merely
+  because it might still happen to cover the current result. Fail closed to explicit
+  scope when provenance is no longer exact.
+- No filter reducer, persisted/saved-view refactor, date-input repair, column/sort
+  redesign, CSS, or mobile-layout change.
+- No redesign of loaded-row publication-summary counts in
+  `useDashboardSelectionDetails`; that separate limitation remains explicitly labeled.
+
+Acceptance:
+
+- A 51-row filtered enumeration owns 51 IDs and 51 source revisions, and the next
+  source-bound action receives all 51.
+- All-filtered scope is true only for the exact query that produced the complete
+  snapshot and becomes false on the first render of another committed query, before
+  pruning settles.
+- Manual toggle, shift/range, drag, page selection, and partial mutation replacement
+  atomically retain intended IDs/revisions while establishing explicit scope.
+- Current prune success/failure and select-all success/failure retain Slice 025's
+  latest-owner behavior without any independent scope setter.
+- Focused API/selection/row/bulk/composition tests, source ownership, a discriminating
+  mocked-browser flow, related Dashboard tests, touched lint/typecheck, and the full
+  repository gate pass.
+
+Rollback base: `5c10d875`.
+
+## Slice 025 — Committed Dashboard Query Ownership
+
+Status: complete at `5c10d875`
 
 Problem:
 
@@ -2120,32 +2202,49 @@ can replace newer rows, pagination, stats, loading, or error state. Old pruning 
 remove IDs from the current query—or clear selection after a stale failure—and an old
 “All filtered” response can select IDs after the query has changed.
 
-Target invariant:
+Delivered invariant:
 
 One immutable, serializable `DashboardCommittedQuery` is the exact identity of current
 server-visible filters and sort. The route creates it once from committed controls and
 passes that same snapshot to list fetching, selected-ID pruning, and “All filtered.”
 Each async read is owned by the captured query/request identity; only a completion
-that is still current may publish rows, request state, selection, or errors.
+that is still current may publish rows, request state, selection, or errors. A retained
+post-mutation refresh reads the current committed query when invoked, and query change
+or unmount invalidates every older owner.
 
-Planned minimum:
+What changed:
 
-- Characterize every query field and sort rule with exact equality, including default
-  omissions, multi-sort order, both flagged values, metadata status, and date shapes.
-- Add a focused query model with an explicit readonly whitelist and a pure API adapter.
-  Keep `searchInput`, collection input, sort-dialog draft, `dateMode`, filter-panel UI
-  state, setters, and callbacks outside the committed snapshot.
-- Memoize the snapshot once in `AdminDashboard`; make list data and filtered selection
-  accept it instead of `DashboardFilterControls` plus `sortColumns`.
-- Move initial/query-change page-one fetching into the list-data owner. Keep explicit
-  pagination and post-mutation refreshes behind its one `fetchLetters` boundary.
-- Fence list requests across query, page, and same-query refresh changes. Fence prune
-  success/failure and “All filtered” success/failure across query changes.
-- Delete the duplicated field projections, per-field dependency arrays, and mixed
-  query adapter from general dashboard utilities.
-- Add a narrow ownership tripwire and a mocked-browser compound-query flow proving the
-  list and ID-enumeration URLs carry the same canonical filter/sort parameters, with
-  only pagination differing.
+- `dashboardQueryModel.ts` now contains the single readonly 15-field whitelist, owned
+  array copies, ordered sort snapshot, server-sort predicate, and pure API adapter.
+  `searchInput`, collection input, sort-dialog draft, `dateMode`, filter-panel state,
+  setters, and callbacks remain outside request identity.
+- `AdminDashboard` builds that snapshot once with `useMemo` and passes the exact same
+  object to the list-data and filtered-selection owners. The two read hooks no longer
+  accept `DashboardFilterControls`, independently project fields, or know about sort
+  controls.
+- `useDashboardLettersData` now owns authenticated initial and query-change page-one
+  reads plus explicit pagination and post-mutation refresh. Query, request, and
+  accepted-page ownership make old query/page/same-query success, failure, loading,
+  and error completions inert. Its stable refresh boundary snapshots the current query
+  when invoked, so an async mutation begun before a filter change still refreshes the
+  current rows and stats when it finishes.
+- `useDashboardFilteredSelection` independently owns query-change pruning and “All
+  filtered.” Query/request/unmount fencing makes stale success, failure, selection,
+  toolbar, and toast effects inert. A failed select-all preserves the valid current
+  prune; a successful select-all supersedes that prune only immediately before
+  publishing the complete selection.
+- The duplicated query-field projection and adapter were deleted from
+  `useDashboardFilters` and general `utils`. Persisted-state initialization also moved
+  from a render-read ref to lazy state. The touched hooks and utilities now satisfy the
+  React compiler/ref and Fast Refresh lint rules.
+- `StatusIcon` moved from the mixed pure-utility module into its own component module.
+  The general utility file fell from 285 to 163 lines; `useDashboardFilters` fell from
+  301 to 261 lines. The route grew from 380 to 437 lines because its one explicit
+  composition-boundary whitelist is visible rather than hidden in two consumers.
+- A source tripwire rejects restored filter-controller ownership in either read hook.
+  A real-browser compound flow activates visibility, search, transcript status, and
+  metadata status, then proves list and selected-ID enumeration carry identical
+  filter/sort parameters with only pagination different.
 
 Non-goals:
 
@@ -2158,20 +2257,53 @@ Non-goals:
   mobile layout, or collection view.
 - No generic application-wide query framework.
 
-Acceptance:
+Evidence:
 
-- Exact pure tests prove the committed whitelist, JSON round trip, array isolation,
-  default omission, and every API parameter.
-- Draft-only UI state cannot alter snapshot identity or trigger a read; committed
-  search/sort/filter changes trigger exactly one page-one list read.
-- List and filtered-ID calls consume the same committed filter/sort snapshot.
-  Pagination changes do not prune selection.
-- Deferred old query/page/refresh success and failure cannot overwrite current list
-  state. Deferred old prune/select-all success and failure cannot mutate current
-  selection or report a stale error.
-- Focused query/list/selection tests, source ownership, a discriminating mocked browser
-  flow, relevant Dashboard tests, touched lint/typecheck, and the full repository gate
-  pass.
+- The new query/list/selection characterizations were red against the old contracts,
+  then the final focused surface passed 6 files / 41 tests. It proves the exact
+  whitelist, JSON round trip, array isolation, default omission, every API parameter,
+  current-page refresh, retained mutation refresh, query/page/same-query reversal,
+  unmount, prune/select-all interleavings, error truth, source ownership, and the
+  extracted status component.
+- The related Dashboard unit surface passed 23 files / 128 tests.
+- The strengthened mocked Dashboard spec passed 7/7. Its compound parity assertion
+  sees the actual page-list `limit=50` and selected-ID `limit=100` requests and requires
+  exact equality after removing only `page` and `limit`.
+- Definitive `CI=1 ./scripts/verify-all.sh` passed backend 104 files / 1,016 tests plus
+  typecheck, frontend 131 files / 884 tests plus production build, and the complete
+  mocked browser suite 57/57 without retry.
+- Touched frontend ESLint, frontend `tsc --noEmit`, and `git diff --check` passed.
+  Whole-frontend lint was not remeasured; the last recorded backlog remains 161
+  problems (141 errors and 20 warnings).
+- Three independent architecture, correctness, and adversarial-coverage reviews first
+  stopped the checkpoint over unmount publication, retained stale refresh callbacks,
+  prune cancellation on failed select-all, an unstable test-harness query, missing
+  component coverage, and weak browser discrimination. Each issue was repaired; all
+  three final passes found no remaining P0–P2 issue.
+- Existing production-build warnings remain: `LetterReviewPage` is 527.84 kB and
+  `UpdateEditorPage` is 1,182.96 kB after minification.
+
+Residuals:
+
+- `useDashboardFilters` still owns 20 independent state cells, and the same persisted
+  filter schema remains enumerated across initialization, local-storage persistence,
+  saved-view capture/application, and route snapshot assembly. Slice 025 intentionally
+  closed read-side drift before choosing a reducer or state-schema migration.
+- Saved and persisted dashboard payloads are only partially shape-checked after
+  `JSON.parse`; most enum, date, sort-direction, column, and array values are trusted
+  through casts. A malformed or older payload can still put the controller into an
+  invalid state.
+- Range-date text boxes still derive their visible value directly from committed
+  `YYYYMMDD` state, so an incomplete `mm/dd/yyyy` edit collapses back to empty. That
+  behavior defect needs a characterized draft/commit owner rather than another input
+  patch.
+- Applying a saved view still fans out through many setters, and explicit versus
+  all-filtered selection/count truth remains a separate model.
+- Superseded HTTP requests are publication-fenced but not aborted; they can consume
+  network work until completion. Cancellation is not required for state correctness.
+
+No new product feature, visual layout, backend behavior, API, database schema,
+deployment, or external state changed in this slice.
 
 ## Slice 024 — Visit-Owned Line Review Session
 

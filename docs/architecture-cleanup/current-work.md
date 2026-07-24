@@ -7,12 +7,12 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 030 — single Dashboard manager-surface owner
-- Last sealed cleanup implementation: Dashboard manager ownership at `cf7c0d27`
+- Current checkpoint: 031 — one live Dashboard filter-option style family
+- Last sealed cleanup implementation: dead Dashboard filter CSS deletion at
+  `6ebe7886`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: 031 — delete the dead singular Dashboard filter-pill family;
-  framed against `6365ec4f`, with no production implementation yet
+- Current slice: next-slice orientation; no production implementation is open
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2446,7 +2446,7 @@ Rollback base: `2a4e0415`.
 
 ## Slice 031 — Delete the Dead Singular Dashboard Filter-Pill Family
 
-Status: framed; implementation not started
+Status: complete at `6ebe7886`
 
 Problem:
 
@@ -2510,6 +2510,73 @@ Acceptance:
   `git diff --check` pass.
 - Independent selector/cascade, rendered-verification, and simplicity reviews find no
   remaining P0–P2 issue in the bounded deletion.
+
+What changed:
+
+- Removed all 50 rules whose 54 selector branches required the absent exact
+  `.filter-pill` or `.filter-pill-count` class, together with eight comments that
+  documented only that retired family. The stylesheet fell from 4,281 to 4,006
+  lines, a net deletion of 275 lines.
+- Preserved the plural `.filter-pills` family, every generic filter layout rule, all
+  live `.filter-option` selectors, the content-status toggle, and every dynamic
+  `filter-*` variant produced by the six filter sections.
+- Kept the proof temporary rather than adding a negative implementation-name test.
+  Source/history, parser comparison, live DOM evidence, and rendered parity establish
+  the one-owner invariant without coupling the permanent suite to a retired class
+  spelling.
+
+Evidence:
+
+- PostCSS parsed the baseline and final stylesheet. The baseline contained 50 target
+  rules, 54 matching selector branches, and 113 declarations with no mixed live
+  selector branch. The final stylesheet contains zero exact singular legacy rule,
+  while the complete surviving 543-rule selector/declaration sequence is
+  byte-semantically identical to the baseline.
+- The deterministic rendered state contained one open filter panel, eight sections,
+  26 live `.filter-option` controls, six active variant families, three content tabs,
+  and zero `.filter-pill` or `.filter-pill-count` nodes. Transcript, Metadata, and
+  Extras were each mounted and inspected.
+- Complete before/after DOM fingerprints matched at desktop `1440×900`, tablet
+  `768×1024`, phone `390×844` top, and phone maximum scroll. The comparison included
+  every panel surface, section, grid, option rectangle, computed typography, color,
+  background, border, radius, shadow, gap, padding, overflow, class, pressed state,
+  and scroll extent.
+- All four screenshot pairs were byte- and therefore pixel-identical. Their SHA-256
+  values were
+  `6b662f2b3063fa182550f49c1738bb833637acf4437e182964bdca816ee06c35`
+  (desktop),
+  `af0c2fcad07dd997b07c408d0c7585a376ddb30dec3a17da90e03e7a972fdac1`
+  (tablet),
+  `3b062a840f60da5b18b8b908229a194f73ee0063c4cb2332baef7b63d6e8252f`
+  (phone top), and
+  `190e65035090deab8fadb3cc683c344d217adb65150010076d274bc14dfd1aac`
+  (phone bottom). The temporary artifacts were removed after independent inspection.
+- Focused filter coverage passed 3 files / 16 tests. The complete Dashboard
+  neighborhood passed 31 files / 215 tests. The deterministic Dashboard browser spec
+  passed 11/11.
+- Aggregate `CI=1 ./scripts/verify-all.sh` passed: backend 105 files / 1,070 tests,
+  backend typecheck, frontend 141 files / 974 tests, frontend production build, and
+  mocked browser 61/61. PostCSS parsing and `git diff --check` passed.
+- Three independent selector/cascade, rendered-evidence, and skeptical-simplicity
+  reviews approved the final tree with no P0–P2 finding. Their independent checks
+  included exact-token search, before/after AST comparison, dynamic-variant coverage,
+  screenshot hashes, semantic DOM counts, focused Dashboard tests, and the build.
+
+Residuals:
+
+- The plural `.filter-pills` rule and the E2E selector that mentions it remain
+  intentionally. Their reachability and contract need a separate exact-token and
+  rendered orientation rather than being inferred from the singular family.
+- `AdminDashboard.css` remains a 4,006-line global stylesheet. A separately suspicious
+  `.collection-table` vocabulary and any style repartitioning require their own
+  usage/cascade proof; no further rule was deleted by proximity.
+- The production build retains its existing large-chunk warning:
+  `LetterReviewPage` is 527.84 kB and `UpdateEditorPage` is 1,182.96 kB after
+  minification.
+
+No DOM, filter request, state transition, responsive breakpoint, layout geometry,
+computed style, screenshot pixel, product feature, backend behavior, deployment, or
+external state changed.
 
 Rollback base: `6365ec4f`.
 

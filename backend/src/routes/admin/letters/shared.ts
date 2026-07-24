@@ -4,6 +4,10 @@ import {
   PrimaryTopicEnum,
   RelationshipEnum,
 } from '../../../ai/schemas/metadataV2.js';
+import {
+  decodeMetadataVersionContent,
+  decodeTranscriptVersionContent,
+} from '../../../services/letter/version-content.js';
 
 export const MAX_BULK_SOURCE_ITEMS = 1_000;
 
@@ -60,12 +64,40 @@ export const updateLetterSchema = z.object({
   readingText: z.string().nullable().optional(),
 });
 
-export const versionBodySchema = z.object({
+function decodedVersionContent<Content>(
+  decode: (value: unknown) =>
+    | { ok: true; content: Content }
+    | { ok: false },
+) {
+  return z.unknown().transform((value, context): Content => {
+    const result = decode(value);
+    if (result.ok) return result.content;
+
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Invalid version content',
+    });
+    return z.NEVER;
+  });
+}
+
+const versionRequestBase = {
   primarySourceRevision: z.number().int().nonnegative().optional(),
-  fieldType: z.enum(['transcript', 'metadata']),
-  content: z.union([z.string(), z.record(z.unknown())]),
   source: z.enum(['ai', 'human']),
-});
+};
+
+export const versionBodySchema = z.discriminatedUnion('fieldType', [
+  z.object({
+    ...versionRequestBase,
+    fieldType: z.literal('transcript'),
+    content: decodedVersionContent(decodeTranscriptVersionContent),
+  }),
+  z.object({
+    ...versionRequestBase,
+    fieldType: z.literal('metadata'),
+    content: decodedVersionContent(decodeMetadataVersionContent),
+  }),
+]);
 
 export const restoreVersionBodySchema = z.object({
   primarySourceRevision: z.number().int().nonnegative().optional(),

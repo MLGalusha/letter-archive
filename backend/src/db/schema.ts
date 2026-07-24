@@ -13,6 +13,10 @@ import {
   check,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
+import {
+  PERSISTED_EMOTIONAL_TONE_VALUES,
+  PERSISTED_RELATIONSHIP_TYPE_VALUES,
+} from '../constants/metadata-values.js';
 
 // ============================================================================
 // ENUMS
@@ -68,47 +72,16 @@ export const dateConfidenceEnum = pgEnum('date_confidence', [
 ]);
 
 // Emotional tone for V2 metadata
-export const emotionalToneEnum = pgEnum('emotional_tone', [
-  'joyful',
-  'affectionate',
-  'hopeful',
-  'grateful',
-  'matter-of-fact',
-  'nostalgic',
-  'anxious',
-  'sad',
-  'angry',
-  // Legacy values (no longer assigned, but exist in DB)
-  'neutral',
-  'desperate',
-]);
+export const emotionalToneEnum = pgEnum(
+  'emotional_tone',
+  PERSISTED_EMOTIONAL_TONE_VALUES,
+);
 
 // Sender-recipient relationship for V2 metadata
-export const relationshipEnum = pgEnum('relationship_type', [
-  'spouse',
-  'romantic-partner',
-  'parent-child',
-  'sibling',
-  'extended-family',
-  'friend',
-  'acquaintance',
-  'professional',
-  'institutional',
-  'unknown',
-  // Legacy values (no longer assigned, but exist in DB)
-  'fiancé/fiancée',
-  'parent',
-  'child',
-  'grandparent',
-  'grandchild',
-  'aunt/uncle',
-  'nephew/niece',
-  'cousin',
-  'in-law',
-  'business-associate',
-  'employer',
-  'employee',
-]);
+export const relationshipEnum = pgEnum(
+  'relationship_type',
+  PERSISTED_RELATIONSHIP_TYPE_VALUES,
+);
 
 // Content status for transcript and metadata (two-track workflow system)
 export const contentStatusEnum = pgEnum('content_status', [

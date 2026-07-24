@@ -65,7 +65,11 @@ describe('participant sync helpers', () => {
   });
 
   describe('mapMetadataRelationshipToPersonRelationship', () => {
-    it('maps directed metadata relationships to graph-safe bidirectional types', () => {
+    it('preserves the canonical parent-child relationship', () => {
+      expect(mapMetadataRelationshipToPersonRelationship('parent-child')).toBe('parent-child');
+    });
+
+    it('maps legacy directed metadata relationships to graph-safe bidirectional types', () => {
       expect(mapMetadataRelationshipToPersonRelationship('parent')).toBe('parent-child');
       expect(mapMetadataRelationshipToPersonRelationship('child')).toBe('parent-child');
       expect(mapMetadataRelationshipToPersonRelationship('employer')).toBe('employer-employee');

@@ -15,6 +15,7 @@ const {
   fetchLetterWithRelatedAndTransformMock,
   updateLetterMock,
   createVersionMock,
+  restoreVersionMock,
   verifyTranscriptMock,
   unverifyTranscriptMock,
   verifyMetadataMock,
@@ -47,6 +48,7 @@ const {
   fetchLetterWithRelatedAndTransformMock: vi.fn(),
   updateLetterMock: vi.fn(),
   createVersionMock: vi.fn(),
+  restoreVersionMock: vi.fn(),
   verifyTranscriptMock: vi.fn(),
   unverifyTranscriptMock: vi.fn(),
   verifyMetadataMock: vi.fn(),
@@ -190,7 +192,7 @@ vi.mock('../../../services/letter-operations.js', () => ({
   updateLetter: updateLetterMock,
   getVersions: vi.fn(),
   createVersion: createVersionMock,
-  restoreVersion: vi.fn(),
+  restoreVersion: restoreVersionMock,
   verifyTranscript: verifyTranscriptMock,
   unverifyTranscript: unverifyTranscriptMock,
   verifyMetadata: verifyMetadataMock,
@@ -560,7 +562,7 @@ describe('admin letters line review route integration', () => {
     expect(createVersionMock).toHaveBeenCalledWith(LETTER_ID, {
       primarySourceRevision: 4,
       fieldType: 'transcript',
-      content: 'Edited line one\nEdited line two',
+      content: { text: 'Edited line one\nEdited line two' },
       source: 'human',
     });
     expect(response.body).toEqual({
@@ -590,6 +592,90 @@ describe('admin letters line review route integration', () => {
       error: 'Letter content changed before its version could be saved',
       requestId: expect.any(String),
     });
+  });
+
+  it('accepts a recognized partial metadata version candidate during rollout', async () => {
+    createVersionMock.mockResolvedValueOnce({
+      kind: 'created',
+      version: {
+        versionNumber: 4,
+        createdAt: '2026-07-24T12:00:00.000Z',
+      },
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/versions`,
+      path: `/letters/${LETTER_ID}/versions`,
+      body: {
+        primarySourceRevision: 4,
+        fieldType: 'metadata',
+        content: { hook: 'Current hook' },
+        source: 'human',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(createVersionMock).toHaveBeenCalledWith(LETTER_ID, {
+      primarySourceRevision: 4,
+      fieldType: 'metadata',
+      content: { hook: 'Current hook' },
+      source: 'human',
+    });
+  });
+
+  it.each([
+    ['metadata-shaped content for transcript', 'transcript', { sender: 'Ada Lovelace' }],
+    ['transcript-shaped content for metadata', 'metadata', 'Transcript text'],
+    ['an empty metadata candidate', 'metadata', {}],
+    ['metadata with no recognized fields', 'metadata', { futureMetadataField: 'value' }],
+    ['metadata with a non-string sender', 'metadata', { sender: 42 }],
+    ['metadata with an invalid date', 'metadata', { extractedDate: 'August 10, 1947' }],
+    ['metadata with an invalid emotional tone', 'metadata', { emotionalTone: 'not-a-tone' }],
+    [
+      'metadata with an invalid relationship',
+      'metadata',
+      { senderRecipientRelationship: 'not-a-relationship' },
+    ],
+    ['metadata with a non-array topic value', 'metadata', { primaryTopics: 'family/children' }],
+  ])('returns 400 for %s', async (_caseName, fieldType, content) => {
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/versions`,
+      path: `/letters/${LETTER_ID}/versions`,
+      body: {
+        primarySourceRevision: 4,
+        fieldType,
+        content,
+        source: 'human',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(createVersionMock).not.toHaveBeenCalled();
+  });
+
+  it('returns a stable conflict without fetching a DTO for invalid stored version content', async () => {
+    restoreVersionMock.mockResolvedValueOnce({ kind: 'invalid_content' });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/versions/2/restore?fieldType=metadata`,
+      path: `/letters/${LETTER_ID}/versions/2/restore`,
+      query: { fieldType: 'metadata' },
+      body: { primarySourceRevision: 4 },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(restoreVersionMock).toHaveBeenCalledWith(LETTER_ID, 2, 'metadata', 4);
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toEqual({
+      error: 'Stored version content is invalid and cannot be restored',
+      requestId: expect.any(String),
+    });
+    expect(fetchLetterWithRelatedAndTransformMock).not.toHaveBeenCalled();
   });
 
   it('re-tags metadata immediately and returns the refreshed letter DTO', async () => {

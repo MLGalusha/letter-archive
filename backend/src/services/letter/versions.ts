@@ -2,26 +2,54 @@ import { and, eq, sql } from 'drizzle-orm';
 import { TIMING } from '../../constants/timing.js';
 import { db, letters, letterVersions } from '../../db/index.js';
 import { syncLetterParticipantsFromMetadata } from '../entities/participant-sync.js';
-import { log, type VersionInput, type VersionResult } from './shared.js';
+import { log, type VersionResult } from './shared.js';
 import {
   buildHumanMetadataJobPatch,
   buildMetadataSourceInvalidationPatch,
   observedMetadataRevisionConditions,
 } from './metadata-job.js';
 import { buildMetadataDocumentProjectionPatch } from './metadata-projection.js';
+import {
+  canonicalizeMetadataVersionContent,
+  decodeMetadataVersionContent,
+  decodeTranscriptVersionContent,
+  metadataVersionMatchesCurrentContent,
+  transcriptVersionMatchesCurrentContent,
+  type MetadataVersionCandidateContent,
+  type MetadataVersionContent,
+  type TranscriptVersionCandidateContent,
+  type TranscriptVersionContent,
+} from './version-content.js';
+
+interface VersionInputBase {
+  primarySourceRevision: number;
+  source: 'ai' | 'human';
+}
+
+export type VersionInput =
+  | VersionInputBase & {
+    fieldType: 'transcript';
+    content: TranscriptVersionCandidateContent;
+  }
+  | VersionInputBase & {
+    fieldType: 'metadata';
+    content: MetadataVersionCandidateContent;
+  };
 
 export type CreateVersionOutcome =
   | { kind: 'created'; version: VersionResult }
   | { kind: 'letter_not_found' }
   | { kind: 'source_changed' }
-  | { kind: 'content_changed' };
+  | { kind: 'content_changed' }
+  | { kind: 'invalid_content' };
 
 export type RestoreVersionOutcome =
   | { kind: 'restored' }
   | { kind: 'letter_not_found' }
   | { kind: 'version_not_found' }
   | { kind: 'source_changed' }
-  | { kind: 'metadata_changed' };
+  | { kind: 'metadata_changed' }
+  | { kind: 'invalid_content' };
 
 export async function getVersions(
   letterId: string,
@@ -55,62 +83,12 @@ export async function getVersions(
   });
 }
 
-interface VersionSourceState {
-  transcriptionText: string | null;
-  sender: string | null;
-  recipient: string | null;
-  locationWritten: string | null;
-  hook: string | null;
-  summary: string | null;
-}
-
-function metadataSnapshotValue(value: unknown): string | null | undefined {
-  if (value === undefined || value === null) return null;
-  return typeof value === 'string' ? value : undefined;
-}
-
-function versionMatchesCurrentContent(
-  letter: VersionSourceState,
-  input: VersionInput,
-): boolean {
-  if (input.fieldType === 'transcript') {
-    const snapshot = typeof input.content === 'string'
-      ? input.content
-      : input.content.text;
-    return typeof snapshot === 'string' && snapshot === letter.transcriptionText;
-  }
-
-  if (
-    typeof input.content !== 'object'
-    || input.content === null
-    || Array.isArray(input.content)
-  ) {
-    return false;
-  }
-  const snapshot = input.content;
-
-  const fields = [
-    ['sender', letter.sender],
-    ['recipient', letter.recipient],
-    ['locationWritten', letter.locationWritten],
-    ['hook', letter.hook],
-    ['summary', letter.summary],
-  ] as const;
-
-  return fields.every(([field, currentValue]) => {
-    const snapshotValue = metadataSnapshotValue(snapshot[field]);
-    return snapshotValue !== undefined && snapshotValue === currentValue;
-  });
-}
-
 export async function createVersion(
   letterId: string,
   input: VersionInput,
 ): Promise<CreateVersionOutcome> {
   const {
     primarySourceRevision,
-    fieldType,
-    content,
     source,
   } = input;
   return db.transaction(async (tx) => {
@@ -121,9 +99,13 @@ export async function createVersion(
         transcriptionText: letters.transcriptionText,
         sender: letters.sender,
         recipient: letters.recipient,
+        extractedDate: letters.extractedDate,
         locationWritten: letters.locationWritten,
         hook: letters.hook,
         summary: letters.summary,
+        emotionalTone: letters.emotionalTone,
+        senderRecipientRelationship: letters.senderRecipientRelationship,
+        primaryTopics: letters.primaryTopics,
       })
       .from(letters)
       .where(eq(letters.id, letterId))
@@ -132,14 +114,46 @@ export async function createVersion(
     if (letter.primarySourceRevision !== primarySourceRevision) {
       return { kind: 'source_changed' };
     }
-    if (!versionMatchesCurrentContent(letter, input)) {
-      return { kind: 'content_changed' };
+
+    let canonicalContent: TranscriptVersionContent | MetadataVersionContent;
+    if (input.fieldType === 'transcript') {
+      const decoded = decodeTranscriptVersionContent(input.content);
+      if (!decoded.ok) return { kind: 'invalid_content' };
+      if (!transcriptVersionMatchesCurrentContent(
+        letter.transcriptionText,
+        decoded.content,
+      )) {
+        return { kind: 'content_changed' };
+      }
+      canonicalContent = decoded.content;
+    } else {
+      const decoded = decodeMetadataVersionContent(input.content);
+      if (!decoded.ok) return { kind: 'invalid_content' };
+
+      const currentContent: MetadataVersionContent = {
+        sender: letter.sender,
+        recipient: letter.recipient,
+        extractedDate: letter.extractedDate,
+        locationWritten: letter.locationWritten,
+        hook: letter.hook,
+        summary: letter.summary,
+        emotionalTone: letter.emotionalTone,
+        senderRecipientRelationship: letter.senderRecipientRelationship,
+        primaryTopics: letter.primaryTopics,
+      };
+      if (!metadataVersionMatchesCurrentContent(
+        currentContent,
+        decoded.content,
+      )) {
+        return { kind: 'content_changed' };
+      }
+      canonicalContent = canonicalizeMetadataVersionContent(currentContent);
     }
 
     const existingVersions = await tx.query.letterVersions.findMany({
       where: and(
         eq(letterVersions.letterId, letterId),
-        eq(letterVersions.fieldType, fieldType),
+        eq(letterVersions.fieldType, input.fieldType),
       ),
       orderBy: (v, { desc }) => [desc(v.versionNumber)],
       limit: 1,
@@ -151,20 +165,23 @@ export async function createVersion(
 
     const [newVersion] = await tx.insert(letterVersions).values({
       letterId,
-      fieldType,
+      fieldType: input.fieldType,
       versionNumber: nextVersionNumber,
-      content: typeof content === 'string' ? { text: content } : content,
+      content: canonicalContent,
       source,
       primarySourceRevision,
     }).returning();
 
-    log.debug({ letterId, fieldType, versionNumber: nextVersionNumber }, 'Version created');
+    log.debug(
+      { letterId, fieldType: input.fieldType, versionNumber: nextVersionNumber },
+      'Version created',
+    );
 
     const cutoff = new Date(Date.now() - TIMING.RECENT_CUTOFF_MS).toISOString();
     await tx.delete(letterVersions).where(
       and(
         eq(letterVersions.letterId, letterId),
-        eq(letterVersions.fieldType, fieldType),
+        eq(letterVersions.fieldType, input.fieldType),
         sql`${letterVersions.createdAt} < ${cutoff}`,
         sql`${letterVersions.versionNumber} > 1`,
       ),
@@ -209,14 +226,16 @@ export async function restoreVersion(
       return { kind: 'source_changed' };
     }
 
-    const content = version.content as Record<string, unknown>;
     const sourceConditions = [
       ...observedMetadataRevisionConditions(letterId, letter),
       eq(letters.primarySourceRevision, expectedPrimarySourceRevision),
     ];
 
     if (fieldType === 'transcript') {
-      const transcriptionText = (content.text as string) || '';
+      const decoded = decodeTranscriptVersionContent(version.content);
+      if (!decoded.ok) return { kind: 'invalid_content' };
+
+      const { text: transcriptionText } = decoded.content;
       const hasTranscription = transcriptionText.trim().length > 0;
 
       const restored = await tx
@@ -242,17 +261,23 @@ export async function restoreVersion(
         .returning({ id: letters.id });
       if (restored.length === 0) return { kind: 'metadata_changed' };
     } else {
-      const metadataValues = {
-        sender: (content.sender as string) || null,
-        recipient: (content.recipient as string) || null,
-        locationWritten: (content.locationWritten as string) || null,
-        hook: (content.hook as string) || null,
-        summary: (content.summary as string) || null,
+      const decoded = decodeMetadataVersionContent(version.content);
+      if (!decoded.ok) return { kind: 'invalid_content' };
+
+      const metadataValues = decoded.content;
+      const metadataPatch: Record<string, unknown> = {
+        ...metadataValues,
       };
+      if (Object.hasOwn(metadataValues, 'primaryTopics')) {
+        const topics = metadataValues.primaryTopics!;
+        metadataPatch.primaryTopics = topics === null ? null : [...topics];
+        metadataPatch.tags = topics === null ? null : [...topics];
+      }
+
       const restored = await tx
         .update(letters)
         .set({
-          ...metadataValues,
+          ...metadataPatch,
           ...buildMetadataDocumentProjectionPatch(letter, metadataValues),
           ...buildHumanMetadataJobPatch(),
           updatedAt: new Date(),
@@ -261,12 +286,27 @@ export async function restoreVersion(
         .returning({ id: letters.id });
       if (restored.length === 0) return { kind: 'metadata_changed' };
 
-      await syncLetterParticipantsFromMetadata({
-        letterId,
-        sender: metadataValues.sender,
-        recipient: metadataValues.recipient,
-        database: tx,
-      });
+      const synchronizesParticipants = Object.hasOwn(metadataValues, 'sender')
+        || Object.hasOwn(metadataValues, 'recipient')
+        || Object.hasOwn(metadataValues, 'senderRecipientRelationship');
+      if (synchronizesParticipants) {
+        await syncLetterParticipantsFromMetadata({
+          letterId,
+          sender: Object.hasOwn(metadataValues, 'sender')
+            ? metadataValues.sender
+            : undefined,
+          recipient: Object.hasOwn(metadataValues, 'recipient')
+            ? metadataValues.recipient
+            : undefined,
+          relationshipType: Object.hasOwn(
+            metadataValues,
+            'senderRecipientRelationship',
+          )
+            ? metadataValues.senderRecipientRelationship
+            : undefined,
+          database: tx,
+        });
+      }
     }
 
     log.info({ letterId, fieldType, restoredVersion: versionNumber }, 'Version restored');

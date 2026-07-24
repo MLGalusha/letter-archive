@@ -233,6 +233,24 @@ describe('public letter read model', () => {
     }]);
   });
 
+  it('keeps empty admin metadata omitted from the serialized public contract', () => {
+    const result = toPublicLetter(makeLetter({
+      metadataPublished: true,
+      metadata: {
+        sender: '',
+        recipient: '',
+        location: '',
+        hook: '',
+        description: '',
+        verified: true,
+      },
+    }), { photoOnly: false });
+
+    expect(JSON.parse(JSON.stringify(result.metadata))).toEqual({
+      verified: true,
+    });
+  });
+
   it('publishes both tracks when both flags are on but still omits admin-only fields', () => {
     const result = toPublicLetter(makeLetter({
       transcriptPublished: true,

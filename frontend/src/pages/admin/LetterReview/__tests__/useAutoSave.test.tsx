@@ -215,18 +215,22 @@ describe('useAutoSave', () => {
       senderRecipientRelationship: 'parent-child',
       primaryTopics: ['family/marriage'],
     });
-    expect(createVersionMock).toHaveBeenCalledWith(
-      'letter-1',
-      7,
-      'metadata',
-      expect.objectContaining({
+    expect(createVersionMock).toHaveBeenCalledWith('letter-1', {
+      primarySourceRevision: 7,
+      fieldType: 'metadata',
+      content: {
+        sender: 'Old Sender',
+        recipient: 'Recipient',
         extractedDate: '1920-03-15',
+        locationWritten: 'Old Location',
+        hook: 'Old Hook',
+        summary: 'Old Summary',
         emotionalTone: 'matter-of-fact',
         senderRecipientRelationship: 'parent-child',
         primaryTopics: ['family/marriage'],
-      }),
-      'human',
-    );
+      },
+      source: 'human',
+    });
   });
 
   it('keeps a failed patch in the next same-lane save', async () => {
@@ -525,13 +529,12 @@ describe('useAutoSave', () => {
       await vi.advanceTimersByTimeAsync(1_500);
     });
 
-    expect(createVersionMock).toHaveBeenCalledWith(
-      'letter-1',
-      7,
-      'transcript',
-      'Edited transcript',
-      'human',
-    );
+    expect(createVersionMock).toHaveBeenCalledWith('letter-1', {
+      primarySourceRevision: 7,
+      fieldType: 'transcript',
+      content: 'Edited transcript',
+      source: 'human',
+    });
   });
 
   it('preserves an explicit null in the metadata version snapshot', async () => {
@@ -557,19 +560,22 @@ describe('useAutoSave', () => {
       await vi.advanceTimersByTimeAsync(1_500);
     });
 
-    expect(createVersionMock).toHaveBeenCalledWith(
-      'letter-1',
-      7,
-      'metadata',
-      {
+    expect(createVersionMock).toHaveBeenCalledWith('letter-1', {
+      primarySourceRevision: 7,
+      fieldType: 'metadata',
+      content: {
         sender: 'Old Sender',
         recipient: 'Authoritative Recipient',
+        extractedDate: null,
         locationWritten: null,
         hook: 'Old Hook',
         summary: 'Old Summary',
+        emotionalTone: null,
+        senderRecipientRelationship: null,
+        primaryTopics: null,
       },
-      'human',
-    );
+      source: 'human',
+    });
   });
 
   it('reports a history-only failure without misreporting the committed save', async () => {

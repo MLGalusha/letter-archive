@@ -290,6 +290,7 @@ export function mapMetadataRelationshipToPersonRelationship(
       return 'fiancé/fiancée';
     case 'romantic-partner':
       return 'romantic-partner';
+    case 'parent-child':
     case 'parent':
     case 'child':
       return 'parent-child';

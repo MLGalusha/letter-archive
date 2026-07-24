@@ -133,6 +133,7 @@ interface MockLetterSegmentTrustRequest {
 interface MockVersionRequest {
   url: string;
   body: {
+    primarySourceRevision?: number;
     fieldType?: string;
     content?: unknown;
     source?: string;

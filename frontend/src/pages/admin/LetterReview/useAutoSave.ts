@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { createVersion, updateLetter } from '../../../api/admin';
-import type {
-  EmotionalTone,
-  Letter,
-  RelationshipType,
-} from '../../../types/Letter';
+import {
+  createVersion,
+  updateLetter,
+  type CreateVersionRequest,
+} from '../../../api/admin';
+import type { Letter } from '../../../types/Letter';
 import { trackEdit } from '../../../utils/recentEdits';
 import { useIdentityAutoSave } from './useIdentityAutoSave';
 import {
@@ -15,22 +15,18 @@ import {
   useLetterReviewAutosaveCoordinator,
 } from './useLetterReviewAutosaveCoordinator';
 import type { LetterReviewVisit } from './useLetterReviewVisit';
+import {
+  createMetadataVersionSnapshot,
+  hasMetadataVersionPatch,
+  type MetadataVersionPatch,
+} from './metadataVersionSnapshot';
 
 type HandleMutationError = (error: unknown, fallback: string) => boolean;
 
-export interface AutoSaveData {
+export type AutoSaveData = MetadataVersionPatch & {
   transcriptionText?: string;
-  sender?: string | null;
-  recipient?: string | null;
-  extractedDate?: string | null;
-  locationWritten?: string | null;
-  hook?: string | null;
-  summary?: string | null;
-  emotionalTone?: EmotionalTone | null;
-  senderRecipientRelationship?: RelationshipType | null;
-  primaryTopics?: string[] | null;
   notes?: string | null;
-}
+};
 
 interface UseAutoSaveOptions {
   visit: LetterReviewVisit;
@@ -165,19 +161,12 @@ export function useAutoSave({
 
   const recordVersion = useCallback(async (
     targetLetter: LetterFieldTarget,
-    fieldType: 'transcript' | 'metadata',
-    content: string | Record<string, unknown>,
+    request: CreateVersionRequest,
   ) => {
     if (visit.isActive() && isMutationBlocked()) return;
 
     try {
-      await createVersion(
-        targetLetter.id,
-        targetLetter.primarySourceRevision,
-        fieldType,
-        content,
-        'human',
-      );
+      await createVersion(targetLetter.id, request);
     } catch (error) {
       console.error('Version history save error:', error);
       handleMutationError(
@@ -243,54 +232,23 @@ export function useAutoSave({
         if (snapshot.transcriptionText !== undefined) {
           await recordVersion(
             targetLetter,
-            'transcript',
-            snapshot.transcriptionText,
+            {
+              primarySourceRevision: targetLetter.primarySourceRevision,
+              fieldType: 'transcript',
+              content: snapshot.transcriptionText,
+              source: 'human',
+            },
           );
         }
 
-        if (
-          snapshot.sender !== undefined
-          || snapshot.recipient !== undefined
-          || snapshot.extractedDate !== undefined
-          || snapshot.locationWritten !== undefined
-          || snapshot.hook !== undefined
-          || snapshot.summary !== undefined
-          || snapshot.emotionalTone !== undefined
-          || snapshot.senderRecipientRelationship !== undefined
-          || snapshot.primaryTopics !== undefined
-        ) {
+        if (hasMetadataVersionPatch(snapshot)) {
           await recordVersion(
             targetLetter,
-            'metadata',
             {
-              sender: snapshot.sender !== undefined
-                ? snapshot.sender
-                : updated.metadata.sender,
-              recipient: snapshot.recipient !== undefined
-                ? snapshot.recipient
-                : updated.metadata.recipient,
-              extractedDate: snapshot.extractedDate !== undefined
-                ? snapshot.extractedDate
-                : updated.metadata.extractedDate,
-              locationWritten: snapshot.locationWritten !== undefined
-                ? snapshot.locationWritten
-                : updated.metadata.location,
-              hook: snapshot.hook !== undefined
-                ? snapshot.hook
-                : updated.metadata.hook,
-              summary: snapshot.summary !== undefined
-                ? snapshot.summary
-                : updated.metadata.description,
-              emotionalTone: snapshot.emotionalTone !== undefined
-                ? snapshot.emotionalTone
-                : updated.metadata.emotionalTone,
-              senderRecipientRelationship:
-                snapshot.senderRecipientRelationship !== undefined
-                  ? snapshot.senderRecipientRelationship
-                  : updated.metadata.senderRecipientRelationship,
-              primaryTopics: snapshot.primaryTopics !== undefined
-                ? snapshot.primaryTopics
-                : updated.metadata.primaryTopics,
+              primarySourceRevision: targetLetter.primarySourceRevision,
+              fieldType: 'metadata',
+              content: createMetadataVersionSnapshot(snapshot, updated),
+              source: 'human',
             },
           );
         }

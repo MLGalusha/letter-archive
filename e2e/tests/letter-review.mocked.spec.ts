@@ -623,7 +623,10 @@ test.describe('@mocked Letter Review', () => {
     const mockedApi = await openMockLetterReview(
       page,
       createMockLetterReviewLetter({
-        metadata: { primaryTopics: [] },
+        metadata: {
+          hook: '',
+          primaryTopics: [],
+        },
       }),
     );
 
@@ -647,6 +650,25 @@ test.describe('@mocked Letter Review', () => {
       senderRecipientRelationship: 'parent-child',
       primaryTopics: ['family/marriage'],
     });
+    expect(mockedApi.versionRequests).toEqual([{
+      url: `${API_BASE_URL}/admin/letters/letter-review-1/versions`,
+      body: {
+        primarySourceRevision: 4,
+        fieldType: 'metadata',
+        content: {
+          sender: 'Alice Smith',
+          recipient: 'Bob Smith',
+          extractedDate: '1932-07-07',
+          locationWritten: 'Boston',
+          hook: '',
+          summary: 'Alice wrote to Bob after arriving safely in Boston.',
+          emotionalTone: 'matter-of-fact',
+          senderRecipientRelationship: 'parent-child',
+          primaryTopics: ['family/marriage'],
+        },
+        source: 'human',
+      },
+    }]);
     expect(mutationOrder).toEqual([
       'PUT /admin/letters/letter-review-1',
       'POST /admin/letters/letter-review-1/verify-metadata',

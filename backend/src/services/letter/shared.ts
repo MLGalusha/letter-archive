@@ -4,6 +4,7 @@ import type {
   PrimaryTopic,
   Relationship,
 } from '../../ai/schemas/metadataV2.js';
+import { PERSISTED_RELATIONSHIP_TYPE_VALUES } from '../../constants/metadata-values.js';
 import { createLogger } from '../../utils/logger.js';
 
 export const log = createLogger({ module: 'letter-operations' });
@@ -15,14 +16,7 @@ export function observedTimestampMatches(column: AnyColumn, observed: Date) {
 
 export const contentStatusValues = ['EMPTY', 'AI_DRAFT', 'EDITED', 'VERIFIED'] as const;
 
-export const VALID_RELATIONSHIP_TYPES = [
-  'spouse', 'romantic-partner', 'parent-child', 'sibling', 'extended-family',
-  'friend', 'acquaintance', 'professional', 'institutional', 'unknown',
-  // Legacy values (still valid in DB, mapped from old extractions)
-  'fiancé/fiancée', 'parent', 'child', 'grandparent', 'grandchild',
-  'aunt/uncle', 'nephew/niece', 'cousin', 'in-law',
-  'business-associate', 'employer', 'employee',
-] as const;
+export const VALID_RELATIONSHIP_TYPES = PERSISTED_RELATIONSHIP_TYPE_VALUES;
 
 export type RelationshipType = typeof VALID_RELATIONSHIP_TYPES[number];
 
@@ -176,13 +170,6 @@ export interface UpdateLetterInput {
   metadataPublished?: boolean;
   notes?: string | null;
   readingText?: string | null;
-}
-
-export interface VersionInput {
-  primarySourceRevision: number;
-  fieldType: 'transcript' | 'metadata';
-  content: string | Record<string, unknown>;
-  source: 'ai' | 'human';
 }
 
 export interface VersionResult {

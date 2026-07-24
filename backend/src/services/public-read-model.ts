@@ -169,6 +169,10 @@ function publicTranscript(transcript: FrontendLetter['transcript']): PublicTrans
   };
 }
 
+function nonEmptyPublicMetadataValue(value: string | undefined) {
+  return value === '' ? undefined : value;
+}
+
 function publicMetadata(dto: FrontendLetter): PublicLetterMetadata {
   const catalogDate = {
     date: dto.metadata.date,
@@ -185,11 +189,11 @@ function publicMetadata(dto: FrontendLetter): PublicLetterMetadata {
 
   return {
     ...catalogDate,
-    sender: dto.metadata.sender,
-    recipient: dto.metadata.recipient,
-    location: dto.metadata.location,
-    hook: dto.metadata.hook,
-    description: dto.metadata.description,
+    sender: nonEmptyPublicMetadataValue(dto.metadata.sender),
+    recipient: nonEmptyPublicMetadataValue(dto.metadata.recipient),
+    location: nonEmptyPublicMetadataValue(dto.metadata.location),
+    hook: nonEmptyPublicMetadataValue(dto.metadata.hook),
+    description: nonEmptyPublicMetadataValue(dto.metadata.description),
     tags: dto.metadata.tags,
     emotionalTone: dto.metadata.emotionalTone,
     senderRecipientRelationship: dto.metadata.senderRecipientRelationship,

@@ -838,6 +838,9 @@ router.post('/:letterId/versions', async (req, res, next) => {
     if (result.kind === 'content_changed') {
       throw new AppError(409, 'Letter content changed before its version could be saved');
     }
+    if (result.kind === 'invalid_content') {
+      throw new BadRequestError('Invalid version content');
+    }
     res.json(result.version);
   } catch (error) {
     next(error);
@@ -872,6 +875,12 @@ router.post('/:letterId/versions/:versionNumber/restore', async (req, res, next)
     }
     if (result.kind === 'metadata_changed') {
       throw new AppError(409, 'Letter metadata changed; reload before restoring a version');
+    }
+    if (result.kind === 'invalid_content') {
+      throw new AppError(
+        409,
+        'Stored version content is invalid and cannot be restored',
+      );
     }
 
     res.json(await requireLetterDto(letterId, 'Letter not found after restore'));

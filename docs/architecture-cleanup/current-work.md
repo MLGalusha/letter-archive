@@ -7,9 +7,9 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 014 — invalidate derived state with primary-letter page changes
-- Last sealed cleanup implementation: durable entity-extraction liveness at `0b76d592`
-- Current slice: 014 — framed; primary-page writer characterization next
+- Current checkpoint: 014 — primary-letter page source commit boundary
+- Last sealed cleanup implementation: primary page source ownership at `9ae1a7cb`
+- Current slice: 015 — frame one vertical Letter Review ownership extraction
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -83,9 +83,10 @@ tree:
 - [ ] Centralize explicit letter stage, content-review, and publication transitions.
 - [x] Replace public admin-DTO reuse with positive allowlist read models and enforce
   publication gates before matching, ranking, aggregation, or response projection.
-- [ ] Introduce a correspondence-group seam for keying, representative selection,
+- [x] Introduce a correspondence-group seam for keying, representative selection,
   visibility, deletion, and companion lookup.
-- [ ] Add compensation or recoverability around database/filesystem ingestion changes.
+- [ ] Finish compensation or recoverability across database/filesystem ingestion
+  changes. Primary-page writes are now commit-safe; orphan-object collection remains.
 - [ ] Extract explicit public summary/detail and admin detail read models.
 
 ### D. Frontend change isolation
@@ -1628,9 +1629,9 @@ Residuals:
   page or force-replacing its stored source mutates transcription input without
   invalidating transcription, metadata, entity, review, or publication state.
 
-## Slice 014 — Primary-Letter Page Source Invalidation
+## Slice 014 — Primary-Letter Page Source Commit Boundary
 
-Status: framed; characterization next
+Status: complete at `9ae1a7cb`
 
 Problem:
 
@@ -1638,41 +1639,121 @@ Problem:
 same database transaction, but L-page insert/force-replacement passes no corresponding
 effect. A changed image can therefore remain paired with a transcript, metadata,
 entity projection, review state, and public visibility derived from the previous
-source. File replacement also occurs before the database transaction, so a failed
-state mutation can leave filesystem/database disagreement.
+source. Forced storage also unlinks the live object before copying its replacement.
+The production Cloud Storage FUSE mount has no cross-instance file locking, so even a
+local temp-and-rename overwrite would still let filesystem and database commit order
+diverge across API instances.
 
-Target invariant:
+Delivered invariant:
 
-A meaningful primary-letter page change and revocation of every source-derived
-processing/publication state share one explicit database boundary. Unchanged uploads
-are no-ops. An active producer cannot publish from the replaced source, and the durable
-queue truthfully reflects the work required to rebuild it. Filesystem replacement
-failure/recovery remains explicit rather than being mistaken for transactional safety.
+A meaningful primary-letter page change switches the page to a new immutable object
+and revokes every source-derived processing/publication authority in one explicit
+database boundary. The old referenced object is never overwritten before commit.
+Unchanged uploads are no-ops. An active producer or stale page-annotation client cannot
+publish against the replaced source, and the durable queue truthfully reflects the
+work required to rebuild it. A failed database transaction may leave an unreferenced
+object, never new bytes behind an old published page pointer.
 
-Scope:
+What changed:
 
-- Characterize page insert, unchanged upload, force replacement, upload batching,
-  current transcription/metadata/entity attempts, review/publication state, and
-  storage-before-database failure behavior.
-- Identify one canonical primary-source invalidation operation instead of reproducing
-  a reset patch inside `letter-pages.ts` or the upload route.
-- Persist the page row and database invalidation in one transaction, using exact
-  ownership-revocation helpers and the existing processing eligibility contract.
-- Preserve the existing T/C/E extra-content invalidation path and filename identity.
+- Migration 0054 adds monotonic letter/version source revisions, a revision/fingerprint
+  contract for collection profiles, the profile fingerprint function, and constrained
+  highlight cleanup. Primary page DTOs now carry their committed revision.
+- New and forced page bytes are written to checksum-verified immutable objects. The
+  database transaction locks the complete correspondence group, switches the page
+  pointer, increments the source revision, and invokes one canonical invalidation
+  owner. Unchanged uploads retain the current revision and do no derived-state work.
+- Source invalidation revokes stale transcription, metadata, entity, review,
+  annotation, version, profile, and publication authority. It creates truthful queued
+  rebuild state and emits notifications/wakes only after commit.
+- All active producers and direct editor mutations now compare the source revision
+  they observed. Notes use one source-plus-metadata compare-and-set owner, line
+  mappings and reading-view mutations are fenced, and stale clients receive the shared
+  terminal `SOURCE_REVISION_CHANGED` conflict.
+- Processing queue snapshots carry source and stage tokens. Bulk actions reject stale
+  snapshots, while a clear operation remains explicitly tied to the frozen snapshot it
+  reports.
+- Canonical publication, collection-profile publication, and public collection reads
+  have final atomic authority checks. Companion-page content ownership stays distinct
+  from the canonical catalogue publication root.
+- Correspondence deletion locks and fences every observed member, commits database
+  deletion first, and treats object removal as best-effort cleanup. Collection edits,
+  identity changes, bulk operations, verification, versions, and direct publication
+  all use named mutation owners instead of reproducing partial reset patches.
+- Multi-page uploads propagate the committed successor revision only within the
+  matching correspondence identity. Force upload is deliberately single-file so one
+  replacement cannot ambiguously advance several source owners.
+- Letter Review guards both same-letter DTO adoption and cross-letter async responses:
+  a stale revision becomes a sticky terminal editor conflict, and a slow response for
+  letter A cannot hydrate the route after navigation to letter B.
 
-Non-goals:
+This was a broad integrity slice, not the structural simplification finish line. Its
+size is mostly executable ownership coverage and explicit safety owners. Large route
+and component files remain the next architecture concern.
 
-- No upload UI, filename scheme, storage backend, retry policy, or feature change.
-- No claim that filesystem writes roll back with PostgreSQL; compensation or
-  recoverable staging requires a separately framed ingestion slice if not achievable
-  without broadening this boundary.
-- No generic event bus or source-version framework.
+Evidence:
 
-Acceptance:
+- Complete backend suite: 101 files / 1,007 tests. Backend typecheck, migration
+  validation 12/12, `drizzle-kit check`, harness syntax, migration-script syntax, and
+  `git diff --check` passed.
+- Complete frontend suite: 108 files / 718 tests. TypeScript production build and
+  ESLint across all 74 changed or new TypeScript files passed.
+- The settled mocked browser suite passed 40/40.
+- A disposable native PostgreSQL 17 database applied the journal through 0054 and
+  passed the page-source ownership and concurrency interleaving harness.
+- Independent data-integrity and adversarial reviews found no remaining P0 or P1
+  issue after fixes for deletion fencing, queue snapshot ownership, note resolution,
+  companion publication, public profile revocation, stale route responses, and
+  multi-page force uploads.
+- The existing production-build warning remains for the large `LetterReviewPage` and
+  `UpdateEditorPage` chunks.
 
-- Characterization and behavior tests cover inserted, unchanged, force-replaced,
-  active, reviewed/published, and failed-invalidation cases.
-- Architecture coverage leaves one named owner for primary-source invalidation and
-  prevents direct upload/page writers from bypassing it.
-- Focused and complete package checks, aggregate verification, and an independent
-  data-integrity/simplicity review are green before checkpointing.
+Rollout boundary:
+
+Migration 0054 is not mixed-binary write-safe. Roll it out as a write-quiesced
+boundary:
+
+1. Pause workers and administrative writes.
+2. Drain every old API and worker process.
+3. Apply migration 0054 while writes remain closed.
+4. Deploy the new API and worker, route 100% of traffic to them, and confirm old
+   processes are gone before reopening writes.
+5. Smoke-test unchanged upload, replacement/revision advancement, stale-editor
+   conflict, derived-state invalidation, worker rebuild, and public/profile gating.
+6. Resume workers and administrative writes.
+
+Rollback keeps migration 0054 and immutable candidate objects in place and rolls
+forward with a corrected binary. An older binary may be used only for read-only
+diagnosis. This repository checkpoint did not apply a production migration, deploy a
+binary, resume a worker, or change external infrastructure.
+
+Residuals:
+
+- Failed or ambiguous database commits can leave safe unreferenced immutable objects;
+  a grace-period orphan collector is still needed.
+- Correspondence deletion fences every member observed under lock, but group membership
+  itself has no revision/fingerprint. A same-revision concurrent insertion seam should
+  be closed in a later lifecycle slice.
+- Dormant linked-person/place mutation endpoints have no current UI caller and remain
+  outside the source-revision contract.
+- Content autosave and version-history append still use two commits. Legacy collection
+  profiles without a fingerprint are withheld until regeneration rather than
+  backfilled from uncertain source.
+- Several ownership tests are curated source-level tripwires rather than an exhaustive
+  writer manifest. Selecting multiple rows from one correspondence for bulk deletion
+  can also report one success followed by a harmless 404 after the group is gone.
+- Structural debt remains visible: `LetterReviewPage`, `LineReviewMode`, processing
+  queue, public letter routes, and the dashboard stylesheet still own too much.
+
+## Slice 015 — Letter Review Vertical Ownership Extraction
+
+Status: framing next
+
+Intent:
+
+Characterize the state, effects, and callback ownership still concentrated in
+`LetterReviewPage`, then extract one cohesive vertical workspace behind a narrow
+contract. Preserve the terminal source-conflict and route-loading boundaries from
+Slice 014. Do not create a generic action container or move complexity into an
+unbounded hook; measure whether the route loses state/effect ownership and whether the
+extracted unit can be tested without rendering the whole page.

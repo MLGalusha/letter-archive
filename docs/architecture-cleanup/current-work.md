@@ -7,11 +7,10 @@ Last updated: July 23, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 011A — move queued extra-content work to the durable worker,
-  complete
-- Last sealed cleanup checkpoint: legacy executor retirement at `a8359250`
+- Current checkpoint: 011B — retire the process-registry batch executor
+- Last sealed cleanup checkpoint: queued extra-content worker migration at `fa7eedb8`
 - Current slice: 011B — migrate the Processing page and retire the API registry
-  executor (framed, not started)
+  executor (audit and implementation next)
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -1144,7 +1143,7 @@ Residuals carried forward:
 
 ## Slice 010 — Retire the Legacy In-Process Batch Executor
 
-Status: complete
+Status: complete at `a8359250`
 
 Problem:
 
@@ -1228,7 +1227,7 @@ Residuals carried forward:
 
 ## Slice 011A — Move Queued Extra Content to the Durable Worker
 
-Status: complete
+Status: complete at `fa7eedb8`
 
 Problem:
 
